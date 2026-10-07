@@ -1,0 +1,21 @@
+{
+  "name": "Goal Hint",
+  "colors": {
+    "navy": "#0B1F33",
+    "teal": "#007F7A",
+    "tealOnDark": "#39D5CA",
+    "paper": "#F5F8F7",
+    "white": "#FFFFFF",
+    "muted": "#566574",
+    "border": "#D8E2E6"
+  },
+  "typography": {
+    "family": "Manrope, Arial, sans-serif",
+    "bodyWeight": 400,
+    "headingWeight": 700,
+    "wordmarkWeight": 750
+  },
+  "shape": {
+    "componentRadius": "0px"
+  }
+}
