@@ -2,7 +2,7 @@
 
 **Feature:** Durable, idempotent background job execution.
 
-**Depends on:** [002-runtime-policy.md](002-runtime-policy.md), [003-postgres-prisma.md](003-postgres-prisma.md), [019-prediction-history.md](019-prediction-history.md)
+**Depends on:** [002-runtime-policy.md](002-runtime-policy.md), [003-mysql-prisma.md](003-mysql-prisma.md), [019-prediction-history.md](019-prediction-history.md)
 
 **Source:** [app-write-up.md](../app-write-up.md) §§9–11, 13–15.
 

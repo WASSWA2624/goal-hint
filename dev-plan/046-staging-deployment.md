@@ -8,7 +8,7 @@
 
 ## Prompt
 
-Read `dev-plan/000-index.md`, the source sections and established hosting/runtime decisions. Implement reusable deployment configuration for the web app, PostgreSQL, durable queue/workers, shared limiter and long-lived leased poller. Keep environment-specific values separate from reusable configuration. Build using pinned compatible versions and server-only secrets. Add safe migration/release and rollback commands, health checks and deployment documentation.
+Read `dev-plan/000-index.md`, the source sections and established hosting/runtime decisions. Implement reusable deployment configuration for the web app, MySQL, durable queue/workers, shared limiter and long-lived leased poller. Keep environment-specific values separate from reusable configuration. Build using pinned compatible versions and server-only secrets. Add safe migration/release and rollback commands, health checks and deployment documentation.
 
 Configure staging's daily scheduler at `0 21 * * *` UTC for 00:00 EAT, protected enqueue operations and independent watchdog recovery. Verify that continuous polling is supported by the selected runtime instead of pretending a request-bound function runs indefinitely. Configure canonical production metadata separately from staging origin and prevent staging indexing. Use private infrastructure access controls where necessary without adding visitor-auth code to the product.
 

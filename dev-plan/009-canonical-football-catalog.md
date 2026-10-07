@@ -2,7 +2,7 @@
 
 **Feature:** Persist reusable competition, team and fixture identities with trustworthy import coverage.
 
-**Depends on:** [003 PostgreSQL and Prisma runtime](003-postgres-prisma.md), [007 API-Football adapter](007-api-football-adapter.md), [008 Football provider trial](008-football-provider-trial.md).
+**Depends on:** [003 MySQL and Prisma runtime](003-mysql-prisma.md), [007 API-Football adapter](007-api-football-adapter.md), [008 Football provider trial](008-football-provider-trial.md).
 
 **Source:** [App specification](../app-write-up.md), sections 2, 5–6 and 9–11.
 

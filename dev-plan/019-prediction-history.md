@@ -2,7 +2,7 @@
 
 **Feature:** Immutable prediction-cycle and revision persistence.
 
-**Depends on:** [003-postgres-prisma.md](003-postgres-prisma.md), [005-market-domain.md](005-market-domain.md), [009-canonical-football-catalog.md](009-canonical-football-catalog.md), [011-fixture-evidence.md](011-fixture-evidence.md), [012-ai-predictor.md](012-ai-predictor.md)
+**Depends on:** [003-mysql-prisma.md](003-mysql-prisma.md), [005-market-domain.md](005-market-domain.md), [009-canonical-football-catalog.md](009-canonical-football-catalog.md), [011-fixture-evidence.md](011-fixture-evidence.md), [012-ai-predictor.md](012-ai-predictor.md)
 
 **Source:** [app-write-up.md](../app-write-up.md) §§4, 5, 7–10, 15.
 

@@ -55,7 +55,7 @@ The early runtime, database and domain work exists to support the specification'
 | --- | --- |
 | [001 Project foundation](001-project-foundation.md) | Create the minimal Next.js and TypeScript development foundation. |
 | [002 Runtime policy](002-runtime-policy.md) | Validate environment settings and track unresolved operating decisions. |
-| [003 PostgreSQL and Prisma](003-postgres-prisma.md) | Establish database access and incremental migrations. |
+| [003 MySQL and Prisma](003-mysql-prisma.md) | Establish database access and incremental migrations. |
 | [004 EAT calendar](004-eat-calendar.md) | Centralize reporting dates, seven-day windows and cutoff calculations. |
 | [005 Market domain](005-market-domain.md) | Define the four market families and probability rules. |
 | [006 API quota limiter](006-api-quota-limiter.md) | Enforce account-wide request limits and essential reserves. |

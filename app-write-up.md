@@ -45,7 +45,7 @@ AI is the primary predictor; validated API-Football predictions provide fallback
 | --- | --- | --- |
 | Seven-day fixtures and daily predictions<br>Search and filters<br>Four market families with probabilities and explanations<br>Revision history, results and performance<br>English and a light theme | Additional languages<br>Dark theme<br>Advertising | Betting and payments<br>Visitor accounts or subscriptions<br>Social feeds and comments<br>AI chat, native apps or an admin dashboard |
 
-Use stable Next.js with the App Router and TypeScript, Prisma, PostgreSQL, Redux Toolkit and styled-components. Server code and durable workers own business logic.
+Use stable Next.js with the App Router and TypeScript, Prisma, MySQL, Redux Toolkit and styled-components. Server code and durable workers own business logic.
 
 Every public feature and read endpoint works without registration, sign-in, visitor tokens or authentication cookies. Do not add account screens, an auth SDK or user/session tables. Store anonymous preferences in the URL or browser storage. Private jobs use service credentials or hosting controls.
 
@@ -278,18 +278,18 @@ Compare AI, provider and simple team-strength/league-frequency baselines on matc
 
 ### Framework baseline
 
-Use stable Next.js 16.4 and Prisma ORM 7 as the checked baseline; verify compatibility and pin exact versions when implementation begins. Prisma ORM 8 is a release candidate. Use compatible stable React, Redux Toolkit, react-redux and styled-components versions and a supported Node.js LTS runtime. [1][2]
+Use stable Next.js 16.4 and Prisma ORM 7 as the selected baseline; verify compatibility and pin exact versions when implementation begins. Use MySQL 8.4 LTS with InnoDB and Prisma's MySQL datasource provider and compatible driver adapter. Recheck release status before changing the selected major versions. Use compatible stable React, Redux Toolkit, react-redux and styled-components versions and a supported Node.js LTS runtime. [1][2][16][17]
 
 | Layer | Responsibility |
 | --- | --- |
 | Next.js | Server-rendered pages, metadata, public reads and protected operations endpoints. |
-| Prisma/PostgreSQL | Persistence, migrations, constraints, transactions and indexed queries. |
+| Prisma/MySQL | Persistence, migrations, constraints, transactions and indexed queries. |
 | Durable queue/workers | Selection, prediction jobs, cutoff locks, retries and settlement. |
 | AI/fallback controller | Evidence, model execution, validation and source provenance. |
 | Provider adapters | Normalization, bounded research and shared API-Football limiting. |
 | Public cache | Stored page/data responses with targeted invalidation. |
 
-Keep shared schemas and domain services in one repository. Use a managed or PostgreSQL-backed durable queue after workload testing. Triggers enqueue work and return promptly. Run the 15-second poller in a long-lived worker with one renewable lease, independent of visitor requests.
+Keep shared schemas and domain services in one repository. Use an approved managed or MySQL-backed durable queue after workload testing. Triggers enqueue work and return promptly. Run the 15-second poller in a long-lived worker with one renewable lease, independent of visitor requests.
 
 ### Client state
 
@@ -316,6 +316,12 @@ This logical schema preserves queryable fields and versioned evidence. Final Pri
 | Result / Settlement | Regulation score and provider status revisions; locked set/market, outcome, reason and settlement/correction time. |
 | JobRun / AuditEvent | Idempotency key, attempts/leases, reasons, costs/request counts, actors and publication/schedule/reference changes. |
 | ApiUsageState | Durable account quota period, counters, observed remaining capacity, limiter state, poller lease and last sync. |
+
+### Storage conventions
+
+Use InnoDB transactions and database-enforced foreign keys and uniqueness. Store UTC instants in `DATETIME(3)` with explicit millisecond precision and UTC connection/serialization behavior; MySQL `DATETIME` does not carry a timezone. Keep EAT reporting dates separate from stored instants. Use integer minor units for monetary totals and exact `DECIMAL` values for probabilities and rates; their feature owners define precision, scale, bounds and rounding from validated contracts. [16][18]
+
+Coordinate concurrent writes with transactional row locks or conditional updates, durable unique keys and lease ownership fencing. Choose isolation and indexes from the invariant being enforced and prove contention behavior with real MySQL tests. Keep external calls outside held database locks. Schema changes may implicitly commit, so migration recovery must inspect actual schema state; rolling back application code must preserve forward-compatible schema and immutable history. [19][20]
 
 ### Required constraints
 
@@ -549,3 +555,13 @@ Official implementation references; recheck versions, coverage and commercial te
 [14] [API-Football pricing](https://www.api-football.com/pricing) — Mega, quotas and subscription terms.
 
 [15] [API-Football rate limiting](https://www.api-football.com/news/post/how-ratelimit-works) — limits, headers and retries.
+
+[16] [Prisma MySQL support](https://www.prisma.io/docs/orm/v7/core-concepts/supported-databases/mysql) — MySQL datasource, driver adapters and exact type mappings.
+
+[17] [MySQL release tracks](https://dev.mysql.com/doc/refman/8.4/en/mysql-releases.html) — LTS server baseline.
+
+[18] [MySQL temporal types](https://dev.mysql.com/doc/refman/8.4/en/datetime.html) and [fractional seconds](https://dev.mysql.com/doc/refman/8.4/en/fractional-seconds.html) — UTC handling and explicit precision.
+
+[19] [InnoDB locking reads](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html) — transaction row locking and contention behavior.
+
+[20] [MySQL implicit commits](https://dev.mysql.com/doc/refman/8.4/en/implicit-commit.html) — DDL boundaries and migration recovery.

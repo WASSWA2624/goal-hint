@@ -186,13 +186,31 @@ test("malformed settings reject booleans, money, counts, IDs, tolerances and URL
     ["GOAL_HINT_COMPETITION_IDS", ["1,1", "0", "1,0", "1, 2", "1,", "1.5", "9007199254740992"]],
     ["GOAL_HINT_PROBABILITY_SUM_TOLERANCE", ["0", "1", "-0.1", "1.01", "Infinity", "NaN", "1e-4", ".01"]],
     ["GOAL_HINT_CONSISTENCY_TOLERANCE", ["0", "1", "0.000" + "0".repeat(400) + "1"]],
-    ["DATABASE_URL", ["https://synthetic.invalid/db", "postgresql:///db", "postgresql://synthetic.invalid/", "synthetic-database-url"]],
-    ["TEST_DATABASE_URL", ["file:///synthetic.db", "postgresql://synthetic.invalid/"]],
+    ["DATABASE_URL", ["https://synthetic.invalid/db", "mysql:///db", "mysql://synthetic.invalid/", "synthetic-database-url"]],
+    ["TEST_DATABASE_URL", ["file:///synthetic.db", "mysql://synthetic.invalid/"]],
     ["API_FOOTBALL_KEY", ["synthetic token", "synthetic\ntoken"]],
     ["GOAL_HINT_AI_PROVIDER", ["synthetic\nprovider", "synthetic\0provider"]],
   ];
   for (const [field, values] of invalid) {
     for (const value of values) policyError(() => parseRuntimePolicy({ [field]: value }), [field]);
+  }
+});
+
+test("database settings accept MySQL targets and reject former PostgreSQL protocols without leaking credentials", () => {
+  const sentinel = "synthetic-database-protocol-password-sentinel";
+  for (const field of ["DATABASE_URL", "TEST_DATABASE_URL"]) {
+    const mysqlUrl = `mysql://synthetic:${sentinel}@synthetic.invalid:3306/synthetic_main`;
+    const policy = parseRuntimePolicy({ [field]: mysqlUrl });
+    const secret = field === "DATABASE_URL" ? policy.secrets.databaseUrl : policy.secrets.testDatabaseUrl;
+    assert.equal(secret.read(), mysqlUrl);
+    for (const protocol of ["postgres", "postgresql"]) {
+      const error = policyError(() => parseRuntimePolicy({
+        [field]: `${protocol}://synthetic:${sentinel}@synthetic.invalid:5432/synthetic_main`,
+      }), [field]);
+      for (const output of [error.message, error.stack, JSON.stringify(error), inspect(error, { depth: null })]) {
+        assert.ok(!output.includes(sentinel));
+      }
+    }
   }
 });
 
@@ -220,7 +238,7 @@ test("secret serialization and validation errors stay redacted while explicit re
   const databaseSentinel = "synthetic-database-password-sentinel";
   const policy = parseRuntimePolicy({
     API_FOOTBALL_KEY: sentinels[0], AI_API_KEY: sentinels[1], RESEARCH_API_KEY: sentinels[2],
-    DATABASE_URL: `postgresql://synthetic:${databaseSentinel}@synthetic.invalid/synthetic_main`,
+    DATABASE_URL: `mysql://synthetic:${databaseSentinel}@synthetic.invalid/synthetic_main`,
   });
   assert.equal(policy.secrets.footballKey.read(), sentinels[0]);
   assert.equal(policy.secrets.aiKey.read(), sentinels[1]);
@@ -406,8 +424,8 @@ test("trial and shadow allowances reject contradictions even before enabling cap
 });
 
 test("test database use requires its separate URL and never falls back to production", () => {
-  const main = "postgresql://synthetic:synthetic-main-password@synthetic.invalid/synthetic_main";
-  const isolated = "postgresql://synthetic:synthetic-test-password@synthetic.invalid/synthetic_test";
+  const main = "mysql://synthetic:synthetic-main-password@synthetic.invalid/synthetic_main";
+  const isolated = "mysql://synthetic:synthetic-test-password@synthetic.invalid/synthetic_test";
   policyError(() => parseRuntimePolicy({ NODE_ENV: "test", GOAL_HINT_DATABASE_ENABLED: "true", DATABASE_URL: main }), ["TEST_DATABASE_URL"]);
   policyError(() => parseRuntimePolicy({ NODE_ENV: "production", GOAL_HINT_DATABASE_ENABLED: "true", TEST_DATABASE_URL: isolated }), ["DATABASE_URL"]);
   policyError(() => parseRuntimePolicy({ NODE_ENV: "test", GOAL_HINT_DATABASE_ENABLED: "true", DATABASE_URL: main, TEST_DATABASE_URL: main }), ["TEST_DATABASE_URL"]);

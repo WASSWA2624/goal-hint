@@ -2,13 +2,13 @@
 
 **Feature:** Recoverable durable data with a proven restoration procedure.
 
-**Depends on:** [003-postgres-prisma.md](003-postgres-prisma.md), [019-prediction-history.md](019-prediction-history.md), [043-recovery-watchdog.md](043-recovery-watchdog.md), [044-operations-monitoring.md](044-operations-monitoring.md).
+**Depends on:** [003-mysql-prisma.md](003-mysql-prisma.md), [019-prediction-history.md](019-prediction-history.md), [043-recovery-watchdog.md](043-recovery-watchdog.md), [044-operations-monitoring.md](044-operations-monitoring.md).
 
 **Source:** [App specification](../app-write-up.md), sections 6, 10, 11, 13–15.
 
 ## Prompt
 
-Read `dev-plan/000-index.md`, the source sections and the database/hosting/permissions decisions. Implement and document automated PostgreSQL backups and point-in-time recovery where the selected infrastructure supports it. Define owner-approved recovery point/time objectives and retention for predictions, results, evidence, audits and structured provider data within contractual source-reuse permissions. Do not choose arbitrary retention that erases required forecast history or violates permissions.
+Read `dev-plan/000-index.md`, the source sections and the database/hosting/permissions decisions. Implement and document automated MySQL backups and point-in-time recovery where the selected infrastructure supports it, including the required consistent snapshot and binary-log retention/replay strategy. Define owner-approved recovery point/time objectives and retention for predictions, results, evidence, audits and structured provider data within contractual source-reuse permissions. Do not choose arbitrary retention that erases required forecast history or violates permissions.
 
 Provide a repeatable restoration procedure into an isolated disposable target. Preserve immutable revisions, original publication/evidence timestamps, locked references, schedule/result correction history, canonical identities, run manifests and job idempotency. Include schema/migration version compatibility and access grants in the restore design. Keep encryption keys and credentials outside source control and record how authorized operators obtain required secrets. Test that restored database access remains least-privilege and private operations remain protected.
 

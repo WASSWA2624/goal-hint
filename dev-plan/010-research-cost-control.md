@@ -2,7 +2,7 @@
 
 **Feature:** Enforce independent, durable research and AI spending budgets.
 
-**Depends on:** [002 Runtime policy](002-runtime-policy.md), [003 PostgreSQL and Prisma runtime](003-postgres-prisma.md).
+**Depends on:** [002 Runtime policy](002-runtime-policy.md), [003 MySQL and Prisma runtime](003-mysql-prisma.md).
 
 **Source:** [App specification](../app-write-up.md), sections 7, 10–11 and 14–15.
 

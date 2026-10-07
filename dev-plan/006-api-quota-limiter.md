@@ -2,7 +2,7 @@
 
 **Feature:** Enforce account-wide durable API-Football dispatch limits.
 
-**Depends on:** [002 Runtime policy](002-runtime-policy.md), [003 PostgreSQL and Prisma runtime](003-postgres-prisma.md).
+**Depends on:** [002 Runtime policy](002-runtime-policy.md), [003 MySQL and Prisma runtime](003-mysql-prisma.md).
 
 **Source:** [App specification](../app-write-up.md), sections 10–11 and 14–15.
 
