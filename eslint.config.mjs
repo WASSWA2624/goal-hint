@@ -3,7 +3,7 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
 const privateImports = {
-  regex: "(^|/)(server|workers)(/|$)",
+  regex: "(^|/)(server|workers)(/|$)|(^|/)prisma\\.config(\\.|$)",
   message: "Browser components and shared contracts must not import server or worker modules.",
 };
 
@@ -15,7 +15,7 @@ const workerImports = {
 export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "out/**", "build/**", ".tmp/**", "next-env.d.ts"]),
+  globalIgnores([".next/**", "out/**", "build/**", ".tmp/**", "src/server/generated/**", "next-env.d.ts"]),
   {
     files: ["src/{components,domain}/**/*.{ts,tsx}"],
     rules: {

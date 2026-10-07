@@ -14,12 +14,24 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
+    "postinstall": "npm run db:generate",
+    "db:generate": "node --conditions=react-server scripts/database.mjs generate",
+    "db:validate": "node --conditions=react-server scripts/database.mjs validate",
+    "db:migrate": "node --conditions=react-server scripts/database.mjs migrate",
+    "db:deploy": "node --conditions=react-server scripts/database.mjs deploy",
+    "db:status": "node --conditions=react-server scripts/database.mjs status",
+    "db:verify": "node --conditions=react-server scripts/database.mjs verify",
+    "db:health": "node --conditions=react-server --env-file-if-exists=.env.local scripts/database-health.mjs",
+    "test:db": "node --conditions=react-server --test tests/database.integration.mjs",
     "policy:check": "node --conditions=react-server --env-file-if-exists=.env.local scripts/check-runtime-policy.mjs",
     "test": "node --conditions=react-server --test tests/*.test.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run db:generate && npm run db:validate && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.13.0",
+    "@prisma/adapter-mariadb": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "mariadb": "3.5.4",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -35,6 +47,18 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.0",
     "nodemon": "3.1.14",
+    "prisma": "7.10.0",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "@prisma/adapter-mariadb@7.10.0": {
+      "mariadb": "$mariadb"
+    },
+    "prisma@7.10.0": {
+      "mysql2": "3.24.5"
+    },
+    "@prisma/config@7.10.0": {
+      "deepmerge-ts": "8.0.2"
+    }
   }
 }

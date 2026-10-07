@@ -4,7 +4,7 @@
 
 A free football prediction website with estimated probabilities, clear analysis and verifiable outcomes.
 
-The Next.js application foundation and runtime policy are implemented. The entry page states that
+The Next.js foundation, runtime policy and MySQL/Prisma access layer are implemented. The entry page states that
 predictions are not yet available; product features follow the numbered plan.
 
 - [App specification](app-write-up.md): scope, user experience, prediction rules, architecture and launch requirements.
@@ -50,12 +50,17 @@ debounces saves; generated output and dependency directories are excluded.
 | `npm run build` | Compile and prerender the production application. |
 | `npm start` | Serve the completed production build. |
 | `npm run check` | Run lint, type-check, tests and production build in order. |
+| `npm run db:generate` / `npm run db:validate` | Generate the guarded Prisma client and validate the MySQL schema without a database. |
+| `npm run db:migrate -- --name <change>` | Generate a reviewable migration offline from the committed schema snapshot. |
+| `npm run db:deploy` / `npm run db:status` / `npm run db:verify` | Deploy reviewed migrations, check their state and detect schema drift using separate migration credentials. |
+| `npm run db:health` | Report private database readiness without internal diagnostics. |
+| `npm run test:db` | Run integration checks in a newly owned isolated MySQL server; explicitly skips when no genuine server binary is available. |
 
 Next.js generates ignored `next-env.d.ts` and `.next/` files. The type-check
 command works before the first development or production build. ESLint is a
 separate check because Next.js 16 builds do not run it automatically. Tests use
-Node's built-in runner and isolated temporary projects; no provider or database
-calls are made.
+Node's built-in runner and isolated temporary projects; the default tests make no
+provider or database calls. Database-backed checks use the separate isolated harness.
 
 ## Environment workflow
 
@@ -94,10 +99,33 @@ structural readiness. It does not mirror Next's full `.env.*` precedence or prov
 external evidence. Set production settings in the intended process environment.
 Tests supply isolated synthetic configuration; `NODE_ENV=test` cannot authorize
 paid/provider, shadow or publication operations. Test database access requires
-`TEST_DATABASE_URL` and never falls back to `DATABASE_URL`; prompt 003 must verify
-actual isolation. Secret wrappers require an explicit `.read()` in server adapters
+`TEST_DATABASE_URL` and never falls back to `DATABASE_URL`; the integration harness
+owns a fresh server/data directory and verifies its identity before mutation.
+Secret wrappers require an explicit `.read()` in server adapters
 and redact string/JSON serialization. Never put credentials in `next.config.ts`
 exports or browser imports.
+
+## MySQL and migrations
+
+The specification now requires **MySQL 8.4 LTS/InnoDB** with Prisma 7.10.0.
+Database access stays disabled until an approved target and credentials are
+configured. Application services and workers share one lazy process pool through
+`src/server/database/client.ts`; close it only at script/worker shutdown.
+Transactions expose a shared Prisma transaction client and redact failures.
+
+`MIGRATION_DATABASE_URL` supplies separate DDL credentials. Offline migration
+generation uses `prisma/schema.snapshot.prisma`, creates SQL only for actual
+changes and advances the snapshot for review together with the migration.
+Generation/validation need no URL. No football, authentication or job tables have
+been invented; the committed initial migration establishes history only.
+
+Remote/production targets require approved direct connections, verified TLS and
+explicit production pool sizing. Production operation guards also require the
+existing trusted budget-evidence verifier. The CLI/health commands have no live
+verifier wired, so production target operations remain blocked. Test processes
+ignore local environment files and never reuse an existing service or database
+for cleanup. Read the [database runbook](docs/database.md) for privileges, commands,
+UTC/exact-number conventions, rollback compatibility and pending live evidence.
 
 ## Code boundaries
 

@@ -1,0 +1,2 @@
+-- Intentionally no application tables. This baseline establishes migration
+-- history only; later features own their domain tables and constraints.

@@ -1,0 +1,15 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/server/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  engineType             = "client"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// Domain models, exact types, constraints and indexes belong to later prompts.

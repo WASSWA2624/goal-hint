@@ -127,7 +127,10 @@ test("the complete documented environment example parses safely without approval
   const env = parseEnv(source);
   const documentedKeys = new Set([
     ...Object.keys(syntheticProduction), ...Object.keys(syntheticResearch),
-    "DATABASE_URL", "TEST_DATABASE_URL", "GOAL_HINT_DATABASE_ENABLED", "GOAL_HINT_ADS_ENABLED", "GOAL_HINT_DARK_MODE_ENABLED",
+    "DATABASE_URL", "TEST_DATABASE_URL", "MIGRATION_DATABASE_URL", "GOAL_HINT_DATABASE_ENABLED", "GOAL_HINT_ADS_ENABLED", "GOAL_HINT_DARK_MODE_ENABLED",
+    "GOAL_HINT_DATABASE_CONNECTION_MODE", "GOAL_HINT_DATABASE_POOL_LIMIT", "GOAL_HINT_DATABASE_CONNECT_TIMEOUT_MS",
+    "GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS", "GOAL_HINT_DATABASE_IDLE_TIMEOUT_SECONDS", "GOAL_HINT_DATABASE_TLS_MODE", "GOAL_HINT_DATABASE_TLS_CA_FILE",
+    "GOAL_HINT_DATABASE_ACCESS_REF",
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES",
   ]);
   documentedKeys.delete("NODE_ENV");
@@ -143,8 +146,13 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  assertUnresolved(policy.choices);
-  for (const operation of ["database", ...operations]) {
+  const { database, ...unresolvedChoices } = policy.choices;
+  assertUnresolved(unresolvedChoices);
+  assert.deepEqual(database, {
+    connectionMode: null, poolLimit: null, connectTimeoutMs: 5000, acquireTimeoutMs: 10000,
+    idleTimeoutSeconds: 30, tlsMode: null, tlsCaFile: null, accessRef: null,
+  });
+  for (const operation of ["database", "database-migration", ...operations]) {
     policyError(() => assertOperationAllowed(policy, operation, verifySyntheticEvidence));
   }
 });
@@ -167,7 +175,7 @@ test("disabled defaults keep unresolved choices explicit in every deployment mod
     assert.equal(policy.choices.releaseApprovalRef, null);
     assertDeepFrozen(policy);
     assert.deepEqual(env, { NODE_ENV: mode });
-    for (const operation of ["database", ...operations]) {
+    for (const operation of ["database", "database-migration", ...operations]) {
       policyError(() => assertOperationAllowed(policy, operation));
     }
   }
@@ -188,6 +196,13 @@ test("malformed settings reject booleans, money, counts, IDs, tolerances and URL
     ["GOAL_HINT_CONSISTENCY_TOLERANCE", ["0", "1", "0.000" + "0".repeat(400) + "1"]],
     ["DATABASE_URL", ["https://synthetic.invalid/db", "mysql:///db", "mysql://synthetic.invalid/", "synthetic-database-url"]],
     ["TEST_DATABASE_URL", ["file:///synthetic.db", "mysql://synthetic.invalid/"]],
+    ["MIGRATION_DATABASE_URL", ["https://synthetic.invalid/db", "mysql:///db"]],
+    ["GOAL_HINT_DATABASE_CONNECTION_MODE", ["proxy", "pool", "synthetic-connection-mode"]],
+    ["GOAL_HINT_DATABASE_POOL_LIMIT", ["0", "-1", "1.5", "9007199254740992"]],
+    ["GOAL_HINT_DATABASE_CONNECT_TIMEOUT_MS", ["0", "-1", "1.5", "Infinity", "2147483648", "9007199254740992"]],
+    ["GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS", ["0", "-1", "1.5", "Infinity", "2147483648", "9007199254740992"]],
+    ["GOAL_HINT_DATABASE_IDLE_TIMEOUT_SECONDS", ["0", "-1", "1.5", "Infinity", "2147484", "9007199254740992"]],
+    ["GOAL_HINT_DATABASE_TLS_MODE", ["insecure", "optional", "false"]],
     ["API_FOOTBALL_KEY", ["synthetic token", "synthetic\ntoken"]],
     ["GOAL_HINT_AI_PROVIDER", ["synthetic\nprovider", "synthetic\0provider"]],
   ];
@@ -198,11 +213,12 @@ test("malformed settings reject booleans, money, counts, IDs, tolerances and URL
 
 test("database settings accept MySQL targets and reject former PostgreSQL protocols without leaking credentials", () => {
   const sentinel = "synthetic-database-protocol-password-sentinel";
-  for (const field of ["DATABASE_URL", "TEST_DATABASE_URL"]) {
+  for (const [field, secretKey] of [
+    ["DATABASE_URL", "databaseUrl"], ["TEST_DATABASE_URL", "testDatabaseUrl"], ["MIGRATION_DATABASE_URL", "migrationDatabaseUrl"],
+  ]) {
     const mysqlUrl = `mysql://synthetic:${sentinel}@synthetic.invalid:3306/synthetic_main`;
     const policy = parseRuntimePolicy({ [field]: mysqlUrl });
-    const secret = field === "DATABASE_URL" ? policy.secrets.databaseUrl : policy.secrets.testDatabaseUrl;
-    assert.equal(secret.read(), mysqlUrl);
+    assert.equal(policy.secrets[secretKey].read(), mysqlUrl);
     for (const protocol of ["postgres", "postgresql"]) {
       const error = policyError(() => parseRuntimePolicy({
         [field]: `${protocol}://synthetic:${sentinel}@synthetic.invalid:5432/synthetic_main`,
@@ -212,6 +228,19 @@ test("database settings accept MySQL targets and reject former PostgreSQL protoc
       }
     }
   }
+});
+
+test("database acquisition timeout must leave time for connection establishment", () => {
+  for (const acquisition of ["4999", "5000"]) {
+    policyError(() => parseRuntimePolicy({
+      GOAL_HINT_DATABASE_CONNECT_TIMEOUT_MS: "5000", GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS: acquisition,
+    }), ["GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS"]);
+  }
+  const policy = parseRuntimePolicy({
+    GOAL_HINT_DATABASE_CONNECT_TIMEOUT_MS: "250", GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS: "500",
+  });
+  assert.equal(policy.choices.database.connectTimeoutMs, 250);
+  assert.equal(policy.choices.database.acquireTimeoutMs, 500);
 });
 
 test("feature flags cannot silently extend the approved launch", () => {
@@ -235,17 +264,21 @@ test("unknown policy keys and public environment overrides fail without exposing
 
 test("secret serialization and validation errors stay redacted while explicit reads work", () => {
   const sentinels = ["synthetic-football-secret-sentinel", "synthetic-ai-secret-sentinel", "synthetic-research-secret-sentinel"];
-  const databaseSentinel = "synthetic-database-password-sentinel";
+  const databaseSentinels = ["synthetic-database-password-sentinel", "synthetic-test-database-password-sentinel", "synthetic-migration-database-password-sentinel"];
   const policy = parseRuntimePolicy({
     API_FOOTBALL_KEY: sentinels[0], AI_API_KEY: sentinels[1], RESEARCH_API_KEY: sentinels[2],
-    DATABASE_URL: `mysql://synthetic:${databaseSentinel}@synthetic.invalid/synthetic_main`,
+    DATABASE_URL: `mysql://synthetic:${databaseSentinels[0]}@synthetic.invalid/synthetic_main`,
+    TEST_DATABASE_URL: `mysql://synthetic:${databaseSentinels[1]}@synthetic.invalid/synthetic_test`,
+    MIGRATION_DATABASE_URL: `mysql://synthetic-migrator:${databaseSentinels[2]}@synthetic.invalid/synthetic_main`,
   });
   assert.equal(policy.secrets.footballKey.read(), sentinels[0]);
   assert.equal(policy.secrets.aiKey.read(), sentinels[1]);
   assert.equal(policy.secrets.researchKey.read(), sentinels[2]);
-  assert.ok(policy.secrets.databaseUrl.read().includes(databaseSentinel));
+  for (const [index, key] of ["databaseUrl", "testDatabaseUrl", "migrationDatabaseUrl"].entries()) {
+    assert.ok(policy.secrets[key].read().includes(databaseSentinels[index]));
+  }
   for (const output of [JSON.stringify(policy), inspect(policy, { depth: null }), String(policy.secrets.footballKey)]) {
-    for (const sentinel of [...sentinels, databaseSentinel]) assert.ok(!output.includes(sentinel));
+    for (const sentinel of [...sentinels, ...databaseSentinels]) assert.ok(!output.includes(sentinel));
   }
   assert.equal(JSON.parse(JSON.stringify(policy)).secrets.aiKey, "[REDACTED]");
 
@@ -424,8 +457,8 @@ test("trial and shadow allowances reject contradictions even before enabling cap
 });
 
 test("test database use requires its separate URL and never falls back to production", () => {
-  const main = "mysql://synthetic:synthetic-main-password@synthetic.invalid/synthetic_main";
-  const isolated = "mysql://synthetic:synthetic-test-password@synthetic.invalid/synthetic_test";
+  const main = "mysql://synthetic:synthetic-main-password@127.0.0.1/synthetic_main";
+  const isolated = "mysql://synthetic:synthetic-test-password@127.0.0.1/synthetic_test";
   policyError(() => parseRuntimePolicy({ NODE_ENV: "test", GOAL_HINT_DATABASE_ENABLED: "true", DATABASE_URL: main }), ["TEST_DATABASE_URL"]);
   policyError(() => parseRuntimePolicy({ NODE_ENV: "production", GOAL_HINT_DATABASE_ENABLED: "true", TEST_DATABASE_URL: isolated }), ["DATABASE_URL"]);
   policyError(() => parseRuntimePolicy({ NODE_ENV: "test", GOAL_HINT_DATABASE_ENABLED: "true", DATABASE_URL: main, TEST_DATABASE_URL: main }), ["TEST_DATABASE_URL"]);
@@ -434,10 +467,80 @@ test("test database use requires its separate URL and never falls back to produc
   assert.equal(testPolicy.secrets.testDatabaseUrl.read(), isolated);
   const productionPolicy = parseRuntimePolicy({
     NODE_ENV: "production", GOAL_HINT_DATABASE_ENABLED: "true", DATABASE_URL: main,
+    GOAL_HINT_DATABASE_CONNECTION_MODE: "direct", GOAL_HINT_DATABASE_POOL_LIMIT: "2", GOAL_HINT_DATABASE_TLS_MODE: "required",
+    GOAL_HINT_DATABASE_ACCESS_REF: "synthetic-database-access-evidence",
     GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS: "0",
     GOAL_HINT_BUDGET_APPROVAL_REF: "synthetic-zero-infrastructure-budget-approval",
   });
   assert.doesNotThrow(() => assertOperationAllowed(productionPolicy, "database", verifySyntheticEvidence));
+});
+
+test("production database access requires an explicit direct pool and verified TLS configuration", () => {
+  const env = {
+    NODE_ENV: "production", GOAL_HINT_DATABASE_ENABLED: "true",
+    DATABASE_URL: "mysql://synthetic:synthetic-main-password@synthetic.invalid/synthetic_main",
+    GOAL_HINT_DATABASE_CONNECTION_MODE: "direct", GOAL_HINT_DATABASE_POOL_LIMIT: "2", GOAL_HINT_DATABASE_TLS_MODE: "required",
+    GOAL_HINT_DATABASE_ACCESS_REF: "synthetic-database-access-evidence",
+    GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS: "0", GOAL_HINT_BUDGET_APPROVAL_REF: "synthetic-budget-approval",
+  };
+  for (const field of ["GOAL_HINT_DATABASE_CONNECTION_MODE", "GOAL_HINT_DATABASE_POOL_LIMIT", "GOAL_HINT_DATABASE_TLS_MODE", "GOAL_HINT_DATABASE_ACCESS_REF"]) {
+    policyError(() => parseRuntimePolicy({ ...env, [field]: undefined }), [field]);
+  }
+  policyError(() => parseRuntimePolicy({ ...env, GOAL_HINT_DATABASE_TLS_MODE: "disabled" }), ["GOAL_HINT_DATABASE_TLS_MODE"]);
+  const policy = parseRuntimePolicy(env);
+  policyError(() => assertOperationAllowed(policy, "database"), ["GOAL_HINT_BUDGET_APPROVAL_REF"]);
+  policyError(() => assertOperationAllowed(policy, "database", (_reference, requirement) => requirement !== "database-access"), ["GOAL_HINT_DATABASE_ACCESS_REF"]);
+  assert.doesNotThrow(() => assertOperationAllowed(policy, "database", verifySyntheticEvidence));
+});
+
+test("remote database access cannot bypass target ownership and budget evidence through development or test mode", () => {
+  for (const mode of ["development", "test"]) {
+    const targetField = mode === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL";
+    const env = {
+      NODE_ENV: mode, GOAL_HINT_DATABASE_ENABLED: "true",
+      [targetField]: "mysql://synthetic:synthetic-remote-password@synthetic.invalid/synthetic_isolated_target",
+      GOAL_HINT_DATABASE_CONNECTION_MODE: "direct", GOAL_HINT_DATABASE_POOL_LIMIT: "2", GOAL_HINT_DATABASE_TLS_MODE: "required",
+      GOAL_HINT_DATABASE_ACCESS_REF: "synthetic-database-access-evidence",
+      GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS: "0", GOAL_HINT_BUDGET_APPROVAL_REF: "synthetic-budget-approval",
+    };
+    for (const field of ["GOAL_HINT_DATABASE_ACCESS_REF", "GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS", "GOAL_HINT_BUDGET_APPROVAL_REF"]) {
+      policyError(() => parseRuntimePolicy({ ...env, [field]: undefined }), [field]);
+    }
+    const policy = parseRuntimePolicy(env);
+    policyError(() => assertOperationAllowed(policy, "database"), ["GOAL_HINT_DATABASE_ACCESS_REF", "GOAL_HINT_BUDGET_APPROVAL_REF"]);
+    for (const blocked of ["database-access", "budget-approval"]) {
+      policyError(() => assertOperationAllowed(policy, "database", (_reference, requirement) => requirement !== blocked), [
+        blocked === "database-access" ? "GOAL_HINT_DATABASE_ACCESS_REF" : "GOAL_HINT_BUDGET_APPROVAL_REF",
+      ]);
+    }
+    assert.doesNotThrow(() => assertOperationAllowed(policy, "database", verifySyntheticEvidence));
+  }
+});
+
+test("migration authorization checks its actual target instead of inheriting a local application allowance", () => {
+  for (const mode of ["development", "test"]) {
+    const applicationField = mode === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL";
+    const env = {
+      NODE_ENV: mode, GOAL_HINT_DATABASE_ENABLED: "true",
+      [applicationField]: "mysql://synthetic@127.0.0.1/synthetic_local_app",
+      MIGRATION_DATABASE_URL: "mysql://synthetic-migrator@synthetic.invalid/synthetic_remote_migration",
+    };
+    const localApplication = parseRuntimePolicy(env);
+    assert.doesNotThrow(() => assertOperationAllowed(localApplication, "database"));
+    policyError(() => assertOperationAllowed(localApplication, "database-migration"), [
+      "GOAL_HINT_DATABASE_ACCESS_REF", "GOAL_HINT_BUDGET_APPROVAL_REF", "GOAL_HINT_DATABASE_TLS_MODE",
+    ]);
+    const configured = parseRuntimePolicy({
+      ...env, GOAL_HINT_DATABASE_CONNECTION_MODE: "direct", GOAL_HINT_DATABASE_POOL_LIMIT: "2", GOAL_HINT_DATABASE_TLS_MODE: "required",
+      GOAL_HINT_DATABASE_ACCESS_REF: "synthetic-migration-target-access-evidence",
+      GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS: "0", GOAL_HINT_BUDGET_APPROVAL_REF: "synthetic-budget-approval",
+    });
+    policyError(() => assertOperationAllowed(configured, "database-migration"), ["GOAL_HINT_DATABASE_ACCESS_REF", "GOAL_HINT_BUDGET_APPROVAL_REF"]);
+    policyError(() => assertOperationAllowed(configured, "database-migration", (_reference, requirement) => requirement !== "database-access"), ["GOAL_HINT_DATABASE_ACCESS_REF"]);
+    assert.doesNotThrow(() => assertOperationAllowed(configured, "database-migration", verifySyntheticEvidence));
+    const missingMigration = parseRuntimePolicy({ ...env, MIGRATION_DATABASE_URL: undefined });
+    policyError(() => assertOperationAllowed(missingMigration, "database-migration"), ["MIGRATION_DATABASE_URL"]);
+  }
 });
 
 test("the process accessor validates once and retains its immutable policy until restart", async () => {

@@ -238,7 +238,7 @@ values or references only; a referenced policy must resolve all listed details.
 
 | ID / subject | Status | Decision or evidence still required and authoritative source | Owner | Affected configuration | First dependent prompt |
 | --- | --- | --- | --- | --- | --- |
-| OP-01 Database target and privileges | **Unresolved** | Choose the local/live PostgreSQL target, connection/pooling mode, least-privilege application role and separate migration access; authorize the isolated test target. No database integration is established by 001. Specification §§9–10, 13; prompt 003. | Unassigned; user decision/evidence required | `GOAL_HINT_DATABASE_ENABLED`, `DATABASE_URL`, `TEST_DATABASE_URL`; Deferred: database hosting/connection/privilege policy | **003** |
+| OP-01 Database target and privileges | **MySQL selected; live target unresolved** | The user's 7 October 2026 instruction supersedes PostgreSQL with MySQL. Select MySQL 8.4 LTS/InnoDB and the compatible Prisma 7 direct adapter runtime locally. Live hosting, actual least-privilege grants, separate direct migration access, TLS/certificate evidence, process/replica connection capacity and authorized target credentials remain unresolved. Any remote or production target needs trusted database-access and budget evidence; remote development/test mode is not an exemption. Isolated local integration evidence belongs in the progress record and does not authorize a hosted target. Specification §§9–10, 13; prompt 003. | Unassigned; user decision/evidence required for live deployment | `GOAL_HINT_DATABASE_ENABLED`, `DATABASE_URL`, `TEST_DATABASE_URL`, `MIGRATION_DATABASE_URL`, `GOAL_HINT_DATABASE_CONNECTION_MODE`, `GOAL_HINT_DATABASE_POOL_LIMIT`, connection/acquisition/idle timeout settings, `GOAL_HINT_DATABASE_TLS_MODE`, `GOAL_HINT_DATABASE_TLS_CA_FILE`, `GOAL_HINT_DATABASE_ACCESS_REF`; Deferred: verified live target ownership/grants/isolation/TLS/capacity and itemized infrastructure approval | **003**; hosted qualification **046** |
 | OP-02 Numeric and consistency policy | **Unresolved** | Set probability-group sum and cross-market tolerances and the deterministic conflict-check details. Valid AI groups outrank conflicting fallback groups; unsupported/conflicting families must be omitted and audited. No arbitrary epsilon or normalization is approved. §§7–8; prompt 005. | Unassigned; user decision/evidence required | `GOAL_HINT_PROBABILITY_SUM_TOLERANCE`, `GOAL_HINT_CONSISTENCY_TOLERANCE`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: versioned consistency/conflict rules | **005**, before production candidates are accepted |
 | OP-03 Provider account and reset evidence | **Evidence required** | Verify authorized account identity, actual direct Mega limits, quota headers/reset boundary, expiry, conservative reset/probe protocol and current payable total within US$45. EAT midnight is not the assumed provider reset. Limiter implementation may use isolated simulations; provider trial owns actual account proof. §§11, 14–15; prompts 006–008. | Unassigned; user evidence required | `GOAL_HINT_FOOTBALL_ACCOUNT_EVIDENCE_REF`, `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS`; Deferred: verified account/reset/expiry/active-limit metadata | **006** for live limiter behavior; verification **008** |
 | OP-04 Private provider access | **Evidence required** | Supply authorized private-use entitlement and server key before any bounded provider probe/trial. Key presence alone does not prove subscription or rights. The trial cannot purchase, renew or change plans. §§6, 14–15; prompts 007–008. | Unassigned; user evidence required | `GOAL_HINT_FOOTBALL_ENABLED`, `API_FOOTBALL_KEY`, `GOAL_HINT_FOOTBALL_PRIVATE_USE_REF`, `GOAL_HINT_OPERATION_SCOPE` | **007** for optional live probes; trial **008** |
@@ -324,3 +324,124 @@ package entries**, all from the same unpatched `braces` advisory recorded under
 reports zero vulnerabilities. The historical 001 audit remains a record of its
 then-current five entries; it is not the current dependency count. No forced
 framework downgrade or dependency-peer bypass was applied.
+
+## 003 — MySQL runtime, migrations and connection policy
+
+**Decision date:** 7 October 2026. **Status:** MySQL selected by the user;
+local runtime implemented with database-backed verification tracked separately.
+
+The user's MySQL instruction supersedes the original PostgreSQL choice.
+The specification and prompt 003 now require MySQL 8.4 LTS/InnoDB. Historical
+001/002 compatibility notes remain records of their original state; they do not
+override this selection. No hosting service, account, paid provisioning,
+production credential or operator identity is inferred.
+
+| Package or runtime choice | Decision and evidence |
+| --- | --- |
+| Prisma CLI/client | Pin `prisma@7.10.0` and `@prisma/client@7.10.0`. Their [CLI metadata](https://registry.npmjs.org/prisma/7.10.0) and [client metadata](https://registry.npmjs.org/@prisma/client/7.10.0), checked through npm on the decision date, accept Node `^20.19`, `^22.12` or `>=24.0`; the client accepts TypeScript `>=5.4`. The existing Node `24.18.1` and TypeScript `5.9.3` satisfy those requirements. Retain the requested stable Prisma 7 major. |
+| MySQL adapter | Pin `@prisma/adapter-mariadb@7.10.0` to match the Prisma packages. [Official MySQL documentation](https://www.prisma.io/docs/orm/v7/core-concepts/supported-databases/mysql) specifies the MySQL datasource provider and this connector adapter for standard MySQL. Its package name does not select a MariaDB server. |
+| Connector security override | Pin `mariadb@3.5.4` and scope the npm override to the adapter's connector dependency. [Adapter metadata](https://registry.npmjs.org/@prisma/adapter-mariadb/7.10.0) declares `mariadb@3.4.5`, affected by [GHSA-cqhc-2h57-wpxf](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-cqhc-2h57-wpxf). The [text-protocol SQL escaping advisory](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-r3rv-jm3r-62q2) requires `3.5.4` on the 3.5 branch; the [maintainer release](https://github.com/mariadb-corporation/mariadb-connector-nodejs/releases/tag/3.5.4) records these fixes. [Connector metadata](https://registry.npmjs.org/mariadb/3.5.4) requires Node `>=20`. Recheck the scoped override with subsequent adapter updates and actual tests. |
+| Server baseline | MySQL 8.4 LTS with InnoDB, based on [MySQL's release tracks](https://dev.mysql.com/doc/refman/8.4/en/mysql-releases.html). This is the chosen compatibility baseline, not a claim that a live server is configured or that it is the latest major. |
+| Client generation | Use `prisma-client` with custom ignored output under `src/server/generated/prisma`, ESM, Node runtime and `.ts` import/file extensions. The [official generator reference](https://www.prisma.io/docs/orm/v7/prisma-schema/overview/generators) documents this arrangement. Reproduce generation without a database URL; guarded server services own access and generated clients stay outside browser imports. |
+
+The baseline contains no application models. An initial non-domain migration
+records the starting point; provider identities, markets, jobs, quotas, evidence
+and immutable history arrive in their owning prompts. No users, sessions or
+authentication schema is added. Temporary integration probes remain confined to
+a harness-owned disposable target and are never public application data.
+
+Use one lazy bounded client/pool per process, retained across Next development
+module reloads. Requests reuse it; workers and one-off scripts use explicit
+shutdown. The server runtime exposes guarded query/transaction access and
+sanitized `ready`/`unavailable` checks. It does not add a public diagnostic
+endpoint or log URLs, SQL parameters or raw driver errors. Transaction retries
+belong to idempotent feature services, with bounded contention handling; an
+arbitrary callback is not automatically replayed.
+
+`DATABASE_URL` is the application connection, `TEST_DATABASE_URL` is isolated
+test access, and `MIGRATION_DATABASE_URL` is separate direct migration access.
+Neither test nor migration credentials fall back to the application URL.
+The supported runtime connection mode is explicit `direct`; live proxy/pooling
+compatibility remains an evidence requirement. Local defaults bound the pool
+to five connections, 5,000 ms connection and 10,000 ms acquisition timeouts, and
+30 seconds idle timeout. Remote/production pool sizing must be configured and account
+for every replica, worker and concurrent deployment version.
+
+Remote/production access requires verified TLS and hostname/certificate checks,
+using system trust or an approved private CA PEM file. Disabled TLS is confined
+to local loopback development/tests. Unknown connection URL parameters are
+rejected rather than accepted as unverified provider options. Any remote
+application/test target, or any target in production mode, also requires explicit
+direct mode and pool sizing, infrastructure cap, budget approval reference and
+`GOAL_HINT_DATABASE_ACCESS_REF`. Trusted `budget-approval` and `database-access`
+verification must establish actual target ownership, connection security,
+least-privilege application/migration grants and required isolation. A remote
+development/test target does not bypass those checks. Owned loopback development
+and test contexts retain the bounded local defaults. These settings and a successful probe do not prove least-privilege
+grants, provider terms, backups or production capacity.
+
+The database boundary evaluates the actual application URL, or test URL in test
+mode. The separate `database-migration` boundary evaluates the migration URL.
+Configuring a local application target cannot waive remote migration access or
+budget evidence requirements.
+
+Migration credentials own only their approved DDL/migration privileges. The
+application receives feature-specific database/table access, without global
+administration, account creation, grant delegation, DDL or `_prisma_migrations`
+rights. Append-only forecast/evidence/audit grants and constraints belong to the
+features that create those tables. Hosted grants and secure credential delivery
+remain unresolved; a local test administrator is not an application role design.
+
+Store UTC instants in `DATETIME(3)` with explicit connector/session timezone
+handling and UTC serialization. [MySQL's temporal reference](https://dev.mysql.com/doc/refman/8.4/en/datetime.html)
+explains that `DATETIME` carries no timezone conversion. Store monetary totals
+in integer minor units and probabilities/rates in exact decimal types; later
+features choose precision, scale, bounds and rounding from validated contracts.
+Use InnoDB foreign keys, unique keys, compatible collations and transaction row
+locks or conditional updates with ownership/version fencing. Real contention
+checks, rather than a connection-scoped lock alone, prove each durable invariant.
+
+Schema evolution follows expand/backfill/contract with old-version compatibility.
+[MySQL DDL implicitly commits](https://dev.mysql.com/doc/refman/8.4/en/implicit-commit.html),
+so failed migrations require inspection and a reviewed forward repair/resolution.
+Application rollback preserves applied migration history and original data; it
+does not automatically reset, down-migrate or overwrite newer history with a
+backup. Backup/restore qualification remains prompt 045.
+
+Generate incremental migrations offline from the committed
+`prisma/schema.snapshot.prisma` to the current Prisma schema with
+`migrate diff --script`. `db:migrate -- --name <lowercase_identifier>` writes
+reviewable SQL and advances the snapshot only for a nonempty SQL change. It
+does not access a live or shadow database. Review and commit the migration and
+snapshot together; unsupported/custom SQL constraints, triggers and grants
+remain separately reviewed and tested. Deployment/status/verification use only
+the explicit migration target. `db:verify` checks migration status and
+Prisma-representable schema drift without repairing it.
+
+The operator CLI and health command have no wired trusted budget/access
+evidence verifier, so their remote/production target operations intentionally
+fail closed. The shared runtime accepts a supplied verifier; configured
+approval-reference strings do not establish evidence. An approved future
+operator integration must wire verified records before those commands can
+run. No mode change, direct CLI invocation or environment-reference string is
+an authorization workaround.
+
+The targetless Prisma config reads only the wrapper-prepared migration URL and
+does not import private server services. Generation adds the server-only marker
+after generated TypeScript header comments, preserving `@ts-nocheck` and license
+text; the pinned generator supports the empty schema without an extra flag.
+Nonempty process `DEBUG` blocks database construction and queries, including a
+value captured when the module loaded, so adapter debug namespaces cannot bypass
+the normal sanitized logging policy.
+
+The isolated harness must own a fresh private data directory/server and
+disposable database, verify identity before mutation/cleanup, and leave existing
+services and data untouched. `MYSQL_TEST_SERVER_BINARY` selects an installed
+test binary only; it is not application configuration or authorization to use
+an existing database. A name prefix, unequal URLs and `NODE_ENV=test` are guards,
+not isolation proof. Actual migration deployment/status, transaction rollback,
+concurrency, UTC, grants and cleanup evidence are recorded in
+[development progress](development-progress.md). Until those checks run, they
+remain explicitly pending. A successful isolated local run still cannot clear
+the unresolved live target, TLS, privileges, capacity or budget gates in OP-01
+and OP-12. The operational procedures are in [the database runbook](database.md).

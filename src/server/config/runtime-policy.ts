@@ -103,7 +103,13 @@ const disabledFeature = z.literal("false").optional();
 const databaseUrl = optional(z.string().refine((value) => {
   try {
     const url = new URL(value);
-    return /^(postgres|postgresql):$/.test(url.protocol) && url.hostname.length > 0 && url.pathname.length > 1;
+    const user = decodeURIComponent(url.username);
+    const database = decodeURIComponent(url.pathname.slice(1));
+    decodeURIComponent(url.password);
+    return url.protocol === "mysql:" && url.hostname.length > 0 && /^\/[^/]+$/.test(url.pathname)
+      && user.length > 0 && !/[\0\r\n]/.test(user)
+      && database.length > 0 && database.length <= 64 && !/[\0/\\]/.test(database)
+      && url.hash === "" && (url.port === "" || Number(url.port) > 0);
   } catch {
     return false;
   }
@@ -118,8 +124,17 @@ const environmentSchema = z.object({
   GOAL_HINT_FOOTBALL_ENABLED: enabled.describe("Use true or false; paid calls require approved bounded policy."),
   GOAL_HINT_AI_ENABLED: enabled.describe("Use true or false; AI calls require an approved separate budget."),
   GOAL_HINT_RESEARCH_ENABLED: enabled.describe("Use true or false; research calls require licensing and a separate budget."),
-  DATABASE_URL: databaseUrl.describe("Supply a PostgreSQL connection URL with a host and database (003)."),
-  TEST_DATABASE_URL: databaseUrl.describe("Supply a separate isolated PostgreSQL test URL (003)."),
+  DATABASE_URL: databaseUrl.describe("Supply a MySQL connection URL with a host and one database (003)."),
+  TEST_DATABASE_URL: databaseUrl.describe("Supply a separate isolated MySQL test URL (003)."),
+  MIGRATION_DATABASE_URL: databaseUrl.describe("Supply separate direct MySQL migration credentials; never fall back to the application URL (003)."),
+  GOAL_HINT_DATABASE_CONNECTION_MODE: optional(z.literal("direct")).describe("Approve direct MySQL TCP access; hosted proxy compatibility remains a deployment decision (003/046)."),
+  GOAL_HINT_DATABASE_POOL_LIMIT: count.describe("Set the positive per-process pool limit; production sizing must be explicit (003/046)."),
+  GOAL_HINT_DATABASE_CONNECT_TIMEOUT_MS: count.transform((value) => value ?? 5_000).pipe(z.int().positive().max(2_147_483_647)).describe("Use a positive connection timeout within the platform timer range, in milliseconds (003)."),
+  GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS: count.transform((value) => value ?? 10_000).pipe(z.int().positive().max(2_147_483_647)).describe("Use a positive acquisition timeout within the timer range, greater than the connection timeout (003)."),
+  GOAL_HINT_DATABASE_IDLE_TIMEOUT_SECONDS: count.transform((value) => value ?? 30).pipe(z.int().positive().max(2_147_483)).describe("Use a positive idle timeout within the platform timer range, in seconds (003)."),
+  GOAL_HINT_DATABASE_TLS_MODE: optional(z.enum(["disabled", "required"])).describe("Require verified TLS remotely/in production; disabled is permitted only for local development/tests (003)."),
+  GOAL_HINT_DATABASE_TLS_CA_FILE: text.describe("Supply the approved CA PEM file path when system trust is insufficient; never disable certificate verification (003)."),
+  GOAL_HINT_DATABASE_ACCESS_REF: text.describe("Reference verified target ownership, connection/TLS policy, application/migration grants and test isolation for remote/production access (003)."),
   API_FOOTBALL_KEY: token.describe("Supply a server-only credential without whitespace (007)."),
   AI_API_KEY: token.describe("Supply a server-only credential without whitespace (012)."),
   RESEARCH_API_KEY: token.describe("Supply a server-only credential without whitespace (011)."),
@@ -192,11 +207,22 @@ function assemble(settings: z.output<typeof environmentSchema>) {
     secrets: {
       databaseUrl: secret(settings.DATABASE_URL),
       testDatabaseUrl: secret(settings.TEST_DATABASE_URL),
+      migrationDatabaseUrl: secret(settings.MIGRATION_DATABASE_URL),
       footballKey: secret(settings.API_FOOTBALL_KEY),
       aiKey: secret(settings.AI_API_KEY),
       researchKey: secret(settings.RESEARCH_API_KEY),
     },
     choices: {
+      database: {
+        connectionMode: settings.GOAL_HINT_DATABASE_CONNECTION_MODE,
+        poolLimit: settings.GOAL_HINT_DATABASE_POOL_LIMIT,
+        connectTimeoutMs: settings.GOAL_HINT_DATABASE_CONNECT_TIMEOUT_MS,
+        acquireTimeoutMs: settings.GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS,
+        idleTimeoutSeconds: settings.GOAL_HINT_DATABASE_IDLE_TIMEOUT_SECONDS,
+        tlsMode: settings.GOAL_HINT_DATABASE_TLS_MODE,
+        tlsCaFile: settings.GOAL_HINT_DATABASE_TLS_CA_FILE,
+        accessRef: settings.GOAL_HINT_DATABASE_ACCESS_REF,
+      },
       competitionIds: settings.GOAL_HINT_COMPETITION_IDS,
       football: {
         payableMonthlyUsdCents: settings.API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS,
@@ -227,8 +253,18 @@ function assemble(settings: z.output<typeof environmentSchema>) {
 }
 
 export type RuntimePolicy = ReturnType<typeof assemble>;
-const operations = ["database", "football", "research", "ai", "private-shadow", "publication"] as const;
+const operations = ["database", "database-migration", "football", "research", "ai", "private-shadow", "publication"] as const;
 export type Operation = typeof operations[number];
+
+export function isLoopbackDatabaseHost(host: string): boolean {
+  return ["localhost", "127.0.0.1", "[::1]"].includes(host);
+}
+
+function databaseApprovalRequired(policy: RuntimePolicy, migration = false): boolean {
+  const target = migration ? policy.secrets.migrationDatabaseUrl
+    : policy.mode === "test" ? policy.secrets.testDatabaseUrl : policy.secrets.databaseUrl;
+  return policy.mode === "production" || (target !== null && !isLoopbackDatabaseHost(new URL(target.read()).hostname));
+}
 
 /** Pure parsing for isolated contracts/tests; never mutates env or performs I/O. */
 export function parseRuntimePolicy(env: Environment): RuntimePolicy {
@@ -269,11 +305,16 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
       issues.push({ field, reason: environmentSchema.shape[field].description ?? "Required for this operation." });
     }
   };
-  if (operation === "database") {
+  if (operation === "database" || operation === "database-migration") {
+    const migration = operation === "database-migration";
     need("GOAL_HINT_DATABASE_ENABLED", policy.capabilities.database);
-    need(policy.mode === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL",
-      policy.mode === "test" ? policy.secrets.testDatabaseUrl : policy.secrets.databaseUrl);
-    if (policy.mode === "production") {
+    need(migration ? "MIGRATION_DATABASE_URL" : policy.mode === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL",
+      migration ? policy.secrets.migrationDatabaseUrl : policy.mode === "test" ? policy.secrets.testDatabaseUrl : policy.secrets.databaseUrl);
+    if (databaseApprovalRequired(policy, migration)) {
+      need("GOAL_HINT_DATABASE_CONNECTION_MODE", policy.choices.database.connectionMode);
+      need("GOAL_HINT_DATABASE_POOL_LIMIT", policy.choices.database.poolLimit);
+      if (policy.choices.database.tlsMode !== "required") need("GOAL_HINT_DATABASE_TLS_MODE", null);
+      need("GOAL_HINT_DATABASE_ACCESS_REF", policy.choices.database.accessRef);
       if (policy.choices.budgets.infrastructureMonthlyUsdCents === null) need("GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS", null);
       need("GOAL_HINT_BUDGET_APPROVAL_REF", policy.choices.budgets.approvalRef);
     }
@@ -346,6 +387,9 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
 
 function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
   const issues: PolicyIssue[] = [];
+  if (policy.choices.database.acquireTimeoutMs <= policy.choices.database.connectTimeoutMs) {
+    issues.push({ field: "GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS", reason: "Pool acquisition timeout must exceed the connection timeout." });
+  }
   if (policy.scope === "production" && policy.mode !== "production") {
     issues.push({ field: "NODE_ENV", reason: "Public production publication requires production mode." });
   }
@@ -368,7 +412,7 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
 }
 
 export type EvidenceRequirement =
-  | "budget-approval" | "football-private-use" | "football-account" | "football-public-rights"
+  | "budget-approval" | "database-access" | "football-private-use" | "football-account" | "football-public-rights"
   | "research-license" | "calibration-configuration" | "evidence-policy" | "freshness-policy"
   | "shadow-protocol" | "pipeline-integrity" | "quality-qualification" | "release-approval";
 export type EvidenceVerifier = (reference: string, requirement: EvidenceRequirement) => boolean;
@@ -378,14 +422,19 @@ export function assertOperationAllowed(policy: RuntimePolicy, operation: Operati
   if (!operations.includes(operation)) throw new RuntimePolicyError([{ field: "operation", reason: "Unknown operation; no authorization is granted." }]);
   validateOperationConfiguration(policy, operation);
   // Individual paid calls cannot bypass the enclosing shadow or release gate.
-  if (operation !== "database" && operation !== "private-shadow" && operation !== "publication") {
+  const databaseOperation = operation === "database" || operation === "database-migration";
+  const databaseNeedsApproval = databaseApprovalRequired(policy, operation === "database-migration");
+  if (!databaseOperation && operation !== "private-shadow" && operation !== "publication") {
     if (policy.scope === "shadow") assertOperationAllowed(policy, "private-shadow", verifyEvidence);
     if (policy.scope === "production") assertOperationAllowed(policy, "publication", verifyEvidence);
   }
   const requirements: [keyof typeof environmentSchema.shape, string | null, EvidenceRequirement][] = [];
   const { choices } = policy;
-  if (operation !== "database" || policy.mode === "production") {
+  if (!databaseOperation || databaseNeedsApproval) {
     requirements.push(["GOAL_HINT_BUDGET_APPROVAL_REF", choices.budgets.approvalRef, "budget-approval"]);
+  }
+  if (databaseOperation && databaseNeedsApproval) {
+    requirements.push(["GOAL_HINT_DATABASE_ACCESS_REF", choices.database.accessRef, "database-access"]);
   }
   if (operation === "football" || operation === "private-shadow" || operation === "publication") {
     requirements.push(["GOAL_HINT_FOOTBALL_PRIVATE_USE_REF", choices.football.privateUseRef, "football-private-use"]);

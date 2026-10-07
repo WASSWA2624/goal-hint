@@ -1,0 +1,5 @@
+datasource db {
+  provider = "mysql"
+}
+
+// Last migration's data model. Offline generation advances this snapshot.

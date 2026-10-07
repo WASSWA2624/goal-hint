@@ -4,6 +4,7 @@ out/
 dist/
 coverage/
 .tmp/
+src/server/generated/
 *.tsbuildinfo
 next-env.d.ts
 npm-debug.log*
