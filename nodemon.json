@@ -1,0 +1,14 @@
+{
+  "watch": [
+    "src",
+    "public",
+    "next.config.ts",
+    "tsconfig.json",
+    ".env{,.*}",
+    ".env.example"
+  ],
+  "ext": "*",
+  "ignore": ["**/*.md", ".next/**", "node_modules/**"],
+  "delay": 300,
+  "exec": "next dev"
+}

@@ -2,7 +2,7 @@
 
 This register records implementation choices and their evidence without changing
 the product requirements in [the specification](../app-write-up.md). Prompt 002
-will extend it into the operating decision register. Verification results belong
+extends it into the operating decision register below. Verification results belong
 in [development progress](development-progress.md); dependency metadata and
 documentation establish compatibility requirements, not passing application tests.
 
@@ -129,3 +129,198 @@ choices already settled by the specification remain settled.
 | **017 Client state** | Introduce stores only when state is needed. Follow the [official Redux Next.js guidance](https://redux.js.org/usage/nextjs): per-request/provider instances, no global store and no Redux access from Server Components. |
 | **020 Durable jobs** | Select the queue and standalone worker runner/build strategy. Plain Node does not resolve the TypeScript `@/*` alias; external server-service execution also needs the `react-server` export condition for `server-only`. Resolve both deliberately in the worker integration. |
 | **046 Staging deployment** | Confirm hosting and deployment configuration supporting long-lived polling, durable workers and shared limits, then verify the pinned runtime on that platform. No deployment is established by prompt 001. |
+
+## 002 — Runtime contract and evidence status
+
+**Decision date:** 7 October 2026. **Status:** implementation contract selected;
+external operating choices and validation remain as recorded below.
+
+The prompt 001 records above remain historical foundation decisions. The
+operating register below now owns the prompt 002 handoff. Sources are the
+[specification](../app-write-up.md), especially sections 1, 5–8, 11 and 14–15,
+and the numbered [development prompts](../dev-plan/000-index.md). The repository
+contains no operator approvals, provider account reports, rights agreements,
+prices for AI/research, qualification reports or deployment evidence that resolve
+the pending items. The specification's advertised commercial terms describe the
+selected plan; they do not establish an active subscription or its current
+payable total.
+
+`src/domain/public-policy.ts` owns the immutable, nonsecret public product
+policy. `src/server/config/runtime-policy.ts` owns credentials, operation scope,
+enablement flags, limits and evidence references. Public exports must not contain
+private operational settings or secrets. Configuration validation is not a
+provider trial, legal review, qualification result or deployment approval.
+
+`GOAL_HINT_OPERATION_SCOPE` is `disabled`, `trial`, `shadow` or `production`,
+separately from the technical `NODE_ENV` build mode. Production operation scope
+requires `NODE_ENV=production`; a technical production build with `trial` scope
+may perform authorized private trial work without becoming a production release.
+Optional capabilities are disabled by default;
+unset operating choices remain unresolved rather than becoming a zero allowance
+or an enabled feature. `GOAL_HINT_DATABASE_ENABLED`,
+`GOAL_HINT_FOOTBALL_ENABLED`, `GOAL_HINT_AI_ENABLED` and
+`GOAL_HINT_RESEARCH_ENABLED` select affected capabilities. An enabled live
+operation must satisfy its own prerequisites. A production build with those
+capabilities disabled can still render the foundation. `NODE_ENV=test` cannot
+authorize live paid/provider work, shadow operation or public forecast
+publication. Isolated test contracts remain usable without live secrets.
+
+The infrastructure monthly cap must be explicitly configured for database
+operation under `NODE_ENV=production` and private shadow/publication. An explicit zero can record a
+deliberately approved free infrastructure cap; an unset cap remains unresolved.
+The approval must be verified, and later features must itemize applicable service
+rates and caps before enabling their live use. Comparing `TEST_DATABASE_URL`
+with `DATABASE_URL` rejects identical configured targets, but this structural
+check does not prove that differently written URLs address isolated databases.
+Prompt 003 must establish actual test-target isolation before database tests.
+
+Evidence-reference settings identify operator-supplied records; supplying a
+nonempty reference does not prove that its underlying evidence exists, is
+current or passes its owning prompt. `parseRuntimePolicy` checks configuration
+structure and readiness prerequisites only. `assertOperationAllowed` also
+requires a trusted evidence-verifier callback for applicable rights, budget,
+account, pipeline-integrity, quality and release references. An absent verifier,
+a false result or a thrown verification error denies the operation. Future
+consumers must supply verification against recorded evidence before dispatch,
+publication or release. This repository currently provides no live proof
+verifier or live operation consumer. Never set approval references from
+synthetic test output or treat a successful API response as rights/quality proof.
+
+Status meanings:
+
+- **Settled:** an authoritative product or implementation requirement is recorded.
+- **Unresolved:** a required operator choice has not been supplied.
+- **Evidence required:** a selected requirement needs real verification; no pass
+  is inferred from documentation, credentials or mocks.
+- **Excluded:** optional scope remains disabled until an explicit later decision
+  and its validation requirements are satisfied.
+
+No operating, incident, legal or release role is explicitly assigned by the
+specification. Its “Prepared for Wasswa Wilson” attribution is not an assignment
+of those duties. Each pending row therefore records an unassigned owner and the
+user decision/evidence required. First dependent prompts identify the earliest
+feature that needs the missing value or proof for its affected live path;
+independent local work may proceed. Ask for the missing input at that dependency,
+after completing useful independent work.
+
+## 002 — Settled product and operational requirements
+
+These are definitions to preserve, not pending choices to reopen. Detailed domain
+algorithms and infrastructure are implemented by their owning prompts.
+
+| Decision | Status and authoritative requirement | Definition or affected configuration | First implementation consumer |
+| --- | --- | --- | --- |
+| Identity and origin | **Settled**, specification opening table and §15: Goal Hint; canonical production origin `https://goalhint.com`. Registration, DNS and HTTPS are separately unverified. | `publicPolicy` identity/origin | 002; canonical discovery 042 |
+| Access and product scope | **Settled**, §1: free anonymous public pages/read endpoints; no visitor accounts, tokens, authentication cookies, payments, betting, subscriptions, social features, AI chat or public admin dashboard. Private jobs use private service controls. | `publicPolicy` access/scope; private mutation credential configuration is server-owned | 002; private jobs 020 |
+| Launch locale/theme | **Settled**, §§1, 12–13, 15: English and light mode. Prepare reusable extension points without enabling additional locales, dark mode or selectors. | `publicPolicy` launch locale/theme; reserved optional flags cannot enable them | 002; UI 015–016 |
+| Advertising | **Excluded** at launch, §§1, 14–15. Future consent, audience, rights and layout decisions are required before enabling ads. | Fixed disabled public policy; reserved ad flag cannot enable it | 002; any later scope change requires a new decision |
+| Exact scores | **Excluded** from the launch contract, §§4, 7 and prompt 005. No operator approval or validated score distribution exists. Any later approval must specify a validated complete score distribution, its own probability, source/timing/consistency checks and separate reporting/evaluation; it cannot silently join the four-family headline metrics. | Fixed disabled public policy; reserved exact-score flag cannot enable it | 002; reconsideration/validation begins at 005 before downstream use |
+| Reporting calendar and daily run | **Settled**, §5: `Africa/Kampala` reporting dates; stored instants UTC; one logical run at 00:00 EAT, `0 21 * * *` UTC on the previous date. Selection is `[D 00:00, D+7 00:00)` in EAT, today plus six days. No hourly/last-minute AI refreshes. | Shared server/runtime schedule policy; public reporting timezone/window | 004; daily selection 021 |
+| Publication cutoff | **Settled**, §§4–5: kickoff minus five minutes; publication strictly before cutoff. Observed earlier play closes writes immediately. Previous-day eligible revisions may serve early kickoffs. | Shared server/runtime cutoff policy | 004; publication/locking 022–024 |
+| Four market families | **Settled**, §4: match result; derived double chance; over/under 2.5; both teams to score. Regulation time includes stoppage time and excludes extra time/penalties. Highest unrounded probability wins with ties in the specification's listed order. | Public market family list; shared domain rules introduced by 005 | 005 |
+| Probability and source semantics | **Settled**, §§4, 7–8: finite values strictly between zero and one; complete outcome groups; double chance derived from one accepted match-result source group. No guessed values, implicit odds conversion, source averaging or selection by higher source percentage. Numeric tolerances remain unresolved below. | Shared market rules; `GOAL_HINT_PROBABILITY_SUM_TOLERANCE`, `GOAL_HINT_CONSISTENCY_TOLERANCE` | 005 |
+| Primary predictor and fallback | **Settled**, §§1, 5, 7: valid AI families take priority; supported API-Football fallback may follow invalid/missing AI, timeout, insufficient evidence or exhausted budget. Missing news alone does not force fallback when approved evidence coverage is met. | Server source policy; AI/research/football capability flags | 011–013 |
+| Revision and settlement integrity | **Settled**, §§4–5, 8, 10–11: complete ordered snapshots; one publication per refresh identity; partial replacements drop old unsupported families. No valid family retains an eligible prior forecast with original age or stays unavailable. Immutable locks/history; verified regulation results only; corrections preserve locked picks and append audit history. | Shared server/domain invariants; database services arrive in 019–027 | 019 |
+| Selected football provider/plan/cap | **Settled**, §§6, 14–15: sole football-data/fallback provider API-Football by API-Sports, direct Mega; payable monthly ceiling **US$45 including taxes/payment charges**. Plan choice is not a purchase. The specification's US$39 advertised price is not a verified invoice. | Server football policy; `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS` must not exceed 4500 | 006–008 |
+| Account-wide dispatch ceilings | **Settled**, §§11, 14–15: at most 12/rolling second, evenly paced; 720/rolling 60 seconds; 120,000/verified provider day, containing a 20,000 essential reserve and leaving 30,000 headroom below the stated Mega quota. All replicas/environments/tools/retries share accounting; uncertain attempts count conservatively; use lower active ceilings; shared-state failure pauses calls. | Shared server/runtime football limits; account evidence/reset configuration remains pending | 006 |
+| Shared polling and visitor independence | **Settled**, §§5, 11: one leased poller, 15-second live checks while active/approaching, 60-second EAT date/results and active unresolved checks. Browser views may refresh app endpoints every 15–30 seconds and slow/pause in background. Public visits/polls never trigger provider research or AI. | Shared server/runtime cadences; approaching/result horizon choices below | 026; browser refresh 037 |
+| Evidence timestamps and missingness | **Settled**, §§5–7: retain evidence cutoff, generation, publication, retrieval and provider-update times separately. An absent update time remains unknown; retrieval does not make an unchanged forecast newly generated. Missing injury data does not imply a fully fit squad. Source text is untrusted data. | Evidence/freshness policy references; owning adapters preserve unknown values | 007; evidence 011 |
+| Third-party images and attribution | **Settled**, §6: approved credential-free HTTPS URL strings, loaded directly by native browser images, no download/proxy/optimizer/binary storage/persistent image cache. First-party Goal Hint branding may be bundled. Rights and media-host restrictions still need proof below. | Provider/public serializers and shared image components; rights references | 007–008; UI 018 |
+| Honest reporting and targets | **Settled**, §§8, 11, 14–15: provisional unvalidated estimates, no guaranteed accuracy or calibration claim without adequate evidence; locked fixture/market picks counted once with AI/fallback/pending/unavailable/void breakdowns. Benchmark 100/500/1,000 then the full seven-day workload. 1,000 jobs by 01:00 EAT and final badges within two minutes are provisional/proposed targets requiring deployment measurements, not service commitments. | Quality/protocol references; reporting rules 014/030; qualification 047 | 014 |
+
+## 002 — Unresolved operating decisions and verification dependencies
+
+Every row has owner **Unassigned — user decision or evidence required** unless
+the row is later updated with an explicit assignment. `Deferred:` names identify
+future contracts to be introduced by the owning prompt; they are **not accepted
+environment settings** in prompt 002. Existing environment settings hold selected
+values or references only; a referenced policy must resolve all listed details.
+
+| ID / subject | Status | Decision or evidence still required and authoritative source | Owner | Affected configuration | First dependent prompt |
+| --- | --- | --- | --- | --- | --- |
+| OP-01 Database target and privileges | **Unresolved** | Choose the local/live PostgreSQL target, connection/pooling mode, least-privilege application role and separate migration access; authorize the isolated test target. No database integration is established by 001. Specification §§9–10, 13; prompt 003. | Unassigned; user decision/evidence required | `GOAL_HINT_DATABASE_ENABLED`, `DATABASE_URL`, `TEST_DATABASE_URL`; Deferred: database hosting/connection/privilege policy | **003** |
+| OP-02 Numeric and consistency policy | **Unresolved** | Set probability-group sum and cross-market tolerances and the deterministic conflict-check details. Valid AI groups outrank conflicting fallback groups; unsupported/conflicting families must be omitted and audited. No arbitrary epsilon or normalization is approved. §§7–8; prompt 005. | Unassigned; user decision/evidence required | `GOAL_HINT_PROBABILITY_SUM_TOLERANCE`, `GOAL_HINT_CONSISTENCY_TOLERANCE`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: versioned consistency/conflict rules | **005**, before production candidates are accepted |
+| OP-03 Provider account and reset evidence | **Evidence required** | Verify authorized account identity, actual direct Mega limits, quota headers/reset boundary, expiry, conservative reset/probe protocol and current payable total within US$45. EAT midnight is not the assumed provider reset. Limiter implementation may use isolated simulations; provider trial owns actual account proof. §§11, 14–15; prompts 006–008. | Unassigned; user evidence required | `GOAL_HINT_FOOTBALL_ACCOUNT_EVIDENCE_REF`, `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS`; Deferred: verified account/reset/expiry/active-limit metadata | **006** for live limiter behavior; verification **008** |
+| OP-04 Private provider access | **Evidence required** | Supply authorized private-use entitlement and server key before any bounded provider probe/trial. Key presence alone does not prove subscription or rights. The trial cannot purchase, renew or change plans. §§6, 14–15; prompts 007–008. | Unassigned; user evidence required | `GOAL_HINT_FOOTBALL_ENABLED`, `API_FOOTBALL_KEY`, `GOAL_HINT_FOOTBALL_PRIVATE_USE_REF`, `GOAL_HINT_OPERATION_SCOPE` | **007** for optional live probes; trial **008** |
+| OP-05 Initial competitions and trial allowance | **Unresolved** | Choose representative initial candidate competitions and a bounded account-counted trial request allowance, then approve launch coverage from observed field/status/market quality and budgets. No worldwide coverage or enabled competition is inferred from Mega endpoint access. §§1, 6, 14–15; prompt 008. | Unassigned; user decision/evidence required | `GOAL_HINT_COMPETITION_IDS`, `GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT`; Deferred: competition/season coverage settings | **008** before live trial |
+| OP-06 Football/prediction/logo rights | **Evidence required** | Verify public data/prediction redistribution, credential-free remote-image display rights, attribution/reuse restrictions and separate media-host throttling for the expected audience. Private entitlement is not public redistribution permission. §§6, 15; prompt 008. | Unassigned; user evidence required | `GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF`; Deferred: source/media rights, approved URL and reuse metadata | **008**; public use remains blocked |
+| OP-07 Football freshness and unknown times | **Unresolved / evidence required** | Trial-backed source-specific fallback freshness, supported family coverage, pre-match availability and acceptance of unknown provider update/generation times are missing. Unknown remains unknown; retrieval time cannot substitute silently. Require independently verified regulation-score/status mappings and document any validated BTTS derivation. §§6–7, 15; prompts 008/013. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`, `GOAL_HINT_FOOTBALL_ACCOUNT_EVIDENCE_REF`; Deferred: supported fallback derivations/coverage and unknown-timestamp eligibility rules | **008**; fallback consumes proof **013** |
+| OP-08 Structured source retention | **Unresolved** | Define permission-compatible retention/reuse of normalized/raw structured provider responses and attribution records before persistent catalog caching/import. Private evidence use needs its applicable rights; public display/redistribution needs public rights. Preserve required forecast/audit history; do not invent an unlimited retention entitlement. §§6, 10, 13, 15; prompt 009. | Unassigned; user decision/evidence required | `GOAL_HINT_FOOTBALL_PRIVATE_USE_REF`, `GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF` according to use; Deferred: structured-source retention/reuse policy | **009**; backup application **045** |
+| OP-09 AI spending policy | **Unresolved** | Approve a separate AI monthly cap, provider/model rate versions, billed units, currency/accounting-period conversions and conservative reservations/retry/unknown-usage reconciliation. A missing cap or unpriced call is not free work. §§7, 14–15; prompt 010. | Unassigned; user decision/evidence required | `GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS`, `GOAL_HINT_AI_PROVIDER`, `GOAL_HINT_AI_MODEL`, `GOAL_HINT_BUDGET_APPROVAL_REF`; Deferred: versioned billing/rates and per-job monetary cap | **010** before paid AI dispatch |
+| OP-10 Research spending policy | **Unresolved** | Approve the independent research/search cap, selected service's rate/unit/currency/accounting rules and conservative reconciliation, including retries. Do not borrow AI or football allowances. §§6–7, 14–15; prompt 010. | Unassigned; user decision/evidence required | `GOAL_HINT_RESEARCH_MONTHLY_BUDGET_USD_CENTS`, `GOAL_HINT_RESEARCH_PROVIDER`, `GOAL_HINT_BUDGET_APPROVAL_REF`; Deferred: versioned research rates and per-job monetary cap | **010** before paid research dispatch |
+| OP-11 Per-job operating bounds | **Unresolved** | Set request/token/time ceilings and a usable time/quota reserve for fallback; document per-provider allocation and cost handling. Counts and monetary caps are different controls. No timeout, token budget or free allowance is approved by the specification. §§7, 11, 14; prompt 010. | Unassigned; user decision/evidence required | `GOAL_HINT_JOB_REQUEST_LIMIT`, `GOAL_HINT_JOB_TOKEN_LIMIT`, `GOAL_HINT_JOB_TIMEOUT_SECONDS`, `GOAL_HINT_BUDGET_APPROVAL_REF`; Deferred: fallback time/quota reservation and per-service allocation | **010**; orchestration **025** |
+| OP-12 Infrastructure budgets | **Unresolved** | Approve itemized caps/cost accounting for database, queue/workers/web hosting, network egress, monitoring and domain renewal. Production database and shadow/publication require an explicit infrastructure cap and verified approval; an explicitly approved zero may cover deliberate free infrastructure, while unset is unresolved. The aggregate cap is not approval to provision a service or assume its rate; later features must itemize applicable rates/caps. These remain separate from AI, research and the API-Football payable cap. §§14–15. | Unassigned; user decision/evidence required | `GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS`, `GOAL_HINT_BUDGET_APPROVAL_REF`; Deferred: itemized database/hosting/network/monitoring/domain budgets and contracted rates | **003** live database; **007** billable egress; **020** queue/workers; **031** paid cache; **044** monitoring; **046** web hosting; **049** domain renewal |
+| OP-13 Licensed research and source permissions | **Unresolved** | Select the actual licensed search/news service and permitted official sources; provide credentials, attribution/extraction/reuse/display terms and retention permissions. Football data access does not license articles. §§6–7, 15; prompt 011. | Unassigned; user decision/evidence required | `GOAL_HINT_RESEARCH_ENABLED`, `GOAL_HINT_RESEARCH_PROVIDER`, `RESEARCH_API_KEY`, `GOAL_HINT_RESEARCH_LICENSE_REF`; Deferred: permitted sources/claims/reuse metadata | **011**; pricing prerequisite **010** |
+| OP-14 Evidence coverage/conflicts | **Unresolved** | Set minimum evidence coverage, missing-news behavior under that threshold, source-specific freshness, conflicting-claim handling and unknown/publication-time eligibility before live evidence use. Confirmed facts and rumors remain distinct; late evidence cannot enter an earlier cutoff. §§6–8, 15; prompt 011. | Unassigned; user decision/evidence required | `GOAL_HINT_EVIDENCE_POLICY_REF`, `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: versioned coverage/source-conflict/unknown-time policy | **011** |
+| OP-15 AI predictor and calibration configuration | **Unresolved** | Select the approved predictor/model/prompt/schema and calibration configuration with training/calibration windows and provenance. Verify the chosen API and rates. A configured artifact or successful call cannot establish calibration quality; unvalidated output stays provisional. §§7–8, 15; prompt 012. | Unassigned; user decision/evidence required | `GOAL_HINT_AI_ENABLED`, `AI_API_KEY`, `GOAL_HINT_AI_PROVIDER`, `GOAL_HINT_AI_MODEL`, `GOAL_HINT_CALIBRATION_REF`; Deferred: versioned model/prompt/schema/calibration registry | **012**; rate selection **010**, evaluation **014** |
+| OP-16 Evaluation protocol and samples | **Unresolved** | Freeze chronological training/validation/calibration/final-test periods, matched fixtures/horizons, reconstructable baselines, minimum samples, quality/coverage gates and calibration aggregation before the final test. Historical comparisons require genuine pre-cutoff snapshots; otherwise plan prospective observations. §§8, 14–15; prompt 014. | Unassigned; user decision/evidence required | `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: versioned evaluation cohorts, samples, baselines, metrics and release thresholds | **014**; actual prospective evidence **047** |
+| OP-17 Public performance-claim gates | **Unresolved / evidence required** | Define minimum market/source/horizon samples and permitted claims, then gather sufficient independent evidence. No fixed accuracy promise is approved. Below-threshold public metrics must show insufficient data/provisional status. §§8, 15; prompts 014/030/038. | Unassigned; user decision/evidence required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`; Deferred: public-claim minimum samples and qualification results | **014** defines gates; public consumers **030/038** |
+| OP-18 Bounded shadow authorization | **Unresolved / evidence required** | Approve a private bounded protocol, maximum jobs/spend and evidence locations after applicable private provider/evidence-use rights, account, independent budgets and pipeline-integrity checks pass. Public redistribution/logo-display rights are required for public use, not isolated private shadow evidence collection. Candidate quality may remain unqualified while shadow gathers evidence. Shadow cannot publish production forecasts or declare qualification; a trusted verifier must validate applicable recorded evidence. Prompt 002, index gate and prompt 047. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE=shadow`, `GOAL_HINT_SHADOW_MAX_JOBS`, `GOAL_HINT_SHADOW_BUDGET_USD_CENTS`, `GOAL_HINT_SHADOW_PROTOCOL_REF`, `GOAL_HINT_PIPELINE_INTEGRITY_REF`; private provider/account, independent infrastructure/AI/research budgets and evidence/freshness/calibration prerequisites also apply | **014** prospective protocol; execution **047** after pipeline checks |
+| OP-19 Durable queue, worker runtime and private identity | **Unresolved** | Choose approved queue/runner/hosting and safe external TypeScript/module resolution, private job authentication/workload identity, deployment ownership and bounded lease/timeout/retry/concurrency settings. One long-lived leased poller is required. No managed service or paid infrastructure is inferred. §§9, 11, 13–15; prompt 020. | Unassigned; user decision/evidence required | Deferred: queue/worker hosting, service identity, leases, retry bounds and concurrency; existing job limits and infrastructure budget feed these contracts | **020**; hosted verification **046** |
+| OP-20 Selection eligibility and degraded finalization | **Unresolved** | Trial-backed competition/status eligibility and an explicit recorded degraded-manifest finalization policy/action are required. A partial immutable manifest must expose missing coverage; it cannot be silently completed later or treated as authoritative emptiness. §§5, 11, 15; prompt 021. | Unassigned; user decision/evidence required | `GOAL_HINT_COMPETITION_IDS`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: manifest/status eligibility and degraded-finalization policy | **021** |
+| OP-21 Publication-status freshness | **Unresolved** | Set the maximum age and conflict handling of provider kickoff/status observations used for publication/cutoff safety; stale or unknown eligibility cannot authorize a write. Acquire trial evidence first; use the bound transactionally. §§5, 7, 15; prompt 022. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: fixture-status publication freshness bound | **022**; trial evidence **008** |
+| OP-22 Polling horizons and approach threshold | **Unresolved** | Choose approaching-kickoff lead time, active/result window, unresolved-result horizon and progressively slower correction checks with bounded stopping/review rules. Preserve visible unresolved fixtures after midnight/outside the prediction window. §§5, 11, 15; prompt 026. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: poller approach thresholds, unresolved/correction horizons/cadences | **026** |
+| OP-23 Public query/search limits | **Unresolved implementation choice** | Set reusable validated response/page/search limits and anonymous search throttling from workload/security evidence; about 30 initial cards is the specification's default. No visitor credential or provider work may be added. §§11, 13; prompt 028. | Unassigned; implementation evidence required | Deferred: public query/page/search rate limits | **028** |
+| OP-24 Shared cache strategy and lifetimes | **Unresolved implementation choice** | Choose approved cache capability, active/historical lifetimes and recovery/invalidation/fencing policy compatible with 15/60-second cadences and measured final-badge latency. Cache hits preserve actual source sync times. §§11, 13; prompt 031. | Unassigned; implementation/infrastructure evidence required | Deferred: cache backend, active/historical TTL and invalidation/recovery policy; infrastructure budget if paid | **031** |
+| OP-25 Correction/dispute ownership and public process | **Unresolved** | The audited correction mechanics are settled; assign the actual correction/dispute owner, intake/review process, supporting-evidence rules and factual public statements. Do not promise an unapproved response time or operational policy. §§8, 12–15; prompt 038. | Unassigned; user decision/evidence required | Deferred: correction/dispute owner and public process policy | **038**; intake/legal consumers **040–041** |
+| OP-26 Analytics and visitor/log retention | **Unresolved** | Inventory actual log/search/browser-preference/remote-image data flows; choose whether analytics is used, its providers/purposes/recipients/retention and applicable consent/data-handling requirements before enabling tracking. Ads stay disabled. Retention must match actual configuration and permissions. §§12–13, 15; prompts 039/044. | Unassigned; user decision/evidence required | Deferred: analytics enablement/provider, visitor/telemetry/log retention and privacy data-flow policy | **039** notice facts; telemetry activation **044** |
+| OP-27 Operator identity, jurisdiction and legal facts | **Unresolved** | Obtain actual operator identity, audience/jurisdiction, lawful contact and owner-approved privacy/terms/dispute facts. “Prepared for” attribution supplies no legal identity, address, liability policy or signoff. Do not publish placeholders or invented legal assertions. §§13, 15; prompts 039–040. | Unassigned; user decision/evidence required | Deferred: approved operator/legal/privacy/terms content and factual evidence | **039**; terms **040** |
+| OP-28 Verified public contact route | **Unresolved** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
+| OP-29 Recovery watchdog ownership and thresholds | **Unresolved** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15; prompt 043. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization and recovery/incident owner | **043** |
+| OP-30 Alerts, destinations and monitoring service | **Unresolved** | Choose the authorized monitoring service, actionable outage/staleness/latency/quota/cost/expiry thresholds, severity/deduplication, recipients and notification approval. No recipient or unapproved test message is inferred. Telemetry must reconcile with privacy/retention decisions. §§11, 13–15; prompt 044. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget | **044** |
+| OP-31 Recovery objectives, backups and history retention | **Unresolved / evidence required** | Approve RPO/RTO, backup/PITR capabilities, encryption/access/retention and ownership for predictions, results, evidence, audits and structured source data within rights. Prove isolated restoration and safe limiter/job restart. No arbitrary deletion period or completed restore is inferred. §§13, 15; prompt 045. | Unassigned; user decision/evidence required | Deferred: RPO/RTO, backup/PITR and prediction/result/evidence/audit/backup retention policy | **045**; source retention prerequisites **009/011**, visitor notice **039** |
+| OP-32 Hosted deployment and account isolation | **Unresolved / evidence required** | Confirm actual web/database/queue/long-lived worker/poller infrastructure, scheduler/workload identity and authorized access. Choose account sharing vs genuinely separate provider accounts, durable cross-environment limits and poller observation/ownership transfer. Separate databases cannot create extra provider capacity. §§9, 11, 14–15; prompt 046. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE`, infrastructure/provider/budget references; Deferred: environment isolation, hosted runtime and poller ownership plan | **046**; database/queue choices earlier **003/020** |
+| OP-33 Quality qualification and measured commitments | **Evidence required** | Accumulate real prospective samples under the frozen protocol; prove market/source/horizon quality and coverage, calibrated-claim eligibility, full-slate cost/capacity and cadence/latency targets. Simulated load is not elapsed shadow observation or unapproved paid-call authority. §§8, 14–15; prompt 047. | Unassigned; user evidence/commitment decision required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: qualification report and approved measurement-supported commitments | **047**, with protocol choices fixed **014** |
+| OP-34 Release decision and signoff | **Unresolved / evidence required** | Assign production release authority and record actual go/no-go evidence tied to build/configuration. All required rights/account/budget/quality/recovery/monitoring/legal gates must pass; an environment reference cannot substitute for missing evidence or owner approval. §§14–15; prompt 048. | Unassigned; user decision/evidence required | `GOAL_HINT_RELEASE_APPROVAL_REF`, `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_OPERATION_SCOPE=production`; Deferred: release owner and readiness report | **048** |
+| OP-35 Domain and production operation | **Evidence required** | Verify authorized domain registration/DNS/HTTPS/canonical redirects, current payable/account/budget state, deployment access and approved release/rollback/observation ownership. No purchase, deployment, production URL or successful scheduler run is established by the specification. §§12, 14–15; prompt 049. | Unassigned; user decision/evidence required | Public canonical origin remains fixed; server production scope/release references; Deferred: authorized domain/DNS/deployment and rollback evidence | **049** |
+
+## 002 — Separate private-shadow and production gates
+
+The requirement to evaluate is settled; the missing samples and quality approval
+are not. A candidate must be able to gather prospective evidence without being
+misrepresented as qualified.
+
+| Scope | Required prerequisites | What it permits / evidence status |
+| --- | --- | --- |
+| Disabled/local contracts | Valid nonsecret settled policy and isolated local/test settings; live capability flags off. | Foundation rendering and deterministic contracts/tests. No paid/provider dispatch or forecast release. |
+| Private provider trial | Authorized private provider use, credentials, payable cost within the fixed cap and account-counted bounded trial allowance; applicable budget controls and trusted verification of required evidence. Select candidate competitions before competition/fixture trials; account/status probes do not need a competition list. | Bounded private collection of missing account/coverage/freshness/rights evidence, including a technical production build with trial operation scope. Public redistribution, final coverage or model quality is not assumed. |
+| Private shadow | Verified applicable private provider/evidence-use rights and account, approved independent AI and enabled-research budgets plus an explicit infrastructure cap, priced bounded calls, selected model/calibration and evidence/freshness/tolerance policies, pipeline-integrity evidence and a frozen bounded protocol with maximum jobs/spend. A trusted verifier must validate applicable recorded evidence. | Private isolated prospective forecasts may gather missing quality evidence without public redistribution/logo-display permission. Quality qualification and production-release approval are not prerequisites to gathering that evidence; neither is claimed by the run. No production forecast publication. |
+| Production forecasting/release | `NODE_ENV=production` and production operation scope; all applicable provider/private and public rights, independent explicit budgets, evidence/freshness, numeric, model and pipeline prerequisites plus completed quality/sample/coverage gates, measured qualification and explicit release approval. A trusted verifier must validate applicable recorded evidence. Release readiness also verifies backups, recovery/incident ownership, actual legal/contact content, hosting/domain and monitoring evidence. | Only qualified authorized production operations. Missing mandatory decisions/evidence or failed/absent verification block the affected live path with an actionable reason; public claims must satisfy their separate sample/claim gates. |
+
+`parseRuntimePolicy` checks configuration structure and required references;
+`assertOperationAllowed` additionally requires trusted evidence verification,
+and denies operations when verification is absent, false or throws. Future
+consumers and the owning prompts must verify real rights, billing, pipeline and
+qualification evidence. There is no live proof verifier or live dispatch in this
+feature. Until those checks pass, no environment file, flag, evidence-reference
+string, synthetic fixture, successful build or private shadow forecast authorizes
+live work or establishes production qualification.
+
+## 002 — Schema validation and development restart tooling
+
+Pin `zod@4.6.5` for typed environment schemas and reusable validation. Its
+[official schema API](https://zod.dev/api) and
+[publisher metadata](https://registry.npmjs.org/zod/4.6.5) were checked on
+7 October 2026; the selected TypeScript/runtime and actual type-check/build pass.
+Do not expose raw schema errors: the runtime contract emits only documented
+field names and static guidance, and secret wrappers redact serialization.
+
+At the user's explicit request, pin development-only `nodemon@3.1.14` and run
+`next dev` through it. The [publisher metadata](https://registry.npmjs.org/nodemon/3.1.14)
+supports Node >=10, including the pinned Node 24 runtime. Follow
+[nodemon's configuration/watch documentation](https://github.com/remy/nodemon#config-files).
+`nodemon.json` watches source, public assets, Next/TypeScript configuration and
+environment files, with a 300 ms save debounce and generated files excluded.
+The `.env{,.*}` glob catches files created after startup; explicitly watching the
+tracked `.env.example` enables dotfile monitoring. Windows smoke checks proved
+creation and later edits restart the server. Literal absent paths and plain
+`.env*` failed that check, so those patterns are not used.
+Next.js retains browser Fast Refresh; nodemon restarts the server.
+Existing development processes use their original command until restarted.
+
+The current full audit now reports **seven high-severity development-only
+package entries**, all from the same unpatched `braces` advisory recorded under
+001. Nodemon adds the `nodemon > chokidar > braces` chain. Production-only audit
+reports zero vulnerabilities. The historical 001 audit remains a record of its
+then-current five entries; it is not the current dependency count. No forced
+framework downgrade or dependency-peer bypass was applied.

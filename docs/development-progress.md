@@ -99,3 +99,119 @@ and the broader operating decision register; prompt 003 owns Prisma/PostgreSQL.
 No product, provider, quality, staging or release gate is claimed by this
 foundation. Deferred choices and their first affected prompts are listed in the
 [decision register](implementation-decisions.md).
+
+## 002 — Runtime policy
+
+Date: 7 October 2026 (Africa/Kampala).
+
+Status: implemented; runtime-policy acceptance checks and nodemon save/restart
+verification passed. External integrations and unresolved choices remain pending
+at their owning prompts.
+
+### Implemented behavior
+
+Added one immutable public product projection and a typed server-owned runtime
+contract. Settled identity/origin, English/light/free access, regulation-time
+markets and 2.5 goals line, EAT/seven-day/daily cadence, strict five-minute
+publication cutoff, AI priority/fallback, shared provider quotas, direct Mega and
+the US$45 payable ceiling have discoverable definitions. Ads, extra locales,
+dark mode and exact scores stay disabled; contradictory overrides fail.
+
+Private secrets require explicit reads and redact string/JSON serialization.
+Environment parsing rejects malformed supplied values, unknown app settings,
+public environment exports, duplicate IDs, invalid/unsafe numbers, excessive
+allowances and equal declared live/test database targets. Missing optional
+choices remain `null`. Enabled affected capabilities fail structural validation
+when required configuration is unresolved.
+
+Next's Node instrumentation validates the process policy once. Service/worker
+operation guards additionally require trusted verification of the relevant
+rights, budget, account and pipeline records; arbitrary reference strings grant
+no authority. Individual paid calls cannot bypass their enclosing phase gate.
+Private shadow may gather quality evidence after its applicable private-use,
+budget and pipeline prerequisites; production additionally requires public
+rights, actual quality qualification and release approval. Test mode cannot
+authorize paid/provider or forecasting work, and database tests never fall back
+to the live URL. No live evidence verifier/provider/worker was created.
+
+At the user's added request, `npm run dev` now uses pinned nodemon to restart the
+Next development server on saved source, asset, configuration and environment
+changes, including files created after startup. Next.js continues browser Fast
+Refresh.
+
+### Changed files
+
+- `src/domain/public-policy.ts`: immutable browser-safe settings and type.
+- `src/server/config/runtime-policy.ts`: schemas, private policy, redacted
+  errors/secrets, configuration validation and trusted-evidence operation guards.
+- `src/instrumentation.ts`: Node startup validation without importing private
+  configuration into Edge/client modules.
+- `src/app/layout.tsx`, `src/app/page.tsx`: reuse the shared brand/locale settings.
+- `scripts/check-runtime-policy.mjs`, `.env.example`, `README.md`: structural
+  configuration command and documented local workflow without credentials.
+- `package.json`, `package-lock.json`, `tsconfig.json`: exact Zod/nodemon pins,
+  Node server condition for tests, native TypeScript import support and commands.
+- `nodemon.json`: scoped save watching and restart debounce.
+- `tests/runtime-policy.test.mjs`: synthetic configuration, redaction, readiness,
+  immutable projections, example environment and live-gate failure cases.
+- `docs/implementation-decisions.md`, this file: preserved prior records and
+  comprehensive settled/unresolved operating handoff with first dependencies.
+
+### Verification
+
+Node `v24.18.1`, npm `11.16.0`; Next telemetry disabled for verification. All
+credential, policy and evidence fixtures were explicitly synthetic. No real
+provider/database calls, purchases, messages or deployment occurred.
+
+| Command/check | Result |
+| --- | --- |
+| `npm install zod@4.6.5`; `npm install --save-dev nodemon@3.1.14` | Passed; exact manifest/lockfile pins. |
+| `npm run check` | Passed: lint with zero warnings, strict type-check, then-current 25 tests, and production Turbopack build. |
+| Final `npm test` after test refinements | Passed: **26 tests**, zero failures/skips (5 boundary + 21 runtime-policy groups). |
+| `npm run policy:check` | Passed with no local configuration required; prints structural readiness only. |
+| `node --conditions=react-server --env-file=.env.example scripts/check-runtime-policy.mjs` | Passed with the complete committed example; no credentials/approvals enabled. |
+| Production instrumentation with synthetic provider key and enabled trial capability but missing payable/budget/use-rights policy | Rejected server preparation; HTTP 500, no synthetic credential in logs or response. Next remained listening until the owned test process was stopped; no healthy startup or affected operation was claimed. |
+| Default `npm start -- --hostname 127.0.0.1 --port 3101` and anonymous HTTP check | Passed: HTTP 200, shared heading, no visitor cookie or private policy fields in HTML. Owned server stopped afterward. |
+| Nodemon isolated save/restart smoke on port 3104 | Passed: source edit restarted the real Next child and returned updated HTTP 200 output; existing `.env.local` edits restarted; final glob configuration detected initially absent `.env.local` creation and subsequent edits with distinct child processes and updated HTTP 200 output. 137 generated files plus an explicit `.next` write caused no further restart. Owned servers stopped, port 3104 closed. |
+| `git diff --exit-code -- app-write-up.md dev-plan assets public`; `git diff --check` | Passed; specification, plans and brand assets preserved. Existing staged/unrelated foundation work retained. |
+| `npm audit --omit=dev --json` | Passed: zero reported production vulnerabilities. |
+| Full `npm audit --json` | Seven high-severity development-only package entries from the same unpatched braces advisory; historical 001 had five. Nodemon/chokidar add two affected chain entries. |
+
+One malformed-URL refinement initially propagated a native URL exception. It
+was replaced with a guarded validator; sentinel-based tests now confirm static
+redacted errors across message, stack, JSON and inspection. Reviews also exposed
+the need to verify underlying evidence, rather than accept nonempty references;
+the final operation guard fails closed without a trusted verifier.
+
+The first repo-local nodemon smoke encountered the user's already-running Next
+development lock; that process was left running. Isolated synthetic Next projects
+were used instead. Literal absent environment paths and a plain `.env*` glob
+missed newly created files on Windows. The final `.env{,.*}` pattern, with the
+tracked `.env.example` explicitly watched to enable dotfile monitoring, passed
+creation/edit checks in a fixture without a dot-directory ancestor.
+
+### Handoff and unresolved dependencies
+
+The [decision register](implementation-decisions.md) contains 35 current
+unresolved/evidence items, with source, unknown ownership where appropriate,
+affected accepted configuration or explicitly deferred fields, and first prompt.
+The next dependency is the database target/connection/privilege and isolated-test
+choice in **003**. Numeric tolerances follow in **005**; account/credentials,
+competitions and rights in **006–008**; spending/providers/evidence/model choices
+in **010–014**. Queue/private jobs (**020**), status/polling (**022/026**), public
+claims/legal/contact (**030/038–041**), recovery/monitoring/backups (**043–045**),
+hosting/shadow qualification/release/domain (**046–049**) remain explicitly
+pending. No missing choice is treated as approved or requested prematurely.
+
+Actual evidence verification, quota/spend accounting, database target isolation,
+workers, prospective quality and deployment checks belong to their owning
+prompts. No live capability is enabled by the defaults/example. Existing ESLint
+EOL, braces audit and npm optional postinstall-policy limitations remain recorded.
+Prompt 003 was not started.
+
+Automatic approval review rejected recursive removal of the verified owned
+nodemon smoke fixture with “blocked by policy” and supplied no further reason.
+The ignored synthetic fixture/logs remain under `.tmp`; no alternate deletion
+route was attempted. Further watcher verification output remains under ignored
+`out/`. All owned test processes were stopped; the user's development process
+was preserved.
