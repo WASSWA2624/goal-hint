@@ -1130,3 +1130,58 @@ source permissions and freshness, model/calibration selection and evaluation
 proof. Source summary reuse does not automatically permit AI disclosure. No live
 AI adapter, actual rate resolver or quality approval was invented. **012 remains
 unchecked** until its required selected integration and checks are complete.
+
+## Prompt 013 — Validated provider fallback
+
+Implemented the local fallback adapter and complete candidate resolver on
+**9 October 2026 EAT**. Read the [fallback runbook](provider-fallback.md) for
+private caller contracts, market evidence and live qualification requirements.
+
+Use the existing API-Football adapter and shared durable quota gateway. Resolve
+the original, independently authenticated 012 result; acquire fallback only for
+missing, invalid or expired source groups or an authenticated failed attempt.
+Preserve valid AI distributions, evidence-grounded reasons, uncertainty,
+coverage, model/evidence identity and original clocks. Match result and derived
+double chance always share one complete distribution and source. Shared 005
+rules validate the combined snapshot and omit conflicting fallback groups.
+
+The current provider mapping accepts only complete `predictions.percent`
+home/draw/away percentages, explicitly converted from percent to probability,
+under independently verified regulation-period and response-correlation proof.
+Goal thresholds, winner/advice fields and comparison statistics supply no full
+over/under 2.5 or BTTS distribution. **Provider total-goals and BTTS fallback
+remain unsupported; exact score remains disabled.** No complement, odds
+conversion, averaging or unrecorded derivation fills those gaps.
+
+The committed [008 trial report](reports/provider-trial-008.md) contains zero real
+observations and zero dispatched requests. Official endpoint guidance identifies
+the percentage fields and an hourly cadence, but establishes neither actual
+account coverage nor a forecast's generation/update timestamp. The current
+normalized response keeps both source clocks unknown. An explicit approved
+policy must permit flagged unknown generation and, separately, bounded
+retrieval-only treatment of unknown update time before an attempt can proceed.
+There is no default age, retention permission or unknown-time acceptance.
+
+| Operating record | Remaining actual evidence or decision |
+| --- | --- |
+| OP-03/04/06 Account and rights | Actual account/private-use entitlement, applicable quota/reset evidence, permitted attribution and public prediction display rights. Real source URLs require independent permission proof. |
+| OP-07 Freshness and mapping | Separate fixture and forecast retrieval/source age limits, unknown generation/update handling, regulation mapping, supported coverage and actual pre-match availability. Hourly cadence cannot stand in for record timestamps. |
+| OP-08 Structured retention | Permitted job-cache reuse/retention of normalized responses and attribution records; existing private permission grants no public redistribution rights. |
+| OP-11 Job allowances | Original owning-job request, timeout and deadline ceilings, with separately allocated fallback opportunity. AI failure grants no extra football allowance. |
+| OP-15 AI model | The unresolved selected 012 provider/model/calibration integration. A synthetic accepted AI receipt cannot qualify that integration. |
+
+Within one job, authorized cached normalized responses retain their original
+retrieval and source clocks. The adapter pins the approved job bounds; the
+service's workflow deadline separately narrows an individual call. Repeated
+cache access cannot renew spent requests or widen the original job deadline.
+Final dispatch checks occur before quota reservation and immediately before
+actual HTTP, with uncertain attempts conservatively accounted. All approval,
+catalogue and source checks remain current through final candidate verification.
+
+Return every launch family as available or explicitly unavailable, with original
+source provenance and auditable omissions. Source expiry during final checks
+permits one bounded recomposition that preserves the other source and makes no
+extra request. Zero valid groups return `retain-previous-or-unavailable` for the
+later publication transaction; this feature selects no old market and writes no
+revision, lock or public endpoint. **013's local implementation and acceptance
+are complete; live fallback qualification remains pending the records above.**

@@ -866,3 +866,59 @@ test("approved third-party logos remain URL metadata and are never fetched by th
   assert.equal(state.network.length, 1);
   assert.equal(state.network[0].url.pathname, "/fixtures");
 });
+
+test("async operation authorization fails closed without credential reads, reservations or unhandled rejection", async () => {
+  for (const authorize of [async () => {}, async () => { throw new Error("Synthetic private async approval"); }]) {
+    let credentialReads = 0;
+    const state = setup({ authorize, options: { credential: { read() { credentialReads++; return KEY; } } } });
+    const result = await state.adapter.evidence.liveFixtures(bounds());
+    assert.equal(result.error.reason, "operation-not-authorized");
+    assert.equal(state.network.length, 0);
+    assert.equal(state.reservations.length, 0);
+    assert.equal(credentialReads, 0);
+  }
+});
+
+test("async structured-cache permission rejects reuse and drains rejected approval promises", async () => {
+  const state = setup({ respond: (url) => jsonResponse(url, [fixture()]), options: {
+    verifyCacheUse: async () => { throw new Error("Synthetic private async reuse approval"); },
+  } });
+  const request = bounds({ cacheMaxAgeMs: 10_000 });
+  assert.equal((await state.adapter.evidence.fixtures({ fixtureId: 1 }, request)).status, "complete");
+  assert.equal((await state.adapter.evidence.fixtures({ fixtureId: 1 }, request)).status, "complete");
+  assert.equal(state.network.length, 2);
+});
+
+test("fallback workflow is checked again inside the protected HTTP callback after claiming quota", async () => {
+  let allowed = true, dispatched = 0;
+  const state = setup({ respond: (url) => jsonResponse(url, []), options: { gateway: {
+    async execute(_request, transport) {
+      allowed = false;
+      try { await transport(new AbortController().signal, {}, () => {}); }
+      catch { return { status: "failed", reason: "uncertain" }; }
+      throw new Error("The revoked callback must not reach HTTP.");
+    },
+  } } });
+  const workflow = { signal: new AbortController().signal, deadlineAt: NOW + 1000,
+    check() { if (!allowed) throw new Error("Synthetic revoked canonical context"); }, beforeDispatch() { dispatched++; } };
+  const result = await state.adapter.fallback.predictions(1, bounds({ cacheScope: "synthetic-private-job" }), workflow);
+  assert.equal(result.status, "failed");
+  assert.equal(state.network.length, 0);
+  assert.equal(dispatched, 0);
+});
+
+test("fallback workflow rechecks a cached page after cache permission callbacks", async () => {
+  let allowed = true, checks = 0;
+  const prediction = { teams: fixture().teams, predictions: { percent: { home: "60%", draw: "25%", away: "15%" } } };
+  const state = setup({ respond: (url) => jsonResponse(url, [prediction]), options: { verifyCacheUse() {
+    if (++checks === 2) allowed = false;
+    return true;
+  } } });
+  const request = bounds({ cacheMaxAgeMs: 10_000, cacheScope: "synthetic-private-job" });
+  assert.equal((await state.adapter.fallback.predictions(1, request)).status, "complete");
+  const workflow = { signal: new AbortController().signal, deadlineAt: NOW + 1000,
+    check() { if (!allowed) throw new Error("Synthetic revoked source reuse"); } };
+  const result = await state.adapter.fallback.predictions(1, request, workflow);
+  assert.equal(result.error.reason, "operation-not-authorized");
+  assert.equal(state.network.length, 1);
+});

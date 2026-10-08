@@ -32,3 +32,13 @@ output validation. Candidates retain valid families, missingness, original
 clocks and explicit provisional/calibration state. Read the
 [predictor contract](../../docs/ai-predictor.md); actual provider selection and
 its concrete transport remain pending.
+
+Refresh callers use `createFallbackService` in `fallback/fallback-service.ts`
+with an authenticated original AI result, exact
+canonical context and approved remaining football allowance. Its adapter reuses
+the existing provider gateway/cache, validates current canonical aliases and
+fixture revision, and counts requests against the owning job. Keep match result
+and derived double chance together; unsupported fields remain unavailable.
+Current output expiry and permissions are rechecked after callbacks. The
+[fallback runbook](../../docs/provider-fallback.md) describes candidate/retention
+results and the actual source evidence still needed for live operation.

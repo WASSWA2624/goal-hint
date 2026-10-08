@@ -225,3 +225,14 @@ hooks and failure reasons. `npm run test:predictor` runs isolated genuine MySQL
 registry acceptance. No actual AI provider/model or calibration configuration
 has been selected; its provider-specific adapter and live integration remain
 incomplete, so **012 remains unchecked**.
+
+## Validated provider fallback
+
+Private refresh callers use `src/server/fallback` to retain valid AI groups and
+fill missing match-result groups through the shared API-Football quota gateway.
+Every candidate preserves source clocks, job-scoped cache provenance and explicit
+unavailable-family reasons; zero valid groups signal later retention logic.
+Read the [fallback runbook](docs/provider-fallback.md) for identity, freshness,
+budget and source-proof contracts. Current provider inputs do not support full
+total-goals or BTTS distributions. Actual trial mapping, freshness and rights
+evidence remain required before enabling live fallback.

@@ -1160,3 +1160,102 @@ approvals, mid-call permission/retention revocation, blocking preflight against
 fallback time, and freshness expiring during semantic verification. Synthetic
 valid outputs remain provisional; these checks establish contract behavior,
 not football prediction accuracy or calibration quality.
+
+## Prompt 013 — Validated provider fallback
+
+**Date:** 9 October 2026 EAT. The local adapter, complete candidate resolver and
+bounded refresh service are implemented. They use the existing API-Football
+transport and quota gateway with independently verified policy and ownership
+contracts. Local implementation and acceptance are complete; the recorded live
+trial, freshness, retention/rights, account and selected AI integration remain
+pending. Read the [fallback runbook](provider-fallback.md).
+
+### Changed files and behavior
+
+- Five server-only modules under `src/server/fallback/` define strict context,
+  receipts, provenance, explicit freshness policy, private adapter, resolution
+  rules and one bounded refresh service. Three focused suites and three
+  synthetic helpers exercise the actual 012 validation/calibration, 013
+  resolver/collector, 007 normalization and 006 quota gateway together.
+- The adapter verifies exact canonical fixture/version, cycle/run, home/away
+  aliases, kickoff, scheduled status, current permissions and approved response
+  mapping before and after collection. The original job identity and request
+  allowance persist across accesses; quotas remain account-wide through the
+  existing durable gateway. Approved cache hits preserve original clocks and
+  incur no new request. Exhausted cache misses are stopped before reservation.
+- `api-football-contract.ts` and `api-football-adapter.ts` add a private fallback
+  workflow with shared abort/deadline checks, before-reservation and final HTTP
+  dispatch hooks. Each retry consumes the owning allowance. Rejected asynchronous
+  approvals cannot authorize work; uncertain attempts retain their liability.
+  Four additional 007 regressions cover the extended workflow.
+- Valid AI groups retain priority. Complete provider match-result percentages
+  supply one distribution and its derived double chance under the shared 005
+  rules. Incomplete, unsupported or conflicting groups stay explicitly
+  unavailable. No source mixing, averaging, guessed complements, odds conversion
+  or exact-score output is introduced. Every result contains the complete set
+  of family availability decisions rather than inheriting old markets.
+- `predictor-output.ts` carries the pinned model's original `outputTiming` policy
+  and exposes a pure freshness check after authenticated receipt verification.
+  Candidates preserve AI evidence-grounded reasons, genuine source references,
+  uncertainty, coverage/missingness and immutable model/evidence provenance.
+  Provider reasons describe the supported statistical basis with permitted
+  real attribution only.
+- Generation, retrieval and update times remain distinct. Unknown provider
+  generation/update times require separate explicit approved policies and stay
+  flagged. Cached data cannot reset its age. Final checks cover source expiry,
+  context/permission changes and the complete wall/monotonic deadline. One
+  bounded recomposition can discard a newly expired source while preserving the
+  other, with no additional HTTP request.
+- The service preserves valid AI through failed or malformed fallback receipts,
+  records conservative request accounting, joins identical inflight requests
+  and rejects conflicting or excess work. Original job bounds remain separate
+  from shorter per-call deadlines so later permitted cache reuse stays valid.
+  Zero surviving families return `retain-previous-or-unavailable`; no prediction
+  revision, lock, schema migration, public provider route or scheduler is added.
+- README, private server/worker guidance, the fallback runbook and
+  [implementation decisions](implementation-decisions.md) document the caller
+  contracts and remaining live evidence.
+
+### Market-support evidence and remaining live checks
+
+Reviewed current official API-Sports endpoint guidance on 9 October 2026 EAT;
+the precise source links and limits are recorded in the runbook. The current
+normalized contract supports complete home/draw/away percentages under verified
+regulation mapping. Derived double chance shares that same source. Provider
+total-goals and BTTS remain unsupported because their required complete
+distributions or validated derivation are absent. Advice, winner picks, goal
+thresholds and comparison statistics cannot fill those gaps.
+
+The committed [008 trial report](reports/provider-trial-008.md) records **zero
+real observations and zero dispatched requests**. Actual fallback coverage,
+pre-match availability, source freshness and rights remain untested. OP-03/04/06,
+OP-07/08, OP-11 and OP-15 retain their account/rights, mapping/freshness/retention,
+job-allocation and selected AI integration requirements. No numeric freshness
+choice, unknown-time acceptance, live permission or supported binary distribution
+has been invented.
+
+### Confirmed acceptance
+
+Checks use pinned Node **24.18.1**, npm **11.16.0** and genuine MySQL **8.4.11**.
+The quota regression helper owned an isolated throwaway loopback server with
+separate migration/application roles, then stopped and cleaned only its owned
+data. All provider responses, credentials, source approvals, account evidence
+and AI receipts are synthetic; no live football, AI or research request was made.
+
+| Check | Result |
+| --- | --- |
+| Final `npm run check` | Passed guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **650 tests: 649 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. Log: `.tmp/fallback-full-check.log`. |
+| New fallback scenarios | **92 passed**: 27 provider adapter, 23 source-group resolution and 42 service-chain checks. They cover every failure trigger, complete AI priority, partial/unsupported groups, incomplete distributions, mixed-source conflicts, exact context, age/unknown clocks, revoked proof, quota/time exhaustion and original same-job cache provenance. |
+| Existing adapter regressions | All **52** API-Football tests passed, including **4 new** workflow/cancellation/final-dispatch checks, bringing this prompt's added checks to **96**. |
+| Genuine `npm run test:quota` | **27 passed, no failures/skips**, about **129 seconds** on the owned MySQL 8.4.11 server. Durable account-wide concurrency, rolling limits, reset uncertainty, single-use claims, header reconciliation, dispatch freshness, adapter retries and storage failures remain valid. Log: `.tmp/fallback-quota-regression.log`. |
+| Handoff | Tracked and untracked changed files pass whitespace checks; local Markdown links resolve. The 013 row is ticked in [the root tracker](../dev-tracker.md). Live provider qualification remains pending; 011 and 012 remain unchecked for their outstanding selected integrations. |
+
+The final service regression repeats one original job request with a ten-second
+job deadline and a one-second per-call allowance. After advancing the clock,
+the second resolution reuses the cached provider candidate with identical
+original timestamps, zero new dispatches and only one total quota reservation.
+Other final checks prove source expiry/revocation drops only affected groups,
+blocking approval time counts against the deadline, and a second expiry during
+the bounded recomposition prevents a late candidate. These checks establish
+contract and accounting behavior, not football prediction accuracy or live
+coverage.

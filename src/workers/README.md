@@ -34,3 +34,11 @@ restart. Preserve candidate provenance and family failure reasons for 013/019;
 the predictor performs no fallback selection, publication or durable scheduling.
 See the [predictor runbook](../../docs/ai-predictor.md) for actual integration
 decisions still required before live use.
+
+After an AI attempt, pass its original verified result into
+`createFallbackService` with the same fixture/cycle/run and owning job. Reuse
+one provider adapter/account/cache scope and approved remaining bounds across
+accesses; a new request ID cannot renew that job's allowance. Preserve complete
+candidate snapshots, per-family source/failure provenance and the zero-valid
+retention instruction for later publication. Public read routes must never run
+fallback. See the [fallback runbook](../../docs/provider-fallback.md).

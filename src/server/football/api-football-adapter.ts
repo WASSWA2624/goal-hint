@@ -6,7 +6,7 @@ import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } fro
 import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoints,
   type ApiFootballBounds, type ApiFootballEndpoint, type ApiFootballFailure,
   type ApiFootballPageProvenance, type ApiFootballResult, type ApiFootballCachePermission,
-  type ApiFootballBatchEvidence } from "./api-football-contract.ts";
+  type ApiFootballBatchEvidence, type ApiFootballFallbackWorkflow } from "./api-football-contract.ts";
 import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatistics,
   normalizeAvailability, normalizePlayerStatistics, normalizeFallbackPrediction,
   normalizeAccountStatus,
@@ -187,26 +187,45 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
   if (!positive(capacity) || capacity > 10_000 || !/^[a-f0-9]{64}$/u.test(options.accountId)) throw new Error("Invalid API-Football adapter configuration.");
   const cache = new Map<string, Page<unknown>>();
   const inFlight = new Map<string, Promise<PageOutcome<unknown>>>();
-  function authorized(): boolean { try { options.authorize(); return true; } catch { return false; } }
+  function authorized(): boolean {
+    try {
+      const approval: unknown = options.authorize();
+      if (approval instanceof Promise) void approval.catch(() => undefined);
+      return approval === undefined;
+    } catch { return false; }
+  }
   function credential(): string | null {
     try { const key = options.credential.read(); return typeof key === "string" && /^[\x21-\x7e]{1,512}$/u.test(key) ? key : null; }
     catch { return null; }
   }
   function permitted<T>(endpoint: ApiFootballEndpoint, bounds: ApiFootballBounds, page: Page<T>): boolean {
     if (bounds.cacheMaxAgeMs === 0 || !options.verifyCacheUse) return false;
-    try { return options.verifyCacheUse(Object.freeze({ endpoint, purpose: endpoint === "predictions" ? "fallback-only" : "structured-evidence",
+    try {
+      const approval: unknown = options.verifyCacheUse(Object.freeze({ endpoint, purpose: endpoint === "predictions" ? "fallback-only" : "structured-evidence",
       cacheScope: endpoint === "predictions" ? bounds.cacheScope! : null, maxAgeMs: bounds.cacheMaxAgeMs,
-      retrievedAt: page.provenance.retrievedAt, data: page.data })) === true; } catch { return false; }
+      retrievedAt: page.provenance.retrievedAt, data: page.data }));
+      if (approval instanceof Promise) void approval.catch(() => undefined);
+      return approval === true;
+    } catch { return false; }
+  }
+  function workflowAllowed(workflow?: ApiFootballFallbackWorkflow): boolean {
+    if (workflow === undefined) return true;
+    try {
+      const checked: unknown = workflow.check();
+      if (checked instanceof Promise) void checked.catch(() => undefined);
+      return checked === undefined && !workflow.signal.aborted && clock.now() < workflow.deadlineAt;
+    } catch { return false; }
   }
   async function request<T>(endpoint: ApiFootballEndpoint, params: Params, bounds: ApiFootballBounds,
-    budget: Budget, normalize: Normalize<T>): Promise<PageOutcome<T>> {
+    budget: Budget, normalize: Normalize<T>, workflow?: ApiFootballFallbackWorkflow): Promise<PageOutcome<T>> {
     const url = new URL(apiFootballEndpoints[endpoint].path, API_FOOTBALL_ORIGIN);
     for (const key of Object.keys(params).sort()) url.searchParams.set(key, params[key]!);
     const workKey = createHash("sha256").update(JSON.stringify([options.accountId, url.href, endpoint === "predictions" ? bounds.cacheScope : null])).digest("hex");
-    if (!authorized()) return { error: failure("operation-not-authorized") };
+    if (!authorized() || !workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
     if (!credential()) return { error: failure("invalid-credential") };
     const cached = cache.get(workKey) as Page<T> | undefined;
     if (cached && clock.now() >= cached.provenance.retrievedAt && clock.now() - cached.provenance.retrievedAt < bounds.cacheMaxAgeMs && permitted(endpoint, bounds, cached)) {
+      if (!workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
       if (clock.now() >= bounds.deadlineAt) return { error: failure("deadline-exceeded") };
       cache.delete(workKey); cache.set(workKey, cached);
       return { page: { ...cached, provenance: { ...cached.provenance, fromCache: true } } };
@@ -220,7 +239,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         const outcome = await Promise.race([existing, new Promise<PageOutcome<T>>((resolve) => {
           timer = setTimeout(() => resolve({ error: failure("deadline-exceeded") }), Math.min(bounds.timeoutMs, Math.max(0, bounds.deadlineAt - clock.now())));
         })]);
-        if (!authorized()) return { error: failure("operation-not-authorized") };
+        if (!authorized() || !workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
         return clock.now() >= bounds.deadlineAt ? { error: failure("deadline-exceeded") } : outcome;
       } finally { clearTimeout(timer); }
     }
@@ -233,6 +252,12 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       let lastError: ApiFootballFailure = failure("transport-error", true);
       let attemptId = randomBytes(32).toString("hex");
       for (let attempt = 0; attempt < bounds.retry.maxAttempts; attempt++) {
+        if (!workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
+        try {
+          const reserveCheck: unknown = workflow?.beforeReserve?.();
+          if (reserveCheck instanceof Promise) void reserveCheck.catch(() => undefined);
+          if (reserveCheck !== undefined || !workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
+        } catch { return { error: failure("operation-not-authorized") }; }
         if (clock.now() >= bounds.deadlineAt) return { error: failure("deadline-exceeded") };
         if (budget.requests >= bounds.maxRequests) return { error: failure("request-budget-exhausted") };
         const key = credential();
@@ -242,8 +267,13 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         let didDispatch = false;
         const result = await options.gateway.execute({ requestId: attemptId, workKey, priority: bounds.priority,
           deadlineAt: bounds.deadlineAt, timeoutMs: Math.min(bounds.timeoutMs, bounds.deadlineAt - clock.now()) }, async (signal, _permit, observe) => {
+          if (!workflowAllowed(workflow)) throw new Error("Fallback refresh is no longer authorized.");
+          const dispatchCheck: unknown = workflow?.beforeDispatch?.();
+          if (dispatchCheck instanceof Promise) void dispatchCheck.catch(() => undefined);
+          if (dispatchCheck !== undefined) throw new Error("Fallback dispatch is no longer authorized.");
           didDispatch = true; budget.requests++;
-          const response = await fetcher(url, { method: "GET", headers: { "x-apisports-key": key }, signal,
+          const transportSignal = workflow === undefined ? signal : AbortSignal.any([signal, workflow.signal]);
+          const response = await fetcher(url, { method: "GET", headers: { "x-apisports-key": key }, signal: transportSignal,
             redirect: "error", credentials: "omit", cache: "no-store" });
           const retrievedAt = clock.now();
           const observation = quotaHeaders(response, retrievedAt);
@@ -255,7 +285,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           if (captured) captured = { ...captured, httpStatus: response.status, ...(observation.retryAfterMs === undefined ? {} : { retryAfterMs: observation.retryAfterMs }) };
           observe({ ...observation, kind: captured ? feedbackKind(captured) : "uncertain" });
           let body: unknown;
-          try { body = await readBody(response, bounds.maxResponseBytes, signal); }
+          try { body = await readBody(response, bounds.maxResponseBytes, transportSignal); }
           catch (error) {
             if (signal.aborted) throw error;
             captured = failure(error instanceof BodyFailure ? error.reason : "response-body-error");
@@ -311,7 +341,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           return { value: page, feedback: { ...observation, kind: "success" } };
         });
         if (result.status === "completed" && result.value) {
-          if (!authorized()) return { error: failure("operation-not-authorized") };
+          if (!authorized() || !workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
           if (clock.now() >= bounds.deadlineAt) return { error: failure("deadline-exceeded") };
           return { page: result.value };
         }
@@ -345,7 +375,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       requestsDispatched: budget.requests, error: error ? Object.freeze(error) : null });
   }
   async function run<T>(endpoint: ApiFootballEndpoint, queries: readonly Params[] | null, bounds: ApiFootballBounds,
-    normalize: Normalize<T>, expectedIds?: readonly number[]): Promise<ApiFootballResult<T>> {
+    normalize: Normalize<T>, expectedIds?: readonly number[], workflow?: ApiFootballFallbackWorkflow): Promise<ApiFootballResult<T>> {
     const budget: Budget = { requests: 0 }, data: T[] = [], pages: ApiFootballPageProvenance[] = [], missingCoverage: string[] = [];
     if (!queries || !validBounds(bounds, clock.now(), endpoint === "predictions")) return finished(data, pages, [], 0, budget, failure("invalid-request"));
     let error: ApiFootballFailure | null = null, invalidRows = 0;
@@ -356,7 +386,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
       let pageNumber = 1, totalPages: number | null = null;
       do {
         if (retrievedPages.length >= bounds.maxPages || data.length >= bounds.maxRows) { error = failure("pagination-incomplete"); break; }
-        const outcome = await request(endpoint, apiFootballEndpoints[endpoint].paginated ? { ...query, page: String(pageNumber) } : query, bounds, budget, normalize);
+        const outcome = await request(endpoint, apiFootballEndpoints[endpoint].paginated ? { ...query, page: String(pageNumber) } : query, bounds, budget, normalize, workflow);
         if (outcome.provenance) pages.push(...outcome.provenance);
         if (!outcome.page) { error = outcome.error ?? failure("transport-error"); break; }
         const page = outcome.page;
@@ -387,15 +417,16 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     }
     const missingIds = expectedIds?.filter((id) => !identities.has(id)) ?? [];
     if (missingIds.length > 0) error = error ?? failure("coverage-error");
-    if (!authorized()) return finished([], [], [], 0, budget, failure("operation-not-authorized"));
+    if (!authorized() || !workflowAllowed(workflow)) return finished([], [], [], 0, budget, failure("operation-not-authorized"));
     if (clock.now() >= bounds.deadlineAt) return finished([], [], [], 0, budget, failure("deadline-exceeded"));
     if (error === null) for (const page of retrievedPages) {
       if (permitted(endpoint, bounds, page)) {
+        if (!workflowAllowed(workflow)) return finished([], [], [], 0, budget, failure("operation-not-authorized"));
         cache.delete(page.cacheKey); cache.set(page.cacheKey, page);
         while (cache.size > capacity) cache.delete(cache.keys().next().value!);
       }
     }
-    if (!authorized()) return finished([], [], [], 0, budget, failure("operation-not-authorized"));
+    if (!authorized() || !workflowAllowed(workflow)) return finished([], [], [], 0, budget, failure("operation-not-authorized"));
     if (clock.now() >= bounds.deadlineAt) {
       for (const page of retrievedPages) cache.delete(page.cacheKey);
       return finished([], [], [], 0, budget, failure("deadline-exceeded"));
@@ -449,8 +480,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         positive(fixtureId) && ["lineups", "injuries"].includes(kind) ? [{ fixture: String(fixtureId) }] : null, bounds, (raw, context) => normalizeAvailability(raw, kind, context)),
       playerStatistics: (query: PlayerStatisticsQuery, bounds: ApiFootballBounds) => { const params = paired(query); return run("playerStatistics", params ? [params] : null, bounds, normalizePlayerStatistics); },
     }),
-    fallback: Object.freeze({ predictions: (fixtureId: number, bounds: ApiFootballBounds) => run("predictions",
-      positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeFallbackPrediction) }),
+    fallback: Object.freeze({ predictions: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("predictions",
+      positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeFallbackPrediction, undefined, workflow) }),
   });
 }
 

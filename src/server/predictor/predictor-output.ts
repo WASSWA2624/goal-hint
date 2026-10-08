@@ -27,6 +27,7 @@ export type PredictorSourceAttribution = Readonly<{
 }>;
 export type PredictorValidatedOutput = Readonly<{
   modelVersionId: string; evidenceHash: string; context: EvidenceContext; schemaVersion: string;
+  outputTiming: ModelVersion["outputTiming"];
   evidence: Readonly<{ policyVersion: string; coverage: EvidenceSnapshot["coverage"]; missingness: EvidenceSnapshot["missingness"] }>;
   markets: MarketSnapshot; reasons: readonly PredictorExplanation[]; uncertainty: PredictorExplanation;
   sources: readonly PredictorSourceAttribution[]; timestamps: PredictorTransportMetadata;
@@ -121,15 +122,26 @@ function eligibleEvidence(snapshot: EvidenceSnapshot, authority: EvidenceAuthori
       evidenceSerialize({ sources: snapshot.sources, facts: snapshot.facts, missingness: snapshot.missingness, coverage: snapshot.coverage });
   } catch { return false; }
 }
-function timing(metadata: PredictorTransportMetadata, model: ModelVersion, context: EvidenceContext, now: UtcInstant): boolean {
+function timing(metadata: PredictorTransportMetadata, policy: ModelVersion["outputTiming"], context: EvidenceContext, now: UtcInstant): boolean {
   if (now < context.analysisAt || now >= context.kickoffAt || metadata.retrievedAt < context.analysisAt || metadata.retrievedAt > now ||
     metadata.generatedAt !== null && (metadata.generatedAt < context.analysisAt || metadata.generatedAt > metadata.retrievedAt) ||
     metadata.providerUpdatedAt !== null && metadata.providerUpdatedAt > metadata.retrievedAt ||
-    metadata.generatedAt === null && model.outputTiming.unknownGeneration === "reject" ||
-    metadata.providerUpdatedAt === null && model.outputTiming.unknownUpdate === "reject") return false;
-  const basis = model.outputTiming.basis === "generated" ? metadata.generatedAt :
-    model.outputTiming.basis === "provider-updated" ? metadata.providerUpdatedAt : metadata.retrievedAt;
-  return now - (basis ?? metadata.retrievedAt) <= model.outputTiming.maxAgeMs;
+    metadata.generatedAt === null && policy.unknownGeneration === "reject" ||
+    metadata.providerUpdatedAt === null && policy.unknownUpdate === "reject") return false;
+  const basis = policy.basis === "generated" ? metadata.generatedAt :
+    policy.basis === "provider-updated" ? metadata.providerUpdatedAt : metadata.retrievedAt;
+  return now - (basis ?? metadata.retrievedAt) <= policy.maxAgeMs;
+}
+/** Downstream composition authenticates the original model/configuration first,
+ * then uses this pure check after all callbacks without changing source clocks. */
+export function isPredictorForecastCurrent(output: PredictorValidatedOutput, nowInput: UtcInstant): boolean {
+  try {
+    const policy = z.object({ maxAgeMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+      basis: z.enum(["generated", "retrieved", "provider-updated"]), unknownGeneration: z.enum(["reject", "allow-flagged"]),
+      unknownUpdate: z.enum(["reject", "allow-flagged"]) }).strict().parse(output.outputTiming);
+    return Object.isFrozen(output.outputTiming) && Object.isFrozen(output.timestamps) &&
+      timing(metadataSchema.parse(output.timestamps), policy, parseEvidenceContext(output.context), instant.parse(nowInput));
+  } catch { return false; }
 }
 /** Pure temporal check for the final return boundary. It neither restamps
  * clocks nor replaces the original transport and evidence authorization. */
@@ -137,7 +149,8 @@ export function isPredictorOutputCurrent(output: PredictorValidatedOutput, model
   try {
     const model = parseModelVersion(modelInput), context = parseEvidenceContext(output.context), metadata = metadataSchema.parse(output.timestamps), now = instant.parse(nowInput);
     return Object.isFrozen(output.timestamps) && output.modelVersionId === model.id && output.schemaVersion === model.schemaVersion &&
-      model.schemaVersion === PRIMARY_SCHEMA_VERSION && model.promptVersion === PRIMARY_PROMPT_VERSION && timing(metadata, model, context, now);
+      model.schemaVersion === PRIMARY_SCHEMA_VERSION && model.promptVersion === PRIMARY_PROMPT_VERSION &&
+      evidenceFingerprint(output.outputTiming) === evidenceFingerprint(model.outputTiming) && timing(metadata, model.outputTiming, context, now);
   } catch { return false; }
 }
 
@@ -157,7 +170,7 @@ export function validatePredictorOutput(input: unknown, options: PredictorOutput
   if (!eligibleEvidence(snapshot, authority.evidenceAuthority) || snapshot.sources.length > model.bounds.maxSources ||
     snapshot.facts.length > model.bounds.maxFacts) return reject("invalid-evidence");
   if (!snapshot.coverage.sufficient || snapshot.sources.length === 0 || snapshot.facts.length === 0) return reject("insufficient-evidence");
-  if (!trusted(() => authority.verifyTransport(metadata, model, snapshot)) || !timing(metadata, model, snapshot.context, now)) return reject("invalid-timing");
+  if (!trusted(() => authority.verifyTransport(metadata, model, snapshot)) || !timing(metadata, model.outputTiming, snapshot.context, now)) return reject("invalid-timing");
   let output: z.infer<typeof envelope>;
   try { output = envelope.parse(boundedInput(input, model.bounds.maxOutputBytes)); } catch { return reject("invalid-output"); }
   if (!sameIdentity(output, snapshot, model)) return reject("wrong-identity");
@@ -181,7 +194,7 @@ export function validatePredictorOutput(input: unknown, options: PredictorOutput
   if (!eligibleEvidence(snapshot, authority.evidenceAuthority)) return reject("invalid-evidence");
   const accepted: PredictorValidatedOutput = freezeEvidence({ modelVersionId: model.id, evidenceHash: snapshot.hash, context: snapshot.context,
     evidence: { policyVersion: snapshot.policy.version, coverage: snapshot.coverage, missingness: snapshot.missingness },
-    schemaVersion: model.schemaVersion, markets, reasons: output.reasons, uncertainty: output.uncertainty, sources, timestamps: metadata,
+    schemaVersion: model.schemaVersion, outputTiming: model.outputTiming, markets, reasons: output.reasons, uncertainty: output.uncertainty, sources, timestamps: metadata,
     flags: [...(metadata.generatedAt === null ? ["unknown-generation-time" as const] : []),
       ...(metadata.providerUpdatedAt === null ? ["unknown-provider-update-time" as const] : [])] });
   validated.set(accepted, Object.freeze({ model, snapshot, authority }));

@@ -16,7 +16,7 @@
 | ☑ | [010-research-cost-control.md](dev-plan/010-research-cost-control.md) |
 | ☐ | [011-fixture-evidence.md](dev-plan/011-fixture-evidence.md) |
 | ☐ | [012-ai-predictor.md](dev-plan/012-ai-predictor.md) |
-| ☐ | [013-provider-fallback.md](dev-plan/013-provider-fallback.md) |
+| ☑ | [013-provider-fallback.md](dev-plan/013-provider-fallback.md) |
 | ☐ | [014-forecast-evaluation.md](dev-plan/014-forecast-evaluation.md) |
 | ☐ | [015-brand-styling.md](dev-plan/015-brand-styling.md) |
 | ☐ | [016-locale-navigation.md](dev-plan/016-locale-navigation.md) |

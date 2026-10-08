@@ -32,6 +32,16 @@ export type ApiFootballBounds = Readonly<{
   /** Required for predictions, so ready-made predictions remain within one fallback job. */
   cacheScope?: string;
 }>;
+/** Internal refresh guard; never serialized into provider parameters or cache data. */
+export type ApiFootballFallbackWorkflow = Readonly<{
+  signal: AbortSignal;
+  deadlineAt: UtcInstant;
+  check(): void;
+  /** Checks remaining job allowance after a cache miss, without renewing or charging it. */
+  beforeReserve?(): void;
+  /** Counts against the owning job immediately before protected HTTP dispatch. */
+  beforeDispatch?(): void;
+}>;
 export type ApiFootballErrorReason =
   | "invalid-request" | "invalid-credential" | "operation-not-authorized"
   | "authentication-error" | "subscription-expired" | "rate-limited"
