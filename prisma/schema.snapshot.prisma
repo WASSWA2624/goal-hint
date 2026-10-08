@@ -256,3 +256,85 @@ model FootballIdentityReview {
   @@unique([provider, externalId, candidateExternalId])
   @@index([status, observedAt])
 }
+
+// Each category retains its own permanent account row to serialize ledger mutations.
+model CostBudgetAccount {
+  accountId String              @db.Char(64)
+  category  String              @db.VarChar(16)
+  stateJson Json?
+  periods   CostBudgetPeriod[]
+  jobs      CostBudgetJob[]
+  attempts  CostBudgetAttempt[]
+
+  @@id([accountId, category])
+}
+
+model CostBudgetPeriod {
+  accountId            String              @db.Char(64)
+  category             String              @db.VarChar(16)
+  id                   String              @db.Char(64)
+  startsAt             DateTime            @db.DateTime(3)
+  endsAt               DateTime            @db.DateTime(3)
+  capAmount            Decimal             @db.Decimal(38, 12)
+  openingChargedAmount Decimal             @db.Decimal(38, 12)
+  stateJson            Json
+  account              CostBudgetAccount   @relation(fields: [accountId, category], references: [accountId, category], onDelete: Restrict, onUpdate: Restrict)
+  attempts             CostBudgetAttempt[]
+
+  @@id([accountId, category, id])
+  @@index([accountId, category, startsAt, endsAt])
+}
+
+model CostBudgetJob {
+  accountId  String              @db.Char(64)
+  category   String              @db.VarChar(16)
+  id         String              @db.Char(64)
+  workKey    String              @db.Char(64)
+  startsAt   DateTime            @db.DateTime(3)
+  deadlineAt DateTime            @db.DateTime(3)
+  capAmount  Decimal             @db.Decimal(38, 12)
+  stateJson  Json
+  account    CostBudgetAccount   @relation(fields: [accountId, category], references: [accountId, category], onDelete: Restrict, onUpdate: Restrict)
+  attempts   CostBudgetAttempt[]
+
+  @@id([accountId, category, id])
+  @@unique([accountId, category, workKey])
+}
+
+model CostBudgetAttempt {
+  accountId           String            @db.Char(64)
+  category            String            @db.VarChar(16)
+  id                  String            @db.Char(64)
+  jobId               String            @db.Char(64)
+  periodId            String?           @db.Char(64)
+  state               String            @db.VarChar(24)
+  queuedAt            DateTime          @db.DateTime(3)
+  kickoffAt           DateTime?         @db.DateTime(3)
+  priority            Int
+  deadlineAt          DateTime          @db.DateTime(3)
+  dispatchedAt        DateTime?         @db.DateTime(3)
+  maxCostAmount       Decimal           @db.Decimal(38, 12)
+  liabilityAmount     Decimal           @db.Decimal(38, 12)
+  estimatedAmount     Decimal?          @db.Decimal(38, 12)
+  observedAmount      Decimal?          @db.Decimal(38, 12)
+  invoicedAmount      Decimal?          @db.Decimal(38, 12)
+  chargedRequests     BigInt            @default(0) @db.UnsignedBigInt
+  chargedInputTokens  BigInt            @default(0) @db.UnsignedBigInt
+  chargedOutputTokens BigInt            @default(0) @db.UnsignedBigInt
+  chargedBilledUnits  BigInt            @default(0) @db.UnsignedBigInt
+  timeMs              BigInt            @default(0) @db.UnsignedBigInt
+  overage             Boolean           @default(false)
+  provider            String            @db.VarChar(128)
+  model               String?           @db.VarChar(128)
+  rateVersion         String            @db.VarChar(128)
+  integrity           String            @db.Char(64)
+  stateJson           Json
+  account             CostBudgetAccount @relation(fields: [accountId, category], references: [accountId, category], onDelete: Restrict, onUpdate: Restrict)
+  job                 CostBudgetJob     @relation(fields: [accountId, category, jobId], references: [accountId, category, id], onDelete: Restrict, onUpdate: Restrict)
+  period              CostBudgetPeriod? @relation(fields: [accountId, category, periodId], references: [accountId, category, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([accountId, category, id])
+  @@index([accountId, category, state, priority, kickoffAt, queuedAt])
+  @@index([accountId, category, periodId])
+  @@index([accountId, category, jobId])
+}

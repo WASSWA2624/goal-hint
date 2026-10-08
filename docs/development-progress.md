@@ -904,3 +904,97 @@ capacity, enabled competition or unlimited raw/structured entitlement is invente
 Implementation and local acceptance checks are complete; **009** is ticked in
 the root tracker. Actual provider qualification and live/public permissions
 remain separate pending gates.
+
+## 010 — Research and AI cost control
+
+Implemented on **9 October 2026 EAT** using the existing 002 runtime operation
+gates and 003 MySQL runtime. AI and research have independent account/category
+ledgers; neither changes API-Football quotas or its US$45 payable ceiling.
+
+### Delivered files and invariants
+
+- `src/server/cost-control/cost-contract.ts`, `cost-input.ts`, `cost-pricing.ts`
+  and `cost-totals.ts`: strict immutable policy/usage parsing, opaque identities,
+  exact USD picodollar arithmetic, explicit versioned rational conversions and
+  conservative financial/count projections. Estimates, observations and
+  invoices stay separately labeled.
+- `cost-service.ts`: atomic maximum reservations, stable work/job ceilings,
+  one-use owner permits, verified completion/reconciliation, confirmed
+  cancellation, explicit eligible nearest-kickoff priority and distinct budget,
+  request/token/unit/time/fallback/timeout outcomes. Unknown and partial usage
+  retains the maximum; actual overages and opening debt block later paid work.
+- `cost-mysql-store.ts`: account/category row locks across replicas, exact native
+  sums with sealed JSON projection checks, immutable period/job/attempt metadata,
+  append-only receipt history and guarded lifecycle transitions. Provider I/O
+  stays outside transactions; caller callbacks are never automatically replayed.
+- `cost-policy.ts`: existing runtime scope, credentials, trusted approvals and
+  provider/model selection plus explicit verified joint AI/research allocations
+  within global job request/token/time limits, with fallback reserved once.
+- `cost-gateway.ts`: one authorized transport callback after durable claim,
+  bounded reservation/claim/settlement waits and transport timeout, abort and
+  drained late results. A real late receipt can still be verified and accounted
+  for without exposing its timed-out value or inventing usage. Verified cached
+  evidence reuse dispatches zero requests and preserves original source times.
+- `cost-observability.ts`: private JSON-safe aggregate records with exact string
+  amounts/counters and no copied prompts, credentials, owner tokens, source
+  bodies or driver errors.
+- Schema/snapshot and migration `20261008221928_research_ai_cost_control`:
+  **four new InnoDB tables**, `DECIMAL(38,12)` monetary columns, native unique
+  work/attempt identities, restrictive foreign keys, indexes and reviewed
+  nonnegative/state/priority/count/identity/period checks. Existing migrations
+  remain intact.
+- Focused input/pricing/service/policy/gateway/telemetry tests, genuine MySQL
+  `tests/cost.integration.mjs` and reusable synthetic fixture/memory helpers;
+  `npm run test:cost`, [cost runbook](research-cost-control.md), README/boundary
+  guidance, decision-register and tracker handoff.
+
+Verified historical receipt quantities combine componentwise, so a later smaller
+receipt cannot erase known measured charges. Original `observedAt` selects the
+latest usage; older verified invoices still contribute their actual charges.
+An invoice with unknown quantities can settle money while preserving conservative
+request/token/unit/time bounds. Monotonic account-clock checks also apply to
+reconciliation, cancellation and private reads; late bills can reconcile against
+their original closed period after a new period is explicitly approved.
+
+### Verification
+
+Commands use pinned Node **24.18.1** and npm **11.16.0**. Database acceptance uses
+the existing ignored portable MySQL **8.4.11** binary, a fresh owned loopback
+server/data directory and separate migration DDL/application DML roles. Source
+prices, receipts, approvals and clocks are explicitly synthetic. No actual paid
+AI, research or football request is made.
+
+| Command/check | Result |
+| --- | --- |
+| `npm run check` | Passed: guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **382 tests: 381 passed, 1 existing Windows POSIX-mode skip**, production build and prerendering. |
+| New focused cost tests | **71 passed** across input, pricing/projections, service, runtime policy, gateway/cache and telemetry contracts. |
+| Final `npm run test:cost` | **29 passed, no failures/skips**, about **27 seconds**, with 28 genuine MySQL acceptance subchecks and their parent. |
+| Concurrent durable accounting | Passed aggregate and per-job worker races, stable work/attempt identities, single-use claims, retries, restart, cancellation, unknown/partial usage and immutable period/cap behavior. |
+| Billing and operating bounds | Passed measured/invoice separation, invoice-only unknown count reservations, original source chronology, componentwise historical maxima, observed overages, exact EUR-to-USD rounding and distinct request/token/unit/time/fallback outcomes. |
+| Storage integrity and isolation | Passed corrupt JSON/native projection rejection; identity and inactive opening-debt bindings; seven valid-shaped direct-store reset/mutation/history attacks; native uniqueness/foreign keys; separate AI/research/football allowances and least-privilege roles. |
+| `npm run test:db` regression | **8 passed, no failures/skips**, about **25 seconds**: repeat deployment/status/drift, exact UTC/value round trips, rollback, concurrent uniqueness, role separation and pool shutdown with the new migration. |
+| Final handoff | Whitespace checks passed and **100 local Markdown links** resolve. Ignored logs: `.tmp/cost-full-check.log`, `.tmp/cost-acceptance-final.log` and `.tmp/cost-database-regression.log`. |
+
+The final migration uses explicit boolean guarded CHECK expressions compatible
+with MySQL 8.4. Native bindings cannot detach charged rows from their sealed
+account/job/period or erase prior opening debt. Final genuine acceptance also
+verifies incremental deployment and schema drift against the snapshot.
+
+### Pending live decisions
+
+OP-09–11 still need actual AI/research providers/accounts/model, rate versions,
+billable units/fees, source currencies and conversion rules, accounting windows,
+opening charges, separate monthly caps, per-job monetary/request/token/unit/time
+allocations and usable fallback time. OP-13 still needs actual licensed research
+source, extraction/attribution/reuse/display and retention evidence. There is no
+live rate resolver, receipt verifier, provider adapter or enabled paid path.
+Configuration references and synthetic tests do not approve these decisions.
+Stored forecast reads remain independent of accounting storage availability.
+
+This feature starts no predictions, fixture selection, scheduled workers,
+public cost endpoint or monitoring destination. Those integrations remain with
+their respective later prompts.
+
+Implementation and local acceptance checks are complete; **010** is ticked in
+the root tracker. Actual paid-operation configuration and evidence remain
+separate pending gates.

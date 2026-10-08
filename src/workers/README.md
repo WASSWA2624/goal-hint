@@ -11,3 +11,10 @@ Future standalone Node runners and server-service tests need the
 Next.js. TypeScript path aliases are understood by Next.js, but plain Node does
 not resolve `@/*`; the worker prompt must choose its runner/build resolution.
 No queue, scheduler, paid operation or worker process is activated here.
+
+Later research/prediction workers must reuse `createPolicyCostService` and
+`createCostGateway` from the server cost-control boundary. Stable work identities
+and explicit joint allocations preserve job ceilings across retries; account
+identity and the ledger must be shared with local trials. Keep fallback within
+its approved reserve and the existing football limiter. An unavailable cost
+ledger stops paid dispatch while stored forecast reads remain available.

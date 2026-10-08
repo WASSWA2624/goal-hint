@@ -194,3 +194,13 @@ rules and the transaction boundary for later schedule services. Run
 `npm run test:catalog` with an available genuine MySQL binary for isolated
 concurrency acceptance. Actual retention, mapping and provider rights remain
 pending the recorded trial evidence.
+
+## Research and AI budgets
+
+Private workers use the shared cost ledger and single-attempt gateway in
+`src/server/cost-control`. It holds exact maximum spend before dispatch, preserves
+uncertain charges, enforces independent AI/research caps and job allocations, and
+keeps fallback time available. Read the [cost-control contract](docs/research-cost-control.md)
+for pricing, reconciliation, reuse and safe summaries. `npm run test:cost` runs
+isolated genuine MySQL concurrency acceptance. Actual providers, rates, caps and
+operating bounds remain unresolved; live paid dispatch stays blocked.

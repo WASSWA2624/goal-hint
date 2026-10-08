@@ -977,3 +977,54 @@ and public/logo rights still need source-specific 008 evidence before live use.
 No actual ambiguous mappings have been collected; integration mappings are
 explicitly synthetic. The runbook records the reusable private API and future
 schedule integration contract.
+
+## Prompt 010 — Separate research and AI spending ledgers
+
+Implemented locally on **9 October 2026 EAT**. The reusable accounting engine,
+MySQL store, runtime-policy wrapper and one-attempt transport gateway enforce
+independent account/category budgets. Four new InnoDB tables are added by
+`20261008221928_research_ai_cost_control`; existing foundation, quota and catalog
+tables and migration history stay compatible. Read the
+[cost-control contract](research-cost-control.md) for the private caller API.
+
+Money uses exact USD picodollars and `DECIMAL(38,12)`, with conservative rational
+currency conversion and explicit upward per-component rounding. Rates identify
+provider/model/version, validity, billing units and measured versus
+invoice-required reconciliation. Null rates are unpriced; an explicit approved
+zero is distinct. Estimates, observed costs and invoices remain separately
+labeled. These implementation rules do not establish any provider's rates.
+
+Every worker and local trial must use the same opaque account identity and
+durable ledger for a shared provider account. Atomic account/category locks,
+unique attempt/work identities and immutable fingerprints prevent duplicate
+dispatch or job-cap resets. A maximum reservation precedes a single-use durable
+claim. Unknown and partial outcomes retain liability; confirmed cancellation
+before claim can release it. Known usage and charges survive later receipts and
+process restarts. Actual overages and verified opening debt block paid work
+across periods; a new accounting window cannot hide them.
+
+The application policy wrapper binds monthly caps and provider/model identity to
+002 configuration and independently verifies explicit joint AI/research job
+allocations. Their requests/tokens/primary times plus fallback reserve must fit
+the global job limits. Per-category money, request, token, unit and time ceilings
+remain independent. Nearest-kickoff priority applies only to eligible queued
+work and starts no fixture selection, prediction, scheduler or public endpoint.
+Safe internal summaries expose exact aggregate strings without prompts,
+credentials, owner permits, provider bodies or private driver diagnostics.
+Verified cache reuse preserves original source times and dispatches zero calls.
+
+### Decisions still blocking paid work
+
+| Decision | Actual input/evidence still required |
+| --- | --- |
+| OP-09 AI | Authorized provider/account and selected model; immutable rate versions and full billable dimensions/fees; source currency and approved conversion/rounding coverage; provider billing-window and usage-assignment rules; separate monthly cap and opening charges; per-job monetary allocation and documented measured/invoice reconciliation evidence. |
+| OP-10 Research | Selected licensed provider/account; actual search/research unit rates, fees, currency, validity, exchange rules and billing periods; independent monthly cap and opening charges; explicit per-job cost/unit allocation and retry/unknown-usage billing rules. |
+| OP-11 Bounds | Approved global request/token/time ceilings, explicit positive fallback time, per-service request/input-token/output-token/billed-unit/primary-time allocation and stable cross-category job/work identities. The football fallback request/quota allowance still belongs to the existing shared limiter. |
+| OP-13 Permissions | Actual research source/license, extraction, attribution, reuse/display and retention evidence; separate provider adapter and evidence verification in prompt 011. |
+
+These records are **unresolved**. No live rate, cap, exchange rate, free allowance,
+job timeout or approval has been invented. Configuration references and synthetic
+test verifiers cannot substitute for trusted actual records. The existing runtime
+gate still blocks paid calls in test/disabled scope and enforces the separate
+shadow/publication prerequisites. No live provider is enabled by completing
+010's implementation or local acceptance.

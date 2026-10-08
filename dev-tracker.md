@@ -13,7 +13,7 @@
 | ☑ | [007-api-football-adapter.md](dev-plan/007-api-football-adapter.md) |
 | ☑ | [008-football-provider-trial.md](dev-plan/008-football-provider-trial.md) |
 | ☑ | [009-canonical-football-catalog.md](dev-plan/009-canonical-football-catalog.md) |
-| ☐ | [010-research-cost-control.md](dev-plan/010-research-cost-control.md) |
+| ☑ | [010-research-cost-control.md](dev-plan/010-research-cost-control.md) |
 | ☐ | [011-fixture-evidence.md](dev-plan/011-fixture-evidence.md) |
 | ☐ | [012-ai-predictor.md](dev-plan/012-ai-predictor.md) |
 | ☐ | [013-provider-fallback.md](dev-plan/013-provider-fallback.md) |
