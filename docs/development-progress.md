@@ -998,3 +998,73 @@ their respective later prompts.
 Implementation and local acceptance checks are complete; **010** is ticked in
 the root tracker. Actual paid-operation configuration and evidence remain
 separate pending gates.
+
+## Prompt 011 — Fixture evidence foundation (partial)
+
+**Date:** 9 October 2026 EAT. Independent local collection, immutable snapshots,
+security and persistence are implemented. The licensed research provider and
+OP-13/14 operating choices have not been supplied; no provider-specific news
+adapter or live source qualification is claimed. **011 remains unchecked** in
+[the root tracker](../dev-tracker.md).
+
+### Changed files and behavior
+
+- Eight server evidence modules provide strict contracts/parsers, deterministic
+  snapshots, bounded collection/replay, canonical football observations,
+  cost-controlled research integration, safe source fetching and immutable
+  MySQL persistence. Explicit fixture/version/team/time inputs and nullable
+  caller cycle/run references are retained; no production references are made up.
+- Football collection uses the existing adapter and shared quota gateway.
+  Accepted history proves canonical identities and regulation scores before
+  deriving form/rest or collecting supported statistics. Catalogue snapshots
+  expose all approved API-Football team aliases. Missing injuries, neutral venue
+  and unsupported xG remain unknown; provider predictions cannot enter this path.
+- Snapshot eligibility excludes wrong identities and future/stale/unapproved
+  evidence, retains source times and versions, deduplicates syndicated coverage,
+  and preserves conflicts, rumor and missingness. Minimum coverage and source
+  freshness rules require explicit verified policy. Missing news yields
+  `Limited news coverage`; a denied optional search does not erase sufficient
+  structured facts.
+- Research integration requires a reviewed actual binding, separate existing
+  cost reservations/receipts and verified license/evidence/freshness policies.
+  One callback permits one bounded attempt. Extraction text remains inert data;
+  it cannot authorize actions, read credentials or invoke tools.
+- Source fetching uses approved HTTPS hosts, safe query names, public DNS
+  address validation, pinned connections and fresh checks across redirects.
+  Strict synchronous authority results, final dispatch expiry checks and shared
+  abort/deadline checks prevent late work from gaining permission.
+- Schema/snapshot and migration `20261008225550_fixture_evidence` add **three
+  InnoDB tables** with restrictive/composite foreign keys, positive identity and
+  chronology checks, sealed native/JSON projections and immutable source links.
+  Evidence application grants require SELECT/INSERT only. The writer rechecks
+  canonical mappings, fixture version and permissions before committing.
+- Focused evidence tests, genuine MySQL acceptance, reusable synthetic fixtures,
+  `npm run test:evidence`, [evidence runbook](fixture-evidence.md), README and
+  server/worker guidance accompany the implementation.
+
+### Confirmed acceptance
+
+Pinned Node **24.18.1**, npm **11.16.0** and the existing ignored genuine MySQL
+**8.4.11** binary were used. The database helper starts a fresh owned loopback
+server with separate migration/application roles and removes only its owned
+datadir after shutdown. All source responses, prices, receipts, licenses,
+policies and credentials in these tests are synthetic. No paid research, AI or
+football call was made and no live credentials were read.
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **472 tests: 471 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. Log: `.tmp/evidence-full-check.log`. |
+| New focused evidence contracts | **90 passed** across strict input/snapshots, football collection, cost-gateway research integration, source-network security and orchestration/replay. |
+| Genuine evidence MySQL acceptance | **20 passed, no failures/skips**, about **29 seconds**: incremental migration drift, role separation, concurrent idempotency, immutable source deduplication, original timestamps, wrong fixture/team bindings, composite foreign keys, changed schedule/version denial, authority rollback, null cycle/run refs, exact bigint versions, checksum/native projection corruption and protected archives. Log: `.tmp/evidence-acceptance.log`. |
+| Genuine catalogue regression | **28 passed, no failures/skips**, about **26 seconds** after the alias snapshot extension. Log: `.tmp/evidence-catalog-regression.log`. |
+| Handoff | Whitespace checks passed and **487 local Markdown links** resolve. The 011 tracker row remains empty because the selected news adapter and approved operating rules are still required. |
+
+### Remaining decisions and checks
+
+Select the licensed research/news provider and approved sources, attribution,
+original-summary/extraction permissions, reuse/display/archive retention rights,
+minimum evidence thresholds, source age/clock policy and conflict/unknown-time
+rules. OP-09–11 still govern actual pricing, caps and job allocations. The
+provider-specific implementation and its bounded live integration/coverage
+qualification depend on these decisions. Completing the independent foundation
+does not resolve them or enable paid operations.

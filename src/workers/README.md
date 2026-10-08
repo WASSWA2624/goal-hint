@@ -18,3 +18,11 @@ and explicit joint allocations preserve job ceilings across retries; account
 identity and the ledger must be shared with local trials. Keep fallback within
 its approved reserve and the existing football limiter. An unavailable cost
 ledger stops paid dispatch while stored forecast reads remain available.
+
+Later analysis workers pass their actual fixture, cycle/run identities, analysis
+time and cutoff to `createEvidenceService`. Use explicit null references until
+the owning orchestration creates them. Preserve original evidence times during
+reuse and verify current rights; immutable archives are not permission for new
+analyses. Keep collection within the shared workflow deadline and approved
+football/research allowances. The [evidence runbook](../../docs/fixture-evidence.md)
+records the caller contract and pending licensed provider/policy decisions.

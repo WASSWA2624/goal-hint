@@ -11,7 +11,8 @@ import { normalizeCatalogSearch, isSafeCatalogLogo, parseCatalogTeamMapping, cat
 
 const PROVIDER = "api-football";
 const MAX_VERSION = 18_446_744_073_709_551_615n;
-const fixtureRelations = { homeTeam: true, awayTeam: true, season: { include: { competition: true } } } as const;
+const fixtureRelations = { homeTeam: { include: { providers: true } }, awayTeam: { include: { providers: true } },
+  season: { include: { competition: true } } } as const;
 type StoredFixture = Prisma.FootballFixtureGetPayload<{ include: typeof fixtureRelations }>;
 type SharedHistory<Entity> = Map<string, { before: Entity; aliasesAdded: { name: string; normalizedSearch: string; observedAt: UtcInstant }[] }>;
 type FixtureFields = Pick<FootballFixture, "homeTeamId" | "awayTeamId" | "seasonId" | "round" | "kickoff" | "eatDate" | "status" |
@@ -61,11 +62,15 @@ export function catalogImportSummary(row: FootballImport) {
 }
 export type CatalogImportSummary = ReturnType<typeof catalogImportSummary>;
 export function catalogFixtureSnapshot(row: StoredFixture) {
+  const externalIds = (value: StoredFixture["homeTeam"]) => Object.freeze(value.providers
+    .filter((mapping) => mapping.provider === PROVIDER).map((mapping) => Number(mapping.externalId))
+    .filter((externalId) => Number.isSafeInteger(externalId) && externalId > 0).sort((first, second) => first - second));
   const team = (value: FootballTeam) => Object.freeze({ id: value.id, name: value.name, country: value.country,
     logoUrl: value.logoUrl !== null && isSafeCatalogLogo(value.logoUrl) ? value.logoUrl : null });
   const competition = row.season.competition;
   return Object.freeze({ id: row.id, externalId: Number(row.externalId), homeTeamId: row.homeTeamId,
-    awayTeamId: row.awayTeamId, seasonId: row.seasonId, round: row.round, kickoff: row.kickoff === null ? null : instant(row.kickoff),
+    awayTeamId: row.awayTeamId, homeExternalIds: externalIds(row.homeTeam), awayExternalIds: externalIds(row.awayTeam),
+    seasonId: row.seasonId, round: row.round, kickoff: row.kickoff === null ? null : instant(row.kickoff),
     eatDate: row.eatDate === null ? null : parseReportingDate(row.eatDate.toISOString().slice(0, 10)),
     status: row.status as SettlementStatus, providerStatus: row.providerStatus, elapsedMinutes: row.elapsedMinutes,
     regulationScore: row.regulationHome === null || row.regulationAway === null ? null : Object.freeze({ verified: true as const,
@@ -277,8 +282,8 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       const changedTeams = new Set<string>(), changedCompetitions = new Set<string>(), changedFixtures = new Set<string>(), insertedFixtures = new Set<string>(), fixtureIds: string[] = [];
       const teamHistory: SharedHistory<FootballTeam> = new Map(), competitionHistory: SharedHistory<FootballCompetition> = new Map();
       const priorSnapshot = (row: StoredFixture): StoredFixture => ({ ...row,
-        homeTeam: teamHistory.get(row.homeTeamId)?.before ?? row.homeTeam,
-        awayTeam: teamHistory.get(row.awayTeamId)?.before ?? row.awayTeam,
+        homeTeam: { ...(teamHistory.get(row.homeTeamId)?.before ?? row.homeTeam), providers: row.homeTeam.providers },
+        awayTeam: { ...(teamHistory.get(row.awayTeamId)?.before ?? row.awayTeam), providers: row.awayTeam.providers },
         season: { ...row.season, competition: competitionHistory.get(row.season.competitionId)?.before ?? row.season.competition } });
       for (const input of batch.rows.teams) await team(transaction, input, authority, changedTeams, teamHistory);
       for (const input of batch.rows.competitions) await competition(transaction, input, authority, changedCompetitions, competitionHistory);

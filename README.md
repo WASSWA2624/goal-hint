@@ -204,3 +204,13 @@ keeps fallback time available. Read the [cost-control contract](docs/research-co
 for pricing, reconciliation, reuse and safe summaries. `npm run test:cost` runs
 isolated genuine MySQL concurrency acceptance. Actual providers, rates, caps and
 operating bounds remain unresolved; live paid dispatch stays blocked.
+
+## Fixture evidence
+
+Private callers use `src/server/evidence` to collect attributable football facts,
+apply explicit coverage/freshness rules and persist immutable fixture snapshots.
+Source text stays inert; approved source fetches validate public DNS targets and
+redirects. Read the [evidence runbook](docs/fixture-evidence.md) for identities,
+permissions, replay and retention. `npm run test:evidence` runs isolated genuine
+MySQL acceptance. The licensed news provider, concrete adapter and operating
+policies remain pending, so **011 is not yet complete** in the tracker.

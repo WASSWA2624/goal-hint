@@ -250,8 +250,8 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-10 Research spending policy | **Unresolved** | Approve the independent research/search cap, selected service's rate/unit/currency/accounting rules and conservative reconciliation, including retries. Do not borrow AI or football allowances. §§6–7, 14–15; prompt 010. | Unassigned; user decision/evidence required | `GOAL_HINT_RESEARCH_MONTHLY_BUDGET_USD_CENTS`, `GOAL_HINT_RESEARCH_PROVIDER`, `GOAL_HINT_BUDGET_APPROVAL_REF`; Deferred: versioned research rates and per-job monetary cap | **010** before paid research dispatch |
 | OP-11 Per-job operating bounds | **Unresolved** | Set request/token/time ceilings and a usable time/quota reserve for fallback; document per-provider allocation and cost handling. Counts and monetary caps are different controls. No timeout, token budget or free allowance is approved by the specification. §§7, 11, 14; prompt 010. | Unassigned; user decision/evidence required | `GOAL_HINT_JOB_REQUEST_LIMIT`, `GOAL_HINT_JOB_TOKEN_LIMIT`, `GOAL_HINT_JOB_TIMEOUT_SECONDS`, `GOAL_HINT_BUDGET_APPROVAL_REF`; Deferred: fallback time/quota reservation and per-service allocation | **010**; orchestration **025** |
 | OP-12 Infrastructure budgets | **Unresolved** | Approve itemized caps/cost accounting for database, queue/workers/web hosting, network egress, monitoring and domain renewal. Production database and shadow/publication require an explicit infrastructure cap and verified approval; an explicitly approved zero may cover deliberate free infrastructure, while unset is unresolved. The aggregate cap is not approval to provision a service or assume its rate; later features must itemize applicable rates/caps. These remain separate from AI, research and the API-Football payable cap. §§14–15. | Unassigned; user decision/evidence required | `GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS`, `GOAL_HINT_BUDGET_APPROVAL_REF`; Deferred: itemized database/hosting/network/monitoring/domain budgets and contracted rates | **003** live database; **007** billable egress; **020** queue/workers; **031** paid cache; **044** monitoring; **046** web hosting; **049** domain renewal |
-| OP-13 Licensed research and source permissions | **Unresolved** | Select the actual licensed search/news service and permitted official sources; provide credentials, attribution/extraction/reuse/display terms and retention permissions. Football data access does not license articles. §§6–7, 15; prompt 011. | Unassigned; user decision/evidence required | `GOAL_HINT_RESEARCH_ENABLED`, `GOAL_HINT_RESEARCH_PROVIDER`, `RESEARCH_API_KEY`, `GOAL_HINT_RESEARCH_LICENSE_REF`; Deferred: permitted sources/claims/reuse metadata | **011**; pricing prerequisite **010** |
-| OP-14 Evidence coverage/conflicts | **Unresolved** | Set minimum evidence coverage, missing-news behavior under that threshold, source-specific freshness, conflicting-claim handling and unknown/publication-time eligibility before live evidence use. Confirmed facts and rumors remain distinct; late evidence cannot enter an earlier cutoff. §§6–8, 15; prompt 011. | Unassigned; user decision/evidence required | `GOAL_HINT_EVIDENCE_POLICY_REF`, `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: versioned coverage/source-conflict/unknown-time policy | **011** |
+| OP-13 Licensed research and source permissions | **Unresolved; integration boundary implemented** | Select the actual licensed search/news service and permitted official sources; provide credentials, attribution/extraction/reuse/display terms and archive retention permissions. The 011 bridge requires a reviewed concrete provider binding; none is selected or implemented. Football data access does not license articles. §§6–7, 15. | User decision/evidence required | `GOAL_HINT_RESEARCH_ENABLED`, `GOAL_HINT_RESEARCH_PROVIDER`, `RESEARCH_API_KEY`, `GOAL_HINT_RESEARCH_LICENSE_REF`; immutable source metadata, trusted reuse verifier and approved-host fetch policy | **011 pending actual adapter**; pricing prerequisite **010** |
+| OP-14 Evidence coverage/conflicts | **Unresolved; strict policy contract implemented** | Approve per-team minimum history/form/statistics, venue/rest/news requirements, source freshness bounds and clock basis, preserve/fail-coverage conflicts and exclude/allow-flagged unknown timestamps before live use. Source/cutoff/rights checks and missing-news labels are implemented, with no operating defaults. §§6–8, 15. | User decision/evidence required | `GOAL_HINT_EVIDENCE_POLICY_REF`, `GOAL_HINT_FRESHNESS_POLICY_REF`; explicit versioned `EvidencePolicy` and trusted verification | **011 pending approved rules** |
 | OP-15 AI predictor and calibration configuration | **Unresolved** | Select the approved predictor/model/prompt/schema and calibration configuration with training/calibration windows and provenance. Verify the chosen API and rates. A configured artifact or successful call cannot establish calibration quality; unvalidated output stays provisional. §§7–8, 15; prompt 012. | Unassigned; user decision/evidence required | `GOAL_HINT_AI_ENABLED`, `AI_API_KEY`, `GOAL_HINT_AI_PROVIDER`, `GOAL_HINT_AI_MODEL`, `GOAL_HINT_CALIBRATION_REF`; Deferred: versioned model/prompt/schema/calibration registry | **012**; rate selection **010**, evaluation **014** |
 | OP-16 Evaluation protocol and samples | **Unresolved** | Freeze chronological training/validation/calibration/final-test periods, matched fixtures/horizons, reconstructable baselines, minimum samples, quality/coverage gates and calibration aggregation before the final test. Historical comparisons require genuine pre-cutoff snapshots; otherwise plan prospective observations. §§8, 14–15; prompt 014. | Unassigned; user decision/evidence required | `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: versioned evaluation cohorts, samples, baselines, metrics and release thresholds | **014**; actual prospective evidence **047** |
 | OP-17 Public performance-claim gates | **Unresolved / evidence required** | Define minimum market/source/horizon samples and permitted claims, then gather sufficient independent evidence. No fixed accuracy promise is approved. Below-threshold public metrics must show insufficient data/provisional status. §§8, 15; prompts 014/030/038. | Unassigned; user decision/evidence required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`; Deferred: public-claim minimum samples and qualification results | **014** defines gates; public consumers **030/038** |
@@ -1028,3 +1028,55 @@ test verifiers cannot substitute for trusted actual records. The existing runtim
 gate still blocks paid calls in test/disabled scope and enforces the separate
 shadow/publication prerequisites. No live provider is enabled by completing
 010's implementation or local acceptance.
+
+## Prompt 011 — Immutable fixture evidence foundation
+
+Implemented the independent local foundation on **9 October 2026 EAT**; the
+actual licensed news adapter and operating rules remain pending. Read the
+[evidence contract](fixture-evidence.md) for private caller APIs and permissions.
+
+Evidence binds a canonical fixture/version, internal and provider team IDs,
+kickoff, analysis time and cutoff. Cycle/run references are explicit nullable
+caller inputs. Catalogue snapshots expose sorted provider aliases so the
+collector can prove the selected external IDs without assuming one primary ID.
+Football history and supported statistics come through the existing quota
+adapter; form/rest derive only from eligible canonical regulation results.
+Provider forecasts are outside its input interface. Home/away orientation is
+retained; neutral venues, numerical home advantage and unsupported xG stay
+unknown. Missing injuries do not establish squad fitness.
+
+Each policy explicitly defines coverage, separate source freshness clocks and
+age bounds, conflict/unknown-time behavior and source/claim/extract/byte bounds.
+No defaults resolve OP-14. Canonical fact identities prevent changed extractor
+keys from hiding conflicts or inflating history/statistics coverage. Syndication,
+article-version and equivalent-content families retain attribution while
+counting independent news once. Rumor alone cannot satisfy confirmed news
+coverage. Optional research has an explicit acquisition target separate from
+the primary evidence minimum; denied news can leave a sufficient structured
+snapshot with `Limited news coverage`.
+
+Stable content hashes cover immutable context, policy, sources, facts,
+missingness, exclusions and coverage. Three incremental InnoDB tables persist
+source versions, request snapshots and their bindings. Source and request rows
+are append-only through SELECT/INSERT application grants; native checks,
+restrictive foreign keys, sealed JSON projections and catalogue locking prevent
+wrong fixture/team/version links or conflicting request replay. Archive reads
+remain reproducible after upstream changes. New use rechecks current source
+permissions and retention while preserving original observation times; archive
+access has its own approved retention purpose.
+
+The research bridge uses the existing cost gateway around one reviewed bounded
+provider attempt. Matching names or environment references do not approve a
+binding: trusted verification must bind the actual contract, license, fixture
+and job/attempt identities, pricing/allocations and permitted extraction. No
+provider-specific research transport is implemented before OP-13 selection.
+Text stays inert data and grants no tools, instructions or credentials. Source
+fetching requires HTTPS, approved hosts/queries, public DNS answers pinned to
+the TLS connection and fresh checks on each redirect; bytes, text and elapsed
+time are bounded. Provider bindings must separately count any source fetches.
+
+OP-09–11 and OP-13–14 still need actual account/pricing/budget/bounds, provider,
+source/license/reuse/archive rights and coverage/freshness decisions. Offline
+synthetic contracts and MySQL acceptance do not verify live source coverage or
+permissions. **011 remains unchecked** until its required selected adapter and
+approved rules are implemented and checked.

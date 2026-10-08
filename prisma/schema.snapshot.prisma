@@ -56,22 +56,26 @@ model FootballCatalogLock {
 }
 
 model FootballTeam {
-  id                String                 @id @default(uuid()) @db.Char(36)
-  name              String?                @db.VarChar(512)
-  nameSearch        String?                @db.VarChar(512)
-  code              String?                @db.VarChar(64)
-  country           String?                @db.VarChar(256)
-  countrySearch     String?                @db.VarChar(256)
-  national          Boolean?
-  logoUrl           String?                @db.VarChar(2048)
-  retrievedAt       DateTime               @db.DateTime(3)
-  providerUpdatedAt DateTime?              @db.DateTime(3)
-  createdAt         DateTime               @default(now()) @db.DateTime(3)
-  updatedAt         DateTime               @updatedAt @db.DateTime(3)
-  providers         FootballTeamProvider[]
-  aliases           FootballTeamAlias[]
-  homeFixtures      FootballFixture[]      @relation("FootballHomeTeam")
-  awayFixtures      FootballFixture[]      @relation("FootballAwayTeam")
+  id                    String                    @id @default(uuid()) @db.Char(36)
+  name                  String?                   @db.VarChar(512)
+  nameSearch            String?                   @db.VarChar(512)
+  code                  String?                   @db.VarChar(64)
+  country               String?                   @db.VarChar(256)
+  countrySearch         String?                   @db.VarChar(256)
+  national              Boolean?
+  logoUrl               String?                   @db.VarChar(2048)
+  retrievedAt           DateTime                  @db.DateTime(3)
+  providerUpdatedAt     DateTime?                 @db.DateTime(3)
+  createdAt             DateTime                  @default(now()) @db.DateTime(3)
+  updatedAt             DateTime                  @updatedAt @db.DateTime(3)
+  providers             FootballTeamProvider[]
+  aliases               FootballTeamAlias[]
+  homeFixtures          FootballFixture[]         @relation("FootballHomeTeam")
+  awayFixtures          FootballFixture[]         @relation("FootballAwayTeam")
+  homeEvidenceSources   EvidenceSourceVersion[]   @relation("EvidenceSourceHomeTeam")
+  awayEvidenceSources   EvidenceSourceVersion[]   @relation("EvidenceSourceAwayTeam")
+  homeEvidenceSnapshots FixtureEvidenceSnapshot[] @relation("EvidenceSnapshotHomeTeam")
+  awayEvidenceSnapshots FixtureEvidenceSnapshot[] @relation("EvidenceSnapshotAwayTeam")
 
   @@index([nameSearch])
   @@index([countrySearch, nameSearch])
@@ -162,31 +166,33 @@ model FootballSeason {
 }
 
 model FootballFixture {
-  id                    String                 @id @default(uuid()) @db.Char(36)
-  provider              String                 @db.VarChar(32)
-  externalId            BigInt                 @db.UnsignedBigInt
-  homeTeamId            String                 @db.Char(36)
-  awayTeamId            String                 @db.Char(36)
-  seasonId              String                 @db.Char(36)
-  round                 String?                @db.VarChar(512)
-  kickoff               DateTime?              @db.DateTime(3)
-  eatDate               DateTime?              @db.Date
-  status                String                 @default("unknown") @db.VarChar(32)
-  providerStatus        String?                @db.VarChar(32)
+  id                    String                    @id @default(uuid()) @db.Char(36)
+  provider              String                    @db.VarChar(32)
+  externalId            BigInt                    @db.UnsignedBigInt
+  homeTeamId            String                    @db.Char(36)
+  awayTeamId            String                    @db.Char(36)
+  seasonId              String                    @db.Char(36)
+  round                 String?                   @db.VarChar(512)
+  kickoff               DateTime?                 @db.DateTime(3)
+  eatDate               DateTime?                 @db.Date
+  status                String                    @default("unknown") @db.VarChar(32)
+  providerStatus        String?                   @db.VarChar(32)
   elapsedMinutes        Int?
   regulationHome        Int?
   regulationAway        Int?
-  regulationEvidenceRef String?                @db.VarChar(512)
-  regulationVerifiedAt  DateTime?              @db.DateTime(3)
-  retrievedAt           DateTime               @db.DateTime(3)
-  providerUpdatedAt     DateTime?              @db.DateTime(3)
-  dataVersion           BigInt                 @default(1) @db.UnsignedBigInt
-  createdAt             DateTime               @default(now()) @db.DateTime(3)
-  updatedAt             DateTime               @updatedAt @db.DateTime(3)
-  homeTeam              FootballTeam           @relation("FootballHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  awayTeam              FootballTeam           @relation("FootballAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  season                FootballSeason         @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  regulationEvidenceRef String?                   @db.VarChar(512)
+  regulationVerifiedAt  DateTime?                 @db.DateTime(3)
+  retrievedAt           DateTime                  @db.DateTime(3)
+  providerUpdatedAt     DateTime?                 @db.DateTime(3)
+  dataVersion           BigInt                    @default(1) @db.UnsignedBigInt
+  createdAt             DateTime                  @default(now()) @db.DateTime(3)
+  updatedAt             DateTime                  @updatedAt @db.DateTime(3)
+  homeTeam              FootballTeam              @relation("FootballHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  awayTeam              FootballTeam              @relation("FootballAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  season                FootballSeason            @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   audits                FootballFixtureAudit[]
+  evidenceSources       EvidenceSourceVersion[]
+  evidenceSnapshots     FixtureEvidenceSnapshot[]
 
   @@unique([provider, externalId])
   @@index([eatDate, kickoff])
@@ -337,4 +343,82 @@ model CostBudgetAttempt {
   @@index([accountId, category, state, priority, kickoffAt, queuedAt])
   @@index([accountId, category, periodId])
   @@index([accountId, category, jobId])
+}
+
+// Attributable, content-addressed source versions never replace older evidence.
+model EvidenceSourceVersion {
+  id                String                          @id @db.Char(64)
+  fixtureId         String                          @db.Char(36)
+  homeTeamId        String                          @db.Char(36)
+  awayTeamId        String                          @db.Char(36)
+  fixtureVersion    BigInt                          @db.UnsignedBigInt
+  sourceKey         String                          @db.Char(64)
+  syndicationKey    String?                         @db.Char(64)
+  kind              String                          @db.VarChar(16)
+  version           String                          @db.VarChar(128)
+  publisher         String                          @db.VarChar(512)
+  title             String                          @db.VarChar(2048)
+  sourceUrl         String?                         @db.VarChar(2048)
+  publishedAt       DateTime?                       @db.DateTime(3)
+  retrievedAt       DateTime                        @db.DateTime(3)
+  providerUpdatedAt DateTime?                       @db.DateTime(3)
+  retainUntil       DateTime                        @db.DateTime(3)
+  integrity         String                          @db.Char(64)
+  metadataJson      Json
+  fixture           FootballFixture                 @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  homeTeam          FootballTeam                    @relation("EvidenceSourceHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  awayTeam          FootballTeam                    @relation("EvidenceSourceAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  snapshots         FixtureEvidenceSnapshotSource[]
+
+  @@unique([id, fixtureId, homeTeamId, awayTeamId, fixtureVersion], map: "EvidenceSourceVersion_binding_key")
+  @@index([sourceKey, retrievedAt])
+  @@index([fixtureId, retrievedAt])
+  @@index([retainUntil])
+}
+
+// One immutable replay record per caller-supplied collection request. Identical
+// snapshot bodies may be associated with separate requests without new sources.
+model FixtureEvidenceSnapshot {
+  requestId          String                          @id @db.Char(64)
+  requestFingerprint String                          @db.Char(64)
+  contentHash        String                          @db.Char(64)
+  fixtureId          String                          @db.Char(36)
+  homeTeamId         String                          @db.Char(36)
+  awayTeamId         String                          @db.Char(36)
+  fixtureVersion     BigInt                          @db.UnsignedBigInt
+  analysisAt         DateTime                        @db.DateTime(3)
+  cutoffAt           DateTime                        @db.DateTime(3)
+  kickoffAt          DateTime                        @db.DateTime(3)
+  cycleId            String?                         @db.Char(36)
+  runId              String?                         @db.Char(36)
+  policyVersion      String                          @db.VarChar(128)
+  sufficient         Boolean
+  integrity          String                          @db.Char(64)
+  snapshotJson       Json
+  fixture            FootballFixture                 @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  homeTeam           FootballTeam                    @relation("EvidenceSnapshotHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  awayTeam           FootballTeam                    @relation("EvidenceSnapshotAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sources            FixtureEvidenceSnapshotSource[]
+
+  @@unique([requestId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], map: "FixtureEvidenceSnapshot_binding_key")
+  @@index([contentHash])
+  @@index([fixtureId, analysisAt])
+  @@index([cycleId, runId])
+}
+
+// Both composite foreign keys require every source to belong to the snapshot's
+// exact canonical fixture, team pair and fixture version.
+model FixtureEvidenceSnapshotSource {
+  requestId       String                  @db.Char(64)
+  sourceVersionId String                  @db.Char(64)
+  fixtureId       String                  @db.Char(36)
+  homeTeamId      String                  @db.Char(36)
+  awayTeamId      String                  @db.Char(36)
+  fixtureVersion  BigInt                  @db.UnsignedBigInt
+  snapshot        FixtureEvidenceSnapshot @relation(fields: [requestId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], references: [requestId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict, map: "FixtureEvidenceSnapshotSource_snapshot_fkey")
+  source          EvidenceSourceVersion   @relation(fields: [sourceVersionId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], references: [id, fixtureId, homeTeamId, awayTeamId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict, map: "FixtureEvidenceSnapshotSource_source_fkey")
+
+  @@id([requestId, sourceVersionId])
+  @@index([sourceVersionId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], map: "FixtureEvidenceSnapshotSource_source_idx")
+  @@index([requestId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], map: "FixtureEvidenceSnapshotSource_snapshot_idx")
 }
