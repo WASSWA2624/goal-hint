@@ -10,3 +10,7 @@ introduced by the foundation.
 The shared [calendar contract](../../docs/calendar.md) owns reporting dates,
 prediction/query boundaries, temporal publication rules and kickoff display
 inputs. Components and adapters should use it instead of duplicating arithmetic.
+
+The [market contract](../../docs/markets.md) owns versioned regulation-time
+probabilities, source-group consistency, deterministic picks, presentation and
+pure result adjudication. Reuse it in providers, publications, UI and settlement.

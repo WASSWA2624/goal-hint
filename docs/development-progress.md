@@ -414,3 +414,95 @@ freshness, cycle closure, run ordering and atomic publication. Temporal eligibil
 does not grant operation approval or reopen locked cycles. Durable triggering and
 deployment remain with 020/021/046–049. No live scheduler, provider call, purchase
 or deployment was performed. Prompt 004 is ticked in the root tracker.
+
+## 005 — Regulation-time market domain
+
+Date: 8 October 2026 (Africa/Kampala).
+
+Status: complete. Prompt 005 implementation, acceptance checks and full repository
+verification passed on the pinned runtime. Prompt 006 was not started.
+
+### Shared behavior and rule decisions
+
+Added reusable browser-safe contracts for match result, derived double chance,
+over/under 2.5 and BTTS. Every family uses regulation including stoppage time,
+excluding extra time and penalties. Stable selection codes and exact tie order
+remain independent of display language. Exact-score families remain excluded.
+
+The user explicitly chose sum tolerance **0.001** and consistency tolerance
+**0.002**. These are shared source-owned defaults in `regulation-markets-v1`;
+different runtime overrides fail. OP-02 is resolved for this version, while
+independent provider/evidence/production gates remain intact.
+
+Validation requires complete finite probabilities strictly inside `(0, 1)` and
+uses exact canonical-decimal comparisons to include tolerance equality without
+an extra floating-point epsilon. It never infers missing values, converts odds,
+normalizes accepted distributions or substitutes verbal confidence. Result and
+double chance form one source group; derivation and strict bounds succeed or
+reject together.
+
+The two feasible-marginal consistency constraints relate draw, over 2.5 and BTTS.
+Conflicts omit all participating fallback groups ahead of valid AI. Same-source
+contradictions omit all joint participants with audited reasons, preserving no
+arbitrary family preference. Available/unavailable snapshot entries are explicit,
+immutable and independent of input property order.
+
+`probability-display-v1` allocates exclusive display groups to 100% by exact
+largest remainders and specification tie order. Overlapping double-chance values
+round independently. Original precision and unrounded selected picks remain
+unchanged; outputs carry Estimated probability and boundary-label keys.
+
+Pure settlement requires an eligible final context and a separately verified
+regulation score. Live/nonfinal/unknown or invalid/missing score evidence stays
+Pending; ineligible cycles and void fixture statuses retain reasons; missing or
+unsupported picks remain Unavailable. Eligible final picks settle independently
+to Correct or Incorrect. Extra-time and penalty totals never replace regulation
+scores. All outcomes carry the rule version.
+
+Full APIs, types, conflict/rounding rules and result precedence are documented in
+the [market contract](markets.md).
+
+### Changed files
+
+- `src/domain/markets.ts`: versioned codes, strict validation, atomic derivation,
+  consistency, deterministic selection, frozen snapshots and presentation.
+- `src/domain/market-settlement.ts`: pure five-outcome adjudication and stable reasons.
+- `src/server/config/runtime-policy.ts`: shared approved defaults/version and
+  rejection of differing overrides, preserving all independent evidence gates.
+- `tests/markets.test.mjs`, `market-settlement.test.mjs`: 20 validation/display
+  groups and 11 regulation settlement groups.
+- `tests/runtime-policy.test.mjs`: approved-default/override regression coverage.
+- `.env.example`, `README.md`, `src/domain/README.md`, `docs/markets.md`: workflow
+  and shared-contract documentation.
+- `docs/implementation-decisions.md`, this progress record and `dev-tracker.md`:
+  recorded user choice, OP-02 resolution and actual implementation status.
+
+### Verification
+
+Pinned Node `24.18.1`, npm `11.16.0`; no dependency or database schema changes.
+Probabilities, scores and source labels are synthetic fixtures, not live provider
+support or forecast-quality evidence. Next telemetry was disabled for checks.
+
+| Command/check | Result |
+| --- | --- |
+| Focused market validation/presentation tests | Passed: **20 groups**, zero failures/skips; exact sum/consistency equality and next-representable rejection, derived strict bounds, all mixed-source conflicts, deterministic picks, group rounding, subnormal/boundary labels, unsupported families and immutable inputs/outputs. |
+| Focused settlement tests | Passed: **11 groups**, zero failures/skips; draws/0–0/1–1, two/three goals, BTTS zero boundaries, live and final status, extra-time/penalty regulation evidence, void/unavailable precedence, malformed inputs and unchanged caller context. |
+| Focused runtime-policy tests | Passed: **27 tests**, zero failures/skips; approved defaults/equivalent decimals, drift rejection in all modes and independent publication evidence gates. |
+| Focused ESLint and strict type-check | Passed with zero warnings/errors after final domain metadata/type fixes. |
+| `npm run check` | Passed (exit 0): generation, schema validation, zero-warning lint, strict type-check, all **96 tests** with zero failures/skips and production Turbopack build/prerendering. |
+| Whitespace and schema/dependency/specification scope checks | Passed: no migrations, dependency changes or original specification/plan edits. |
+
+Review tightened presentation to reject inconsistent deserialized selection,
+probability, period/source/line and derivation metadata. Distributive market types
+preserve family-specific complete distributions. Final focused checks include
+these refinements.
+
+### Handoff and remaining dependencies
+
+No unresolved input blocks the domain feature. Provider support/precision,
+freshness and source mappings remain with 007/008/013; model/evidence sufficiency
+and calibration/quality remain with 011/012/014. Persistence owners choose exact
+database precision/scale from validated contracts. Forecast locks, cycles,
+publication, result verification, corrections and headline aggregation remain
+with 019–030. No external provider calls, purchase, live forecast, scheduler or
+deployment was performed. Prompt 005 is ticked in the root tracker.

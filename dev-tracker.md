@@ -8,7 +8,7 @@
 | ☑ | [002-runtime-policy.md](dev-plan/002-runtime-policy.md) |
 | ☑ | [003-mysql-prisma.md](dev-plan/003-mysql-prisma.md) |
 | ☑ | [004-eat-calendar.md](dev-plan/004-eat-calendar.md) |
-| ☐ | [005-market-domain.md](dev-plan/005-market-domain.md) |
+| ☑ | [005-market-domain.md](dev-plan/005-market-domain.md) |
 | ☐ | [006-api-quota-limiter.md](dev-plan/006-api-quota-limiter.md) |
 | ☐ | [007-api-football-adapter.md](dev-plan/007-api-football-adapter.md) |
 | ☐ | [008-football-provider-trial.md](dev-plan/008-football-provider-trial.md) |

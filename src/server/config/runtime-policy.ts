@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { calendarRules } from "../../domain/calendar.ts";
+import { marketRules } from "../../domain/markets.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -41,13 +42,14 @@ class Secret {
 export const operatingRules = freeze({
   calendar: calendarRules,
   forecasts: {
+    ruleVersion: marketRules.ruleVersion,
     primary: "ai",
     fallback: "api-football",
     completeRevisionSnapshots: true,
     retainEligiblePreviousWhenAllMarketsUnavailable: true,
-    probabilityMinimumExclusive: 0,
-    probabilityMaximumExclusive: 1,
-    sourceConflictRule: "preserve-valid-ai-groups-omit-conflicting-fallback",
+    probabilityMinimumExclusive: marketRules.probabilityMinimumExclusive,
+    probabilityMaximumExclusive: marketRules.probabilityMaximumExclusive,
+    sourceConflictRule: marketRules.sourceConflictRule,
     visitorRequestsTriggerPredictions: false,
   },
   football: {
@@ -154,8 +156,8 @@ const environmentSchema = z.object({
   GOAL_HINT_RESEARCH_LICENSE_REF: text.describe("Record permitted research retrieval and reuse (011)."),
   GOAL_HINT_EVIDENCE_POLICY_REF: text.describe("Record minimum evidence, conflicts and missing-data rules (011)."),
   GOAL_HINT_FRESHNESS_POLICY_REF: text.describe("Record source/status freshness and unknown-update-time handling (008/011/022)."),
-  GOAL_HINT_PROBABILITY_SUM_TOLERANCE: tolerance.describe("Choose a finite tolerance strictly between zero and one (005)."),
-  GOAL_HINT_CONSISTENCY_TOLERANCE: tolerance.describe("Choose a finite cross-market tolerance strictly between zero and one (005)."),
+  GOAL_HINT_PROBABILITY_SUM_TOLERANCE: tolerance.describe("Use the probability sum tolerance approved for the active market rule version; leave unset for its default (005)."),
+  GOAL_HINT_CONSISTENCY_TOLERANCE: tolerance.describe("Use the consistency tolerance approved for the active market rule version; leave unset for its default (005)."),
   GOAL_HINT_JOB_REQUEST_LIMIT: count.describe("Set a positive per-job request limit (010/020)."),
   GOAL_HINT_JOB_TOKEN_LIMIT: count.describe("Set a positive per-job token limit (010/012)."),
   GOAL_HINT_JOB_TIMEOUT_SECONDS: count.describe("Set a positive bounded job timeout (010/020)."),
@@ -234,8 +236,8 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       research: { provider: settings.GOAL_HINT_RESEARCH_PROVIDER, licenseRef: settings.GOAL_HINT_RESEARCH_LICENSE_REF },
       evidencePolicyRef: settings.GOAL_HINT_EVIDENCE_POLICY_REF,
       freshnessPolicyRef: settings.GOAL_HINT_FRESHNESS_POLICY_REF,
-      probabilitySumTolerance: settings.GOAL_HINT_PROBABILITY_SUM_TOLERANCE,
-      consistencyTolerance: settings.GOAL_HINT_CONSISTENCY_TOLERANCE,
+      probabilitySumTolerance: settings.GOAL_HINT_PROBABILITY_SUM_TOLERANCE ?? marketRules.probabilitySumTolerance,
+      consistencyTolerance: settings.GOAL_HINT_CONSISTENCY_TOLERANCE ?? marketRules.consistencyTolerance,
       job: { requestLimit: settings.GOAL_HINT_JOB_REQUEST_LIMIT, tokenLimit: settings.GOAL_HINT_JOB_TOKEN_LIMIT, timeoutSeconds: settings.GOAL_HINT_JOB_TIMEOUT_SECONDS },
       shadow: { maximumJobs: settings.GOAL_HINT_SHADOW_MAX_JOBS, budgetUsdCents: settings.GOAL_HINT_SHADOW_BUDGET_USD_CENTS, protocolRef: settings.GOAL_HINT_SHADOW_PROTOCOL_REF },
       pipelineIntegrityRef: settings.GOAL_HINT_PIPELINE_INTEGRITY_REF,
@@ -380,6 +382,12 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
 
 function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
   const issues: PolicyIssue[] = [];
+  if (policy.choices.probabilitySumTolerance !== marketRules.probabilitySumTolerance) {
+    issues.push({ field: "GOAL_HINT_PROBABILITY_SUM_TOLERANCE", reason: "Probability sum tolerance must match the approved market rule version; changes require a recorded versioned decision." });
+  }
+  if (policy.choices.consistencyTolerance !== marketRules.consistencyTolerance) {
+    issues.push({ field: "GOAL_HINT_CONSISTENCY_TOLERANCE", reason: "Cross-market consistency tolerance must match the approved market rule version; changes require a recorded versioned decision." });
+  }
   if (policy.choices.database.acquireTimeoutMs <= policy.choices.database.connectTimeoutMs) {
     issues.push({ field: "GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS", reason: "Pool acquisition timeout must exceed the connection timeout." });
   }

@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { inspect, parseEnv, promisify } from "node:util";
+import { marketRules } from "../src/domain/markets.ts";
 import * as publicExports from "../src/domain/public-policy.ts";
 import {
   assertOperationAllowed,
@@ -146,8 +147,10 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  const { database, ...unresolvedChoices } = policy.choices;
+  const { database, probabilitySumTolerance, consistencyTolerance, ...unresolvedChoices } = policy.choices;
   assertUnresolved(unresolvedChoices);
+  assert.equal(probabilitySumTolerance, marketRules.probabilitySumTolerance);
+  assert.equal(consistencyTolerance, marketRules.consistencyTolerance);
   assert.deepEqual(database, {
     connectionMode: null, poolLimit: null, connectTimeoutMs: 5000, acquireTimeoutMs: 10000,
     idleTimeoutSeconds: 30, tlsMode: null, tlsCaFile: null, accessRef: null,
@@ -173,6 +176,9 @@ test("disabled defaults keep unresolved choices explicit in every deployment mod
     assert.equal(policy.choices.budgets.infrastructureMonthlyUsdCents, null);
     assert.equal(policy.choices.qualityQualificationRef, null);
     assert.equal(policy.choices.releaseApprovalRef, null);
+    assert.equal(policy.choices.probabilitySumTolerance, marketRules.probabilitySumTolerance);
+    assert.equal(policy.choices.consistencyTolerance, marketRules.consistencyTolerance);
+    assert.equal(policy.rules.forecasts.ruleVersion, marketRules.ruleVersion);
     assertDeepFrozen(policy);
     assert.deepEqual(env, { NODE_ENV: mode });
     for (const operation of ["database", "database-migration", ...operations]) {
@@ -181,6 +187,34 @@ test("disabled defaults keep unresolved choices explicit in every deployment mod
   }
   assert.equal(parseRuntimePolicy({}).mode, "development");
   assert.equal(parseRuntimePolicy({ GOAL_HINT_AI_PROVIDER: "   " }).choices.ai.provider, null);
+});
+
+test("approved market tolerances cannot drift through environment overrides", () => {
+  for (const [field, choice, approved, alternatives] of [
+    ["GOAL_HINT_PROBABILITY_SUM_TOLERANCE", "probabilitySumTolerance", "0.001", ["0.0001", "0.002", "0.1"]],
+    ["GOAL_HINT_CONSISTENCY_TOLERANCE", "consistencyTolerance", "0.002", ["0.001", "0.003", "0.1"]],
+  ]) {
+    for (const value of [undefined, "", "   ", approved, approved + "0"]) {
+      const policy = parseRuntimePolicy({ [field]: value });
+      assert.equal(policy.choices[choice], Number(approved));
+    }
+    for (const value of alternatives) {
+      for (const mode of ["development", "test", "production"]) {
+        const error = policyError(() => parseRuntimePolicy({ NODE_ENV: mode, [field]: value }), [field]);
+        assert.match(error.issues.find((issue) => issue.field === field).reason, /approved market rule version/);
+      }
+      policyError(() => parseRuntimePolicy({ ...syntheticProduction, [field]: value }), [field]);
+    }
+  }
+  const production = parseRuntimePolicy({
+    ...syntheticProduction,
+    GOAL_HINT_PROBABILITY_SUM_TOLERANCE: undefined,
+    GOAL_HINT_CONSISTENCY_TOLERANCE: undefined,
+  });
+  assert.equal(production.choices.probabilitySumTolerance, 0.001);
+  assert.equal(production.choices.consistencyTolerance, 0.002);
+  policyError(() => assertOperationAllowed(production, "publication"), ["GOAL_HINT_RELEASE_APPROVAL_REF"]);
+  assert.doesNotThrow(() => assertOperationAllowed(production, "publication", verifySyntheticEvidence));
 });
 
 test("malformed settings reject booleans, money, counts, IDs, tolerances and URLs", () => {

@@ -65,9 +65,10 @@ provider or database calls. Database-backed checks use the separate isolated har
 ## Environment workflow
 
 The minimal public page works with no environment variables. Copy `.env.example`
-to ignored `.env.local` to configure later features; blank optional values remain
-explicitly unresolved. Keep real credentials in local environment files or
-deployment secret storage. Public settings come from `src/domain/public-policy.ts`;
+to ignored `.env.local` to configure later features; blank owner choices remain
+explicitly unresolved. Market tolerances use the approved versioned defaults
+described in the [shared market contract](docs/markets.md). Keep real credentials
+in local environment files or deployment secret storage. Public settings come from `src/domain/public-policy.ts`;
 `NEXT_PUBLIC_*` and unknown `GOAL_HINT_*` settings fail validation. The settled
 launch features cannot be enabled through environment overrides.
 

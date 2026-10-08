@@ -218,7 +218,7 @@ algorithms and infrastructure are implemented by their owning prompts.
 | Reporting calendar and daily run | **Settled**, §5: `Africa/Kampala` reporting dates; stored instants UTC; one logical run at 00:00 EAT, `0 21 * * *` UTC on the previous date. Selection is `[D 00:00, D+7 00:00)` in EAT, today plus six days. No hourly/last-minute AI refreshes. | Shared server/runtime schedule policy; public reporting timezone/window | 004; daily selection 021 |
 | Publication cutoff | **Settled**, §§4–5: kickoff minus five minutes; publication strictly before cutoff. Observed earlier play closes writes immediately. Previous-day eligible revisions may serve early kickoffs. | Shared server/runtime cutoff policy | 004; publication/locking 022–024 |
 | Four market families | **Settled**, §4: match result; derived double chance; over/under 2.5; both teams to score. Regulation time includes stoppage time and excludes extra time/penalties. Highest unrounded probability wins with ties in the specification's listed order. | Public market family list; shared domain rules introduced by 005 | 005 |
-| Probability and source semantics | **Settled**, §§4, 7–8: finite values strictly between zero and one; complete outcome groups; double chance derived from one accepted match-result source group. No guessed values, implicit odds conversion, source averaging or selection by higher source percentage. Numeric tolerances remain unresolved below. | Shared market rules; `GOAL_HINT_PROBABILITY_SUM_TOLERANCE`, `GOAL_HINT_CONSISTENCY_TOLERANCE` | 005 |
+| Probability and source semantics | **Settled**, §§4, 7–8: finite values strictly between zero and one; complete outcome groups; double chance derived from one accepted match-result source group. No guessed values, implicit odds conversion, source averaging or selection by higher source percentage. User approved sum tolerance 0.001 and consistency tolerance 0.002 for `regulation-markets-v1` on 8 October 2026; see OP-02 and prompt 005 decisions. | Shared market rules; `GOAL_HINT_PROBABILITY_SUM_TOLERANCE`, `GOAL_HINT_CONSISTENCY_TOLERANCE` | 005 |
 | Primary predictor and fallback | **Settled**, §§1, 5, 7: valid AI families take priority; supported API-Football fallback may follow invalid/missing AI, timeout, insufficient evidence or exhausted budget. Missing news alone does not force fallback when approved evidence coverage is met. | Server source policy; AI/research/football capability flags | 011–013 |
 | Revision and settlement integrity | **Settled**, §§4–5, 8, 10–11: complete ordered snapshots; one publication per refresh identity; partial replacements drop old unsupported families. No valid family retains an eligible prior forecast with original age or stays unavailable. Immutable locks/history; verified regulation results only; corrections preserve locked picks and append audit history. | Shared server/domain invariants; database services arrive in 019–027 | 019 |
 | Selected football provider/plan/cap | **Settled**, §§6, 14–15: sole football-data/fallback provider API-Football by API-Sports, direct Mega; payable monthly ceiling **US$45 including taxes/payment charges**. Plan choice is not a purchase. The specification's US$39 advertised price is not a verified invoice. | Server football policy; `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS` must not exceed 4500 | 006–008 |
@@ -239,7 +239,7 @@ values or references only; a referenced policy must resolve all listed details.
 | ID / subject | Status | Decision or evidence still required and authoritative source | Owner | Affected configuration | First dependent prompt |
 | --- | --- | --- | --- | --- | --- |
 | OP-01 Database target and privileges | **MySQL selected; live target unresolved** | The user's 7 October 2026 instruction supersedes PostgreSQL with MySQL. Select MySQL 8.4 LTS/InnoDB and the compatible Prisma 7 direct adapter runtime locally. Live hosting, actual least-privilege grants, separate direct migration access, TLS/certificate evidence, process/replica connection capacity and authorized target credentials remain unresolved. Any remote or production target needs trusted database-access and budget evidence; remote development/test mode is not an exemption. Isolated local integration evidence belongs in the progress record and does not authorize a hosted target. Specification §§9–10, 13; prompt 003. | Unassigned; user decision/evidence required for live deployment | `GOAL_HINT_DATABASE_ENABLED`, `DATABASE_URL`, `TEST_DATABASE_URL`, `MIGRATION_DATABASE_URL`, `GOAL_HINT_DATABASE_CONNECTION_MODE`, `GOAL_HINT_DATABASE_POOL_LIMIT`, connection/acquisition/idle timeout settings, `GOAL_HINT_DATABASE_TLS_MODE`, `GOAL_HINT_DATABASE_TLS_CA_FILE`, `GOAL_HINT_DATABASE_ACCESS_REF`; Deferred: verified live target ownership/grants/isolation/TLS/capacity and itemized infrastructure approval | **003**; hosted qualification **046** |
-| OP-02 Numeric and consistency policy | **Unresolved** | Set probability-group sum and cross-market tolerances and the deterministic conflict-check details. Valid AI groups outrank conflicting fallback groups; unsupported/conflicting families must be omitted and audited. No arbitrary epsilon or normalization is approved. §§7–8; prompt 005. | Unassigned; user decision/evidence required | `GOAL_HINT_PROBABILITY_SUM_TOLERANCE`, `GOAL_HINT_CONSISTENCY_TOLERANCE`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: versioned consistency/conflict rules | **005**, before production candidates are accepted |
+| OP-02 Numeric and consistency policy | **Resolved for `regulation-markets-v1`** | User chose sum 0.001 and consistency 0.002 on 8 October 2026. Equality uses exact canonical-decimal comparisons; probabilities are not normalized. Versioned feasible-marginal checks preserve AI ahead of conflicting fallback; same-source contradictions omit all participating groups with reasons. Different runtime overrides fail. Evidence adequacy/source verification remains separately pending in OP-07/OP-14. §§7–8; see prompt 005 decisions below. | User selected numeric limits; implementation defines conservative deterministic conflict rules | Shared `marketRules`; `GOAL_HINT_PROBABILITY_SUM_TOLERANCE`, `GOAL_HINT_CONSISTENCY_TOLERANCE`; evidence policy remains independently required | **005** implemented; provider precision/quality validation **008/014** |
 | OP-03 Provider account and reset evidence | **Evidence required** | Verify authorized account identity, actual direct Mega limits, quota headers/reset boundary, expiry, conservative reset/probe protocol and current payable total within US$45. EAT midnight is not the assumed provider reset. Limiter implementation may use isolated simulations; provider trial owns actual account proof. §§11, 14–15; prompts 006–008. | Unassigned; user evidence required | `GOAL_HINT_FOOTBALL_ACCOUNT_EVIDENCE_REF`, `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS`; Deferred: verified account/reset/expiry/active-limit metadata | **006** for live limiter behavior; verification **008** |
 | OP-04 Private provider access | **Evidence required** | Supply authorized private-use entitlement and server key before any bounded provider probe/trial. Key presence alone does not prove subscription or rights. The trial cannot purchase, renew or change plans. §§6, 14–15; prompts 007–008. | Unassigned; user evidence required | `GOAL_HINT_FOOTBALL_ENABLED`, `API_FOOTBALL_KEY`, `GOAL_HINT_FOOTBALL_PRIVATE_USE_REF`, `GOAL_HINT_OPERATION_SCOPE` | **007** for optional live probes; trial **008** |
 | OP-05 Initial competitions and trial allowance | **Unresolved** | Choose representative initial candidate competitions and a bounded account-counted trial request allowance, then approve launch coverage from observed field/status/market quality and budgets. No worldwide coverage or enabled competition is inferred from Mega endpoint access. §§1, 6, 14–15; prompt 008. | Unassigned; user decision/evidence required | `GOAL_HINT_COMPETITION_IDS`, `GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT`; Deferred: competition/season coverage settings | **008** before live trial |
@@ -536,3 +536,56 @@ Visitor display returns locale-neutral `Intl` inputs with a validated explicit
 timezone; its optional local date never feeds reporting identity or eligibility.
 See the [shared API and scheduling contract](calendar.md) and actual verification
 in [development progress](development-progress.md).
+
+## 005 — Versioned regulation-time markets
+
+**Decision date:** 8 October 2026. **Status:** implemented for prompt 005.
+
+The user explicitly selected probability sum tolerance `0.001` and consistency
+tolerance `0.002` in this chat. They are probability units, respectively 0.1 and
+0.2 percentage points. These approved defaults belong to
+`regulation-markets-v1`; runtime settings may repeat the same values but cannot
+silently override them. Production rights, evidence, freshness, calibration and
+release gates remain independent. OP-02 is resolved for this version.
+
+Use immutable, language-neutral contracts for the four source-owned market
+families, regulation including stoppage time, stable selection codes and exact
+specification tie order. Validate complete finite strictly interior probabilities
+with exact decimal comparisons over their canonical JavaScript number strings.
+Equality at approved tolerances passes without an arbitrary floating-point
+epsilon. Never normalize accepted probabilities, infer missing complements,
+convert odds implicitly, use verbal confidence as event probability or average
+sources. Reject nonrepresentable derived double-chance boundaries atomically
+with the parent match-result group.
+
+For draw `D`, over-2.5 `O` and BTTS Yes `B`, enforce `B <= D + O` and
+`D + O <= 1 + B`, each extended only by the approved consistency tolerance.
+BTTS with under 2.5 implies a 1–1 draw; a draw with over 2.5 requires BTTS. These
+are the feasible-marginal constraints available without inventing a score
+distribution. No pair alone justifies an extra relationship.
+
+The deterministic conflict policy preserves AI ahead of conflicting fallback:
+omit all fallback source groups participating in a violated three-group check.
+When all participants share one source, omit all jointly inconsistent groups;
+do not invent a preference among market families. Omit match result and its
+derived double chance together. Preserve unavailable states and related-group/
+constraint reasons. Selecting/fetching replacement candidates, validating
+fixture/cycle identity and provenance, and retaining old forecasts belong to
+007–013/019–025, not this pure validator.
+
+Tag probability presentation separately as `probability-display-v1`. Allocate
+exclusive groups to 100 integer percentage points using exact largest remainders
+and specification tie order; quotas adjust display only, not stored values or
+chosen picks. Round overlapping double-chance alternatives independently.
+Boundary-label and Estimated probability keys remain separate from UI language.
+
+Adjudicate one selected pick only after an eligible final context and separately
+verified regulation score. Live/nonfinal/missing or invalid scores stay pending;
+ineligible cycles and postponed/canceled/abandoned/awarded games are void; absent
+or unsupported picks are unavailable. Extra-time/shootout final totals cannot
+replace regulation evidence. Persistence, locks, corrections and headline
+aggregation remain with their owning later prompts. Exact score stays disabled.
+
+See the [market API contract](markets.md) for input/output shapes, precedence and
+later responsibilities, and [development progress](development-progress.md) for
+actual validation results. No models/migrations or dependencies were changed.
