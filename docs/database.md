@@ -56,6 +56,10 @@ TypeScript file's header comments, preserving Prisma's `@ts-nocheck` directive
 and licensing text. Generation supports the initial model-free schema without
 an extra no-models flag.
 
+Guarding runs after failed generation too, because Prisma can rewrite part of
+an existing client before returning an error. Repeated guarding preserves the
+headers and adds no duplicate markers.
+
 The initial schema contains no application models. Its migration baseline
 establishes migration history without inventing football, user, session, job or
 quota entities. Later prompts add the models, SQL constraints and indexes they
@@ -89,11 +93,20 @@ containing reserved URL characters must be encoded. Differently spelled URLs,
 credentials or options do not establish different databases.
 
 For local loopback development/tests, omitted TLS mode may resolve to disabled.
+The connector permits RSA public-key retrieval only for these nonproduction,
+TLS-disabled loopback connections. This supports a fresh MySQL 8.4
+`caching_sha2_password` account before its authentication cache is populated.
+[MySQL's authentication reference](https://dev.mysql.com/doc/refman/8.4/en/caching-sha2-pluggable-authentication.html)
+documents the TLS or RSA exchange needed for initial authentication. TLS,
+remote and production connections keep key retrieval disabled.
 Remote and production connections require TLS with certificate and hostname
 verification; an absent provider CA is not permission to disable verification.
 The migration connection must follow the same approved security policy. Hosted
 poolers, proxy modes, connection limits and provider-specific CA requirements
 must be verified before enabling a live target.
+
+The application connector disables server-directed redirects so a connection
+cannot silently reuse the approved target's credentials at another server.
 
 Prisma Migrate's native URL uses `sslaccept=strict` for required TLS. The
 [pinned engine source](https://github.com/prisma/prisma-engines/blob/0edf323efd1d98336f3f0a68684b56f689b900d3/quaint/src/connector/mysql/url.rs)
@@ -167,6 +180,18 @@ Schema generation and validation must work when no URL is configured; no fake
 connection target is supplied to make those commands pass. Targeted commands
 must stop with sanitized guidance if migration configuration is missing. Do not
 use automatic `db push`, migration reset or data deletion as a release strategy.
+
+The Prisma config always supplies a datasource object, with its URL omitted for
+offline commands. The pinned schema engine requires that object for offline
+comparisons; omitting it can produce a misleading successful empty diff.
+An unexpectedly blank diff now fails without creating a migration or updating
+the snapshot; only Prisma's explicit empty-migration comment denotes no change.
+
+The wrapper disables Prisma checkpoint telemetry and update requests so local
+commands do not wait on that network work. It also rejects `DEBUG`, `NODE_DEBUG`
+and `NODE_DEBUG_NATIVE` before spawning a migration child, whose environment
+contains the private connection URL. Unexpected wrapper failures expose a
+static message rather than raw filesystem, driver or process diagnostics.
 
 Migration generation uses `migrate diff --from-schema` / `--to-schema --script`
 and needs no database or shadow target. It writes a dated named migration and
@@ -254,6 +279,24 @@ configuration. `MYSQL_TEST_SERVER_BINARY` may select an installed test-server
 binary; this test-only control is separate from application policy. Never start,
 stop, initialize or clean an existing service/data directory to obtain evidence.
 
+A portable official MySQL 8.4 LTS ZIP can supply the binary without installing
+a service. Select it for the current PowerShell session, then run the harness:
+
+```powershell
+$env:MYSQL_TEST_SERVER_BINARY = 'C:\path\to\mysql-8.4\bin\mysqld.exe'
+npm run test:db
+```
+
+The harness ignores the binary's installed configuration and supplies a fresh
+data directory and unused loopback port. It verifies the directory, server UUID
+and port before administrative mutations and again before shutdown. Each run
+creates separate migration and application accounts; the application has DML
+access only to its fixture table, and cannot read migration history or run DDL.
+The migration role has database-scoped privileges and cannot read server accounts.
+Test clients also disable inherited login-path files and `MYSQL_PWD`; the cold
+application account connects through Prisma before any client login can warm
+its authentication cache.
+
 Before mutation or cleanup, verify the actual server/database identity and
 harness ownership, not just `NODE_ENV=test`, a name prefix or unequal URL text.
 Cleanup may remove only exact objects created by that run after ownership is
@@ -265,8 +308,10 @@ behavior, UTC round trips, migration/application privilege separation and client
 shutdown. Later prompts reuse the owned-target setup for their substantive
 concurrency checks.
 
-Database-backed results remain pending until the harness actually runs. If a
-server binary is unavailable, generation and local checks still run and the
-integration skip is explicit. A local MySQL version other than 8.4 can establish
-its own compatibility evidence only; it cannot establish the chosen hosted 8.4
-target, TLS, grants, budgets, backups or release readiness.
+The 8 October 2026 acceptance run passed all eight checks on a fresh owned
+MySQL 8.4.11 instance; actual commands and results are in the
+[progress record](development-progress.md). If a future run has no server
+binary, generation and local checks still run and the integration skip is
+explicit. A local run establishes its tested compatibility and isolation only;
+hosted target approval, TLS, grants, budgets, backups and release readiness
+require their own evidence.

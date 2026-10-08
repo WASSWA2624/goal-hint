@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -40,17 +41,31 @@ test("isolated genuine MySQL migration, transaction and lifecycle contracts", { 
     return;
   }
   t.diagnostic(`Owned throwaway server: ${instance.version}. This run does not qualify a separate MySQL 8.4 LTS deployment.`);
-  const env = isolatedEnvironment(instance.url);
+  t.beforeEach(() => instance.assertOwnership());
+  const migrationPassword = randomBytes(24).toString("hex");
+  const applicationPassword = randomBytes(24).toString("hex");
+  const migrationUrl = `mysql://goal_hint_migration:${migrationPassword}@127.0.0.1:${instance.port}/goal_hint_test`;
+  const applicationUrl = `mysql://goal_hint_application:${applicationPassword}@127.0.0.1:${instance.port}/goal_hint_test`;
+  const env = { ...isolatedEnvironment(applicationUrl), MIGRATION_DATABASE_URL: migrationUrl };
   let database;
+  let migrationDatabase;
   try {
-    await t.test("committed migration deploy, repeat deploy and status succeed", async () => {
+    await instance.executeAdmin(`
+      CREATE USER 'goal_hint_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
+      CREATE USER 'goal_hint_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES
+        ON goal_hint_test.* TO 'goal_hint_migration'@'127.0.0.1';
+    `);
+    await t.test("separate migration account deploys, repeats, reports status and verifies the schema", async () => {
+      await instance.assertOwnership();
       await runNode([script, "deploy"], env);
       await runNode([script, "deploy"], env);
       await runNode([script, "status"], env);
+      await runNode([script, "verify"], env);
       const { createDatabase } = await import("../src/server/database/client.ts");
-      database = createDatabase(parseRuntimePolicy(env));
-      assert.equal(await database.readiness(), "ready");
-      const migrations = await database.query((client) => client.$queryRaw`
+      migrationDatabase = createDatabase(parseRuntimePolicy({ ...env, TEST_DATABASE_URL: migrationUrl }));
+      assert.equal(await migrationDatabase.readiness(), "ready");
+      const migrations = await migrationDatabase.query((client) => client.$queryRaw`
         SELECT migration_name, finished_at, rolled_back_at FROM _prisma_migrations
       `);
       assert.ok(migrations.length > 0);
@@ -59,15 +74,43 @@ test("isolated genuine MySQL migration, transaction and lifecycle contracts", { 
 
     // MySQL DDL commits implicitly. This fixture table belongs only to the
     // proven new datadir and is intentionally created outside a DML transaction.
-    await database.query((client) => client.$executeRaw`
+    await instance.executeAdmin(`
       CREATE TABLE runtime_integration_probe (
         id VARCHAR(64) NOT NULL PRIMARY KEY,
         value INT NOT NULL,
         amount DECIMAL(12, 2) NOT NULL,
         probability DECIMAL(12, 9) NOT NULL,
         instant DATETIME(3) NOT NULL
-      ) ENGINE=InnoDB
+      ) ENGINE=InnoDB;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.runtime_integration_probe
+        TO 'goal_hint_application'@'127.0.0.1';
     `);
+    const { createDatabase } = await import("../src/server/database/client.ts");
+    database = createDatabase(parseRuntimePolicy(env));
+
+    await t.test("application credentials allow fixture DML but deny schema and migration-history access", async () => {
+      assert.equal(await database.readiness(), "ready");
+      await assert.rejects(database.query((client) => client.$executeRaw`
+        CREATE TABLE forbidden_application_ddl (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB
+      `), (error) => error.name === "DatabaseOperationError");
+      await assert.rejects(database.query((client) => client.$queryRaw`SELECT migration_name FROM _prisma_migrations`),
+        (error) => error.name === "DatabaseOperationError");
+      await assert.rejects(migrationDatabase.query((client) => client.$queryRaw`SELECT User FROM mysql.user`),
+        (error) => error.name === "DatabaseOperationError");
+    });
+
+    await t.test("verification detects representable drift without repair or reset", async () => {
+      await instance.assertOwnership();
+      await assert.rejects(runNode([script, "verify"], env), (error) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr, /Schema drift detected/u);
+        assert.ok(!`${error.stdout}${error.stderr}`.includes(migrationPassword));
+        assert.ok(!`${error.stdout}${error.stderr}`.includes("runtime_integration_probe"));
+        return true;
+      });
+      const tables = await instance.executeAdmin("SHOW TABLES LIKE 'runtime_integration_probe'");
+      assert.equal(tables.stdout.trim(), "runtime_integration_probe");
+    });
 
     await t.test("InnoDB commits exact values and a UTC millisecond instant", async () => {
       const instant = new Date("2026-10-07T00:00:00.123Z");
@@ -89,7 +132,7 @@ test("isolated genuine MySQL migration, transaction and lifecycle contracts", { 
       assert.equal(rows[0].amount.toString(), "12.34");
       assert.equal(rows[0].probability.toString(), "0.123456789");
       assert.equal(rows[0].instant.toISOString(), instant.toISOString());
-      const engines = await database.query((client) => client.$queryRaw`
+      const engines = await migrationDatabase.query((client) => client.$queryRaw`
         SELECT ENGINE FROM information_schema.TABLES
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${"runtime_integration_probe"}
       `);
@@ -145,7 +188,7 @@ test("isolated genuine MySQL migration, transaction and lifecycle contracts", { 
     });
   } finally {
     try {
-      await database?.disconnect();
+      await Promise.all([database?.disconnect(), migrationDatabase?.disconnect()]);
     } finally {
       await instance.stop();
     }

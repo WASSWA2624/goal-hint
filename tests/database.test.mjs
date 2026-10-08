@@ -3,11 +3,14 @@ import { execFile } from "node:child_process";
 import { createServer } from "node:net";
 import test from "node:test";
 import { inspect, promisify } from "node:util";
+import { defaultOptions } from "mariadb";
 import { createDatabase, DatabaseOperationError } from "../src/server/database/client.ts";
 import { databasePoolOptions, migrationConnectionUrl } from "../src/server/database/connection.ts";
 import { parseRuntimePolicy, RuntimePolicyError } from "../src/server/config/runtime-policy.ts";
 
 const execFileAsync = promisify(execFile);
+// Cold Windows module imports compete with concurrent build tests; keep a finite bound.
+const subprocessTimeoutMs = 30_000;
 const local = "mysql://synthetic:synthetic-local-password@127.0.0.1:1/goal_hint_test";
 const remote = "mysql://synthetic:synthetic-remote-password@synthetic.invalid/goal_hint_main";
 
@@ -98,6 +101,75 @@ test("callback failures retain only stable classifications and never retry or ex
   }
 });
 
+test("pool and adapter initialization failures are redacted and owned pools are released", async () => {
+  const moduleUrl = new URL("../src/server/database/client.ts", import.meta.url).href;
+  const policyUrl = new URL("../src/server/config/runtime-policy.ts", import.meta.url).href;
+  const sentinel = "synthetic-initialization-credential-sentinel";
+  const driver = `
+    import { EventEmitter } from "node:events";
+    export function createPool() {
+      if (globalThis.syntheticFailureStage === "pool") throw new Error(${JSON.stringify(sentinel)});
+      const pool = new EventEmitter();
+      pool.end = () => {
+        globalThis.syntheticPoolCloses++;
+        if (globalThis.syntheticFailureStage === "adapter-async-cleanup") return Promise.reject(new Error(${JSON.stringify(sentinel)}));
+        throw new Error(${JSON.stringify(sentinel)});
+      };
+      return pool;
+    }
+  `;
+  const adapter = `
+    export class PrismaMariaDb {
+      constructor() { throw new Error(${JSON.stringify(sentinel)}); }
+    }
+  `;
+  const source = `
+    import assert from "node:assert/strict";
+    import { registerHooks } from "node:module";
+    import { inspect } from "node:util";
+    const replacements = new Map([
+      ["mariadb", ${JSON.stringify(driver)}],
+      ["@prisma/adapter-mariadb", ${JSON.stringify(adapter)}],
+    ]);
+    registerHooks({
+      resolve(specifier, context, nextResolve) {
+        if (replacements.has(specifier)) return { url: "goal-hint-init-test:" + specifier, shortCircuit: true };
+        return nextResolve(specifier, context);
+      },
+      load(url, context, nextLoad) {
+        if (url.startsWith("goal-hint-init-test:")) return {
+          format: "module", source: replacements.get(url.slice("goal-hint-init-test:".length)), shortCircuit: true,
+        };
+        return nextLoad(url, context);
+      },
+    });
+    const { createDatabase, DatabaseOperationError } = await import(${JSON.stringify(moduleUrl)});
+    const { parseRuntimePolicy } = await import(${JSON.stringify(policyUrl)});
+    const policy = parseRuntimePolicy({ NODE_ENV: "test", GOAL_HINT_DATABASE_ENABLED: "true", TEST_DATABASE_URL: ${JSON.stringify(local)} });
+    globalThis.syntheticPoolCloses = 0;
+    for (const stage of ["pool", "adapter-sync-cleanup", "adapter-async-cleanup"]) {
+      globalThis.syntheticFailureStage = stage;
+      assert.throws(() => createDatabase(policy), (error) => {
+        assert.ok(error instanceof DatabaseOperationError);
+        assert.equal(error.code, "failed");
+        assert.equal(error.cause, undefined);
+        for (const output of [error.message, error.stack, JSON.stringify(error), inspect(error, { depth: null })]) {
+          assert.ok(!output.includes(${JSON.stringify(sentinel)}));
+        }
+        return true;
+      });
+      await new Promise(setImmediate);
+    }
+    assert.equal(globalThis.syntheticPoolCloses, 2);
+    process.stdout.write("synthetic initialization boundaries passed");
+  `;
+  const { stdout, stderr } = await execFileAsync(process.execPath, ["--conditions=react-server", "--input-type=module", "--eval", source], {
+    env: { ...process.env, DEBUG: "" }, windowsHide: true, timeout: subprocessTimeoutMs, maxBuffer: 1024 * 1024,
+  });
+  assert.equal(stdout, "synthetic initialization boundaries passed");
+  assert.equal(stderr, "");
+});
+
 test("production approval and disabled-capability gates run before pool creation", async (t) => {
   const endpoint = await observableEndpoint(t);
   configurationError(() => createDatabase(parseRuntimePolicy({})), "GOAL_HINT_DATABASE_ENABLED");
@@ -119,10 +191,31 @@ test("remote access requires approved direct mode and verified TLS without URL o
   configurationError(() => databasePoolOptions(testPolicy({ ...direct, GOAL_HINT_DATABASE_TLS_MODE: "disabled" })), "GOAL_HINT_DATABASE_TLS_MODE");
   const options = databasePoolOptions(testPolicy({ ...direct, GOAL_HINT_DATABASE_TLS_MODE: "required" }));
   assert.deepEqual(options.ssl, { host: "synthetic.invalid", servername: "synthetic.invalid", rejectUnauthorized: true });
+  // Check the actual connector configuration: its TLS default enables redirects.
+  assert.equal(defaultOptions(options).permitRedirect, false);
+  assert.equal(defaultOptions(options).allowPublicKeyRetrieval, false);
   const sentinel = "synthetic-query-override-secret-sentinel";
   configurationError(() => databasePoolOptions(testPolicy({
     TEST_DATABASE_URL: `${remote}?sslaccept=${sentinel}`, GOAL_HINT_DATABASE_CONNECTION_MODE: "direct", GOAL_HINT_DATABASE_TLS_MODE: "required", GOAL_HINT_DATABASE_ENABLED: "false",
   })), "TEST_DATABASE_URL", sentinel);
+});
+
+test("RSA public key retrieval is restricted to loopback development/tests without TLS", () => {
+  for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+    const target = `mysql://synthetic:synthetic-local-password@${host}/goal_hint_test`;
+    for (const mode of ["development", "test"]) {
+      const env = { NODE_ENV: mode, GOAL_HINT_DATABASE_ENABLED: "true", [mode === "test" ? "TEST_DATABASE_URL" : "DATABASE_URL"]: target };
+      assert.equal(defaultOptions(databasePoolOptions(parseRuntimePolicy(env))).allowPublicKeyRetrieval, true);
+      assert.equal(defaultOptions(databasePoolOptions(parseRuntimePolicy({ ...env, GOAL_HINT_DATABASE_TLS_MODE: "required" }))).allowPublicKeyRetrieval, false);
+    }
+  }
+  const production = parseRuntimePolicy({
+    NODE_ENV: "production", GOAL_HINT_DATABASE_ENABLED: "true", DATABASE_URL: local,
+    GOAL_HINT_DATABASE_CONNECTION_MODE: "direct", GOAL_HINT_DATABASE_POOL_LIMIT: "2", GOAL_HINT_DATABASE_TLS_MODE: "required",
+    GOAL_HINT_DATABASE_ACCESS_REF: "synthetic-database-access-evidence",
+    GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS: "0", GOAL_HINT_BUDGET_APPROVAL_REF: "synthetic-budget-approval",
+  });
+  assert.equal(defaultOptions(databasePoolOptions(production)).allowPublicKeyRetrieval, false);
 });
 
 test("connection decoding rejects invalid inputs and unreadable CA files without leaking supplied values", () => {
@@ -202,7 +295,7 @@ test("debug diagnostics fail closed both at module load and before callback exec
       process.stdout.write("synthetic debug guard passed");
     `;
     const { stdout, stderr } = await execFileAsync(process.execPath, ["--conditions=react-server", "--input-type=module", "--eval", source], {
-      env: { ...process.env, DEBUG: initiallyEnabled ? sentinel : "" }, windowsHide: true, timeout: 10000, maxBuffer: 1024 * 1024,
+      env: { ...process.env, DEBUG: initiallyEnabled ? sentinel : "" }, windowsHide: true, timeout: subprocessTimeoutMs, maxBuffer: 1024 * 1024,
     });
     assert.equal(stdout, "synthetic debug guard passed");
     assert.equal(stderr, "");
@@ -234,7 +327,7 @@ test("the process singleton survives module reloads and releases unused pools wi
     process.stdout.write("synthetic unused singleton passed");
   `;
   const { stdout, stderr } = await execFileAsync(process.execPath, ["--conditions=react-server", "--input-type=module", "--eval", source], {
-    env, windowsHide: true, timeout: 10000, maxBuffer: 1024 * 1024,
+    env, windowsHide: true, timeout: subprocessTimeoutMs, maxBuffer: 1024 * 1024,
   });
   assert.equal(stdout, "synthetic unused singleton passed");
   assert.equal(stderr, "");

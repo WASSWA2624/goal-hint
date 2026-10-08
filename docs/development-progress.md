@@ -215,3 +215,113 @@ The ignored synthetic fixture/logs remain under `.tmp`; no alternate deletion
 route was attempted. Further watcher verification output remains under ignored
 `out/`. All owned test processes were stopped; the user's development process
 was preserved.
+
+## 003 — MySQL and Prisma runtime
+
+Date: 8 October 2026 (Africa/Kampala).
+
+Status: complete. Prompt 003 acceptance checks and final repository checks passed
+on the pinned runtime. Live database approval and deployment evidence remain
+unresolved in the decision register.
+
+### Implementation and fixes
+
+Completed the existing minimal MySQL/Prisma foundation without adding domain
+models. Services and workers reuse one lazy, bounded process pool and generated
+server client. The runtime exposes guarded query and transaction callbacks,
+sanitized readiness and errors, and explicit shutdown; development module reloads
+reuse the same client. UTC sessions and millisecond/exact-decimal conventions,
+application/migration privileges and compatible schema evolution are documented
+in the [database runbook](database.md).
+
+Fixed the targetless Prisma config to supply an empty datasource object. The
+pinned native schema engine needs it for offline diff; without it, the CLI could
+return exit 0 and empty SQL despite a changed schema. Offline migration generation
+now creates real reviewed SQL in an isolated fixture, advances its snapshot only
+for an actual change and rejects unexpectedly blank output. The committed
+model-free schema and baseline migration are preserved.
+
+Disabled checkpoint/update requests for Prisma child commands, guarded debug
+settings that can expose child environment credentials, and redacted unexpected
+wrapper failures. Client generation restores server-only markers even after a
+failed partial generation, preserving headers and avoiding duplicate imports.
+Real Next client-compilation tests enforce both direct and transitive boundaries.
+
+The runtime now sanitizes all pool/adapter/client initialization failures and
+releases an owned pool when initialization fails. It refuses server-directed
+redirects. Cold MySQL 8.4 `caching_sha2_password` authentication uses RSA key
+retrieval only for nonproduction, TLS-disabled loopback connections; remote,
+TLS and production connections keep retrieval disabled and retain verified TLS.
+A fresh application account reproduced the failure and verified the fix before
+any other client login could populate its authentication cache.
+
+The reusable integration harness owns a new data directory, loopback server and
+disposable database. It rechecks the ownership marker, directory, server UUID
+and port before administrative mutations, subtests and shutdown. Test clients
+exclude inherited login-path files and `MYSQL_PWD`. Separate schema-scoped
+migration and fixture-table DML accounts prove the documented privilege design.
+All owned diagnostic and acceptance instances shut down and removed their
+verified disposable directories; existing services and data were preserved.
+
+### Changed files
+
+- `prisma.config.ts`: targetless datasource object required by the native engine.
+- `src/server/database/client.ts`, `connection.ts`: initialization cleanup and
+  redaction, direct-target protection and local cold-authentication support.
+- `scripts/database.mjs`: reliable offline commands, static failures, debug
+  protection and generated-client guarding on success and failure.
+- `tests/database.test.mjs`, `database-cli.test.mjs`: meaningful runtime, offline
+  migration, redaction and failed-generation regressions. Database test child
+  processes share a bounded 30-second cold-start timeout.
+- `tests/database.integration.mjs`, `helpers/mysql-instance.mjs`: genuine isolated
+  MySQL transactions, privileges, drift and repeated ownership verification.
+- `docs/database.md`, `implementation-decisions.md`, this progress record and
+  `dev-tracker.md`: connection decisions, procedures and actual handoff status.
+
+### Verification
+
+The final acceptance run uses Node `24.18.1`, npm `11.16.0`, Prisma `7.10.0`
+and Oracle MySQL Community `8.4.11`. Rechecked publisher metadata and official
+adapter/generator/runtime documentation; retained the existing exact dependency
+pins and scoped connector/config overrides. See the
+[decision register](implementation-decisions.md) for sources and constraints.
+
+The official portable MySQL ZIP remains under ignored `.tmp/mysql-tools` for
+repeat testing, without a service installation or changes to global MySQL
+configuration. The published MD5 matched, and Oracle's detached signature
+verified using its official release key. The portable binary was selected with
+`MYSQL_TEST_SERVER_BINARY` for the acceptance run.
+
+| Command/check | Result |
+| --- | --- |
+| `npm ls --depth=0`; `npm ls @prisma/adapter-mariadb mariadb mysql2 deepmerge-ts` | Passed; exact installed versions and all three scoped overrides resolve correctly. |
+| Focused database runtime tests on Node 24 | Passed: 10 tests, including cold-auth settings, initialization cleanup/redaction and singleton lifecycle. |
+| Focused database CLI tests | Passed: 6 tests covering offline SQL/snapshot generation, target isolation, argument validation, diagnostics and failed-generation guards. |
+| `npm run check` on pinned Node/npm | Passed (exit 0): client generation, schema validation, lint with zero warnings, route/type generation, strict type-check, all 48 tests with zero failures/skips, and the production Turbopack build. |
+| `npm run test:db` with the portable MySQL 8.4.11 binary on Node 24 | Passed: 8 tests, zero failures/skips. Fresh/repeated deployment, migration status and schema verification; restricted account access; drift detection without repair; real InnoDB commit, exact decimals and UTC `DATETIME(3)` round trip; DML rollback; concurrent durable uniqueness; process singleton and shutdown. |
+| `npm run db:migrate -- --name verify_foundation` | Passed; unchanged committed schema produces no new migration or snapshot change. |
+| `npm run db:health` without local database configuration | Passed; reports `disabled` without a connection or private diagnostics. |
+| `npm audit --omit=dev --json` | Passed: zero reported production vulnerabilities. |
+| `npm audit --json` | Exit 1: seven existing high-severity development-only entries in the recorded `braces` chains; no new database-package advisory remains. |
+| `git diff --check`; committed schema/migration comparison; disposable-directory check | Passed: no whitespace errors, committed schemas and migrations unchanged, zero remaining disposable MySQL directories. |
+
+The real run exposed uncached local authentication that the earlier migration
+account's warmed cache had masked; the final restricted application account
+connects without a warmup workaround. A parallel repository run hit a 10-second
+singleton subprocess cold-start limit with no output. That test exited naturally
+in 848 ms on a pinned-runtime isolated rerun; its shared bounded timeout now
+allows cold Windows imports while preserving every assertion and natural exit.
+An initial shell run selected Node 26; the final acceptance results above use
+the explicitly selected pinned Node 24 runtime.
+
+### Handoff and unresolved inputs
+
+Prompt 003 introduces no football, authentication, job or quota tables and does
+not enable live access. OP-01 still requires an approved hosted target,
+credentials, actual least-privilege grants, TLS evidence and process/replica
+capacity; OP-12 still requires itemized infrastructure approval. Remote/production
+operator commands remain gated until a trusted evidence-verifier integration
+exists. A local test success does not supply those approvals or qualify backups,
+hosting or production operations. No provider calls, purchase or deployment was
+performed. Prompt 003 is ticked in the root development tracker; prompt 004 was
+not started.

@@ -328,7 +328,8 @@ framework downgrade or dependency-peer bypass was applied.
 ## 003 — MySQL runtime, migrations and connection policy
 
 **Decision date:** 7 October 2026. **Status:** MySQL selected by the user;
-local runtime implemented with database-backed verification tracked separately.
+local runtime implemented and database acceptance verified on MySQL 8.4.11
+on 8 October 2026. Live target decisions remain unresolved.
 
 The user's MySQL instruction supersedes the original PostgreSQL choice.
 The specification and prompt 003 now require MySQL 8.4 LTS/InnoDB. Historical
@@ -464,7 +465,38 @@ test binary only; it is not application configuration or authorization to use
 an existing database. A name prefix, unequal URLs and `NODE_ENV=test` are guards,
 not isolation proof. Actual migration deployment/status, transaction rollback,
 concurrency, UTC, grants and cleanup evidence are recorded in
-[development progress](development-progress.md). Until those checks run, they
-remain explicitly pending. A successful isolated local run still cannot clear
+[development progress](development-progress.md). The 8 October 2026 isolated
+MySQL 8.4.11 run passed all eight database checks with Node 24.18.1. This does not clear
 the unresolved live target, TLS, privileges, capacity or budget gates in OP-01
 and OP-12. The operational procedures are in [the database runbook](database.md).
+
+### 8 October 2026 implementation verification
+
+Rechecked Prisma 7.10.0 publisher metadata and the official
+[MySQL adapter](https://www.prisma.io/docs/orm/v7/core-concepts/supported-databases/mysql),
+[generator](https://www.prisma.io/docs/orm/v7/prisma-schema/overview/generators)
+and [runtime requirements](https://www.prisma.io/docs/orm/v7/reference/system-requirements)
+against the pinned Node 24.18.1 and TypeScript 5.9.3. Retain the existing exact
+packages and parent-scoped security overrides; no dependency upgrades were needed.
+
+Always provide `datasource: {}` for targetless Prisma configuration. The pinned
+native schema engine requires the object for offline diff; its missing-object
+failure previously surfaced as exit 0 and empty SQL. The wrapper now rejects
+unexpectedly blank output without advancing migration state, disables upstream
+checkpoint/update work, redacts unexpected failures and restores generated
+server-only guards even after unsuccessful generation.
+
+Disable connector server redirects. Permit RSA public-key retrieval only for
+nonproduction, TLS-disabled loopback connections so an uncached
+`caching_sha2_password` account can authenticate. The fresh restricted application
+account proved this behavior without a cache-warming login. TLS, remote and
+production connections keep retrieval disabled. The
+[MySQL authentication reference](https://dev.mysql.com/doc/refman/8.4/en/caching-sha2-pluggable-authentication.html)
+documents initial TLS/RSA authentication requirements. Pool, adapter and client
+initialization failures retain only sanitized errors and release owned resources.
+
+The test harness now proves separate schema-scoped migration and table-scoped
+application grants, migration status/repeat deployment, drift detection without
+repair, exact UTC/decimal transactions, rollback and durable uniqueness. It
+rechecks its owned directory, server UUID and port before administrative work
+and shutdown, and excludes inherited MySQL login files and passwords.

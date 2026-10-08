@@ -20,7 +20,9 @@ export class MysqlServerUnavailableError extends Error {
 }
 
 async function run(binary, args, timeout = 15000) {
-  return execFileAsync(binary, args, { ...commandOptions, timeout });
+  const env = { ...process.env };
+  delete env.MYSQL_PWD;
+  return execFileAsync(binary, args, { ...commandOptions, env, timeout });
 }
 
 /** Locate genuine MySQL without using, changing or stopping an installed service. */
@@ -96,13 +98,14 @@ export async function startIsolatedMysql() {
   const admin = path.join(path.dirname(binary), process.platform === "win32" ? "mysqladmin.exe" : "mysqladmin");
   const client = path.join(path.dirname(binary), process.platform === "win32" ? "mysql.exe" : "mysql");
   const port = await unusedLoopbackPort();
-  const connection = ["--no-defaults", "--protocol=TCP", "--host=127.0.0.1", `--port=${port}`, "--user=root"];
+  const connection = ["--no-defaults", "--no-login-paths", "--protocol=TCP", "--host=127.0.0.1", `--port=${port}`, "--user=root"];
   let child;
   let stopped = false;
   let targetVerified = false;
+  let serverUuid;
   let startupOutput = "";
 
-  async function removeOwnedDirectory() {
+  async function ownedDirectory() {
     const actual = await realpath(directory);
     const parent = await realpath(instancesRoot);
     const relative = path.relative(parent, actual);
@@ -110,15 +113,46 @@ export async function startIsolatedMysql() {
       || path.isAbsolute(relative) || (await readFile(marker, "utf8")) !== ownership) {
       throw new Error("The MySQL test datadir failed its ownership check; it was preserved.");
     }
+    return actual;
+  }
+
+  async function removeOwnedDirectory() {
+    const actual = await ownedDirectory();
     await rm(actual, { recursive: true, force: false });
+  }
+
+  async function assertOwnership() {
+    await ownedDirectory();
+    if (!child || child.exitCode !== null || child.signalCode !== null) {
+      throw new Error("The owned MySQL child is no longer running; no target operation was attempted.");
+    }
+    const { stdout } = await run(client, [...connection, "--batch", "--skip-column-names",
+      "--execute=SELECT @@datadir, @@server_uuid, @@port"]);
+    const [actualDatadir, actualUuid, actualPort] = stdout.trim().split("\t");
+    if ((await realpath(actualDatadir)) !== (await realpath(datadir)) || Number(actualPort) !== port
+      || (serverUuid !== undefined && actualUuid !== serverUuid)) {
+      throw new Error("The loopback MySQL target failed its owned server identity check; no target operation was attempted.");
+    }
+    serverUuid ??= actualUuid;
+  }
+
+  async function executeAdmin(sql) {
+    await assertOwnership();
+    return run(client, [...connection, "--database=goal_hint_test", "--batch", "--skip-column-names", `--execute=${sql}`]);
   }
 
   async function stop() {
     if (stopped) return;
     stopped = true;
     if (child && child.exitCode === null && child.signalCode === null) {
-      if (targetVerified) await run(admin, [...connection, "shutdown"], 10000).catch(() => {});
-      else child.kill();
+      if (targetVerified) {
+        // A previous verification cannot authorize a different process that
+        // subsequently acquires the same port. Terminate only our child on failure.
+        try {
+          await assertOwnership();
+          await run(admin, [...connection, "shutdown"], 10000);
+        } catch { child.kill(); }
+      } else child.kill();
       if (!await finishWithin(exited(child), 10000)) {
         child.kill();
         if (!await finishWithin(exited(child), 10000)) {
@@ -154,14 +188,12 @@ export async function startIsolatedMysql() {
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
     }
-    const { stdout } = await run(client, [...connection, "--batch", "--skip-column-names", "--execute=SELECT @@datadir"]);
-    if ((await realpath(stdout.trim())) !== (await realpath(datadir))) {
-      throw new Error("The loopback MySQL target did not prove the newly owned datadir; no schema changes were attempted.");
-    }
+    await assertOwnership();
     targetVerified = true;
     await run(client, [...connection, "--execute=CREATE DATABASE goal_hint_test CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"]);
     return Object.freeze({
       url: `mysql://root@127.0.0.1:${port}/goal_hint_test`, directory, port, version, stop,
+      assertOwnership, executeAdmin,
     });
   } catch (error) {
     await stop();

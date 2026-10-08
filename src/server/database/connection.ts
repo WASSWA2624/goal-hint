@@ -54,7 +54,8 @@ function connection(policy: RuntimePolicy, purpose: "application" | "migration")
   return { url, user, password, database, tls, options, fail };
 }
 
-export function databasePoolOptions(policy: RuntimePolicy): PoolConfig {
+// Connector 3.5.4 implements permitRedirect but omits it from its public types.
+export function databasePoolOptions(policy: RuntimePolicy): PoolConfig & { permitRedirect: false } {
   assertSafeDatabaseDiagnostics();
   const { url, user, password, database, tls, options, fail } = connection(policy, "application");
   let ca: Buffer | undefined;
@@ -75,6 +76,11 @@ export function databasePoolOptions(policy: RuntimePolicy): PoolConfig {
     connectionLimit: options.poolLimit ?? 5, minimumIdle: 0,
     connectTimeout: options.connectTimeoutMs, acquireTimeout: options.acquireTimeoutMs,
     idleTimeout: options.idleTimeoutSeconds, prepareCacheLength: 0,
+    // Server redirects would change the approved target and reuse its credentials.
+    permitRedirect: false,
+    // MySQL's cold caching_sha2_password authentication needs RSA without TLS.
+    // Key retrieval is restricted to local development/test without TLS.
+    allowPublicKeyRetrieval: tls === "disabled" && policy.mode !== "production" && isLoopbackDatabaseHost(url.hostname),
     timezone: "+00:00", sessionVariables: { time_zone: "+00:00" },
     ssl,
     debug: false, trace: false, logParam: false,

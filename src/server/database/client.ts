@@ -44,14 +44,20 @@ export class DatabaseRuntime {
   constructor(policy: RuntimePolicy, verifyEvidence?: EvidenceVerifier) {
     assertOperationAllowed(policy, "database", verifyEvidence);
     const options = databasePoolOptions(policy);
-    this.#pool = createPool(options);
-    // Pool events must never print driver errors, statements or connection strings.
-    // The connector's event overloads omit error, although its pool is an emitter.
-    (this.#pool as unknown as EventEmitter).on("error", () => {});
-    const adapter = new PrismaMariaDb(this.#pool, { database: options.database!, disposeExternalPool: false, onConnectionError: () => {} });
-    try { this.#client = new PrismaClient({ adapter, log: [], errorFormat: "minimal" }); }
+    let pool: Pool | undefined;
+    try {
+      pool = createPool(options);
+      // Pool events must never print driver errors, statements or connection strings.
+      // The connector's event overloads omit error, although its pool is an emitter.
+      (pool as unknown as EventEmitter).on("error", () => {});
+      const adapter = new PrismaMariaDb(pool, { database: options.database!, disposeExternalPool: false, onConnectionError: () => {} });
+      this.#client = new PrismaClient({ adapter, log: [], errorFormat: "minimal" });
+      this.#pool = pool;
+    }
     catch {
-      void this.#pool.end().catch(() => {});
+      // Initialization may fail before Prisma owns a client; still close an owned pool.
+      const ownedPool = pool;
+      if (ownedPool !== undefined) void Promise.resolve().then(() => ownedPool.end()).catch(() => {});
       throw new DatabaseOperationError("failed");
     }
   }

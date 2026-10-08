@@ -21,7 +21,7 @@ function isolatedEnvironment(overrides = {}) {
     if (key.startsWith("GOAL_HINT_") || key.startsWith("NEXT_PUBLIC_") || key.startsWith("API_FOOTBALL_") || credentials.has(key)) delete env[key];
   }
   return {
-    ...env, NODE_ENV: "test", DEBUG: "", GOAL_HINT_OPERATION_SCOPE: "disabled",
+    ...env, NODE_ENV: "test", DEBUG: "", CHECKPOINT_DISABLE: "1", PRISMA_HIDE_UPDATE_MESSAGE: "1", GOAL_HINT_OPERATION_SCOPE: "disabled",
     GOAL_HINT_DATABASE_ENABLED: "false", GOAL_HINT_FOOTBALL_ENABLED: "false",
     GOAL_HINT_AI_ENABLED: "false", GOAL_HINT_RESEARCH_ENABLED: "false", ...overrides,
   };
@@ -152,4 +152,52 @@ test("unsupported migration names and command arguments fail with static diagnos
     });
   }
   assert.deepEqual(await readdir(path.join(fixture, "prisma", "migrations")), ["migration_lock.toml"]);
+});
+
+test("debug diagnostics cannot print migration credentials or contact a target", async (t) => {
+  const fixture = await createFixture(t);
+  const endpoint = await observableEndpoint(t);
+  const sentinel = "synthetic-debug-credential-sentinel";
+  const url = `mysql://synthetic:${sentinel}@127.0.0.1:${endpoint.port}/synthetic_isolated_target`;
+  for (const diagnostics of [{ DEBUG: "prisma:*" }, { NODE_DEBUG: "child_process" }]) {
+    await assert.rejects(run(fixture, ["deploy"], isolatedEnvironment({
+      GOAL_HINT_DATABASE_ENABLED: "true", TEST_DATABASE_URL: url, MIGRATION_DATABASE_URL: url, ...diagnostics,
+    })), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /Disable process DEBUG|Disable Node process diagnostics/u);
+      assert.ok(!`${error.stdout}${error.stderr}`.includes(sentinel));
+      return true;
+    });
+  }
+  assert.equal(endpoint.connections(), 0);
+});
+
+test("schema validation failures withhold private Prisma diagnostics", async (t) => {
+  const fixture = await createFixture(t);
+  const sentinel = "synthetic_private_schema_sentinel";
+  const schemaFile = path.join(fixture, "prisma", "schema.prisma");
+  await writeFile(schemaFile, `${await readFile(schemaFile, "utf8")}\n${sentinel}\n`);
+  await assert.rejects(run(fixture, ["validate"]), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /Prisma command failed\./u);
+    assert.ok(!`${error.stdout}${error.stderr}`.includes(sentinel));
+    return true;
+  });
+});
+
+test("failed generation restores server guards without duplicating them or losing headers", async (t) => {
+  const fixture = await createFixture(t);
+  const generated = path.join(fixture, "src", "server", "generated", "prisma");
+  const clientFile = path.join(generated, "client.ts");
+  const header = "// Generated license header\n// @ts-nocheck\n";
+  await mkdir(generated, { recursive: true });
+  await writeFile(clientFile, `${header}export const partialClient = true;\n`);
+  const schemaFile = path.join(fixture, "prisma", "schema.prisma");
+  await writeFile(schemaFile, `${await readFile(schemaFile, "utf8")}\nsynthetic_invalid_schema\n`);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await assert.rejects(run(fixture, ["generate"]));
+    const guarded = await readFile(clientFile, "utf8");
+    assert.ok(guarded.startsWith(header));
+    assert.equal(guarded.match(/import "server-only";/gu)?.length, 1);
+  }
 });
