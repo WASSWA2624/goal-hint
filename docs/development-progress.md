@@ -506,3 +506,101 @@ database precision/scale from validated contracts. Forecast locks, cycles,
 publication, result verification, corrections and headline aggregation remain
 with 019–030. No external provider calls, purchase, live forecast, scheduler or
 deployment was performed. Prompt 005 is ticked in the root tracker.
+
+## 006 — Shared API-Football quota limiter
+
+**Date:** 8 October 2026. **Scope:** `dev-plan/006-api-quota-limiter.md`.
+
+### Implementation
+
+Added server-only durable quota contracts, MySQL coordination, reservations,
+single-use dispatch claims and an authorized bounded gateway for ordinary calls
+and reset probes. All replicas/tools/trials/retries use the same canonical account
+identity and shared database. Migration `20261008182528_api_quota_limiter` adds
+`ApiQuotaAccount`, `ApiQuotaPeriod` and `ApiQuotaAttempt`, with account foreign keys,
+nullable unique owned-work keys and rolling/priority/sequence indexes. Generated
+schema snapshot advances with that incremental migration; foundation SQL remains
+unchanged. No dependency versions changed.
+
+The account lock encloses all checks and writes. MySQL UTC is authoritative;
+transactions are bounded and external I/O runs after commit. Verified active
+terms cap 12 per rolling second, 720 per rolling minute and 120,000 per provider
+day, with even 84 ms default pacing and protected 20,000 essential capacity.
+Priority orders safety/recovery, near-kickoff and live/date work, daily inputs and
+enrichment; ordinary work cannot consume reserve. Queued duplicates can inherit
+essential urgency. Prior spending, uncertain attempts, unused permits and crashes
+remain counted. Retrying needs a new counted ID; joining never invokes transport.
+
+Lower limits apply immediately, including between reservation and launch. Header
+floors account for subsequent reservations and unresolved work; stale responses
+cannot refill allowance. The gateway enforces runtime/evidence authority, short
+permit windows, single use, remaining lease timeouts, AbortSignal transport and
+redacted structured outcomes. HTTP/body rate limits pause all callers; expired
+subscriptions/credentials and unavailable/corrupt shared state fail closed while
+stored reads remain usable.
+
+Verified boundary evidence allows one counted candidate probe. Bulk dispatch
+requires successful probe-bound trusted reset confirmation. Old counters persist;
+uncertain probes, stale old replies, higher headers and EAT midnight cannot enable
+bulk traffic. Same-period refresh/reset cannot restore lower active terms. All
+reset/account evidence in tests is synthetic; real database behavior is not.
+
+### Changed files and handoff
+
+- `src/server/football/quota-contract.ts`, `quota-limiter.ts`,
+  `quota-mysql-store.ts`, `quota-gateway.ts`: shared typed state, durable safety
+  rules, account locking and guarded one-request transport.
+- `prisma/schema.prisma`, `schema.snapshot.prisma`, incremental quota migration:
+  three coordination/usage tables; no forecast/catalog/job implementation.
+- `tests/quota.integration.mjs`: genuine isolated MySQL concurrency and failure
+  acceptance; `tests/quota-gateway.test.mjs`: gateway authority/transport cases.
+- `package.json`: explicit `test:quota` integration command.
+- `docs/quota-limiter.md`, `README.md`, decision register, this record and root
+  tracker: caller contract, rollout dependencies and actual progress.
+
+### Verification
+
+Pinned Node `24.18.1`, npm `11.16.0`; owned genuine MySQL `8.4.11` fixtures with
+separate migration DDL and narrowly scoped application DML roles. The existing
+ownership-checked helper starts a fresh loopback server/data directory and removes
+only its own fixture after shutdown. No installed service, external database,
+provider account or live API request is used.
+
+| Command/check | Result |
+| --- | --- |
+| `npm run check` | Passed (exit 0): client generation, schema validation, zero-warning lint, strict type-check, **113 tests**, zero failures/skips, and production Turbopack build/prerendering. |
+| Final scoped ESLint, `tsc --noEmit`, gateway tests | Passed after the final limiter refinements: zero warnings/errors and **17 gateway tests**, zero failures/skips. Covers authorization revocation, single-use claims, ordinary/probe parity, delayed commits/process pauses, remaining lease bounds, AbortSignal timeout, late success/rejection, body errors and storage failure. |
+| `npm run test:db` | Passed on owned genuine MySQL **8.4.11**: **8 tests**, zero failures/skips. Applies the new migration, repeats deployment, checks status/schema, denies DDL/history access to the application role, detects drift without repair, verifies InnoDB/UTC/exact values, rollback, concurrent uniqueness and singleton shutdown. |
+| Final unfiltered `npm run test:quota` | Passed on owned genuine MySQL **8.4.11**: **25 tests**, zero failures/skips, about 124 seconds. Separate pools serialize/deduplicate concurrent work; **725 counted reservations and single-use claims** satisfy every rolling second/minute and 84 ms pacing interval. Covers lower rates/day terms, cap/headroom/reserve, priorities/promotion, uncertain retries, crash/restart, stale/in-flight headers, contention, unavailable/corrupt storage, expiry and clock regression. |
+| Provider-period/reset checks within that quota suite | Passed using explicitly synthetic evidence: one counted candidate probe; no bulk traffic on uncertainty or without exact trusted confirmation; old counters/stale replies cannot reset daily allowance; lower probe terms survive confirmation; minute floors cross daily boundaries and expire only at their trailing-minute boundary. |
+| Actual MySQL UTC-clock gateway check within that quota suite | Passed: one authorized mocked transport, three authority checks, durable count **1**, completed outcome. Final gateway latency about **95 ms** (reserve 36 / claim 33 / complete 25); no network I/O. |
+| Whitespace/scope checks | Passed. Incremental migration explicitly selects InnoDB; foundation migration, dependency versions and specification/dev-plan files remain unchanged. All owned fixture servers/data directories were cleaned up. |
+
+Review tightened same-period verified refreshes, lower terms between reservation
+and launch, urgent queued deduplication, candidate lower-term preservation and
+account-wide minute protection across daily boundaries. The final unfiltered
+quota suite includes every correction.
+
+The first actual-clock gateway check exposed an 84 ms permit freshness window
+that could expire during real MySQL commits. The final permit freshness window
+is independently bounded to one second (or its shorter lease/deadline), while
+launch claims recheck account pacing/windows and the gateway checks elapsed time
+immediately before I/O. Real-clock checks then passed without increasing the
+test request's 5-second transport budget. One repeated 725-attempt stress run
+under parallel build load exceeded its original 180-second test allowance; the
+fixture-only stress allowance is now 300 seconds, parent 600 seconds. Earlier
+and final full runs passed; the final stress loop took about **92 seconds**.
+This changes test infrastructure timing, not application job/time budgets.
+
+Implementation and all local acceptance checks are complete. Prompt 006 is
+ticked in the root tracker; provider-account/reset qualification is still pending.
+
+### Remaining external evidence
+
+OP-03 remains pending: canonical authorized account identity, actual limits,
+daily boundary/reset protocol, candidate probe confirmation, expiry, current
+payable total within US$45 and egress/IP protection evidence. Prompt 008 owns that
+authorized trial; 007 owns header/body parsing and real HTTP integration. OP-11
+job request/time/fallback budgets remain with 010/025; the gateway requires caller
+bounds and supplies no invented job defaults. No purchase, provider request,
+scheduler, forecast, deployment or notification was performed.

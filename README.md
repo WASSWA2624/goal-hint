@@ -4,7 +4,8 @@
 
 A free football prediction website with estimated probabilities, clear analysis and verifiable outcomes.
 
-The Next.js foundation, runtime policy and MySQL/Prisma access layer are implemented. The entry page states that
+The Next.js foundation, runtime policy, MySQL/Prisma access, calendar, market domain
+and shared football quota limiter are implemented. The entry page states that
 predictions are not yet available; product features follow the numbered plan.
 
 - [App specification](app-write-up.md): scope, user experience, prediction rules, architecture and launch requirements.
@@ -55,6 +56,7 @@ debounces saves; generated output and dependency directories are excluded.
 | `npm run db:deploy` / `npm run db:status` / `npm run db:verify` | Deploy reviewed migrations, check their state and detect schema drift using separate migration credentials. |
 | `npm run db:health` | Report private database readiness without internal diagnostics. |
 | `npm run test:db` | Run integration checks in a newly owned isolated MySQL server; explicitly skips when no genuine server binary is available. |
+| `npm run test:quota` | Run shared quota, concurrency and reset checks on an owned isolated MySQL server. |
 
 Next.js generates ignored `next-env.d.ts` and `.next/` files. The type-check
 command works before the first development or production build. ESLint is a
@@ -117,8 +119,8 @@ Transactions expose a shared Prisma transaction client and redact failures.
 `MIGRATION_DATABASE_URL` supplies separate DDL credentials. Offline migration
 generation uses `prisma/schema.snapshot.prisma`, creates SQL only for actual
 changes and advances the snapshot for review together with the migration.
-Generation/validation need no URL. No football, authentication or job tables have
-been invented; the committed initial migration establishes history only.
+Generation/validation need no URL. The initial migration establishes history;
+prompt 006 adds the incremental account, period and attempted-request quota tables.
 
 Remote/production targets require approved direct connections, verified TLS and
 explicit production pool sizing. Production operation guards also require the
@@ -127,6 +129,16 @@ verifier wired, so production target operations remain blocked. Test processes
 ignore local environment files and never reuse an existing service or database
 for cleanup. Read the [database runbook](docs/database.md) for privileges, commands,
 UTC/exact-number conventions, rollback compatibility and pending live evidence.
+
+## Shared football quotas
+
+Server callers use the durable MySQL limiter and authorized single-use gateway in
+`src/server/football`. It applies shared rolling limits, even pacing, the protected
+essential reserve, conservative header reconciliation and counted reset probes.
+Run `npm run test:quota` with an available genuine MySQL binary for isolated
+database acceptance. See the [quota contract](docs/quota-limiter.md) for caller
+identity, priorities, timeout/retry rules and the adapter handoff. Actual provider
+account/reset evidence remains pending prompt 008; no live calls are enabled.
 
 ## Code boundaries
 

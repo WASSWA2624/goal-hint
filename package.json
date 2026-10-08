@@ -23,6 +23,7 @@
     "db:verify": "node --conditions=react-server scripts/database.mjs verify",
     "db:health": "node --conditions=react-server --env-file-if-exists=.env.local scripts/database-health.mjs",
     "test:db": "node --conditions=react-server --test tests/database.integration.mjs",
+    "test:quota": "node --conditions=react-server --test tests/quota.integration.mjs",
     "policy:check": "node --conditions=react-server --env-file-if-exists=.env.local scripts/check-runtime-policy.mjs",
     "test": "node --conditions=react-server --test tests/*.test.mjs",
     "check": "npm run db:generate && npm run db:validate && npm run lint && npm run typecheck && npm test && npm run build"

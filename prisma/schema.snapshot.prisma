@@ -1,5 +1,51 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/server/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  engineType             = "client"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
 datasource db {
   provider = "mysql"
 }
 
-// Last migration's data model. Offline generation advances this snapshot.
+// This stable coordination row serializes every reservation for one provider account.
+model ApiQuotaAccount {
+  id        String            @id @db.Char(64)
+  stateJson Json?
+  periods   ApiQuotaPeriod[]
+  attempts  ApiQuotaAttempt[]
+}
+
+model ApiQuotaPeriod {
+  accountId String          @db.Char(64)
+  id        String          @db.Char(64)
+  stateJson Json
+  account   ApiQuotaAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@id([accountId, id])
+}
+
+model ApiQuotaAttempt {
+  accountId   String          @db.Char(64)
+  id          String          @db.Char(64)
+  workKey     String?         @db.Char(64)
+  state       String          @db.VarChar(16)
+  priority    Int
+  queuedAt    DateTime        @db.DateTime(3)
+  deadlineAt  DateTime        @db.DateTime(3)
+  dispatchedAt DateTime?      @db.DateTime(3)
+  periodId    String?         @db.Char(64)
+  sequence    Int?
+  payloadJson Json
+  account     ApiQuotaAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@id([accountId, id])
+  @@unique([accountId, workKey])
+  @@index([accountId, dispatchedAt])
+  @@index([accountId, state, priority, queuedAt])
+  @@index([accountId, periodId, sequence])
+}

@@ -589,3 +589,73 @@ aggregation remain with their owning later prompts. Exact score stays disabled.
 See the [market API contract](markets.md) for input/output shapes, precedence and
 later responsibilities, and [development progress](development-progress.md) for
 actual validation results. No models/migrations or dependencies were changed.
+
+## 006 — Durable account-wide API-Football quotas
+
+**Decision date:** 8 October 2026. **Status:** local implementation and isolated
+database verification; actual account/reset evidence remains OP-03/008.
+
+Use one stable canonical account hash and one shared MySQL/InnoDB account row
+across environments, tools, trials, replicas and workers. Hash account identity
+independently of credential rotation. Serialize reservation and state changes
+under that row lock with the existing bounded database transactions. MySQL UTC
+time governs quota decisions; clock regression, corrupt state, connection errors
+and lock failures pause outbound work. Retain period and attempted-request rows
+through restart. Application callers cannot reset allowance by reinitializing.
+
+The lower active limits apply against the source-owned 12/rolling second,
+720/rolling minute and 120,000/provider-day caps. Even pacing uses the ceiling of
+the stricter per-second/per-minute interval (84 ms under default terms). Protect
+20,000 of the daily ceiling for results/cutoff safety, recovery and near-kickoff
+fallback. Live/date sync, daily inputs and enrichment cannot consume the reserve.
+Imported unknown prior spending is conservatively ordinary usage. Existing
+verified-period refreshes may tighten terms, remaining allowance and expiry;
+neither higher observations nor reset confirmation undo lower terms learned from
+a probe. A separate trusted account-change process owns any eventual increase.
+
+Each attempt commits its count before I/O and obtains a single-use launch claim.
+Reservations remain spent on uncertainty, crash, expired permits and failures.
+Each retry gets a new attempt ID. Queued/in-flight work hashes deduplicate under
+the account lock; an urgent consumer can promote queued work without a second
+dispatch. Observable priority ordering, lease fencing, deadline expiry and
+remaining-lease transport bounds prevent queue or retry bypasses. The gateway
+checks existing runtime/evidence authority around asynchronous coordination and
+checks monotonic elapsed time immediately before I/O. No transport, automatic
+retry, pagination or provider-specific mapping is implemented by the limiter.
+Permit freshness is bounded separately to one second (or a shorter lease), so
+durable commits need not fit inside the 84 ms pacing interval. Actual MySQL-clock
+gateway validation verifies that the guarded callback can execute under this
+bound; expired permits remain spent and cannot be replayed.
+
+Daily/minute header floors subtract later reservations and unresolved earlier
+attempts; late responses never restore spent allowance. Daily floors persist for
+the verified period. Minute observations constrain a conservative trailing minute
+from receipt and carry across provider-day boundaries. Late old-period minute
+observations can tighten the active period without changing its daily allowance.
+Honor normalized retry delays; a 429/body rate-limit error with no
+usable delay pauses for a local conservative 60 seconds. Credential and
+subscription failures pause the entire account with redacted structured reasons.
+Stored reads remain available to callers when outbound state is unavailable.
+
+The provider's [rate-limit article](https://www.api-football.com/news/post/how-ratelimit-works)
+(read 8 October 2026; published 12 June 2026) documents daily/minute headers,
+account/IP protections, smoothing and 429 handling. Its published Mega rate is
+900/minute and 15/second; the application deliberately retains its stricter caps.
+This document does not verify the current account, payable total, expiry or actual
+daily reset boundary/protocol. No boundary is inferred from EAT reporting days.
+
+At a trusted candidate boundary permit only one counted, paced probe. Bulk work
+remains paused until that exact probe succeeds and trusted evidence confirms the
+new provider period. Preserve the probe count, lower observed terms/floors and all
+old counters. Stale responses, larger headers, restart, uncertainty and candidate
+timestamps alone cannot activate capacity. Missed boundaries, failed probes,
+account renewal and upgrades require operator reconciliation; do not invent
+automatic recovery behavior before the authorized provider trial establishes it.
+
+Migration `20261008182528_api_quota_limiter` adds the account, period and attempted
+request tables with indexed rolling/priority/sequence projections and account
+foreign keys. The original foundation migration remains unchanged. No new
+dependencies or public UI are introduced. See the [quota contract](quota-limiter.md)
+for the 007 gateway handoff and [development progress](development-progress.md)
+for actual genuine-MySQL concurrency checks. All account/period/reset fixtures in
+those checks are synthetic; they are not confirmed live subscription evidence.
