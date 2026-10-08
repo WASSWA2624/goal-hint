@@ -27,6 +27,7 @@ export interface GatewayQuotaLimiter {
 export type QuotaTransport<Value> = (
   signal: AbortSignal,
   permit: QuotaPermit,
+  observe: (feedback: QuotaFeedback) => void,
 ) => Promise<Readonly<{ value: Value; feedback: QuotaFeedback }>>;
 
 export type QuotaGatewayResult<Value> =
@@ -96,6 +97,22 @@ export function createQuotaGateway({ limiter, authorize }: {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let dispatchExpired = false;
     let response: Awaited<ReturnType<QuotaTransport<Value>>> | undefined;
+    let earlyFeedback: QuotaFeedback | undefined;
+    let observationDeadline = 0;
+    let observationOpen = false;
+    const observe = (feedback: QuotaFeedback) => {
+      if (!observationOpen || controller.signal.aborted || performance.now() >= observationDeadline
+        || !["uncertain", "rate-limited", "credential-failure", "subscription-expired", "provider-error"].includes(feedback.kind)) return;
+      const fields = ["dailyLimit", "dailyRemaining", "minuteLimit", "minuteRemaining", "retryAfterMs"] as const;
+      if (fields.some((field) => feedback[field] !== undefined && (!Number.isSafeInteger(feedback[field]) || feedback[field]! < 0))) return;
+      const ranks = { uncertain: 0, "provider-error": 1, "rate-limited": 2, "credential-failure": 3, "subscription-expired": 4, success: -1 };
+      const combined = { ...earlyFeedback, kind: earlyFeedback && ranks[earlyFeedback.kind] > ranks[feedback.kind] ? earlyFeedback.kind : feedback.kind };
+      for (const field of fields) {
+        const previous = earlyFeedback?.[field], next = feedback[field];
+        if (next !== undefined) combined[field] = previous === undefined ? next : field === "retryAfterMs" ? Math.max(previous, next) : Math.min(previous, next);
+      }
+      earlyFeedback = Object.freeze(combined);
+    };
     try {
       response = await Promise.resolve().then(async () => {
         // Validate immediately inside the I/O callback: database commit latency
@@ -107,6 +124,8 @@ export function createQuotaGateway({ limiter, authorize }: {
           throw new Error("Provider dispatch permit expired.");
         }
         const transportDeadline = now + transportMs;
+        observationDeadline = transportDeadline;
+        observationOpen = true;
         const timeout = new Promise<never>((_resolve, reject) => {
           timer = setTimeout(() => {
             controller.abort();
@@ -114,7 +133,7 @@ export function createQuotaGateway({ limiter, authorize }: {
           }, transportMs);
         });
         // Both settlement handlers remain attached to a late transport rejection.
-        const result = await Promise.race([transport(controller.signal, permit), timeout]);
+        const result = await Promise.race([transport(controller.signal, permit, observe), timeout]);
         // A blocked event loop can delay the timer beyond transport settlement.
         if (performance.now() >= transportDeadline) {
           controller.abort();
@@ -125,10 +144,20 @@ export function createQuotaGateway({ limiter, authorize }: {
     } catch {
       // Attempted dispatch remains spent even when its network outcome is unknown.
     } finally {
+      observationOpen = false;
       clearTimeout(timer);
     }
 
-    const feedback = response?.feedback ?? uncertain;
+    let feedback = response?.feedback ?? earlyFeedback ?? uncertain;
+    if (response && earlyFeedback) {
+      const combined = { ...feedback };
+      for (const field of ["dailyLimit", "dailyRemaining", "minuteLimit", "minuteRemaining", "retryAfterMs"] as const) {
+        const early = earlyFeedback[field], final = feedback[field];
+        if (early !== undefined) combined[field] = final === undefined ? early : field === "retryAfterMs" ? Math.max(early, final) : Math.min(early, final);
+      }
+      if (combined.kind === "success" && earlyFeedback.kind !== "uncertain") combined.kind = earlyFeedback.kind;
+      feedback = Object.freeze(combined);
+    }
     const completion = await record(permit, feedback);
     if (completion.status === "denied") return completion;
     if (dispatchExpired) return { status: "denied", reason: "dispatch-expired" };

@@ -165,3 +165,14 @@ and rendering setup are deliberately deferred to prompts 015–017. Read
 [implementation decisions](docs/implementation-decisions.md) for compatibility
 evidence and [development progress](docs/development-progress.md) for verified
 checks and outstanding work.
+
+## API-Football adapter
+
+Server callers use the typed, policy-authorized adapter in `src/server/football`
+for fixtures, live data, teams/competitions, statistics, availability and isolated
+fallback predictions. Every HTTP attempt and retry uses the shared quota gateway;
+callers supply explicit bounds and trusted permissions. Read the
+[adapter contract](docs/api-football-adapter.md) for endpoint pagination,
+completeness, structured caching, score verification and logo rights. Contract
+tests use synthetic responses; actual account and coverage qualification remains
+with prompt 008.

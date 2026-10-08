@@ -9,6 +9,7 @@ import { createDatabase } from "../src/server/database/client.ts";
 import { createQuotaLimiter } from "../src/server/football/quota-limiter.ts";
 import { createQuotaGateway } from "../src/server/football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../src/server/football/quota-mysql-store.ts";
+import { createApiFootballAdapter } from "../src/server/football/api-football-adapter.ts";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -635,6 +636,87 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const result = await f.limiter.reserve(f.request());
       denied(result, "storage-unavailable");
       assert.ok(!JSON.stringify(result).includes(applicationPassword));
+    });
+
+    await t.test("stalled adapter bodies retain early quota headers and stop another MySQL-backed replica", async () => {
+      const f = fixture(firstDatabase, "adapter-stalled-body");
+      await f.initialize();
+      let providerCalls = 0;
+      let bodyCancellations = 0;
+      const completions = [];
+      const tracedLimiter = {
+        ...f.limiter,
+        async complete(permit, feedback) {
+          completions.push({ permit, feedback });
+          return f.limiter.complete(permit, feedback);
+        },
+      };
+      const fetcher = async (input, init) => {
+        const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+        assert.equal(url.pathname, "/fixtures");
+        assert.equal(url.searchParams.get("live"), "all");
+        assert.equal(init.signal.aborted, false);
+        providerCalls++;
+        // Synthetic lower-account terms. A normal initial allowance remains
+        // available unless these headers survive the never-completing body.
+        return new Response(new ReadableStream({ cancel() { bodyCancellations++; } }), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "x-ratelimit-requests-limit": "1",
+            "x-ratelimit-requests-remaining": "0",
+            "x-ratelimit-limit": "900",
+            "x-ratelimit-remaining": "0",
+          },
+        });
+      };
+      const adapterFor = (limiter) => createApiFootballAdapter({
+        accountId: f.accountId,
+        credential: { read: () => "synthetic-stalled-body-key" },
+        gateway: createQuotaGateway({ limiter, authorize: () => {} }),
+        authorize: () => {},
+        clock: { now: () => f.clock.now },
+        fetcher,
+      });
+      const bounds = () => ({
+        priority: "results-cutoff", timeoutMs: 1000, deadlineAt: f.clock.now + 5000,
+        maxRequests: 1, maxPages: 1, maxRows: 1, maxResponseBytes: 1024,
+        retry: { maxAttempts: 1, baseDelayMs: 0, maxDelayMs: 0 }, cacheMaxAgeMs: 0,
+      });
+      const first = await adapterFor(tracedLimiter).evidence.liveFixtures(bounds());
+      assert.equal(first.status, "failed", JSON.stringify(first));
+      assert.equal(first.error.reason, "transport-error");
+      assert.equal(first.requestsDispatched, 1);
+      assert.equal(providerCalls, 1);
+      assert.equal(bodyCancellations, 1);
+      assert.equal(completions.length, 1);
+      assert.equal(completions[0].feedback.kind, "uncertain");
+      assert.equal(completions[0].feedback.dailyRemaining, 0);
+      assert.equal(completions[0].feedback.minuteRemaining, 0);
+      let state = await f.state();
+      assert.equal(state.period.used, 1);
+      assert.equal(state.period.providerDailyLimit, 1);
+      assert.equal(state.period.dayRemaining, 0);
+      assert.equal(state.period.minuteRemaining, 0);
+      const firstAttempt = await f.store.transaction(f.accountId,
+        (transaction) => transaction.attempt(completions[0].permit.requestId));
+      assert.equal(firstAttempt.state, "uncertain");
+      assert.equal(firstAttempt.responseKind, "uncertain");
+      assert.ok(firstAttempt.launchedAt !== null);
+
+      f.clock.now += 84;
+      const secondLimiter = createQuotaLimiter({ accountId: f.accountId,
+        store: clockStore(secondDatabase, f.clock), verifyEvidence: () => true });
+      const second = await adapterFor(secondLimiter).evidence.liveFixtures(bounds());
+      assert.equal(second.status, "failed", JSON.stringify(second));
+      assert.equal(second.error.reason, "quota-denied");
+      assert.ok(["daily-limit", "minute-limit"].includes(second.error.quotaReason));
+      assert.equal(second.requestsDispatched, 0);
+      assert.equal(providerCalls, 1);
+      state = await f.state();
+      assert.equal(state.period.used, 1);
+      assert.equal(state.period.dayRemaining, 0);
+      assert.equal(state.period.minuteRemaining, 0);
     });
 
     await t.test("actual-clock gateway dispatches one authorized mocked transport through durable MySQL claims", async (subtest) => {

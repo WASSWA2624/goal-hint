@@ -308,3 +308,127 @@ test("unconfirmed or unsupported reset probes cannot invoke transport", async ()
     { status: "denied", reason: "operation-not-authorized" });
   assert.deepEqual(calls, []);
 });
+
+test("headers received before a blocked body remain durable when transport times out", async () => {
+  const { calls, gateway } = setup();
+  const headers = { kind: "uncertain", dailyLimit: 40, dailyRemaining: 0,
+    minuteLimit: 2, minuteRemaining: 0, retryAfterMs: 60000 };
+  let signal;
+  const result = await gateway.execute({ ...request, timeoutMs: 75 }, (receivedSignal, receivedPermit, observe) => {
+    signal = receivedSignal;
+    assert.equal(receivedPermit, permit);
+    observe(headers);
+    return new Promise(() => {});
+  });
+  assert.equal(signal.aborted, true);
+  assert.deepEqual(result, { status: "failed", reason: "uncertain" });
+  assert.deepEqual(calls.at(-1)[2], headers);
+  assert.equal(calls.filter(([name]) => name === "complete").length, 1);
+});
+
+test("early provider failures survive body rejection without exposing a response value", async () => {
+  for (const kind of ["rate-limited", "credential-failure", "subscription-expired"]) {
+    const { calls, gateway } = setup();
+    const observed = { kind, dailyRemaining: 0, retryAfterMs: 60000 };
+    const result = await gateway.execute(request, async (_signal, _permit, observe) => {
+      observe(observed);
+      throw new Error("synthetic private response-body diagnostic");
+    });
+    assert.deepEqual(result, { status: "failed", reason: kind });
+    assert.deepEqual(calls.at(-1)[2], observed);
+    assert.equal(calls.filter(([name]) => name === "complete").length, 1);
+    assert.equal(JSON.stringify(result).includes("synthetic private"), false);
+  }
+});
+
+test("early success cannot establish completion or reconcile headers without a complete response", async () => {
+  const { calls, gateway } = setup();
+  const result = await gateway.execute({ ...request, timeoutMs: 75 }, (_signal, _permit, observe) => {
+    observe({ kind: "success", dailyLimit: 150000, dailyRemaining: 150000 });
+    return new Promise(() => {});
+  });
+  assert.deepEqual(result, { status: "failed", reason: "uncertain" });
+  assert.deepEqual(calls.at(-1)[2], { kind: "uncertain" });
+  assert.equal(calls.filter(([name]) => name === "complete").length, 1);
+});
+
+test("observations after timeout or completion cannot mutate recorded quota feedback", async () => {
+  for (const completes of [false, true]) {
+    const { calls, gateway } = setup();
+    let observeLate;
+    const result = await gateway.execute({ ...request, timeoutMs: 75 }, async (_signal, _permit, observe) => {
+      observeLate = observe;
+      observe({ kind: "uncertain", dailyRemaining: 0, minuteRemaining: 0 });
+      if (completes) return { value: "synthetic completed response", feedback: { kind: "success", dailyRemaining: 0, minuteRemaining: 0 } };
+      return new Promise(() => {});
+    });
+    const recorded = structuredClone(calls.at(-1)[2]);
+    observeLate({ kind: "credential-failure", dailyRemaining: 150000, minuteRemaining: 900 });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(result.status, completes ? "completed" : "failed");
+    assert.deepEqual(calls.at(-1)[2], recorded);
+    assert.equal(calls.filter(([name]) => name === "complete").length, 1);
+  }
+});
+
+test("repeated early observations retain lower quota limits and the longest retry delay", async () => {
+  const { calls, gateway } = setup();
+  const result = await gateway.execute(request, async (_signal, _permit, observe) => {
+    observe({ kind: "uncertain", dailyLimit: 150000, dailyRemaining: 149000,
+      minuteLimit: 900, minuteRemaining: 899, retryAfterMs: 250 });
+    observe({ kind: "uncertain", dailyLimit: 100000, dailyRemaining: 99900,
+      minuteLimit: 720, minuteRemaining: 10, retryAfterMs: 100 });
+    observe({ kind: "uncertain", dailyLimit: 150000, dailyRemaining: 150000,
+      minuteLimit: 900, minuteRemaining: 900, retryAfterMs: 200 });
+    throw new Error("synthetic body rejection after observed headers");
+  });
+  assert.deepEqual(result, { status: "failed", reason: "uncertain" });
+  assert.deepEqual(calls.at(-1)[2], { kind: "uncertain", dailyLimit: 100000,
+    dailyRemaining: 99900, minuteLimit: 720, minuteRemaining: 10, retryAfterMs: 250 });
+  assert.equal(calls.filter(([name]) => name === "complete").length, 1);
+});
+
+test("elapsed transport deadlines reject observations even when the abort timer has not run", async () => {
+  const { calls, gateway } = setup();
+  const result = await gateway.execute({ ...request, timeoutMs: 50 }, async (signal, _permit, observe) => {
+    observe({ kind: "uncertain", dailyRemaining: 0 });
+    const end = performance.now() + 70;
+    while (performance.now() < end) { /* A blocked event loop delays the abort timer. */ }
+    assert.equal(signal.aborted, false);
+    observe({ kind: "credential-failure", dailyRemaining: 150000, minuteRemaining: 900 });
+    return { value: "late response withheld", feedback: { kind: "success" } };
+  });
+  assert.deepEqual(result, { status: "failed", reason: "uncertain" });
+  assert.deepEqual(calls.at(-1)[2], { kind: "uncertain", dailyRemaining: 0 });
+  assert.equal(calls.filter(([name]) => name === "complete").length, 1);
+});
+
+test("a complete successful response cannot restore capacity exhausted by its earlier headers", async () => {
+  const { calls, gateway } = setup();
+  const result = await gateway.execute(request, async (_signal, _permit, observe) => {
+    observe({ kind: "uncertain", dailyLimit: 120000, dailyRemaining: 0,
+      minuteLimit: 720, minuteRemaining: 0, retryAfterMs: 1000 });
+    return { value: "synthetic completed response", feedback: { kind: "success",
+      dailyLimit: 150000, dailyRemaining: 149999, minuteLimit: 900,
+      minuteRemaining: 899, retryAfterMs: 100 } };
+  });
+  const reconciled = { kind: "success", dailyLimit: 120000, dailyRemaining: 0,
+    minuteLimit: 720, minuteRemaining: 0, retryAfterMs: 1000 };
+  assert.deepEqual(result, { status: "completed", value: "synthetic completed response", feedback: reconciled });
+  assert.deepEqual(calls.at(-1)[2], reconciled);
+  assert.equal(calls.filter(([name]) => name === "complete").length, 1);
+});
+
+test("early provider failures cannot be overwritten by a contradictory successful body", async () => {
+  for (const kind of ["rate-limited", "credential-failure", "subscription-expired"]) {
+    const { calls, gateway } = setup();
+    const result = await gateway.execute(request, async (_signal, _permit, observe) => {
+      observe({ kind, dailyRemaining: 0 });
+      return { value: "synthetic response withheld", feedback: { kind: "success", dailyRemaining: 150000 } };
+    });
+    assert.deepEqual(result, { status: "failed", reason: kind });
+    assert.deepEqual(calls.at(-1)[2], { kind, dailyRemaining: 0 });
+    assert.equal(calls.filter(([name]) => name === "complete").length, 1);
+    assert.equal(JSON.stringify(result).includes("withheld"), false);
+  }
+});

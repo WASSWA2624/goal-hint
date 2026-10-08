@@ -10,7 +10,7 @@
 | ☑ | [004-eat-calendar.md](dev-plan/004-eat-calendar.md) |
 | ☑ | [005-market-domain.md](dev-plan/005-market-domain.md) |
 | ☑ | [006-api-quota-limiter.md](dev-plan/006-api-quota-limiter.md) |
-| ☐ | [007-api-football-adapter.md](dev-plan/007-api-football-adapter.md) |
+| ☑ | [007-api-football-adapter.md](dev-plan/007-api-football-adapter.md) |
 | ☐ | [008-football-provider-trial.md](dev-plan/008-football-provider-trial.md) |
 | ☐ | [009-canonical-football-catalog.md](dev-plan/009-canonical-football-catalog.md) |
 | ☐ | [010-research-cost-control.md](dev-plan/010-research-cost-control.md) |

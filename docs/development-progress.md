@@ -604,3 +604,104 @@ authorized trial; 007 owns header/body parsing and real HTTP integration. OP-11
 job request/time/fallback budgets remain with 010/025; the gateway requires caller
 bounds and supplies no invented job defaults. No purchase, provider request,
 scheduler, forecast, deployment or notification was performed.
+
+## 007 — API-Football adapter
+
+**Completed:** 8 October 2026. **Scope:** protected direct-v3 retrieval and
+normalization, with no polling, catalog persistence or publication.
+
+### Implemented behavior and changed files
+
+- `src/server/football/api-football-contract.ts`, `api-football-adapter.ts` and
+  `api-football-normalize.ts`: fixed-origin typed endpoints, private credentials,
+  bounded streamed JSON reads, separately counted retries with jitter and honored
+  provider delays, explicit failure/completeness/coverage metadata and immutable
+  normalized records. Supported operations cover fixtures/date/live/IDs,
+  teams/competitions, statistics/player aggregates, lineups/injuries and separate
+  fallback predictions.
+- `src/server/football/quota-gateway.ts`: an early-observation callback preserves
+  already received lower quota headers and known failures if a body stalls.
+  Observations cannot establish success and are ignored after abort, elapsed
+  deadline or completion; conservative final reconciliation precedes exposure.
+- `tests/api-football-adapter.test.mjs` and
+  `tests/api-football-normalize.test.mjs`: **48 transport/contract** and **18
+  normalization** cases using explicitly labeled synthetic payloads and injected
+  HTTP. `tests/quota-gateway.test.mjs` adds **8** early-observation regressions;
+  `tests/quota.integration.mjs` adds actual durable adapter/header acceptance.
+- `docs/api-football-adapter.md`, `docs/quota-limiter.md`, `README.md`, decision
+  register, this progress record and root tracker: usage, official provenance,
+  normalization decisions, honest local results and pending external evidence.
+
+No dependency, database schema, migration, specification or dev-plan changes were
+needed. Every provider HTTP attempt uses the existing durable limiter/gateway;
+uncertainty is never refunded. Account work identity survives credential rotation.
+Local fresh/in-flight reuse remains bounded and policy-authorized; fallback
+reuse additionally requires a job scope. Structured cache admission waits for
+complete correlation/retrieval, preserves original times and excludes failed or
+partial responses. No image HTTP request, binary storage or proxy exists.
+
+### Official evidence and normalization decisions
+
+Reviewed on 8 October 2026:
+
+- [Official beginner guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide)
+  (13 March 2026): direct v3 origin/header, endpoint shapes, fixture single-response
+  behavior and `/players` pagination at 20 items per page.
+- [Fixture-ID tutorial](https://www.api-football.com/news/post/how-to-get-all-fixtures-data-from-one-league)
+  (12 December 2024): hyphen-separated IDs, at most 20; actual batching requires
+  trusted evidence or falls back to individually reserved lookups.
+- [Rate-limit article](https://www.api-football.com/news/post/how-ratelimit-works)
+  (12 June 2026): daily/minute headers, rate-limit bodies and HTTP 429.
+- [Coverage guidance](https://www.api-football.com/news/post/how-to-optimize-api-sports-calls-and-quota-usage)
+  and [provider terms](https://www.api-football.com/terms): field population and
+  reuse/media rights need independent qualification.
+
+The interactive reference and public schema download could not provide readable
+schemas in this session; the accessible official guides support the implemented
+endpoint subset. No claim of a verified full current schema or account contract
+is made. Fixtures never receive an invented page parameter. Unexpected pages,
+short player pages, drifting totals, duplicates, mismatched/missing selector
+echoes, foreign identities and exhausted bounds stay incomplete.
+
+Kickoff/date checks use the shared Africa/Kampala calendar, including UTC day
+boundaries. Original response retrieval time is independent of the unavailable
+per-record provider update time; update fields remain null. Failed received
+responses retain time/quota provenance without payloads or fabricated paging.
+Empty enrichment and unavailable injury information never imply complete field
+coverage or squad fitness. All known status codes map explicitly; unknowns and
+live disappearance never establish a final score. FT/AET/PEN `score.fulltime`
+candidates require exact trusted verification; extra-time/penalty totals cannot
+substitute. Approved third-party images remain credential-free HTTPS URL metadata
+only. Predictions remain fallback-only and do not become validated market groups.
+
+### Verification
+
+Pinned Node **24.18.1**, npm **11.16.0**. Genuine MySQL **8.4.11** runs only in the
+ownership-checked throwaway harness, with separate migration and application
+roles. Provider responses, account/reset evidence, cache/media approvals and
+regulation verifiers in all tests are synthetic. No credentialed provider HTTP,
+live account probe, paid operation or image fetch ran.
+
+| Command/check | Result |
+| --- | --- |
+| Final `npm run check` | Passed (exit 0): client generation, schema validation, zero-warning lint, strict type-check, **187 tests**, zero failures/skips, production Turbopack build and prerendering. |
+| Focused adapter and normalization checks | Passed: **48 adapter** and **18 normalization** tests, with normal Node 24 strip-only execution; scoped ESLint and TypeScript checks passed. |
+| Final focused quota gateway | Passed: **25 tests**, including eight new early-observation cases, zero failures/skips. |
+| `npm run test:quota` | Passed on owned genuine MySQL **8.4.11**: **26 tests**, zero failures/skips, about **100 seconds**. The 725 counted-reservation stress loop passed, about 66 seconds. |
+| New durable adapter case | Passed: one mocked HTTP 200 response with a stalled body retains received lower limit/zero remaining headers; the stream is canceled, the attempt stays uncertain/count **1**, and a separate MySQL-backed replica is denied with no second HTTP dispatch. |
+| Actual-clock gateway case | Passed with real MySQL UTC time: counted single-use mocked transport, about **76 ms** total (reserve 31 / claim 23 / completion 22 ms). No network I/O. |
+| Scope/cleanup | Whitespace and local-link checks passed. Owned MySQL instance/data directory cleaned up; no existing service or external database was used. |
+
+Review found and corrected premature caching of missing requested IDs, unrelated
+selector/row acceptance, duplicate observations, empty coverage implications,
+deadline crossings during cache approval and loss of quota headers on stalled
+bodies. Meaningful regressions cover those cases, body-level errors, HTTP 499,
+bounded response cancellation, retry identity, permission revocation, original
+times, fallback scopes and regulation-score safety.
+
+Implementation and local acceptance checks are complete; prompt 007 is ticked in
+the root tracker. The [008 handoff](implementation-decisions.md#unverified-mappings-and-coverage-questions-for-008)
+keeps actual account limits/reset/expiry, full query/body contracts, representative
+field/status/score coverage and data/media rights unverified. OP-11 job bounds,
+OP-12 billable egress and OP-24 shared cache strategy retain their existing
+owners. Nothing activates polling or paid/provider/publication operations.

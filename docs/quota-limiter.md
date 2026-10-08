@@ -83,6 +83,16 @@ callback are prohibited.
 
 ## Gateway for prompt 007
 
+The transport callback also receives `observe(feedback)`. The adapter uses it
+for numeric quota headers and known HTTP failures received before reading a
+bounded response body. A stalled body remains a counted uncertain attempt;
+already received lower limits/remaining allowance and rate-limit delays still
+reach durable completion. Early observations cannot establish success. Repeated
+observations and final feedback preserve the lower numeric terms and longest
+retry delay, while known early failures cannot become a successful result.
+Observations after abort, elapsed deadline or completion are ignored. This adds
+no extra dispatch, refund or automatic retry to the gateway.
+
 `createPolicyQuotaGateway({ limiter, policy, verifyEvidence })` checks the existing
 runtime operation/evidence gates. Its `execute(request, transport)` and
 `executeResetProbe(evidence, request, transport)` share reservation, claim,

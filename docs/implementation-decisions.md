@@ -659,3 +659,124 @@ dependencies or public UI are introduced. See the [quota contract](quota-limiter
 for the 007 gateway handoff and [development progress](development-progress.md)
 for actual genuine-MySQL concurrency checks. All account/period/reset fixtures in
 those checks are synthetic; they are not confirmed live subscription evidence.
+
+## 007 — Protected direct-v3 API-Football adapter
+
+**Decision date:** 8 October 2026. **Status:** implemented locally; account,
+coverage and rights qualification remain pending prompt 008.
+
+Use one server-only direct provider boundary, fixed to
+`https://v3.football.api-sports.io` and the `x-apisports-key` header. Typed endpoint
+operations route every HTTP attempt, including retries, through the existing
+counted, single-use quota gateway. Credentials and provider diagnostics never
+enter URLs, results, logs or caches. Redirects and framework HTTP caching are
+disabled. Caller-supplied request/page/row/byte/time/retry bounds remain explicit;
+OP-11 job/fallback allowances are not invented by this adapter.
+
+### Official contract evidence and pagination
+
+The [official beginner guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide)
+(published 13 March 2026; read 8 October 2026) describes the direct origin,
+authentication header, endpoint envelopes and selected operations. Its fixture
+example returns a season's fixtures in one response; `/fixtures` has no invented
+`page` loop. Bound a large fixture selection by supported date/range/round
+queries and explicit response limits. The guide documents `/players` with a
+`page` parameter and 20 players per page; only that implemented endpoint follows
+a page loop. Unexpected pages, short intermediate player pages, changing totals,
+duplicate identities and exhausted caller bounds produce incomplete results.
+This resolves the prompt's general mention of paginated fixtures by following
+its explicit requirement to use each endpoint's actual contract.
+
+The [official fixture-ID tutorial](https://www.api-football.com/news/post/how-to-get-all-fixtures-data-from-one-league)
+(published 12 December 2024; read 8 October 2026) describes hyphen-separated IDs,
+at most 20 per request. Actual batch support still requires a trusted verifier
+of supplied evidence; unverified support uses individually reserved `id` queries.
+Missing requested IDs remain explicit. League/season coverage is independently
+reported; the [provider's coverage guidance](https://www.api-football.com/news/post/how-to-optimize-api-sports-calls-and-quota-usage)
+does not equate a coverage flag or endpoint access with populated fixture fields.
+
+The [official rate-limit article](https://www.api-football.com/news/post/how-ratelimit-works)
+(published 12 June 2026; read 8 October 2026) documents daily/minute headers,
+body-level rate-limit errors, 429 behavior and account/IP protections. Missing or
+malformed numeric headers remain unknown. Honor a valid `Retry-After` duration
+or HTTP date; otherwise use caller-bounded exponential backoff with jitter. A
+server delay longer than the job deadline stops work instead of being truncated.
+Known HTTP 401/429 and 499/server failures have distinct handling; ambiguous
+403/access errors do not automatically establish subscription expiry.
+
+The [interactive v3 reference](https://www.api-football.com/documentation-v3)
+did not expose readable endpoint schemas in this session. The accessible
+official guides above support the selected contract; the attempted public schema
+download was blocked. No full-current-schema or live-contract validation is
+claimed. The adapter contract version records the reviewed examples' date.
+
+### Data, cache and safety decisions
+
+Validate the envelope's endpoint, echoed selectors, counts and actual paging
+shape. Correlate fixture IDs, team assignment, competition/season, date/range and
+round with the requested scope. Reject unrelated or duplicate observations;
+preserve individually identified player competition aggregates without summing
+across competitions. Empty enrichment, missing fields and unknown status values
+stay unknown. Retrieval completeness and field coverage are separate result
+metadata: an empty injury response cannot establish a healthy squad.
+
+Every received response retains its original retrieval time independently of
+provider update time. The reviewed shapes establish no per-entity update field,
+so `providerUpdatedAt` remains null; kickoff timestamps and cache hits never
+substitute for it. Failed HTTP observations retain timestamps and quota metadata
+without response data or invented page counts. Live disappearance cannot create
+a final result. Only separate `score.fulltime` fields in FT/AET/PEN records create
+regulation candidates, and they remain unverified until a trusted verifier
+approves the exact fixture/status/score. Extra-time/shootout aggregates cannot
+fill a missing regulation score; FT totals must agree when both are supplied.
+
+Structured process-local LRU caching requires trusted approval of actual data,
+purpose, retrieval time and caller-supplied age before insertion and reuse.
+Admission waits for complete operation/correlation checks; partial/failed
+responses do not populate it. Preserve original times on cache hits. In-flight
+duplicates share one safe dispatch within each caller's deadline; durable shared
+coordination remains with 006. This is not a shared cache backend or an OP-24 TTL
+decision. Approved lifetimes must remain compatible with the specification's
+15/60-second cadences; shared invalidation/recovery belongs to 031.
+
+Predictions are exposed only through `adapter.fallback`, with job-scoped reuse.
+Reported 0–100 percentages, advice and goal thresholds remain provider payload
+fields, not validated market probabilities or primary AI evidence. Unsupported
+statistics such as unqualified xG remain explicitly unsupported. Approved logos
+and player photos are credential-free HTTPS URL metadata, with independent
+rights status. Exact URL approval is required; no image request, proxy, binary
+storage or persistent image cache is implemented. The
+[provider terms](https://www.api-football.com/terms) do not independently clear
+third-party display or redistribution rights.
+
+The gateway's new early-observation callback retains already received lower
+quota headers and known HTTP failures when a body stalls. It cannot establish
+success, accepts no observation after abort/deadline/completion, preserves lower
+terms and longer delays across observations/final feedback, and does not expose
+data before durable completion. This was verified through both isolated gateway
+tests and an actual owned MySQL instance with mocked HTTP.
+
+### Unverified mappings and coverage questions for 008
+
+- OP-03/04: authorized canonical account identity, current direct-plan terms,
+  actual daily boundary/reset/expiry and exact authentication/expired-subscription
+  body shapes. Key presence, published reset prose and synthetic error fixtures
+  are not account evidence.
+- Confirm selected query echoes, pagination stability, batch limit/support and
+  response-byte behavior on representative real league/cup/low-coverage fixtures.
+- Verify every live/final/postponed/abandoned/awarded status, FT/AET/PEN
+  `score.fulltime` semantics and per-record update fields if any. Default
+  regulation candidates remain unverified until those mappings are qualified.
+- Measure populated statistics, player aggregates, lineup/injury completeness,
+  xG support and fallback market/percentage freshness per competition/season;
+  never infer four-market or squad-fitness coverage from endpoint access.
+- Qualify private/public data reuse, prediction storage/display, remote-media
+  rights, credential-free URLs and independent media throttling. Keep cache/URL
+  verifiers unapproved until applicable evidence is established.
+- OP-11/12/24: job and fallback request/time allocations, billable egress,
+  approved source-specific freshness and eventual shared cache strategy remain
+  with their existing owners. No paid provider call or live trial ran for 007.
+
+See [adapter usage](api-football-adapter.md) and the actual check results in
+[development progress](development-progress.md). No database migration,
+dependency change, polling, catalog persistence or publication belongs to 007.
