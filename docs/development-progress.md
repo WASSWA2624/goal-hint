@@ -705,3 +705,104 @@ keeps actual account limits/reset/expiry, full query/body contracts, representat
 field/status/score coverage and data/media rights unverified. OP-11 job bounds,
 OP-12 billable egress and OP-24 shared cache strategy retain their existing
 owners. Nothing activates polling or paid/provider/publication operations.
+
+## 008 — Football provider trial (9 October 2026 EAT)
+
+Implemented the internal bounded trial command, durable private journal and
+34-requirement report format described in
+[008](../dev-plan/008-football-provider-trial.md). The dated evidence collection
+and report generation occurred on 8 October UTC. Provider suitability remains
+incomplete; local tooling completion does not establish actual account, field,
+market, price or rights qualification.
+
+### Delivered files and behavior
+
+- `src/server/football/provider-trial-{contract,input,journal,runner,command,evaluation}.ts`:
+  strict immutable plans, exclusive process ownership, atomic synced intent/result
+  records, cumulative request budgets, bounded adapter operations, trusted source
+  verification and JSON/Markdown findings. Crashes retain the full uncertain
+  reservation; zero-I/O quota waits can defer safely; completed responses never
+  replay. Absolute deadlines and timed observations survive restarts.
+- `scripts/football-provider-trial.mjs` and `npm run trial:football`: private
+  `init`, `report` and explicitly gated `run` actions. Offline actions need no
+  credentials/database. Reports distinguish confirmed, failed and untested
+  findings, retain source/test timestamps and state separate catalog/live/launch
+  gates. Unknown inputs are not assigned invented defaults.
+- Existing adapter contracts/normalization: counted `/status` diagnostic with its
+  documented object response and optional paging. It strips account holder data
+  and preserves actual plan, active state, expiry and counters without activating
+  capacity or supplying account reset evidence.
+- `tests/provider-trial-*.test.mjs`, `tests/api-football-account.test.mjs` and an
+  additional `tests/quota.integration.mjs` case: offline output, source/rights
+  gates, budget/retry accounting, crash recovery, cross-process locking, symlink
+  safety, immutable completed results, safe deferral and shared market/calendar
+  contract checks. All provider payloads and account/rights approvals are
+  explicitly synthetic development fixtures.
+- [Trial runbook](football-provider-trial.md), README, decision register and
+  sanitized baseline reports:
+  [Markdown](reports/provider-trial-008.md) /
+  [JSON](reports/provider-trial-008.json).
+
+No dependencies, database schema/migrations, public routes or UI were added.
+Every live transport would use the existing MySQL limiter/gateway, including
+diagnostics, retries and pagination. The CLI requires trusted runtime, quota,
+private retention and observation authority; no permissive live verifier was
+created. Fallback context and predictions reuse shared identity, regulation,
+probability, settlement, Kampala-day and five-minute cutoff rules. Missing
+provider update time requires an explicit verified freshness policy. Advice and
+goal picks cannot manufacture totals/BTTS distributions.
+
+### Reproducible offline report and pending live evidence
+
+Executed with pinned Node **24.18.1** and npm **11.16.0**:
+
+```sh
+npm run trial:football -- report --directory .tmp/provider-trial-008
+```
+
+The command resumed its existing immutable offline journal and generated
+`.tmp/provider-trial-008/provider-trial-report.md` and
+`.tmp/provider-trial-008/provider-trial-report.json`. The sanitized tracked copies
+above contain **34 untested requirements**, **0 dispatched/charged requests**,
+an unresolved allowance and `liveSuitability: incomplete`. No actual provider,
+account probe, remote image, purchase, renewal or plan change occurred. Private
+journals and verification modules remain ignored; no raw provider/account
+payload was copied into the tracked baseline reports.
+
+Primary pricing, rate-limit, terms, predictions and `/status` reference sources
+were reviewed on 8 October UTC and are linked in the runbook/decision register.
+Published Mega limits and the advertised US$39 price are background evidence;
+actual limits/reset/expiry and an itemized payable total within US$45 remain
+pending. Public redistribution/logo permissions are not inferred from private
+entitlement or provider terms. Source-specific mappings, update/freshness policy
+and media restrictions require actual verified evidence.
+
+OP-05 competition IDs/seasons and trial allowance remain unanswered; no live
+credentials, account/payment records or applicable verification authority are
+configured. OP-03–08 remain explicitly pending. **009** may implement catalog
+structure with those gates; live import/reuse and public data/prediction/media
+operations remain blocked. AI-quality qualification belongs to **014**, and
+launch requires later release checks.
+
+### Verification
+
+| Command/check | Result |
+| --- | --- |
+| Final `npm run check` | Passed (exit 0): client generation, schema validation, zero-warning lint, strict type-check, **274 tests: 273 passed, 1 platform skip**, and production Turbopack build/prerendering. |
+| Trial/account tests within the full suite | **87 cases: 86 passed, 1 skip** — 11 account diagnostic, 7 command, 18 runner, 33 evaluator and 18 journal cases. |
+| Journal process/filesystem acceptance | Real child-process crash recovery, live-owner locking and symlink/junction rejection passed. One POSIX file-mode check is skipped on Windows; private inherited ACLs remain an operator responsibility. |
+| Final `npm run test:quota` | Passed on owned genuine MySQL **8.4.11**: **27 tests**, zero failures/skips, about **132 seconds**. `MYSQL_TEST_SERVER_BINARY` points to the existing ignored `.tmp/mysql-tools/mysql-8.4.11-winx64/bin/mysqld.exe`. |
+| New durable trial acceptance | Passed: unknown-account denial dispatches zero and persists deferral; reopening after verified synthetic initialization counts a 503→200 retry as **2** durable requests, exhausts the trial allowance and cannot replay the completed sample after another reopen. |
+| Offline command/report | Passed without credentials or database; generation/resume records all 34 live requirements untested and zero requests. Missing-authority `run` returns exit **2** with an incomplete report. |
+| Scope/cleanup | Owned MySQL instance/data directory was cleaned up. No existing service/external database or actual provider/account/media operation was used. Whitespace and local-link checks passed. |
+
+Early parallel attempts encountered local Prisma/MySQL startup timeouts during
+heavy CPU/paging pressure. Diagnostic client generation briefly overlapped a
+generated-client boundary test. The final ordered repository check ran after
+all 11 generated server-only guards were restored and passed, including that
+boundary test; database/schema scripts required no changes.
+
+Implementation and local acceptance checks are complete; prompt **008** is
+ticked in the root tracker. The tracked offline report deliberately leaves
+actual provider suitability incomplete and live/launch gates blocked. No live
+trial result or permission is claimed by this completion checkbox.

@@ -14,6 +14,7 @@ export const apiFootballEndpoints = Object.freeze({
   injuries: Object.freeze({ path: "/injuries", paginated: false }),
   playerStatistics: Object.freeze({ path: "/players", paginated: true }),
   predictions: Object.freeze({ path: "/predictions", paginated: false }),
+  accountStatus: Object.freeze({ path: "/status", paginated: false }),
 } as const);
 export type ApiFootballEndpoint = keyof typeof apiFootballEndpoints;
 
@@ -53,7 +54,7 @@ export type ApiFootballPageProvenance = Readonly<{
   retrievedAt: UtcInstant;
   providerUpdatedAt: UtcInstant | null;
   fromCache: boolean;
-  /** Null when HTTP headers arrived but a valid page envelope was unavailable. */
+  /** Null when no valid page metadata was returned, including documented /status omissions. */
   currentPage: number | null;
   totalPages: number | null;
   quota: QuotaFeedback;

@@ -57,6 +57,7 @@ debounces saves; generated output and dependency directories are excluded.
 | `npm run db:health` | Report private database readiness without internal diagnostics. |
 | `npm run test:db` | Run integration checks in a newly owned isolated MySQL server; explicitly skips when no genuine server binary is available. |
 | `npm run test:quota` | Run shared quota, concurrency and reset checks on an owned isolated MySQL server. |
+| `npm run trial:football -- init` / `report` / `run` | Generate private provider evidence reports or resume an explicitly authorized bounded trial. |
 
 Next.js generates ignored `next-env.d.ts` and `.next/` files. The type-check
 command works before the first development or production build. ESLint is a
@@ -176,3 +177,8 @@ callers supply explicit bounds and trusted permissions. Read the
 completeness, structured caching, score verification and logo rights. Contract
 tests use synthetic responses; actual account and coverage qualification remains
 with prompt 008.
+
+The [provider trial runbook](docs/football-provider-trial.md) covers offline
+`init`/`report`, approved plans, trusted authority modules and resumable `run`.
+Reports distinguish real evidence from synthetic contracts; missing account,
+competition, allowance and rights inputs keep live qualification incomplete.

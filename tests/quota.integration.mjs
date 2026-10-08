@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -10,6 +13,9 @@ import { createQuotaLimiter } from "../src/server/football/quota-limiter.ts";
 import { createQuotaGateway } from "../src/server/football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../src/server/football/quota-mysql-store.ts";
 import { createApiFootballAdapter } from "../src/server/football/api-football-adapter.ts";
+import { parseTrialPlan } from "../src/server/football/provider-trial-input.ts";
+import { withTrialJournal } from "../src/server/football/provider-trial-journal.ts";
+import { chargedTrialRequests, runProviderTrial } from "../src/server/football/provider-trial-runner.ts";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -33,7 +39,7 @@ function isolatedEnvironment(applicationUrl, migrationUrl) {
   };
 }
 
-// Only the clock is synthetic. All coordination, transactions, indexes, stored
+// Clocks, account evidence and mocked provider responses are synthetic. Coordination, transactions, indexes, stored
 // counters and races below use the isolated genuine MySQL server and app role.
 function clockStore(database, clock) {
   const store = createMysqlQuotaStore(database);
@@ -636,6 +642,108 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const result = await f.limiter.reserve(f.request());
       denied(result, "storage-unavailable");
       assert.ok(!JSON.stringify(result).includes(applicationPassword));
+    });
+
+    await t.test("private provider trial resumes zero-I/O deferral and durable adapter retries without replay or budget renewal", async (subtest) => {
+      const f = fixture(firstDatabase, "provider-trial-resume");
+      const clock = { now: () => f.clock.now };
+      const prefix = "goal-hint-provider-trial-quota-";
+      const directory = resolve(await mkdtemp(join(tmpdir(), prefix)));
+      subtest.after(async () => {
+        assert.equal(dirname(directory), resolve(tmpdir()), "cleanup must stay within the explicitly owned temporary directory");
+        assert.ok(basename(directory).startsWith(prefix));
+        await rm(directory, { recursive: true, force: true });
+      });
+      const trialPlan = parseTrialPlan({
+        version: 1, id: "synthetic-mysql-trial", accountId: f.accountId,
+        competitions: [{ id: 39, season: 2026 }], maxRequests: 2, deadlineAt: initialNow + 120_000,
+        bounds: { priority: "enrichment", timeoutMs: 5000, maxPages: 1, maxRows: 5, maxResponseBytes: 10_000,
+          retry: { maxAttempts: 2, baseDelayMs: 1000, maxDelayMs: 1000 }, cacheMaxAgeMs: 0 },
+        freshness: null, evidence: [],
+        tasks: [
+          { id: "fixture", case: "league", operation: { kind: "fixtures", query: { fixtureId: 101 } }, maxRequests: 2 },
+          { id: "must-wait-for-budget", case: "league", operation: { kind: "fixtures", query: { fixtureId: 102 } }, maxRequests: 1 },
+        ],
+      });
+      let providerCalls = 0;
+      const fetcher = async (input, init) => {
+        const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
+        assert.equal(url.origin, "https://v3.football.api-sports.io");
+        assert.equal(url.pathname, "/fixtures");
+        assert.equal(url.searchParams.get("id"), "101", "the exhausted follow-up task must never enter HTTP transport");
+        assert.equal(init.signal.aborted, false);
+        providerCalls++;
+        const headers = { "content-type": "application/json", "x-ratelimit-requests-limit": "150000",
+          "x-ratelimit-requests-remaining": String(150000 - providerCalls), "x-ratelimit-limit": "900",
+          "x-ratelimit-remaining": String(900 - providerCalls) };
+        if (providerCalls === 1) return new Response(JSON.stringify({ errors: { server: "Synthetic temporary failure" } }), { status: 503, headers });
+        assert.equal(providerCalls, 2, "completed trial work must not be replayed after the journal is reopened");
+        return new Response(JSON.stringify({ get: "fixtures", parameters: Object.fromEntries(url.searchParams), errors: [],
+          results: 1, paging: { current: 1, total: 1 }, response: [{
+            fixture: { id: 101, date: "2026-10-08T16:00:00+03:00", timezone: "Africa/Kampala",
+              timestamp: Math.floor((initialNow + 3_600_000) / 1000), status: { short: "NS", elapsed: null } },
+            league: { id: 39, name: "Synthetic league", country: "Synthetic", type: "League", season: 2026 },
+            teams: { home: { id: 1, name: "Synthetic home" }, away: { id: 2, name: "Synthetic away" } },
+            goals: { home: null, away: null }, score: { fulltime: { home: null, away: null },
+              extratime: { home: null, away: null }, penalty: { home: null, away: null } },
+          }] }), { status: 200, headers });
+      };
+      const runtimeFor = (limiter) => ({
+        source: "synthetic", authorize: () => {}, verifyObservation: () => true, verifyFreshness: () => true,
+        adapter: createApiFootballAdapter({ accountId: f.accountId, credential: { read: () => "synthetic-trial-key" },
+          gateway: createQuotaGateway({ limiter, authorize: () => {} }), authorize: () => {}, clock, fetcher,
+          random: () => 1, sleep: async (milliseconds) => { f.clock.now += milliseconds; } }),
+      });
+      // No quota account exists yet: the real durable gateway withholds HTTP,
+      // while the private journal records a retryable task with zero dispatches.
+      await withTrialJournal(directory, trialPlan, async (session) => {
+        assert.deepEqual(await runProviderTrial(session, runtimeFor(f.limiter), { clock }), { reason: "waiting" });
+        assert.equal(session.read().tasks[0].status, "deferred");
+        assert.equal(session.read().tasks[0].dispatchedRequests, 0);
+        assert.equal(session.read().tasks[0].observation.result.error.quotaReason, "unknown-account");
+        assert.equal(chargedTrialRequests(session.read()), 0);
+      }, { clock });
+      assert.equal(providerCalls, 0);
+      assert.equal((await f.state()).account, null);
+      await f.initialize();
+
+      const secondLimiter = createQuotaLimiter({ accountId: f.accountId,
+        store: clockStore(secondDatabase, f.clock), verifyEvidence: () => true });
+      let persistedObservation;
+      await withTrialJournal(directory, trialPlan, async (session) => {
+        assert.equal(session.read().tasks[0].status, "deferred");
+        assert.deepEqual(await runProviderTrial(session, runtimeFor(secondLimiter), { clock }), { reason: "budget-exhausted" });
+        const state = session.read().tasks[0];
+        assert.equal(state.status, "completed");
+        assert.equal(state.reservedRequests, 2);
+        assert.equal(state.dispatchedRequests, 2);
+        assert.equal(state.observation.source, "synthetic");
+        assert.equal(state.observation.result.status, "complete");
+        assert.equal(state.observation.result.data[0].id, 101);
+        assert.equal(chargedTrialRequests(session.read()), 2);
+        assert.equal(session.read().tasks.length, 1);
+        persistedObservation = state.observation;
+      }, { clock });
+      assert.equal(providerCalls, 2);
+      const attempts = await f.store.transaction(f.accountId, (transaction) => transaction.rollingAttempts(initialNow - 1));
+      assert.equal(attempts.length, 2);
+      assert.equal(new Set(attempts.map((attempt) => attempt.id)).size, 2, "each retry owns a separate durable reservation");
+      assert.equal(new Set(attempts.map((attempt) => attempt.workKey)).size, 1);
+      assert.ok(attempts.every((attempt) => attempt.state === "completed" && attempt.launchedAt !== null));
+      assert.deepEqual(attempts.map((attempt) => attempt.responseKind), ["provider-error", "success"]);
+      assert.equal((await f.state()).period.used, 2);
+      assert.equal((await f.state()).period.ordinaryUsed, 2);
+
+      f.clock.now += 84;
+      await withTrialJournal(directory, trialPlan, async (session) => {
+        assert.deepEqual(session.read().tasks[0].observation, persistedObservation);
+        assert.deepEqual(await runProviderTrial(session, runtimeFor(secondLimiter), { clock }), { reason: "budget-exhausted" });
+        assert.equal(chargedTrialRequests(session.read()), 2);
+        assert.equal(session.read().tasks.length, 1);
+        assert.equal(session.read().plan.deadlineAt, initialNow + 120_000);
+      }, { clock });
+      assert.equal(providerCalls, 2);
+      assert.equal((await f.state()).period.used, 2);
     });
 
     await t.test("stalled adapter bodies retain early quota headers and stop another MySQL-backed replica", async () => {

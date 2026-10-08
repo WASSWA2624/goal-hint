@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { parseUtcInstant, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { UtcInstant } from "../../domain/calendar.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
 
@@ -136,6 +136,12 @@ export type NormalizedFallbackPrediction = Readonly<{
   reportedPercentages: Readonly<{ home: number | null; draw: number | null; away: number | null }>;
   source: SourceTimestamps;
 }>;
+/** Internal diagnostics only; account holder names, email and credentials are discarded. */
+export type NormalizedAccountStatus = Readonly<{
+  subscription: Readonly<{ plan: string | null; expiresAt: UtcInstant | null; active: boolean | null }>;
+  requests: Readonly<{ current: number | null; dailyLimit: number | null }>;
+  source: SourceTimestamps;
+}>;
 
 const identity = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 const text = z.string().max(512).nullable().optional();
@@ -194,6 +200,10 @@ const statisticsSchema = z.object({
     value: z.union([z.number().finite(), z.string().max(128), z.null()]) })).max(100),
 });
 const aggregateCount = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional();
+const accountStatusSchema = z.object({
+  subscription: z.object({ plan: text, end: text, active: optionalBoolean }).nullable().optional(),
+  requests: z.object({ current: aggregateCount, limit_day: aggregateCount }).nullable().optional(),
+});
 const playerStatisticsSchema = z.object({
   player: z.object({
     id: identity, name: text, firstname: text, lastname: text, nationality: text,
@@ -287,6 +297,37 @@ function competition(raw: z.infer<typeof leagueSchema>, context: NormalizationCo
 }
 function pair(raw: z.infer<typeof pairSchema> | null | undefined): ScorePair {
   return { home: raw?.home ?? null, away: raw?.away ?? null };
+}
+
+/** Strict offset timestamps use the shared calendar parser without Date.parse normalization. */
+function subscriptionExpiry(value: string): UtcInstant | false {
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  if (!match) return false;
+  const hours = Number(match[4] ?? 0), minutes = Number(match[5] ?? 0);
+  if (hours > 14 || minutes > 59 || hours === 14 && minutes !== 0) return false;
+  try {
+    const wallTime = parseUtcInstant(`${match[1]}Z`);
+    const offset = (hours * 60 + minutes) * 60_000 * (match[3] === "-" ? -1 : 1);
+    return utcInstantFromEpochMilliseconds(wallTime - offset);
+  } catch { return false; }
+}
+
+export function normalizeAccountStatus(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedAccountStatus> {
+  if (!contextValid(context)) return invalid();
+  const parsed = accountStatusSchema.safeParse(raw);
+  if (!parsed.success) return invalid();
+  const input = parsed.data, missing: string[] = [];
+  const expiry = input.subscription?.end;
+  const expiresAt = expiry == null || expiry.trim() === "" ? null : subscriptionExpiry(expiry);
+  if (expiresAt === false) return invalid();
+  if (expiresAt === null) missing.push("subscription-expiry");
+  if (input.subscription?.active == null) missing.push("subscription-active");
+  if (input.requests?.current == null) missing.push("account-request-current");
+  if (input.requests?.limit_day == null) missing.push("account-request-daily-limit");
+  return valid({ subscription: { plan: nullableText(input.subscription?.plan, "subscription-plan", missing),
+    expiresAt, active: input.subscription?.active ?? null },
+    requests: { current: input.requests?.current ?? null, dailyLimit: input.requests?.limit_day ?? null },
+    source: source(context, missing) }, missing);
 }
 
 /** Validates both the ISO calendar and its reported IANA timezone wall time. */

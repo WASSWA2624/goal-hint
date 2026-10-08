@@ -1,0 +1,323 @@
+{
+  "version": 1,
+  "trialId": "provider-trial",
+  "generatedAt": 1791494693109,
+  "liveSuitability": "incomplete",
+  "budget": {
+    "allowance": null,
+    "chargedRequests": 0,
+    "knownDispatchedRequests": 0,
+    "uncertainTasks": 0
+  },
+  "findings": [
+    {
+      "requirement": "candidate-competitions",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "trial-allowance",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "pagination",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "canonical-identities",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "aliases",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "league-sample",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "cup-sample",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "low-coverage-sample",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "postponed-sample",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "cross-midnight-sample",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "extra-time-sample",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "shootout-sample",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "status-transitions",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "field-coverage",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "provider-update-times",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "regulation-scores",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "fallback-match-result",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "fallback-double-chance",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "fallback-total-goals",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "fallback-btts",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "fallback-prematch",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "fallback-freshness",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "account-plan",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "account-limits",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "quota-headers",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "provider-reset",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "subscription-expiry",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "payable-total",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "private-use-rights",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "data-redistribution",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "prediction-redistribution",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "remote-logo-rights",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "media-host-restrictions",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    },
+    {
+      "requirement": "credential-free-logo-urls",
+      "status": "untested",
+      "sources": [],
+      "testedAt": null,
+      "result": "No verified real evidence recorded.",
+      "limitation": "Synthetic fixtures and unverified claims cannot establish provider suitability.",
+      "followUp": "Record the relevant authorized provider response or account/rights evidence and verify its source."
+    }
+  ],
+  "catalogImplementation": "permitted-with-pending-live-evidence",
+  "liveOperations": "blocked",
+  "launch": "blocked"
+}

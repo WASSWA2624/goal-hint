@@ -780,3 +780,95 @@ tests and an actual owned MySQL instance with mocked HTTP.
 See [adapter usage](api-football-adapter.md) and the actual check results in
 [development progress](development-progress.md). No database migration,
 dependency change, polling, catalog persistence or publication belongs to 007.
+
+## 008 — Bounded provider qualification tool
+
+**Decision date:** 9 October 2026 EAT (8 October UTC). **Status:** local tooling
+implemented; actual provider suitability remains incomplete. The reproducible
+[offline report](reports/provider-trial-008.md) records zero dispatched requests
+and all 34 live requirements untested. OP-03–08 retain their evidence owners and
+unresolved decisions; no live account, subscription or permission is approved.
+
+Use `npm run trial:football -- init|report|run` with a private ignored directory.
+The [runbook](football-provider-trial.md) describes the versioned plan, evidence
+format, trusted authority interface and failure outcomes. Offline generation
+does not parse paid-operation policy, connect to MySQL or request provider data.
+Live construction requires trial scope, verified runtime/private retention
+authority, an approved account/period, selected competition seasons, cumulative
+allowance, absolute deadline and explicit operation bounds. No default
+competition, request allowance or freshness tolerance is invented.
+
+### Durable requests and qualification boundaries
+
+Hash and persist the whole immutable protocol before collecting observations.
+The private journal commits each task's full reservation before I/O and preserves
+completed observations. Crash recovery retains the full uncertain reservation
+and never replays it. Only a known zero-dispatch quota/shared-work wait can defer
+and resume; partial responses that consumed requests remain immutable and keep
+their actual charge. Each resume retains the original deadline and cumulative
+allowance. A new directory or regenerated report cannot reset account capacity.
+All HTTP attempts, including retry/page requests and `/status`, use the existing
+MySQL limiter and single-use gateway. The provider's quota-free status description
+does not exempt it from the application's counted gateway.
+
+The diagnostic accepts the documented `/status` object response and omitted
+paging without fabricating pages. It exposes plan, active state, expiry and
+request counters, strips account holder identity, and does not bootstrap a reset
+or entitlement from those counters. The current verified provider period must
+exist before collection. Published midnight prose cannot activate another day;
+period changes still use the shared limiter's verified reset reconciliation.
+
+Reports require source-specific verifiers and exact task/query provenance.
+`live-provider`, a URL, an account reference or a successful synthetic response
+cannot alone establish authenticity, rights or suitability. Selected competition
+seasons constrain sample qualification; incomplete retrieval, absent fields,
+unverified records and unsupported markets remain visible. Actual provider
+limits are recorded independently of the application's lower 12/second,
+720/minute and 120,000/day ceilings. Neither larger headers nor a restart restore
+spent requests.
+
+Fallback sampling requires earlier trusted fixture context, matching identity,
+scheduled status and an independently known kickoff. The shared five-minute
+publication cutoff bounds dispatch. A verified freshness policy must cover both
+fixture context and prediction retrieval/source times; missing update time stays
+unknown and requires an explicit retrieval-only decision to be eligible. A
+qualified regulation-period mapping for complete `predictions.percent` values
+uses the existing market validator and derived double chance. Advice, winner
+picks and goal-threshold strings cannot establish complementary over/under 2.5
+or BTTS probabilities. Regulation score qualification reuses shared settlement
+rules and independently verified FT/AET/PEN mappings.
+
+### Published information and outstanding actual evidence
+
+Primary sources reviewed on **8 October 2026 UTC**:
+
+- [Direct pricing](https://www.api-football.com/pricing) advertises Mega at
+  US$39/month with 150,000 daily requests. This is not an itemized actual payable
+  total; existing authorized account records must reconcile base price, taxes
+  and payment charges to at most US$45, with no purchase or renewal.
+- [Rate-limit guidance](https://www.api-football.com/news/post/how-ratelimit-works)
+  (12 June 2026) describes 900/minute, 15/second and source-IP protections.
+  Actual account terms, quota headers, remaining allowance and reset behavior
+  still need recorded evidence.
+- [Provider terms](https://www.api-football.com/terms) (updated 21 May 2025)
+  describe direct-dashboard reset at 00:00 UTC and leave applicable publication
+  and third-party permissions with the user. Published prose proves neither an
+  active account period nor a redistribution/logo license.
+- [Beginner guide](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide)
+  (13 March 2026) describes percentage fields, indicative update cadence and
+  separate media throttling. No complementary totals/BTTS distribution, actual
+  source timestamp, freshness entitlement or numeric media limit is inferred.
+- The [official v3 reference](https://api-sports.io/documentation/football/v3)
+  provides the `/status` object example. Published identity and score semantics
+  remain subject to representative recorded tests and independent verification.
+
+OP-05 selected competition IDs/seasons and trial allowance remain unanswered.
+No private key, actual account/payable/reset/expiry records, verified retention
+and redistribution rights, approved media restrictions or freshness/mapping
+authority is configured. No credentialed provider or image request ran. The
+offline report confirms no account, coverage, field or market requirement.
+
+Prompt **009** may implement catalog structure using these explicit pending
+gates. Live import/reuse and public data/prediction/logo display remain blocked
+until their actual evidence passes. AI quality is owned by **014**, and launch
+remains independently blocked by the later qualification and release prompts.

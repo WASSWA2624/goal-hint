@@ -9,6 +9,7 @@ import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoint
   type ApiFootballBatchEvidence } from "./api-football-contract.ts";
 import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatistics,
   normalizeAvailability, normalizePlayerStatistics, normalizeFallbackPrediction,
+  normalizeAccountStatus,
   type NormalizationContext, type NormalizationResult, type NormalizedFixture } from "./api-football-normalize.ts";
 import { createPolicyQuotaGateway, type createQuotaGateway, type GatewayQuotaLimiter } from "./quota-gateway.ts";
 import { quotaPriorities, type QuotaFeedback } from "./quota-contract.ts";
@@ -36,7 +37,7 @@ export type ApiFootballAdapterOptions = Readonly<{
 }>;
 type Params = Readonly<Record<string, string>>;
 type Normalize<T> = (raw: unknown, context: NormalizationContext) => NormalizationResult<T>;
-type Page<T> = Readonly<{ cacheKey: string; data: readonly T[]; provenance: ApiFootballPageProvenance & { currentPage: number; totalPages: number };
+type Page<T> = Readonly<{ cacheKey: string; data: readonly T[]; provenance: ApiFootballPageProvenance;
   missingCoverage: readonly string[]; invalidRows: number; error: ApiFootballFailure | null }>;
 type Budget = { requests: number };
 type PageOutcome<T> = Readonly<{ page?: Page<T>; error?: ApiFootballFailure; provenance?: readonly ApiFootballPageProvenance[] }>;
@@ -268,19 +269,24 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
             return { value: null, feedback: { ...observation, kind: feedbackKind(captured) } };
           }
           const expectedPage = Number(params.page ?? "1");
+          // /status intentionally has an object response and may omit paging.
+          const accountStatus = endpoint === "accountStatus";
+          const rows = record(body) && (accountStatus ? record(body.response) : Array.isArray(body.response))
+            ? accountStatus ? [body.response] : body.response as unknown[] : null;
+          const paging = record(body) && record(body.paging) ? body.paging : null;
+          const validPaging = accountStatus && record(body) && body.paging === undefined
+            || paging !== null && positive(paging.current) && positive(paging.total) && paging.current <= paging.total;
           if (!record(body) || body.get !== apiFootballEndpoints[endpoint].path.slice(1)
             || !(record(body.parameters) || Array.isArray(body.parameters) && body.parameters.length === 0)
             || !(Array.isArray(body.errors) && body.errors.length === 0 || record(body.errors) && Object.keys(body.errors).length === 0)
-            || !Array.isArray(body.response) || !nonnegative(body.results) || body.results !== body.response.length
-            || !record(body.paging) || !positive(body.paging.current) || !positive(body.paging.total)
-            || body.paging.current > body.paging.total
+            || rows === null || !nonnegative(body.results) || body.results !== rows.length || !validPaging
             || record(body.parameters) && Object.keys(params).some((key) => Object.hasOwn(body.parameters as object, key)
               && String((body.parameters as Record<string, unknown>)[key]) !== params[key])) {
             captured = failure("schema-error");
             return { value: null, feedback: { ...observation, kind: "provider-error" } };
           }
           const data: T[] = [], missingCoverage = new Set<string>(["provider-update-time"]);
-          if (body.response.length === 0) missingCoverage.add(`${endpoint}-coverage-not-established`);
+          if (rows.length === 0) missingCoverage.add(`${endpoint}-coverage-not-established`);
           if (Object.keys(params).some((key) => key !== "timezone" && (!record(body.parameters) || !Object.hasOwn(body.parameters, key)))) {
             captured = failure("coverage-error");
             return { value: null, feedback: { ...observation, kind: "provider-error" } };
@@ -289,19 +295,19 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           const context: NormalizationContext = { retrievedAt, endpoint: apiFootballEndpoints[endpoint].path,
             ...(options.verifyLogo === undefined ? {} : { verifyLogo: options.verifyLogo }),
             ...(options.verifyRegulationScore === undefined ? {} : { verifyRegulationScore: options.verifyRegulationScore }) };
-          for (const row of body.response.slice(0, bounds.maxRows)) {
+          for (const row of rows.slice(0, bounds.maxRows)) {
             const normalized = normalize(row, context);
             if (normalized.valid && matchesScope(endpoint, params, normalized.data)) { data.push(normalized.data); for (const missing of normalized.missingCoverage) missingCoverage.add(missing); }
             else invalidRows++;
           }
           let pageError: ApiFootballFailure | null = invalidRows > 0 ? failure("schema-error") : null;
-          if (body.response.length > bounds.maxRows || endpoint === "playerStatistics"
-            && (body.response.length > 20 || body.paging.current < body.paging.total && body.response.length !== 20)) pageError = failure("pagination-incomplete");
-          if (body.paging.current !== expectedPage || (!apiFootballEndpoints[endpoint].paginated && body.paging.total !== 1)) pageError = failure("pagination-incomplete");
+          if (rows.length > bounds.maxRows || endpoint === "playerStatistics" && paging !== null
+            && (rows.length > 20 || Number(paging.current) < Number(paging.total) && rows.length !== 20)) pageError = failure("pagination-incomplete");
+          if (paging !== null && (paging.current !== expectedPage || (!apiFootballEndpoints[endpoint].paginated && paging.total !== 1))) pageError = failure("pagination-incomplete");
           const page: Page<T> = Object.freeze({ cacheKey: workKey, data: Object.freeze(data), invalidRows, missingCoverage: Object.freeze([...missingCoverage]), error: pageError,
             provenance: Object.freeze({ provider: "api-football", endpoint, requestParameters: Object.freeze({ ...params }), contractVersion: API_FOOTBALL_CONTRACT_VERSION,
-              retrievedAt, providerUpdatedAt: null, fromCache: false, currentPage: body.paging.current,
-              totalPages: body.paging.total, quota: Object.freeze({ ...observation, kind: "success" }) }) });
+              retrievedAt, providerUpdatedAt: null, fromCache: false, currentPage: paging === null ? null : Number(paging.current),
+              totalPages: paging === null ? null : Number(paging.total), quota: Object.freeze({ ...observation, kind: "success" }) }) });
           return { value: page, feedback: { ...observation, kind: "success" } };
         });
         if (result.status === "completed" && result.value) {
@@ -374,7 +380,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         }
         error = error ?? page.error;
         if (error) break;
-        if (apiFootballEndpoints[endpoint].paginated && page.data.length === 0 && pageNumber < totalPages) { error = failure("pagination-incomplete"); break; }
+        if (apiFootballEndpoints[endpoint].paginated && page.data.length === 0 && totalPages !== null && pageNumber < totalPages) { error = failure("pagination-incomplete"); break; }
         pageNumber++;
       } while (apiFootballEndpoints[endpoint].paginated && pageNumber <= totalPages!);
       if (error) break;
@@ -406,6 +412,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
   };
   return Object.freeze({
     evidence: Object.freeze({
+      accountStatus: (bounds: ApiFootballBounds) => run("accountStatus", [{}], bounds, normalizeAccountStatus),
       fixtures: fixtureQueries,
       fixturesByDate: (date: string, bounds: ApiFootballBounds) => fixtureQueries({ date }, bounds),
       liveFixtures: (bounds: ApiFootballBounds) => run("fixtures", [{ live: "all", timezone: "Africa/Kampala" }], bounds, normalizeFixture),
