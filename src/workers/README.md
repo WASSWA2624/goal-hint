@@ -26,3 +26,11 @@ reuse and verify current rights; immutable archives are not permission for new
 analyses. Keep collection within the shared workflow deadline and approved
 football/research allowances. The [evidence runbook](../../docs/fixture-evidence.md)
 records the caller contract and pending licensed provider/policy decisions.
+
+Later prediction workers resolve an independently approved model pin and invoke
+`createPredictorService` with the same immutable evidence and cost intent. Keep
+the job's model fixed across retries and restore its verified prior pin after
+restart. Preserve candidate provenance and family failure reasons for 013/019;
+the predictor performs no fallback selection, publication or durable scheduling.
+See the [predictor runbook](../../docs/ai-predictor.md) for actual integration
+decisions still required before live use.

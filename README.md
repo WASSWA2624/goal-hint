@@ -214,3 +214,14 @@ redirects. Read the [evidence runbook](docs/fixture-evidence.md) for identities,
 permissions, replay and retention. `npm run test:evidence` runs isolated genuine
 MySQL acceptance. The licensed news provider, concrete adapter and operating
 policies remain pending, so **011 is not yet complete** in the tracker.
+
+## Primary AI predictor
+
+Private callers use `src/server/predictor` to pin immutable model configurations,
+prepare approved evidence, validate probability groups and citations, and return
+provisional candidates through the existing cost gateway. The
+[predictor runbook](docs/ai-predictor.md) describes current permissions, calibration
+hooks and failure reasons. `npm run test:predictor` runs isolated genuine MySQL
+registry acceptance. No actual AI provider/model or calibration configuration
+has been selected; its provider-specific adapter and live integration remain
+incomplete, so **012 remains unchecked**.

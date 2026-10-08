@@ -252,7 +252,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-12 Infrastructure budgets | **Unresolved** | Approve itemized caps/cost accounting for database, queue/workers/web hosting, network egress, monitoring and domain renewal. Production database and shadow/publication require an explicit infrastructure cap and verified approval; an explicitly approved zero may cover deliberate free infrastructure, while unset is unresolved. The aggregate cap is not approval to provision a service or assume its rate; later features must itemize applicable rates/caps. These remain separate from AI, research and the API-Football payable cap. §§14–15. | Unassigned; user decision/evidence required | `GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS`, `GOAL_HINT_BUDGET_APPROVAL_REF`; Deferred: itemized database/hosting/network/monitoring/domain budgets and contracted rates | **003** live database; **007** billable egress; **020** queue/workers; **031** paid cache; **044** monitoring; **046** web hosting; **049** domain renewal |
 | OP-13 Licensed research and source permissions | **Unresolved; integration boundary implemented** | Select the actual licensed search/news service and permitted official sources; provide credentials, attribution/extraction/reuse/display terms and archive retention permissions. The 011 bridge requires a reviewed concrete provider binding; none is selected or implemented. Football data access does not license articles. §§6–7, 15. | User decision/evidence required | `GOAL_HINT_RESEARCH_ENABLED`, `GOAL_HINT_RESEARCH_PROVIDER`, `RESEARCH_API_KEY`, `GOAL_HINT_RESEARCH_LICENSE_REF`; immutable source metadata, trusted reuse verifier and approved-host fetch policy | **011 pending actual adapter**; pricing prerequisite **010** |
 | OP-14 Evidence coverage/conflicts | **Unresolved; strict policy contract implemented** | Approve per-team minimum history/form/statistics, venue/rest/news requirements, source freshness bounds and clock basis, preserve/fail-coverage conflicts and exclude/allow-flagged unknown timestamps before live use. Source/cutoff/rights checks and missing-news labels are implemented, with no operating defaults. §§6–8, 15. | User decision/evidence required | `GOAL_HINT_EVIDENCE_POLICY_REF`, `GOAL_HINT_FRESHNESS_POLICY_REF`; explicit versioned `EvidencePolicy` and trusted verification | **011 pending approved rules** |
-| OP-15 AI predictor and calibration configuration | **Unresolved** | Select the approved predictor/model/prompt/schema and calibration configuration with training/calibration windows and provenance. Verify the chosen API and rates. A configured artifact or successful call cannot establish calibration quality; unvalidated output stays provisional. §§7–8, 15; prompt 012. | Unassigned; user decision/evidence required | `GOAL_HINT_AI_ENABLED`, `AI_API_KEY`, `GOAL_HINT_AI_PROVIDER`, `GOAL_HINT_AI_MODEL`, `GOAL_HINT_CALIBRATION_REF`; Deferred: versioned model/prompt/schema/calibration registry | **012**; rate selection **010**, evaluation **014** |
+| OP-15 AI predictor and calibration configuration | **Local registry implemented; actual selection unresolved** | Select the approved provider, exact model/version and calibration configuration with applicable training/calibration windows and provenance. Local prompt/schema contracts are `regulation-ai-prompt-v1` / `regulation-ai-output-v1`; the immutable registry pins them per invocation/job. Implement the selected provider transport and verify its current structured API and rates. A configured artifact or successful call cannot establish calibration quality; unvalidated output stays provisional. §§7–8, 15; prompt 012 and [predictor runbook](ai-predictor.md). | Unassigned; user decision/evidence required | `GOAL_HINT_AI_ENABLED`, `AI_API_KEY`, `GOAL_HINT_AI_PROVIDER`, `GOAL_HINT_AI_MODEL`, `GOAL_HINT_CALIBRATION_REF`; implemented: immutable model/prompt/schema/calibration registry; pending: actual API/rates, calibration artifacts and model/evaluation proof | **012** incomplete; rate selection **010**, evaluation **014** |
 | OP-16 Evaluation protocol and samples | **Unresolved** | Freeze chronological training/validation/calibration/final-test periods, matched fixtures/horizons, reconstructable baselines, minimum samples, quality/coverage gates and calibration aggregation before the final test. Historical comparisons require genuine pre-cutoff snapshots; otherwise plan prospective observations. §§8, 14–15; prompt 014. | Unassigned; user decision/evidence required | `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: versioned evaluation cohorts, samples, baselines, metrics and release thresholds | **014**; actual prospective evidence **047** |
 | OP-17 Public performance-claim gates | **Unresolved / evidence required** | Define minimum market/source/horizon samples and permitted claims, then gather sufficient independent evidence. No fixed accuracy promise is approved. Below-threshold public metrics must show insufficient data/provisional status. §§8, 15; prompts 014/030/038. | Unassigned; user decision/evidence required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`; Deferred: public-claim minimum samples and qualification results | **014** defines gates; public consumers **030/038** |
 | OP-18 Bounded shadow authorization | **Unresolved / evidence required** | Approve a private bounded protocol, maximum jobs/spend and evidence locations after applicable private provider/evidence-use rights, account, independent budgets and pipeline-integrity checks pass. Public redistribution/logo-display rights are required for public use, not isolated private shadow evidence collection. Candidate quality may remain unqualified while shadow gathers evidence. Shadow cannot publish production forecasts or declare qualification; a trusted verifier must validate applicable recorded evidence. Prompt 002, index gate and prompt 047. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE=shadow`, `GOAL_HINT_SHADOW_MAX_JOBS`, `GOAL_HINT_SHADOW_BUDGET_USD_CENTS`, `GOAL_HINT_SHADOW_PROTOCOL_REF`, `GOAL_HINT_PIPELINE_INTEGRITY_REF`; private provider/account, independent infrastructure/AI/research budgets and evidence/freshness/calibration prerequisites also apply | **014** prospective protocol; execution **047** after pipeline checks |
@@ -1080,3 +1080,53 @@ source/license/reuse/archive rights and coverage/freshness decisions. Offline
 synthetic contracts and MySQL acceptance do not verify live source coverage or
 permissions. **011 remains unchecked** until its required selected adapter and
 approved rules are implemented and checked.
+
+## Prompt 012 — Primary predictor foundation (partial)
+
+Implemented the independent local predictor contracts on **9 October 2026 EAT**.
+The selected provider, exact model/version, concrete API adapter and approved
+calibration configuration remain unresolved. Prompt/schema contracts are
+`regulation-ai-prompt-v1` and `regulation-ai-output-v1`; neither selects a model.
+Read the [predictor runbook](ai-predictor.md) for private caller APIs.
+
+Immutable `ModelVersion` records bind provider/model/version, reviewed contract,
+prompt/schema, known chronological windows, calibration/evaluation proof and
+explicit output freshness/input bounds. A SHA-256 identity changes with any
+configuration change. Registry pins bind both invocation and owning job; retries
+cannot silently switch models. After restart, trusted owning-job proof must
+restore a prior pin. Migration `20261008232332_ai_predictor_model_registry` adds
+one append-only InnoDB table with binary identities, sealed native/JSON
+projections, chronological constraints and SELECT/INSERT application grants.
+
+Prepared prompts rederive immutable evidence under current permissions, prove
+separate AI transmission rights and keep source text in bounded inert JSON.
+Provider forecasts, full articles, tools, credentials and internal reasoning are
+excluded. Output requests three regulation probability families, two to four
+concise grounded reasons, one uncertainty and genuine supplied reference tuples.
+Shared 005 rules own bounds, sums, consistency and derived double chance. Valid
+families survive independent family failures; wrong identity, invalid timing or
+invented references invalidate the whole candidate. Trusted explanation proof
+must establish semantic grounding; matching IDs alone are insufficient.
+
+Candidates preserve exact model/evidence/pin provenance, coverage/missingness,
+original source clocks and distinct transport generation/retrieval/update times.
+Generation normally follows the evidence cutoff. Unknown generation/update
+clocks remain explicitly flagged under verified policy. Evaluated transforms
+require exact registered artifacts and pass shared market rules again; there is
+no default transform or quality claim. Provisional status follows independently
+verified evaluation configuration. Permissions are rechecked after callbacks.
+
+The provider bridge wraps one reviewed attempt in the existing durable cost
+gateway and retains uncertain usage liability. Explicit input/output tokens,
+request/time ceilings, actual rates, monthly/job budgets and positive fallback
+reserve remain mandatory. Shared `dispatchCostProvider` now serves research and
+AI final dispatch, counting synchronous approval latency against both wall and
+monotonic deadlines. The predictor service bounds registry wait, prompt work,
+provider/reconciliation and validation; it starts no automatic research, retry,
+fallback selection, prediction revision, lock, scheduler or publication.
+
+OP-09–11 and OP-13–16 still require actual account/pricing/budget/allocations,
+source permissions and freshness, model/calibration selection and evaluation
+proof. Source summary reuse does not automatically permit AI disclosure. No live
+AI adapter, actual rate resolver or quality approval was invented. **012 remains
+unchecked** until its required selected integration and checks are complete.

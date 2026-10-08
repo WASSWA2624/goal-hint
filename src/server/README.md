@@ -23,3 +23,12 @@ existing cost gateway and an approved provider binding. Text cannot authorize
 actions; optional source fetching uses the shared HTTPS/public-address boundary.
 See the [evidence contract](../../docs/fixture-evidence.md). No licensed research
 provider or live evidence policy has been selected yet.
+
+Primary predictor callers use `predictor/` with an immutable model pin, approved
+evidence snapshot and exact cost job/attempt. Supply trusted model, source,
+transmission, receipt and semantic explanation verifiers; names or hashes alone
+do not authorize paid use. The existing gateway accounts for one attempt before
+output validation. Candidates retain valid families, missingness, original
+clocks and explicit provisional/calibration state. Read the
+[predictor contract](../../docs/ai-predictor.md); actual provider selection and
+its concrete transport remain pending.

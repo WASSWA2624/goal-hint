@@ -1068,3 +1068,95 @@ rules. OP-09–11 still govern actual pricing, caps and job allocations. The
 provider-specific implementation and its bounded live integration/coverage
 qualification depend on these decisions. Completing the independent foundation
 does not resolve them or enable paid operations.
+
+## Prompt 012 — Primary AI predictor foundation (partial)
+
+**Date:** 9 October 2026 EAT. The independent local registry, prompt, validation,
+calibration hooks and cost-controlled candidate flow are implemented. No actual
+AI provider, exact model/version or calibration configuration was supplied.
+The required provider-specific transport, current official API/rate verification
+and live integration remain incomplete. **012 remains unchecked** in
+[the root tracker](../dev-tracker.md).
+
+### Changed files and behavior
+
+- Nine server predictor modules implement immutable model configuration/parsing,
+  bounded registry pinning, append-only MySQL persistence, prepared evidence
+  prompts, provider integration contracts, output validation, evaluated
+  calibration hooks and one bounded candidate invocation. Existing evidence,
+  market and cost services supply shared rules and accounting.
+- Model identities cover provider/model/version, reviewed API contract,
+  `regulation-ai-prompt-v1`, `regulation-ai-output-v1`, known chronological
+  training/validation/calibration/final-test windows, evaluation configuration,
+  explicit clock policy and input/output bounds. Job/invocation pins prevent
+  silent model switches; restarting jobs require independently verified prior
+  pins. No prediction result or durable job tables are introduced.
+- Prompts verify genuine retained facts and current source/transmission rights,
+  preserve unknown/conflicting/missing evidence and keep source text inert.
+  Prepared object provenance blocks copied/forged worker instructions. Primary
+  input excludes provider forecast votes, raw articles, tools and credentials.
+- Output validation binds exact canonical fixture/version/team/cycle/run,
+  evidence/model identity and original clocks. Genuine source/fact/claim/team
+  reference tuples and independent semantic grounding proof are mandatory.
+  Shared 005 rules validate distributions and derive double chance. Valid
+  independent families survive invalid or missing ones without complements,
+  normalization, guessed numerical news effects or public publication.
+- Candidates retain explicit evidence coverage/missingness, attribution,
+  timestamps, pin/model provenance and provisional/evaluation state. Calibration
+  requires an exact evaluated artifact; transformed distributions pass shared
+  rules again. Current model, source, transport and calibration authority is
+  checked after callbacks; a final clock check rejects newly stale output.
+- The provider bridge runs one approved attempt through the existing cost
+  gateway, verifies/reconciles usage before returning output and retains unknown
+  liability. Invalid output remains charged and attempts are not automatically
+  retried. Shared `cost-dispatch.ts` replaces duplicated research final-dispatch
+  guards and counts approval/credential latency against launch/workflow bounds.
+- The service includes preflight and registry wait in wall/monotonic time,
+  reserves explicit fallback time, prevents dispatch after cancellation/expiry,
+  joins identical concurrent intents and rejects conflicting or excess inflight
+  requests. Distinct denials cover timeout, insufficient evidence, budget/token
+  limits, invalid output/citations, uncertain usage and absent configuration.
+  It starts no research, fallback selection, revisions, locks or scheduling.
+- Schema/snapshot and migration `20261008232332_ai_predictor_model_registry`
+  add **one InnoDB ModelVersion table** with binary identities, chronological
+  windows, sealed native/JSON projections and SELECT/INSERT application grants.
+  Three synthetic fixture helpers, focused tests, genuine registry acceptance,
+  `npm run test:predictor`, [predictor runbook](ai-predictor.md), README and
+  server/worker guidance accompany the implementation.
+
+### Remaining decisions and checks
+
+OP-15 needs the actual provider, exact immutable model/version, approved
+calibration policy/artifact and applicable model/evaluation windows. OP-09–11
+still need actual account/rates/monthly and job budgets, request/token/unit/time
+allocations and fallback opportunity. OP-13–14 still govern the licensed evidence
+adapter, coverage/freshness and source use/transmission permissions; OP-16 owns
+independent quality evaluation. Implement the selected provider using current
+official structured-output and rate documentation, then run bounded accounted
+integration smoke checks when approved credentials exist. Synthetic approvals
+and passing contract tests establish no provider rights or prediction quality.
+
+### Confirmed acceptance
+
+Checks used pinned Node **24.18.1**, npm **11.16.0** and genuine MySQL **8.4.11**.
+The database helper owned a fresh isolated loopback server/data directory with
+separate DDL and SELECT/INSERT application roles, then shut it down and removed
+only its owned temporary data. All provider responses, model identifiers,
+prices, receipts, credentials and authority/evaluation records are synthetic.
+No live AI, research or football request was made.
+
+| Check | Result |
+| --- | --- |
+| Final `npm run check` | Passed guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **554 tests: 553 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. Log: `.tmp/predictor-full-check.log`. |
+| New focused predictor contracts | **82 passed**: 11 registry, 14 prompt, 30 output/calibration, 13 real-cost-gateway adapter and 14 full-chain service checks. |
+| Genuine `test:predictor` acceptance | **12 passed, no failures/skips**, about **23 seconds**: incremental deployment/drift, native projections/hash/window constraints, role separation, concurrent idempotency, original millisecond windows, immutable versions, revoked-authority rollback, restart pin proof and corrupt archive rejection. Log: `.tmp/predictor-acceptance.log`. |
+| Existing research regression | All 12 research bridge tests passed after sharing final dispatch guards; the final full suite passed them again. |
+| Handoff | Whitespace and local Markdown link checks passed. The 012 tracker row remains empty because actual provider/model/calibration selection and the selected adapter are still required. |
+
+The final service checks include original generation after evidence cutoff,
+partial valid families, charged invalid responses without retries, precise
+fallback-ready denials, concurrent joining/conflicts/capacity, rejected async
+approvals, mid-call permission/retention revocation, blocking preflight against
+fallback time, and freshness expiring during semantic verification. Synthetic
+valid outputs remain provisional; these checks establish contract behavior,
+not football prediction accuracy or calibration quality.

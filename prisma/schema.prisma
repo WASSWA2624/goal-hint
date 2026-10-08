@@ -422,3 +422,32 @@ model FixtureEvidenceSnapshotSource {
   @@index([sourceVersionId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], map: "FixtureEvidenceSnapshotSource_source_idx")
   @@index([requestId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], map: "FixtureEvidenceSnapshotSource_snapshot_idx")
 }
+
+// Immutable predictor configurations. Job/retry ownership is pinned by the
+// caller and becomes durable with 020; this table does not store predictions.
+model ModelVersion {
+  id                   String    @id @db.Char(64)
+  provider             String    @db.VarChar(128)
+  model                String    @db.VarChar(128)
+  providerModelVersion String    @db.VarChar(128)
+  contractVersion      String    @db.VarChar(128)
+  promptVersion        String    @db.VarChar(128)
+  schemaVersion        String    @db.VarChar(128)
+  calibrationKind      String    @db.VarChar(16)
+  calibrationVersion   String    @db.VarChar(128)
+  evaluationStatus     String    @db.VarChar(16)
+  evaluationVersion    String    @db.VarChar(128)
+  trainingStartsAt     DateTime? @db.DateTime(3)
+  trainingEndsAt       DateTime? @db.DateTime(3)
+  validationStartsAt   DateTime? @db.DateTime(3)
+  validationEndsAt     DateTime? @db.DateTime(3)
+  calibrationStartsAt  DateTime? @db.DateTime(3)
+  calibrationEndsAt    DateTime? @db.DateTime(3)
+  finalTestStartsAt    DateTime? @db.DateTime(3)
+  finalTestEndsAt      DateTime? @db.DateTime(3)
+  integrity            String    @db.Char(64)
+  configurationJson    Json
+  createdAt            DateTime  @default(now()) @db.DateTime(3)
+
+  @@index([provider, model, providerModelVersion])
+}

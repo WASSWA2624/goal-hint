@@ -5,6 +5,7 @@ import { assertOperationAllowed, type RuntimePolicy, type EvidenceVerifier } fro
 import type { CostJobPolicy, CostRequest, CostDenialReason } from "../cost-control/cost-contract.ts";
 import { parseCostJob, parseCostRequest, parseCostEvidenceRef } from "../cost-control/cost-input.ts";
 import type { createCostGateway, CostTransportContext, CostTransportResponse } from "../cost-control/cost-gateway.ts";
+import { dispatchCostProvider } from "../cost-control/cost-dispatch.ts";
 import type { EvidenceAuthority, EvidenceContext, EvidencePolicy, EvidenceSource, EvidenceWorkflow } from "./evidence-contract.ts";
 import { EvidenceInputError, evidenceSerialize, freezeEvidence, parseEvidenceContext, parseEvidencePolicy, parseEvidenceSource } from "./evidence-input.ts";
 
@@ -94,26 +95,13 @@ export function createResearchEvidenceAdapter(options: Readonly<{
     }
     try { authorize(); } catch { return denied("not-authorized"); }
     try {
-      const result = await options.gateway.execute(selected.job, selected.request, async (transport) => {
-        const enteredAt = performance.now(), enteredNow = now(), launchWindow = transport.permit.launchBefore - enteredNow;
-        // Source text is never passed to this authority boundary or interpreted as instructions.
-        authorize();
-        if (transport.signal.aborted) throw new EvidenceInputError("not-authorized");
-        const credential = options.runtimePolicy.secrets.researchKey?.read();
-        if (!credential) throw new EvidenceInputError("not-authorized");
-        workflow?.check();
-        const currentNow = now(), elapsed = performance.now() - enteredAt;
-        const paidDeadline = Math.min(selected.job.deadlineAt, selected.job.startsAt + selected.job.timeLimitMs) - selected.job.fallbackReserveMs;
-        const timeoutMs = Math.floor(Math.min(transport.timeoutMs - elapsed, paidDeadline - currentNow,
-          workflow === undefined ? Infinity : workflow.deadlineAt - currentNow));
-        if (transport.signal.aborted || workflow?.signal.aborted || currentNow < enteredNow ||
-          currentNow >= transport.permit.launchBefore || elapsed >= launchWindow || timeoutMs < 1)
-          throw new EvidenceInputError("not-authorized");
-        const boundedTransport = Object.freeze({ ...transport, timeoutMs,
-          signal: workflow === undefined ? transport.signal : AbortSignal.any([transport.signal, workflow.signal]) });
+      const result = await options.gateway.execute(selected.job, selected.request, (transport) => dispatchCostProvider({
+        job: selected.job, transport, workflow, clock: options.clock, authorize,
+        credential: () => options.runtimePolicy.secrets.researchKey?.read(),
+      }, async ({ transport: boundedTransport, credential }) => {
         dispatched = true;
         return binding.search(Object.freeze({ context, policy, plan: selected, transport: boundedTransport, credential }));
-      });
+      }));
       if (result.status === "denied") return denied(result.reason, dispatched);
       reconciled = true;
       // Known usage is reconciled even when the provider's normalized evidence is invalid.
