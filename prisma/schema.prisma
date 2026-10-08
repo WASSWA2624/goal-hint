@@ -30,22 +30,229 @@ model ApiQuotaPeriod {
 }
 
 model ApiQuotaAttempt {
-  accountId   String          @db.Char(64)
-  id          String          @db.Char(64)
-  workKey     String?         @db.Char(64)
-  state       String          @db.VarChar(16)
-  priority    Int
-  queuedAt    DateTime        @db.DateTime(3)
-  deadlineAt  DateTime        @db.DateTime(3)
-  dispatchedAt DateTime?      @db.DateTime(3)
-  periodId    String?         @db.Char(64)
-  sequence    Int?
-  payloadJson Json
-  account     ApiQuotaAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  accountId    String          @db.Char(64)
+  id           String          @db.Char(64)
+  workKey      String?         @db.Char(64)
+  state        String          @db.VarChar(16)
+  priority     Int
+  queuedAt     DateTime        @db.DateTime(3)
+  deadlineAt   DateTime        @db.DateTime(3)
+  dispatchedAt DateTime?       @db.DateTime(3)
+  periodId     String?         @db.Char(64)
+  sequence     Int?
+  payloadJson  Json
+  account      ApiQuotaAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
   @@id([accountId, id])
   @@unique([accountId, workKey])
   @@index([accountId, dispatchedAt])
   @@index([accountId, state, priority, queuedAt])
   @@index([accountId, periodId, sequence])
+}
+
+// A permanent provider row serializes identity resolution and catalog imports.
+model FootballCatalogLock {
+  provider String @id @db.VarChar(32)
+}
+
+model FootballTeam {
+  id                String                 @id @default(uuid()) @db.Char(36)
+  name              String?                @db.VarChar(512)
+  nameSearch        String?                @db.VarChar(512)
+  code              String?                @db.VarChar(64)
+  country           String?                @db.VarChar(256)
+  countrySearch     String?                @db.VarChar(256)
+  national          Boolean?
+  logoUrl           String?                @db.VarChar(2048)
+  retrievedAt       DateTime               @db.DateTime(3)
+  providerUpdatedAt DateTime?              @db.DateTime(3)
+  createdAt         DateTime               @default(now()) @db.DateTime(3)
+  updatedAt         DateTime               @updatedAt @db.DateTime(3)
+  providers         FootballTeamProvider[]
+  aliases           FootballTeamAlias[]
+  homeFixtures      FootballFixture[]      @relation("FootballHomeTeam")
+  awayFixtures      FootballFixture[]      @relation("FootballAwayTeam")
+
+  @@index([nameSearch])
+  @@index([countrySearch, nameSearch])
+}
+
+model FootballTeamProvider {
+  provider    String       @db.VarChar(32)
+  externalId  BigInt       @db.UnsignedBigInt
+  teamId      String       @db.Char(36)
+  evidenceRef String?      @db.VarChar(512)
+  sourceRef   String?      @db.VarChar(512)
+  mappedAt    DateTime     @db.DateTime(3)
+  team        FootballTeam @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([provider, externalId])
+  @@index([teamId])
+}
+
+model FootballTeamAlias {
+  teamId           String       @db.Char(36)
+  normalizedSearch String       @db.VarChar(512)
+  name             String       @db.VarChar(512)
+  observedAt       DateTime     @db.DateTime(3)
+  sourceRef        String       @db.VarChar(512)
+  team             FootballTeam @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([teamId, normalizedSearch])
+  @@index([normalizedSearch])
+}
+
+model FootballCompetition {
+  id                String                        @id @default(uuid()) @db.Char(36)
+  name              String?                       @db.VarChar(512)
+  nameSearch        String?                       @db.VarChar(512)
+  country           String?                       @db.VarChar(256)
+  countrySearch     String?                       @db.VarChar(256)
+  type              String?                       @db.VarChar(32)
+  logoUrl           String?                       @db.VarChar(2048)
+  retrievedAt       DateTime                      @db.DateTime(3)
+  providerUpdatedAt DateTime?                     @db.DateTime(3)
+  createdAt         DateTime                      @default(now()) @db.DateTime(3)
+  updatedAt         DateTime                      @updatedAt @db.DateTime(3)
+  providers         FootballCompetitionProvider[]
+  aliases           FootballCompetitionAlias[]
+  seasons           FootballSeason[]
+
+  @@index([nameSearch])
+  @@index([countrySearch, nameSearch])
+}
+
+model FootballCompetitionProvider {
+  provider      String              @db.VarChar(32)
+  externalId    BigInt              @db.UnsignedBigInt
+  competitionId String              @db.Char(36)
+  evidenceRef   String?             @db.VarChar(512)
+  sourceRef     String?             @db.VarChar(512)
+  mappedAt      DateTime            @db.DateTime(3)
+  competition   FootballCompetition @relation(fields: [competitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([provider, externalId])
+  @@index([competitionId])
+}
+
+model FootballCompetitionAlias {
+  competitionId    String              @db.Char(36)
+  normalizedSearch String              @db.VarChar(512)
+  name             String              @db.VarChar(512)
+  observedAt       DateTime            @db.DateTime(3)
+  sourceRef        String              @db.VarChar(512)
+  competition      FootballCompetition @relation(fields: [competitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([competitionId, normalizedSearch])
+  @@index([normalizedSearch])
+}
+
+model FootballSeason {
+  id                String              @id @default(uuid()) @db.Char(36)
+  competitionId     String              @db.Char(36)
+  year              Int
+  current           Boolean?
+  coverage          Json?
+  retrievedAt       DateTime            @db.DateTime(3)
+  providerUpdatedAt DateTime?           @db.DateTime(3)
+  competition       FootballCompetition @relation(fields: [competitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fixtures          FootballFixture[]
+
+  @@unique([competitionId, year])
+}
+
+model FootballFixture {
+  id                    String                 @id @default(uuid()) @db.Char(36)
+  provider              String                 @db.VarChar(32)
+  externalId            BigInt                 @db.UnsignedBigInt
+  homeTeamId            String                 @db.Char(36)
+  awayTeamId            String                 @db.Char(36)
+  seasonId              String                 @db.Char(36)
+  round                 String?                @db.VarChar(512)
+  kickoff               DateTime?              @db.DateTime(3)
+  eatDate               DateTime?              @db.Date
+  status                String                 @default("unknown") @db.VarChar(32)
+  providerStatus        String?                @db.VarChar(32)
+  elapsedMinutes        Int?
+  regulationHome        Int?
+  regulationAway        Int?
+  regulationEvidenceRef String?                @db.VarChar(512)
+  regulationVerifiedAt  DateTime?              @db.DateTime(3)
+  retrievedAt           DateTime               @db.DateTime(3)
+  providerUpdatedAt     DateTime?              @db.DateTime(3)
+  dataVersion           BigInt                 @default(1) @db.UnsignedBigInt
+  createdAt             DateTime               @default(now()) @db.DateTime(3)
+  updatedAt             DateTime               @updatedAt @db.DateTime(3)
+  homeTeam              FootballTeam           @relation("FootballHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  awayTeam              FootballTeam           @relation("FootballAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  season                FootballSeason         @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  audits                FootballFixtureAudit[]
+
+  @@unique([provider, externalId])
+  @@index([eatDate, kickoff])
+  @@index([kickoff])
+  @@index([status, kickoff])
+  @@index([seasonId, kickoff])
+  @@index([seasonId, round, kickoff])
+  @@index([homeTeamId, kickoff])
+  @@index([awayTeamId, kickoff])
+}
+
+model FootballFixtureAudit {
+  id          String          @id @default(uuid()) @db.Char(36)
+  fixtureId   String          @db.Char(36)
+  importId    String          @db.Char(36)
+  dataVersion BigInt          @db.UnsignedBigInt
+  observedAt  DateTime        @db.DateTime(3)
+  changes     Json
+  fixture     FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  import      FootballImport  @relation(fields: [importId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([fixtureId, dataVersion])
+  @@index([importId])
+}
+
+model FootballImport {
+  id                   String                 @id @default(uuid()) @db.Char(36)
+  sequence             BigInt                 @unique @default(autoincrement()) @db.UnsignedBigInt
+  fingerprint          String                 @db.Char(64)
+  requestFingerprint   String                 @db.Char(64)
+  selection            Json
+  scopeKey             String                 @db.Char(64)
+  provider             String                 @db.VarChar(32)
+  kind                 String                 @db.VarChar(32)
+  status               String                 @db.VarChar(32)
+  observedAt           DateTime               @db.DateTime(3)
+  recordedAt           DateTime               @db.DateTime(3)
+  receivedCount        Int
+  importedCount        Int
+  rejectedCount        Int
+  requestsDispatched   Int
+  reasons              Json
+  missingIds           Json
+  missingCoverage      Json
+  provenance           Json
+  retentionEvidenceRef String                 @db.VarChar(512)
+  subsetEvidenceRef    String?                @db.VarChar(512)
+  fixtureIds           Json
+  changedFixtureIds    Json
+  fixtureAudits        FootballFixtureAudit[]
+
+  @@index([fingerprint])
+  @@index([scopeKey, observedAt, sequence])
+}
+
+model FootballIdentityReview {
+  id                  String   @id @default(uuid()) @db.Char(36)
+  provider            String   @db.VarChar(32)
+  externalId          BigInt   @db.UnsignedBigInt
+  candidateExternalId BigInt   @db.UnsignedBigInt
+  status              String   @default("pending") @db.VarChar(32)
+  reason              String   @db.VarChar(32)
+  sourceRef           String   @db.VarChar(512)
+  evidenceRef         String?  @db.VarChar(512)
+  observedAt          DateTime @db.DateTime(3)
+
+  @@unique([provider, externalId, candidateExternalId])
+  @@index([status, observedAt])
 }

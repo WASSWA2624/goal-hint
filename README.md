@@ -182,3 +182,15 @@ The [provider trial runbook](docs/football-provider-trial.md) covers offline
 `init`/`report`, approved plans, trusted authority modules and resumable `run`.
 Reports distinguish real evidence from synthetic contracts; missing account,
 competition, allowance and rights inputs keep live qualification incomplete.
+
+## Canonical football catalog
+
+Private server workers import validated fixtures, teams and competitions through
+`createFootballCatalogImporter` and the existing provider adapter. MySQL preserves
+canonical identities, searchable aliases, original observations, exact import
+coverage and audited fixture versions. No visitor request initiates an import.
+Read the [catalog contract](docs/football-catalog.md) for authorization, update
+rules and the transaction boundary for later schedule services. Run
+`npm run test:catalog` with an available genuine MySQL binary for isolated
+concurrency acceptance. Actual retention, mapping and provider rights remain
+pending the recorded trial evidence.

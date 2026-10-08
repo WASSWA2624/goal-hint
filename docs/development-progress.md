@@ -806,3 +806,101 @@ Implementation and local acceptance checks are complete; prompt **008** is
 ticked in the root tracker. The tracked offline report deliberately leaves
 actual provider suitability incomplete and live/launch gates blocked. No live
 trial result or permission is claimed by this completion checkbox.
+
+## 009 — Canonical football catalog
+
+Implemented on **9 October 2026 EAT**, building on the 003 database runtime,
+004 calendar, 005 settlement rules, 006 quota gateway, 007 sole provider adapter
+and the explicitly incomplete 008 trial. Local persistence acceptance is
+independent of live account/coverage/rights qualification.
+
+### Delivered files and migration
+
+- `src/server/football/catalog-contract.ts` and `catalog-input.ts`: strict
+  immutable import selections/bounds, provenance/scope validation, safe normalized
+  identities/search, attributable regulation proof and explicit degraded-subset
+  authority. Missing fixture season rejects the row without guessing a season.
+  Only privately registered validated batches bound to the same trusted authority
+  can enter the writer.
+- `catalog-service.ts`: reusable private imports through the existing adapter;
+  pre-I/O authorization/retention, identical in-flight request sharing, committed
+  request replay without I/O and conflict rejection for reused IDs. No additional
+  HTTP client, quota counter, live verifier or public import path was created.
+- `catalog-mysql-store.ts`: canonical identities/aliases/seasons, transactional
+  provider locks and fixture mutations, shared metadata updates, private mapping
+  review, exact versions/audits and consistent exact-scope coverage reads.
+  Original source times are retained; outages/disappearance never delete records
+  or imply final/canceled status. Missing fields preserve reliable values under
+  the documented update rules.
+- `prisma/schema.prisma`, the matching snapshot and incremental migration
+  `20261008214325_canonical_football_catalog/migration.sql`: **12 new InnoDB
+  tables**, binary collations, restrictive relationships, unique provider IDs,
+  season/search/date/round indexes and reviewed SQL checks. Existing foundation
+  and quota table definitions/migration history remain compatible. The import
+  sequence resolves equal-time coverage ordering without comparing UUIDs.
+- `tests/catalog-input.test.mjs`, `catalog-service.test.mjs`,
+  `catalog.integration.mjs` and `helpers/catalog-fixtures.mjs`: deterministic
+  validation/service cases plus genuine MySQL multi-replica identity, uniqueness,
+  version, coverage, mapping, permission and coordinator acceptance.
+- `package.json`: `npm run test:catalog`; [catalog runbook](football-catalog.md),
+  README, decision register and root tracker handoff.
+
+Fresh approved shared names/logo URLs and attributable aliases advance every
+referencing fixture version once per import. Audits preserve normalized old/new
+attributes and alias additions alongside fixture-owned changes. Coordinators
+receive the original shared attributes and all writes roll back on failure.
+Regulation scores require exact verified fixture/status/period evidence and
+never use extra-time/shootout totals. Third-party images remain approved remote
+URL strings; no binary image is downloaded or stored.
+
+`coordinateFixtureMutation` and `withFixtureTransaction` expose one consistent
+provider-then-fixture transaction boundary for later cycle/schedule services.
+Custom callbacks are never automatically retried. Those future services must
+wire the coordinator into every importer; direct fixture writes cannot become
+an alternative schedule/status mutation path. Daily selection, cycle lifecycle,
+polling, predictions, settlement jobs and public endpoints remain with their
+own prompts.
+
+### Verification
+
+Commands used pinned Node **24.18.1** and npm **11.16.0**. Genuine MySQL checks
+used the existing ignored portable **8.4.11** binary, a new loopback server/data
+directory and separate migration DDL/application DML credentials. Each owned
+target was verified before writes and cleanup; no existing service/database,
+actual provider/account or remote image operation was used.
+
+| Command/check | Result |
+| --- | --- |
+| `npm run check` | Passed: guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **311 tests: 310 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. |
+| New input/service tests | **37 passed**: 27 input cases and 10 service cases, including pre-I/O denial, source/scope validation, unknown seasons, immutable receipt replay, in-flight sharing and permission revocation. |
+| Final `npm run test:catalog` | **28 passed, no failures/skips**, about **29 seconds**, on genuine owned MySQL 8.4.11. Concurrent/repeated imports across competitions/seasons reuse canonical identities; distinct same-name IDs remain distinct. |
+| Catalog database acceptance | Passed: native uniqueness/constraints, exact BigInt IDs/versions, direct/shared version races and audits, alias search, safe URL retention, verified regulation periods, stale/null preservation, outage/disappearance, exact filtered/empty/degraded coverage and equal-time sequence ordering. |
+| Mapping/coordinator acceptance | Passed: attributable alternate identity, pending conflicts, older/weaker proof preservation, future-time rejection, operation/retention revocation rollback, coordinator old/new snapshots, duplicate/omitted/unawaited-failed apply rollback and future-service lock serialization. |
+| Incremental schema review | Schema validation and empty offline diff passed; genuine migration deployment and drift verification passed with least-privilege role separation. |
+| `npm run test:db` regression | **8 passed, no failures/skips**, about **21 seconds**: repeat deployment/status, drift detection, exact UTC/value round trips, rollback, concurrent uniqueness, privilege separation and pool shutdown with the new migration. |
+| Final handoff checks | Whitespace checks passed; **104 local Markdown links** resolve. Final ordered repository and catalog checks passed after the authority-bound prepared-batch guard was added. |
+
+The initial catalog run exposed two test assumptions: JSON serialization needed
+an explicit BigInt representation, and 007 rejects pre-1970 kickoffs. The corrected
+historical EAT check uses a clearly synthetic normalized future-contract
+observation to verify catalog/calendar storage; it does not extend or claim live
+provider historical coverage. Final database acceptance passed after those
+corrections and the audit/coordination hardening.
+
+### Pending live evidence
+
+The 008 baseline remains **34 untested requirements and zero actual requests**.
+OP-03–08 still require authorized account/reset/expiry/payable records, initial
+competition IDs/seasons and allowance, private/structured retention and audit
+reuse terms, source-specific identity/score/freshness mapping, and public/logo
+rights. Synthetic normalized timestamps, mappings, permissions and provider
+bodies prove local behavior only. No actual pending provider mapping was
+collected; contradictory synthetic mappings stay in private test review rows.
+
+Live catalog imports/reuse and public data/prediction/media operations remain
+blocked until those actual evidence gates pass. No retention period, account
+capacity, enabled competition or unlimited raw/structured entitlement is invented.
+
+Implementation and local acceptance checks are complete; **009** is ticked in
+the root tracker. Actual provider qualification and live/public permissions
+remain separate pending gates.

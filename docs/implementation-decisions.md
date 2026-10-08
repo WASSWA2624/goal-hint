@@ -872,3 +872,108 @@ Prompt **009** may implement catalog structure using these explicit pending
 gates. Live import/reuse and public data/prediction/logo display remain blocked
 until their actual evidence passes. AI quality is owned by **014**, and launch
 remains independently blocked by the later qualification and release prompts.
+
+## Prompt 009 — Canonical football catalog
+
+The 008 baseline has 34 untested live requirements and zero provider requests.
+These schema and import decisions implement the validated 007 contracts locally;
+they do not declare real provider identities, score semantics, retention or logo
+rights qualified. OP-03–08 remain pending. There is no live catalog authority,
+automatic provider import, public endpoint or visitor-triggered work.
+
+### Identity, schema and concurrency
+
+Migration `20261008214325_canonical_football_catalog` adds twelve InnoDB tables
+for canonical teams/competitions, provider mappings, aliases, competition
+seasons, fixtures, imports, fixture audits, private identity review and a provider
+write-lock row. Existing foundation/quota migrations remain intact. Binary
+collations preserve exact machine identity; application-normalized NFKC,
+lowercase search fields support case-insensitive names/aliases while preserving
+accents. A matching name never establishes identity.
+
+Unique provider/external-team and provider/external-fixture keys, unique
+competition/season keys and restrict foreign keys protect reusable relationships.
+External IDs are positive safe JavaScript integers persisted exactly as unsigned
+BIGINT; fixture versions and import sequence remain exact `bigint` values.
+Indexed dates/kickoffs, status, season/round, home/away, names, countries and
+aliases support later stored-data searches.
+
+Catalog writes acquire the provider row lock before fixture locks, keeping
+identity creation and shared metadata/version updates atomic across replicas.
+Provider requests occur before locks through the sole 007 adapter and 006 quota
+gateway. Only internal transactional work retries genuine deadlock conflicts;
+custom coordination and caller-owned transaction callbacks are not replayed.
+Reusable transaction callbacks must contain database work only. Later cycle and
+schedule services must supply the coordinator and share this lock order.
+
+### Observations, updates and coverage
+
+Input validation binds each normalized row to exact adapter query and original
+page provenance. The immutable prepared batch is registered privately and bound
+to the validating authority; fabricated objects or another authority cannot
+enter persistence. Import IDs bind immutable request/content
+fingerprints; completed intent replays return the original audit without another
+provider call. Changed content under a persisted ID is rejected.
+
+UTC instants use existing millisecond connection conventions. EAT dates are
+derived with 004's `Africa/Kampala` calendar, including historical offsets. MySQL
+checks paired kickoff/date nullness; a fixed UTC+3 check would contradict that
+calendar. Unsupported DATETIME years and malformed/oversized values fail input
+validation rather than being coerced or truncated.
+
+Fresh non-null observations can update reliable fields. Missing names, kickoff,
+country, round, scores and unknown status retain known values. Older retrieval
+times or known older provider update times cannot replace newer attributes.
+Last-known provider update times remain a watermark when a new response omits
+them; original null values stay visible in import provenance and never qualify
+fallback freshness. Historical attributable aliases may extend search even when
+their observation is older than the current name.
+
+Verified regulation scores require the shared 005 settlement rules, exact 007
+fixture/status/source-field mapping and independent attributable evidence. Extra
+time, shootout and aggregate goals never substitute. A changed status context
+invalidates the prior verified score; a missing score within the same confirmed
+context preserves it. Approved remote logo strings update shared records;
+missing/unapproved replacements retain an approved prior URL, and loss of the
+prior URL's approval clears it. No logo body is downloaded, cached or persisted.
+
+Each material fixture or shared name/logo/alias change advances affected fixture
+versions atomically, once per import, with unique version audits. Timestamp-only
+updates do not advance versions. Shared changes retain normalized old/new fields
+and alias additions in the same audit; coordinators receive the actual prior
+shared attributes. Provider disappearance, partial responses and
+outages preserve existing fixtures and cannot infer cancellation, deletion or
+full time. Alternate IDs need independent mapping proof; contradictory canonical
+assignments remain pending private resolution and are never retargeted by name.
+Older/weaker duplicate reviews preserve existing resolution evidence; future
+mapping observation times are rejected. The current 007 adapter rejects pre-1970
+kickoffs; broader catalog storage/calendar tests do not assert that live provider
+coverage exists for those dates.
+
+Coverage belongs to the exact selection, including filters and EAT dates. A
+repeatable-read snapshot orders original observation time then durable import
+sequence, never UUID text. Only a complete empty exact-scope response with no
+matching retained fixtures produces `complete-empty`; a competition/round
+subset cannot establish a whole empty day. Incomplete, failed and independently
+approved degraded subsets remain explicit, with the previous complete import
+and known fixtures available.
+
+### Retention and outstanding evidence
+
+Retention verification explicitly covers permitted structured catalog and audit
+history for the selection. It runs before provider I/O and inside the transaction,
+including a final check before commit. Mapping writes have a separate operation
+authorization hook and the same retention rechecks. Source verification, score,
+mapping and logo approvals require trusted code; references or self-labelled
+provider objects alone cannot grant permission.
+
+Only normalized permitted fields, query provenance, original timestamps,
+coverage reasons and attributable references are retained. Raw HTTP bodies,
+headers/quota feedback, provider diagnostics, secrets and binary images are not
+copied into catalog storage. No unlimited raw/structured retention or deletion
+period is invented. Actual account entitlement, selected competitions/seasons,
+retention/reuse terms, identity exceptions, regulation mapping, freshness policy
+and public/logo rights still need source-specific 008 evidence before live use.
+No actual ambiguous mappings have been collected; integration mappings are
+explicitly synthetic. The runbook records the reusable private API and future
+schedule integration contract.
