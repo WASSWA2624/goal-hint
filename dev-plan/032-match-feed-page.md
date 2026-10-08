@@ -23,4 +23,6 @@ Distinguish confirmed no fixtures, incomplete import/partial coverage, unavailab
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Update `docs/development-progress.md` with changed files, checks and results, and actual blockers. Record justified implementation choices in `docs/implementation-decisions.md`; do not replace source requirements with new product scope.

@@ -26,4 +26,6 @@ Use a least-privilege application connection strategy and document separate migr
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, migration commands, database-backed checks and their results in `docs/development-progress.md`. Update `docs/implementation-decisions.md` for connection/runtime decisions and genuine blockers. Preserve existing data and report any migration limitation precisely.

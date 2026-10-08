@@ -15,14 +15,34 @@ Prisma documents this adapter for MySQL; its name does not change the server
 choice to MariaDB. The selected Node `24.18.1` and TypeScript `5.9.3` satisfy
 the published package requirements. Use the committed lockfile with `npm ci`.
 
-The adapter declares `mariadb@3.4.5`; the project pins `mariadb@3.5.4` and scopes
-an npm override to the adapter's connector dependency. The maintainer's
-[TLS credential advisory](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-cqhc-2h57-wpxf)
-affects the older connector. The connector maintainer's
-[3.5.4 release](https://github.com/mariadb-corporation/mariadb-connector-nodejs/releases/tag/3.5.4)
-includes fixes for SQL escaping and security issues. Keep the override explicit
-and recheck it when upgrading the adapter. Do not substitute a peer bypass or
-an unqualified Prisma major upgrade.
+The installed dependency tree uses three exact, parent-scoped npm overrides:
+
+| Parent scope | Dependency override | Reason |
+| --- | --- | --- |
+| `@prisma/adapter-mariadb@7.10.0` | `mariadb: "$mariadb"`, resolving the direct `3.5.4` pin | Replaces the adapter's `3.4.5` connector. The maintainer's [TLS credential advisory](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-cqhc-2h57-wpxf), [SQL escaping advisory](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-r3rv-jm3r-62q2) and [3.5.4 release](https://github.com/mariadb-corporation/mariadb-connector-nodejs/releases/tag/3.5.4) establish the patched connector selection. |
+| `prisma@7.10.0` | `mysql2: "3.24.5"` | Includes fixes for [GHSA-3f6p-5ww8-9rcr](https://github.com/sidorares/node-mysql2/security/advisories/GHSA-3f6p-5ww8-9rcr) and [GHSA-rgwj-5xj2-c3m3](https://github.com/sidorares/node-mysql2/security/advisories/GHSA-rgwj-5xj2-c3m3): unsolicited cleartext authentication and unbounded compressed-packet inflation. The fixes shipped in [3.22.0](https://github.com/sidorares/node-mysql2/releases/tag/v3.22.0) and [3.23.1](https://github.com/sidorares/node-mysql2/releases/tag/v3.23.1). |
+| `@prisma/config@7.10.0` | `deepmerge-ts: "8.0.2"` | The maintainer's [GHSA-ggr8-5vv4-36mx](https://github.com/RebeccaStevens/deepmerge-ts/security/advisories/GHSA-ggr8-5vv4-36mx) identifies versions below `8.0.0` as vulnerable to stack exhaustion on recursive object graphs. |
+
+The `deepmerge-ts` override crosses a major-version boundary. The installed
+Prisma config loader uses the named `deepmerge` export on plain configuration
+records; the reviewed three merge cases remained equivalent. The changed Map
+merging and custom/in-place helper behavior is outside that use. Actual config
+loading and client generation passed during `npm install`; this evidence does
+not complete the remaining application or database verification.
+
+`npm ls` confirmed the scoped versions, including the deduplicated `mariadb`
+connector. The 7 October 2026 production-only audit (`npm audit --omit=dev
+--json`) reports zero vulnerabilities. The full audit retains seven high
+development-only package entries from the existing `braces` chains through
+Next lint tooling and nodemon. No forced framework downgrade or peer bypass is
+applied. Keep actual checks and open verification in the
+[progress record](development-progress.md).
+
+Recheck all three overrides when upgrading their Prisma parent packages.
+Remove each only after the upstream dependency selects a patched compatible
+version, the lockfile resolves it, and generation, configuration loading,
+application/database checks and both audit scopes pass review. Until then,
+retain exact scopes and recheck the major override against any config changes.
 
 The `prisma-client` generator emits ESM TypeScript into
 `src/server/generated/prisma`, with `.ts` import extensions for the pinned Node

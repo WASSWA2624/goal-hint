@@ -27,4 +27,6 @@ Do not purchase a subscription, change the plan or make uncontrolled live calls.
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record schema changes, concurrency evidence and every limit/reset check in `docs/development-progress.md`. Update `docs/implementation-decisions.md` with provider-boundary evidence still required. Clearly distinguish simulated reset validation from a confirmed account reset.

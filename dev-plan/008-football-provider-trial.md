@@ -27,4 +27,6 @@ Generate a concise report listing each requirement, tested fixture or source, ti
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record commands, report paths, evidence and blockers in `docs/development-progress.md`; update `docs/implementation-decisions.md`. State which findings permit catalog implementation and which still block live operations or launch.

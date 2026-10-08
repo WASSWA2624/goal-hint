@@ -25,4 +25,6 @@ Smoke-test public HTML/read APIs from a fresh session, private mutation rejectio
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Update `docs/development-progress.md` with changed files, actual deployment/check results, evidence and blockers. Record release/rollback decisions in `docs/implementation-decisions.md` and finish the production operations runbook.

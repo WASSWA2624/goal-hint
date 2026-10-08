@@ -26,4 +26,6 @@ Do not implement the daily manifest, prediction orchestration, watchdog, full mo
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, commands, recovery checks and blockers in `docs/development-progress.md`; document queue choice, ownership and idempotency contracts in `docs/implementation-decisions.md`.

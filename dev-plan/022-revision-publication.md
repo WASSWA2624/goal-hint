@@ -25,4 +25,6 @@ A partial new revision replaces the entire snapshot; unsupported families become
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, concurrency/eligibility checks and blockers in `docs/development-progress.md`; document transaction and durable change-event contracts in `docs/implementation-decisions.md`.

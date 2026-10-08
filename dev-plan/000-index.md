@@ -10,7 +10,7 @@ There are **49 implementation prompts**, one feature per file. This index is the
 2. Inspect the repository and previous handoffs. Build on existing modules; do not recreate foundations or overwrite unrelated changes.
 3. Implement only that file's feature, including its necessary integration and verification. Shared contracts may be introduced when needed, but do not implement later features or leave a placeholder presented as finished.
 4. Run the feature's meaningful acceptance checks and the repository checks affected by the change. Fix failures caused by the feature and record actual results.
-5. Update `docs/development-progress.md`, then proceed to the next number when its prerequisites are satisfied. Do not automatically run all remaining prompts.
+5. Update `docs/development-progress.md`. Every implementation prompt must update [dev-tracker.md](../dev-tracker.md) by ticking its row (☐ → ☑) when its implementation and acceptance checks are complete; otherwise leave the checkbox empty. Then proceed to the next number when its prerequisites are satisfied. Do not automatically run all remaining prompts.
 
 Example instruction to an implementation agent:
 
@@ -18,7 +18,8 @@ Example instruction to an implementation agent:
 Read app-write-up.md, dev-plan/000-index.md and applicable repository instructions.
 Implement dev-plan/001-project-foundation.md completely, within its stated scope.
 Run its acceptance checks and update docs/development-progress.md with the
-changes, results and any unresolved blockers. Do not start the next prompt.
+changes, results and any unresolved blockers. When implementation and acceptance
+checks are complete, tick this file's row in dev-tracker.md. Do not start the next prompt.
 ```
 
 Change the filename for each subsequent run. Prompt 001 starts the progress record and compatibility notes; prompt 002 formalizes `docs/implementation-decisions.md` as the operating decision register.

@@ -340,9 +340,32 @@ production credential or operator identity is inferred.
 | --- | --- |
 | Prisma CLI/client | Pin `prisma@7.10.0` and `@prisma/client@7.10.0`. Their [CLI metadata](https://registry.npmjs.org/prisma/7.10.0) and [client metadata](https://registry.npmjs.org/@prisma/client/7.10.0), checked through npm on the decision date, accept Node `^20.19`, `^22.12` or `>=24.0`; the client accepts TypeScript `>=5.4`. The existing Node `24.18.1` and TypeScript `5.9.3` satisfy those requirements. Retain the requested stable Prisma 7 major. |
 | MySQL adapter | Pin `@prisma/adapter-mariadb@7.10.0` to match the Prisma packages. [Official MySQL documentation](https://www.prisma.io/docs/orm/v7/core-concepts/supported-databases/mysql) specifies the MySQL datasource provider and this connector adapter for standard MySQL. Its package name does not select a MariaDB server. |
-| Connector security override | Pin `mariadb@3.5.4` and scope the npm override to the adapter's connector dependency. [Adapter metadata](https://registry.npmjs.org/@prisma/adapter-mariadb/7.10.0) declares `mariadb@3.4.5`, affected by [GHSA-cqhc-2h57-wpxf](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-cqhc-2h57-wpxf). The [text-protocol SQL escaping advisory](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-r3rv-jm3r-62q2) requires `3.5.4` on the 3.5 branch; the [maintainer release](https://github.com/mariadb-corporation/mariadb-connector-nodejs/releases/tag/3.5.4) records these fixes. [Connector metadata](https://registry.npmjs.org/mariadb/3.5.4) requires Node `>=20`. Recheck the scoped override with subsequent adapter updates and actual tests. |
+| Connector security override | Pin `mariadb@3.5.4`; scope `mariadb: "$mariadb"` to `@prisma/adapter-mariadb@7.10.0`. [Adapter metadata](https://registry.npmjs.org/@prisma/adapter-mariadb/7.10.0) declares `mariadb@3.4.5`, affected by [GHSA-cqhc-2h57-wpxf](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-cqhc-2h57-wpxf). The [text-protocol SQL escaping advisory](https://github.com/mariadb-corporation/mariadb-connector-nodejs/security/advisories/GHSA-r3rv-jm3r-62q2) requires `3.5.4` on the 3.5 branch; the [maintainer release](https://github.com/mariadb-corporation/mariadb-connector-nodejs/releases/tag/3.5.4) records these fixes. [Connector metadata](https://registry.npmjs.org/mariadb/3.5.4) requires Node `>=20`. |
+| CLI connector security override | Scope `mysql2: "3.24.5"` to `prisma@7.10.0`. This includes the fixes for [GHSA-3f6p-5ww8-9rcr](https://github.com/sidorares/node-mysql2/security/advisories/GHSA-3f6p-5ww8-9rcr), unsolicited cleartext authentication, and [GHSA-rgwj-5xj2-c3m3](https://github.com/sidorares/node-mysql2/security/advisories/GHSA-rgwj-5xj2-c3m3), unbounded compressed-packet inflation. The maintainer releases [3.22.0](https://github.com/sidorares/node-mysql2/releases/tag/v3.22.0) and [3.23.1](https://github.com/sidorares/node-mysql2/releases/tag/v3.23.1) record those fixes. |
+| Config merge security override | Scope `deepmerge-ts: "8.0.2"` to `@prisma/config@7.10.0`. [GHSA-ggr8-5vv4-36mx](https://github.com/RebeccaStevens/deepmerge-ts/security/advisories/GHSA-ggr8-5vv4-36mx) affects versions below `8.0.0`. This is an explicit scoped major compatibility override, not a general replacement of all config dependencies. |
 | Server baseline | MySQL 8.4 LTS with InnoDB, based on [MySQL's release tracks](https://dev.mysql.com/doc/refman/8.4/en/mysql-releases.html). This is the chosen compatibility baseline, not a claim that a live server is configured or that it is the latest major. |
 | Client generation | Use `prisma-client` with custom ignored output under `src/server/generated/prisma`, ESM, Node runtime and `.ts` import/file extensions. The [official generator reference](https://www.prisma.io/docs/orm/v7/prisma-schema/overview/generators) documents this arrangement. Reproduce generation without a database URL; guarded server services own access and generated clients stay outside browser imports. |
+
+The installed Prisma config loader imports named `deepmerge` and merges plain
+configuration records. Three reviewed merge cases remained equivalent across
+the old and new versions; the changed Map merging and custom/in-place helper
+behavior is unused here. Config loading and client generation passed during
+`npm install`, and `npm ls` confirmed all three scoped resolutions. Remaining
+application and database checks belong in the progress record.
+
+The verified 7 October 2026 production-only audit (`npm audit --omit=dev
+--json`) reports zero vulnerabilities. The full audit still reports seven high
+development-only entries: `@next/eslint-plugin-next`, `braces`, `chokidar`,
+`eslint-config-next`, `fast-glob`, `micromatch` and `nodemon`. They come from the
+existing unpatched brace-processing chains recorded in 001/002. No forced
+framework downgrade or peer bypass is applied; the earlier audit records remain
+historical evidence.
+
+Recheck each exact scoped override on its next Prisma parent upgrade. Remove it
+only when upstream selects a patched compatible dependency and the lockfile,
+config loading, generation, application/database verification and both audit
+scopes support the change. Recheck the major `deepmerge-ts` override whenever
+the config's merge inputs or loader behavior change.
 
 The baseline contains no application models. An initial non-domain migration
 records the starting point; provider identities, markets, jobs, quotas, evidence

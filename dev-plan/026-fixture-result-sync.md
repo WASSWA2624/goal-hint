@@ -25,4 +25,6 @@ Use bounded, progressively slower polling for corrections and long-unresolved re
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, cadence/recovery results and blockers in `docs/development-progress.md`; document polling horizons and result-event contracts in `docs/implementation-decisions.md`.

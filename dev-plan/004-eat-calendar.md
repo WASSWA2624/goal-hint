@@ -26,4 +26,6 @@ Keep optional visitor-local kickoff formatting separate from reporting dates, ru
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record the shared API, changed files, boundary-test results and unresolved dependencies in `docs/development-progress.md`. Add any required implementation decision to `docs/implementation-decisions.md`; do not create production schedules in this feature.

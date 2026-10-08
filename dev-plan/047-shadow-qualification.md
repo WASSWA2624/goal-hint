@@ -25,4 +25,6 @@ Use authorized live services when available and label replay/synthetic capacity 
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Update `docs/development-progress.md` with changed files, evidence locations, executed checks and pending observations/blockers. Record qualification decisions in `docs/implementation-decisions.md`.

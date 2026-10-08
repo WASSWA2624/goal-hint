@@ -27,4 +27,6 @@ Exact scores remain excluded unless the recorded decision enables them with a va
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, rule-version choices and test results in `docs/development-progress.md`. Update `docs/implementation-decisions.md` with resolved tolerances/conflict policy or the exact remaining blocker.

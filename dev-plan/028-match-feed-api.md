@@ -24,4 +24,6 @@ Use safe parameterized queries, permitted filter values, bounded response sizes 
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, query/security checks and blockers in `docs/development-progress.md`; document response/error/pagination contracts in `docs/implementation-decisions.md`.

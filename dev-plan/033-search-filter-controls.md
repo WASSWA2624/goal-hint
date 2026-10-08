@@ -25,4 +25,6 @@ Use labeled controls, visible focus, restrained count announcements and a dismis
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Update `docs/development-progress.md` with changed files, checks/results and actual blockers. Record decisions in `docs/implementation-decisions.md` without changing product requirements.

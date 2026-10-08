@@ -27,4 +27,6 @@ Snapshot input facts, missingness, source versions, cutoff and a stable hash. Ex
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, schema additions, evidence/security checks and pending external validation in `docs/development-progress.md`. Update `docs/implementation-decisions.md` with resolved provider, freshness, coverage and reuse rules.

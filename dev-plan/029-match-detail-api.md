@@ -26,4 +26,6 @@ All reads remain anonymous, bounded and stored-data only. Reuse error handling/r
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, detail/history/security checks and blockers in `docs/development-progress.md`; document DTO and revision-query contracts in `docs/implementation-decisions.md`.

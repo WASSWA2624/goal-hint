@@ -27,4 +27,6 @@ Enforce research/AI cost, token, request and timeout controls; leave the configu
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, model/prompt versions, contract and live checks in `docs/development-progress.md`. Update `docs/implementation-decisions.md` with selected configuration and any remaining live or evaluation gate.

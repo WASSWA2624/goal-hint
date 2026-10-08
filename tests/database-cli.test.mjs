@@ -47,7 +47,7 @@ async function createFixture(t) {
   await mkdir(path.join(fixture, "prisma", "migrations"), { recursive: true });
   await Promise.all([
     copyFile(path.join(workspace, "prisma.config.ts"), path.join(fixture, "prisma.config.ts")),
-    copyFile(path.join(workspace, "prisma", "schema.snapshot.prisma"), path.join(fixture, "prisma", "schema.prisma")),
+    copyFile(path.join(workspace, "prisma", "schema.prisma"), path.join(fixture, "prisma", "schema.prisma")),
     copyFile(path.join(workspace, "prisma", "schema.snapshot.prisma"), path.join(fixture, "prisma", "schema.snapshot.prisma")),
     writeFile(path.join(fixture, "prisma", "migrations", "migration_lock.toml"), 'provider = "mysql"\n'),
     writeFile(path.join(fixture, "package.json"), JSON.stringify({ private: true, type: "module" })),
@@ -68,6 +68,7 @@ async function observableEndpoint(t) {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
   });
+  server.unref();
   t.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
   return { port: server.address().port, connections: () => connections };
 }
@@ -91,9 +92,13 @@ test("offline Prisma commands generate reviewed SQL and a snapshot without datab
   assert.equal(validation.stdout.trim(), "Database validate completed.");
   const schemaFile = path.join(fixture, "prisma", "schema.prisma");
   const snapshotFile = path.join(fixture, "prisma", "schema.snapshot.prisma");
-  const before = await readFile(snapshotFile, "utf8");
+  const before = await readFile(schemaFile, "utf8");
   const changed = `${before}${syntheticModel}`;
   await writeFile(schemaFile, changed);
+  const raw = await execFileAsync(process.execPath, [path.join(workspace, "node_modules", "prisma", "build", "index.js"), "migrate", "diff", "--from-schema", "prisma/schema.snapshot.prisma", "--to-schema", "prisma/schema.prisma", "--script"], {
+    cwd: fixture, env: isolatedEnvironment(), windowsHide: true, timeout: 60000, maxBuffer: 2 * 1024 * 1024,
+  });
+  t.diagnostic(JSON.stringify({ schema: await readFile(schemaFile, "utf8"), snapshot: await readFile(snapshotFile, "utf8"), stdout: raw.stdout, stderr: raw.stderr }));
   const migration = await run(fixture, ["migrate", "--name", "offline_probe"], offline);
   assert.match(migration.stdout, /Migration \d{14}_offline_probe generated; review SQL before deployment\./u);
   const directory = path.join(fixture, "prisma", "migrations");

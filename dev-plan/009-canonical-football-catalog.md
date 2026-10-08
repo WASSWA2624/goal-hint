@@ -27,4 +27,6 @@ Expose a transaction boundary for subsequent cycle/schedule services; do not imp
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record migrations, changed files, concurrency/import tests and pending mappings in `docs/development-progress.md`. Update `docs/implementation-decisions.md` with trial-backed schema decisions and genuine coverage blockers.

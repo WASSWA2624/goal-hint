@@ -28,4 +28,6 @@ Serve all reads without registration, tokens or authentication cookies. Apply sh
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, reconciliation/math checks and unresolved quality gates in `docs/development-progress.md`; document cohort and metric contracts in `docs/implementation-decisions.md`.

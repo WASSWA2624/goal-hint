@@ -25,4 +25,6 @@ Expose concise internal usage/cost summaries and safe logs without prompts, secr
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, ledger invariants and concurrency/accounting test results in `docs/development-progress.md`. Update `docs/implementation-decisions.md` with approved rates/caps or the exact decisions still blocking live paid calls.

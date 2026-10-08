@@ -27,4 +27,6 @@ Treat third-party logos as approved credential-free HTTPS URL strings only, with
 
 ## Handoff
 
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+
 Record changed files, official contract references, normalization decisions and local/live check results in `docs/development-progress.md`. Update `docs/implementation-decisions.md` with unverified mappings and coverage questions for prompt 008.
