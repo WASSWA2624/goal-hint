@@ -325,3 +325,92 @@ exists. A local test success does not supply those approvals or qualify backups,
 hosting or production operations. No provider calls, purchase or deployment was
 performed. Prompt 003 is ticked in the root development tracker; prompt 004 was
 not started.
+
+## 004 — East Africa calendar
+
+Date: 8 October 2026 (Africa/Kampala).
+
+Status: complete. Prompt 004 implementation and acceptance checks passed on the
+pinned runtime. Prompt 005 was not started.
+
+### Implemented behavior and shared API
+
+Added a reusable browser-safe calendar domain using `Africa/Kampala` reporting
+dates and integer UTC epoch milliseconds. Strict parsers reject impossible,
+noncanonical and normalized dates/times, including trailing line terminators;
+Gregorian increments cover month/year/leap-century boundaries. Date inputs are
+copied into primitives. Frozen run/query boundaries preserve original identity
+without retaining mutable Date objects.
+
+The 7 October 2026 run begins at `2026-10-06T21:00:00.000Z` and ends exclusively
+at `2026-10-13T21:00:00.000Z`, covering 7–13 October EAT. Current decisions capture
+an injected clock once, derive a new rolling window, and require original
+manifest/window and current-window membership together. Historical bounded query
+ranges remain valid outside prediction eligibility. Named-zone day boundaries
+also handle historical 23.5-hour and 24.5-hour Kampala days.
+
+Publication is strictly before scheduled kickoff minus 300 seconds. A supplied
+earlier closing instant reduces the deadline; a later instant cannot extend it.
+Kickoff display returns language-neutral `Intl` inputs with an explicit timezone
+and unchanged reporting date/UTC value. An optional visitor-local date never
+changes run identity or eligibility.
+
+`calendarRules` is now the shared source of the existing runtime calendar policy.
+The daily trigger contract remains 00:00 EAT and UTC cron `0 21 * * *` on the
+preceding date. The module does not install or activate a scheduler.
+
+| Shared API | Purpose |
+| --- | --- |
+| `parseReportingDate`, `addReportingDays` | Canonical Gregorian dates and validated increments. |
+| UTC parsers/factories and `toUtcIsoString` | Millisecond instants, copied Date inputs and explicit UTC serialization. |
+| `getReportingDate`, `getReportingDayBounds`, `createPredictionWindow`, `isInWindow` | Named-zone reporting dates and immutable inclusive/exclusive boundaries. |
+| `validateReportingDateRange` | Mandatory inclusive endpoints and caller-supplied finite day cap, independently of prediction eligibility. |
+| `getPublicationDeadline`, `isBeforePublicationCutoff`, `isEligibleForPrediction`, `isTemporallyEligibleForPublication` | Standard/earlier deadlines and original/current/manifest temporal eligibility. |
+| `createCalendar`, `getKickoffDisplayInput` | Injected current decisions and separate locale-compatible display values. |
+
+Full types, inputs, examples, supported years and later integration responsibilities
+are documented in the [calendar contract](calendar.md).
+
+### Changed files
+
+- `src/domain/calendar.ts`: shared temporal rules, values, validation and clock API.
+- `src/server/config/runtime-policy.ts`: references the same frozen calendar rules.
+- `src/domain/README.md`, `docs/calendar.md`: discoverable API and scheduling contract.
+- `tests/calendar.test.mjs`: 16 meaningful calendar acceptance/regression groups.
+- `docs/implementation-decisions.md`, this record and `dev-tracker.md`: decisions,
+  actual check results and completed prompt status.
+
+### Verification
+
+Node `24.18.1`, npm `11.16.0`; no dependency changes. Next telemetry was disabled
+for the repository check. All timestamps/manifests/clocks are synthetic test
+inputs; no external provider or database access was needed by the calendar tests.
+
+| Command/check | Result |
+| --- | --- |
+| Focused calendar tests on pinned Node 24 | Passed: final **16 groups**, zero failures/skips. |
+| Exact 7 October window | Passed: start/end and adjacent milliseconds, seven EAT dates and exclusive day-seven boundary. |
+| Calendar transitions and strict inputs | Passed: EAT midnight, month/year/leap-century transitions, supported year limits, impossible dates, UTC precision and trailing-line rejection. |
+| Host `TZ=UTC`, `America/Los_Angeles`, `Asia/Tokyo` child processes | Passed: same reporting/window/cutoff/display inputs; each process confirmed its different configured host timezone. |
+| Publication and display separation | Passed: cutoff equality rejects, one millisecond before accepts, earlier closure only reduces deadline, both windows plus manifest required, clock read once, visitor display changes local date without changing EAT identity. |
+| Historical named-zone boundaries | Passed: exact UTC boundaries and neighbor instants for Kampala days of 23.5 and 24.5 hours; independently valid historical query ranges. |
+| `npm run check` | Passed (exit 0): generation, schema validation, zero-warning lint, strict type-check, then-current **63 tests** without failures/skips and production Turbopack build. |
+| Final file lint after historical regression addition | Passed: `npm exec -- eslint tests/calendar.test.mjs --max-warnings=0`. The added regression and shared-rule identity assertion also passed in the final focused 16-group run. |
+| `git diff --check` | Passed; no database models/migrations, dependency or specification changes. |
+
+Independent review caught JavaScript regex end anchors accepting trailing line
+terminators; exact input length/full-match checks fixed this before final
+verification. The additional historical regression was added after the full
+repository suite had loaded its 15 calendar groups; its final focused run is
+recorded separately above.
+
+### Handoff and unresolved dependencies
+
+No input blocks prompt 004. Public query services in 028/030 must supply their
+approved maximum date spans. Persistence adapters enforce their storage bounds;
+reporting dates support `0001–9999` while JavaScript instants have a wider range.
+Prompts 019–025 own persisted manifests, actual-start/schedule evidence, status
+freshness, cycle closure, run ordering and atomic publication. Temporal eligibility
+does not grant operation approval or reopen locked cycles. Durable triggering and
+deployment remain with 020/021/046–049. No live scheduler, provider call, purchase
+or deployment was performed. Prompt 004 is ticked in the root tracker.

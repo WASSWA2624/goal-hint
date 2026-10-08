@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { calendarRules } from "../../domain/calendar.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 
 type Environment = Readonly<Record<string, string | undefined>>;
@@ -38,15 +39,7 @@ class Secret {
 }
 
 export const operatingRules = freeze({
-  calendar: {
-    storedTimeZone: "UTC",
-    dailyRunTime: "00:00",
-    dailyRunUtcCron: "0 21 * * *",
-    windowDays: publicPolicy.predictionWindowDays,
-    cutoffSecondsBeforeKickoff: 300,
-    publicationStrictlyBeforeCutoff: true,
-    observedPlayClosesPublication: true,
-  },
+  calendar: calendarRules,
   forecasts: {
     primary: "ai",
     fallback: "api-football",

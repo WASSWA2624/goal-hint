@@ -500,3 +500,39 @@ application grants, migration status/repeat deployment, drift detection without
 repair, exact UTC/decimal transactions, rollback and durable uniqueness. It
 rechecks its owned directory, server UUID and port before administrative work
 and shutdown, and excludes inherited MySQL login files and passwords.
+
+## 004 — Shared EAT calendar values and temporal decisions
+
+**Decision date:** 8 October 2026. **Status:** implemented for prompt 004.
+
+Use a browser-safe domain module for Gregorian reporting-date strings and integer
+UTC epoch milliseconds. Validate dates before arithmetic instead of allowing
+JavaScript Date to normalize invalid input. Reporting years are `0001–9999`;
+increments and seven-day windows that exceed those years fail. Millisecond
+instants use the JavaScript Date range; persistence adapters retain responsibility
+for MySQL's narrower `DATETIME(3)` range. Copy mutable Date inputs into primitives
+and freeze run/query window objects so original boundaries cannot be rewritten.
+
+Derive reporting days with an explicit `Africa/Kampala`, Gregorian calendar and
+Latin digits using the
+[ECMAScript Intl contract](https://tc39.es/ecma402/#sec-intl.datetimeformat).
+Resolve day starts by a bounded millisecond search over named-zone reporting
+dates, preserving historical offset/day-length changes without assuming UTC+03
+for every archive date. Current EAT scheduling remains the settled 00:00 trigger
+and `0 21 * * *` UTC cron. Extract existing calendar operating constants into
+the shared module; the server runtime policy references the same frozen object.
+
+Require an injected clock for current decisions and capture it exactly once.
+Expose temporal eligibility requiring original-manifest membership, original
+window membership, current rolling-window membership and strict cutoff. An
+explicit earlier closing instant can only reduce the standard kickoff-minus-
+five-minute deadline. Trusted status/start evidence, persisted manifest and cycle
+identity, run ordering and transaction enforcement remain with prompts 019–025.
+
+Historical query validation requires two inclusive dates and a caller-supplied
+finite maximum day count. It does not apply the forward prediction window or
+invent a product archive limit. Public query services in 028/030 own their caps.
+Visitor display returns locale-neutral `Intl` inputs with a validated explicit
+timezone; its optional local date never feeds reporting identity or eligibility.
+See the [shared API and scheduling contract](calendar.md) and actual verification
+in [development progress](development-progress.md).
