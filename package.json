@@ -30,6 +30,7 @@
     "test:predictor": "node --conditions=react-server --test tests/predictor.integration.mjs",
     "policy:check": "node --conditions=react-server --env-file-if-exists=.env.local scripts/check-runtime-policy.mjs",
     "trial:football": "node --conditions=react-server --env-file-if-exists=.env.local scripts/football-provider-trial.mjs",
+    "evaluation:report": "node --conditions=react-server scripts/forecast-evaluation.mjs",
     "test": "node --conditions=react-server --test tests/*.test.mjs",
     "check": "npm run db:generate && npm run db:validate && npm run lint && npm run typecheck && npm test && npm run build"
   },

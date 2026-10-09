@@ -1259,3 +1259,114 @@ blocking approval time counts against the deadline, and a second expiry during
 the bounded recomposition prevents a late candidate. These checks establish
 contract and accounting behavior, not football prediction accuracy or live
 coverage.
+
+## Prompt 014 — Chronological evaluation harness (partial operating setup)
+
+**Date:** 9 October 2026 EAT. The independent offline harness, deterministic
+metrics, reconstructable baselines, immutable archives and private report command
+are implemented. Actual chronological periods, cohort/parameter choices, sample
+and quality/public-claim thresholds, selected AI configuration and genuine
+forecast observations remain pending. **014 remains unchecked** in
+[the root tracker](../dev-tracker.md). No model was promoted or qualified.
+
+### Changed files and behavior
+
+- Eight server-only modules in `src/server/evaluation/` implement versioned
+  protocol/dataset contracts, strict bounded parsing, metrics, baselines,
+  cohort/gate evaluation, readable reports, immutable archives and the local
+  command. Six focused suites and a reusable synthetic helper cover actual
+  shared market/settlement, predictor and filesystem behavior.
+- Protocol identities freeze half-open chronological assessment windows,
+  competition/horizon selections, baseline settings, reliability bins,
+  uncertainty parameters and original gate criteria. Model fitting/prior
+  evaluation periods remain separate from the planned assessment schedule;
+  012's existing known-window cutoff guards stay unchanged. A future planned
+  final assessment is not represented as already completed model fitting.
+- Datasets bind fixture/version/cycle, canonical teams, exact evidence cutoff,
+  forecast-as-of time, original capture/generation/update times, source/model
+  versions and independently verified regulation results. News/football input
+  must be available by the evidence cutoff; provider forecast receipts must be
+  captured by the forecast-as-of time. Later news, revised hindsight forecasts,
+  future fitting artifacts, overlapping splits and changed hashes are rejected.
+- Kickoff assigns each fixture/cycle to one split. Each horizon contains one
+  selected capture per fixture/cycle; repeated revisions cannot inflate counts.
+  AI/provider/combined and baseline comparisons use identical matched keys and
+  expose their intersection counts. Source-specific and combined metrics retain
+  unique picks, while unavailable, void and pending denominators reconcile.
+- Metrics report selected-pick hit rate, full-distribution Brier/log loss and
+  selection-specific reliability bins with counts, observed frequencies and
+  Wilson uncertainty. Double chance averages three overlapping binary events
+  per fixture and contributes one headline pick. No distribution normalization,
+  probability clipping or hidden alternatives inflate the results.
+- League frequencies use explicit additive smoothing of available regulation
+  history. Team strength uses chronological Elo updates and a configured
+  Davidson draw weight for result/double chance only. Approved parameters are
+  required; no-history output stays unavailable. Shared validators own sums,
+  strict probability bounds, derivation and joint consistency. Original history
+  receipt hashes preserve batch provenance and deterministic ordering.
+- Gates retain their actual frozen criteria and separate diagnostics from
+  passed/failed/pending qualification. Synthetic data, insufficient samples,
+  unknown fitting provenance, unapproved settings and unverified independent
+  final tests cannot qualify a model or public claim. Failure retains a verified
+  previous approved model; where none exists, status stays provisional with a
+  launch blocker. Source/history/model authority is checked again at return.
+- Only an original issued harness report can create an evaluation archive;
+  copied/rehashed invented results and revoked proofs are rejected. Exclusive
+  bounded writes preserve `protocol.json`, `dataset.json`, `report.json` and
+  `report.md`; the first final-test protocol/selection/dataset/report binding
+  rejects silently changed reruns. Identical reruns preserve their artifacts.
+  JSON decodes bigint only at the native fixture-version field.
+- `scripts/forecast-evaluation.mjs` and `npm run evaluation:report` provide the
+  local command. It reads an explicit private protocol/dataset and trusted
+  authority module, or writes factual readiness artifacts with no data arguments.
+  It constructs no runtime policy, database, credential lookup or provider
+  transport. README, server/worker guidance, the
+  [evaluation runbook](forecast-evaluation.md) and
+  [decision register](implementation-decisions.md) accompany the implementation.
+  No database migration or public performance route is introduced.
+
+### Actual datasets, report paths and remaining shadow requirements
+
+No genuine evaluation dataset or selected model was supplied. The committed
+[readiness Markdown report](reports/forecast-evaluation-014-readiness.md) and
+[canonical JSON report](reports/forecast-evaluation-014-readiness.json) record
+**zero actual forecast observations, zero live requests in this evaluation,
+unavailable historical AI/provider comparisons and provisional/unapproved model
+status**. They were generated by the actual local command and copied to the
+committed handoff paths. Synthetic fixture policies and metric results remain
+test data, not an actual dataset or operating approval.
+
+OP-15–18 and OP-33 retain actual model/calibration, evaluation periods, selected
+competitions/horizons, baseline values, sample/quality/coverage/public-claim
+gates, source availability/rights, budgets and bounded prospective shadow
+requirements. Freeze the complete actual protocol before inspecting the final
+test. The runbook/readiness report give a concrete capture plan: retain every
+predeclared fixture/horizon and missing attempt, original evidence/source and
+forecast receipts, immutable manifests and separately verified regulation
+results/corrections. Later approved private shadow work must use the existing
+cost/quota controls and passed pipeline-integrity checks. No hindsight forecast,
+fixed accuracy promise, automatic promotion or public calibration claim follows.
+
+### Confirmed local acceptance
+
+Checks use pinned Node **24.18.1** and npm **11.16.0**. Fixtures, source/model
+versions, periods, thresholds, credentials and authority records are explicitly
+synthetic. Filesystem archive checks use owned temporary directories. No live
+football, AI, research or database request was made by this feature.
+
+| Check | Result |
+| --- | --- |
+| Final `npm run check` | Passed guarded Prisma generation, schema validation, zero-warning lint, strict type-check, **746 tests: 745 passed, 1 existing Windows POSIX-mode skip**, and production build/prerendering. Log: `.tmp/evaluation-full-check.log`. |
+| New evaluation checks | **96 passed**: 15 input/integrity, 17 metric arithmetic/calibration, 20 historical baseline, 29 full harness/cohort/gate and 15 report/archive/CLI checks. All six suites passed again in the full check. |
+| Genuine predictor integration | The harness test uses actual 012 prompt construction, output validation and calibration hooks with one immutable model's completed fitting windows and a future planned assessment period. It produces a scored synthetic capture without qualification or public claims. |
+| Reproducibility and archive integrity | Frozen reruns and reordered fixture/history batches reproduce hashes/metrics. Exact native bigint versions survive JSON/archive reads. Identical archives are reused; copied/rehashed invented reports, revoked authority, traversal/linked paths, size limits, changed datasets and final-test replacement are denied. |
+| Actual readiness command | `npm run evaluation:report` succeeded and generated report **a0fb4f64b50d0971cde249f8b690a9140a600ec89e4d419a8c2d3502c186dfde**. Its canonical JSON and Markdown were copied to the two `docs/reports/forecast-evaluation-014-readiness` handoff paths. |
+| Handoff | Whitespace and local Markdown links checked. 014 stays empty while its approved protocol and selected configuration remain unresolved. No actual forecast-quality claim or model promotion is recorded. |
+
+The two readiness files accidentally created by an early path-traversal test
+remain under `C:/Users/WASSWA WILSON/AppData/Local/Temp/unapproved-target/`, outside
+the repository. Automatic approval review rejected the verified narrow cleanup
+with **“blocked by policy”**; cleanup was not retried. The corrected test preserves
+the literal traversal input and rejects it before creating files. These two
+temporary files contain factual zero-observation readiness data and are not
+included in repository changes.

@@ -236,3 +236,15 @@ Read the [fallback runbook](docs/provider-fallback.md) for identity, freshness,
 budget and source-proof contracts. Current provider inputs do not support full
 total-goals or BTTS distributions. Actual trial mapping, freshness and rights
 evidence remain required before enabling live fallback.
+
+## Chronological forecast evaluation
+
+Private callers use `src/server/evaluation` to verify original as-of datasets,
+reconstruct cutoff-safe league/rating baselines and score matched market/horizon
+cohorts. Frozen protocol and dataset identities make reports reproducible;
+missing, pending and void observations stay visible. Double chance uses
+overlapping binary events with one selected headline pick per fixture.
+Read the [evaluation runbook](docs/forecast-evaluation.md) for metrics, immutable
+archives and the prospective capture plan. `npm run evaluation:report` writes a
+readiness report without live requests. Actual periods, thresholds, model
+selection and qualifying observations remain pending; **014 remains unchecked**.

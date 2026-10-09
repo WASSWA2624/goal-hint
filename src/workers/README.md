@@ -42,3 +42,11 @@ accesses; a new request ID cannot renew that job's allowance. Preserve complete
 candidate snapshots, per-family source/failure provenance and the zero-valid
 retention instruction for later publication. Public read routes must never run
 fallback. See the [fallback runbook](../../docs/provider-fallback.md).
+
+Later prospective shadow workers must capture every eligible fixture/cycle and
+predeclared forecast horizon, including failed or unavailable attempts, before
+results arrive. Retain original evidence/source/model receipts and regulation
+result versions for the offline evaluation harness. Its report authorizes no
+provider call or model promotion; live trial work still uses the shared cost and
+quota gateways under the approved shadow/pipeline bounds. See the
+[evaluation runbook](../../docs/forecast-evaluation.md).

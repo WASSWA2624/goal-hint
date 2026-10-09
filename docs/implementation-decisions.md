@@ -1185,3 +1185,75 @@ extra request. Zero valid groups return `retain-previous-or-unavailable` for the
 later publication transaction; this feature selects no old market and writes no
 revision, lock or public endpoint. **013's local implementation and acceptance
 are complete; live fallback qualification remains pending the records above.**
+
+## Prompt 014 — Chronological evaluation harness (operating protocol pending)
+
+Implemented the independent internal harness on **9 October 2026 EAT**. Read the
+[evaluation runbook](forecast-evaluation.md) for precise metrics, private caller
+contracts, immutable report archives and the prospective capture plan.
+`chronological-evaluation-v1` reuses `regulation-markets-v1` and existing
+regulation-only settlement. No actual model is selected, evaluated or promoted.
+
+Protocol hashes freeze half-open training, validation, calibration and final-test
+assessment periods, competition/horizon selection, baseline parameters, fixed
+reliability-band edges, uncertainty configuration and explicit gate criteria.
+Known model fitting/prior-evaluation windows remain separate from the planned
+assessment schedule and must end before the original forecast evidence cutoff,
+as required by 012. Unknown training or evaluated calibration provenance remains
+provisional. A planned final period is not recorded as completed model training
+or evaluation. Original model/calibration/source versions and as-of receipts are
+independently verified; hashes alone establish no source availability or rights.
+
+Every fixture/cycle belongs to one assessment split by kickoff. Each configured
+horizon admits one selected capture per fixture/cycle; duplicate revisions in
+that horizon are rejected. Comparisons use the exact shared fixture/version,
+cycle, evidence cutoff and forecast-as-of instant. AI/provider/combined source
+pairs and baselines use their matched intersection, with explicit counts and
+keys hashes. Full-cohort source metrics cannot substitute for matched comparison.
+Void, pending and unavailable rows stay visible; one selected pick per family
+contributes to headline hit rate rather than counting alternative outcomes.
+
+Match-result Brier is the sum of squared three-outcome errors, range 0–2.
+Binary-family Brier is half the sum over both supplied outcomes, range 0–1.
+Double chance is the per-fixture mean of three overlapping binary Brier/log-loss
+events, with one headline pick. Natural-log loss uses original probabilities
+without clipping or renormalization. Selection-specific reliability bins retain
+counts, mean probabilities, observed frequencies and Wilson intervals under
+the explicit frozen z value. Calibration error averages each selection's
+count-weighted reliability gaps. Independent-fixture assumptions and insufficient
+samples stay visible; lower loss alone establishes no calibration claim.
+
+The reconstructable league baseline uses configured positive additive smoothing
+of observed regulation results. The team-strength baseline uses deterministic
+chronological Elo updates and a configured Davidson draw weight, supporting only
+match result and derived double chance. Every probability group passes shared
+validation/consistency. History must be independently verified, in the chosen
+competition/lookback and actually available before that evidence cutoff; the
+target fixture/cycle is excluded. No-history estimates are unavailable rather
+than invented prior forecasts. These are versioned baseline definitions, not
+approved numeric settings or quality guarantees.
+
+Report archives preserve protocol, dataset, metrics, thresholds and source/model
+identities. Only an original trusted harness receipt may create an evaluation
+archive; source/model authority is rechecked. Exclusive writes and the pinned
+first final-test report prevent changed datasets or thresholds from silently
+replacing an independent result. A failed candidate gate retains an independently
+verified previous approved model; otherwise status remains provisional with a
+launch blocker. Passing results are eligible only for independent review and
+perform no registry update, automatic promotion or public claim.
+
+| Record | Actual status and remaining requirement |
+| --- | --- |
+| OP-16 Protocol | **Pending.** No actual periods, competitions/horizon cohorts, minimum samples, baseline parameter values, quality/coverage bounds or fixed reliability-band/uncertainty choices were supplied or approved. Freeze the complete protocol before the final test. Synthetic test policies are not operating approvals. |
+| OP-17 Public claims | **Pending.** No source/market/horizon sample minima, permitted claim scope or independent supporting final-test observations exist. Report provisional/insufficient data until these are supplied and verified. |
+| OP-15 Model/calibration | **Pending.** Actual selected provider/model/version and calibration artifacts remain unresolved. No actual previous approved model has been established. |
+| OP-18/33 Prospective shadow | **Pending.** Capture original manifests, source/news availability, chosen receipts and regulation results through the later approved bounded private shadow pipeline. Applicable source/account rights, freshness, independent budgets and pipeline integrity still govern live work. |
+
+The existing 008 report has zero real observations. Historical AI/provider
+comparisons remain unavailable without original trustworthy snapshots; later
+news or revised forecasts cannot reconstruct them. The factual readiness
+artifacts record zero actual forecast observations and zero live requests in
+this evaluation. No accuracy or calibration result is fabricated.
+**014 remains unchecked** until its required approved operating protocol and
+selected configuration are resolved; independent harness verification does not
+clear those requirements or authorize shadow/public production operations.

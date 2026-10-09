@@ -42,3 +42,11 @@ and derived double chance together; unsupported fields remain unavailable.
 Current output expiry and permissions are rechecked after callbacks. The
 [fallback runbook](../../docs/provider-fallback.md) describes candidate/retention
 results and the actual source evidence still needed for live operation.
+
+`evaluation/` scores independently verified immutable as-of datasets through
+the existing market and settlement rules. Use `createEvaluationHarness` with
+explicit bounds and trusted protocol, dataset, original forecast/source, model,
+regulation-result and history verifiers. Keep original clocks and matched
+fixture/cycle/horizon identities. Evaluation archives do not publish or promote
+models; real quality and public claims require the separately frozen gates and
+independent final-test evidence in the [evaluation runbook](../../docs/forecast-evaluation.md).
