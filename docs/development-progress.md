@@ -1591,3 +1591,82 @@ Current pages pass `data: null`; they do not imply empty fixture availability.
 There are no invented RTK Query endpoints, browser provider/AI requests,
 forecast persistence or active polling. Existing operating/launch gates remain
 with their owning prompts. **No blocker remains for 017.**
+
+## 018 — Reusable match card
+
+Date: **9 October 2026 (Africa/Kampala)**.
+
+Implemented shared match-card presentation and its public-data contract. The
+[runbook](match-card.md) and
+[decision register](implementation-decisions.md#prompt-018--selected-market-match-card-presentation)
+describe the handoff to later feed/detail pages. No dependency version, lockfile,
+schema or migration changed.
+
+### Scope and changed files
+
+- `src/components/match/{match-card,team-row,probability-label,outcome-badge,match-card-list}.tsx`
+  supplies the article, separate Home/Away scores, selected-family prediction,
+  estimated probability, five explicit/icon outcomes, source/publication and
+  supplied notices, plus canonical analysis navigation. Shared tokens/primitives
+  keep square corners, visible focus and a one-column/mobile, two-column/large
+  native list. `src/components/ui/visually-hidden.tsx` supplies reusable heading
+  and score-label semantics without duplicate logo announcements.
+- `src/domain/match-card.ts` selects only the requested family, reuses complete
+  market probability presentation, binds supplied outcomes and derives Unicode
+  initials. `market-settlement.ts` exports the existing played-final predicate;
+  card code never adjudicates display scores or synthesizes missing forecasts.
+- `src/domain/fixture-snapshot.ts` adds optional logo, coverage, delayed,
+  provisional and per-market outcome metadata. It validates cycle/revision/pick
+  coherence, public Void reasons and final-status correctness. These fields use
+  the existing atomic whole-version state replacement.
+- `src/domain/remote-image.ts` shares structural HTTPS URL checks with
+  `src/server/football/{catalog-input,api-football-normalize,provider-trial-evaluation}.ts`.
+  Existing server media approval remains authoritative. Native 32px images use
+  direct supplied URLs, lazy/eager loading, cached-load detection and initials on
+  missing/failed images. Changed URLs can recover without retry loops.
+- `src/i18n/messages.ts` reuses immutable number/date formatters and adds
+  one-pass interpolation plus actual EAT instant labels. `messages/en.ts` owns
+  the card, market, probability and outcome copy.
+- `tests/match-card.test.mjs`, `tests/helpers/match-card-fixtures.mjs` and
+  `tests/fixtures/match-card/preview.tsx` provide deterministic synthetic cases.
+  `scripts/verify-match-card-rendering.mjs` builds a temporary production app
+  with the real components/root provider and an isolated analysis destination.
+  `package.json` exposes `test:card` and `test:card:rendering`.
+- Component/domain guidance, styling/state runbooks, this progress record,
+  implementation decisions, the new match-card runbook and tracker document
+  the shared contracts and completed acceptance.
+
+### Validation and evidence
+
+Checks used pinned **Node.js 24.18.1 / npm 11.16.0**. Browser checks used the
+Playwright skill/CLI and installed Chrome. All example teams, scores, predictions
+and image responses were synthetic, confined to tests/temporary apps.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed (exit 0): Prisma generation/schema validation, zero-warning lint, strict type-check, **780 cases: 779 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the Next.js production build. Log: `.tmp/018-check.log`. |
+| `npm run test:card` | All **9** focused tests passed: family/outcome independence, absent forecasts, score/settlement separation, identity binding and Void reason, sources/notices, group rounding/boundaries, Unicode initials, URL structure, literal interpolation/EAT publication and whole-version metadata replacement. |
+| Isolated production SSR | `test:card:rendering` passed with **12** labeled examples, every outcome and both sources, correct reading order, one link per card, initial styles, actual publication time, notice scope, direct HTTPS native images/reserved dimensions, and no visitor cookie. Repeated after simplifying the unavailable label. Final artifacts: `.tmp/match-card-L2q8B0/`. |
+| Hydration and family selection | Gated JavaScript allowed inspection of server markup and eager logo completion before hydration. Releasing scripts produced no hydration/page errors. Switching the first card from match result to total goals changed Correct/54% to Incorrect/70% and back, without coloring the card. |
+| Reading and keyboard order | All articles have unique accessible headings, Home/Away score labels, decorative logo/initial containers and text plus non-color outcome icons. Tab followed preview controls then all 12 links in source order, with visible focus; Enter reached the canonical isolated fixture destination. |
+| Responsive/text checks | At **320, 360, 390, 430 and 1280px**, no document/card overflow; logos remained 32px square, score columns aligned, long words wrapped and corners stayed square. Mobile lists had one column, desktop two. At 320px with **200% text**, the same layout checks passed. |
+| Images and no-JavaScript behavior | Browser requests used the exact synthetic HTTPS URLs as image requests, without optimizer/proxy requests. 404 and 429 removed failed images and retained initials; a replacement URL loaded. A JavaScript-disabled 320px context retained readable server cards/initials and working keyboard analysis navigation. |
+| Integrated public regression | All **10** feed/information URLs passed `test:navigation:html`, including historical ranges and selected-market sorting; redirects, locale fallback and invalid-query 404s stayed correct. Production browser chunks contained no card-example headings, URLs or synthetic team names. |
+
+The browser acceptance result was `passed: true`, `cards: 12`,
+`hydrationErrors: 0`. Expected image failures were synthetic 404/429 responses,
+not application errors. The final unavailable copy was separately checked in
+the rebuilt browser fixture. Screenshots visually inspected under ignored
+`output/playwright/` include `match-card-{desktop,320,text-200,long-320,void,unavailable,limited,partial,delayed,broken}.png`.
+The fixture uses intercepted synthetic HTTPS images, so these checks establish
+component transport/fallback behavior rather than real-provider media approval
+or CDN uptime. Acceptance scripts/config remain beside the screenshots.
+
+### Remaining scope
+
+The public feed still passes unloaded data and contains no fabricated matches.
+028 supplies public DTO reads, 032 composes the real feed, 035 owns real analysis
+destinations and 037 owns refresh/polling. Locked-revision projection and settled
+outcomes remain server responsibilities. Real media rights, provider operations,
+forecast qualification and launch gates retain their existing owners.
+**No blocker remains for 018.**

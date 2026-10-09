@@ -1,4 +1,5 @@
 import "server-only";
+import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
 
 import { getReportingDate, isBeforePublicationCutoff, toUtcIsoString, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { Clock, UtcInstant } from "../../domain/calendar.ts";
@@ -82,10 +83,7 @@ function competition(value: unknown): value is NormalizedCompetition {
 }
 function validLogo(value: unknown): value is ProviderLogo & { url: string } {
   if (!isRecord(value) || value.rights !== "approved" || typeof value.url !== "string") return false;
-  try {
-    const url = new URL(value.url);
-    return url.protocol === "https:" && !!url.hostname && !url.username && !url.password && !url.search && !url.hash;
-  } catch { return false; }
+  return isSafeRemoteImageUrl(value.url);
 }
 function logoReferences(data: unknown): unknown[] {
   if (!isRecord(data)) return [];

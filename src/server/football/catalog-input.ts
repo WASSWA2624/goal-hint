@@ -1,4 +1,6 @@
 import "server-only";
+import { isSafeRemoteImageUrl as isSafeCatalogLogo } from "../../domain/remote-image.ts";
+export { isSafeRemoteImageUrl as isSafeCatalogLogo } from "../../domain/remote-image.ts";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -172,12 +174,6 @@ export function normalizeCatalogSearch(value: string): string {
   const normalized = value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase();
   if (normalized.length > 512) throw new CatalogInputError("invalid-request");
   return normalized;
-}
-export function isSafeCatalogLogo(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return value === value.trim() && url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
-  } catch { return false; }
 }
 function parameters(selection: CatalogSelection): Record<string, string> {
   const params: Record<string, string> = {};

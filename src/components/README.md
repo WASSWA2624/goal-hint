@@ -14,3 +14,10 @@ isolated styling acceptance fixture supplies its own demonstration controls.
 composition lives in `src/app/_components/`. Reuse the route contracts in
 `@/domain/navigation` and messages in `@/i18n/messages`. The component preview is
 no longer mounted on a public homepage.
+
+`match/` contains `MatchCard`, `TeamRow`, `ProbabilityLabel`, `OutcomeBadge` and
+`MatchCardList` from prompt 018. Follow the [match-card contract](../../docs/match-card.md)
+for typed snapshots, selected-family outcomes, direct remote logos, accessible
+reading order and responsive composition. The isolated acceptance fixture keeps
+synthetic matches out of public routes. `ui/visually-hidden.tsx` provides the
+shared accessible-only text/heading primitive.

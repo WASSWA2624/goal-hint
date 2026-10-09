@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import { isMarketFamily, validateMarketSnapshot, MARKET_RULE_VERSION, type AcceptedMarket } from "./markets.ts";
-import type { SettlementStatus } from "./market-settlement.ts";
+import { isPlayedFinalStatus, type SettlementOutcomeStatus, type SettlementStatus } from "./market-settlement.ts";
+import { isSafeRemoteImageUrl } from "./remote-image.ts";
 
 /** MySQL UNSIGNED BIGINT travels as canonical decimal text, never a JS number. */
 export const maximumFixtureVersion = "18446744073709551615";
@@ -28,8 +29,18 @@ const version = z.string().transform((value, context) => {
   catch { context.addIssue({ code: "custom", message: "Invalid fixture version." }); return z.NEVER; }
 });
 const score = z.strictObject({ home: z.number().int().min(0).max(1000), away: z.number().int().min(0).max(1000) });
-const team = z.strictObject({ id: identity, name: z.string().max(512).nullable() });
+const team = z.strictObject({
+  id: identity, name: z.string().max(512).nullable(),
+  /** Only server-approved, credential-free catalog URLs may populate this field. */
+  logoUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe logo URL.").nullable().optional(),
+});
 const statuses = ["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const satisfies readonly SettlementStatus[];
+const outcomeStatuses = ["correct", "incorrect", "pending", "void", "unavailable"] as const satisfies readonly SettlementOutcomeStatus[];
+const displayedOutcome = z.strictObject({
+  cycleId: identity, revisionId: identity, selection: z.string(), status: z.enum(outcomeStatuses),
+  /** Original public explanation, never a worker log or raw internal reason. */
+  explanation: z.string().trim().min(1).max(2000).nullable(),
+}).refine((value) => value.status !== "void" || value.explanation !== null, "Void requires its public reason.");
 
 function acceptedMarket(value: unknown): value is AcceptedMarket {
   if (!value || typeof value !== "object" || !("family" in value)) return false;
@@ -48,12 +59,19 @@ function acceptedMarket(value: unknown): value is AcceptedMarket {
 
 const forecast = z.strictObject({
   runId: identity, revisionId: identity, publishedAt: instant,
+  updateDelayed: z.boolean().optional(), provisional: z.boolean().optional(),
   markets: z.array(z.strictObject({
     market: z.custom<AcceptedMarket>(acceptedMarket).transform((market) =>
       ({ ...market, probabilities: { ...market.probabilities } }) as AcceptedMarket),
     reasons: z.array(text).max(4), uncertainty: text.nullable(),
+    limitedNews: z.boolean().optional(), outcome: displayedOutcome.optional(),
   })).max(4),
 }).superRefine((value, context) => {
+  for (const item of value.markets) {
+    if (item.outcome && (item.outcome.revisionId !== value.revisionId || item.outcome.selection !== item.market.selection)) {
+      context.addIssue({ code: "custom", message: "Outcome must refer to this revision's selected market pick." });
+    }
+  }
   const inputs: Record<string, unknown> = {};
   const supplied = new Map(value.markets.map((item) => [item.market.family, item.market]));
   if (supplied.size !== value.markets.length) { context.addIssue({ code: "custom", message: "Duplicate market." }); return; }
@@ -87,8 +105,18 @@ export const fixtureSnapshotSchema = z.strictObject({
   competition: z.strictObject({ id: identity, name: z.string().max(512).nullable(), country: z.string().max(256).nullable() }),
   kickoffAt: instant.nullable(), syncedAt: instant.nullable(),
   status: z.enum(statuses), score: score.nullable(),
+  partialCoverage: z.boolean().optional(),
   cycleId: identity.nullable(), forecast: forecast.nullable(),
-}).refine((value) => value.forecast === null || value.cycleId !== null, "A revision must belong to a cycle.");
+}).superRefine((value, context) => {
+  if (value.forecast !== null && value.cycleId === null) context.addIssue({ code: "custom", message: "A revision must belong to a cycle." });
+  if (value.forecast?.markets.some((item) => item.outcome && item.outcome.cycleId !== value.cycleId)) {
+    context.addIssue({ code: "custom", message: "Outcome must refer to this fixture cycle." });
+  }
+  if (!isPlayedFinalStatus(value.status) && value.forecast?.markets.some((item) =>
+    item.outcome?.status === "correct" || item.outcome?.status === "incorrect")) {
+    context.addIssue({ code: "custom", message: "Correctness requires a played final fixture." });
+  }
+});
 export type FixtureSnapshot = z.infer<typeof fixtureSnapshotSchema>;
 
 export function parseFixtureSnapshot(value: unknown): FixtureSnapshot {

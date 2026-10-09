@@ -45,6 +45,10 @@ export type SettlementContext = Readonly<{
 
 export type SettlementOutcomeStatus = "correct" | "incorrect" | "pending" | "void" | "unavailable";
 
+export function isPlayedFinalStatus(status: SettlementStatus): boolean {
+  return status === "finished-regulation" || status === "finished-extra-time" || status === "finished-penalties";
+}
+
 export type SettlementReason =
   | "missing-selection"
   | "unsupported-market-selection"

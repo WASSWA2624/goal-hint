@@ -19,3 +19,9 @@ The [client-state contract](../../docs/client-state.md) defines validated feed
 URL queries and visitor-facing versioned fixture snapshots. Pages, future public
 APIs and browser reconciliation must share these contracts rather than expose
 provider payloads or duplicate calendar/market validation.
+
+The [match-card contract](../../docs/match-card.md) extends that projection with
+optional approved logo URLs, coverage notices and revision-bound outcomes.
+`match-card.ts` presents the selected family through existing market rounding
+without inferring settlement from scores. `remote-image.ts` shares structural
+HTTPS checks with server approval paths; it does not grant media rights.

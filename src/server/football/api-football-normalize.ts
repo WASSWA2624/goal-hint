@@ -1,4 +1,5 @@
 import "server-only";
+import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
 
 import { z } from "zod";
 import { parseUtcInstant, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
@@ -271,9 +272,7 @@ function approvedLogo(raw: string | null | undefined, context: NormalizationCont
   if (!raw) { missing.push(field); return { url: null, rights: "unavailable" }; }
   let approved = false;
   try {
-    const url = new URL(raw);
-    const safe = raw === raw.trim() && url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
-    approved = safe && context.verifyLogo?.(raw) === true;
+    approved = isSafeRemoteImageUrl(raw) && context.verifyLogo?.(raw) === true;
   } catch { /* Invalid URLs and rights verifier failures retain no URL. */ }
   if (!approved) missing.push(`${field}-rights-review`);
   return { url: approved ? raw : null, rights: approved ? "approved" : "review-required" };

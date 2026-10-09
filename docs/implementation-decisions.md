@@ -1423,3 +1423,50 @@ and two providers per request, plus browser checks with gated JavaScript,
 stored/blocked preferences and parent rerenders. Synthetic fixtures remain in
 tests and temporary apps. No dependency versions, lockfile, schema, migration or
 operating/launch decisions changed.
+
+## Prompt 018 — Selected-market match-card presentation
+
+Implemented on **9 October 2026 EAT**. The [match-card runbook](match-card.md)
+defines the reusable components, optional public DTO fields, responsive layout,
+accessibility, logo transport and acceptance workflow for later feed/detail work.
+
+Cards receive validated visitor-facing snapshots and a canonical analysis slug.
+They do not read stores, call providers, fetch forecasts or settle scores. The
+selected family defaults to match result and owns its own deterministic pick,
+estimated probability, source and outcome. Group rounding and boundary labels
+come from the existing market domain; missing families remain Unavailable.
+Known final scores are independent from prediction correctness. Only the outcome
+badge uses its outcome tone, with explicit text and a non-color icon.
+
+The shared snapshot now accepts optional logo, delayed/provisional/coverage and
+per-market outcome metadata. An outcome binds to the current cycle, revision
+and deterministic selection; Correct/Incorrect requires a played final status,
+and Void requires a public reason. Missing or mismatched presentation outcomes
+remain Pending. The future server projection must supply the correct published
+or locked revision and its outcomes together. It must not attach a historical
+settlement to a different current revision. All fields participate in the
+existing atomic data-version replacement. No UI inference turns display scores
+into verified regulation scores or settlement decisions.
+
+Actual forecast publication and kickoff instants have machine-readable UTC
+attributes and full EAT date/time labels. Immutable locale formatters are reused
+without caching visitor data. English messages own user-visible labels and
+single-pass placeholder interpolation. Provisional defaults to true, and other
+notices render only supplied facts at fixture, forecast or selected-market scope.
+The component cannot establish forecast calibration or provider coverage.
+
+Native 32px remote images reserve square space and fall back to decorative
+Unicode initials without hiding team names. The URL structural validator is
+shared with existing catalog/provider approval paths; rights and exact-host
+approval remain server responsibilities. No optimizer, proxy, binary storage
+or provider asset is introduced. Load state handles cached pre-hydration images,
+404/429 failures and new URLs; JavaScript-disabled rendering retains initials.
+
+The article and single contextual analysis link reuse existing styling/navigation
+primitives. A shared native list wraps to one column on mobile and at most two
+at the large breakpoint. Tests and an isolated production fixture cover outcomes,
+sources, coverage, boundaries, width/text scaling, reading/tab order, Enter,
+SSR/hydration and image behavior. Synthetic data and the acceptance destination
+are confined to tests/temporary apps. Public routes remain the honest development
+shell; real feed/detail/polling and existing operating gates retain their owners.
+No dependency, lockfile, schema or migration changed.

@@ -36,6 +36,8 @@
     "test:navigation:html": "node scripts/verify-navigation-rendering.mjs",
     "test:state": "node --conditions=react-server --test tests/feed-query.test.mjs tests/client-state.test.mjs",
     "test:state:rendering": "node scripts/verify-client-state-rendering.mjs",
+    "test:card": "node --conditions=react-server --test tests/match-card.test.mjs",
+    "test:card:rendering": "node scripts/verify-match-card-rendering.mjs",
     "test": "node --conditions=react-server --test tests/*.test.mjs",
     "check": "npm run db:generate && npm run db:validate && npm run lint && npm run typecheck && npm test && npm run build"
   },

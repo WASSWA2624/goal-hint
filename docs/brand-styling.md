@@ -46,6 +46,11 @@ Import directly from the owning module to keep dependencies clear:
 | `@/components/ui/layout` | `Container`, `Stack`, `Inline`, `Surface`, `PageMain`, `PageHeading`, `SectionHeading`, `BodyText`, `MutedText`. Logical spacing, wrapping and bounded content width. |
 | `@/components/ui/controls` | `Button`, `ButtonLink`, `TextLink`, `TextInput`, `SelectInput` and their prop types. Native button, Next.js link and labeled native form semantics. |
 | `@/components/ui/feedback` | `StatusText`, `EmptyState` and their prop types. Explicit text and decorative outcome icons; empty states accept a heading, explanation and optional action. |
+| `@/components/ui/visually-hidden` | `VisuallyHidden`: reusable accessible-only text, including polymorphic headings and score labels. |
+
+Prompt 018 composes these primitives into the shared
+[match-card components and responsive list](match-card.md). Reuse their
+selected-market, outcome and remote-image contracts on later public pages.
 
 `Button` defaults to `type="button"`; use `type="submit"` deliberately inside
 forms. Variants are `primary`, `secondary` and `quiet`. Native disabled buttons

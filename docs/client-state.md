@@ -78,6 +78,13 @@ markets with their source, probabilities, selection, reasons and uncertainty.
 It requires a cycle. Scores are display values; they are not independently
 verified regulation scores or a settlement decision.
 
+Prompt 018 adds optional team `logoUrl`, fixture `partialCoverage`, forecast
+`updateDelayed`/`provisional`, and per-market `limitedNews`/`outcome` fields.
+Outcomes bind to the same cycle/revision/selection; correctness requires a played
+final status and Void requires its public reason. See the
+[match-card contract](match-card.md). These fields participate in the same whole
+snapshot replacement, never independent metadata patches or browser settlement.
+
 The existing market validator checks source groups and derived double chance;
 computed selections cannot be forged, incomplete groups cannot be spliced in,
 and unknown fields are rejected. Later public DTO fields must extend this shared
