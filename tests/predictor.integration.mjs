@@ -43,7 +43,7 @@ test("immutable predictor model registry on isolated genuine MySQL", { timeout: 
     await instance.executeAdmin(`
       CREATE USER 'predictor_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'predictor_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES ON goal_hint_test.* TO 'predictor_migration'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'predictor_migration'@'127.0.0.1';
     `);
     await execFileAsync(process.execPath, ["--conditions=react-server", databaseScript, "deploy"],
       { cwd: workspace, env, windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });

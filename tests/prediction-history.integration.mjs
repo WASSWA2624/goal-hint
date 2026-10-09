@@ -59,7 +59,7 @@ test('immutable prediction history on isolated genuine MySQL', { timeout: 300000
   try {
     await instance.executeAdmin(`CREATE USER 'history_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'history_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES ON goal_hint_test.* TO 'history_migration'@'127.0.0.1';`);
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'history_migration'@'127.0.0.1';`);
     await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 60000 });
     await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.${name} TO 'history_application'@'127.0.0.1';`).join('\n') +
       immutableTables.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'history_application'@'127.0.0.1';`).join('\n') +

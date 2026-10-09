@@ -241,6 +241,11 @@ account may receive the required schema-scoped DDL and migration-history rights;
 offline migration generation does not create a shadow database.
 Never infer that a supplied root credential is a suitable application account.
 
+The [031 public cache runbook](public-response-cache.md) adds schema-scoped
+`TRIGGER` rights for the migration/definer account and narrow cache DML grants
+for applications. Qualify binary-log trigger creation with the database operator;
+the isolated test server's setting does not approve changing a hosted target.
+
 Grant DML per feature-owned table. Immutable forecast/evidence/audit history
 needs append-only repositories, grants and constraints appropriate to that
 feature; a blanket `UPDATE`/`DELETE` grant does not establish immutability.

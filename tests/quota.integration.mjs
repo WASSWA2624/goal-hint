@@ -122,7 +122,7 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
     await instance.executeAdmin(`
       CREATE USER 'quota_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'quota_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER
         ON goal_hint_test.* TO 'quota_migration'@'127.0.0.1';
     `);
     await execFileAsync(process.execPath, ["--conditions=react-server", databaseScript, "deploy"], {

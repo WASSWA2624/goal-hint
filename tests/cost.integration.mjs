@@ -57,7 +57,7 @@ test("independent durable spending contracts on isolated genuine MySQL", { timeo
     await instance.executeAdmin(`
       CREATE USER 'cost_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'cost_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER
         ON goal_hint_test.* TO 'cost_migration'@'127.0.0.1';
     `);
     await execFileAsync(process.execPath, ["--conditions=react-server", databaseScript, "deploy"],

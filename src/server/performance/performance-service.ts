@@ -14,6 +14,7 @@ import { evaluateMarketMetrics } from "../evaluation/evaluation-metrics.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
 import { parsePerformanceQuery, type PerformanceQuery } from "./performance-query.ts";
 import { readPerformanceSnapshot, type PerformanceSnapshot } from "./performance-read.ts";
+import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 
 /** A trusted server binding, never an HTTP input or checksum-as-approval shortcut. */
 export type PerformancePolicyBinding = Readonly<{ protocol: EvaluationProtocol; verifyProtocol(protocol: EvaluationProtocol): boolean }>;
@@ -126,7 +127,7 @@ export function aggregatePerformance(snapshot: PerformanceSnapshot, query: Perfo
 }
 
 export function createPerformanceService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[];
-  clock?: Clock; policy?: PerformancePolicyBinding | null }>) {
+  clock?: Clock; policy?: PerformancePolicyBinding | null; cache?: PublicResponseCache }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const policy = options.policy ?? null;
   return Object.freeze({ async query(parameters = new URLSearchParams()): Promise<PerformanceResponse> {
@@ -135,12 +136,18 @@ export function createPerformanceService(options: Readonly<{ database: DatabaseR
     if (!configured.success || new Set(configured.data).size !== configured.data.length) throw new MatchFeedError("unavailable");
     const protocol = verifiedPolicy(policy, asOf);
     try {
-      const response = await options.database.transaction(async (tx) => {
+      const read = () => options.database.transaction(async (tx) => {
         const snapshot = await readPerformanceSnapshot(tx, query, configured.data);
         // A revoked approval cannot survive an in-flight stored read.
         const current = verifiedPolicy(policy, asOf);
         return aggregatePerformance(snapshot, query, asOf, current?.id === protocol?.id ? current : null);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
+      let response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "performance", locale: "en", now: asOf,
+        query, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
+        parse: (value) => performanceResponseSchema.parse(value) }), read) : await read();
+      // Preserve the reader's unapproved/counts-only response when permission is
+      // revoked during a cache probe; never reuse previously approved metrics.
+      if (options.cache && verifiedPolicy(policy, clock.now())?.id !== protocol?.id) response = await read();
       if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
       return freezeEvidence(response);
     } catch { throw new MatchFeedError("unavailable"); }

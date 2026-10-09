@@ -261,7 +261,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-21 Publication-status freshness | **Local contract implemented; live decisions unresolved** | 022 requires an approved original-observation age, source-specific clock/unknown-time rules, trusted authority and transactional rechecks; older evidence cannot override a newer canonical observation. Verified play persists a publication barrier. Actual trial-backed timing/conflict decisions remain missing. §§5, 7, 15. | Unassigned; user decision/evidence required for live acceptance | `GOAL_HINT_FRESHNESS_POLICY_REF`, `GOAL_HINT_EVIDENCE_POLICY_REF`; implemented: explicit publication policy/authority; pending: approved observation/source timing and bindings | **022 local implementation**; trial evidence **008**, locking/lifecycle **023–024** |
 | OP-22 Polling horizons and approach threshold | **Unresolved** | Choose approaching-kickoff lead time, active/result window, unresolved-result horizon and progressively slower correction checks with bounded stopping/review rules. Preserve visible unresolved fixtures after midnight/outside the prediction window. §§5, 11, 15; prompt 026. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: poller approach thresholds, unresolved/correction horizons/cadences | **026** |
 | OP-23 Public query/search limits | **Initial implementation settled** | 028 reuses the URL validator: 30 default/100 maximum cards, seven-day ranges, page cap 10,000, 2 KiB query/1 MiB JSON bounds. Nonempty searches share an atomic MySQL UTC budget of 120/minute across replicas, retaining no visitor identity or search text. Genuine MySQL burst acceptance verifies the bound; tune against production workload evidence without treating synthetic tests as capacity approval. | Implemented in 028; operator owns later tuning | [Match feed contract](match-feed-api.md) | **028** |
-| OP-24 Shared cache strategy and lifetimes | **Unresolved implementation choice** | Choose approved cache capability, active/historical lifetimes and recovery/invalidation/fencing policy compatible with 15/60-second cadences and measured final-badge latency. Cache hits preserve actual source sync times. §§11, 13; prompt 031. | Unassigned; implementation/infrastructure evidence required | Deferred: cache backend, active/historical TTL and invalidation/recovery policy; infrastructure budget if paid | **031** |
+| OP-24 Shared cache strategy and lifetimes | **Local implementation complete; hosted qualification pending** | 031 reuses MySQL: five-second mutable envelopes, six-hour immutable revision payloads capped by source permissions, EAT rollover, transactional tag generations and durable receipt recovery. Hits preserve source clocks/versions; failures use bounded stored reads. See [cache policy](public-response-cache.md). Actual trigger/binlog capabilities, maintenance and capacity/cost evidence remain OP-01/12/19/32 gates. §§11, 13. | Implementation settled; operator owns hosted qualification | No new subscription; existing database authorization and per-table grants; private cache maintenance | **031 local implementation**; hosted measurement **046/047** |
 | OP-25 Correction/dispute ownership and public process | **Unresolved** | The audited correction mechanics are settled; assign the actual correction/dispute owner, intake/review process, supporting-evidence rules and factual public statements. Do not promise an unapproved response time or operational policy. §§8, 12–15; prompt 038. | Unassigned; user decision/evidence required | Deferred: correction/dispute owner and public process policy | **038**; intake/legal consumers **040–041** |
 | OP-26 Analytics and visitor/log retention | **Unresolved** | Inventory actual log/search/browser-preference/remote-image data flows; choose whether analytics is used, its providers/purposes/recipients/retention and applicable consent/data-handling requirements before enabling tracking. Ads stay disabled. Retention must match actual configuration and permissions. §§12–13, 15; prompts 039/044. | Unassigned; user decision/evidence required | Deferred: analytics enablement/provider, visitor/telemetry/log retention and privacy data-flow policy | **039** notice facts; telemetry activation **044** |
 | OP-27 Operator identity, jurisdiction and legal facts | **Unresolved** | Obtain actual operator identity, audience/jurisdiction, lawful contact and owner-approved privacy/terms/dispute facts. “Prepared for” attribution supplies no legal identity, address, liability policy or signoff. Do not publish placeholders or invented legal assertions. §§13, 15; prompts 039–040. | Unassigned; user decision/evidence required | Deferred: approved operator/legal/privacy/terms content and factual evidence | **039**; terms **040** |
@@ -2179,3 +2179,44 @@ the actual read asOf time. A deterministic snapshot key and invalidation
 categories cover fixture/cycle/lock, result/settlement, refresh and policy changes
 for 031; no cache or event worker is added here. Full query, cohort and metric
 contracts are in [performance-api.md](performance-api.md).
+
+## 031 — Shared public response cache (9 October 2026)
+
+Reuse the selected MySQL 8.4 capability for shared response storage. No managed
+cache subscription, framework process cache or CDN authority is assumed. All
+three public service contracts share a versioned canonical key and fixture/date
+tag strategy; competition/evaluation scope, locale, resolved EAT dates and every
+validated filter/history/page parameter participate. Query validation, the shared
+search budget and trusted evaluation-policy verification precede cache reuse.
+
+Choose five seconds for mutable envelopes and six hours for immutable revision
+markets/analysis. Source permission expiry caps both detail layers, and EAT
+midnight caps mutable responses. Never refresh original sync/source clocks or
+drop version, coverage/progress or correction fields on a hit. Keep immutable
+payloads separate from current cycle/result/history applicability.
+
+Invalidate generations and append a durable journal in the same source MySQL
+transaction using triggers. Existing prediction change events invalidate fixture,
+current date and all cycle dates; fixture updates invalidate old/new dates.
+Run/import/job/lifecycle/catalog changes also invalidate affected responses,
+including updates without prediction events. Global progress/catalog tags are a
+deliberately conservative local choice. A pre-read generation stamp stays with
+every fill and is compared on every hit, preventing an invalidated older read
+from establishing new authority even if invalidation races the fill's commit.
+
+Private bounded maintenance acknowledges only generations already applied and
+sweeps expired bodies. Pending receipts, rather than a global time/ID watermark,
+recover missed delivery, downtime and late commits. Retain journal/generation
+history until the separately approved retention work; schedule cleanup before
+hosted operation. Cache errors fall back to bounded stored reads, and database
+errors remain truthful unavailable responses. HTTP headers remain `no-store`.
+
+The isolated MySQL server explicitly permits trigger creation under binary
+logging; migration roles gain schema-scoped `TRIGGER`, while applications only
+read generations and update acknowledgment timestamps. Actual hosted trigger
+definer/binlog privileges, maintenance scheduling, capacity and infrastructure
+cost approval remain OP-01/12/19/32 gates. No remote setting, deployment, provider
+operation or paid service is authorized here. [The cache runbook](public-response-cache.md)
+records grants, rollback, lifetimes and recovery commands. Local five-second
+freshness evidence supports the proposed 15/60-second cadence budget; actual
+provider/worker/network and hosted final-badge measurements remain pending.

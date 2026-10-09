@@ -2637,3 +2637,66 @@ budget/database/hosting gates remain effective. No cache/UI/later prompt is adde
 disables the performance route while retaining stored immutable data. No UI
 change requires visual acceptance. No feature implementation or local acceptance
 blocker remains; 030 is checked in the tracker. Later rows remain unchanged.
+
+## 031 — Public response cache (9 October 2026)
+
+### Implemented behavior and changed files
+
+Completed the shared server-only cache for feed, detail/history and performance.
+It reuses MySQL rather than provisioning another service. Canonical keys include
+validated query/history/filter/sort/page fields, locale, resolved EAT dates and
+competition/evaluation scope. Search accounting and live policy verification
+remain outside cache reuse. Hits retain response/source clocks, data versions,
+coverage, run progress, revision references and correction fingerprints.
+
+- Added `src/server/cache/public-cache.ts` and `mysql-public-cache.ts`; integrated
+  the three API routes and `feed-service.ts`, `detail-service.ts`, `detail-read.ts`
+  and `performance-service.ts`.
+- Added three disposable-cache/generation/journal models to both Prisma schema
+  files and migration `20261009183000_public_response_cache`, with 30 transactional
+  invalidation triggers. Existing prediction changes invalidate fixture/current
+  and original cycle dates; fixture changes invalidate old/new dates. Job, run,
+  import, lifecycle and catalog changes also cover progress/coverage without a
+  prediction event.
+- Added bounded private `scripts/public-cache-reconcile.mjs`, `cache:reconcile`
+  and `test:cache` commands. Maintenance acknowledges only applied generations,
+  recovers late commits without a global watermark and sweeps expired bodies.
+- Added cache unit/integration suites and extended the shared pipeline grants.
+  Existing integration harness migration roles now have schema-scoped `TRIGGER`;
+  the owned throwaway MySQL enables binary-log trigger creation explicitly.
+- Added `docs/public-response-cache.md`; updated database instructions, the OP-24
+  decision and tracker. No UI or later browser refresh feature is implemented.
+
+Mutable envelopes have a five-second maximum lifetime, capped by EAT midnight
+and applicable source permissions. Immutable revision markets/analysis can last
+six hours, capped by source permission expiry. Generation stamps captured before
+loading are checked at fill and every hit, including invalidation racing a fill's
+commit. Failed lookups/fills use bounded stored reads; a database outage remains
+unavailable. Cache rows cannot turn errors into authoritative empty responses.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Cache acceptance | **24 passed, 0 failed/skipped**: eight units and 16 genuine MySQL cases, including the parent scenario. Covers replica hits, normalized isolation, publication/locking, score/status/reschedule old/new dates, settlement/corrections, job/import progress, source expiry, midnight, rollback and absence of forecast/provider side effects. |
+| Races, recovery and outages | Passed both stale-fill windows, concurrent consumers, missed notification/downtime recovery, duplicate passes, a late lower-ID commit, incomplete-generation acknowledgment rollback, SQL cache-access revocation, simulated cache/database outage, failed fills and replica clock skew. The old-snapshot insert may safely lose a unique-key race instead of overwriting the newer row. |
+| Freshness | Genuine MySQL hits at virtual age 4,999 ms and refreshes at 5,000 ms; immutable payload creation times survive result corrections while mutable badges update. Simulated 15/60-second observations plus the independent five-second expiry fit 20/65-second budgets before worker/network processing. Hits preserve original sync times. This is not a hosted SLA. |
+| Database regressions | **345 final passing cases across 20 root scenarios**, combining 320 unaffected cases in the full sweep with the successful 25-case performance/cache rerun. Full command: `node --conditions=react-server --test --test-concurrency=2 tests/*.integration.mjs`; log `.tmp/031-database-regressions.log`. The sweep exposed a policy-revocation response regression and an overly strict cache-race assertion; both were corrected. The final targeted command uses concurrency 1 with `tests/performance.integration.mjs tests/public-cache.integration.mjs`; **25 passed, 0 failed/skipped**, log `.tmp/031-cache-performance-final.log`. |
+| Repository units | **913 cases: 912 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Quiet command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/031-units-final.log`. |
+| Migration and permissions | Fresh deploy, repeated deploy and `db:verify` pass on genuine MySQL 8.4.11. All 30 triggers are present; the application cannot forge generations/journals or gain trigger DDL rights. Source transaction rollback also rolls back invalidation. |
+| Static/build checks | `npm run db:generate`, `npm run db:validate`, `npm run lint`, `npm run typecheck`, `npm run build` and `git diff --check` pass. Final build keeps all three API routes dynamic. |
+| Production HTTP | Owned loopback `next start` passes 12 invalid/unavailable GET cases plus GET-only method enforcement, with no redirect, cookie or HTTP cache. The database-disabled profile remains truthful 503. Log `.tmp/031-http-final.log`; owned server stopped. |
+
+### Operating gates and handoff
+
+OP-24's local strategy is settled. OP-01/12/19/32 still require an actual approved
+hosted target, trigger/definer/binlog capabilities, per-table grants, maintenance
+scheduling, infrastructure budget and workload/latency evidence. No remote server
+setting, subscription, provider operation or deployment was changed. Generation
+and journal retention remains subject to the later approved recovery policy;
+schedule bounded expired-body cleanup before hosted operation.
+
+Rollback can remove the route wrappers while retaining cache tables, generations,
+journals and trigger-definer rights. Repair partially applied DDL forward; do not
+erase source or forecast history. No local feature or acceptance blocker remains.
+031 is checked in the tracker; later rows are unchanged.

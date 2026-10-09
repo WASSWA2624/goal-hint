@@ -60,7 +60,7 @@ test('durable job execution on isolated genuine MySQL', { timeout: 300000 }, asy
   try {
     await instance.executeAdmin(`CREATE USER 'jobs_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'jobs_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES ON goal_hint_test.* TO 'jobs_migration'@'127.0.0.1';`);
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'jobs_migration'@'127.0.0.1';`);
     await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 60000 });
     await instance.executeAdmin(`GRANT SELECT, INSERT ON goal_hint_test.DurableJob TO 'jobs_application'@'127.0.0.1';
       GRANT SELECT, UPDATE ON goal_hint_test.DurableJobEnqueueLock TO 'jobs_application'@'127.0.0.1';

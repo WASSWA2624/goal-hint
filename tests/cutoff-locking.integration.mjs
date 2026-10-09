@@ -65,7 +65,7 @@ test('irreversible cutoff locking on isolated genuine MySQL', { timeout: 300_000
   try {
     await instance.executeAdmin(`CREATE USER 'cutoff_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'cutoff_app'@'127.0.0.1' IDENTIFIED BY '${appPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES ON goal_hint_test.* TO 'cutoff_migration'@'127.0.0.1';`);
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'cutoff_migration'@'127.0.0.1';`);
     try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 90_000 }); }
     catch (error) { t.diagnostic((await instance.executeAdmin('SELECT migration_name, LEFT(logs, 1500) FROM _prisma_migrations WHERE finished_at IS NULL')).stdout); throw error; }
     await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') +

@@ -47,7 +47,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
   try {
     await instance.executeAdmin(`CREATE USER 'selection_app'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
       CREATE USER 'selection_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES ON goal_hint_test.* TO 'selection_migration'@'127.0.0.1';`);
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'selection_migration'@'127.0.0.1';`);
     try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 90_000 }); }
     catch (error) {
       const diagnostic = await instance.executeAdmin("SELECT migration_name, LEFT(logs, 1800) FROM _prisma_migrations WHERE finished_at IS NULL");

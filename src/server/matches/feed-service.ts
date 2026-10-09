@@ -12,6 +12,7 @@ import { MatchFeedError } from "./feed-error.ts";
 import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 import { feedSql, storedFeedCoverage, storedFeedRun } from "./feed-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
+import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 
 export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate, context: Readonly<{ locale?: string; routeDate?: string }> = {}) {
   try {
@@ -29,7 +30,7 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
     ? { kind: "date", date: dates.startDate } : { kind: "range", from: dates.startDate, to: dates.endDate } }, today)}`;
 }
 
-export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock }>) {
+export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache }>) {
   const parsedIds = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(1000).safeParse(options.competitionIds);
   if (!parsedIds.success || new Set(parsedIds.data).size !== parsedIds.data.length) throw new MatchFeedError("unavailable");
   const { database } = options, competitionIds = Object.freeze(parsedIds.data), limiter = createMysqlPublicSearchLimiter(database);
@@ -39,7 +40,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
     const range = resolveFeedDates(query, today), window = createPredictionWindow(today), messages = createMessages(query.locale);
     try {
       if (query.search) await limiter.consume();
-      return await database.transaction(async (tx) => {
+      const read = () => database.transaction(async (tx) => {
         const sql = feedSql(query, range, competitionIds);
         const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.joins} WHERE ${sql.scope}`);
         const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
@@ -72,6 +73,9 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
+      return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range,
+        query: { ...query, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");

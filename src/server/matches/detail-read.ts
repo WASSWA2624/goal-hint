@@ -1,5 +1,7 @@
 import "server-only";
 
+import { z } from "zod";
+
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import type { DetailSnapshot } from "../../domain/match-detail.ts";
 import type { StoredCycle, StoredRevision } from "../predictions/history-contract.ts";
@@ -8,6 +10,11 @@ import type { EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { isSafeEvidenceUrl } from "../evidence/evidence-network.ts";
 import { storedSettlementProjection } from "../settlement/settlement-read.ts";
 import { publicVoidReason } from "./fixture-read.ts";
+import { detailSnapshotSchema } from "../../domain/match-detail.ts";
+import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
+
+const revisionPayloadSchema = z.strictObject({ markets: detailSnapshotSchema.shape.markets,
+  unavailableMarkets: detailSnapshotSchema.shape.unavailableMarkets, analysis: detailSnapshotSchema.shape.analysis });
 
 export const publicDetailCycle = (cycle: StoredCycle) => ({ id: cycle.id, ordinal: cycle.ordinal, state: cycle.state,
   currentRevisionId: cycle.currentSetId, lockedRevisionId: cycle.lockedSetId, kickoffAt: cycle.kickoffAt, cutoffAt: cycle.cutoffAt,
@@ -45,22 +52,29 @@ export function publicRevisionAnalysis(revision: StoredRevision, evidence: Evide
 }
 
 export async function publicDetailSnapshot(tx: Prisma.TransactionClient, revision: StoredRevision, cycle: StoredCycle,
-  currentRevisionId: string | null, evidence: EvidenceSnapshot, asOf: number): Promise<DetailSnapshot> {
+  currentRevisionId: string | null, evidence: EvidenceSnapshot, asOf: number, cache?: PublicResponseCache): Promise<DetailSnapshot> {
   const historical = revision.id !== currentRevisionId;
   const applicability = cycle.state === "void" ? "void" : cycle.lockedSetId === revision.id ? "locked" : historical ? "historical" : "current";
-  const analysis = publicRevisionAnalysis(revision, evidence, asOf);
-  const markets: DetailSnapshot["markets"] = Object.values(revision.candidate.markets).filter((m) => m.available).map((m) => ({
-    market: m.market, reasons: [], uncertainty: null, timestamps: { ...m.timestamps },
-    alternatives: marketSelections[m.market.family].filter((s) => s !== m.market.selection).map((selection) => ({ selection,
-      probability: (m.market.probabilities as Readonly<Record<string, number>>)[selection]! })),
-    source: { kind: m.provenance.kind, provisional: m.provenance.kind === "api-football" || m.provenance.provisional,
-      fallbackReason: m.fallback?.reason ?? null, sourceIds: m.provenance.kind === "api-football" ? ["api-football"]
-        : m.provenance.sources.filter((s) => analysis.sources.some((a) => a.id === s.sourceId)).map((s) => s.sourceId) },
-  }));
-  const unavailableMarkets: DetailSnapshot["unavailableMarkets"] = (Object.keys(marketSelections) as MarketFamily[]).flatMap((family) => {
-    const m = revision.candidate.markets[family];
-    return m.available ? [] : [{ family, reason: ["unsupported-family", "unsupported-markets"].includes(m.reason) ? "unsupported" : "insufficient-data" }];
-  });
+  const load = async () => {
+    const analysis = publicRevisionAnalysis(revision, evidence, asOf);
+    const markets: DetailSnapshot["markets"] = Object.values(revision.candidate.markets).filter((m) => m.available).map((m) => ({
+      market: m.market, reasons: [], uncertainty: null, timestamps: { ...m.timestamps },
+      alternatives: marketSelections[m.market.family].filter((s) => s !== m.market.selection).map((selection) => ({ selection,
+        probability: (m.market.probabilities as Readonly<Record<string, number>>)[selection]! })),
+      source: { kind: m.provenance.kind, provisional: m.provenance.kind === "api-football" || m.provenance.provisional,
+        fallbackReason: m.fallback?.reason ?? null, sourceIds: m.provenance.kind === "api-football" ? ["api-football"]
+          : m.provenance.sources.filter((s) => analysis.sources.some((a) => a.id === s.sourceId)).map((s) => s.sourceId) },
+    }));
+    const unavailableMarkets: DetailSnapshot["unavailableMarkets"] = (Object.keys(marketSelections) as MarketFamily[]).flatMap((family) => {
+      const m = revision.candidate.markets[family];
+      return m.available ? [] : [{ family, reason: ["unsupported-family", "unsupported-markets"].includes(m.reason) ? "unsupported" : "insufficient-data" }];
+    });
+    return { markets, unavailableMarkets, analysis };
+  };
+  const deadlineAt = Math.min(Number.MAX_SAFE_INTEGER, ...evidence.sources.filter((s) => s.reuse.retainUntil >= asOf).map((s) => s.reuse.retainUntil + 1));
+  const { markets, unavailableMarkets, analysis } = cache ? await cache.read(publicCacheDescriptor({ kind: "revision", locale: "en", now: asOf,
+    query: { revisionId: revision.id, evidenceHash: evidence.hash, permissionEpoch: evidence.sources.map((s) => [s.id, s.reuse.retainUntil >= asOf]) },
+    deadlineAt, parse: (value) => revisionPayloadSchema.parse(value) }), load) : await load();
   const settlement = cycle.lockedSetId === revision.id ? await storedSettlementProjection(tx, revision.fixtureId, cycle.id) : null;
   const outcomes: DetailSnapshot["outcomes"] = applicability === "historical" ? [] : markets.map(({ market }) => {
     const entry = settlement?.cycles[0]?.markets.find((m) => m.base.family === market.family), recorded = entry?.previous;

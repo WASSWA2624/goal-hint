@@ -53,7 +53,7 @@ test("isolated genuine MySQL migration, transaction and lifecycle contracts", { 
     await instance.executeAdmin(`
       CREATE USER 'goal_hint_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'goal_hint_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER
         ON goal_hint_test.* TO 'goal_hint_migration'@'127.0.0.1';
     `);
     await t.test("separate migration account deploys, repeats, reports status and verifies the schema", async () => {

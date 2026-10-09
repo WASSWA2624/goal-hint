@@ -57,7 +57,7 @@ test("immutable fixture evidence on isolated genuine MySQL", { timeout: 300000 }
     await instance.executeAdmin(`
       CREATE USER 'evidence_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'evidence_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES ON goal_hint_test.* TO 'evidence_migration'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'evidence_migration'@'127.0.0.1';
     `);
     await execFileAsync(process.execPath, ["--conditions=react-server", databaseScript, "deploy"],
       { cwd: workspace, env, windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });

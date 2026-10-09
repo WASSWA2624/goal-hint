@@ -62,7 +62,7 @@ export async function withPredictionPipeline(t, operation) {
   try {
     await instance.executeAdmin(`CREATE USER 'cutoff_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'cutoff_app'@'127.0.0.1' IDENTIFIED BY '${appPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES ON goal_hint_test.* TO 'cutoff_migration'@'127.0.0.1';`);
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'cutoff_migration'@'127.0.0.1';`);
     try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 90_000 }); }
     catch (error) { t.diagnostic((await instance.executeAdmin('SELECT migration_name, LEFT(logs, 1500) FROM _prisma_migrations WHERE finished_at IS NULL')).stdout); throw error; }
     await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') +
@@ -80,6 +80,9 @@ export async function withPredictionPipeline(t, operation) {
       GRANT SELECT, INSERT, UPDATE (consumedRunId, previousVersion, kickoffAt, state, actor, evidenceRef, recordedAt, eligibleAfter) ON goal_hint_test.SelectionCycleEligibility TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DurableJob TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, UPDATE ON goal_hint_test.DurableJobEnqueueLock TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.PublicCacheTag TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.PublicResponseCache TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, UPDATE (acknowledgedAt) ON goal_hint_test.PublicCacheInvalidation TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, UPDATE ON goal_hint_test.PublicSearchLimit TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DurableJobAttempt TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DurableJobEvent TO 'cutoff_app'@'127.0.0.1';`);

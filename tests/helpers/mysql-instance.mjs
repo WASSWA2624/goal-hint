@@ -167,7 +167,7 @@ export async function startIsolatedMysql() {
     await run(binary, ["--no-defaults", "--initialize-insecure", `--datadir=${datadir}`], serverTimeoutMs);
     child = spawn(binary, [
       "--no-defaults", `--datadir=${datadir}`, `--port=${port}`, "--bind-address=127.0.0.1",
-      "--mysqlx=OFF", `--pid-file=${path.join(directory, "mysqld.pid")}`, "--console",
+      "--mysqlx=OFF", "--log-bin-trust-function-creators=ON", `--pid-file=${path.join(directory, "mysqld.pid")}`, "--console",
     ], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     const started = Date.now();
     child.stdout.on("data", (chunk) => { startupOutput = `${startupOutput}${chunk}`.slice(-16384); });

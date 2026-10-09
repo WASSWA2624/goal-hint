@@ -67,7 +67,7 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
     await instance.executeAdmin(`
       CREATE USER 'catalog_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'catalog_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
-      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES
+      GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER
         ON goal_hint_test.* TO 'catalog_migration'@'127.0.0.1';
     `);
     await execFileAsync(process.execPath, ["--conditions=react-server", databaseScript, "deploy"],
