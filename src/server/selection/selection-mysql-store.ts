@@ -6,7 +6,7 @@ import { addReportingDays, createPredictionWindow, getPublicationDeadline, isInW
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseCatalogImportRequest } from "../football/catalog-input.ts";
-import type { Prisma, DailyRun } from "../generated/prisma/client.ts";
+import type { Prisma } from "../generated/prisma/client.ts";
 import type { JobQueue } from "../jobs/job-contract.ts";
 import { durableJobId, jobHash, parseJobEnvelope } from "../jobs/job-input.ts";
 import { createMysqlPredictionHistoryStore } from "../predictions/history-mysql-store.ts";
@@ -14,6 +14,7 @@ import { DailySelectionError, selectionFail, type CycleSelectionEligibility, typ
   type SelectionAuthority, type SelectionCoverage, type SelectionEntry, type SelectionImport,
   type SelectionLease, type SelectionManifest, type SelectionPolicy } from "./selection-contract.ts";
 import { parseCycleSelectionEligibility, parseSelection } from "./selection-input.ts";
+import { storedSelectionManifest } from "./selection-read.ts";
 
 type Transaction = Prisma.TransactionClient;
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -34,18 +35,6 @@ async function assertOwned(tx: Transaction, lease: SelectionLease) {
   if (row.ownerId !== lease.ownerId || row.fence !== lease.fence || row.leaseExpiresAt === null || row.leaseExpiresAt.getTime() <= now) return selectionFail("lost-lease");
   return { row, now };
 }
-async function manifestFromRow(tx: Transaction, row: DailyRun): Promise<SelectionManifest | null> {
-  const sealed = await tx.dailyRunManifest.findUnique({ where: { runId: row.id } });
-  if (sealed === null) return row.committedAt === null ? null : selectionFail("unavailable");
-  if (evidenceFingerprint(sealed.manifestJson) !== sealed.manifestHash) return selectionFail("unavailable");
-  const manifest = sealed.manifestJson as unknown as SelectionManifest;
-  if (manifest.runId !== row.id || manifest.sequence !== String(row.sequence) || manifest.runDate !== row.eatDate.toISOString().slice(0, 10) ||
-    manifest.selectionHash !== row.selectionHash || evidenceFingerprint(row.selectionJson) !== manifest.selectionHash ||
-    manifest.committedAt !== row.committedAt?.getTime() || manifest.startInclusive !== row.windowStart?.getTime() ||
-    manifest.endExclusive !== row.windowEnd?.getTime() || manifest.partial !== row.partial || manifest.entries.length !== row.totalJobs) return selectionFail("unavailable");
-  return freezeEvidence(manifest);
-}
-
 export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue: JobQueue) {
   const history = createMysqlPredictionHistoryStore(database);
   async function transact<Result>(operation: (tx: Transaction) => Promise<Result>): Promise<Result> {
@@ -78,7 +67,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
     return transact(async (tx) => {
       const row = await tx.dailyRun.findUnique({ where: { id: runId } });
       if (!row) return null;
-      const manifest = await manifestFromRow(tx, row);
+      const manifest = await storedSelectionManifest(tx, row);
       return freezeEvidence({ manifest, total: row.totalJobs, completed: row.completedJobs,
         terminal: row.terminalJobs, coverage: manifest?.coverage ?? await coverage(tx, row.id, row.eatDate.toISOString().slice(0, 10)) });
     });
@@ -173,7 +162,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
     },
     async commit(lease: SelectionLease, policy: SelectionPolicy, degradedAction: DegradedSelectionAction | null): Promise<SelectionManifest> {
       return transact(async (tx) => {
-        const { row, now } = await assertOwned(tx, lease), known = await manifestFromRow(tx, row);
+        const { row, now } = await assertOwned(tx, lease), known = await storedSelectionManifest(tx, row);
         if (known) return known;
         if (row.selectionHash !== evidenceFingerprint(policy)) return selectionFail("conflicting-request");
         const runDate = row.eatDate.toISOString().slice(0, 10), window = createPredictionWindow(parseReportingDate(runDate));
@@ -259,7 +248,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
     },
     async progress(runId: string) {
       return transact(async (tx) => {
-        const row = await lockRun(tx, runId), manifest = await manifestFromRow(tx, row);
+        const row = await lockRun(tx, runId), manifest = await storedSelectionManifest(tx, row);
         if (!manifest) return selectionFail("incomplete-import");
         const entries = await tx.runFixture.findMany({ where: { runId }, include: { job: true } });
         if (entries.length !== manifest.entries.length) return selectionFail("unavailable");

@@ -1,7 +1,6 @@
 import "server-only";
 
-import { MARKET_RULE_VERSION, marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { settleMarketSelection, type CycleEligibility } from "../../domain/market-settlement.ts";
+import type { MarketFamily } from "../../domain/markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
@@ -10,81 +9,18 @@ import { defineJob } from "../jobs/job-registry.ts";
 import { historyFail } from "../predictions/history-contract.ts";
 import { createMysqlPredictionHistoryStore } from "../predictions/history-mysql-store.ts";
 import { historyId } from "../predictions/history-input.ts";
-import { assertHistorySeal, historyJson, historyTime, storedCycle, storedRevision } from "../predictions/history-read.ts";
-import { resultStatus, storedFixtureResult } from "../results/result-read.ts";
-import { SETTLEMENT_JOB_TYPE, settlementFamily, settlementPayload, settlementRevisionSchema, type SettlementRevision } from "./settlement-contract.ts";
+import { historyTime } from "../predictions/history-read.ts";
+import { storedFixtureResult } from "../results/result-read.ts";
+import { SETTLEMENT_JOB_TYPE, settlementFamily, settlementPayload, type SettlementRevision } from "./settlement-contract.ts";
+import { storedSettlementProjection, storedSettlementRevision } from "./settlement-read.ts";
 
 type Tx = Prisma.TransactionClient;
-const families = Object.keys(marketSelections) as MarketFamily[];
 const sourceKinds = ["fixture-result", "cycle-closed", "cycle-voided", "schedule-lifecycle", "lifecycle-conflict", "eligibility-closed", "revision-published"];
 const serverNow = async (tx: Tx) => historyTime((await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at);
-
-async function revision(tx: Tx, id: string): Promise<SettlementRevision> {
-  const row = await tx.marketSettlementRevision.findUniqueOrThrow({ where: { id } });
-  const [seal] = await tx.$queryRaw<{ validIntegrity: bigint }[]>`SELECT integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity FROM MarketSettlementRevision WHERE id = ${id}`;
-  assertHistorySeal(seal?.validIntegrity);
-  const parsed = settlementRevisionSchema.safeParse(historyJson(row.body));
-  if (!parsed.success) return historyFail("invalid-state");
-  const v = parsed.data;
-  if (v.id !== id || v.fixtureId !== row.fixtureId || v.cycleId !== row.cycleId || v.family !== row.family || v.batchId !== row.batchId ||
-    v.previousId !== row.previousId || v.resultId !== row.resultId || v.lockedSetId !== row.lockedSetId || v.inputHash !== row.inputHash || v.at !== row.at.getTime()) return historyFail("invalid-state");
-  const { fixtureId, cycleId, family, ruleVersion, lockedSetId, selection, source, selectedProbability,
-    resultId, resultUsable, status, reason, cycleState, voidReason } = v;
-  if (evidenceFingerprint({ fixtureId, cycleId, family, ruleVersion, lockedSetId, selection, source, selectedProbability,
-    resultId, resultUsable, status, reason, cycleState, voidReason }) !== v.inputHash) return historyFail("invalid-state");
-  return freezeEvidence(v);
-}
 
 /** Projects only immutable locks. All provider I/O belongs to result synchronization. */
 export function createMarketSettlementService(options: Readonly<{ database: DatabaseRuntime; queue: JobQueue }>) {
   const { database, queue } = options, history = createMysqlPredictionHistoryStore(database);
-  async function projection(tx: Tx, fixtureId: string) {
-    const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: fixtureId } });
-    const cursor = await tx.fixtureLifecycleState.findUnique({ where: { fixtureId } });
-    const resultState = await tx.fixtureResultState.findUnique({ where: { fixtureId } });
-    const result = resultState?.resultId ? await storedFixtureResult(tx, fixtureId, resultState.resultId) : null;
-    const status = resultStatus.parse(fixture.status);
-    const resultUsable = result !== null && cursor?.issue == null && result.status === status &&
-      result.regulation.home === fixture.regulationHome && result.regulation.away === fixture.regulationAway &&
-      (result.regulationVerifiedAt === null ? fixture.regulationVerifiedAt === null
-        : fixture.regulationVerifiedAt !== null && result.regulationVerifiedAt <= fixture.regulationVerifiedAt.getTime()) &&
-      result.regulation.evidenceRef === fixture.regulationEvidenceRef;
-    const rows = await tx.predictionCycle.findMany({ where: { fixtureId }, orderBy: { ordinal: "asc" }, select: { id: true } });
-    const cycles = [];
-    for (const row of rows) {
-      const cycle = (await storedCycle(tx, row.id))!;
-      const lock = cycle.lockedSetId ? await storedRevision(tx, cycle.lockedSetId) : null;
-      if (lock && (lock.cycleId !== cycle.id || lock.fixtureId !== fixtureId)) return historyFail("invalid-state");
-      const eligibility: CycleEligibility = cycle.state !== "void" ? { eligible: true } : { eligible: false,
-        reason: cycle.voidReason === "formal-postponement" ? "postponed-cycle"
-          : cycle.voidReason === "locked-cutoff-invalidated" ? "cutoff-invalidated" : "ineligible-cycle" };
-      const markets = [];
-      for (const family of families) {
-        const item = lock?.candidate.markets[family];
-        const market = item?.available ? item.market : null;
-        const outcome = settleMarketSelection(family, market?.selection ?? null, {
-          status: cursor?.issue && cycle.state !== "void" ? "unknown" : status, cycleEligibility: eligibility,
-          regulationScore: resultUsable && result?.regulation.verified ? { verified: true,
-            period: "regulation-including-stoppage-time", home: result.regulation.home!, away: result.regulation.away! } : null,
-        });
-        const pointer = await tx.marketSettlement.findUnique({ where: { cycleId_family: { cycleId: cycle.id, family } } });
-        const previous = pointer ? await revision(tx, pointer.revisionId) : null;
-        const historicalVoid = previous?.cycleState === "void" && cycle.state === "void";
-        const base = { fixtureId, cycleId: cycle.id, family, ruleVersion: MARKET_RULE_VERSION, lockedSetId: cycle.lockedSetId,
-          selection: market?.selection ?? null, source: market?.source ?? null, selectedProbability: market?.selectedProbability ?? null,
-          resultId: historicalVoid ? previous.resultId : market ? result?.id ?? null : null,
-          resultUsable: historicalVoid ? previous.resultUsable : market ? resultUsable : false,
-          status: outcome.status, reason: !lock ? cycle.state === "open" ? "awaiting-locked-selection" : "no-locked-selection"
-            : item && !item.available ? item.reason : outcome.reason,
-          cycleState: cycle.state, voidReason: cycle.voidReason } as const;
-        if (previous && (previous.fixtureId !== fixtureId || previous.cycleId !== cycle.id || previous.family !== family ||
-          previous.lockedSetId !== null && previous.lockedSetId !== cycle.lockedSetId)) return historyFail("invalid-state");
-        markets.push({ base, inputHash: evidenceFingerprint(base), previous });
-      }
-      cycles.push({ cycle, markets });
-    }
-    return { fixture, result, cycles };
-  }
   const service = {
     async settleFixture(fixtureId: string, lease?: JobLease) {
       historyId.parse(fixtureId);
@@ -94,7 +30,7 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
             settlementPayload.parse(lease.job.envelope.payload).fixtureId !== fixtureId) return historyFail("invalid-request");
           await queue.assertOwned(tx, lease);
         }
-        const snapshot = await projection(tx, fixtureId), at = await serverNow(tx);
+        const snapshot = await storedSettlementProjection(tx, fixtureId), at = await serverNow(tx);
         const changes = snapshot.cycles.flatMap((entry) => entry.markets).filter((entry) => entry.previous?.inputHash !== entry.inputHash);
         if (changes.length) {
           const version = (await tx.footballFixture.update({ where: { id: fixtureId }, data: { dataVersion: { increment: 1 } }, select: { dataVersion: true } })).dataVersion;
@@ -144,7 +80,7 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
     async forFixture(fixtureId: string) {
       historyId.parse(fixtureId);
       return database.transaction(async (tx) => {
-        const snapshot = await projection(tx, fixtureId);
+        const snapshot = await storedSettlementProjection(tx, fixtureId);
         return freezeEvidence({ fixtureId, fixtureVersion: snapshot.fixture.dataVersion, applicableCycleId: snapshot.fixture.activeCycleId,
           cycles: snapshot.cycles.map(({ cycle, markets }) => ({ cycle, applicable: cycle.id === snapshot.fixture.activeCycleId,
             markets: markets.map(({ base, inputHash, previous }) => {
@@ -160,7 +96,7 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
       return database.transaction(async (tx) => {
         const rows = await tx.marketSettlementRevision.findMany({ where: { cycleId, family } });
         const values = await Promise.all(rows.map(async (row) => {
-          const value = await revision(tx, row.id);
+          const value = await storedSettlementRevision(tx, row.id);
           return { ...value, result: value.resultId ? await storedFixtureResult(tx, value.fixtureId, value.resultId) : null };
         }));
         // Chain order is stable even when multiple corrections share a millisecond.

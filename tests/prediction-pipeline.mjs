@@ -80,6 +80,7 @@ export async function withPredictionPipeline(t, operation) {
       GRANT SELECT, INSERT, UPDATE (consumedRunId, previousVersion, kickoffAt, state, actor, evidenceRef, recordedAt, eligibleAfter) ON goal_hint_test.SelectionCycleEligibility TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DurableJob TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, UPDATE ON goal_hint_test.DurableJobEnqueueLock TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, UPDATE ON goal_hint_test.PublicSearchLimit TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DurableJobAttempt TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DurableJobEvent TO 'cutoff_app'@'127.0.0.1';`);
     const a = replica(), b = replica(), catalog = createFootballCatalogStore(a), history = createMysqlPredictionHistoryStore(a);
@@ -114,7 +115,9 @@ export async function withPredictionPipeline(t, operation) {
     async function setup(id, date = '2026-10-09') {
       const selected = await cohort(date), fixture = await catalog.fixtureByProviderId(id);
       const entry = selected.manifest.entries.find((item) => item.fixtureId === fixture.id), cycle = await history.findCycle(entry.cycleId);
-      const lease = selected.leases.get(fixture.id), context = evidenceContext(fixture, { runId: selected.selected.runId, cycleId: cycle.id });
+      const lease = selected.leases.get(fixture.id), context = evidenceContext(fixture, { runId: selected.selected.runId, cycleId: cycle.id,
+        home: { teamId: fixture.homeTeamId, externalId: fixture.homeExternalIds[0] },
+        away: { teamId: fixture.awayTeamId, externalId: fixture.awayExternalIds[0] } });
       const authority = evidenceAuthority(), snapshot = buildEvidenceSnapshot({ context, policy: evidencePolicy(), sources: [evidenceSource(context)] }, authority);
       const evidenceId = evidenceHash(randomUUID()); await createMysqlEvidenceStore(a).save(evidenceId, evidenceHash(`request:${evidenceId}`), snapshot, authority);
       const input = publicationInput(historyCandidate({ snapshot, model, jobId: lease.jobId }), evidenceId, cycle.scheduleVersion);

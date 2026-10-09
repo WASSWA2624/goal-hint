@@ -2415,3 +2415,74 @@ or worker was activated. 030 owns hit-rate aggregation, 031 owns result-event
 delivery/cache invalidation and 043 owns watchdog activation. Rollback stops the
 private binding and retains additive schema, immutable locks, result/correction
 evidence and durable events. No UI change requires visual acceptance.
+
+## Prompt 028 — Match feed API
+
+**Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
+Followed [028](../dev-plan/028-match-feed-api.md) only. Added GET /api/matches
+and its reusable stored-data server service. Database acceptance deployed all
+migrations to owned throwaway MySQL 8.4.11 instances. No installed/production
+database, football/research provider, AI invocation or live worker was used.
+
+### Implemented and changed files
+
+- `src/app/api/matches/route.ts` and `src/server/matches/`: anonymous Node route,
+  shared query service, parameterized SQL filtering/search/sorting before
+  pagination, coherent card projections, exact-date coverage, real daily-run
+  progress, structured errors and a replica-safe public search budget. Reuses
+  the existing URL/EAT/catalog/forecast/result/settlement contracts.
+- `src/domain/match-feed.ts`, `fixture-snapshot.ts` and English messages: public
+  response/error schemas and backwards-compatible shared card metadata for cycle
+  modes/void reasons, unavailable families, update observations, correction time,
+  score period and seven-day availability. No UI change or later detail/cache
+  feature is implemented.
+- `src/server/settlement/settlement-read.ts`, `settlement-service.ts`,
+  `results/result-read.ts`, `selection/selection-read.ts` and
+  `selection/selection-mysql-store.ts`: extracted reusable sealed read paths and
+  canonical result agreement without changing private write behavior. Public
+  reads suppress stale outcome badges and never write settlement or jobs.
+- Prisma schema/snapshot and additive migration
+  `20261009184740_match_feed_api`: one permanent binary-collated InnoDB
+  PublicSearchLimit row, with a scope CHECK and migration seed. Public runtime
+  grants need SELECT/UPDATE on that row, with SELECT on shared read tables.
+- `tests/match-feed.test.mjs`, `match-feed.integration.mjs`,
+  `prediction-pipeline.mjs`, `helpers/lifecycle-fixtures.mjs` and `package.json`:
+  028 acceptance and `npm run test:feed`. Shared synthetic helpers now derive
+  canonical provider team IDs rather than assuming every fixture uses 10/20;
+  the pipeline adds minimal search-counter grants.
+- `docs/match-feed-api.md`, implementation decisions and tracker: complete
+  response/error/pagination/search/privacy/grants/rollout contracts; OP-23's
+  initial bounds are settled, with production tuning left to workload evidence.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| `npm run test:feed` | **47 passed, 0 failed/skipped**: 31 input/HTTP/schema checks, 15 substantive genuine MySQL checks and their harness. Log `.tmp/028-feed-final.log`. |
+| Queries/pagination | 75 synthetic fixture inputs; matching aliases beyond page one, renamed canonical names, league/country aliases, wildcard/injection literals, exact inclusive/exclusive EAT boundaries, a historical date and a two-day range passed. Default 30/max 100, page links, stable ties, selected-family unrounded sorting, missing values last and out-of-range recovery passed. |
+| Coherent projections | Current AI and provisional provider snapshots, missing families, immutable locks, a closed cycle with an ineligible retained preview, pre-lock void reasons, a new applicable cycle with no duplicate, verified regulation, correction timestamps and stale-settlement Pending behavior passed. Historical forecasts remain readable after competition removal and outside the current window. |
+| Coverage/progress | Partial/failed/unknown imports retain rows and cannot establish authoritative empty dates. Newer unfinished/failed attempts suppress an older complete-empty receipt; later complete coverage restores it. Progress uses actual durable successes despite stale DailyRun counters; missing/uncommitted runs keep unknown totals. |
+| Public security | Anonymous success, no auth/set-cookie requirements, 400 validation before database/limiter access, 429/503 recoverable JSON and diagnostic redaction passed. Across two replicas, a 130-request burst admits exactly 120; expiry resets atomically, ordinary browsing continues, and no visitor identity/search text is stored. Adapter counts, fetch interception and job/result/forecast/version totals prove no visitor-triggered work. |
+| Migration/schema | Fresh deployment and `db:verify` passed on genuine MySQL; counter InnoDB/binary collation and denial of runtime INSERT/DELETE passed. Prisma generation/validation and schema/snapshot equality passed. |
+| Affected database regressions | **126 passed, 0 failed/skipped** across selection, prediction history, publication, cutoff, lifecycle, result sync and settlement. Command uses `--test-concurrency=2`; log `.tmp/028-regression.log`. |
+| Repository units | **854 cases: 853 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/028-unit.log`. |
+| Lint/types/build | `npm run lint`, final `npm run typecheck` and `npm run build` passed. Production route manifest includes dynamic /api/matches. Logs `.tmp/028-lint.log`, `.tmp/028-typecheck.log`, `.tmp/028-build.log`. |
+| Production HTTP smoke | An owned loopback Next production server with database capability disabled returned uncached structured 400s for invalid/duplicate/oversized inputs, a recoverable 503 for the disabled database, no locale redirect/cookie, and 405 for POST. Temporary harness/log `.tmp/028-http-smoke.mjs`, `.tmp/028-http.log`; no provider request or live DB was possible. |
+
+### Remaining operating gates and handoff
+
+No feature implementation or local acceptance blocker remains. Apply the additive
+migration and runtime grants before enabling the route against a configured
+database/competition set. Existing production budget/access verification,
+provider/model/rights/quality and hosting gates remain in force; these tests do
+not establish production coverage, rights, throughput, forecast quality or
+successful deployment. The initial shared search budget is conservative and may
+return busy responses across visitors; tune with real workload evidence.
+
+The public canonical fixture version is separate from asOf-dated operational
+job/coverage/window observations. Future client integration must refresh those
+observations without treating them as a new forecast/result revision. 029 owns
+match detail, 030 hit rates, 031 event/cache work and 032 real feed composition.
+No later prompt, worker or scheduler was activated. Rollback disables the route
+and retains additive schema and immutable history. No UI change requires visual
+acceptance.

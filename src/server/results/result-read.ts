@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
-import type { Prisma } from "../generated/prisma/client.ts";
+import type { Prisma, FootballFixture } from "../generated/prisma/client.ts";
 import { historyFail } from "../predictions/history-contract.ts";
 import { historyHash, historyId, historyInstant } from "../predictions/history-input.ts";
 import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
@@ -20,6 +20,15 @@ const resultSchema = z.strictObject({ id: historyHash, fixtureId: historyId, fix
   ? v.regulation.home !== null && v.regulation.away !== null && v.regulation.evidenceRef !== null && v.regulationVerifiedAt !== null && v.regulationVerifiedAt <= v.observedAt
   : v.regulation.home === null && v.regulation.away === null && v.regulation.evidenceRef === null && v.regulationVerifiedAt === null);
 export type StoredFixtureResult = Readonly<z.infer<typeof resultSchema>>;
+
+export function fixtureResultMatchesCanonical(fixture: Pick<FootballFixture, "status" | "regulationHome" | "regulationAway" | "regulationVerifiedAt" | "regulationEvidenceRef">,
+  result: StoredFixtureResult | null, issue: string | null = null): boolean {
+  return result !== null && issue === null && result.status === fixture.status &&
+    result.regulation.home === fixture.regulationHome && result.regulation.away === fixture.regulationAway &&
+    (result.regulationVerifiedAt === null ? fixture.regulationVerifiedAt === null
+      : fixture.regulationVerifiedAt !== null && result.regulationVerifiedAt <= fixture.regulationVerifiedAt.getTime()) &&
+    result.regulation.evidenceRef === fixture.regulationEvidenceRef;
+}
 
 /** Read the sealed, append-only version; canonical/live goal fields are never evidence. */
 export async function storedFixtureResult(tx: Prisma.TransactionClient, fixtureId: string, id: string): Promise<StoredFixtureResult> {

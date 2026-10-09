@@ -12,6 +12,13 @@ datasource db {
   provider = "mysql"
 }
 
+// Aggregate public search budget only; no visitor identifiers or query text.
+model PublicSearchLimit {
+  scope           String   @id @db.VarChar(32)
+  windowStartedAt DateTime @db.DateTime(3)
+  requests        Int      @db.UnsignedInt
+}
+
 // This stable coordination row serializes every reservation for one provider account.
 model ApiQuotaAccount {
   id            String             @id @db.Char(64)

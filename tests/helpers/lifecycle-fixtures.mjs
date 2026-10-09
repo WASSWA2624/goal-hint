@@ -16,7 +16,8 @@ export function lifecycleAuthority(overrides = {}) {
 export function lifecycleInput(state, at, { status = 'NS', kickoffAt = state.cycle.kickoffAt,
   actualStartedAt = null, providerUpdatedAt = null, raw = {} } = {}) {
   const row = catalogFixture(state.fixture.externalId, {
-    kickoff: kickoffAt === null ? null : new Date(kickoffAt).toISOString(), status, ...raw,
+    kickoff: kickoffAt === null ? null : new Date(kickoffAt).toISOString(), status,
+    homeId: state.fixture.homeExternalIds?.[0] ?? 10, awayId: state.fixture.awayExternalIds?.[0] ?? 20, ...raw,
   });
   row.fixture.date = kickoffAt === null ? null : new Date(kickoffAt).toISOString();
   row.fixture.timestamp = kickoffAt === null ? null : Math.floor(kickoffAt / 1000);

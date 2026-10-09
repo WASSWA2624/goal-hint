@@ -260,7 +260,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-20 Selection eligibility and degraded finalization | **Local implementation complete; live choices unresolved** | 021 implements immutable manifests, complete-date retries, explicit verified degraded actions, partial coverage, fenced recovery and recorded closed-cycle eligibility inputs. Approve trial-backed competition/status eligibility and a degradation policy/action authority before the affected live path runs. A committed subset cannot be filled in later or treated as authoritative emptiness. §§5, 11, 15. | Unassigned; user decision/evidence required for live choices | `GOAL_HINT_COMPETITION_IDS`, `GOAL_HINT_EVIDENCE_POLICY_REF`; implemented: versioned selection policy/authority, immutable manifest and recorded action; pending: approved competition/eligibility evidence and degraded-finalization policy | **021 local implementation**; live decisions remain pending |
 | OP-21 Publication-status freshness | **Local contract implemented; live decisions unresolved** | 022 requires an approved original-observation age, source-specific clock/unknown-time rules, trusted authority and transactional rechecks; older evidence cannot override a newer canonical observation. Verified play persists a publication barrier. Actual trial-backed timing/conflict decisions remain missing. §§5, 7, 15. | Unassigned; user decision/evidence required for live acceptance | `GOAL_HINT_FRESHNESS_POLICY_REF`, `GOAL_HINT_EVIDENCE_POLICY_REF`; implemented: explicit publication policy/authority; pending: approved observation/source timing and bindings | **022 local implementation**; trial evidence **008**, locking/lifecycle **023–024** |
 | OP-22 Polling horizons and approach threshold | **Unresolved** | Choose approaching-kickoff lead time, active/result window, unresolved-result horizon and progressively slower correction checks with bounded stopping/review rules. Preserve visible unresolved fixtures after midnight/outside the prediction window. §§5, 11, 15; prompt 026. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: poller approach thresholds, unresolved/correction horizons/cadences | **026** |
-| OP-23 Public query/search limits | **Unresolved implementation choice** | Set reusable validated response/page/search limits and anonymous search throttling from workload/security evidence; about 30 initial cards is the specification's default. No visitor credential or provider work may be added. §§11, 13; prompt 028. | Unassigned; implementation evidence required | Deferred: public query/page/search rate limits | **028** |
+| OP-23 Public query/search limits | **Initial implementation settled** | 028 reuses the URL validator: 30 default/100 maximum cards, seven-day ranges, page cap 10,000, 2 KiB query/1 MiB JSON bounds. Nonempty searches share an atomic MySQL UTC budget of 120/minute across replicas, retaining no visitor identity or search text. Genuine MySQL burst acceptance verifies the bound; tune against production workload evidence without treating synthetic tests as capacity approval. | Implemented in 028; operator owns later tuning | [Match feed contract](match-feed-api.md) | **028** |
 | OP-24 Shared cache strategy and lifetimes | **Unresolved implementation choice** | Choose approved cache capability, active/historical lifetimes and recovery/invalidation/fencing policy compatible with 15/60-second cadences and measured final-badge latency. Cache hits preserve actual source sync times. §§11, 13; prompt 031. | Unassigned; implementation/infrastructure evidence required | Deferred: cache backend, active/historical TTL and invalidation/recovery policy; infrastructure budget if paid | **031** |
 | OP-25 Correction/dispute ownership and public process | **Unresolved** | The audited correction mechanics are settled; assign the actual correction/dispute owner, intake/review process, supporting-evidence rules and factual public statements. Do not promise an unapproved response time or operational policy. §§8, 12–15; prompt 038. | Unassigned; user decision/evidence required | Deferred: correction/dispute owner and public process policy | **038**; intake/legal consumers **040–041** |
 | OP-26 Analytics and visitor/log retention | **Unresolved** | Inventory actual log/search/browser-preference/remote-image data flows; choose whether analytics is used, its providers/purposes/recipients/retention and applicable consent/data-handling requirements before enabling tracking. Ads stay disabled. Retention must match actual configuration and permissions. §§12–13, 15; prompts 039/044. | Unassigned; user decision/evidence required | Deferred: analytics enablement/provider, visitor/telemetry/log retention and privacy data-flow policy | **039** notice facts; telemetry activation **044** |
@@ -2003,3 +2003,69 @@ cycles, alternatives, superseded audit revisions, missing/pending outcomes and
 unreconciled stale results are excluded. 030 owns aggregation, and 031 owns event
 delivery/cache invalidation. Synthetic acceptance proves mechanics only; existing
 provider, model, rights, operating and deployment gates remain in effect.
+
+## Prompt 028 — Anonymous stored match feed
+
+**Decision date:** 9 October 2026. **Scope:** GET /api/matches and a reusable
+server query service. The UI remains on its earlier preview; no detail endpoint,
+hit-rate aggregation, cache, provider call or worker activation is introduced.
+The complete response/error/pagination/operations contract is in
+[match-feed-api.md](match-feed-api.md).
+
+Reuse the existing date/filter URL validator and EAT calendar, with bounded
+historical dates whose UTC bounds fit MySQL DATETIME. Default pages contain 30
+records, maximum 100, page cap 10,000; ranges span at most seven days. Limit query
+strings to 2,048 bytes and serialized responses to 1 MiB. Bind every SQL value,
+including pagination. Search normalized team/league/country names and retained
+aliases across the entire range before pagination; escape wildcard characters
+literally. Reuse existing kickoff/name/alias indexes. The date predicate bounds
+substring matching; no prefix-index performance claim is made for leading
+wildcards. Default ties are kickoff/fixture ID; probability order uses only the
+selected family's stored unrounded value, missing last, then the same ties.
+
+Return shared FixtureSnapshot records with required cycle, unavailable-family,
+update, score-period and seven-day-message metadata. A repeatable snapshot binds
+counts, membership, applicable current/locked/void revision, sealed results and
+settlement input hashes. Closed-without-lock never falls back to a preview; a
+pre-lock void retains its last prediction and public reason. Historical closed
+and void forecasts remain readable if their competition is later disabled.
+Correctness refers only to current audited settlement against the immutable
+selected pick; result corrections suppress old badges until settlement catches
+up. Shared read modules now serve both private settlement/selection services
+and the public feed, keeping writes outside the public dependency path.
+
+Expose canonical dataVersion as unsigned decimal text. syncedAt is actual result
+sync/catalog retrieval time, not request time. asOf dates the response's
+operational observations. Coverage, job status and window messages may change
+without a canonical fixture mutation; future consumers must refresh those
+observations separately from version-gated forecast/result replacement. Every
+family is explicitly available or unavailable. Per-market source and publication
+references remain public, while raw payloads, provenance/evidence internals,
+analysis text, prompts, worker logs and private void proofs remain private.
+
+Exact-date latest import coverage is authoritative only when complete. Newer
+partial/degraded/failed/pending imports cannot establish an empty date or be
+overridden by older complete coverage. Return retained rows with coverage flags.
+Separate no fixtures, no filter matches, insufficient selected-family data,
+unavailable coverage and an out-of-range page. Today's run uses sealed manifest
+membership and actual durable terminal/succeeded states plus accepted publication
+receipts; projected counters are not trusted. Unknown/uncommitted totals stay
+null. Historical/farther-future queries have no current-run progress. Ordinary
+pagination links preserve filters and pin resolved dates across midnight.
+
+Anonymous searches share a conservative fixed 60-second, 120-request aggregate
+budget in one migration-created PublicSearchLimit row. MySQL UTC/row locking
+bounds concurrent replicas. No IP, cookie, token, visitor ID or search text is
+stored, and browsing without search does not consume this budget. This initial
+privacy-preserving bound settles OP-23's implementation; production tuning still
+requires real workload evidence. Application grants add only SELECT/UPDATE on
+that permanent row. Reads require SELECT on the existing shared repositories.
+
+Return structured 400 invalid-query, 429 rate-limited and 503 unavailable errors.
+Only 429/503 are recoverable and carry Retry-After (remaining window or five
+seconds). Database/integrity/configuration failures cannot turn into empty data
+or leak diagnostics. Require no account or authentication cookie. Every response
+uses no-store headers; later cache work may wrap this contract. Existing database,
+competition/provider/model/rights/hosting gates remain effective. Synthetic
+acceptance establishes local query/concurrency mechanics, not live operation,
+coverage, rights, forecast quality or deployment readiness.

@@ -40,7 +40,25 @@ const displayedOutcome = z.strictObject({
   cycleId: identity, revisionId: identity, selection: z.string(), status: z.enum(outcomeStatuses),
   /** Original public explanation, never a worker log or raw internal reason. */
   explanation: z.string().trim().min(1).max(2000).nullable(),
+  correctedAt: instant.nullable().optional(),
 }).refine((value) => value.status !== "void" || value.explanation !== null, "Void requires its public reason.");
+
+export const publicVoidReasonSchema = z.strictObject({
+  code: z.enum(["formal-postponement", "fixture-canceled", "fixture-abandoned", "fixture-awarded", "locked-cutoff-invalidated", "ineligible-cycle"]),
+  explanation: z.string().min(1).max(512),
+});
+export const fixtureCycleSchema = z.strictObject({
+  state: z.enum(["open", "closed", "void"]), mode: z.enum(["current", "locked", "void"]),
+  ordinal: z.number().int().positive(), lockedAt: instant.nullable(), voidReason: publicVoidReasonSchema.nullable(),
+}).refine((value) => value.mode === ({ open: "current", closed: "locked", void: "void" } as const)[value.state], "Cycle mode must match its state.");
+export const unavailableMarketSchema = z.strictObject({
+  family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
+  reason: z.enum(["not-published", "no-locked-selection", "unsupported", "insufficient-data"]),
+});
+export const fixtureUpdateSchema = z.strictObject({
+  prediction: z.enum(["updating", "delayed", "current", "unavailable", "outside-window", "locked"]),
+  result: z.enum(["current", "delayed", "untracked"]),
+});
 
 function acceptedMarket(value: unknown): value is AcceptedMarket {
   if (!value || typeof value !== "object" || !("family" in value)) return false;
@@ -107,6 +125,11 @@ export const fixtureSnapshotSchema = z.strictObject({
   status: z.enum(statuses), score: score.nullable(),
   partialCoverage: z.boolean().optional(),
   cycleId: identity.nullable(), forecast: forecast.nullable(),
+  cycle: fixtureCycleSchema.nullable().optional(),
+  unavailableMarkets: z.array(unavailableMarketSchema).max(4).optional(),
+  update: fixtureUpdateSchema.optional(),
+  availabilityMessage: z.string().max(256).nullable().optional(),
+  scorePeriod: z.enum(["regulation", "live"]).nullable().optional(),
 }).superRefine((value, context) => {
   if (value.forecast !== null && value.cycleId === null) context.addIssue({ code: "custom", message: "A revision must belong to a cycle." });
   if (value.forecast?.markets.some((item) => item.outcome && item.outcome.cycleId !== value.cycleId)) {
@@ -115,6 +138,16 @@ export const fixtureSnapshotSchema = z.strictObject({
   if (!isPlayedFinalStatus(value.status) && value.forecast?.markets.some((item) =>
     item.outcome?.status === "correct" || item.outcome?.status === "incorrect")) {
     context.addIssue({ code: "custom", message: "Correctness requires a played final fixture." });
+  }
+  if (value.cycle && (value.cycleId === null || (value.cycle.state === "void") !== (value.cycle.voidReason !== null))) {
+    context.addIssue({ code: "custom", message: "Cycle metadata must preserve identity and void reason." });
+  }
+  if (value.unavailableMarkets) {
+    const unavailable = value.unavailableMarkets.map((item) => item.family);
+    const available = value.forecast?.markets.map((item) => item.market.family) ?? [];
+    if (new Set([...unavailable, ...available]).size !== 4 || unavailable.length + available.length !== 4) {
+      context.addIssue({ code: "custom", message: "Exactly four available or unavailable market families are required." });
+    }
   }
 });
 export type FixtureSnapshot = z.infer<typeof fixtureSnapshotSchema>;
