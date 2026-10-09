@@ -1257,3 +1257,54 @@ this evaluation. No accuracy or calibration result is fabricated.
 **014 remains unchecked** until its required approved operating protocol and
 selected configuration are resolved; independent harness verification does not
 clear those requirements or authorize shadow/public production operations.
+
+## Prompt 015 — Shared light-theme styling
+
+The existing Next.js 16.4.0, React 19.3.0 and styled-components 6.5.3 versions
+remain pinned. `compiler.styledComponents` is enabled. The root Server Component
+layout has one `StyleProvider` with one lazy per-instance `ServerStyleSheet`,
+`useServerInsertedHTML` flush/clear arrangement, `ThemeProvider` and global
+style. All styled definitions and providers live in Client Component modules;
+the server layout and page still render readable initial content.
+
+Typed semantic tokens preserve the exact navy/teal brand palette. The theme
+contract can accommodate a later dark theme, but only light mode exists. Correct
+uses green, Incorrect red, and Pending/Void/Unavailable gray as required by §4.
+All outcome presentations include explicit text and distinct decorative icons.
+The lighter brand border is a decorative divider; controls use a stronger
+boundary. Focus uses a shared navy outline with explicit width and offset.
+
+Manrope is loaded from the existing licensed variable source with
+`next/font/local`, avoiding external font calls. Typography and control minimums
+use rem units; spacing and page gutters use fixed pixel tokens to preserve
+content width when text is doubled. Body text defaults to 16px and controls to
+at least 44px. Layout and control corners remain square, with logical spacing
+and wrapping. First-party SVG logos retain their ratios and clear space.
+
+Shared exports cover layout, brand images, buttons/links, labeled input/select
+controls, status text and empty states. Buttons default to native `type="button"`;
+links retain navigation semantics. Field IDs and hint/error associations are
+stable, supplied description IDs are preserved, and disabled controls retain
+native tab behavior. Static statuses do not announce repeatedly; callers enable
+polite announcements for meaningful changes. Styling-only fields use transient
+props, and private-import lint restrictions also cover the new styles directory.
+
+The component preview is conditionally imported on the development homepage.
+Production builds omit its text/module from browser chunks and retain only the
+honest development page. No extra application routes, feed, match cards,
+locale navigation, state store or theme switch are implemented. The scoped
+`test:styling` command creates an ignored, isolated production fixture using the
+actual root layout and primitives for delayed streaming and browser inspection.
+Synthetic interface examples never become football data or public application
+routes. The fixture's fake secret canary verifies the client/server boundary.
+
+Next.js's documented `agentRules: false` setting prevents development inspection
+from creating unrelated managed `AGENTS.md` files; its own temporary managed
+block was removed by Next.js. Version-matched local styling/font documentation
+was read along with the specification and brand guide.
+
+The production build, initial rendering without JavaScript, streamed navigation,
+phone widths, doubled text, focus, native fields, reduced motion, contrast and
+private-output checks passed. **015 is complete and ticked**. Its reusable
+exports and acceptance workflow are documented in the [styling runbook](brand-styling.md).
+Outstanding operating choices for 011/012/014 are unchanged.

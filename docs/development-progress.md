@@ -1370,3 +1370,59 @@ with **“blocked by policy”**; cleanup was not retried. The corrected test pr
 the literal traversal input and rejects it before creating files. These two
 temporary files contain factual zero-observation readiness data and are not
 included in repository changes.
+
+## Prompt 015 — Shared brand styling
+
+Implemented the light-theme design system using the existing named first-party
+brand assets and local Manrope source. **015 is complete** and its row is ticked
+in [the root tracker](../dev-tracker.md). The independent styling work does not
+resolve the recorded operating prerequisites for 011/012/014.
+
+### Implemented and changed files
+
+- `src/styles/theme.ts` and `styled.d.ts` define the typed palette, semantic
+  surfaces/borders/outcomes, typography, spacing, breakpoints, focus and control
+  dimensions. `global-style.tsx`, `registry.tsx` and `provider.tsx` implement the
+  single client styling arrangement with initial and streamed server insertion.
+- `src/components/ui/brand.tsx`, `layout.tsx`, `controls.tsx` and `feedback.tsx`
+  provide the reusable exports listed in the [styling runbook](brand-styling.md).
+  Native controls have accessible names, stable IDs, preserved hint/error
+  associations, visible focus, square corners and 44px minimum targets. Status
+  presentations combine text with decorative icons.
+- `src/app/layout.tsx` loads the existing licensed font, integrates the root
+  provider and named favicon assets. `page.tsx` uses the shared layout and honest
+  empty-state presentation. `src/components/dev/brand-demo.tsx` is imported only
+  in development, with interface examples and a local form that sends no data.
+- `next.config.ts` enables the styled-components compiler. The documented
+  `agentRules: false` setting keeps this development check from creating
+  unrelated managed instruction files. `eslint.config.mjs` extends the private
+  import guard to styles. `.gitignore` excludes Playwright captures and CLI
+  session artifacts.
+- `scripts/verify-brand-rendering.mjs` and the `test:styling` package script
+  build and verify an isolated production acceptance fixture under `.tmp`.
+  README/component guidance, this handoff, the decision register and tracker
+  document the exports and results. No dependency version, lockfile or schema
+  migration changed.
+
+### Validation and evidence
+
+All commands ran with Node.js **24.18.1** and npm **11.16.0**. Browser checks used
+Playwright CLI with Chromium. No live football/AI/database calls were dispatched.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed guarded Prisma generation/schema validation, zero-warning ESLint, strict type-check, **746 tests: 745 passed and 1 existing Windows POSIX-mode skip**, plus production build/prerendering. Log: `.tmp/brand-015-full-check.log`. |
+| Production styling fixture | `node scripts/verify-brand-rendering.mjs --serve` passed on the final theme. Artifact directory: `.tmp/brand-styling-evUVVA/`, with build log, `initial.html`, `streamed.html`, `stream-chunks.json` and `verification.json`. One initial style element contains 35 registered rules. The delayed response contains two emitted style elements, 12 unique registered rules and six response chunks. A genuinely new CSS rule precedes its actual streamed DOM and is emitted once. Global style/reset occurs once per response. |
+| Production client boundary | All 13 fixture browser chunks exclude the fake secret/private canary and checked private service names. Rendered HTML excludes transient styling attributes. Actual application production chunks/reference manifest and HTML omit the development demo module and copy. No provider services are imported into the style/component graph. |
+| Production without JavaScript | The actual application homepage returned 200 at 320px with JavaScript disabled. Readable heading/body, navy text, paper background, one styled-components style element and the named primary SVG rendered without hydration. Body is 16px; document width is 320px with no horizontal overflow. Screenshot: `output/playwright/brand-015-actual-production-no-js-320.png`. |
+| Phone/desktop and long text | Production fixture checked at **320, 360, 390, 430 and 1280px**, including long labels, errors and a 270-character unbroken identifier. No horizontal document overflow; control/link minimum height is 44px, all inspected component corners are 0px. Desktop/320 captures: `output/playwright/brand-015-production-desktop.png` and `brand-015-production-320.png`. |
+| Doubled text | The base font was explicitly doubled from 16px to 32px at 320px; body computed at 32px and document width remained within the viewport. Long text, control labels and feedback wrap. Spacing/gutter tokens were adjusted to fixed pixel values after inspection to preserve usable width. Screenshot: `output/playwright/brand-015-production-320-text-200.png`. |
+| Keyboard and fields | Visible focus follows native tab order; a disabled button is skipped. Shared field labels each associate with their control, all referenced description IDs exist, the invalid field is marked, and the existing description remains beside hint/error IDs. A real interactive status update proves hydration; icons are decorative and status labels remain visible. Focus screenshot: `output/playwright/brand-015-production-keyboard-focus.png`. |
+| Streamed browser navigation | Three primitive → delayed → primitive cycles retained the same document. New delayed content had its expected CSS marker when displayed. The adopted sheet remained **one element / 78 CSSOM rules** after every cycle, with no growth. No console warnings, hydration errors or page errors occurred during initial hydration and the navigation checks. |
+| Motion and contrast | Reduced-motion media emulation is honored; computed animation/transition duration is 0.00001s. White/teal text is 4.86:1; navy/white 16.69:1; muted/white 5.98:1; outcome text/background at least 6.10:1. Control boundaries exceed 3:1 on white/paper. Focus CSS uses a navy 3px outline with a 3px offset; Windows display scaling returns fractional pixel measurements. |
+| Handoff | Changed-file whitespace and repository-local Markdown links checked. First-party brand files and font source/license are reused unchanged. No synthetic football data, feed/card feature, locale shell or extra theme ships. |
+
+The scoped fixture and temporary production server were stopped after checks;
+the development homepage provides the preview for later primitive work. Live
+device performance and full feed/navigation acceptance belong to their later
+prompts and are not claimed by these isolated browser checks.

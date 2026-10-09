@@ -248,3 +248,14 @@ Read the [evaluation runbook](docs/forecast-evaluation.md) for metrics, immutabl
 archives and the prospective capture plan. `npm run evaluation:report` writes a
 readiness report without live requests. Actual periods, thresholds, model
 selection and qualifying observations remain pending; **014 remains unchecked**.
+
+## Shared brand styling
+
+The application uses the existing navy/teal brand, locally loaded Manrope and
+one streamed styled-components registry with a light theme. Reusable layout,
+brand image, button/link, labeled field, status and empty-state primitives use
+square corners, visible focus and responsive logical spacing. A component
+preview appears on the development homepage; production retains the honest
+development state. Read the [styling runbook](docs/brand-styling.md) for exports
+and accessibility contracts. `npm run test:styling` verifies production initial
+HTML, genuine delayed streaming, style reuse and the browser/server boundary.

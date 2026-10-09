@@ -17,7 +17,7 @@ export default defineConfig([
   ...nextTypescript,
   globalIgnores([".next/**", "out/**", "build/**", ".tmp/**", "src/server/generated/**", "next-env.d.ts"]),
   {
-    files: ["src/{components,domain}/**/*.{ts,tsx}"],
+    files: ["src/{components,domain,styles}/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": ["error", { patterns: [privateImports] }],
     },
