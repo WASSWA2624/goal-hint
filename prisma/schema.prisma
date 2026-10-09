@@ -466,6 +466,7 @@ model DailyRun {
   eatDate   DateTime        @unique @db.Date
   createdAt DateTime        @db.DateTime(3)
   sets      PredictionSet[]
+  jobs      DurableJob[]
 
   @@unique([id, sequence])
 }
@@ -495,6 +496,7 @@ model PredictionCycle {
   lockedSet          PredictionSet?            @relation("CycleLockedSet", fields: [lockedSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
   schedules          PredictionSchedule[]
   audits             PredictionAudit[]
+  jobs               DurableJob[]
 
   @@unique([id, fixtureId])
   @@unique([fixtureId, creationKey])
@@ -614,4 +616,100 @@ model PredictionAudit {
   @@unique([cycleId, version])
   @@unique([cycleId, eventKey])
   @@index([fixtureId, recordedAt])
+}
+
+// The database row is also the durable delivery record: no external dispatch
+// is necessary after commit. Refresh identity never changes between attempts.
+model DurableJobEnqueueLock {
+  id Int @id @db.UnsignedTinyInt
+}
+
+model DurableJob {
+  id                String             @id @db.Char(64)
+  type              String             @db.VarChar(64)
+  handlerVersion    Int                @db.UnsignedInt
+  idempotencyKey    String             @db.Char(64)
+  requestHash       String             @db.Char(64)
+  integrity         String             @db.Char(64)
+  envelopeJson      Json
+  refreshRunId      String?            @db.Char(36)
+  refreshFixtureId  String?            @db.Char(36)
+  refreshCycleId    String?            @db.Char(36)
+  state             String             @default("pending") @db.VarChar(16)
+  version           Int                @default(1) @db.UnsignedInt
+  priority          Int                @db.UnsignedInt
+  availableAt       DateTime           @db.DateTime(3)
+  expiresAt         DateTime           @db.DateTime(3)
+  createdAt         DateTime           @db.DateTime(3)
+  updatedAt         DateTime           @db.DateTime(3)
+  attemptCount      Int                @default(0) @db.UnsignedInt
+  fence             Int                @default(0) @db.UnsignedInt
+  ownerId           String?            @db.Char(64)
+  leaseExpiresAt    DateTime?          @db.DateTime(3)
+  attemptDeadlineAt DateTime?          @db.DateTime(3)
+  finishedAt        DateTime?          @db.DateTime(3)
+  terminalReason    String?            @db.VarChar(32)
+  run               DailyRun?          @relation(fields: [refreshRunId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle             PredictionCycle?   @relation(fields: [refreshCycleId, refreshFixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  attempts          DurableJobAttempt[]
+  events            DurableJobEvent[]
+  usage             DurableJobUsage[]
+
+  @@unique([type, handlerVersion, idempotencyKey])
+  @@unique([refreshRunId, refreshFixtureId, refreshCycleId], map: "DurableJob_refresh_key")
+  @@index([type, handlerVersion, state, availableAt, priority])
+  @@index([type, handlerVersion, state, leaseExpiresAt])
+}
+
+model DurableJobAttempt {
+  id             String            @id @db.Char(64)
+  jobId          String            @db.Char(64)
+  number         Int               @db.UnsignedInt
+  fence          Int               @db.UnsignedInt
+  ownerId        String            @db.Char(64)
+  startedAt      DateTime          @db.DateTime(3)
+  deadlineAt     DateTime          @db.DateTime(3)
+  finishedAt     DateTime?         @db.DateTime(3)
+  outcome        String            @db.VarChar(16)
+  reason         String?           @db.VarChar(32)
+  job            DurableJob        @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  events         DurableJobEvent[]
+  usage          DurableJobUsage[]
+
+  @@unique([jobId, number])
+  @@unique([id, jobId])
+}
+
+model DurableJobEvent {
+  id        String             @id @default(uuid()) @db.Char(36)
+  jobId     String             @db.Char(64)
+  version   Int                @db.UnsignedInt
+  attemptId String?            @db.Char(64)
+  kind      String             @db.VarChar(32)
+  reason    String?            @db.VarChar(32)
+  at        DateTime           @db.DateTime(3)
+  job       DurableJob         @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt   DurableJobAttempt? @relation(fields: [attemptId, jobId], references: [id, jobId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([jobId, version])
+}
+
+// Append-only links to the existing quota/cost ledgers; no secret/raw response.
+model DurableJobUsage {
+  id               String            @id @db.Char(64)
+  jobId            String            @db.Char(64)
+  attemptId        String            @db.Char(64)
+  version          Int               @db.UnsignedInt
+  requestHash      String            @db.Char(64)
+  provider         String            @db.VarChar(16)
+  requestReference String            @db.Char(64)
+  costReference    String?           @db.Char(64)
+  phase            String            @db.VarChar(16)
+  requests         Int               @db.UnsignedInt
+  durationMs       Int?              @db.UnsignedInt
+  recordedAt       DateTime          @db.DateTime(3)
+  job              DurableJob        @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  attempt          DurableJobAttempt @relation(fields: [attemptId, jobId], references: [id, jobId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([jobId, version])
 }

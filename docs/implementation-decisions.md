@@ -127,7 +127,7 @@ choices already settled by the specification remain settled.
 | **003 PostgreSQL and Prisma** | Recheck exact Prisma 7 CLI/client/adapter versions, add PostgreSQL configuration and prove database access and migrations. `7.10.0` is a checked candidate, not an installed or tested integration. |
 | **015 Brand styling** | Implement and production-test styled-components rendering using the [documented App Router registry](https://nextjs.org/docs/app/guides/css-in-js), compiler option and shared theme. Verify initial styles, streaming and hydration with this pinned stack. |
 | **017 Client state** | Introduce stores only when state is needed. Follow the [official Redux Next.js guidance](https://redux.js.org/usage/nextjs): per-request/provider instances, no global store and no Redux access from Server Components. |
-| **020 Durable jobs** | Select the queue and standalone worker runner/build strategy. Plain Node does not resolve the TypeScript `@/*` alias; external server-service execution also needs the `react-server` export condition for `server-only`. Resolve both deliberately in the worker integration. |
+| **020 Durable jobs** | Local MySQL-backed queue and native Node 24 TypeScript runner implemented in 020 using explicit relative `.ts` imports and the `react-server` condition. Hosted queue choice, worker identity, budgets and measured capacity remain deployment gates; see OP-19 and the 020 decision below. |
 | **046 Staging deployment** | Confirm hosting and deployment configuration supporting long-lived polling, durable workers and shared limits, then verify the pinned runtime on that platform. No deployment is established by prompt 001. |
 
 ## 002 — Runtime contract and evidence status
@@ -256,7 +256,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-16 Evaluation protocol and samples | **Unresolved** | Freeze chronological training/validation/calibration/final-test periods, matched fixtures/horizons, reconstructable baselines, minimum samples, quality/coverage gates and calibration aggregation before the final test. Historical comparisons require genuine pre-cutoff snapshots; otherwise plan prospective observations. §§8, 14–15; prompt 014. | Unassigned; user decision/evidence required | `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: versioned evaluation cohorts, samples, baselines, metrics and release thresholds | **014**; actual prospective evidence **047** |
 | OP-17 Public performance-claim gates | **Unresolved / evidence required** | Define minimum market/source/horizon samples and permitted claims, then gather sufficient independent evidence. No fixed accuracy promise is approved. Below-threshold public metrics must show insufficient data/provisional status. §§8, 15; prompts 014/030/038. | Unassigned; user decision/evidence required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`; Deferred: public-claim minimum samples and qualification results | **014** defines gates; public consumers **030/038** |
 | OP-18 Bounded shadow authorization | **Unresolved / evidence required** | Approve a private bounded protocol, maximum jobs/spend and evidence locations after applicable private provider/evidence-use rights, account, independent budgets and pipeline-integrity checks pass. Public redistribution/logo-display rights are required for public use, not isolated private shadow evidence collection. Candidate quality may remain unqualified while shadow gathers evidence. Shadow cannot publish production forecasts or declare qualification; a trusted verifier must validate applicable recorded evidence. Prompt 002, index gate and prompt 047. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE=shadow`, `GOAL_HINT_SHADOW_MAX_JOBS`, `GOAL_HINT_SHADOW_BUDGET_USD_CENTS`, `GOAL_HINT_SHADOW_PROTOCOL_REF`, `GOAL_HINT_PIPELINE_INTEGRITY_REF`; private provider/account, independent infrastructure/AI/research budgets and evidence/freshness/calibration prerequisites also apply | **014** prospective protocol; execution **047** after pipeline checks |
-| OP-19 Durable queue, worker runtime and private identity | **Unresolved** | Choose approved queue/runner/hosting and safe external TypeScript/module resolution, private job authentication/workload identity, deployment ownership and bounded lease/timeout/retry/concurrency settings. One long-lived leased poller is required. No managed service or paid infrastructure is inferred. §§9, 11, 13–15; prompt 020. | Unassigned; user decision/evidence required | Deferred: queue/worker hosting, service identity, leases, retry bounds and concurrency; existing job limits and infrastructure budget feed these contracts | **020**; hosted verification **046** |
+| OP-19 Durable queue, worker runtime and private identity | **Local implementation complete; deployment unresolved** | 020 implements/test-harnesses MySQL-backed durable delivery, native Node 24 `.ts`/`react-server` execution, typed registry, renewable fenced leases, bounded retries and a fail-closed private identity adapter. Approve the deployed queue/hosting, actual service/workload identity and operator ownership; qualify representative capacity and workload-specific lease/timeout/retry/concurrency/fallback settings. No managed subscription, deployment approval or continuous poller is inferred. §§9, 11, 13–15. | Unassigned; user decision/evidence required for deployment | Trusted worker/trigger bindings; Deferred: approved queue/worker hosting, actual identity and measured capacity; existing per-job limits and itemized infrastructure approval still apply | **020 local implementation**; hosted qualification **046**, poller **026** |
 | OP-20 Selection eligibility and degraded finalization | **Unresolved** | Trial-backed competition/status eligibility and an explicit recorded degraded-manifest finalization policy/action are required. A partial immutable manifest must expose missing coverage; it cannot be silently completed later or treated as authoritative emptiness. §§5, 11, 15; prompt 021. | Unassigned; user decision/evidence required | `GOAL_HINT_COMPETITION_IDS`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: manifest/status eligibility and degraded-finalization policy | **021** |
 | OP-21 Publication-status freshness | **Unresolved** | Set the maximum age and conflict handling of provider kickoff/status observations used for publication/cutoff safety; stale or unknown eligibility cannot authorize a write. Acquire trial evidence first; use the bound transactionally. §§5, 7, 15; prompt 022. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: fixture-status publication freshness bound | **022**; trial evidence **008** |
 | OP-22 Polling horizons and approach threshold | **Unresolved** | Choose approaching-kickoff lead time, active/result window, unresolved-result horizon and progressively slower correction checks with bounded stopping/review rules. Preserve visible unresolved fixtures after midnight/outside the prediction window. §§5, 11, 15; prompt 026. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: poller approach thresholds, unresolved/correction horizons/cadences | **026** |
@@ -1525,3 +1525,69 @@ seed, job/poller or UI was added. Production access/grants/retention and the
 unresolved live 011/012/014 gates keep their existing owners. Code rollback
 retains additive schema/history and disables writers; repairs roll forward
 after checking actual schema and migration state, never by resetting history.
+
+## Prompt 020 — Durable job delivery, attempts and fenced ownership
+
+Implemented locally on **9 October 2026 EAT**. The
+[durable-jobs runbook](durable-jobs.md) owns the private storage, registry,
+worker/trigger contracts, grants and recovery instructions. MySQL 8.4/InnoDB
+reuses the approved database technology for local implementation; deployment
+approval, hosting/identity, itemized infrastructure budgets and representative
+capacity remain OP-01/11/12/19/32 gates. No managed subscription is assumed.
+
+The job row is both queue state and durable delivery intent. Business effects
+and enqueue commit in one scoped transaction, so a crash after commit cannot
+lose a second broker send. Claims reconcile committed due/expired rows through
+Read Committed locking reads with SKIP LOCKED. Sixty-four static control locks,
+sharded by refresh identity or stable job key, serialize concurrent initial
+enqueues without a global mutex or retries of arbitrary business callbacks.
+Multi-job transactions acquire shards in ascending exported bucket order.
+
+Versioned strict JSON envelopes and typed Zod handler registrations bind durable
+type/version/idempotency keys, payloads, original refresh/model references and
+bounded availability/expiry/attempt/time/lease/fallback/backoff settings. The
+optional refresh run/fixture/cycle has native FKs and unique identity. Another
+model/job key cannot acquire a second refresh. Actual delivery attempts have
+separate IDs, monotonic numbers/fences and retained original owner/deadline and
+outcome timing. Existing prediction-set refresh uniqueness is preserved.
+
+Database UTC time decides ownership, hard deadlines and expiry. Every renewal,
+acknowledgement, retry and usage write checks the actual owner, attempt and fence;
+expiry is exclusive even before another worker claims. Renewal cannot extend
+the hard attempt/domain deadline. Dead owners are reconciled with stored capped
+exponential equal-jitter backoff, a maximum of 16 attempts and structured
+terminal reasons. Immutable operational identities/payloads and append-only
+events/usage use least-privilege column grants and native state/projection checks.
+
+Callers can fence business writes and acknowledge in their existing transaction;
+publication must retain canonical provider→fixture→job locking and recheck its
+domain policy. Provider I/O stays outside locks. External effects remain
+at-least-once and need the stable business key, downstream idempotency and
+existing account-wide cost/quota reservations. Request/cost-ledger references,
+actual counts, duration and dispatch/completed/uncertain phases append without
+credentials, raw responses, arbitrary error text or duplicated billing authority.
+
+The worker provides abort/deadline checks, serialized heartbeat renewals, a
+separate primary/fallback time budget and handler-supplied current eligibility.
+It runs one handler per instance; authorized deployment chooses replica limits.
+Cooperative signals bound waiting and subsequent context calls. Uncooperative
+JavaScript/external calls require a supervisor and provider idempotency; a timed
+out owner cannot finalize through fenced write paths. Graceful shutdown stops
+claims, aborts work, retries if still owned and disconnects its pool. Abrupt death
+is recovered by the next claim, retaining the same job identity.
+
+The standalone entry uses pinned Node 24 native TypeScript stripping, explicit
+relative `.ts` imports and `--conditions=react-server`, with repository type
+checks rather than runtime transpiler dependencies. A trusted operator binding
+must provide a registry and current workload authorization; no production
+handler or permissive default exists. The private trigger validates current
+identity before bounded body/payload parsing, durably enqueues and returns 202
+without executing a handler. No route or visitor authentication was introduced.
+Vercel Cron delivery, if selected later, needs independent reconciliation.
+
+021 owns daily manifest transactions, 022–024 publication/lock/lifecycle
+decisions, 025 the prediction handler, 026 the continuous poller and 043 watchdog
+recovery policy. Queue rollback disables worker/trigger code and retains all
+additive schema, jobs/attempts/events and forecast history; repairs roll forward
+after actual schema/migration-state inspection. Production activation and
+workload/host/budget/identity qualification remain explicit deployment blockers.

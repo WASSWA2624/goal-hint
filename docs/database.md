@@ -320,3 +320,8 @@ binary, generation and local checks still run and the integration skip is
 explicit. A local run establishes its tested compatibility and isolation only;
 hosted target approval, TLS, grants, budgets, backups and release readiness
 require their own evidence.
+
+The [durable-jobs runbook](durable-jobs.md) defines the additive queue migration,
+64 control lock rows, column-scoped application updates and recovery that
+preserves pending work and forecast history. Hosted queue capacity and actual
+database/worker grants remain deployment qualifications.

@@ -57,3 +57,10 @@ cycles and append-only schedule/audit history. Reuse the
 Later publication/lifecycle services supply verified decisions within the shared
 fixture transaction; these primitives do not establish publication eligibility
 or enqueue work. Read historical revisions without changing current/locked refs.
+
+`jobs/` provides the shared MySQL queue, typed registry, scoped transactional
+enqueue, renewable fenced leases and private trigger adapter. Use the
+[durable-jobs contract](../../docs/durable-jobs.md) for worker integration,
+usage references, shutdown and deployment blockers. The committed job row is
+the delivery record; no post-commit broker send is required. Keep visitor reads
+independent of enqueueing and supply trusted service/workload identity to triggers.

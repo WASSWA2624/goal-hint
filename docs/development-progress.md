@@ -1759,3 +1759,89 @@ Live evidence/model/source approvals and quality gates in 011/012/014 remain
 pending with their existing tracker state, alongside production database
 grants/retention/recovery qualification. They do not block independent local
 storage acceptance. **No blocker remains for 019.**
+
+## Prompt 020 — Durable jobs
+
+**Date:** 9 October 2026 EAT. **Status:** local implementation and required
+acceptance checks complete; 020 ticked in `dev-tracker.md`. Production activation
+is blocked by the explicit deployment decisions below. No later prompt was run.
+
+### Changes
+
+- `prisma/schema.prisma`, its schema snapshot and additive migration
+  `20261009123830_durable_jobs` add durable jobs, actual attempts, append-only
+  events/usage and 64 sharded enqueue-control locks. Existing daily runs/cycles
+  gain inverse relations. Native refresh uniqueness, fixture/cycle/run FKs,
+  envelope seals/projections and state/deadline/owner checks preserve identities.
+  Only static lock rows are initialized; no runnable job or forecast is seeded.
+- `src/server/jobs/` adds strict versioned typed envelopes/handler registry,
+  the MySQL queue and private identity/trigger adapter. Enqueue and caller effects
+  can share one transaction; caught writer errors still roll back. Committed rows
+  are their own durable delivery intent, so no broker send can disappear after
+  commit. Claims recover expired leases without changing the business job key.
+- Renewable leases, actual attempt IDs and monotonic fencing check ownership on
+  every mutation/finalization. Original deadlines stay bounded. Capped
+  exponential equal-jitter retries and structured failure/expiry reasons retain
+  audit evidence. Request/cost references, actual counts/duration and uncertainty
+  phases append without raw errors, responses or credentials.
+- The worker exposes abort/checkpoint eligibility and separate primary/fallback
+  time budgets, serializes heartbeats, stops new claims on shutdown and closes
+  its pool. `src/workers/jobs.ts` uses pinned Node 24 native TypeScript stripping,
+  relative `.ts` imports and `react-server`; a trusted operator binding is
+  mandatory. No production handler, public/internal route or scheduler is mounted.
+- `tests/durable-jobs.{test,integration}.mjs` and three test-only helpers cover
+  contracts, genuine MySQL contention/recovery and actual child-process death
+  and restart. `package.json` adds `test:jobs` and `worker:jobs` without changing
+  dependencies/lockfile. `docs/durable-jobs.md`, database/server/worker guidance,
+  decision register, progress and tracker record the handoff.
+
+### Validation and recovery evidence
+
+Checks used **Node.js 24.18.1 / npm 11.16.0** and owned throwaway
+**MySQL Community Server 8.4.11** instances selected through
+`MYSQL_TEST_SERVER_BINARY`. All identities, approvals, handlers and effects were
+synthetic. No application database, installed MySQL service, provider call,
+subscription or live deployment was used. The ownership-checked harness shut
+down and removed its owned servers and test data.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed, exit 0: Prisma generation/validation, zero-warning lint, strict type-check, **790 cases: 789 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the Next.js production build. Log: `.tmp/020-check.log`. |
+| `npm run test:jobs` | **23 passed, 0 failed/skipped**: five deterministic tests plus the database harness and 17 substantive database/process cases. Log: `.tmp/020-jobs.log`. |
+| Migration/grants | All committed migrations deployed to fresh InnoDB databases and `db:verify` found no drift. Application DDL, operational payload/attempt identity edits, job deletion and event/usage changes were denied; native checks rejected invalid attempt counters. |
+| Contention/idempotency | Six independent duplicate enqueue clients shared one job and initial event. Two competing workers created one attempt; only its actual owner could finish. Changed payload/model keys and mismatched refresh fixture/cycle bindings were refused. |
+| Death/restart | A real child worker committed an idempotent business effect, was killed, then another process recovered its expired lease. Job identity stayed fixed, attempt/fence changed and exactly one business effect remained. Closing/recreating a database connection also resumed a committed pending row with no external send. |
+| Ownership/atomicity | Already expired owners could not renew, retry or acknowledge even before takeover. Fenced effect/ack transactions rolled back together. Enqueue/caller effects rolled back after a caught writer failure; escaped enqueue calls were refused. |
+| Bounds/privacy | Heartbeat renewal did not extend hard deadlines. Tests verified fallback reserve, current eligibility stop, bounded timeout, capped retry/non-retryable reasons, graceful retry/drain, idempotent usage references, read-only history/cursors and raw-error redaction. Unauthorized triggers rejected before enqueue and never ran handlers. |
+| Standalone runtime | Actual Node `.ts` entry loaded a trusted synthetic binding, handled durable work and exited cleanly after shutdown. Missing bindings failed closed with static diagnostics and no credential output. |
+| `npm run test:history` | **22 passed, 0 failed/skipped** on MySQL 8.4.11; immutable forecast, schedule/audit, precision, transaction and closed/void read contracts remained valid. Log: `.tmp/020-history.log`. |
+| `npm run test:catalog` | **28 passed, 0 failed/skipped** on MySQL 8.4.11; canonical identities, import coordination, exact versions and provider→fixture locking remained valid. Log: `.tmp/020-catalog.log`. |
+| Review | Tracked diff/new-file whitespace, local documentation links, schema snapshot agreement, server-only markers and explicit worker imports checked. Public routes remain unchanged; no UI visual check was required. |
+
+The first contention run exposed duplicate-insert lock-upgrade deadlocks. Sharded
+enqueue locks fixed the race while preserving the rule against retrying arbitrary
+business callbacks. A positive standalone test then exposed its test-only IPC
+channel remaining open after shutdown; the binding now closes that channel and
+the harness bounds exit waiting. Only the verified owned stuck test child was
+terminated. Clean final runs passed all required checks.
+
+### Explicit deployment blockers and deferred work
+
+The local MySQL-backed implementation creates no managed subscription or hosted
+approval. OP-19 still requires confirmation of the deployed queue/worker host,
+actual service/workload identity, operator ownership and representative capacity;
+OP-01 actual target/TLS/grants/pool capacity, OP-11 approved per-workload
+time/request/token/fallback/retry/concurrency bounds, OP-12 itemized infrastructure
+budgets and OP-32 environment/host isolation remain pending. The worker's trusted
+binding fails closed until authorized; synthetic test bindings are not approval.
+At-least-once external effects still need provider idempotency and the existing
+shared quota/cost ledgers. Uncooperative in-process JavaScript needs a qualified
+supervisor/termination policy; queue fencing protects supported finalization.
+
+021 owns committed manifests and their enqueue transaction; 022–024 own
+publication/locking/lifecycle, 025 prediction orchestration, 026 the continuous
+poller, 043 watchdog/recovery thresholds and 044/046 hosted monitoring/capacity.
+Rollback stops writers/workers and retains additive schema and all job/forecast
+history; reviewed corrections roll forward after schema-state inspection.
+011/012/014 retain their existing unresolved live qualification state. No local
+implementation or acceptance blocker remains for 020.

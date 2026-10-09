@@ -6,11 +6,16 @@ contracts. Every executable module must include `import "server-only";`.
 Application routes enqueue through server services; they must not import or run
 worker entry points. Never import workers from browser or shared domain code.
 
-Future standalone Node runners and server-service tests need the
+Standalone Node runners and server-service tests need the
 `--conditions=react-server` Node option to resolve the server-only marker outside
 Next.js. TypeScript path aliases are understood by Next.js, but plain Node does
-not resolve `@/*`; the worker prompt must choose its runner/build resolution.
-No queue, scheduler, paid operation or worker process is activated here.
+not resolve `@/*`. The 020 runner uses native Node 24 TypeScript stripping,
+explicit relative `.ts` imports and a trusted operator binding. Start with
+`npm run worker:jobs -- --binding /absolute/path/to/trusted-binding.mjs` and use
+SIGINT/SIGTERM for graceful drain and pool shutdown. No production handler or
+schedule is registered by default. Read the
+[queue/runbook](../../docs/durable-jobs.md) for ownership, fallback deadlines,
+idempotency, least privilege and the unresolved hosting/identity deployment gates.
 
 Later research/prediction workers must reuse `createPolicyCostService` and
 `createCostGateway` from the server cost-control boundary. Stable work identities
