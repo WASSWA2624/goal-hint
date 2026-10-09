@@ -2115,3 +2115,67 @@ until 031 and leave detail-page rendering to 035. See
 [match-detail-api.md](match-detail-api.md) for the full DTO/query contract. Existing
 operating gates and the distinction between canonical versions and asOf-dated
 operational observations remain unchanged.
+
+## 9 October 2026 — Performance API cohort and claim boundaries (030)
+
+Implement anonymous stored GET /api/performance with a reusable bounded batch
+service. The headline cohort is canonical current kickoff in inclusive requested
+EAT dates, using the feed's enabled competition/published-history scope. Default
+period is 30 days, maximum 31. Each fixture/family contributes once, through its
+applicable closed cycle's immutable lock. Open previews, unsupported families
+and closed cycles without a lock are unavailable. Keep combined AI/fallback and
+source cells explicitly labeled; match result and double chance remain separate.
+Source, immutable model ID and exact provider-model/contract version filters
+place nonmatching available forecasts in `filteredOut`. Preserve unattributed
+unavailable/void coverage and disclose these accounting rules in the response.
+Quality coverage uses available divided by the full nonvoid known fixture cohort;
+filtered origins/versions cannot improve that rate by reducing its denominator.
+
+Available equals settled plus pending, and settled equals Correct plus Incorrect.
+Only coherent sealed settlement/result/lock input hashes supply settled picks.
+Alternative selections, superseded sets, historical postponed cycles and failed
+or delayed refreshes never increase this denominator. Historical void cycles use
+their own original kickoff period even after the current fixture moves outside
+that period. Operational measures use actual durable-job states and retained
+refresh receipts for cohort fixtures and daily-run dates inside the requested
+period. They do not label a still-usable forecast as unavailable.
+
+Reuse evaluation-metrics.ts for full distributions, overlapping double-chance
+binary-event scores and fixed-band Wilson uncertainty. Extract shared numeric
+quality-gate diagnostics for both chronological evaluation and reporting.
+Publication time defines forecast horizon, with evidence cutoff exposed
+separately. Only identical family/source/horizon policy scopes may publish
+descriptive numeric metrics; mixed horizon totals withhold values and retain
+separate horizon cells. There is no matched AI/fallback pair in a single stored
+lock. Mark source comparisons unavailable rather than using unlike fixture
+cohorts or unselected revisions. Missing matched baseline evidence also keeps
+baseline-required quality gates pending.
+
+OP-16/OP-17 still have no actual approved numeric thresholds/qualification. Do
+not invent production minimum samples, quality limits, bands or confidence Z.
+A trusted server-only binding must parse and synchronously verify a frozen
+evaluation protocol, including a second check after stored reads for revocation.
+The route currently supplies no binding: factual counts remain public, metric
+values are null with explicit unavailable reasons. Below-minimum verified-policy
+cells are insufficient-sample; failed quality diagnostics withhold values.
+Synthetic thresholds test these branches only. Passing descriptive diagnostics
+does not authorize public claims or establish calibration: claim authorization
+remains false and launch estimates provisional.
+
+Batch SELECTs reuse extracted sealed cycle/revision/result/settlement/model row
+parsers and the shared settlement projection. Normalize MySQL raw unsigned goal
+bigints/booleans at the result read boundary while retaining seal/index/hash
+checks. Bound fixtures/locks and historical cycles at 1,000 each, total selected
+JSON at 16 MiB before loading it, operational rows at 31,000 and response/query
+sizes at the existing 1 MiB/2 KiB. Fail safely on excess instead of silently
+truncating reports. Existing kickoff, state/cutoff, daily-run sequence and
+primary/foreign-key indexes support these queries; no schema or grants change.
+
+Return known version labels and at most 20 locked detail evidence links per cell
+with explicit total/truncated metadata. Never expose raw forecasts/evidence,
+model configurations/pins or private approval references. Current corrections
+first invalidate old scores, then expose the new private settlement revision at
+the actual read asOf time. A deterministic snapshot key and invalidation
+categories cover fixture/cycle/lock, result/settlement, refresh and policy changes
+for 031; no cache or event worker is added here. Full query, cohort and metric
+contracts are in [performance-api.md](performance-api.md).

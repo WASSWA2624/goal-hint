@@ -46,13 +46,16 @@ export function runFromRow(row: HistoryRow): StoredRun {
 export async function storedCycle(transaction: HistoryTransaction, id: string): Promise<StoredCycle | null> {
   const row = await transaction.predictionCycle.findUnique({ where: { id } });
   if (!row) return null;
+  const schedule = await transaction.predictionSchedule.findUnique({ where: { cycleId_version: { cycleId: id, version: row.scheduleVersion } } });
+  return cycleFromRows(row, schedule);
+}
+export function cycleFromRows(row: HistoryRow, schedule: HistoryRow | null): StoredCycle {
   try {
     const value = parseStoredCycle({ ...row, kickoffAt: historyTime(row.kickoffAt), cutoffAt: historyTime(row.cutoffAt),
       openedAt: historyTime(row.openedAt), closedAt: row.closedAt === null ? null : historyTime(row.closedAt),
       lockedAt: row.lockedAt === null ? null : historyTime(row.lockedAt), voidedAt: row.voidedAt === null ? null : historyTime(row.voidedAt) });
-    const schedule = await transaction.predictionSchedule.findUnique({ where: { cycleId_version: { cycleId: id, version: value.scheduleVersion } } });
-    if (!schedule || schedule.fixtureId !== value.fixtureId || schedule.kickoffAt.getTime() !== value.kickoffAt ||
-      schedule.cutoffAt.getTime() !== value.cutoffAt) return historyFail("invalid-state");
+    if (!schedule || schedule.cycleId !== value.id || schedule.version !== value.scheduleVersion || schedule.fixtureId !== value.fixtureId ||
+      historyTime(schedule.kickoffAt) !== value.kickoffAt || historyTime(schedule.cutoffAt) !== value.cutoffAt) return historyFail("invalid-state");
     return value;
   } catch { return historyFail("invalid-state"); }
 }
@@ -62,6 +65,11 @@ export async function storedRevision(transaction: HistoryTransaction, id: string
     FROM PredictionSet WHERE id = ${id}`;
   const row = rows[0];
   if (!row) return null;
+  const markets = await transaction.$queryRaw<HistoryRow[]>`SELECT *,
+    integrity = SHA2(CAST(payloadJson AS CHAR), 256) AS validIntegrity FROM MarketPrediction WHERE setId = ${id}`;
+  return revisionFromRows(row, markets);
+}
+export function revisionFromRows(row: HistoryRow, markets: HistoryRow[]): StoredRevision {
   try {
     assertHistorySeal(row.validIntegrity);
     const candidate = parseResolvedForecastCandidate(historyJson(row.candidateJson)), context = candidate.context.context;
@@ -82,14 +90,12 @@ export async function storedRevision(transaction: HistoryTransaction, id: string
       !Object.values(candidate.markets).some((item) => item.available) ||
       revision.generationCompletedAt < context.analysisAt || revision.publishedAt < revision.generationCompletedAt ||
       revision.recordedAt < revision.publishedAt) return historyFail("invalid-state");
-    const markets = await transaction.$queryRaw<HistoryRow[]>`SELECT *,
-      integrity = SHA2(CAST(payloadJson AS CHAR), 256) AS validIntegrity FROM MarketPrediction WHERE setId = ${id}`;
     if (markets.length !== 4) return historyFail("invalid-state");
     const seen = new Set<string>();
     for (const marketRow of markets) {
       assertHistorySeal(marketRow.validIntegrity);
       const family = marketRow.family as MarketFamily, item = candidate.markets[family];
-      if (!item || seen.has(family) || evidenceFingerprint(historyJson(marketRow.payloadJson)) !== evidenceFingerprint(item) ||
+      if (marketRow.setId !== revision.id || !item || seen.has(family) || evidenceFingerprint(historyJson(marketRow.payloadJson)) !== evidenceFingerprint(item) ||
         Boolean(marketRow.available) !== item.available) return historyFail("invalid-state");
       seen.add(family);
       const probabilities = item.available ? marketSelections[family].map((selection) =>

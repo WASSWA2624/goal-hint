@@ -5,7 +5,7 @@ import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.
 import type { Prisma, FootballFixture } from "../generated/prisma/client.ts";
 import { historyFail } from "../predictions/history-contract.ts";
 import { historyHash, historyId, historyInstant } from "../predictions/history-input.ts";
-import { assertHistorySeal, historyJson } from "../predictions/history-read.ts";
+import { assertHistorySeal, historyJson, historyTime, type HistoryRow } from "../predictions/history-read.ts";
 
 export const resultStatus = z.enum(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties",
   "postponed", "canceled", "abandoned", "awarded", "unknown"]);
@@ -32,17 +32,21 @@ export function fixtureResultMatchesCanonical(fixture: Pick<FootballFixture, "st
 
 /** Read the sealed, append-only version; canonical/live goal fields are never evidence. */
 export async function storedFixtureResult(tx: Prisma.TransactionClient, fixtureId: string, id: string): Promise<StoredFixtureResult> {
-  const row = await tx.fixtureResult.findUnique({ where: { id } });
-  if (!row || row.fixtureId !== fixtureId) return historyFail("invalid-state");
-  const [seal] = await tx.$queryRaw<{ validIntegrity: bigint }[]>`SELECT integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity FROM FixtureResult WHERE id = ${id}`;
-  assertHistorySeal(seal?.validIntegrity);
+  const [row] = await tx.$queryRaw<HistoryRow[]>`SELECT *, integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity FROM FixtureResult WHERE id = ${id}`;
+  if (!row || row.fixtureId !== fixtureId || row.id !== id) return historyFail("invalid-state");
+  return fixtureResultFromRow(row);
+}
+export function fixtureResultFromRow(row: HistoryRow): StoredFixtureResult {
+  assertHistorySeal(row.validIntegrity);
   const parsed = resultSchema.safeParse(historyJson(row.body));
   if (!parsed.success) return historyFail("invalid-state");
   const v = parsed.data;
   const content = { status: v.status, providerStatus: v.providerStatus, elapsedMinutes: v.elapsedMinutes,
     reportedGoals: v.reportedGoals, extraTimeScore: v.extraTimeScore, penaltyScore: v.penaltyScore, regulation: v.regulation };
-  if (v.id !== id || v.fixtureId !== fixtureId || v.fixtureVersion !== row.fixtureVersion || v.observedAt !== row.observedAt.getTime() ||
-      v.status !== row.status || v.regulation.verified !== row.regulationVerified || v.regulation.home !== row.regulationHome ||
-      v.regulation.away !== row.regulationAway || evidenceFingerprint(content) !== row.contentHash) return historyFail("invalid-state");
+  if (v.id !== row.id || v.fixtureId !== row.fixtureId || v.fixtureVersion !== row.fixtureVersion || v.observedAt !== historyTime(row.observedAt) ||
+      v.status !== row.status || v.regulation.verified !== Boolean(row.regulationVerified) ||
+      v.regulation.home !== (typeof row.regulationHome === "bigint" ? Number(row.regulationHome) : row.regulationHome) ||
+      v.regulation.away !== (typeof row.regulationAway === "bigint" ? Number(row.regulationAway) : row.regulationAway) ||
+      evidenceFingerprint(content) !== row.contentHash) return historyFail("invalid-state");
   return freezeEvidence(v);
 }

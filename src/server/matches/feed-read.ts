@@ -9,6 +9,13 @@ import { storedSelectionManifest } from "../selection/selection-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 
 type Tx = Prisma.TransactionClient;
+/** Shared indexed fixture cohort; aliases f/l/c denote fixture, competition and applicable cycle. */
+export function publicFixtureCohortScope(range: ReportingDateRange, competitionIds: readonly number[]) {
+  return Prisma.sql`f.provider='api-football' AND f.kickoff>=${new Date(range.window.startInclusive)} AND f.kickoff<${new Date(range.window.endExclusive)}
+    AND (EXISTS (SELECT 1 FROM FootballCompetitionProvider cp WHERE cp.competitionId=l.id AND cp.provider='api-football' AND cp.externalId IN (${Prisma.join(competitionIds)}))
+      OR (c.state IN ('closed','void') AND (c.lockedSetId IS NOT NULL OR c.currentSetId IS NOT NULL))
+      OR (c.state='void' AND EXISTS (SELECT 1 FROM PredictionSet p WHERE p.cycleId=c.id)))`;
+}
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[]) {
   const joins = Prisma.sql`FROM FootballFixture f JOIN FootballTeam h ON h.id=f.homeTeamId JOIN FootballTeam a ON a.id=f.awayTeamId
     JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
@@ -17,10 +24,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
       WHEN c.state='open' THEN c.currentSetId WHEN c.state='closed' THEN c.lockedSetId
       WHEN c.state='void' THEN COALESCE(c.lockedSetId,c.currentSetId,
         (SELECT p.id FROM PredictionSet p WHERE p.cycleId=c.id ORDER BY p.cycleRevision DESC LIMIT 1)) END`;
-  const scope = Prisma.sql`f.provider='api-football' AND f.kickoff>=${new Date(range.window.startInclusive)} AND f.kickoff<${new Date(range.window.endExclusive)}
-    AND (EXISTS (SELECT 1 FROM FootballCompetitionProvider cp WHERE cp.competitionId=l.id AND cp.provider='api-football' AND cp.externalId IN (${Prisma.join(competitionIds)}))
-      OR (c.state IN ('closed','void') AND (c.lockedSetId IS NOT NULL OR c.currentSetId IS NOT NULL))
-      OR (c.state='void' AND EXISTS (SELECT 1 FROM PredictionSet p WHERE p.cycleId=c.id)))`;
+  const scope = publicFixtureCohortScope(range, competitionIds);
   const filters: Prisma.Sql[] = [scope];
   if (query.league) filters.push(Prisma.sql`l.id=${query.league}`);
   if (query.status !== "all") filters.push(query.status === "finished"

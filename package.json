@@ -51,6 +51,7 @@
     "test:settlement": "node --conditions=react-server --test tests/market-settlement.test.mjs tests/market-settlement.integration.mjs",
     "test:feed": "node --conditions=react-server --test tests/match-feed.test.mjs tests/match-feed.integration.mjs",
     "test:detail": "node --conditions=react-server --test tests/match-detail.test.mjs tests/match-detail.integration.mjs",
+    "test:performance": "node --conditions=react-server --test tests/performance.test.mjs tests/performance.integration.mjs",
     "test": "node --conditions=react-server --test tests/*.test.mjs",
     "check": "npm run db:generate && npm run db:validate && npm run lint && npm run typecheck && npm test && npm run build"
   },

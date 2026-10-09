@@ -2544,3 +2544,96 @@ operational observations and permission filtering. 030 owns performance, 031
 cache/event work, 035 detail-page rendering and 036 history UI. No later prompt
 was started. Rollback disables the detail route while retaining immutable data.
 No UI change requires visual acceptance.
+
+## Prompt 030 — Performance API
+
+**Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
+Followed [030](../dev-plan/030-performance-api.md) only.
+Added anonymous GET /api/performance and bounded stored-data aggregation.
+Acceptance uses owned throwaway MySQL 8.4.11 databases and synthetic forecasts,
+observations, approvals and policies. No live provider/AI, production database,
+worker, scheduler or independent quality claim was exercised.
+
+### Changed files and behavior
+
+- `src/app/api/performance/route.ts`, `src/server/performance/performance-query.ts`,
+  `performance-read.ts`, `performance-service.ts`, `performance-http.ts` and
+  `src/domain/performance.ts`: strict bounded public query/response contracts,
+  indexed batch reads, repeatable snapshots, locked forecast coverage/scoring,
+  explicit source/version/horizon scopes, policy verification and correction
+  freshness. Unavailable comparisons do not substitute unmatched fixtures.
+- `src/server/evaluation/evaluation-gates.ts`, `evaluation-service.ts`: reuse
+  numeric quality diagnostics in chronological evaluation and public reporting.
+  Existing `evaluateMarketMetrics` remains the sole probability scoring and
+  calibration implementation, including overlapping binary double chance.
+- `src/server/predictions/history-read.ts`, `src/server/results/result-read.ts`,
+  `src/server/settlement/settlement-read.ts`, `src/server/predictor/predictor-mysql-store.ts`
+  and `src/server/matches/feed-read.ts`: shared sealed row parsers, settlement
+  projection and indexed public fixture scope. The raw MySQL result boundary
+  normalizes unsigned goal bigints and booleans while preserving seal/index/hash
+  checks. No migration, write grants or private worker behavior changes.
+- `tests/performance.test.mjs`, `performance.integration.mjs`,
+  `tests/helpers/performance-fixtures.mjs`, `package.json`: `npm run test:performance`,
+  hand calculations, genuine MySQL reconciliation, corrections, policy gates,
+  bounds, privacy and read-only/outbound interception.
+- `docs/performance-api.md`, implementation decisions and tracker: cohort,
+  metric/claim, evidence, correction, resource and future invalidation contracts.
+
+### Reconciliation and math
+
+The 30-fixture synthetic cohort contains one applicable void, one old postponed
+cycle plus its new applicable cycle, open/no-lock forecasts, unsupported provider
+families, mixed-family sources and a newer ineligible stored revision. The cutoff
+locks the earlier eligible publication; reporting uses that exact lock even when
+the newer current pointer would select a different outcome.
+
+- Match result and double chance each reconcile to **5 available, 24 unavailable,
+  1 void; 4 settled and 1 pending**, with 3 AI and 2 provider available forecasts.
+  Source filters account for nonmatching forecasts separately as filteredOut.
+- Totals and BTTS each reconcile to **4 available, 25 unavailable, 1 void**, with
+  all four available picks settled. The unsupported fallback families are not
+  borrowed from older AI revisions.
+- Combined match result starts at **2 correct / 4 settled = 0.5**, full-distribution
+  Brier **0.78**, and log loss
+  `(-ln(.4)-ln(.3)-ln(.5)-ln(.1))/4`. Double-chance Brier is **0.26**; four selected
+  picks produce twelve calibration events across the three overlapping selections,
+  without multiplying the hit-rate denominator.
+- Correcting the first regulation result invalidates its old audit immediately:
+  **3 settled / 2 pending** until private resettlement. Afterwards match result is
+  **1 correct / 4 settled = 0.25**, Brier **0.83**, with the same locked evidence
+  links and the actual audited correction/read time. Both snapshot transitions
+  change the fingerprint.
+- Moving the current postponed fixture outside the date range reduces headline
+  fixture count to 29 while the old postponed cycle remains in its original date
+  period; the four scored picks and their metrics remain unchanged. Failed jobs
+  and retained refreshes are separate operational counts.
+- Zero denominators, insufficient samples, failed quality gates, missing matched
+  baseline evidence, mixed horizons, foreign provider versions, absent/forged/
+  asynchronous/revoked policies and unapproved production thresholds withhold
+  numeric values. Explicit calibration counts and Wilson uncertainty appear only
+  with the verified synthetic fixed-band policy. No public claim is authorized.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Performance acceptance | **36 passed, 0 failed/skipped**, including eight genuine MySQL subcases. `npm run test:performance`; log `.tmp/030-performance-final.log`. Covers hand counts/math, two cycles, ignored unselected revisions, mixed sources, pending/void/unsupported families, filters, matched-comparison unavailability, actual correction clocks and immutable evidence. |
+| Public quality/limits | Unit cases prove zero/null denominators, minimum samples, coverage/loss gates, missing matched baselines, policy scope and mixed horizons. The coverage denominator retains all nonvoid known fixtures, including filtered origins/versions; filtering cannot inflate coverage. 1,001 fixtures stop before snapshot loading; an intercepted oversized JSON preflight stops before payload reading. |
+| Read-only/privacy | A genuine transaction proxy rejects writes and non-SELECT SQL, observes bounded batch operations, and sees zero outbound fetches. Before/after jobs, revisions, evidence, results, audits, settlements, cycle pointers, fixture versions and search counters remain identical. No cookie or private proof/raw/model configuration fields escape. |
+| Shared reader regressions | **98 passed, 0 failed/skipped** on owned MySQL. Command `node --conditions=react-server --test --test-concurrency=2 tests/prediction-history.integration.mjs tests/result-sync.integration.mjs tests/market-settlement.integration.mjs tests/match-feed.integration.mjs tests/match-detail.integration.mjs tests/cutoff-locking.integration.mjs`; log `.tmp/030-regressions.log`. Includes native checks/grants, unchanged results, extra-time/penalty rules, late locks, audited voids, corrupt evidence, atomic rollback and readonly feed/detail/history. |
+| Lint/types/build | Lint and typecheck passed; final production build also passed TypeScript and lists dynamic /api/performance. Logs `.tmp/030-lint-final.log`, `.tmp/030-types-final.log`, `.tmp/030-build.log`. |
+| Production HTTP | Owned loopback Next server with database capability disabled passed malformed/duplicate/oversize filters, shared feed errors, safe uncached 503, no locale redirect or cookie and POST 405. Harness `.tmp/030-http-smoke.mjs`; final log `.tmp/030-http-final.log`. Genuine successful HTTP handler reads are covered in the MySQL suite. |
+| Repository units | **905 cases: 904 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Quiet command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/030-unit-final.log`. Includes chronological evaluation regressions for the extracted shared quality diagnostics. |
+
+### Operating gates and scope
+
+OP-16/OP-17 remain unresolved: actual approved sample/quality/coverage thresholds,
+calibration bands/confidence and independent chronological qualification are not
+supplied. The production route binds no policy, serves factual counts and explicit
+unavailable null metrics, and retains provisional estimates. Synthetic verified
+policies establish implementation behavior only. Existing provider/model/reuse/
+budget/database/hosting gates remain effective. No cache/UI/later prompt is added;
+031 receives stable snapshot keys and explicit invalidation categories. Rollback
+disables the performance route while retaining stored immutable data. No UI
+change requires visual acceptance. No feature implementation or local acceptance
+blocker remains; 030 is checked in the tracker. Later rows remain unchanged.

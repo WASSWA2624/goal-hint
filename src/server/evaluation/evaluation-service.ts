@@ -1,5 +1,7 @@
 import "server-only";
 
+import { evaluateQualityGate } from "./evaluation-gates.ts";
+
 import { getReportingDate } from "../../domain/calendar.ts";
 import { settleMarketSelection } from "../../domain/market-settlement.ts";
 import { marketSelections } from "../../domain/markets.ts";
@@ -146,19 +148,8 @@ export function createEvaluationHarness(options: Readonly<{ authority: Evaluatio
     }
     const gateResults: EvaluationGateResult[] = (protocol.gates ?? []).map((gate: QualityGate) => {
       const cell = cells.find((entry) => entry.system === gate.system && entry.family === gate.family && entry.horizonId === gate.horizonId)!;
-      const reasons: string[] = [], failures: string[] = [];
-      const eligible = cell.coverage.total - cell.coverage.void, ratio = eligible === 0 ? null : cell.coverage.available / eligible;
-      if (cell.metrics.count < gate.minimumSamples) reasons.push("insufficient-settled-samples");
-      if (ratio === null) reasons.push("no-eligible-coverage-denominator"); else if (ratio < gate.minimumCoverage) failures.push("coverage-below-gate");
-      for (const [observed, maximum, reason] of [[cell.metrics.brier, gate.maximumBrier, "brier-above-gate"],
-        [cell.metrics.logLoss, gate.maximumLogLoss, "log-loss-above-gate"], [cell.metrics.calibrationError, gate.maximumCalibrationError, "calibration-error-above-gate"]] as const)
-        if (maximum !== null) { if (observed === null) reasons.push("missing-score"); else if (observed > maximum) failures.push(reason); }
-      if (gate.baseline !== null) {
-        const match = comparisons.find((entry) => entry.system === gate.system && entry.referenceSystem === gate.baseline && entry.family === gate.family && entry.horizonId === gate.horizonId);
-        if (!match || match.count < gate.minimumSamples || match.brierDifference === null) reasons.push("insufficient-matched-baseline-samples");
-        else if (match.brierDifference > gate.maximumBrierDifference!) failures.push("matched-brier-difference-above-gate");
-      }
-      const diagnostic = reasons.length > 0 ? "pending" : failures.length > 0 ? "failed" : "passed";
+      const match = comparisons.find((entry) => entry.system === gate.system && entry.referenceSystem === gate.baseline && entry.family === gate.family && entry.horizonId === gate.horizonId);
+      const { diagnostic, reasons, failures } = evaluateQualityGate(gate, cell.metrics, cell.coverage, match);
       const blockers = [dataset.mode === "synthetic" ? "synthetic-data" : null, !frozen ? "unapproved-protocol" : null,
         !finalProof ? "not-independent-final-test" : null, !protocol.candidateModel ? "unselected-model" : null,
         !knownFit ? "unknown-model-fit-provenance" : null].filter((entry): entry is string => entry !== null);

@@ -22,7 +22,7 @@ const identity = (value: unknown): string => {
 function authorized(model: ModelVersion, authority: ModelAuthority): void {
   try { assertModelAuthorized(model, authority); } catch { return fail("not-authorized"); }
 }
-function fromRow(row: Row): ModelVersion {
+export function modelVersionFromRow(row: Row): ModelVersion {
   if (row.validIntegrity !== true && row.validIntegrity !== 1 && row.validIntegrity !== 1n) return fail("invalid-state");
   let model: ModelVersion;
   try { model = parseModelVersion(typeof row.configurationJson === "string" ? JSON.parse(row.configurationJson) : row.configurationJson); }
@@ -48,7 +48,7 @@ export function createMysqlModelVersionStore(database: DatabaseRuntime) {
     if (rows.length === 0) return null;
     const row = rows[0];
     if (rows.length !== 1 || row === undefined || row.id !== id) return fail("invalid-state");
-    return fromRow(row);
+    return modelVersionFromRow(row);
   }
   async function find(id: string): Promise<ModelVersion | null> {
     identity(id);
