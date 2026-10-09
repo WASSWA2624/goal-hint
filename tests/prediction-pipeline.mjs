@@ -37,7 +37,7 @@ const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEv
   'PredictionSet','MarketPrediction','PredictionSchedule','PredictionAudit','DailyRunManifest',
   'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent','PredictionCycleOperation','FixtureLifecycleObservation',
   'PredictionRefreshIntent','PredictionRefreshStage','PredictionRefreshOutcome','DurableJobUsage',
-  'FixtureResult','ResultProviderObservation'];
+  'FixtureResult','ResultProviderObservation','SettlementBatch','MarketSettlementRevision','SettlementEventReceipt'];
 const target = (state) => ({ fixtureId: state.fixture.id, cycleId: state.cycle.id });
 
 export async function withPredictionPipeline(t, operation) {
@@ -71,6 +71,7 @@ export async function withPredictionPipeline(t, operation) {
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureLifecycleState TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ResultPollerLease TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureResultState TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE (revisionId) ON goal_hint_test.MarketSettlement TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (completedAt) ON goal_hint_test.ResultSyncBatch TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ApiQuotaAccount TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DailyRun TO 'cutoff_app'@'127.0.0.1';

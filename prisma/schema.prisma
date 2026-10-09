@@ -172,6 +172,7 @@ model FootballFixture {
   resultState           FixtureResultState?
   results               FixtureResult[]
   resultObservations    ResultProviderObservation[]
+  settlementBatches     SettlementBatch[]
   provider              String                        @db.VarChar(32)
   externalId            BigInt                        @db.UnsignedBigInt
   homeTeamId            String                        @db.Char(36)
@@ -611,6 +612,8 @@ model PredictionCycle {
   publicationBarrier    PredictionPublicationBarrier?
   operations            PredictionCycleOperation[]
   lifecycleObservations FixtureLifecycleObservation[]
+  settlements           MarketSettlement[]
+  settlementRevisions   MarketSettlementRevision[]
 
   @@unique([id, fixtureId])
   @@unique([fixtureId, creationKey])
@@ -678,6 +681,7 @@ model PredictionSet {
   markets               MarketPrediction[]
   refreshResults        PredictionRefreshResult[]
   cycleOperations       PredictionCycleOperation[]
+  settlements           MarketSettlementRevision[]
 
   @@unique([id, cycleId, fixtureId])
   @@unique([runId, fixtureId, cycleId], map: "PredictionSet_refresh_key")
@@ -825,24 +829,28 @@ model PredictionPublicationBarrier {
 
 // Per-fixture data-version cursor. Delivery/acknowledgement belongs to future caching.
 model PredictionChangeEvent {
-  fixtureId       String                       @db.Char(36)
-  version         BigInt                       @db.UnsignedBigInt
-  resultId        String?                      @unique @db.Char(64)
-  operationId     String?                      @unique @db.Char(64)
-  lifecycleId     String?                      @unique @db.Char(64)
-  fixtureResultId String?                      @unique @db.Char(64)
-  fixtureResult   FixtureResult?               @relation(fields: [fixtureResultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
-  kind            String                       @db.VarChar(32)
-  at              DateTime                     @db.DateTime(3)
-  result          PredictionRefreshResult?     @relation(fields: [resultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
-  operation       PredictionCycleOperation?    @relation(fields: [operationId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
-  lifecycle       FixtureLifecycleObservation? @relation(fields: [lifecycleId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  fixtureId         String                       @db.Char(36)
+  version           BigInt                       @db.UnsignedBigInt
+  resultId          String?                      @unique @db.Char(64)
+  operationId       String?                      @unique @db.Char(64)
+  lifecycleId       String?                      @unique @db.Char(64)
+  fixtureResultId   String?                      @unique @db.Char(64)
+  settlementId      String?                      @unique @db.Char(64)
+  settlement        SettlementBatch?             @relation(fields: [settlementId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  settlementReceipt SettlementEventReceipt?
+  fixtureResult     FixtureResult?               @relation(fields: [fixtureResultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  kind              String                       @db.VarChar(32)
+  at                DateTime                     @db.DateTime(3)
+  result            PredictionRefreshResult?     @relation(fields: [resultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  operation         PredictionCycleOperation?    @relation(fields: [operationId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  lifecycle         FixtureLifecycleObservation? @relation(fields: [lifecycleId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
 
   @@id([fixtureId, version])
   @@unique([resultId, fixtureId, version], map: "PredictionChangeEvent_result_key")
   @@unique([operationId, fixtureId, version], map: "PredictionChangeEvent_operation_key")
   @@unique([lifecycleId, fixtureId, version], map: "PredictionChangeEvent_lifecycle_key")
   @@unique([fixtureResultId, fixtureId, version], map: "PredictionChangeEvent_fixture_result_key")
+  @@unique([settlementId, fixtureId, version], map: "PredictionChangeEvent_settlement_key")
 }
 
 // One continuous poller per provider account, independent of visitors and job delivery.
@@ -892,24 +900,89 @@ model FixtureResultState {
 }
 
 model FixtureResult {
-  id                 String                 @id @db.Char(64)
-  fixtureId          String                 @db.Char(36)
-  fixtureVersion     BigInt                 @db.UnsignedBigInt
-  observedAt         DateTime               @db.DateTime(3)
-  status             String                 @db.VarChar(32)
+  id                 String                     @id @db.Char(64)
+  fixtureId          String                     @db.Char(36)
+  fixtureVersion     BigInt                     @db.UnsignedBigInt
+  observedAt         DateTime                   @db.DateTime(3)
+  status             String                     @db.VarChar(32)
   regulationVerified Boolean
-  regulationHome     Int?                   @db.UnsignedInt
-  regulationAway     Int?                   @db.UnsignedInt
-  contentHash        String                 @db.Char(64)
-  integrity          String                 @db.Char(64)
+  regulationHome     Int?                       @db.UnsignedInt
+  regulationAway     Int?                       @db.UnsignedInt
+  contentHash        String                     @db.Char(64)
+  integrity          String                     @db.Char(64)
   body               Json
-  fixture            FootballFixture        @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fixture            FootballFixture            @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   states             FixtureResultState[]
   event              PredictionChangeEvent?
+  settlements        MarketSettlementRevision[]
 
   @@unique([id, fixtureId])
   @@unique([id, fixtureId, fixtureVersion], map: "FixtureResult_change_key")
   @@index([fixtureId, observedAt, id])
+}
+
+// One atomic projection change and invalidation per fixture, regardless of family count.
+model SettlementBatch {
+  id             String                     @id @db.Char(64)
+  fixtureId      String                     @db.Char(36)
+  fixtureVersion BigInt                     @db.UnsignedBigInt
+  at             DateTime                   @db.DateTime(3)
+  fixture        FootballFixture            @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revisions      MarketSettlementRevision[]
+  event          PredictionChangeEvent?
+
+  @@unique([id, fixtureId])
+  @@unique([id, fixtureId, fixtureVersion], map: "SettlementBatch_change_key")
+}
+
+// Mutable pointer only; history and prior correction evidence are never overwritten.
+model MarketSettlement {
+  fixtureId  String                   @db.Char(36)
+  cycleId    String                   @db.Char(36)
+  family     String                   @db.VarChar(32)
+  revisionId String                   @unique @db.Char(64)
+  cycle      PredictionCycle          @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  revision   MarketSettlementRevision @relation("ActiveSettlement", fields: [revisionId, cycleId, family], references: [id, cycleId, family], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([cycleId, family])
+  @@unique([revisionId, cycleId, family], map: "MarketSettlement_active_key")
+  @@index([fixtureId, cycleId])
+}
+
+model MarketSettlementRevision {
+  id          String                    @id @db.Char(64)
+  fixtureId   String                    @db.Char(36)
+  cycleId     String                    @db.Char(36)
+  family      String                    @db.VarChar(32)
+  batchId     String                    @db.Char(64)
+  previousId  String?                   @unique @db.Char(64)
+  resultId    String?                   @db.Char(64)
+  lockedSetId String?                   @db.Char(36)
+  inputHash   String                    @db.Char(64)
+  at          DateTime                  @db.DateTime(3)
+  integrity   String                    @db.Char(64)
+  body        Json
+  cycle       PredictionCycle           @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  batch       SettlementBatch           @relation(fields: [batchId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  result      FixtureResult?            @relation(fields: [resultId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  lockedSet   PredictionSet?            @relation(fields: [lockedSetId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  active      MarketSettlement?         @relation("ActiveSettlement")
+  previous    MarketSettlementRevision? @relation("SettlementHistory", fields: [previousId, cycleId, family], references: [id, cycleId, family], onDelete: Restrict, onUpdate: Restrict)
+  next        MarketSettlementRevision? @relation("SettlementHistory")
+
+  @@unique([id, cycleId, family], map: "MarketSettlementRevision_identity_key")
+  @@unique([previousId, cycleId, family], map: "MarketSettlementRevision_previous_key")
+  @@index([cycleId, family, at, id])
+}
+
+// Per-event receipts avoid losing late commits behind a global time watermark.
+model SettlementEventReceipt {
+  fixtureId String                @db.Char(36)
+  version   BigInt                @db.UnsignedBigInt
+  at        DateTime              @db.DateTime(3)
+  event     PredictionChangeEvent @relation(fields: [fixtureId, version], references: [fixtureId, version], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([fixtureId, version])
 }
 
 model ResultProviderObservation {

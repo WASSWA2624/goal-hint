@@ -2347,3 +2347,71 @@ from tests. Existing OP-07/14/19/21 operating gates continue to apply.
 Rollback stops the binding and retains additive schema, canonical identities,
 responses, result revisions, forecasts, manifests and audit/events. Inspect actual
 DDL state and repair forward. No UI change requires visual acceptance.
+
+## Prompt 027 — Market settlement
+
+**Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
+Followed [027](../dev-plan/027-market-settlement.md) only. Applied additive
+migrations to owned throwaway MySQL 8.4.11 instances; no installed/production
+database, provider network, AI invocation or live activation was used.
+
+### Implemented and changed files
+
+- `src/server/settlement/settlement-contract.ts` and `settlement-service.ts`:
+  immutable locked-pick settlement, independent four-family outcomes, correction
+  chains, atomic fixture invalidations, durable source receipts, bounded missed
+  work discovery/reconciliation and an existing-worker job definition with lease
+  fencing. Reuses shared regulation domain/history/cutoff/catalog/job services.
+- `src/server/results/result-read.ts` and `result-sync-mysql-store.ts`: shared
+  sealed result reader validating identity, version, body and indexed score
+  fields/content hash; the synchronization read now reuses that reader.
+- `prisma/schema.prisma`, snapshot and migration
+  `20261009181240_market_settlement`: SettlementBatch, MarketSettlement,
+  MarketSettlementRevision and SettlementEventReceipt; composite restrictive
+  foreign keys, one active family pointer, append-only correction chains and an
+  exactly-one-source settlement event extension. InnoDB/binary identities.
+- `tests/market-settlement.integration.mjs`, `tests/prediction-pipeline.mjs` and
+  `package.json`: genuine MySQL acceptance, least-privilege settlement grants and
+  `npm run test:settlement`. Existing pure market rules/tests are reused.
+- `docs/market-settlement.md`, decision register and tracker: evidence,
+  correction/applicable-cycle contracts, private worker integration, recovery,
+  grants, rollout boundaries and completion handoff.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| `npm run test:settlement` | **28 passed, 0 failed/skipped**: 11 domain checks, 16 substantive genuine MySQL cases and their harness. Log `.tmp/027-settlement-final.log`. |
+| Regulation rules | Draws, 0–0, BTTS, exactly two/three goals, live reported scores, extra time and penalties with/without separately verified regulation passed. |
+| Missing/void outcomes | Partial provider families, closed no prediction, canceled/abandoned/awarded/postponed locks, early-start cutoff invalidation, historical void cycles and a new applicable cycle passed. |
+| Corrections/integrity | Prior badge/reason/sealed result, visible correction time, unchanged badge corrections, repeated score confirmation, exact immutable locked picks, stale canonical/result disagreement, corrupt seals and crossed family pointers passed. |
+| Concurrency/recovery | Twelve competing replica deliveries create one batch/four active outcomes. Duplicate replay, rollback before commit, lost acknowledgement after commit, bounded omitted-delivery/cycle discovery, expired lease fencing and successful replacement durable delivery passed. |
+| Migration/grants | Fresh deployment and `db:verify` passed without drift. Foreign keys, event shape, binary InnoDB tables and denial of audit UPDATE/DELETE passed. |
+| Affected database regressions | Cutoff, selection, prediction history, result sync, publication and lifecycle: **109 passed**, no failures/skips. Durable jobs standalone rerun: **18 passed**, no failures/skips (`.tmp/027-jobs-repeat.log`). |
+| Repository units | **823 cases: 822 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`, log `.tmp/027-unit.log`. |
+| Schema/lint/types | Prisma format/generation/validation, schema/snapshot equality, `npm run lint` and final `npm run typecheck` passed. Logs `.tmp/027-lint.log`, `.tmp/027-typecheck.log`. |
+| Production build | `npm run build` passed compilation, strict TypeScript and page generation (`.tmp/027-build.log`). |
+
+The combined seven-suite regression run recorded 125 passes and two failures
+(one existing durable-job wall-clock expiry assertion and its parent harness).
+The short jitter backoff had already elapsed by the next claim under concurrent
+load, so that claim legitimately returned a replacement lease. The isolated
+durable-job rerun passed all 18 cases; no queue implementation/test change was
+made for this feature. Combined log `.tmp/027-regression.log` retains the result.
+
+Repeated-score acceptance exposed a real projection edge case: canonical score
+verification can advance while material result synchronization preserves its
+original sealed timestamp. Settlement now accepts the original verification
+when score/evidence still agree and canonical verification is no earlier. An
+unchanged confirmation no longer creates a false correction or Pending badge.
+
+### Remaining operating gates and handoff
+
+No feature implementation/acceptance blocker remains. Synthetic evidence does
+not establish live provider rights, regulation mapping, quality or approvals.
+Existing provider/model/rights/database/hosting gates continue to apply; private
+job execution bounds and binding must be supplied by the operator. No scheduler
+or worker was activated. 030 owns hit-rate aggregation, 031 owns result-event
+delivery/cache invalidation and 043 owns watchdog activation. Rollback stops the
+private binding and retains additive schema, immutable locks, result/correction
+evidence and durable events. No UI change requires visual acceptance.

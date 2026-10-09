@@ -1941,3 +1941,65 @@ matching the existing account collation. Application grants retain append-only
 results/observations and response bodies; only response completion and mutable
 lease/age projections need UPDATE. Stop the binding for rollback and retain the
 additive schema and immutable evidence; inspect DDL state and repair forward.
+
+## Prompt 027 — Audited settlement and applicable cycles
+
+**Decision date:** 9 October 2026. **Scope:** persisted settlement only; no
+hit-rate aggregation, optional exact scores, public result delivery or live
+worker activation. See [market settlement](market-settlement.md).
+
+Reuse the four-family domain rules and the history reader's verified immutable
+locked snapshot. A current/unlocked forecast never becomes a settlement pick.
+Missing families remain Unavailable; an open cycle awaits a lock and a closed or
+void cycle without one has no prediction. Available locked selections use
+verified regulation including stoppage time, excluding extra time and penalties.
+Scheduled/live and unresolved final scores remain Pending. Ineligible cycles,
+formal postponements, cancellations, abandonments, awards and invalidated cutoff
+locks remain Void with their original cycle reason. A pre-lock void preserves
+its forecast in prediction history without manufacturing a locked prediction.
+
+Read FixtureResult through a shared sealed/versioned reader that checks body,
+identity, indexed score fields and content hash. Require canonical status, score
+and evidence agreement and no lifecycle issue before settling. Reverification
+of the same score may advance canonical verification time without appending a
+material result; retain and accept the original sealed verification time when
+it is no newer than canonical verification. A changed score without a matching
+result version suppresses stale settled counting immediately and remains
+Pending until synchronization supplies verified evidence.
+
+One MarketSettlement pointer per cycle/family references append-only
+MarketSettlementRevision history. Its input fingerprint includes the rule and
+result versions, immutable pick/source/probability and eligibility/outcome.
+Duplicate events/replicas leave history and cursors unchanged. Result corrections
+following Correct/Incorrect append an audited predecessor and database UTC
+correction time against the same lock, including when the badge is unchanged.
+Prior badges, reasons and original sealed results remain readable. First-time
+pending-to-settled is a transition; later transitions preserve the last visible
+correction time. Chain order is independent of millisecond timestamp ties.
+Once recorded, void-cycle evidence is historical and later result corrections
+do not multiply it.
+
+Serialize with the established provider then fixture locks. Commit changed
+family pointers/history, one SettlementBatch, one fixture dataVersion increment
+and its PredictionChangeEvent(kind=market-settlement) together. Composite FKs
+bind result, lock, predecessor, cycle and invalidation to the correct identity;
+the event shape permits exactly one refresh/operation/lifecycle/result/settlement
+binding. Runtime grants allow only pointer updates and append-only history.
+
+Consume durable source events using per-event SettlementEventReceipt rows in
+that transaction. Bounded discovery also finds cycles with missing family
+projections. There is no global timestamp cursor or settlement feedback loop.
+Private reconciliation recovers missed delivery, rollback, exhausted jobs and
+lost commit acknowledgements. The existing durable worker can register the
+fixture-scoped prediction.market-settlement handler; supplied leases are checked
+before effects and before commit. Execution bounds and host/scheduler binding
+remain explicit operator inputs; 043 owns watchdog activation.
+
+The repository reads a repeatable snapshot with applicableCycleId from the
+canonical fixture pointer, historical cycles, one active family projection,
+isCurrent and eligibleForCounting. Counting eligibility requires a current
+Correct/Incorrect selected pick on the applicable closed cycle. Historical void
+cycles, alternatives, superseded audit revisions, missing/pending outcomes and
+unreconciled stale results are excluded. 030 owns aggregation, and 031 owns event
+delivery/cache invalidation. Synthetic acceptance proves mechanics only; existing
+provider, model, rights, operating and deployment gates remain in effect.

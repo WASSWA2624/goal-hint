@@ -13,6 +13,7 @@ import { lifecycleObservationSchema } from "../predictions/lifecycle-input.ts";
 import { lifecycleContentHash } from "../predictions/lifecycle-policy.ts";
 import { finalStatus } from "./result-sync-policy.ts";
 import { ResultSyncError, resultSyncFail, type PollLease, type ResultSyncStore } from "./result-sync-contract.ts";
+import { storedFixtureResult } from "./result-read.ts";
 
 type Tx = Prisma.TransactionClient;
 const batchSchema = z.strictObject({ id: historyHash, accountId: historyHash, policyHash: historyHash,
@@ -199,10 +200,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
       return database.transaction(async (tx) => {
         const state = await tx.fixtureResultState.findUnique({ where: { fixtureId } });
         if (!state?.resultId) return { state, result: null };
-        const row = (await tx.$queryRaw<{ body: unknown; validIntegrity: bigint }[]>`SELECT body, integrity = SHA2(CAST(body AS CHAR), 256) AS validIntegrity
-          FROM FixtureResult WHERE id = ${state.resultId} AND fixtureId = ${fixtureId}`)[0];
-        if (!row) return resultSyncFail("unavailable"); assertHistorySeal(row.validIntegrity);
-        return { state, result: historyJson(row.body) };
+        return { state, result: await storedFixtureResult(tx, fixtureId, state.resultId) };
       }, { isolationLevel: "RepeatableRead" });
     },
   });
