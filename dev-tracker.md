@@ -33,7 +33,7 @@
 | ☑         | [026-fixture-result-sync.md](dev-plan/026-fixture-result-sync.md)               |
 | ☑         | [027-market-settlement.md](dev-plan/027-market-settlement.md)                   |
 | ☑         | [028-match-feed-api.md](dev-plan/028-match-feed-api.md)                         |
-| ☐         | [029-match-detail-api.md](dev-plan/029-match-detail-api.md)                     |
+| ☑         | [029-match-detail-api.md](dev-plan/029-match-detail-api.md)                     |
 | ☐         | [030-performance-api.md](dev-plan/030-performance-api.md)                       |
 | ☐         | [031-public-response-cache.md](dev-plan/031-public-response-cache.md)           |
 | ☐         | [032-match-feed-page.md](dev-plan/032-match-feed-page.md)                       |

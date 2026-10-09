@@ -18,6 +18,11 @@ const voidKeys = { "formal-postponement": "outcome.postponement", "fixture-cance
   "fixture-abandoned": "outcome.abandonment", "fixture-awarded": "outcome.award", "locked-cutoff-invalidated": "outcome.invalidCutoff",
   "ineligible-cycle": "outcome.ineligible" } as const;
 
+export function publicVoidReason(reason: string | null, locale = "en") {
+  const code = reason && Object.hasOwn(voidKeys, reason) ? reason as keyof typeof voidKeys : "ineligible-cycle";
+  return { code, explanation: createMessages(locale).text(voidKeys[code]) };
+}
+
 export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string, partialCoverage: boolean, window: InstantWindow, locale: string): Promise<MatchFeedRecord> {
   const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id }, include: { homeTeam: true, awayTeam: true,
     season: { include: { competition: true } }, resultState: true, lifecycleState: true } });
@@ -32,9 +37,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
   const updating = cycle?.state === "open" && work?.job && ["pending", "running"].includes(work.job.state);
   const delayed = refresh?.outcome === "retained-previous" || work?.job && ["failed", "expired"].includes(work.job.state);
   const prediction = cycle && cycle.state !== "open" ? "locked" : updating ? "updating" : outside ? "outside-window" : delayed ? "delayed" : revision ? "current" : "unavailable";
-  const rawVoidReason = cycle?.voidReason ?? "ineligible-cycle";
-  const voidCode = Object.hasOwn(voidKeys, rawVoidReason) ? rawVoidReason as keyof typeof voidKeys : "ineligible-cycle";
-  const voidReason = cycle?.state === "void" ? { code: voidCode, explanation: messages.text(voidKeys[voidCode]) } : null;
+  const voidReason = cycle?.state === "void" ? publicVoidReason(cycle.voidReason, locale) : null;
   const available = revision ? Object.values(revision.candidate.markets).filter((item) => item.available) : [];
   const markets: NonNullable<MatchFeedRecord["forecast"]>["markets"] = available.map((item) => {
     const active = settlement?.cycles[0]?.markets.find((entry) => entry.base.family === item.market.family);

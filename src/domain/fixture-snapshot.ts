@@ -75,7 +75,7 @@ function acceptedMarket(value: unknown): value is AcceptedMarket {
   return Object.keys(candidate).sort().join() === expectedKeys && candidate.ruleVersion === MARKET_RULE_VERSION;
 }
 
-const forecast = z.strictObject({
+export const publicForecastSchema = z.strictObject({
   runId: identity, revisionId: identity, publishedAt: instant,
   updateDelayed: z.boolean().optional(), provisional: z.boolean().optional(),
   markets: z.array(z.strictObject({
@@ -124,7 +124,7 @@ export const fixtureSnapshotSchema = z.strictObject({
   kickoffAt: instant.nullable(), syncedAt: instant.nullable(),
   status: z.enum(statuses), score: score.nullable(),
   partialCoverage: z.boolean().optional(),
-  cycleId: identity.nullable(), forecast: forecast.nullable(),
+  cycleId: identity.nullable(), forecast: publicForecastSchema.nullable(),
   cycle: fixtureCycleSchema.nullable().optional(),
   unavailableMarkets: z.array(unavailableMarketSchema).max(4).optional(),
   update: fixtureUpdateSchema.optional(),

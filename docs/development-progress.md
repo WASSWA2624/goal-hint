@@ -2486,3 +2486,61 @@ match detail, 030 hit rates, 031 event/cache work and 032 real feed composition.
 No later prompt, worker or scheduler was activated. Rollback disables the route
 and retains additive schema and immutable history. No UI change requires visual
 acceptance.
+
+## Prompt 029 — Match detail API
+
+**Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
+Followed [029](../dev-plan/029-match-detail-api.md) only.
+Added anonymous GET /api/matches/{id}, explicit revision/cycle selection and
+bounded stable history. Genuine database acceptance used owned throwaway MySQL
+8.4.11 instances with synthetic observations, policies and forecasts. No live
+provider, AI invocation, production database, worker or scheduler was used.
+
+### Changed files and behavior
+
+- `src/app/api/matches/[id]/route.ts`, `src/server/matches/detail-query.ts`,
+  `detail-service.ts`, `detail-read.ts` and `detail-http.ts`: reusable repeatable
+  stored queries, owned revision/cycle selection, anchored history, safe source
+  attribution and analysis, explicit historical identities, applicable audited
+  outcomes, and canonical UUID/slug route data. Current fixture metadata remains
+  distinct from an explicitly selected historical snapshot.
+- `src/domain/match-detail.ts`, `fixture-snapshot.ts` and `navigation.ts`: strict
+  public DTOs, reusable validated forecast schema and future detail route identity.
+  Complete source-owned probabilities and alternatives preserve deterministic
+  picks. Unknown provider clocks remain null; expired/unapproved analysis is
+  withheld without replacing stored forecasts or inventing explanations.
+- `src/server/matches/public-http.ts`, `feed-http.ts`, `feed-error.ts`,
+  `fixture-read.ts` and `src/domain/match-feed.ts`: shared uncached public errors
+  and void-reason projection, including a nonrecoverable 404. Existing feed
+  success/error behavior and aggregate anonymous search policy are preserved.
+  Detail reads do not search or mutate its counter. No migration/grant is added.
+- `tests/match-detail.test.mjs`, `match-detail.integration.mjs` and `package.json`:
+  `npm run test:detail`, input/privacy/HTTP acceptance, genuine MySQL scenarios,
+  immutable history pagination under publication and cycle creation, and read-only
+  interception plus before/after database checks.
+- `docs/match-detail-api.md`, implementation decisions and tracker: DTO,
+  selection/pagination, source permission, privacy and operating contracts.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Feed/detail acceptance | **80 passed, 0 failed/skipped**, including both genuine MySQL suites. Command `node --conditions=react-server --test --test-concurrency=2 tests/match-feed.test.mjs tests/match-feed.integration.mjs tests/match-detail.test.mjs tests/match-detail.integration.mjs`; log `.tmp/029-api-final.log`. Final `npm run test:detail` rerun: **34 passed, 0 failed/skipped**, including the added shared UTC/unsigned-version boundary check; log `.tmp/029-detail-complete.log`. |
+| Detail state/ownership | Open, locked, unpublished, closed-without-lock, pre-lock void, old void cycles, corrected results, selected earlier revisions, unknown fixture/history UUIDs and cross-fixture references passed. The database wrapper initially redacted intentional 404s to 503; domain failures are now preserved across that wrapper and both API suites pass. |
+| Consistency/history | Complete probabilities, derived double chance, alternatives, mixed-family provenance, original clocks, explicit current/selected identities and monotonic versions passed. Anchored revision pagination remains stable after another publication; cycle pagination remains stable after another cycle; zero anchors pin empty membership. |
+| Privacy/read-only | Only approved original explanations/attribution leave the whitelist. Expired or unapproved citations withhold analysis; unknown update times remain null. Model/raw/private fields are absent. A transaction proxy rejects writes/non-SELECT SQL, fetch interception sees zero calls, and forecasts/evidence/results/jobs/audits/settlement/cycles/versions/search counter remain identical before/after history reads. |
+| Lint/types | Lint and TypeScript passed; logs `.tmp/029-lint-final.log`, `.tmp/029-types-final.log`. |
+| Build/production HTTP | Final `npm run build` passed and lists dynamic /api/matches/[id]. An owned loopback production server with database capability disabled passed input/duplicate/oversize rejection, shared feed errors, uncached 503, async route identity params, no locale redirect/cookie and POST 405. Logs `.tmp/029-build.log`, `.tmp/029-http.log`; temporary smoke harness `.tmp/029-http-smoke.mjs`. |
+| Repository units | **878 cases: 877 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/029-unit-final.log`. The initial concurrent run had one timing-sensitive existing cost-gateway test expire before its controlled stage; the unchanged isolated cost suite passed all 14 checks, followed by this successful quiet full run. No cost code was changed. |
+
+### Handoff
+
+No feature implementation or local acceptance blocker remains; 029 is checked
+in the tracker. Existing provider/model/reuse/budget/database/hosting gates remain effective;
+synthetic acceptance establishes local behavior, not live rights, quality,
+capacity or deployment readiness. No new schema, grants or private write path
+is required. Public canonical fixture versions remain separate from asOf-dated
+operational observations and permission filtering. 030 owns performance, 031
+cache/event work, 035 detail-page rendering and 036 history UI. No later prompt
+was started. Rollback disables the detail route while retaining immutable data.
+No UI change requires visual acceptance.

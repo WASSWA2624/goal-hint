@@ -2069,3 +2069,49 @@ uses no-store headers; later cache work may wrap this contract. Existing databas
 competition/provider/model/rights/hosting gates remain effective. Synthetic
 acceptance establishes local query/concurrency mechanics, not live operation,
 coverage, rights, forecast quality or deployment readiness.
+
+## Prompt 029 — Match detail and read-only revision selection
+
+Expose anonymous GET /api/matches/{canonical UUID} and the reusable stored query
+service. Reuse the feed fixture serializer, sealed history/evidence/result and
+settlement readers in one RepeatableRead transaction. Preserve intended public
+404s across the database runtime's diagnostic-redaction wrapper. Shared feed and
+detail HTTP errors retain 400/429/503 behavior and add nonrecoverable 404. Invalid
+input is rejected before lazy database initialization. Reads require no account,
+cookie, outbound call, pointer mutation, settlement write or durable job.
+
+The strict detail DTO separates current `fixture`/`currentRevisionId` from the
+selected `snapshot` and nullable `selectedCycle`. Optional revision/cycle UUIDs
+are mutually exclusive and must belong to the fixture. Current, locked, void and
+historical identities are explicit. Closed-without-lock is valid unavailable
+data; pre-lock voids retain their last preview and safe reason/time. Correctness
+binds only to immutable locked picks with currently coherent audited settlement;
+earlier alternatives have no outcomes. Correction and void timestamps are
+separate from score data. Monotonic fixture versions, run/revision/cycle references
+and original generation/evidence/publication/provider clocks support later
+reconciliation. A decorative bounded team-name slug never changes UUID identity.
+
+Paginate revision and cycle summaries independently by unique fixture revision
+sequence/cycle ordinal, newest first. Default limit 10, maximum 20 per collection.
+Inclusive anchors plus exclusive before cursors avoid shifting membership under
+new publication/cycle creation; zero anchors pin empty history. Next links retain
+both anchors, the other cursor and explicit selection. Membership is pinned,
+while current metadata, cycle states, permissions and outcomes reflect `asOf`.
+Query/response limits remain 2 KiB/1 MiB and transactions at most 30 seconds.
+
+Complete source-owned probabilities, deterministic picks, alternatives and
+per-family source/fallback triggers come from one revision. Revision-level
+analysis exposes only validated original supported reasons, one uncertainty and
+permitted attribution/safe HTTPS links. Unknown source times remain null. Filter
+AI evidence by cited source IDs and stored reuse/retention permissions; expired
+or unapproved citations withhold the whole explanation without replacing
+probabilities or inventing reasons. Never serialize raw claims, payloads, prompts,
+model pins, private proofs, denial details or logs. Provider fallback attribution
+uses validated publication provenance. Offline link checks perform no DNS/I/O.
+
+Reuse the feed's anonymous aggregate search policy: ID/history reads do not search
+or mutate its counter. No new schema or grants are needed. Keep no-store responses
+until 031 and leave detail-page rendering to 035. See
+[match-detail-api.md](match-detail-api.md) for the full DTO/query contract. Existing
+operating gates and the distinction between canonical versions and asOf-dated
+operational observations remain unchanged.

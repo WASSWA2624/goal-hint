@@ -34,7 +34,7 @@ export function informationHref(page: InformationPage, locale?: string): string 
   return `${homeHref(locale)}/${page}`;
 }
 
-/** Canonical identity/slug resolution belongs to prompt 035; do not invent fixture pages. */
+/** Detail API supplies canonical identity/slug; page rendering belongs to prompt 035. */
 export function matchHref(fixtureId: string, slug: string, locale?: string): string {
   if (!/^[a-zA-Z0-9_-]+$/.test(fixtureId) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
     throw new RangeError("Match links require a safe fixture ID and canonical slug.");

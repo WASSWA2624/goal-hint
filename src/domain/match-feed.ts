@@ -43,6 +43,6 @@ export const matchFeedResponseSchema = z.strictObject({
 export type MatchFeedResponse = z.infer<typeof matchFeedResponseSchema>;
 export type MatchFeedRecord = z.infer<typeof matchFeedRecordSchema>;
 export const matchFeedErrorSchema = z.strictObject({ error: z.strictObject({
-  code: z.enum(["invalid-query", "rate-limited", "unavailable"]), message: z.string().max(256),
+  code: z.enum(["invalid-query", "not-found", "rate-limited", "unavailable"]), message: z.string().max(256),
   recoverable: z.boolean(), retryAfterSeconds: z.number().int().positive().max(60).nullable(),
 }) });
