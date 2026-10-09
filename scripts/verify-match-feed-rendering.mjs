@@ -69,14 +69,29 @@ export default async function FixturePage({ params, searchParams }: {
     'app/en/page.tsx': `export { default } from '../fixture-page'; export const dynamic = 'force-dynamic';`,
     'app/en/predictions/[date]/page.tsx': `export { default } from '../../../fixture-page'; export const dynamic = 'force-dynamic';`,
     'app/cases/[scenario]/page.tsx': `export { default } from '../../fixture-page'; export const dynamic = 'force-dynamic';`,
+    'app/api/matches/route.ts': `import { parseFeedQuery, feedQueryKey } from '@/domain/feed-query';
+import { parseReportingDate } from '@/domain/calendar';
+import type { MatchFeedResponse } from '@/domain/match-feed';
+import scenarios from '../../scenarios.json';
+const cases = scenarios as unknown as Record<string, { query: ReturnType<typeof parseFeedQuery>; today: string; result: { data: MatchFeedResponse | null } }>;
+export const dynamic = 'force-dynamic';
+export async function GET(request: Request) {
+  const today = parseReportingDate('2026-10-09');
+  let query; try { query = parseFeedQuery(new URL(request.url).searchParams, { today }); } catch { return Response.json({ error: 'invalid-query' }, { status: 400 }); }
+  const selected = Object.entries(cases).find(([name, item]) => !name.startsWith('pagination-changed') &&
+    item.result.data && item.today === today && item.query.page === query.page && feedQueryKey(item.query, today) === feedQueryKey(query, today));
+  return selected ? Response.json(selected[1].result.data, { headers: { 'cache-control': 'no-store' } }) : Response.json({error:'unavailable'},{status:503});
+}`,
     'app/en/matches/[fixtureId]/[slug]/page.tsx': `import { notFound } from 'next/navigation';
 import { PublicShell } from '@/app/_components/public-shell';
 import { BodyText, PageHeading } from '@/components/ui/layout';
 import { canonicalMatchSlug } from '@/domain/match-slug';
+import type { MatchFeedResponse } from '@/domain/match-feed';
 import scenarios from '../../../../scenarios.json';
+const cases = scenarios as unknown as Record<string, { result: { data: MatchFeedResponse | null } }>;
 export default async function Page({ params }: { params: Promise<{ fixtureId: string; slug: string }> }) {
   const { fixtureId, slug } = await params;
-  const fixture = scenarios.today.result.data.records.find((item) => item.fixtureId === fixtureId);
+  const fixture = Object.values(cases).flatMap((item) => item.result.data?.records ?? []).find((item) => item.fixtureId === fixtureId);
   if (!fixture || slug !== canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)) notFound();
   return <PublicShell><PageHeading>Synthetic analysis destination</PageHeading>
     <BodyText>{fixture.homeTeam.name} v {fixture.awayTeam.name}</BodyText>

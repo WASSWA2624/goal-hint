@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { writeFile, realpath } from 'node:fs/promises';
+import { readFile, writeFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
@@ -19,6 +19,19 @@ import { lifecycleAuthority, lifecyclePolicy, lifecycleInput } from './helpers/l
 import { resultHash } from './helpers/result-sync-fixtures.mjs';
 import { PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
+import { appendFeedPage, initialLoadedFeed, replaceFeedPages } from '../src/domain/feed-pagination.ts';
+
+async function saveScenarios(t, captured) {
+  if (!process.env.MATCH_FEED_PAGE_CAPTURE) return;
+  const target = path.resolve(process.env.MATCH_FEED_PAGE_CAPTURE), root = await realpath(fileURLToPath(new URL('../.tmp', import.meta.url)));
+  const relative = path.relative(root, await realpath(path.dirname(target)));
+  assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
+  let previous = {};
+  try { previous = JSON.parse(await readFile(target, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  const scenarios = { ...previous, ...captured };
+  await writeFile(target, JSON.stringify(scenarios));
+  t.diagnostic(`Saved isolated page acceptance projections; ${Object.keys(scenarios).length} scenarios.`);
+}
 
 test('match page handoff uses genuine stored fixtures, cache, coverage and locked results', { timeout: 240_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
@@ -156,12 +169,56 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
       captured[name] = scenario;
     }
     // Captured SQL projections and explicitly synthetic presentation variants remain test-only.
-    if (process.env.MATCH_FEED_PAGE_CAPTURE) {
-      const target = path.resolve(process.env.MATCH_FEED_PAGE_CAPTURE), root = await realpath(fileURLToPath(new URL('../.tmp', import.meta.url)));
-      const relative = path.relative(root, await realpath(path.dirname(target)));
-      assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
-      await writeFile(target, JSON.stringify(captured));
-      t.diagnostic(`Saved isolated page acceptance projections; ${Object.keys(captured).length} scenarios.`);
+    await saveScenarios(t, captured);
+  });
+});
+
+test('pagination detects genuine cohort changes and supplies consistent multi-page restoration', { timeout: 240_000 }, async (t) => {
+  await withPredictionPipeline(t, async (p) => {
+    const today = parseReportingDate('2026-10-09'), captured = {};
+    const rows = Array.from({ length: 95 }, (_, index) => {
+      const row = catalogFixture(4000 + index, { homeId: 8000 + index * 2, awayId: 8001 + index * 2,
+        kickoff: new Date(Date.parse('2026-10-09T12:00:00Z') + index * 60_000).toISOString() });
+      row.teams.home.name = `Pagination Home ${index}`; row.teams.away.name = `Pagination Away ${index}`; return row;
+    });
+    const cohort = await p.cohort(today, p.first, { rows });
+    const clock = { now: () => PUBLICATION_NOW }, cache = createMysqlPublicResponseCache(p.a);
+    const service = createMatchFeedService({ database: p.a, cache, competitionIds: [39], clock });
+    async function capture(prefix, page) {
+      const query = parseFeedQuery({ q: 'Pagination', page: String(page) }, { today });
+      const result = await loadMatchFeedPage(query, today, clock, (parameters, context) => service.query(parameters, context));
+      assert.equal(result.error, null); captured[`${prefix}-${page}`] = { query, today, result }; return result.data;
     }
+    const pages = [];
+    for (let page = 1; page <= 4; page++) pages.push(await capture('pagination', page));
+    assert.deepEqual(pages.map(page=>page.records.length), [30,30,30,5]);
+    assert.equal(new Set(pages.map(page=>page.paginationVersion)).size,1);
+    let loaded = initialLoadedFeed(pages[0]); for (const page of pages.slice(1)) loaded = appendFeedPage(loaded,page);
+    assert.equal(loaded.records.length,95); assert.equal(new Set(loaded.records.map(item=>item.fixtureId)).size,95);
+    assert.equal((await capture('pagination-repeat',1)).paginationVersion,pages[0].paginationVersion);
+
+    // Move a fixture from the last page to the beginning without changing totals.
+    const moved = await p.setup(4094);
+    const lifecycle = createScheduleLifecycleService({ database: p.a, cutoff: p.first, policy: lifecyclePolicy(), authority: lifecycleAuthority() });
+    await lifecycle.observe(lifecycleInput(moved,p.now(),{kickoffAt:Date.parse('2026-10-09T11:59:00Z')}));
+    const updated=[];for(let page=1;page<=4;page++)updated.push(await capture('pagination-changed',page));
+    assert.notEqual(updated[0].paginationVersion,pages[0].paginationVersion);
+    assert.equal(updated[0].total,pages[0].total);assert.equal(updated[0].records[0].fixtureId,pages[3].records.at(-1).fixtureId);
+    assert.throws(()=>appendFeedPage(initialLoadedFeed(pages[0]),updated[1]),error=>error.code==='changed');
+    assert.equal(loaded.records.length,95);
+    const refreshed=replaceFeedPages(loaded,updated);assert.equal(refreshed.records.length,95);
+    assert.deepEqual(refreshed.records.map(item=>item.fixtureId),updated.flatMap(page=>page.records.map(item=>item.fixtureId)));
+
+    // Publication changes the token even when only probability order can move.
+    const state=await p.setup(4000);assert.equal((await p.publisher.publish(state.input,state.lease)).refresh.outcome,'published');
+    const published=await capture('pagination-published',1);assert.notEqual(published.paginationVersion,updated[0].paginationVersion);
+    const token=published.paginationVersion;await p.queue.acknowledge(state.lease);
+    assert.equal((await capture('pagination-acknowledged',1)).paginationVersion,token);
+    const originalFetch=globalThis.fetch;let network=0;globalThis.fetch=async()=>{network++;throw new Error('Stored pagination cannot call providers');};
+    const before=cohort.provider.network.length;
+    try { for(let page=1;page<=4;page++) await service.query({date:today,q:'Pagination',page:String(page)}); }
+    finally {globalThis.fetch=originalFetch;}
+    assert.equal(network,0);assert.equal(cohort.provider.network.length,before);
+    await saveScenarios(t,captured);
   });
 });

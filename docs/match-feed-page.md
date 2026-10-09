@@ -2,8 +2,9 @@
 
 Prompt 033 adds [search/filter controls](search-filter-controls.md) through a
 persistent client surface. Failed filter navigations retain and label the
-previous successful server projection. Load more and scroll restoration stay
-with 034.
+previous successful server projection. Prompt 034 adds
+[Load more and Back restoration](pagination-navigation.md) while keeping ordinary
+pagination links usable without JavaScript.
 
 Prompt 032 connects `/en` and `/en/predictions/YYYY-MM-DD` to the existing feed
 service. Today and Results share `FeedShell` and `MatchFeedPage`; Results retains
@@ -21,7 +22,7 @@ Full-page HTTP caching remains disabled by dynamic request rendering.
 `FeedStateProvider` receives the original successful page as its bootstrap.
 Initial server rendering supplies the cards without reading Redux or starting browser
 requests. Search/filter controls now use the shared persistent surface; the
-pagination composition slot remains for 034. Prompt 037 owns live refresh and
+pagination uses the same surface and a bounded metadata-only checkpoint. Prompt 037 owns live refresh and
 open-tab midnight rollover. Search visits continue to consume the shared
 aggregate limiter before cache lookup.
 
@@ -57,7 +58,7 @@ for an empty lock.
 | Missing, pending, failed, partial or degraded coverage | Partial fixture coverage, affected dates, import status and actual observation time where known. Empty unknown dates say Fixture data unavailable. |
 | Matching fixtures without the selected family | Prediction data unavailable; available fixture cards remain visible. |
 | Stored fixtures with no filter matches | No matches for these filters; coverage notice remains independent. |
-| Direct page beyond the matching list | Match page unavailable; no invented cards. Pagination controls belong to 034. |
+| Direct page beyond the matching list | Match page unavailable; no invented cards. Previous page links return to a populated page when available. |
 | Temporary database/configuration/read failure | Matches temporarily unavailable with an ordinary retry link; no fixture count or fictional run. |
 | Aggregate search budget exhausted | Search temporarily busy with retry. |
 | Any selected date beyond today plus six | The seven-day prediction availability message, including when no fixture data exists. |

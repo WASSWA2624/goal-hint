@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
+import { useCallback, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { FeedAppliedSummary, FeedControls } from "@/components/match/feed-controls";
+import { FeedPagination } from "@/components/match/feed-pagination";
+import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
 import { ButtonLink } from "@/components/ui/controls";
@@ -28,9 +30,14 @@ function FeedRange({ query, today }: { query: FeedQuery; today: ReportingDate })
   </BodyText>;
 }
 
-function FeedResults({ data, query }: { data: MatchFeedResponse; query: FeedQuery }) {
+function FeedResults({ data: initial, query, today, enabled, onStatus }: {
+  data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean; onStatus: (href: string, message: string) => void;
+}) {
   const messages = createMessages(query.locale);
-  return <>
+  const { view, phase, error, root, loadMore, retry } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
+  const { data, records } = view;
+  return <Stack $gap="lg" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
+    aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
     {data.run && <FeedRunStatus run={data.run} asOf={data.asOf} locale={query.locale} />}
     {data.coverage.partial && <EmptyState title={messages.text("feed.partialCoverageTitle")} description={<Stack $gap="sm">
       <BodyText>{messages.text("feed.partialCoverageDescription")}</BodyText>
@@ -42,16 +49,17 @@ function FeedResults({ data, query }: { data: MatchFeedResponse; query: FeedQuer
       </MutedText>)}
     </Stack>} />}
     {data.state !== "ready" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
-    {data.records.length > 0 && <>
-      <MutedText>{messages.text("feed.showingMatches", { shown: messages.number(data.records.length), total: messages.number(data.total) })}</MutedText>
+    {records.length > 0 && <>
+      <MutedText>{messages.text("feed.showingMatches", { shown: messages.number(records.length), total: messages.number(data.total) })}</MutedText>
       <MatchCardList aria-label={messages.text("feed.matchList")}>
-        {data.records.map((fixture, index) => <li key={fixture.fixtureId}>
+        {records.map((fixture, index) => <li key={fixture.fixtureId}>
           <MatchCard fixture={fixture} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
             selectedFamily={query.market} locale={query.locale} eagerLogos={index < 2} />
         </li>)}
       </MatchCardList>
     </>}
-  </>;
+    {enabled && <FeedPagination query={query} today={today} view={view} busy={phase !== null} error={error} onLoadMore={loadMore} onRetry={retry} />}
+  </Stack>;
 }
 
 /** Successful server projections remain visible if a later navigation fails. */
@@ -59,6 +67,8 @@ export function FeedSurface({ query, today, result, controls, pagination }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
+  const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
+  const onPaginationStatus = useCallback((href: string, message: string) => { setPaginationStatus({ href, message }); }, []);
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
   if (result.data && previous?.data !== result.data) setPrevious({ query, today, data: result.data });
   const visible = result.data ? { query, today, data: result.data } : previous;
@@ -75,6 +85,7 @@ export function FeedSurface({ query, today, result, controls, pagination }: {
   }
   const announcement = pending ? messages.text("feed.filters.loading") : result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
+    : paginationStatus?.href === href ? paginationStatus.message
     : result.data.state === "ready" ? messages.plural("feed.matchCount", result.data.total) : messages.text(`feed.state.${result.data.state}`);
   return <Stack $gap="lg">
     <Stack $gap="sm">
@@ -102,7 +113,8 @@ export function FeedSurface({ query, today, result, controls, pagination }: {
         <FeedRange query={visible.query} today={visible.today} />
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />
       </Stack>}
-      {visible && <FeedResults data={visible.data} query={visible.query} />}
+      {visible && <FeedResults key={`${feedQueryHref(visible.query, visible.today)}:${visible.data.paginationVersion}:${visible.data.asOf}`}
+        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} />}
       {!result.error && pagination}
     </Stack>
   </Stack>;

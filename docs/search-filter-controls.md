@@ -36,8 +36,9 @@ regions. Controls remain usable during navigation.
 A failed read displays its failure and labels retained cards with their original
 dates, filters and market. Initial failures have no fabricated cards. Empty
 filters, confirmed-empty, insufficient-prediction and partial-coverage states
-remain reader-owned. Pagination/scroll checkpoints and live refresh stay with
-034/037. No browser provider/AI calls or polling are added.
+remain reader-owned. Prompt 034 supplies [pagination/scroll checkpoints](pagination-navigation.md);
+effective query changes cancel pending loads and restart the loaded extent.
+Prompt 037 owns live refresh. No browser provider/AI calls or polling are added.
 
 Acceptance uses owned MySQL storage with synthetic inputs, an isolated production
 Next app built from captured SQL projections, and Chrome through the Playwright

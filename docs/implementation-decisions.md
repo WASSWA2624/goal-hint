@@ -2288,3 +2288,42 @@ No provider/AI call, browser polling, scheduler or deployment is introduced.
 Prompt 034 continues to own loaded-page/scroll restoration; 037 owns live refresh.
 See [search/filter contracts](search-filter-controls.md). Existing live operating
 and launch gates are unchanged.
+
+## 034 — Pagination and navigation restoration (10 October 2026)
+
+Keep server-rendered Previous/Next links for direct requests and no-JavaScript
+browsing. Pin resolved reporting dates and preserve every validated query option.
+Enhance Load more after hydration, without automatic scrolling loads or URL
+changes. Bound the appended extent to ten pages; ordinary links continue beyond
+that bound. Share the existing square controls, reserved native lazy logos and
+one polite status region. Focus the first new article or the retry action without
+moving the current viewport.
+
+Offset pagination requires a cohort guard to avoid gaps after concurrent schedule
+or probability changes. Add opaque `paginationVersion`, hashing the effective
+query, competition scope and committed date/catalog generations read alongside
+rows in RepeatableRead. Existing source triggers already update these generations
+atomically. Progress acknowledgments do not change the guard; catalog invalidation
+is deliberately conservative. Bump feed cache projection to 3, with no migration.
+Reject changed totals, versions or overlapping pages. Retain all accepted cards
+and offer an explicit refresh of the loaded prefix. Commit refreshed membership
+only after every page agrees, preserving accepted whole records at equal versions
+and rejecting older versions. No independent market merge occurs.
+
+Keep appended records local to the feed projection. Save only bounded position
+metadata in tab-scoped session storage: canonical query/route, starting and last
+pages, scroll, focused fixture ID, opaque version, timestamp and random history
+entry ID. Preserve Next.js-owned history fields. Cap records at 20, 30 minutes and
+65,536 UTF-16 code units; reject malformed/expired/mismatched metadata and tolerate
+blocked storage. Never store authoritative fixture data. On Back/reload re-read
+the complete extent before DOM focus/scroll restoration, keeping the original
+checkpoint if a read fails. Capture before link/form navigation and page exit;
+avoid cleanup saves that can overwrite position after route scroll resets.
+
+Use a synchronous request lock, AbortController and a 30-second operation bound.
+Query changes cancel obsolete work and reset the extent. Anonymous browser reads
+call only the stored-data API; no provider/AI work, polling, scheduler or deployment
+is introduced. Real MySQL mutation tests and an isolated production analysis route
+qualify membership changes and mobile/desktop Back behavior. Prompt 035 must
+repeat those navigation checks through its real detail page. The existing live
+operating gates remain unchanged. See [pagination contracts](pagination-navigation.md).

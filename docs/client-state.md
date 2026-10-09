@@ -23,8 +23,10 @@ The filter provider persists across query changes, keyed by reporting day and
 locale. Applied server query props explicitly dispatch `queryApplied`, preserving
 mounted controls and keyboard focus. The surrounding client surface retains the
 last successful response across failed filter navigations, with its own query.
-When 034 needs a persistent feed across detail navigation, it must place the
-provider at the appropriate shared boundary and wire the checkpoint actions.
+Prompt 034 keeps accepted whole-record pages in `useFeedPagination`, scoped to
+the server projection and canonical query. It restores detail navigation through
+bounded per-history-entry metadata and fresh stored-data reads, without requiring
+a persistent fixture store across routes. See [pagination](pagination-navigation.md).
 Subsequent data uses explicit request/reconciliation actions, not replacement
 of the provider's `initial` prop. The existing single styling provider remains
 at the root.
@@ -131,8 +133,12 @@ bounded nonnegative scroll. It stores membership/position, not copies of fixture
 truth. `navigationRestored` applies the URL query, invalidates in-flight work,
 and restores only an unexpired matching entry/query/starting page; fixture
 records retain their newest accepted versions. Misses start unloaded.
-Session-storage wiring, DOM scrolling and real detail-page Back behavior belong
-to 034; no persistence or browser history listeners are invented here.
+Prompt 034 supplies session-storage/history wiring and DOM scrolling through
+`domain/feed-navigation.ts`, `feed-restoration.ts` and `useFeedPagination`.
+Browser checkpoints contain page extent and focused fixture ID, never ordered
+fixture records; all required pages are re-read before position restoration.
+The earlier Redux checkpoint actions remain available to reconciliation consumers.
+Prompt 035 must repeat Back acceptance through the real detail page.
 
 `calendarChanged(reportingDate)` is the explicit EAT event. Duplicate days are
 idempotent and backwards/invalid dates fail. Relative applied selections retain

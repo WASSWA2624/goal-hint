@@ -6,7 +6,7 @@ import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { createPublicResponseCache, publicCacheRules, type PublicCacheStore } from "./public-cache.ts";
 
 type Tx = Prisma.TransactionClient;
-async function generations(tx: Tx, tags: readonly string[]) {
+export async function readPublicCacheGenerations(tx: Tx, tags: readonly string[]) {
   const rows = tags.length ? await tx.publicCacheTag.findMany({ where: { tag: { in: [...tags] } } }) : [];
   return Object.fromEntries(tags.map((tag) => [tag, String(rows.find((row) => row.tag === tag)?.generation ?? 0n)]));
 }
@@ -14,7 +14,7 @@ export function createMysqlPublicCacheStore(database: DatabaseRuntime): PublicCa
   const store: PublicCacheStore = {
     async lookup(key, tags) {
       return database.transaction(async (tx) => {
-        const stamp = await generations(tx, tags), entry = await tx.publicResponseCache.findUnique({ where: { key } });
+        const stamp = await readPublicCacheGenerations(tx, tags), entry = await tx.publicResponseCache.findUnique({ where: { key } });
         const current = entry && evidenceFingerprint(entry.generations) === evidenceFingerprint(stamp);
         return { generations: stamp, value: current ? entry.body : null, createdAt: current ? entry.createdAt.getTime() : null,
           expiresAt: current ? entry.expiresAt.getTime() : null };
@@ -22,7 +22,7 @@ export function createMysqlPublicCacheStore(database: DatabaseRuntime): PublicCa
     },
     async fill(key, tags, stamp, value, createdAt, expiresAt) {
       return database.transaction(async (tx) => {
-        if (evidenceFingerprint(await generations(tx, tags)) !== evidenceFingerprint(stamp)) return false;
+        if (evidenceFingerprint(await readPublicCacheGenerations(tx, tags)) !== evidenceFingerprint(stamp)) return false;
         const body = JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
         const data = { generations: { ...stamp }, body, createdAt: new Date(createdAt), expiresAt: new Date(expiresAt) };
         await tx.publicResponseCache.upsert({ where: { key }, create: { key, ...data }, update: data });
@@ -38,7 +38,7 @@ export function createMysqlPublicCacheStore(database: DatabaseRuntime): PublicCa
           WHERE acknowledgedAt IS NULL ORDER BY id LIMIT ${limit} FOR UPDATE SKIP LOCKED`;
         // Trigger invalidation and journal insertion commit together. Never ack
         // a corrupt/missing generation; the transaction remains retryable.
-        const stamps = await generations(tx, [...new Set(rows.map((row) => row.tag))]);
+        const stamps = await readPublicCacheGenerations(tx, [...new Set(rows.map((row) => row.tag))]);
         if (rows.some((row) => BigInt(stamps[row.tag] ?? "0") < row.generation)) throw new Error("Cache invalidation is incomplete.");
         const acknowledged = rows.length ? (await tx.publicCacheInvalidation.updateMany({ where: { id: { in: rows.map((row) => row.id) }, acknowledgedAt: null },
           data: { acknowledgedAt: new Date() } })).count : 0;

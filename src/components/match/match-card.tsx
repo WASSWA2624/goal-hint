@@ -32,6 +32,10 @@ const Card = styled(Surface)`
   gap: ${({ theme }) => theme.space.md};
   max-inline-size: 100%;
   overflow-wrap: anywhere;
+  &:focus-visible {
+    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
+    outline-offset: ${({ theme }) => theme.border.focusOffset};
+  }
 `;
 const Competition = styled(BodyText)`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -56,7 +60,7 @@ export function MatchCard({ fixture, analysisSlug, selectedFamily = "match-resul
   const final = hasFinalScoreStatus(fixture.status);
   const scoreLabel = final ? fixture.score ? "match.finalScore" : "match.finalScoreUnknown"
     : fixture.status === "live" ? "match.liveScore" : "match.score";
-  return <Card as="article" aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={selectedFamily}>
+  return <Card as="article" tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={selectedFamily}>
     <header>
       <Competition>{fixture.competition.name?.trim() || messages.text("match.competitionUnknown")}</Competition>
       <MutedText>{fixture.kickoffAt === null ? messages.text("match.kickoffUnknown") : <>

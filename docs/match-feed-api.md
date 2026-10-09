@@ -60,7 +60,12 @@ back to the last reachable populated page (or page 1 when no rows exist).
 Prompt 033 adds `leagues`: up to 1,000 unique id/name/country entries for the full
 selected date cohort, independent of filters/page. Options share the records'
 database snapshot; overflow fails with 503. Omitted legacy options parse to `[]`.
-Feed cache projection version 2 avoids reusing earlier responses without options.
+Prompt 034 adds opaque `paginationVersion`, computed from the effective query,
+competition scope and committed date/catalog generations in the records' snapshot.
+Feed cache projection version 3 avoids reusing earlier responses without this
+marker. Legacy omitted markers parse to null and use direct page navigation.
+Appended pages must have the same marker and total; changes require an atomic
+refresh of the loaded prefix. See [pagination consistency](pagination-navigation.md).
 `records` contains shared `FixtureSnapshot` values, with the feed metadata
 required by `matchFeedRecordSchema`. Maximum query size is 2,048 UTF-8 bytes;
 maximum serialized JSON response is 1 MiB. Responses that cannot be safely

@@ -3,8 +3,9 @@ import { parseReportingDate, utcInstantFromEpochMilliseconds, type UtcInstant } 
 import { feedQueryKey, feedQueryRules, parseFeedQuery, serializeFeedQuery, type FeedQuery } from "../domain/feed-query.ts";
 import { compareFixtureVersions, parseFixtureSnapshot } from "../domain/fixture-snapshot.ts";
 import type { FeedBootstrap, FeedFailure, FeedPage, FeedRequest, FeedState, LoadedView } from "./contracts.ts";
+import { restorationRules } from "../domain/feed-navigation.ts";
 
-export const restorationRules = Object.freeze({ maximumEntries: 20, maximumAgeMilliseconds: 30 * 60 * 1000 });
+export { restorationRules } from "../domain/feed-navigation.ts";
 export const queryApplied = createAction<FeedQuery>("feed/queryApplied");
 export const draftChanged = createAction<FeedQuery>("feed/draftChanged");
 export const calendarChanged = createAction<string>("feed/calendarChanged");

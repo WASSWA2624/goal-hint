@@ -2810,3 +2810,62 @@ stored-query/UI behavior with synthetic inputs, not real forecast quality or
 hosted availability. No paid call, schedule or remote database change was made.
 No migration is required. Owned acceptance servers and browser sessions are
 stopped after verification; the installed database service remains untouched.
+
+## 034 — Pagination and navigation restoration (10 October 2026)
+
+**Complete.** The stored feed retains crawlable, date-pinned pagination links
+and progressively enhances Load more. Back/reload restore validated filters,
+loaded extent, scroll and analysis-link focus after fetching the necessary
+stored pages. Prompt 034 is checked; 035 and subsequent rows remain unchanged.
+
+### Changes
+
+- Added `domain/feed-pagination.ts` for pinned links, response checks, contiguous
+  append and atomic prefix replacement with whole-record version protection.
+  Added `domain/feed-navigation.ts` for bounded, expiring metadata checkpoints;
+  `state/feed.ts` reuses its existing restoration limits.
+- Added `components/match/feed-pagination.tsx`, `feed-page-client.ts`,
+  `feed-restoration.ts` and `use-feed-pagination.ts`. They implement shared square
+  controls, anonymous stored API reads, duplicate-load locking, cancellation,
+  retry/refresh, history-entry scoping and focus/scroll restoration. Storage is
+  optional and contains no fixture records. Appended extent is capped at ten
+  pages; ordinary Next links continue beyond it.
+- Updated `app/_components/feed-surface.tsx`, the shared match card and messages
+  for retained loaded pages, focused new articles, errors and one polite status
+  region. Query changes reset pages and cancel obsolete loads. Link/form departure
+  captures the current position before route changes.
+- Added opaque `paginationVersion` to the public DTO/service using committed
+  date/catalog generations from the same RepeatableRead snapshot. Reused the
+  MySQL cache generation reader and bumped feed cache projection to 3. No schema
+  or migration change is required.
+- Added meaningful pagination/checkpoint units and real MySQL mutation cases.
+  Extended the isolated production rendering harness with a stored-data API and
+  canonical analysis destinations for fixtures beyond the first page. Updated
+  the state/feed/filter documentation, implementation decisions and tracker;
+  added `docs/pagination-navigation.md`.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Repository units | **925 cases: 924 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/034-units.log`. |
+| Final query/state contracts | **23 passed**, including four new cases covering fully preserved URLs, overlap/cohort rejection, atomic whole-record version handling, entry/query/page isolation, expiry, malformed data and storage bounds. Log `.tmp/034-contracts-final.log`. |
+| Genuine MySQL page handoff | **8 passed, 0 failed/skipped**, owned MySQL 8.4.11. Includes 95 fixtures over four pages, repeated stable markers, last-page fixture moving to the first through the authorized lifecycle, publication invalidation, unchanged marker after acknowledgment and zero provider/prediction side effects. Log `.tmp/match-feed-KkJh2p/database.log`. |
+| Feed/cache regressions | **32 passed, 0 failed/skipped** on owned MySQL. Covers selected-market ordering/ties, coverage, history/settlement, search budgets, transactional invalidation, cache recovery and side-effect-free reads. Log `.tmp/034-db-regression.log`. |
+| Production rendering | **47 isolated SQL-captured scenarios pass**, preserving exact card order, timestamps, initial CSS and honest coverage/error states. Four run-phase variants remain explicitly synthetic. The final hook was rebuilt against the same captured projections. Logs `.tmp/034-rendering.log`, `.tmp/034-fixture-final-build.log`; artifacts `.tmp/match-feed-KkJh2p/`. |
+| Browser acceptance | **76 assertions pass** through the Playwright skill/CLI and installed Chrome, French locale/Los Angeles timezone. Covers four-page append without gaps/duplicates, no scroll loading, keyboard Load more/Tab/Enter/Back focus, one live region, 503/429/retry, duplicate clicks, query cancellation, concurrent schedule changes and atomic refresh failure, three-page Back/reload on desktop/mobile, failed restoration with full-extent retry, direct page three, history-entry isolation, blocked storage, form-departure position, no-JavaScript discovery of all 95 fixtures, 320–1280 widths, 200% text, square controls, reserved lazy native logos, no visitor cookies and no browser/hydration errors. Logs `.tmp/034-browser-final.log`, `.tmp/034-extra-final.log`, `.tmp/034-keyboard-final.log`; sources/screenshots `output/playwright/034-*`. Mobile/desktop card and pagination screenshots visually reviewed. Expected injected HTTP failures exercise recovery. |
+| Static/build | Final typecheck, lint, production build and tracked/new-file whitespace checks pass. Logs `.tmp/034-types-final.log`, `.tmp/034-lint-final.log`, `.tmp/034-build-final.log`. |
+| Actual production routes | Ten anonymous surfaces, redirects and invalid queries pass existing navigation HTML checks against the owned loopback production server with database capability disabled. Actual reporting dates remain EAT and unavailable storage is a truthful failure. Log `.tmp/034-production.log`. |
+
+No implementation or required acceptance blocker remains. Browser navigation uses
+an isolated canonical analysis route; prompt 035 must repeat Back acceptance
+through its real detail page. An initial test setup attempted a schedule change
+through catalog import; it was corrected to use the existing coordinated lifecycle.
+The isolated generated analysis route also needed an explicit shared DTO type.
+Both final preparation/build checks pass.
+
+Existing live operating, source-rights, forecast-quality and hosting gates remain
+unchanged. Synthetic stored forecasts and local acceptance do not claim real
+coverage or deployment. No paid operation, provider call, schedule, remote database
+change or migration was activated. Owned acceptance servers/browser sessions are
+stopped after verification; the installed database service remains untouched.

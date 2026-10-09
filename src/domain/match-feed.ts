@@ -14,6 +14,7 @@ export const matchFeedRecordSchema = fixtureSnapshotSchema.safeExtend({ cycle: f
   unavailableMarkets: z.array(unavailableMarketSchema).max(4), update: fixtureUpdateSchema,
   availabilityMessage: z.string().max(256).nullable(), scorePeriod: z.enum(["regulation", "live"]).nullable() });
 export const matchFeedResponseSchema = z.strictObject({
+  paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null),
   leagues: z.array(z.strictObject({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u),
     name: z.string().max(256).nullable(), country: z.string().max(128).nullable() })).max(1000).default([]),
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), page, nextPage: page.nullable(), previousPage: page.nullable(),

@@ -1,18 +1,19 @@
 import "server-only";
 
 import { z } from "zod";
-import { createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds, type Clock, type ReportingDate } from "../../domain/calendar.ts";
-import { parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
+import { addReportingDays, createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds, type Clock, type ReportingDate } from "../../domain/calendar.ts";
+import { feedQueryKey, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
 import { matchFeedRules, matchFeedResponseSchema, type MatchFeedResponse } from "../../domain/match-feed.ts";
 import { createMessages, type TextKey } from "../../i18n/messages.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { freezeEvidence } from "../evidence/evidence-input.ts";
+import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 import { feedSql, storedFeedCoverage, storedFeedRun } from "./feed-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
+import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 
 export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate, context: Readonly<{ locale?: string; routeDate?: string }> = {}) {
   try {
@@ -41,6 +42,11 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
     try {
       if (query.search) await limiter.consume();
       const read = () => database.transaction(async (tx) => {
+        // Source writes and these generations commit atomically. Progress-only
+        // changes do not reorder a cohort; catalog/date changes conservatively do.
+        const tags = ["global:catalog", ...Array.from({ length: range.dayCount }, (_, day) => `date:${addReportingDays(range.startDate, day)}`)];
+        const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v1", query: feedQueryKey(query, today),
+          scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
         const sql = feedSql(query, range, competitionIds);
         const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.joins} WHERE ${sql.scope}`);
         // Options cover the entire date cohort, independently of applied filters/page.
@@ -70,7 +76,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           : total === 0 ? "no-filter-matches" : records.length === 0 ? "page-out-of-range" : matchingWithMarket === 0 ? "insufficient-data" : "ready";
         const keys: Partial<Record<typeof state, TextKey>> = { "data-unavailable": "feed.dataUnavailable", "no-fixtures": "feed.noFixtures",
           "no-filter-matches": "feed.noFilterMatches", "page-out-of-range": "feed.pageOutOfRange", "insufficient-data": "feed.insufficientData" };
-        const response = matchFeedResponseSchema.parse({ leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
+        const response = matchFeedResponseSchema.parse({ paginationVersion, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
           links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf, today,
           range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
           coverage: { partial, knownFixtures, matchingWithMarket, dates }, run });
@@ -78,7 +84,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range,
-        query: { ...query, projection: 2, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 3, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
