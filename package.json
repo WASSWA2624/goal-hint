@@ -57,7 +57,9 @@
     "test:cache": "node --conditions=react-server --test tests/public-cache.test.mjs tests/public-cache.integration.mjs",
     "cache:reconcile": "node --conditions=react-server --env-file-if-exists=.env.local scripts/public-cache-reconcile.mjs",
     "test:feed-page": "node --conditions=react-server --test tests/feed-page.test.mjs tests/feed-page.integration.mjs",
-    "test:feed-page:rendering": "node scripts/verify-match-feed-rendering.mjs"
+    "test:feed-page:rendering": "node scripts/verify-match-feed-rendering.mjs",
+    "test:detail-page": "node --conditions=react-server --test tests/match-detail-page.test.mjs",
+    "test:detail-page:rendering": "node scripts/verify-match-feed-rendering.mjs --detail"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.13.0",

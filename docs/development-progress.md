@@ -2869,3 +2869,63 @@ unchanged. Synthetic stored forecasts and local acceptance do not claim real
 coverage or deployment. No paid operation, provider call, schedule, remote database
 change or migration was activated. Owned acceptance servers/browser sessions are
 stopped after verification; the installed database service remains untouched.
+
+## 035 — Match detail page (10 October 2026)
+
+**Complete.** Added the reusable server-rendered detail route and completed
+034's deferred Back check through the real match destination. Prompt 035 is
+checked; 036 and subsequent rows remain unchanged.
+
+### Changes
+
+- Added `[locale]/matches/[fixtureId]/[slug]/page.tsx` and reusable server route,
+  page and content composition in `app/_components/match-detail-{route,page,content}.tsx`.
+  UUID is authoritative; changed slugs/uppercase IDs redirect canonically, unknown
+  fixtures return 404, and unavailable storage retains an explicit retry state.
+  Request-scoped caching shares one stored response between metadata and content.
+- Added `server/matches/public-detail.ts`, `detail-page.ts` and
+  `detail-presentation.ts`. API/page now share stored-service/cache composition,
+  page preflight and sanitized failures. The HTML boundary reuses offline safe
+  source URL checks and withholds unsafe/unattributed explanations.
+- Added `components/match/detail-styles.tsx`; reused the shell, team rows,
+  probability labels, outcome badges, native disclosures and square tokens.
+  All four available/unavailable families come from one selected snapshot.
+  Original sources/fallback reasons, alternatives, explanations, uncertainty,
+  publication/evidence/source clocks and honest freshness states remain visible.
+- Kept live/verified regulation scores separate from per-family outcomes and
+  settlement/correction clocks. Void reasons survive absent predictions; closed
+  cycles never substitute unlocked previews. Exact-score prediction remains
+  disabled. Added only an optional server history slot for 036.
+- Added unique metadata and canonical/social previews using the existing brand
+  Open Graph image. Existing prelaunch `noindex, follow` remains unchanged.
+- Added `tests/match-detail-page.test.mjs`, shared owned-directory capture helper
+  and genuine SQL detail/navigation capture cases. Extended the existing production
+  rendering harness with `--detail` and validated reuse for UI-only iterations.
+  Updated API/state/feed/pagination documentation, implementation decisions and
+  tracker; added `docs/match-detail-page.md`. No schema or migration is required.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Repository units | **930 cases: 929 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/035-units.log`. |
+| Final detail contracts | **29 passed**, including five new tests for identity/query preflight before reads, original projection/clock handoff, distinct sanitized failures, whole-revision market isolation, outcome identity independent of score, unsafe/missing attribution and fixture-derived metadata. Log `.tmp/035-contracts-final.log`. |
+| Genuine MySQL qualification | **18 passed, 0 failed/skipped** in fresh feed/detail capture, owned MySQL 8.4.11. Includes four-page feed navigation, open/locked/void/closed-without-lock, partial and mixed-family snapshots, expiry, verified/corrected results and read-only anonymous requests with zero outbound work. Original log `.tmp/match-feed-gIlpKV/database.log`. After adding explicit permitted linked-evidence publication, the detail suite repeats with **10 passed, 0 failed/skipped**, preserving cited URLs and independent source clocks; log `.tmp/035-detail-final.log`. |
+| Production HTML | **47 feed and 22 detail scenarios pass** initial CSS/content, exact stored identities/clocks, all lifecycle states, unsafe URL suppression, permanent slug redirect, canonical/social metadata and genuine unknown-fixture 404. Seventeen detail projections are SQL-captured; five long-name/unsafe-link/delayed-coverage/failure variants are explicitly synthetic. The existing four feed run-phase variants remain synthetic. Final code rebuilt against the qualified captures without repeating SQL; log `.tmp/035-rendering-accepted.log`, artifacts `.tmp/match-feed-gIlpKV/`. |
+| Browser | **322 assertions pass**, installed Chrome through the Playwright skill/CLI, French locale/Los Angeles timezone. Covers selected snapshot/source/alternatives across all states, independent correct/incorrect badges, missing lock/void forecast, correction clocks, fallback unknown times, limited-news/age/partial/delayed disclosures, escaped summaries and rejected unsafe links, 404/redirect/metadata, keyboard/source focus, native no-JavaScript markets/alternatives/permitted citations, 320–1280 widths, 200% text, long names, throttled logos, reserved native images, no client detail polling/provider API work/cookies and no browser/hydration errors. Real-detail Back restores filters, 90 ordered cards, scroll and analysis focus on desktop/mobile after three stored-page reads. Log `.tmp/035-browser-accepted.log`; source/screenshots `output/playwright/035-*`. Screenshots visually reviewed. |
+| Static/build | Final build, typecheck and lint pass; dynamic detail route is present. Client chunks exclude stored reader, evidence store, database configuration, provider API and synthetic fixture markers. Tracked/new-file whitespace checks pass. Logs `.tmp/035-build-accepted.log`, `.tmp/035-types-accepted.log`, `.tmp/035-lint-accepted.log`. |
+| Actual production routes | Existing navigation HTML checks pass ten anonymous surfaces, redirects and invalid routes. Additional real-route checks confirm malformed IDs/reserved revision queries return 404, disabled storage produces truthful retryable detail HTML, and detail API preserves anonymous 400/503 behavior with safe bodies and no cookies. Log `.tmp/035-production.log`; owned loopback server runs with database capability disabled. |
+
+No implementation or required acceptance blocker remains. The SQL test gained a
+permitted linked-source scenario because the earlier structured evidence correctly
+had no attributable URL; the page does not invent one. The initial HTML reason
+assertion was corrected to compare escaped text, and server presentation was
+placed under the app boundary to preserve the repository's client import rules.
+Final checks pass. Read-only history browsing and live refresh remain 036/037.
+
+Existing real provider/model/competition/rights/budget/hosting and launch gates
+remain unchanged. Synthetic permissions, predictions and attribution URLs prove
+stored contracts and UI behavior, not forecast quality, real source rights or
+deployment. No paid football/research/AI operation, scheduler, remote database
+change or migration was activated. Owned acceptance servers/browser sessions are
+stopped after verification; the installed database service remains untouched.

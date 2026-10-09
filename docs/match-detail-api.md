@@ -2,7 +2,9 @@
 
 `GET /api/matches/{fixtureId}` is an anonymous, stored-data-only Node route.
 `createMatchDetailService({ database, clock? }).query(fixtureId, searchParams?)`
-provides the same response for future server rendering. IDs are canonical UUIDs.
+provides the same response for [server-rendered detail pages](match-detail-page.md).
+API and page use `readPublicMatchDetail` with the shared 031 response cache.
+IDs are canonical UUIDs.
 The route validates inputs before initializing the database. No visitor account,
 cookie, provider request, AI invocation, settlement write or refresh job is used.
 
@@ -49,10 +51,11 @@ exceed JavaScript's safe integer range are decimal strings.
   applicable cycle, current/locked/void forecast and operational update metadata.
   Its `forecast` always belongs to the currently applicable cycle, regardless of
   a requested historical selection.
-- `route` contains `fixtureId`, a bounded team-name `slug`, and the future English
+- `route` contains `fixtureId`, a bounded team-name `slug`, and the English
   page path `/en/matches/{fixtureId}/{slug}`. Slugs normalize accents and unsafe
   characters, with `home`/`away` fallbacks. Names may change the decorative slug;
-  the UUID remains the route identity. This prompt does not implement the page.
+  the UUID remains the route identity. Prompt 035 implements the page and permanent
+  redirects for changed slugs; prompt 036 owns its history browsing controls.
 - `currentRevisionId` is the applicable display revision, or null. `selection`
   records `applicable`, `revision` or `cycle`. `selectedCycle` retains the chosen
   cycle's identity and lifecycle timestamps even when it has no forecast.

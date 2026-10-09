@@ -2327,3 +2327,47 @@ is introduced. Real MySQL mutation tests and an isolated production analysis rou
 qualify membership changes and mobile/desktop Back behavior. Prompt 035 must
 repeat those navigation checks through its real detail page. The existing live
 operating gates remain unchanged. See [pagination contracts](pagination-navigation.md).
+
+## 035 — Stored match detail page (10 October 2026)
+
+Share `readPublicMatchDetail` between the anonymous API and Server Components,
+retaining the stored service's selection, source-permission filtering and 031
+cache. Request-scoped React caching supplies one response and request instant to
+metadata and page rendering. Validate UUID/query before initializing storage;
+unknown fixtures return 404, while storage failures remain retryable
+unavailable pages. UUID establishes identity and stale slugs/uppercase UUIDs
+redirect permanently to the service canonical path. Page query selection stays
+reserved for 036; this prompt renders only the applicable revision.
+
+Render every market from the selected immutable snapshot, including explicit
+unavailable families. Reuse the shared shell, team rows, probability formatting,
+outcome badges and square tokens. Keep the principal match-result prediction
+visible, with other families following. Native disclosures expose alternatives
+and source timing without hiding the principal prediction or adding alternative
+outcomes. Use the source-owned fallback reason and per-family provisional flag;
+do not describe provider estimates as AI or fill missing families from old data.
+
+Keep all source/evidence/publication/lock/settlement/sync/observation clocks
+distinct; unknown source times remain unknown. Preserve limited-news, retained
+age, partial coverage and delayed updates. Render the resolver's supported reasons
+and one uncertainty as untrusted text. At the HTML boundary reuse offline safe
+HTTPS checks, require attributable citations, withhold unsupported explanations
+and expose permitted links directly. Do not fetch source URLs or invent summaries
+when permission has expired. No raw evidence, prompts, private reasons, credentials
+or worker implementation crosses a client boundary.
+
+Use supplied outcomes independently of live/verified regulation scores, retaining
+pending settlement, corrected outcomes and void reasons even without a locked
+forecast. Keep historical snapshots useful beyond the forward window. Optional
+exact-score prediction remains excluded by the existing recorded launch decision.
+An optional server composition slot reserves read-only history for 036 without
+presenting unfinished controls. Unique metadata uses the existing brand Open
+Graph PNG and canonical origin; prelaunch `noindex, follow` remains in effect
+until 042 qualifies indexing.
+
+Qualification uses real MySQL-captured DTOs, the same route factory with an injected
+stored reader, and isolated security/layout variants. Linked-evidence URLs and
+permissions are explicitly synthetic and are never fetched. Mobile/desktop Back
+through this real page completes 034's deferred destination check. No migration,
+provider/AI invocation, job, polling, deployment or live operating gate is added.
+See [match detail page contracts](match-detail-page.md).

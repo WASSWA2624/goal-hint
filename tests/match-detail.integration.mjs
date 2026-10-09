@@ -20,15 +20,25 @@ import { lifecycleAuthority, lifecyclePolicy, lifecycleInput } from './helpers/l
 import { resultHash } from './helpers/result-sync-fixtures.mjs';
 import { PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
+import { savePageScenarios } from './helpers/page-capture.mjs';
 
 test('stored anonymous match detail and history on genuine isolated MySQL', { timeout: 300_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
     let readAt = PUBLICATION_NOW;
     const service = createMatchDetailService({ database: p.a, clock: { now: () => readAt } });
     const states = new Map();
+    const captured = {}, capture = (name, data) => { captured[name] = { data, error: null }; };
     async function publish(id, options = {}) {
       p.setTime(PUBLICATION_NOW); readAt = p.now();
       const state = await p.setup(id);
+      if (options.linkedEvidence) {
+        const context = state.snapshot.context, authority = evidenceAuthority();
+        state.snapshot = buildEvidenceSnapshot({ context, policy: evidencePolicy(), sources: [evidenceSource(context, {
+          sourceUrl: 'https://news.example.com/synthetic-match-preview', publishedAt: context.cutoffAt - 3000,
+        })] }, authority);
+        state.input.evidenceSnapshotId = evidenceHash(randomUUID());
+        await createMysqlEvidenceStore(p.a).save(state.input.evidenceSnapshotId, evidenceHash(`request:${state.input.evidenceSnapshotId}`), state.snapshot, authority);
+      }
       state.input.candidate = options.candidate?.(state) ?? historyCandidate({ snapshot: state.snapshot, model: modelVersion(), jobId: state.lease.jobId, ...options });
       const receipt = await p.publisher.publish(state.input, state.lease); assert.equal(receipt.refresh.outcome, 'published');
       await p.queue.acknowledge(state.lease); state.revision = receipt.revision; states.set(id, state); return state;
@@ -38,6 +48,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       const state = await p.setup(3009), response = await read(state);
       assert.equal(response.snapshot, null); assert.equal(response.fixture.unavailableMarkets.length, 4);
       assert.equal(response.selection, 'applicable'); assert.equal(response.currentRevisionId, null);
+      capture('unpublished', response);
       await assert.rejects(service.query(randomUUID()), (e) => e.code === 'not-found');
       const first = await publish(3000), other = await publish(3001);
       await assert.rejects(read(first, `revision=${other.revision.id}`), (e) => e.code === 'not-found');
@@ -59,10 +70,12 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       assert.ok(snapshot.outcomes.every((o) => o.status === 'pending'));
       assert.equal(matchDetailResponseSchema.safeParse({ ...response, privatePrompt: 'secret' }).success, false);
       assert.doesNotMatch(JSON.stringify(response), /candidateJson|evidenceRef|transportEvidence|requestHash|observationHash|invocationId|promptVersion|rawJson|claims/u);
+      capture('open', response);
     });
     await t.test('provider fallback and mixed-family provenance stay in one coherent revision', async () => {
       const fallback = await publish(3002, { source: 'api-football' });
       const snapshot = (await read(fallback)).snapshot;
+      capture('fallback', await read(fallback));
       assert.equal(snapshot.markets.length, 2); assert.equal(snapshot.unavailableMarkets.length, 2);
       assert.ok(snapshot.markets.every((m) => m.source.kind === 'api-football' && m.source.fallbackReason === 'ai-failure' && m.timestamps.providerUpdatedAt === null && m.timestamps.generatedAt === null));
       const mixed = await publish(3003, { candidate: (state) => {
@@ -74,13 +87,24 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       const data = (await read(mixed)).snapshot;
       assert.deepEqual(data.markets.map((m) => [m.market.family, m.source.kind]), [['match-result', 'api-football'], ['double-chance', 'api-football'], ['total-goals', 'ai'], ['both-teams-to-score', 'ai']]);
       assert.equal(data.analysis.reasons.length, 3); assert.equal(data.analysis.sources.filter((s) => s.id === 'api-football').length, 1);
+      capture('mixed', await read(mixed));
+      const partial = await publish(3011, { partial: true }), response = await read(partial);
+      assert.equal(response.snapshot.markets.length, 2); assert.equal(response.snapshot.unavailableMarkets.length, 2);
+      capture('partial', response);
+      const linked = await publish(3012, { linkedEvidence: true }), attribution = await read(linked);
+      assert.equal(attribution.snapshot.analysis.sources[0].url, 'https://news.example.com/synthetic-match-preview');
+      assert.equal(attribution.snapshot.analysis.sources[0].publishedAt, linked.snapshot.context.cutoffAt - 3000);
+      assert.ok(attribution.snapshot.analysis.reasons.every(reason => reason.sourceUrls.includes('https://news.example.com/synthetic-match-preview')));
+      capture('linked-evidence', attribution);
     });
     await t.test('locked snapshot and closed without eligible lock keep distinct identities', async () => {
       const state = states.get(3000); p.setTime(state.cycle.cutoffAt); await p.first.close(p.target(state));
       assert.equal((await read(state)).snapshot.applicability, 'locked');
+      capture('locked', await read(state));
       const preview = await publish(3006);
       await p.first.closeObservedPlay({ ...preview.input.observation, status: 'live', retrievedAt: p.now(), actualStartedAt: PUBLICATION_NOW - 1 });
       const response = await read(preview); assert.equal(response.snapshot, null); assert.equal(response.currentRevisionId, null);
+      capture('closed-without-lock', response);
       const historical = (await read(preview, `revision=${preview.revision.id}`)).snapshot;
       assert.equal(historical.applicability, 'historical'); assert.equal(historical.historical, true); assert.deepEqual(historical.outcomes, []);
     });
@@ -90,12 +114,14 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       const response = await read(state);
       assert.equal(response.snapshot.applicability, 'void'); assert.equal(response.snapshot.cycle.lockedAt, null);
       assert.ok(response.snapshot.outcomes.every((o) => o.status === 'void' && o.voidedAt === p.now()));
+      capture('void-preview', response);
       const next = await p.history.withFixtureTransaction(state.fixture.id, (writer) => writer.createCycle(cycleCreation(state.fixture, 'detail-rescheduled')));
       const current = await read(state); assert.equal(current.fixture.cycleId, next.id); assert.equal(current.snapshot, null);
       const previous = await read(state, `cycle=${state.cycle.id}&limit=1`);
       assert.equal(previous.snapshot.revisionId, state.revision.id); assert.equal(previous.snapshot.historical, true);
       assert.equal(previous.snapshot.cycle.voidReason.code, 'formal-postponement'); assert.ok(previous.history.cycles.next);
       await p.first.voidCycle({ fixtureId: state.fixture.id, cycleId: next.id, actor: 'synthetic-detail-test', reason: 'formal-postponement', evidenceRef: 'private-next-cycle-proof' });
+      capture('void-without-prediction', await read(state));
       await p.history.withFixtureTransaction(state.fixture.id, (writer) => writer.createCycle(cycleCreation(state.fixture, 'third-detail-cycle')));
       const page = await read(state, new URL(previous.history.cycles.next, 'http://localhost').searchParams);
       assert.equal(page.history.cycles.entries[0].id, state.cycle.id); assert.equal(page.history.cycles.next, null);
@@ -137,6 +163,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       const data = (await read(state)).snapshot;
       assert.equal(data.analysis.state, 'withheld'); assert.deepEqual(data.analysis.reasons, []); assert.equal(data.analysis.uncertainty, null);
       assert.deepEqual(data.markets[0].market, state.revision.candidate.markets['match-result'].market);
+      capture('withheld', await read(state));
       readAt = PUBLICATION_NOW;
     });
     await t.test('verified result correction updates outcomes while preserving the locked forecast', async () => {
@@ -153,16 +180,22 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
           channel: 'ids', date: null, requestedIds: [3000], observations: [observation], error: null, requestsDispatched: 1 };
         try { await store.save(lease, batch); await store.apply(lease, batch); } finally { await store.release(lease); }
       }
-      await result(2, 1, 1); assert.ok((await read(state)).snapshot.outcomes.every((o) => o.status === 'pending'));
+      await result(2, 0, 1); assert.ok((await read(state)).snapshot.outcomes.every((o) => o.status === 'pending'));
+      capture('pending-settlement', await read(state));
       await settlement.settleFixture(state.fixture.id);
       const original = await read(state); assert.equal(original.fixture.score.home, 2);
       assert.equal(original.snapshot.outcomes[0].status, 'correct'); assert.equal(original.snapshot.outcomes[0].correctedAt, null);
+      assert.deepEqual(original.snapshot.outcomes.map(outcome => outcome.status), ['correct', 'correct', 'incorrect', 'incorrect']);
+      capture('settled', original);
       await result(0, 1, 2); assert.ok((await read(state)).snapshot.outcomes.every((o) => o.status === 'pending'));
+      capture('correction-pending', await read(state));
       await settlement.settleFixture(state.fixture.id);
       const corrected = await read(state); assert.equal(corrected.fixture.score.home, 0);
       assert.equal(corrected.snapshot.outcomes[0].status, 'incorrect'); assert.equal(corrected.snapshot.outcomes[0].reason, 'result-correction');
       assert.equal(corrected.snapshot.outcomes[0].correctedAt, p.now()); assert.equal(corrected.snapshot.outcomes[0].settledAt, p.now());
       assert.equal(corrected.snapshot.revisionId, original.snapshot.revisionId); assert.deepEqual(corrected.snapshot.markets, original.snapshot.markets);
+      capture('corrected', corrected);
+      const previousReadAt = readAt; readAt += 20 * 86_400_000; capture('historical', await read(state)); readAt = previousReadAt;
     });
     await t.test('anonymous detail and historical requests perform only reads, dispatch no outbound work and set no cookie', async () => {
       const counts = () => p.a.query(async (tx) => ({ jobs: await tx.durableJob.findMany({ orderBy: { id: 'asc' } }),
@@ -197,5 +230,6 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       } finally { globalThis.fetch = fetch; }
       assert.equal(writes, 0); assert.equal(outbound, 0); assert.deepEqual(await counts(), before);
     });
+    await savePageScenarios(t, 'MATCH_DETAIL_PAGE_CAPTURE', captured);
   });
 });

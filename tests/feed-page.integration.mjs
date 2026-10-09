@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile, writeFile, realpath } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
 import { parseReportingDate, utcInstantFromEpochMilliseconds } from '../src/domain/calendar.ts';
 import { loadMatchFeedPage } from '../src/server/matches/feed-page.ts';
@@ -20,18 +17,11 @@ import { resultHash } from './helpers/result-sync-fixtures.mjs';
 import { PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
 import { appendFeedPage, initialLoadedFeed, replaceFeedPages } from '../src/domain/feed-pagination.ts';
+import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
+import { loadMatchDetailPage } from '../src/server/matches/detail-page.ts';
+import { savePageScenarios } from './helpers/page-capture.mjs';
 
-async function saveScenarios(t, captured) {
-  if (!process.env.MATCH_FEED_PAGE_CAPTURE) return;
-  const target = path.resolve(process.env.MATCH_FEED_PAGE_CAPTURE), root = await realpath(fileURLToPath(new URL('../.tmp', import.meta.url)));
-  const relative = path.relative(root, await realpath(path.dirname(target)));
-  assert.ok(relative && !relative.startsWith('..') && !path.isAbsolute(relative));
-  let previous = {};
-  try { previous = JSON.parse(await readFile(target, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  const scenarios = { ...previous, ...captured };
-  await writeFile(target, JSON.stringify(scenarios));
-  t.diagnostic(`Saved isolated page acceptance projections; ${Object.keys(scenarios).length} scenarios.`);
-}
+const saveScenarios = (t, captured) => savePageScenarios(t, 'MATCH_FEED_PAGE_CAPTURE', captured);
 
 test('match page handoff uses genuine stored fixtures, cache, coverage and locked results', { timeout: 240_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
@@ -196,6 +186,12 @@ test('pagination detects genuine cohort changes and supplies consistent multi-pa
     let loaded = initialLoadedFeed(pages[0]); for (const page of pages.slice(1)) loaded = appendFeedPage(loaded,page);
     assert.equal(loaded.records.length,95); assert.equal(new Set(loaded.records.map(item=>item.fixtureId)).size,95);
     assert.equal((await capture('pagination-repeat',1)).paginationVersion,pages[0].paginationVersion);
+
+    const destination = pages[2].records[10], detail = createMatchDetailService({ database: p.a, cache, clock });
+    const navigation = await loadMatchDetailPage(destination.fixtureId, clock, (id, parameters) => detail.query(id, parameters));
+    assert.equal(navigation.error, null); assert.deepEqual(navigation.data.fixture.homeTeam, destination.homeTeam);
+    assert.equal(navigation.data.fixture.fixtureId, destination.fixtureId);
+    await savePageScenarios(t, 'MATCH_DETAIL_PAGE_CAPTURE', { navigation });
 
     // Move a fixture from the last page to the beginning without changing totals.
     const moved = await p.setup(4094);

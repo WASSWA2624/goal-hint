@@ -138,7 +138,8 @@ Prompt 034 supplies session-storage/history wiring and DOM scrolling through
 Browser checkpoints contain page extent and focused fixture ID, never ordered
 fixture records; all required pages are re-read before position restoration.
 The earlier Redux checkpoint actions remain available to reconciliation consumers.
-Prompt 035 must repeat Back acceptance through the real detail page.
+Prompt 035 qualifies Back through the real detail route on mobile and desktop,
+including refetch of three pages before restoring scroll and analysis-link focus.
 
 `calendarChanged(reportingDate)` is the explicit EAT event. Duplicate days are
 idempotent and backwards/invalid dates fail. Relative applied selections retain

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import net from 'node:net';
 import path from 'node:path';
@@ -10,17 +10,29 @@ import { promisify } from 'node:util';
 const root = fileURLToPath(new URL('../', import.meta.url)), execute = promisify(execFile);
 const nextCli = createRequire(import.meta.url).resolve('next/dist/bin/next');
 const args = process.argv.slice(2);
-assert.ok(args.every((argument) => argument === '--serve'), 'Usage: node scripts/verify-match-feed-rendering.mjs [--serve]');
+assert.ok(args.every((argument) => ['--serve', '--detail'].includes(argument) || argument.startsWith('--reuse=')),
+  'Usage: node scripts/verify-match-feed-rendering.mjs [--serve] [--detail] [--reuse=.tmp/match-feed-ID]');
+assert.ok(args.filter(argument => argument.startsWith('--reuse=')).length <= 1);
+const includeDetail = args.includes('--detail');
 const environment = { ...process.env, NEXT_TELEMETRY_DISABLED: '1', FORCE_COLOR: '0' };
 let child, log = '';
 
 async function fixture() {
   await mkdir(path.join(root, '.tmp'), { recursive: true });
-  const directory = await mkdtemp(path.join(root, '.tmp/match-feed-'));
+  const reuse = args.find(argument => argument.startsWith('--reuse='))?.slice('--reuse='.length);
+  const directory = reuse ? await realpath(path.resolve(root, reuse)) : await mkdtemp(path.join(root, '.tmp/match-feed-'));
+  if (reuse) {
+    assert.match(path.relative(await realpath(path.join(root, '.tmp')), directory), /^match-feed-[a-zA-Z0-9]+$/);
+    const databaseLog = await readFile(path.join(directory, 'database.log'), 'utf8');
+    assert.match(databaseLog, /\bfail 0\b/); assert.doesNotMatch(databaseLog, /\bfail [1-9]/);
+  }
   const capture = path.join(directory, 'scenarios.json');
-  try {
-    const result = await execute(process.execPath, ['--conditions=react-server', '--test', 'tests/feed-page.integration.mjs'], {
-      cwd: root, env: { ...environment, MATCH_FEED_PAGE_CAPTURE: capture }, windowsHide: true, timeout: 240_000, maxBuffer: 4 * 1024 * 1024,
+  const detailCapture = path.join(directory, 'detail-scenarios.json');
+  if (!reuse) try {
+    const result = await execute(process.execPath, ['--conditions=react-server', '--test', '--test-concurrency=1', 'tests/feed-page.integration.mjs',
+      ...(includeDetail ? ['tests/match-detail.integration.mjs'] : [])], {
+      cwd: root, env: { ...environment, MATCH_FEED_PAGE_CAPTURE: capture, ...(includeDetail ? { MATCH_DETAIL_PAGE_CAPTURE: detailCapture } : {}) },
+      windowsHide: true, timeout: 360_000, maxBuffer: 4 * 1024 * 1024,
     });
     await writeFile(path.join(directory, 'database.log'), `${result.stdout}\n${result.stderr}`);
   } catch (error) {
@@ -28,6 +40,24 @@ async function fixture() {
     throw new Error(`Stored fixture preparation failed; see ${directory}/database.log.`);
   }
   const scenarios = JSON.parse(await readFile(capture, 'utf8'));
+  const details = includeDetail ? JSON.parse(await readFile(detailCapture, 'utf8')) : null;
+  if (details) {
+    assert.ok(details.open?.data.snapshot?.markets.length === 4 && details.navigation?.data, 'Genuine detail projections are required.');
+    // Explicitly synthetic presentation/security variants; never a production switch.
+    const long = structuredClone(details.open);
+    long.data.fixture.homeTeam.name = 'InternationalHomeIdentifier'.repeat(18);
+    long.data.fixture.awayTeam.name = 'InternationalAwayIdentifier'.repeat(18);
+    details['long-names'] = long;
+    const unsafe = structuredClone(details.open), url = 'https://localhost/private?token=synthetic-secret';
+    unsafe.data.snapshot.analysis.sources[0].url = url;
+    unsafe.data.snapshot.analysis.sources[0].title = '<script>window.sourceExecuted=true</script>';
+    unsafe.data.snapshot.analysis.reasons[0].sourceUrls = [url]; details['unsafe-links'] = unsafe;
+    const delayed = structuredClone(details.open);
+    delayed.data.fixture.update.prediction = 'delayed'; delayed.data.fixture.update.result = 'delayed';
+    delayed.data.fixture.forecast.updateDelayed = true; delayed.data.fixture.partialCoverage = true;
+    details['delayed-partial-coverage'] = delayed;
+    details.failure = { data: null, error: 'unavailable' }; details.busy = { data: null, error: 'rate-limited' };
+  }
   assert.ok(scenarios.today?.result.data.records.length === 30, 'Real MySQL acceptance cannot be skipped.');
   const relative = (target) => path.relative(directory, target).split(path.sep).join('/');
   const files = {
@@ -98,11 +128,40 @@ export default async function Page({ params }: { params: Promise<{ fixtureId: st
     <BodyText>Isolated one-tap navigation check; real detail content belongs to prompt 035.</BodyText></PublicShell>;
 }`,
   };
+  if (details) {
+    files['app/detail-scenarios.json'] = JSON.stringify(details);
+    files['app/en/matches/[fixtureId]/[slug]/page.tsx'] = `import { createMatchDetailRoute } from '@/app/_components/match-detail-route';
+import { MatchFeedError } from '@/server/matches/feed-error';
+import type { DetailPageResult } from '@/server/matches/detail-page';
+import cases from '../../../../detail-scenarios.json';
+const scenarios = cases as unknown as Record<string, DetailPageResult>;
+const route = createMatchDetailRoute(async (id) => {
+  const selected = Object.values(scenarios).find(item => item.data?.fixture.fixtureId === id);
+  if (!selected?.data) throw new MatchFeedError('not-found'); return selected.data;
+});
+type Props = { params: Promise<{ fixtureId: string; slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
+const normalized = (props: Props) => ({ ...props, params: props.params.then(params => ({ ...params, locale: 'en' })) });
+export const dynamic = 'force-dynamic';
+export function generateMetadata(props: Props) { return route.generateMetadata(normalized(props)); }
+export default function Page(props: Props) { return route.Page(normalized(props)); }
+`;
+    files['app/detail-cases/[scenario]/page.tsx'] = `import { notFound } from 'next/navigation';
+import { MatchDetailPage } from '@/app/_components/match-detail-page';
+import { parseReportingDate } from '@/domain/calendar';
+import type { DetailPageResult } from '@/server/matches/detail-page';
+import cases from '../../detail-scenarios.json';
+const scenarios = cases as unknown as Record<string, DetailPageResult>;
+export const dynamic = 'force-dynamic';
+export default async function Page({ params }: { params: Promise<{ scenario: string }> }) {
+  const { scenario } = await params, selected = scenarios[scenario]; if (!selected) notFound();
+  return <MatchDetailPage result={selected} today={parseReportingDate('2026-10-09')} retryHref={selected.data?.route.path ?? '/detail-cases/open'} />;
+}`;
+  }
   for (const [name, contents] of Object.entries(files)) {
     const target = path.join(directory, name); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, `${contents}\n`);
   }
-  await cp(path.join(root, 'public/brand'), path.join(directory, 'public/brand'), { recursive: true, errorOnExist: true, force: false });
-  return { directory, scenarios };
+  if (!reuse) await cp(path.join(root, 'public/brand'), path.join(directory, 'public/brand'), { recursive: true, errorOnExist: true, force: false });
+  return { directory, scenarios, details };
 }
 
 async function port() {
@@ -144,8 +203,45 @@ async function verify(origin, directory, scenarios) {
   console.log(`PASS ${Object.keys(scenarios).length} anonymous server-rendered scenarios: original stored cards/clocks, initial CSS, honest coverage/errors, current/locked forecasts and EAT window.`);
 }
 
+async function verifyDetail(origin, directory, scenarios) {
+  const escaped = (value) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' })[character]);
+  for (const [name, scenario] of Object.entries(scenarios)) {
+    const response = await fetch(`${origin}/detail-cases/${name}`); assert.equal(response.status, 200, name);
+    assert.equal(response.headers.get('set-cookie'), null);
+    const html = await response.text(), visible = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/g, '').replace(/<!--[\s\S]*?-->/g, '');
+    await writeFile(path.join(directory, `detail-${name}.html`), html);
+    assert.ok(html.indexOf('data-styled=') < html.indexOf('<main'), `${name}: CSS before content`);
+    assert.equal((visible.match(/<h1[\s>]/g) ?? []).length, 1);
+    if (!scenario.data) { assert.match(visible, /Match temporarily unavailable/); assert.match(visible, /Try again/); continue; }
+    const { fixture, snapshot } = scenario.data;
+    assert.ok(visible.includes(escaped(fixture.homeTeam.name))); assert.ok(visible.includes(escaped(fixture.awayTeam.name)));
+    assert.equal((visible.match(/data-detail-market=/g) ?? []).length, 4, name);
+    assert.match(visible, /Match result and settlement/); assert.match(visible, /excluding extra time and penalties/);
+    assert.doesNotMatch(visible, /\/_next\/image|\s\$[\w-]+=/);
+    if (snapshot) {
+      assert.ok(visible.includes(`data-detail-revision="${snapshot.revisionId}"`));
+      assert.ok(visible.includes(new Date(snapshot.publishedAt).toISOString()));
+      for (const outcome of snapshot.outcomes) assert.ok(visible.includes(`data-outcome="${outcome.status}"`));
+      if (name === 'unsafe-links') { assert.doesNotMatch(visible, /href="https:\/\/localhost|href="javascript:|<script>/); assert.match(visible, /original explanation is unavailable/); }
+      else if (snapshot.analysis.state === 'available') for (const reason of snapshot.analysis.reasons) assert.ok(visible.includes(escaped(reason.text)), `${name}: original reason text`);
+      else assert.match(visible, /original explanation is unavailable/);
+    } else assert.match(visible, /No prediction analysis is available/);
+    if (name === 'closed-without-lock') assert.match(visible, /cycle closed without an eligible locked prediction/);
+    if (name.startsWith('void-')) assert.match(visible, /voided because the match was postponed/);
+    if (name === 'corrected') assert.match(visible, /Result correction applied/);
+  }
+  const data = scenarios.open.data;
+  const unknown = await fetch(`${origin}/en/matches/00000000-0000-4000-8000-000000000000/unknown`); assert.equal(unknown.status, 404);
+  const stale = await fetch(`${origin}/en/matches/${data.fixture.fixtureId}/old-name`, { redirect: 'manual' });
+  assert.equal(stale.status, 308); assert.equal(new URL(stale.headers.get('location'), origin).pathname, data.route.path);
+  const canonical = await fetch(`${origin}${data.route.path}`); assert.equal(canonical.status, 200);
+  const canonicalHtml = await canonical.text(); assert.ok(canonicalHtml.includes(`https://goalhint.com${data.route.path}`));
+  assert.match(canonicalHtml, /property="og:title"/); assert.match(canonicalHtml, /noindex, follow/);
+  console.log(`PASS ${Object.keys(scenarios).length} stored detail HTML scenarios, canonical metadata/redirect and genuine unknown-fixture 404.`);
+}
+
 try {
-  const { directory, scenarios } = await fixture(); console.log(`Building isolated match feed: ${directory}`);
+  const { directory, scenarios, details } = await fixture(); console.log(`Building isolated match feed: ${directory}`);
   try {
     const built = await execute(process.execPath, [nextCli, 'build', directory], { cwd: directory, env: environment, windowsHide: true, timeout: 120_000, maxBuffer: 8 * 1024 * 1024 });
     await writeFile(path.join(directory, 'build.log'), `${built.stdout}\n${built.stderr}`);
@@ -164,8 +260,9 @@ try {
     assert.ok(Date.now() < deadline, log); await new Promise((resolve) => setTimeout(resolve, 100));
   }
   await verify(origin, directory, scenarios);
+  if (details) await verifyDetail(origin, directory, details);
   console.log(`Fixture artifacts: ${directory}`); console.log(`Fixture browser URL: ${origin}`);
-  await writeFile(path.join(root, '.tmp/032-rendering-target.json'), JSON.stringify({ directory, origin }));
+  await writeFile(path.join(root, `.tmp/${includeDetail ? '035' : '032'}-rendering-target.json`), JSON.stringify({ directory, origin }));
   if (args.includes('--serve')) await new Promise((resolve) => { process.once('SIGINT', resolve); process.once('SIGTERM', resolve); child.once('exit', resolve); });
 } catch (error) { console.error(error instanceof Error ? error.message : 'Match feed rendering verification failed.'); process.exitCode = 1; }
 finally {

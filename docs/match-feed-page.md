@@ -40,8 +40,10 @@ eager remote logos; remaining logos are lazy with reserved dimensions and initia
 fallbacks. Native images keep the exact approved remote URL without an optimizer
 or proxy. Names, kickoff, prediction, probability and styled-components CSS exist
 before hydration. Canonical slugs reuse the detail service's extracted helper.
-Prompt 035 supplies the real match-detail destination; acceptance uses a clearly
-labeled isolated analysis route.
+Prompt 035 supplies the real [match-detail destination](match-detail-page.md).
+Its acceptance repeats filtered multi-page Back restoration through the actual
+route factory with genuine stored detail projections. Earlier isolated shell
+destinations remain confined to their original rendering tests.
 
 Open cycles display the supplied current prediction. Closed cycles display only
 the supplied locked forecast, or the explicit missing locked selection for that

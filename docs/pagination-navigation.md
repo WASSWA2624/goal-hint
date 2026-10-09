@@ -65,6 +65,7 @@ checkpoint with that incomplete result. A changed cohort is reported as a
 refreshed current list. Query changes reset appended pages and cancel pending
 requests. There is no polling or prediction/provider work.
 
-The isolated production acceptance app supplies real MySQL-captured pages and an
-isolated canonical analysis destination. Prompt 035 must repeat navigation
-acceptance through the real detail page once it exists.
+The isolated production acceptance app supplies real MySQL-captured pages.
+Prompt 035 repeats desktop/mobile navigation through the actual stored-detail
+route and completes the deferred real-destination Back check: filters, three
+loaded pages, scroll and original analysis-link focus return after stored reads.
