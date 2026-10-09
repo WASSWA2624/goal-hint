@@ -28,7 +28,7 @@ test('missing or unverified competition/eligibility policy blocks before storage
   assert.throws(() => parseSelectionPolicy(null), denied('policy-required'));
   for (const policy of [selectionPolicy({ competitionIds: [] }), selectionPolicy({ eligibleStatuses: ['live'] }),
     { ...selectionPolicy(), imaginaryApproval: true }]) assert.throws(() => parseSelectionPolicy(policy), denied('invalid-request'));
-  const service = createDailySelectionService({ policy: selectionPolicy(), authority: selectionAuthority({ verifyPolicy: () => false }),
+  const service = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy: selectionPolicy(), authority: selectionAuthority({ verifyPolicy: () => false }),
     importer: { import() { assert.fail('must not import'); } }, store: { acquire() { assert.fail('must not acquire'); } } });
   await assert.rejects(service.run(SELECTION_FOR), denied('policy-required'));
 });
@@ -63,6 +63,6 @@ test('lost renewal ownership prevents manifest commit and dispatch after a provi
   const store = { acquire: async () => lease, inspect: async () => null, renew: async () => { if (++renewals > 1) throw new Error('lost'); },
     release: async () => {}, beginImport: async () => ({ id: 'import', request: {} }), finishImport: async () => {},
     commit: async () => { committed++; }, reconcile: async () => { dispatched++; } };
-  const service = createDailySelectionService({ policy: selectionPolicy(), authority: selectionAuthority(), store, importer: { import: async () => {} } });
+  const service = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy: selectionPolicy(), authority: selectionAuthority(), store, importer: { import: async () => {} } });
   await assert.rejects(service.run(SELECTION_FOR)); assert.equal(committed, 0); assert.equal(dispatched, 0);
 });

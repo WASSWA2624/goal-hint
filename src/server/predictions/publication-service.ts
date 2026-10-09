@@ -19,6 +19,7 @@ import { publicationFail, RevisionPublicationError, type PublicationAuthority, t
 import { observationShowsPlay, publicationEligibility, publicationSourceIsFresh, revisionEligibleForSchedule, statusShowsPlay } from "./publication-eligibility.ts";
 import { parsePublication, parsePublicationPolicy, parsePublishRevision } from "./publication-input.ts";
 import { publicationResult, storedPublicationBarrier, storedRefreshResult } from "./publication-read.ts";
+import { recordPublicationBarrier } from "./publication-barrier.ts";
 
 type Transaction = Prisma.TransactionClient;
 async function serverNow(tx: Transaction) {
@@ -93,10 +94,7 @@ export function createRevisionPublicationService(options: Readonly<{
               providerUpdatedAt: fixture.providerUpdatedAt === null ? null : historyTime(fixture.providerUpdatedAt), actualStartedAt: null,
               evidenceRef: `canonical-fixture:${fixture.id}:version:${fixture.dataVersion}` } : null;
           if (!barrier && fixture.activeCycleId === cycle.id && cycle.state === "open" && play !== null) {
-            const payload = evidenceSerialize(play), closedAt = play.actualStartedAt ?? play.retrievedAt;
-            await tx.$executeRaw`INSERT INTO PredictionPublicationBarrier (cycleId, fixtureId, closedAt, recordedAt, integrity, observationJson)
-              VALUES (${cycle.id}, ${fixture.id}, ${new Date(closedAt)}, ${new Date(now)}, SHA2(CAST(CAST(${payload} AS JSON) AS CHAR), 256), CAST(${payload} AS JSON))`;
-            barrier = await storedPublicationBarrier(tx, cycle.id);
+            barrier = await recordPublicationBarrier(tx, play, now);
           }
           let reason = publicationEligibility({ now, cycle, activeCycleId: fixture.activeCycleId,
             kickoffAt: fixture.kickoff === null ? null : utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), status: fixture.status,

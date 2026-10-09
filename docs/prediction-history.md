@@ -99,7 +99,8 @@ freshness/rights, pinned model/job ownership, lease fencing, rolling-window,
 run-order and strict kickoff-minus-five-minutes/early-start checks inside the
 same transaction before appending and moving the current reference. Storage
 validation cannot prove source rights, semantic grounding or forecast quality.
-023 chooses the eligible lock from history; 024 decides rescheduling/voiding and
+[023 cutoff locking](cutoff-locking.md) chooses the eligible lock from history
+and provides an audited void operation; 024 decides rescheduling/voiding and
 coordinates canonical kickoff changes; 027 appends settlement/correction data.
 
 ## Read rules

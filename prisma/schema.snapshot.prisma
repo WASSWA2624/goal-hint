@@ -575,6 +575,7 @@ model PredictionCycle {
   selections           RunFixture[]
   selectionEligibility SelectionCycleEligibility?
   publicationBarrier   PredictionPublicationBarrier?
+  operations           PredictionCycleOperation[]
 
   @@unique([id, fixtureId])
   @@unique([fixtureId, creationKey])
@@ -607,40 +608,41 @@ model PredictionSchedule {
 
 // A complete accepted snapshot; no application UPDATE/DELETE grants.
 model PredictionSet {
-  id                    String                    @id @default(uuid()) @db.Char(36)
-  fixtureId             String                    @db.Char(36)
-  fixtureVersion        BigInt                    @db.UnsignedBigInt
-  cycleId               String                    @db.Char(36)
-  runId                 String                    @db.Char(36)
-  runSequence           BigInt                    @db.UnsignedBigInt
-  jobId                 String                    @db.Char(64)
-  fixtureRevision       Int                       @db.UnsignedInt
-  cycleRevision         Int                       @db.UnsignedInt
-  predecessorId         String?                   @db.Char(36)
-  scheduleVersion       Int                       @db.UnsignedInt
-  modelVersionId        String?                   @db.Char(64)
-  evidenceSnapshotId    String                    @db.Char(64)
-  evidenceHash          String                    @db.Char(64)
-  evidenceCutoffAt      DateTime                  @db.DateTime(3)
-  generationCompletedAt DateTime                  @db.DateTime(3)
-  publishedAt           DateTime                  @db.DateTime(3)
-  recordedAt            DateTime                  @db.DateTime(3)
-  ruleVersion           String                    @db.VarChar(64)
-  requestHash           String                    @db.Char(64)
-  integrity             String                    @db.Char(64)
+  id                    String                     @id @default(uuid()) @db.Char(36)
+  fixtureId             String                     @db.Char(36)
+  fixtureVersion        BigInt                     @db.UnsignedBigInt
+  cycleId               String                     @db.Char(36)
+  runId                 String                     @db.Char(36)
+  runSequence           BigInt                     @db.UnsignedBigInt
+  jobId                 String                     @db.Char(64)
+  fixtureRevision       Int                        @db.UnsignedInt
+  cycleRevision         Int                        @db.UnsignedInt
+  predecessorId         String?                    @db.Char(36)
+  scheduleVersion       Int                        @db.UnsignedInt
+  modelVersionId        String?                    @db.Char(64)
+  evidenceSnapshotId    String                     @db.Char(64)
+  evidenceHash          String                     @db.Char(64)
+  evidenceCutoffAt      DateTime                   @db.DateTime(3)
+  generationCompletedAt DateTime                   @db.DateTime(3)
+  publishedAt           DateTime                   @db.DateTime(3)
+  recordedAt            DateTime                   @db.DateTime(3)
+  ruleVersion           String                     @db.VarChar(64)
+  requestHash           String                     @db.Char(64)
+  integrity             String                     @db.Char(64)
   candidateJson         Json
-  fixture               FootballFixture           @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  cycle                 PredictionCycle           @relation("CyclePredictionSets", fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
-  run                   DailyRun                  @relation(fields: [runId, runSequence], references: [id, sequence], onDelete: Restrict, onUpdate: Restrict)
-  schedule              PredictionSchedule        @relation(fields: [cycleId, scheduleVersion], references: [cycleId, version], onDelete: Restrict, onUpdate: Restrict)
-  evidence              FixtureEvidenceSnapshot   @relation(fields: [evidenceSnapshotId, fixtureId, cycleId, runId, fixtureVersion, evidenceHash], references: [requestId, fixtureId, cycleId, runId, fixtureVersion, contentHash], onDelete: Restrict, onUpdate: Restrict, map: "PredictionSet_evidence_fkey")
-  model                 ModelVersion?             @relation(fields: [modelVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  predecessor           PredictionSet?            @relation("PredictionPredecessor", fields: [predecessorId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
-  successors            PredictionSet[]           @relation("PredictionPredecessor")
-  currentForCycles      PredictionCycle[]         @relation("CycleCurrentSet")
-  lockedForCycles       PredictionCycle[]         @relation("CycleLockedSet")
+  fixture               FootballFixture            @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle                 PredictionCycle            @relation("CyclePredictionSets", fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  run                   DailyRun                   @relation(fields: [runId, runSequence], references: [id, sequence], onDelete: Restrict, onUpdate: Restrict)
+  schedule              PredictionSchedule         @relation(fields: [cycleId, scheduleVersion], references: [cycleId, version], onDelete: Restrict, onUpdate: Restrict)
+  evidence              FixtureEvidenceSnapshot    @relation(fields: [evidenceSnapshotId, fixtureId, cycleId, runId, fixtureVersion, evidenceHash], references: [requestId, fixtureId, cycleId, runId, fixtureVersion, contentHash], onDelete: Restrict, onUpdate: Restrict, map: "PredictionSet_evidence_fkey")
+  model                 ModelVersion?              @relation(fields: [modelVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  predecessor           PredictionSet?             @relation("PredictionPredecessor", fields: [predecessorId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  successors            PredictionSet[]            @relation("PredictionPredecessor")
+  currentForCycles      PredictionCycle[]          @relation("CycleCurrentSet")
+  lockedForCycles       PredictionCycle[]          @relation("CycleLockedSet")
   markets               MarketPrediction[]
   refreshResults        PredictionRefreshResult[]
+  cycleOperations       PredictionCycleOperation[]
 
   @@unique([id, cycleId, fixtureId])
   @@unique([runId, fixtureId, cycleId], map: "PredictionSet_refresh_key")
@@ -785,15 +787,37 @@ model PredictionPublicationBarrier {
 
 // Per-fixture data-version cursor. Delivery/acknowledgement belongs to future caching.
 model PredictionChangeEvent {
-  fixtureId String                  @db.Char(36)
-  version   BigInt                  @db.UnsignedBigInt
-  resultId  String                  @unique @db.Char(64)
-  kind      String                  @db.VarChar(32)
-  at        DateTime                @db.DateTime(3)
-  result    PredictionRefreshResult @relation(fields: [resultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  fixtureId   String                    @db.Char(36)
+  version     BigInt                    @db.UnsignedBigInt
+  resultId    String?                   @unique @db.Char(64)
+  operationId String?                   @unique @db.Char(64)
+  kind        String                    @db.VarChar(32)
+  at          DateTime                  @db.DateTime(3)
+  result      PredictionRefreshResult?  @relation(fields: [resultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  operation   PredictionCycleOperation? @relation(fields: [operationId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
 
   @@id([fixtureId, version])
   @@unique([resultId, fixtureId, version], map: "PredictionChangeEvent_result_key")
+  @@unique([operationId, fixtureId, version], map: "PredictionChangeEvent_operation_key")
+}
+
+// Immutable closure/void receipts remain separate from refresh and forecast payloads.
+model PredictionCycleOperation {
+  id             String                 @id @db.Char(64)
+  fixtureId      String                 @db.Char(36)
+  cycleId        String                 @db.Char(36)
+  kind           String                 @db.VarChar(16)
+  fixtureVersion BigInt                 @db.UnsignedBigInt
+  revisionId     String?                @db.Char(36)
+  at             DateTime               @db.DateTime(3)
+  integrity      String                 @db.Char(64)
+  operationJson  Json
+  cycle          PredictionCycle        @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  revision       PredictionSet?         @relation(fields: [revisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  event          PredictionChangeEvent?
+
+  @@unique([cycleId, kind])
+  @@unique([id, fixtureId, fixtureVersion], map: "PredictionCycleOperation_change_key")
 }
 
 model DurableJobAttempt {

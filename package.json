@@ -42,6 +42,7 @@
     "test:jobs": "node --conditions=react-server --test tests/durable-jobs.test.mjs tests/durable-jobs.integration.mjs",
     "test:selection": "node --conditions=react-server --test tests/daily-selection.test.mjs tests/daily-selection.integration.mjs",
     "test:publication": "node --conditions=react-server --test tests/revision-publication.test.mjs tests/revision-publication.integration.mjs",
+    "test:cutoff": "node --conditions=react-server --test tests/cutoff-locking.test.mjs tests/cutoff-locking.integration.mjs",
     "worker:jobs": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/jobs.ts",
     "test": "node --conditions=react-server --test tests/*.test.mjs",
     "check": "npm run db:generate && npm run db:validate && npm run lint && npm run typecheck && npm test && npm run build"

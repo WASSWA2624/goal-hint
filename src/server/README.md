@@ -62,6 +62,15 @@ for that service and later lifecycle decisions. Read historical revisions withou
 changing current/locked refs. Durable refresh results/events remain separate from
 forecast payloads; no schedule or permissive live authority is mounted.
 
+`createCutoffLockingService` schedules durable close jobs, selects an eligible
+accepted revision from publication/schedule/start history and closes once through
+the same fixture transaction. Pass it as selection's required `cutoff` dependency
+and register `createCutoffJob` in the protected worker binding. Reuse its audited
+void operation for proven corrections; it preserves the original locked pick.
+The [cutoff contract](../../docs/cutoff-locking.md) defines recovery, grants and
+the shared durable change stream. Lifecycle detection and settlement remain
+separate operations.
+
 `jobs/` provides the shared MySQL queue, typed registry, scoped transactional
 enqueue, renewable fenced leases and private trigger adapter. Use the
 [durable-jobs contract](../../docs/durable-jobs.md) for worker integration,

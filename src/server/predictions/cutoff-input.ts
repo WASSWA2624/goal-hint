@@ -5,15 +5,16 @@ import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.
 import { parseJobEnvelope } from "../jobs/job-input.ts";
 import { historyHash, historyId } from "./history-input.ts";
 import { cutoffFail, type CutoffPolicy, type CutoffRecoveryInput, type CutoffTarget, type VoidLockedCycleInput } from "./cutoff-contract.ts";
-import type { StoredCycle } from "./history-contract.ts";
+import type { HistoryActor, StoredCycle } from "./history-contract.ts";
 
 export const CUTOFF_JOB_TYPE = "prediction.cutoff";
 export const cutoffTargetSchema = z.strictObject({ fixtureId: historyId, cycleId: historyId });
-export const cutoffPayloadSchema = cutoffTargetSchema.extend({ scheduleVersion: z.number().int().positive().max(4_294_967_295),
-  recoveryKey: historyHash.nullable() });
-export type CutoffPayload = z.infer<typeof cutoffPayloadSchema>;
 const label = (max: number) => z.string().trim().min(1).max(max).regex(/^[^\p{Cc}]+$/u);
 const actor = { actor: label(128), reason: label(2000), evidenceRef: label(512) };
+export const cutoffPayloadSchema = cutoffTargetSchema.extend({ scheduleVersion: z.number().int().positive().max(4_294_967_295),
+  recoveryKey: historyHash.nullable(), recoveryProof: z.strictObject(actor).nullable() })
+  .refine((value) => (value.recoveryKey === null) === (value.recoveryProof === null));
+export type CutoffPayload = z.infer<typeof cutoffPayloadSchema>;
 export function parseCutoff<Value>(schema: z.ZodType<Value>, input: unknown): Value {
   try { return freezeEvidence(schema.parse(input)); } catch { return cutoffFail("invalid-request"); }
 }
@@ -32,10 +33,10 @@ export function parseCutoffPolicy(input: unknown): CutoffPolicy {
   }) }), input);
 }
 /** No cutoff-based expiry: a close job remains executable after downtime. */
-export function cutoffEnvelope(cycle: StoredCycle, policy: CutoffPolicy, recoveryKey: string | null = null) {
+export function cutoffEnvelope(cycle: StoredCycle, policy: CutoffPolicy, recoveryKey: string | null = null, recoveryProof: HistoryActor | null = null) {
   return parseJobEnvelope({ version: 1, type: CUTOFF_JOB_TYPE, handlerVersion: 1,
     idempotencyKey: evidenceFingerprint({ cycleId: cycle.id, scheduleVersion: cycle.scheduleVersion, recoveryKey }),
-    payload: { fixtureId: cycle.fixtureId, cycleId: cycle.id, scheduleVersion: cycle.scheduleVersion, recoveryKey },
+    payload: parseCutoff(cutoffPayloadSchema, { fixtureId: cycle.fixtureId, cycleId: cycle.id, scheduleVersion: cycle.scheduleVersion, recoveryKey, recoveryProof }),
     refresh: null, notBefore: cycle.cutoffAt, expiresAt: Date.UTC(9999, 11, 31, 23, 59, 59, 999),
     fallbackReserveMs: 0, ...policy.job });
 }

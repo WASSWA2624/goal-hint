@@ -1708,3 +1708,62 @@ budgets, selection choices and real host/workload authority remain live gates.
 The production authority must enforce the existing runtime publication gate;
 synthetic tests grant no release permission. Final locking, lifecycle handling
 and worker integration in 023–025 must pass before scheduled predictions run.
+
+## Prompt 023 — Irreversible cutoff locking
+
+Implemented locally on **9 October 2026 EAT**. The
+[cutoff runbook](cutoff-locking.md) defines the service, queue binding, closure
+selection, correction void and recovery contracts. No provider calls, lifecycle
+detection, settlement, public route or hosted job binding is activated.
+
+Selection now requires the cutoff scheduler and schedules every eligible
+committed member after refresh dispatch, with ownership checks before and after.
+Stable cycle/schedule envelopes are queued under provider → fixture → queue
+shard/job locks. A crash after a prefix retains the manifest and queued work;
+retry fills only missing cutoff jobs. Changed schedules get a new close job,
+without creating a prediction refresh or editing an existing envelope.
+
+Close jobs have no kickoff-based expiry: use the supported maximum UTC instant,
+while keeping explicit approved attempt, timeout, lease and backoff bounds.
+Superseded jobs enqueue the accepted schedule and finish; an early same-version
+delivery retries. Exhausted/missing work requires a verified recovery action/key,
+whose actor, reason and evidence are retained in the new job envelope. Watchdog
+and hosted workload qualification remain with 043/046 and OP-19.
+
+One Read Committed history transaction shares publication/catalog/schedule
+synchronization. It reconstructs the first deadline reached while each schedule
+was in force and applies earlier actual-start/publication-barrier evidence.
+Later kickoff extensions cannot undo an already reached deadline during downtime.
+All schedule versions must be contiguous and coherent. Selection scans sealed
+accepted publications in descending run order, checks their original schedule
+and strict publication cutoff, and applies 022's shared schedule eligibility.
+Scores, outcomes, confidence and the current pointer never choose a pick.
+
+The operation stores one selected reference or no prediction. Effective
+closedAt and actual lockedAt are separate; delayed jobs preserve both original
+forecast timestamps and payload. An effective close before cycle opening is
+retained in the receipt and selection rule, with stored closedAt clamped to
+opening for the established history invariant. UTC_TIMESTAMP(3), final
+ownership fencing and authority checks protect the transaction. Publication
+continues to refuse writes at/after cutoff even before the lock job executes.
+
+PredictionCycleOperation is an append-only sealed closure/void receipt, unique
+per cycle and operation kind, bound to the same-cycle locked revision. Closure,
+history audit, fixture version, receipt and durable invalidation commit together.
+PredictionChangeEvent now binds exactly one refresh result or cycle operation
+with a composite fixture/version FK. Existing publication rows remain valid;
+cycle-closed and cycle-voided share the same per-fixture cursor for 031.
+Application access to the new operation table is SELECT/INSERT only.
+
+Retry returns the original closure even after acknowledgement, an ambiguous
+committed response or later voiding. The audited void operation requires proven
+correction authority and an already closed cycle, retains its selected reference,
+payload and close/lock timestamps, and adds a reason, void time and event. It
+never substitutes an earlier or more favorable pick. Current coherent readers
+show current, locked/no-prediction or void according to cycle state. 024 owns
+correction detection/coordination; 027 owns result settlement.
+
+Actual workload/hosting, provider/rights/budgets/model qualification and
+publication freshness gates remain unresolved. 024–025 must pass before scheduled
+predictions run. Rollback stops bindings and preserves additive schema, forecasts,
+schedules, audit, receipts and events; inspect migration state and repair forward.

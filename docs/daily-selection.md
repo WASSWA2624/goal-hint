@@ -1,15 +1,17 @@
 # Daily selection
 
-Prompt 021 implements private selection and recovery. Publication, cutoff
-locking, lifecycle detection and the prediction refresh handler remain with
-022–025. Nothing in selection executes AI or starts score polling.
+Prompt 021 implements private selection and recovery. Publication and cutoff
+locking are implemented in 022–023; lifecycle detection and the prediction
+refresh handler remain with 024–025. Nothing in selection executes AI or starts
+score polling.
 
 ## Binding and schedule
 
 Use `createMysqlDailySelectionStore(database, queue)` with the existing MySQL
 queue on the **same database**, canonical importer, shared API-Football adapter
 and quota gateway. Construct `createDailySelectionService` with an explicit
-validated policy and trusted `SelectionAuthority`. Authority must verify current
+validated policy, trusted `SelectionAuthority` and required `cutoff` scheduler
+from [cutoff locking](cutoff-locking.md). Authority must verify current
 runtime operation scope, retention rights, exact approved competition IDs and
 trial-backed eligibility evidence. Test verifiers are never deployment approval.
 
@@ -105,6 +107,13 @@ ordering. Existing queue refresh uniqueness protects run/fixture/cycle identity;
 the composite job FK prevents linking work from another refresh. Repeating a
 committed run never imports again and never changes membership. Late discoveries
 wait for another eligible daily run.
+
+After reconciliation, the service schedules durable cutoff jobs for the committed
+membership through `cutoff.scheduleRun(runId)`, then verifies selection ownership
+again. Each cutoff enqueue is idempotent and recoverable independently of refresh
+dispatch. A failure preserves the committed manifest and already queued prefix;
+repeating the original occurrence fills only missing work. Tests focused on 021
+may stub this dependency; production bindings must use the implemented scheduler.
 
 After a crash before manifest commit, acquire the expired lease and resume the
 same run/import receipts. After commit or midway through dispatch, repeat the

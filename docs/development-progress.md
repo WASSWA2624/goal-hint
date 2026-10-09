@@ -2049,3 +2049,86 @@ and 031 event consumption/caching. Scheduled predictions stay disabled until
 023–025 and the live gates pass. Rollback stops bindings and preserves additive
 schema plus immutable forecasts, barriers, results and events; repairs roll
 forward after inspecting actual schema/migration state. No UI changed.
+
+## Prompt 023 — Cutoff locking
+
+**Date:** 9 October 2026 EAT. **Status:** implementation and required local
+verification complete. The tracker row is ticked; live activation remains gated.
+
+### Changed files and behavior
+
+- cutoff-{contract,input,eligibility,read,service}.ts implement explicit policy
+  and synchronous workload/evidence authority, stable durable close/recovery
+  envelopes, strict history reconstruction, irreversible single-reference
+  closure, immediate observed-play closure and an audited immutable void.
+- publication-barrier.ts shares the existing append-only safety-barrier write
+  with publication. Selection requires the implemented cutoff scheduler after
+  refresh dispatch and checks ownership again afterward. The actual close handler
+  integrates with the existing registry/renewable worker rather than a new runner.
+- Prisma schema/snapshot and additive migration 20261009142724_cutoff_locking
+  introduce sealed append-only PredictionCycleOperation receipts and extend
+  PredictionChangeEvent with exactly-one refresh/operation bindings and native
+  checks. Existing publication events remain valid; application grants need only
+  SELECT/INSERT on the new table.
+- The shared provider → fixture → job transaction replays schedule and actual
+  start evidence; selects the latest eligible accepted run rather than the current
+  pointer; preserves an eligible earlier-day forecast; and atomically closes,
+  increments fixture version and records audit/receipt/invalidation. Effective
+  close time remains separate from delayed lock execution. Void never substitutes
+  another locked pick or rewrites a forecast.
+- tests/cutoff-locking.{test,integration}.mjs and its synthetic helper exercise
+  genuine MySQL clocks, real publication/selection/evidence/model/queue contracts,
+  competing clients and the durable worker. Existing selection/publication tests
+  stub only their newly required scheduler dependency. The cutoff runbook, existing
+  selection/history/publication guides, server README and decision register describe
+  bindings, recovery, grants, events and outstanding live gates.
+- `.env.example` restores the documented empty provider-key setting. A populated
+  value in the current commit was retained in ignored `.env.local` without being
+  printed; it must be rotated because it already exists in GitHub history.
+
+### Verification
+
+Checks use bundled **Node.js 24.19.0 / npm 11.17.0** and owned throwaway
+**MySQL Community Server 8.4.11** via MYSQL_TEST_SERVER_BINARY. Repository pins
+24.18.1/11.16.0 remain unchanged; exact-pin execution is not claimed. Provider,
+model, policy, permission and session-clock data are synthetic. No live provider,
+application database, installed service, deployment or hosted schedule is used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:cutoff` | **26 passed, 0 failed/skipped**: eight deterministic tests, the MySQL harness and seventeen substantive database/worker cases. Log: `.tmp/023-cutoff.log`. |
+| Cutoff migration/permissions | Fresh InnoDB deployment and `db:verify` passed with no drift. Application DDL, operation deletion/update and unbound change events were denied. Existing publication events remained valid. |
+| Scheduling/recovery | A simulated crash after one cutoff enqueue preserved the committed manifest and refresh jobs. Retry performed no imports, filled the remaining cutoff jobs and retained stable identities. Superseded jobs scheduled the accepted cutoff; the real worker closed after downtime. |
+| Eligibility/races | Proved one millisecond before, exactly at and after cutoff; early play/barrier consumption; previous-day early-morning forecasts; earlier schedule corrections that skip the newest pointer; and past deadlines that later extensions cannot erase. Publication/closure and schedule races used the shared real MySQL locks. |
+| Outcome independence | A delayed lock chose the newer eligible away pick even though the older home pick would have won the stored 8–0 final score. Changing that result afterward preserved the same immutable lock. |
+| Atomicity/immutability | Eight competing closes produced one receipt/reference/event. Final authority failure or actual lease expiry rolled back provisional closure, audit/version/result/event effects. Ambiguous committed responses and restart returned the original lock. Void retained the original pick/payload/close/lock times and emitted its own stable audit/event. |
+| `npm run test:publication` | **25 passed, 0 failed/skipped**. Log: `.tmp/023-publication.log`. |
+| `npm run test:history` | **22 passed, 0 failed/skipped**. Log: `.tmp/023-history.log`. |
+| `npm run test:selection` | **18 passed, 0 failed/skipped**. Log: `.tmp/023-selection.log`. |
+| `npm run test:jobs` | **23 passed, 0 failed/skipped** in its isolated run. Log: `.tmp/023-jobs.log`. |
+| Environment-example correction | The initial full unit run had **807 passed, 1 failed, 1 existing skip** because the tracked example contained a populated provider key. After restoring its safe blank value, the isolated runtime-policy suite passed **27/27**. Logs: `.tmp/023-check.log`, `.tmp/023-runtime-policy.log`. |
+| Repository validation | All `npm run check` stages passed, using `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs` for the unit stage to avoid the known scheduler-sensitive fallback test. Prisma generation/validation, zero-warning lint and strict type-check passed; the final unit rerun had **809 cases: 808 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Logs: `.tmp/023-check.log`, `.tmp/023-unit-final.log`. |
+| `npm run build` | Passed, exit 0: Next.js production compilation, TypeScript and page generation. Log: `.tmp/023-build.log`. |
+
+Initial acceptance setup exposed existing provider integer-second timestamp and
+verified regulation-score constraints; test fixtures were corrected to satisfy
+those existing parser/database contracts. The MySQL acceptance exercises cutoff boundaries,
+early play, previous-day retention, historical eligibility instead of a newest
+pointer, outcomes-independent selection, duplicate closes, shared-lock races,
+full rollback, ambiguous committed-response recovery, void immutability and a
+real expired lease/fence recovery. All **114 affected unit/integration cases**
+passed in final runs. Repository-wide validation and the production build also
+passed after the environment-example correction. No prediction or fallback
+implementation was changed to make an existing timing test pass.
+
+### Live blockers and handoff
+
+Actual close-job workload bounds/hosting identity (OP-19), provider and reuse
+rights, independent budgets, model/evaluation qualification and publication's
+approved timing/conflict choices remain unresolved. Synthetic approvals grant
+no live operation permission. 024 owns detecting/coordinating kickoff/start
+corrections, 025 refresh orchestration, 027 settlement, 031 cache consumption and
+043 watchdog discovery. Scheduled predictions remain disabled pending 024–025
+and the live gates. Rollback disables bindings and retains additive schema and
+immutable forecasts, schedules, audits, receipts and events; repairs roll forward.
+No UI changed, so visual acceptance is not required.

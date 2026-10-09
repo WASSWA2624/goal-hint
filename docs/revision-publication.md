@@ -83,9 +83,10 @@ append-only `PredictionPublicationBarrier` for the current cycle. Subsequent
 scheduled responses cannot reopen eligibility. `storedPublicationBarrier` and
 `revisionEligibleForSchedule` expose shared safety evidence/rules to 023/024.
 The barrier records the first observed start, or original live retrieval time
-when actual start is unknown. Final closure/locked revision selection belongs
-to 023; later actual-start/schedule corrections belong to 024. No lock is
-invented during a refused publication.
+when actual start is unknown. [023 cutoff locking](cutoff-locking.md) implements
+final closure/locked revision selection and the immediate observed-play close
+path; later actual-start/schedule corrections belong to 024. A refused
+publication persists its safety barrier for the close path to consume.
 
 ## Refresh decisions and retries
 
@@ -119,6 +120,10 @@ monotonic fixture data version, which may have gaps from other fixture changes.
 `changesForFixture(fixtureId, { afterVersion, limit })` provides bounded ascending
 replay (maximum 100). `resultForAttempt(id)` resolves an immutable receipt.
 
+[Cutoff locking](cutoff-locking.md) extends this same stream with cycle closure
+and void events. Each event binds exactly one refresh result or cycle operation;
+both use the existing per-fixture version cursor.
+
 These are durable invalidation intents for 031; they require no cache/broker or
 post-commit send for correctness. Consumers should maintain per-fixture cursors
 and acknowledge only delivered invalidations. There is no global UUID/arrival-
@@ -147,7 +152,7 @@ policies, authorities and deterministic MySQL session clocks are synthetic.
 OP-21 still needs trial-backed status age/conflict decisions. OP-07/14 need
 approved source/evidence timing and unknown-clock rules. Existing provider,
 rights, budgets, model/quality, hosting and identity gates also remain pending.
-023–025 must complete final locking, schedule coordination and the refresh
-worker before scheduled predictions can be enabled. Local results do not grant
+024–025 must complete schedule coordination and the refresh worker before
+scheduled predictions can be enabled. Local results do not grant
 live publication approval; actual checks are recorded in
 [development progress](development-progress.md).

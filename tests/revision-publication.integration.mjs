@@ -88,7 +88,7 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000
       const importer = createFootballCatalogImporter({ adapter: provider.adapter, store: catalog, authority: catalogSelectionAuthority, clock: provider.clock });
       const rawPolicy = selectionPolicy(); rawPolicy.refresh = { ...rawPolicy.refresh, type };
       const selection = createMysqlDailySelectionStore(a, queue);
-      const service = createDailySelectionService({ policy: rawPolicy, authority: selectionAuthority(), store: selection, importer });
+      const service = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy: rawPolicy, authority: selectionAuthority(), store: selection, importer });
       const scheduledFor = SELECTION_FOR + (Number(runDate.slice(-2)) - 9) * 86_400_000;
       let selected;
       at = CATALOG_NOW;

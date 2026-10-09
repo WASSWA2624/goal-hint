@@ -12,6 +12,7 @@ import type { DailySelectionStore } from "./selection-mysql-store.ts";
 export function createDailySelectionService(options: Readonly<{
   policy: unknown; authority: SelectionAuthority; store: DailySelectionStore;
   importer: Pick<ReturnType<typeof createFootballCatalogImporter>, "import">;
+  cutoff: Readonly<{ scheduleRun(runId: string): Promise<unknown> }>;
 }>) {
   const policy = parseSelectionPolicy(options.policy);
   function authorize() {
@@ -67,6 +68,9 @@ export function createDailySelectionService(options: Readonly<{
         }
         await checkpoint();
         const progress = await options.store.reconcile(lease);
+        await checkpoint();
+        await options.cutoff.scheduleRun(lease.runId);
+        await checkpoint();
         return { status: "committed" as const, runId: lease.runId, ...progress };
       } finally {
         clearInterval(timer); await renewal;

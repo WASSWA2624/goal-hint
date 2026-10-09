@@ -78,7 +78,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       const provider = createSyntheticCatalogAdapter({ respond: respond ?? ((url) => catalogResponse(url,
         rows.filter((row) => getReportingDate(Date.parse(row.fixture.date)) === url.searchParams.get('date')))) });
       const importer = createFootballCatalogImporter({ adapter: provider.adapter, store: createFootballCatalogStore(db), authority: catalogSelectionAuthority, clock: provider.clock });
-      return { service: createDailySelectionService({ policy, authority, store: selectionStore, importer }), provider, importer, policy };
+      return { service: createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy, authority, store: selectionStore, importer }), provider, importer, policy };
     }
     async function runId(scheduledFor) {
       const date = new Date(`${selectionWindow(scheduledFor).runDate}T00:00:00Z`);
@@ -133,7 +133,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       assert.equal(state.provider.network.filter((entry) => entry.url.searchParams.get('date') === '2026-10-12').length, 2);
       assert.ok(before.coverage.find((entry) => entry.date === '2026-10-12').status !== 'complete');
       const calls = state.provider.network.length; fail = false;
-      const restarted = createDailySelectionService({ policy: state.policy, authority: selectionAuthority(), store: createMysqlDailySelectionStore(replica(), queue), importer: state.importer });
+      const restarted = createDailySelectionService({ cutoff: { scheduleRun: async () => {} }, policy: state.policy, authority: selectionAuthority(), store: createMysqlDailySelectionStore(replica(), queue), importer: state.importer });
       assert.equal((await restarted.run(occurrence(1))).total, 1);
       assert.equal(state.provider.network.length - calls, 1);
       assert.equal(await database.query((tx) => tx.dailyRunImport.count({ where: { runId: id } })), 9);

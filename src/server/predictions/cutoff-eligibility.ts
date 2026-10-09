@@ -28,7 +28,9 @@ export function reconstructCutoff(cycle: StoredCycle, schedules: readonly Cutoff
 export function revisionEligibleForLock(revision: StoredRevision, cycle: StoredCycle,
   schedules: readonly CutoffSchedule[], effectiveCloseAt: UtcInstant): boolean {
   const schedule = schedules[revision.scheduleVersion - 1];
+  const nextSchedule = schedules[revision.scheduleVersion];
   return revisionEligibleForSchedule(revision, cycle, effectiveCloseAt) && schedule !== undefined &&
     revision.candidate.context.context.kickoffAt === schedule.kickoffAt &&
-    revision.publishedAt >= schedule.observedAt && revision.publishedAt < schedule.cutoffAt;
+    revision.publishedAt >= schedule.observedAt && revision.publishedAt < schedule.cutoffAt &&
+    (nextSchedule === undefined || revision.publishedAt <= nextSchedule.observedAt);
 }
