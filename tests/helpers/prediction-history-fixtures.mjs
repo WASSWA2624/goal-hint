@@ -3,8 +3,8 @@ import { fallbackFixture, fallbackProvider, fallbackAiDenied } from './fallback-
 import { resolveFallbackCandidate } from '../../src/server/fallback/fallback-resolution.ts';
 
 // Synthetic forecasts/permissions only, through the real candidate resolver.
-export function historyCandidate({ snapshot, model, source = 'ai', partial = false, probabilities } = {}) {
-  const fixture = fallbackFixture({ snapshot, model, output: probabilities ? { groups: probabilities } : {} });
+export function historyCandidate({ snapshot, model, jobId, source = 'ai', partial = false, probabilities } = {}) {
+  const fixture = fallbackFixture({ snapshot, model, jobId, output: probabilities ? { groups: probabilities } : {} });
   const ai = source === 'ai' ? fixture.ai : fallbackAiDenied('unconfigured');
   const result = resolveFallbackCandidate({ expected: fixture.expected, ai,
     provider: source === 'ai' ? null : fallbackProvider(fixture.expected), now: fixture.now }, fixture.authority);

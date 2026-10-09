@@ -9,7 +9,7 @@ import { predictorSnapshot, predictorAcceptedOutput } from "./predictor-output-f
 // These fixtures do not establish any actual provider rights or market support.
 export function fallbackFixture(options = {}) {
   const snapshot = options.snapshot ?? predictorSnapshot(), model = options.model ?? modelVersion();
-  const jobId = evidenceHash("synthetic-fallback-job"), invocationId = evidenceHash("synthetic-fallback-ai-invocation");
+  const jobId = options.jobId ?? evidenceHash("synthetic-fallback-job"), invocationId = evidenceHash("synthetic-fallback-ai-invocation");
   const pin = createModelPin({ version: 1, invocationId, jobId, modelVersionId: model.id });
   const calibrated = applyPredictorCalibration(predictorAcceptedOutput(snapshot, model, options.output ?? {}), { model, authority: modelAuthority() });
   if (!calibrated.valid) throw new Error("Synthetic fallback calibration failed.");

@@ -175,6 +175,6 @@ export function createMysqlEvidenceStore(database: DatabaseRuntime, options: Rea
       });
     } catch { if (domainError) throw domainError; return fail("unavailable"); }
   }
-  return Object.freeze({ find, save });
+  return Object.freeze({ find, save, findInTransaction: stored });
 }
 export type MysqlEvidenceStore = ReturnType<typeof createMysqlEvidenceStore>;

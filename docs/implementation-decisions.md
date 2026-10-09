@@ -258,7 +258,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-18 Bounded shadow authorization | **Unresolved / evidence required** | Approve a private bounded protocol, maximum jobs/spend and evidence locations after applicable private provider/evidence-use rights, account, independent budgets and pipeline-integrity checks pass. Public redistribution/logo-display rights are required for public use, not isolated private shadow evidence collection. Candidate quality may remain unqualified while shadow gathers evidence. Shadow cannot publish production forecasts or declare qualification; a trusted verifier must validate applicable recorded evidence. Prompt 002, index gate and prompt 047. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE=shadow`, `GOAL_HINT_SHADOW_MAX_JOBS`, `GOAL_HINT_SHADOW_BUDGET_USD_CENTS`, `GOAL_HINT_SHADOW_PROTOCOL_REF`, `GOAL_HINT_PIPELINE_INTEGRITY_REF`; private provider/account, independent infrastructure/AI/research budgets and evidence/freshness/calibration prerequisites also apply | **014** prospective protocol; execution **047** after pipeline checks |
 | OP-19 Durable queue, worker runtime and private identity | **Local implementation complete; deployment unresolved** | 020 implements/test-harnesses MySQL-backed durable delivery, native Node 24 `.ts`/`react-server` execution, typed registry, renewable fenced leases, bounded retries and a fail-closed private identity adapter. Approve the deployed queue/hosting, actual service/workload identity and operator ownership; qualify representative capacity and workload-specific lease/timeout/retry/concurrency/fallback settings. No managed subscription, deployment approval or continuous poller is inferred. §§9, 11, 13–15. | Unassigned; user decision/evidence required for deployment | Trusted worker/trigger bindings; Deferred: approved queue/worker hosting, actual identity and measured capacity; existing per-job limits and itemized infrastructure approval still apply | **020 local implementation**; hosted qualification **046**, poller **026** |
 | OP-20 Selection eligibility and degraded finalization | **Local implementation complete; live choices unresolved** | 021 implements immutable manifests, complete-date retries, explicit verified degraded actions, partial coverage, fenced recovery and recorded closed-cycle eligibility inputs. Approve trial-backed competition/status eligibility and a degradation policy/action authority before the affected live path runs. A committed subset cannot be filled in later or treated as authoritative emptiness. §§5, 11, 15. | Unassigned; user decision/evidence required for live choices | `GOAL_HINT_COMPETITION_IDS`, `GOAL_HINT_EVIDENCE_POLICY_REF`; implemented: versioned selection policy/authority, immutable manifest and recorded action; pending: approved competition/eligibility evidence and degraded-finalization policy | **021 local implementation**; live decisions remain pending |
-| OP-21 Publication-status freshness | **Unresolved** | Set the maximum age and conflict handling of provider kickoff/status observations used for publication/cutoff safety; stale or unknown eligibility cannot authorize a write. Acquire trial evidence first; use the bound transactionally. §§5, 7, 15; prompt 022. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: fixture-status publication freshness bound | **022**; trial evidence **008** |
+| OP-21 Publication-status freshness | **Local contract implemented; live decisions unresolved** | 022 requires an approved original-observation age, source-specific clock/unknown-time rules, trusted authority and transactional rechecks; older evidence cannot override a newer canonical observation. Verified play persists a publication barrier. Actual trial-backed timing/conflict decisions remain missing. §§5, 7, 15. | Unassigned; user decision/evidence required for live acceptance | `GOAL_HINT_FRESHNESS_POLICY_REF`, `GOAL_HINT_EVIDENCE_POLICY_REF`; implemented: explicit publication policy/authority; pending: approved observation/source timing and bindings | **022 local implementation**; trial evidence **008**, locking/lifecycle **023–024** |
 | OP-22 Polling horizons and approach threshold | **Unresolved** | Choose approaching-kickoff lead time, active/result window, unresolved-result horizon and progressively slower correction checks with bounded stopping/review rules. Preserve visible unresolved fixtures after midnight/outside the prediction window. §§5, 11, 15; prompt 026. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: poller approach thresholds, unresolved/correction horizons/cadences | **026** |
 | OP-23 Public query/search limits | **Unresolved implementation choice** | Set reusable validated response/page/search limits and anonymous search throttling from workload/security evidence; about 30 initial cards is the specification's default. No visitor credential or provider work may be added. §§11, 13; prompt 028. | Unassigned; implementation evidence required | Deferred: public query/page/search rate limits | **028** |
 | OP-24 Shared cache strategy and lifetimes | **Unresolved implementation choice** | Choose approved cache capability, active/historical lifetimes and recovery/invalidation/fencing policy compatible with 15/60-second cadences and measured final-badge latency. Cache hits preserve actual source sync times. §§11, 13; prompt 031. | Unassigned; implementation/infrastructure evidence required | Deferred: cache backend, active/historical TTL and invalidation/recovery policy; infrastructure budget if paid | **031** |
@@ -1648,3 +1648,63 @@ degraded action, but missing policy blocks the affected incomplete live path.
 OP-03–08 provider/account/retention qualification, OP-11 bounds, OP-19 host and
 workload identity, and 022–025 pipeline integrity remain separate activation
 gates. Synthetic verifiers and successful local checks approve none of these.
+
+## Prompt 022 — Atomic ordered revision publication
+
+Implemented locally on **9 October 2026 EAT**. The
+[publication runbook](revision-publication.md) defines the sole acceptance API,
+least-privilege grants, transaction boundary, refresh results and durable events.
+The service consumes the existing complete AI/provider candidate rather than
+introducing another source-selection path. No prediction worker, provider I/O,
+public route, scheduled final lock or cache is activated.
+
+Publication reuses canonical provider → fixture → owning job lock order in one
+Read Committed transaction. The sealed original manifest/window, immutable
+membership/job envelope, current rolling EAT window, active open cycle,
+accepted schedule, canonical identities, stored evidence/model, source
+consistency and trusted job/pin ownership must agree. Analysis follows manifest
+commit/cycle opening. `UTC_TIMESTAMP(3)` supplies decision time and the final
+cutoff/freshness check after provisional writes; worker completion time cannot
+authorize publication. The history writer now uses database UTC by default,
+retaining its explicit isolated-test clock option.
+
+OP-21 is an explicit policy/authority contract with no guessed timing defaults.
+Original retrieval age includes cache age; newer canonical observations win
+over older eligibility evidence. AI's pinned model timing and approved
+source-specific clock/unknown-time rules both apply. Generation, retrieval,
+update, evidence cutoff, workflow completion and actual publication remain
+distinct; unknown source times stay null with their flags. Source permissions,
+grounding and independently verified model pins remain trusted binding duties.
+
+Verified observed/canonical play inserts the append-only publication barrier;
+later scheduled responses cannot reopen the cycle's publication eligibility.
+Shared schedule eligibility and barrier reads prepare final locking in 023 and
+actual-start/schedule correction in 024 without implementing those operations.
+The first safety observation is retained; subsequent actual-start corrections
+must preserve schedule/audit history rather than replace a locked pick.
+
+Set/four-market insert, current reference, monotonic fixture version and history
+audit are atomic with `PredictionRefreshResult` and `PredictionChangeEvent`.
+Accepted refresh uniqueness and run sequence prevent duplicate acceptance and
+older-run rollback. Accepted retries return the original receipt, including
+changed composition, expired ownership and ambiguous commit responses; replay
+never moves the current pointer. New fallback may supersede older AI. Partial
+snapshots explicitly drop unsupported families. Zero-family decisions create
+no set and retain only an eligible previous snapshot with its original age and
+Update delayed, otherwise unavailable. Unpublished attempt keys support exact
+replay and subsequent recovery; worker execution failures/costs belong to 025.
+
+Change events use a per-fixture data-version cursor and composite result binding;
+there is no assumed global completion-time/UUID commit ordering. Later caching
+can replay/acknowledge durable invalidation intents, while uncached readers use
+one Repeatable Read projection and remain correct without an event consumer.
+The additive migration creates InnoDB tables with binary identities, native
+checks and restrictive composite FKs. New tables need application SELECT/INSERT
+only. Rollback disables bindings and retains all schema/history/events; schema
+repairs roll forward after actual migration-state inspection.
+
+OP-07/14/21 source/status freshness, rights, model/evaluation/quality, independent
+budgets, selection choices and real host/workload authority remain live gates.
+The production authority must enforce the existing runtime publication gate;
+synthetic tests grant no release permission. Final locking, lifecycle handling
+and worker integration in 023–025 must pass before scheduled predictions run.

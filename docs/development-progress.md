@@ -1943,3 +1943,109 @@ terminal work; persisted queue outcomes remain authoritative until synchronized.
 recovery contract. Rollback stops bindings/workers while retaining additive schema
 and immutable manifests, imports, cycles and jobs; repairs roll forward after
 schema-state inspection. Earlier live qualification gates remain unchanged.
+
+## Prompt 022 — Revision publication
+
+**Date:** 9 October 2026 EAT. **Status:** implementation and required local
+verification complete. The tracker row is ticked; live activation remains gated.
+
+### Changed files and behavior
+
+- `src/server/predictions/publication-{contract,input,eligibility,read,service}.ts`
+  add the single complete-snapshot acceptance path, explicit policy/authority,
+  transactional manifest/window/cycle/schedule/status/source validation,
+  database-time cutoff and ownership checks, immutable result recovery and
+  coherent current/locked/void reads with ordered refresh/delay status.
+- `prisma/schema.prisma`, its snapshot and additive migration
+  `20261009134454_revision_publication` add append-only
+  `PredictionRefreshResult`, `PredictionPublicationBarrier` and
+  `PredictionChangeEvent`. Binary identities, restrictive composite FKs, unique
+  attempt/event bindings and native checks protect the records. Application
+  access to new tables is SELECT/INSERT only.
+- `history-mysql-store.ts` uses MySQL UTC time by default, preserving its
+  explicit test clock. `history-read.ts` shares the existing coherent display
+  rules with publication. Evidence/model stores expose their existing validated
+  reads inside the caller's transaction; no second connection or source reader
+  is used while publishing.
+- The shared provider → fixture → job locking boundary serializes publication
+  with catalog, cycle close and schedule changes. Commit atomically appends the
+  set/four markets, moves current, advances fixture version and writes history
+  audit, refresh result and durable invalidation event. Final ownership, source/
+  observation freshness and strict cutoff are checked after provisional writes.
+- Original manifest membership/window and the current rolling EAT window must
+  agree with the active open cycle and accepted schedule. Exact stored evidence,
+  model pin/configuration, AI source attributions/coverage, provider support
+  receipts and full probability/source consistency are revalidated. No visitor
+  or completion-time/source-confidence ordering is introduced.
+- Verified early observed/canonical play persists a publication barrier, even
+  before 023's final lock operation exists. Later scheduled responses cannot
+  reopen eligibility. Shared barrier/schedule helpers prepare 023/024 without
+  implementing their final lock or lifecycle coordinator.
+- New fallback can replace old AI. Partial snapshots drop unsupported families;
+  zero-family outcomes create no set and retain only an eligible previous
+  revision with original clocks and Update delayed, otherwise unavailable.
+  Accepted refresh replay returns the original receipt after changed model/
+  composition, acknowledgement, closure or lost commit response, without moving
+  current back. Exact unpublished attempts replay; later attempts can recover.
+- `tests/revision-publication.{test,integration}.mjs` and the publication helper
+  use genuine MySQL, independently pooled clients, the real selection/catalog/
+  evidence/model/history/queue contracts and deterministic MySQL session clocks.
+  Existing forecast helpers accept an optional real job ID. `package.json` adds
+  `test:publication`; no dependencies changed. The publication runbook, server
+  guide and implementation register document grants, recovery and live gates.
+
+### Verification
+
+Checks use bundled **Node.js 24.19.0 / npm 11.17.0** and owned throwaway
+**MySQL Community Server 8.4.11** via `MYSQL_TEST_SERVER_BINARY`. Existing
+24.18.1/11.16.0 pins remain unchanged; exact-pin execution is not claimed.
+Provider/model bodies, permission decisions and MySQL session clocks are
+synthetic. No application database, installed service, live provider request,
+deployment or hosted schedule is used. Harnesses clean their owned test targets.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:publication` | **25 passed, 0 failed/skipped**: six deterministic tests, the MySQL harness and eighteen substantive transaction/concurrency cases. Log: `.tmp/022-publication.log`. |
+| Migration/permissions | All migrations deployed on InnoDB and `db:verify` found no drift. New-table DDL/deletion was denied to the application role; composite bindings and sealed result/barrier reads were exercised through actual inserts. |
+| Duplicate/order races | Eight same-key calls across two clients yielded one set, current pointer, result and event. Overlapping older/newer runs left the newer reference current; a newer partial fallback replaced older AI. Old accepted-key replay returned its original receipt without restoring current. |
+| Eligibility/time | Rejected exactly-at/after cutoff, cutoff crossing during provisional writes, early observed and canonical play, stale/future observations, stale source output, wrong active cycle, changed schedule, missing manifest identity and original/current-window violations. Later scheduled evidence could not remove the durable play barrier. |
+| Atomicity/recovery | Failure after set/reference/result/event writes rolled everything back. A simulated lost response after actual commit recovered the original immutable publication. Acknowledged/restarted deliveries with a changed model pin still returned that original publication. Unpublished attempts could recover without duplicating a set. |
+| Lifecycle/read races | Publication losing a close/schedule race refused the write. Publication winning the lock was visible to the subsequent close decision. Retention kept original forecast timestamps/provenance and Update delayed; empty history stayed unavailable. Bounded event replay and coherent current/locked reads passed. |
+| `npm run test:history` | **22 passed, 0 failed/skipped**. Log: `.tmp/022-history.log`. |
+| `npm run test:selection` | **18 passed, 0 failed/skipped**. Log: `.tmp/022-selection.log`. |
+| `npm run test:evidence` | **20 passed, 0 failed/skipped**. Log: `.tmp/022-evidence.log`. |
+| `npm run test:predictor` | **12 passed, 0 failed/skipped**. Log: `.tmp/022-predictor.log`. |
+| `npm run test:jobs` | **23 passed, 0 failed/skipped** on its isolated final run. Log: `.tmp/022-jobs.log`. |
+| `npm run check` | Prisma generation/validation, zero-warning lint and strict type-check passed. The default-concurrency unit step hit the existing 25 ms fallback timing test, so this invocation stopped before build. Log: `.tmp/022-check-first.log`. All check stages subsequently passed as recorded below. |
+| `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs` | **801 cases: 800 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Reduced concurrency resolved the scheduler-sensitive fallback assertion without code/test changes. Log: `.tmp/022-unit-serial.log`. |
+| `npm run build` | Passed, exit 0: Next.js production compilation, TypeScript and page generation. Log: `.tmp/022-build.log`. |
+
+The **120 affected unit/integration cases** passed in their final runs. All
+database acceptance used genuine MySQL rather than an in-memory transaction
+substitute. The initial jobs regression overlapped several database suites and
+hit an existing short backoff timing expectation: a claim was already due when
+the test expected null. The isolated rerun passed 23/23 without job-code or
+test changes; the earlier log remains `.tmp/022-jobs-overlap.log`. The first full
+check also hit the existing fallback test's 25 ms deadline before its collector
+started, making its unknown-request expectation scheduler-sensitive. Its
+isolated suite passed **42/42** (`.tmp/022-fallback.log`), and the entire unit
+suite then passed with test concurrency set to one. The normal test script and
+fallback implementation/tests remain unchanged. Initial publication test setup
+was corrected to reuse each immutable committed cohort and actual owning job
+identities. No live operation or qualification result is inferred.
+
+### Live blockers and handoff
+
+OP-21 still requires trial-backed status/kickoff observation age and conflict
+decisions. OP-07/14 source/evidence freshness and unknown-time rules, actual
+provider/redistribution/retention rights, separate budgets, model/calibration/
+quality qualification, selection choices and deployed identity remain pending.
+No permissive production binding or freshness allowance was invented.
+
+The authority must enforce the existing runtime publication approval gate and
+independently prove owning job/model/evidence/source receipts. 023 owns final
+locking, 024 schedule/actual-start corrections, 025 orchestration/failure costs,
+and 031 event consumption/caching. Scheduled predictions stay disabled until
+023–025 and the live gates pass. Rollback stops bindings and preserves additive
+schema plus immutable forecasts, barriers, results and events; repairs roll
+forward after inspecting actual schema/migration state. No UI changed.

@@ -102,5 +102,5 @@ export function createMysqlModelVersionStore(database: DatabaseRuntime) {
       return previous;
     }
   }
-  return Object.freeze({ save, find });
+  return Object.freeze({ save, find, findInTransaction: stored });
 }

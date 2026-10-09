@@ -5,7 +5,7 @@ import { MARKET_RULE_VERSION, marketSelections, type MarketFamily } from "../../
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseResolvedForecastCandidate } from "../fallback/fallback-input.ts";
-import { historyFail, type StoredCycle, type StoredRevision, type StoredRun } from "./history-contract.ts";
+import { historyFail, type CycleDisplay, type StoredCycle, type StoredRevision, type StoredRun } from "./history-contract.ts";
 import { historyHash, historyId, historyInstant, historyVersion, parseHistory, parseStoredCycle } from "./history-input.ts";
 
 export type HistoryTransaction = Prisma.TransactionClient;
@@ -107,4 +107,16 @@ export async function storedRevision(transaction: HistoryTransaction, id: string
     }
     return revision;
   } catch { return historyFail("invalid-state"); }
+}
+
+export async function storedCycleDisplay(transaction: HistoryTransaction, cycleId: string): Promise<CycleDisplay | null> {
+  const cycle = await storedCycle(transaction, cycleId);
+  if (!cycle) return null;
+  let id = cycle.state === "open" ? cycle.currentSetId : cycle.lockedSetId;
+  if (cycle.state === "void" && id === null) {
+    id = cycle.currentSetId ?? (await transaction.predictionSet.findFirst({ where: { cycleId }, orderBy: { cycleRevision: "desc" }, select: { id: true } }))?.id ?? null;
+  }
+  const revision = id === null ? null : await storedRevision(transaction, id);
+  if (id !== null && (!revision || revision.cycleId !== cycle.id || revision.fixtureId !== cycle.fixtureId)) return historyFail("invalid-state");
+  return freezeEvidence({ cycle, mode: cycle.state === "open" ? "current" : cycle.state === "void" ? "void" : "locked", revision });
 }

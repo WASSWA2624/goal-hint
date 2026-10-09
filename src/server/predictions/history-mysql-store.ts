@@ -7,10 +7,10 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import { createFootballCatalogStore, type FootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { PredictionHistoryError, historyFail, type AppendRevisionInput, type ChangeCycleInput, type CreateCycleInput,
-  type CycleDisplay, type HistoryActor, type StoredCycle, type StoredHistoryAudit, type StoredRevision, type StoredRun } from "./history-contract.ts";
+  type HistoryActor, type StoredCycle, type StoredHistoryAudit, type StoredRevision, type StoredRun } from "./history-contract.ts";
 import { historyId, historyInstant, historyVersion, nextHistoryVersion, parseAppendRevision, parseChangeCycle,
   parseCreateCycle, parseHistory, parseHistoryAuditSnapshot } from "./history-input.ts";
-import { assertHistorySeal, historyDate, historyJson, historyTime, runFromRow, storedCycle, storedRevision,
+import { assertHistorySeal, historyDate, historyJson, historyTime, runFromRow, storedCycle, storedCycleDisplay, storedRevision,
   type HistoryRow, type HistoryTransaction } from "./history-read.ts";
 
 export type PredictionHistoryWriter = Readonly<{
@@ -25,7 +25,6 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
   catalog?: FootballCatalogStore; clock?: Clock;
 }> = {}) {
   const catalog = options.catalog ?? createFootballCatalogStore(database);
-  const now = () => parseHistory(historyInstant, options.clock?.now() ?? Date.now());
 
   async function read<Result>(operation: (transaction: HistoryTransaction) => Promise<Result>): Promise<Result> {
     let domainError: PredictionHistoryError | undefined;
@@ -61,6 +60,8 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
     try {
       // Reuse catalog lock order (provider then fixture), shared with imports.
       return await catalog.withFixtureTransaction(fixtureId, async (transaction) => {
+        const now = async () => parseHistory(historyInstant, options.clock?.now() ??
+          (await transaction.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime());
         let active = true;
         let auditedActiveId = (await transaction.footballFixture.findUniqueOrThrow({ where: { id: fixtureId }, select: { activeCycleId: true } })).activeCycleId;
         const check = () => { if (!active) historyFail("invalid-state"); };
@@ -107,7 +108,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
             check(); const request = parseCreateCycle(input);
             if (request.fixtureId !== fixtureId) return historyFail("invalid-request");
             const requestHash = evidenceFingerprint(request);
-            if (request.openedAt > now()) return historyFail("invalid-request");
+            if (request.openedAt > await now()) return historyFail("invalid-request");
             const previous = await transaction.predictionCycle.findUnique({ where: { fixtureId_creationKey: { fixtureId, creationKey: request.creationKey } } });
             if (previous) {
               if (previous.creationHash !== requestHash) return historyFail("conflicting-request");
@@ -125,7 +126,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
               state: "open", currentSetId: null, lockedSetId: null, closedAt: null, lockedAt: null, voidedAt: null, voidReason: null });
             await schedule(value, request.openedAt, request);
             if (request.activate) await activate(value);
-            await audit(value, request.creationKey, requestHash, "cycle-created", now(), request, null);
+            await audit(value, request.creationKey, requestHash, "cycle-created", await now(), request, null);
             await bumpFixture(); return value;
           },
           async appendRevision(input) {
@@ -151,7 +152,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
             const predecessor = await transaction.predictionSet.findFirst({ where: { cycleId }, orderBy: { cycleRevision: "desc" } });
             if (predecessor && predecessor.runSequence >= run.sequence) return historyFail("out-of-order");
             const latestFixture = await transaction.predictionSet.findFirst({ where: { fixtureId }, orderBy: { fixtureRevision: "desc" } });
-            const at = now(); if (at < request.publishedAt || at < previousCycle.openedAt) return historyFail("invalid-request");
+            const at = await now(); if (at < request.publishedAt || at < previousCycle.openedAt) return historyFail("invalid-request");
             const id = randomUUID(), candidateJson = evidenceSerialize(request.candidate);
             await transaction.$executeRaw`INSERT INTO PredictionSet
               (id, fixtureId, fixtureVersion, cycleId, runId, runSequence, jobId, fixtureRevision, cycleRevision,
@@ -184,7 +185,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
           },
           async changeCycle(input) {
             check(); const request = parseChangeCycle(input), requestHash = evidenceFingerprint(request);
-            if (request.at > now()) return historyFail("invalid-request");
+            if (request.at > await now()) return historyFail("invalid-request");
             const previous = await cycle(request.cycleId);
             const replay = await transaction.predictionAudit.findUnique({ where: { cycleId_eventKey: { cycleId: previous.id, eventKey: request.eventKey } } });
             if (replay) {
@@ -209,7 +210,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
               closedAt: historyDate(value.closedAt), lockedAt: historyDate(value.lockedAt), voidedAt: historyDate(value.voidedAt) } });
             if (request.schedule) await schedule(value, request.at, request, request.schedule);
             if (request.activate) await activate(value);
-            await audit(value, request.eventKey, requestHash, "cycle-changed", now(), request, previous);
+            await audit(value, request.eventKey, requestHash, "cycle-changed", await now(), request, previous);
             await bumpFixture(); return value;
           },
         });
@@ -232,17 +233,6 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
     } catch { if (domainError) throw domainError; return historyFail("unavailable"); }
   }
 
-  async function display(transaction: HistoryTransaction, cycleId: string): Promise<CycleDisplay | null> {
-    const cycle = await storedCycle(transaction, cycleId);
-    if (!cycle) return null;
-    let id = cycle.state === "open" ? cycle.currentSetId : cycle.lockedSetId;
-    if (cycle.state === "void" && id === null) {
-      id = cycle.currentSetId ?? (await transaction.predictionSet.findFirst({ where: { cycleId }, orderBy: { cycleRevision: "desc" }, select: { id: true } }))?.id ?? null;
-    }
-    const revision = id === null ? null : await storedRevision(transaction, id);
-    if (id !== null && (!revision || revision.cycleId !== cycle.id || revision.fixtureId !== cycle.fixtureId)) return historyFail("invalid-state");
-    return freezeEvidence({ cycle, mode: cycle.state === "open" ? "current" : cycle.state === "void" ? "void" : "locked", revision });
-  }
   async function referenced(transaction: HistoryTransaction, cycleId: string, key: "currentSetId" | "lockedSetId") {
     const cycle = await storedCycle(transaction, cycleId), id = cycle?.[key];
     return id ? storedRevision(transaction, id) : null;
@@ -254,12 +244,12 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
     findRevision(id: string) { parseHistory(historyId, id); return read((transaction) => storedRevision(transaction, id)); },
     currentRevision(cycleId: string) { parseHistory(historyId, cycleId); return read((transaction) => referenced(transaction, cycleId, "currentSetId")); },
     lockedRevision(cycleId: string) { parseHistory(historyId, cycleId); return read((transaction) => referenced(transaction, cycleId, "lockedSetId")); },
-    displayForCycle(id: string) { parseHistory(historyId, id); return read((transaction) => display(transaction, id)); },
+    displayForCycle(id: string) { parseHistory(historyId, id); return read((transaction) => storedCycleDisplay(transaction, id)); },
     displayForFixture(id: string) {
       parseHistory(historyId, id);
       return read(async (transaction) => {
         const fixture = await transaction.footballFixture.findUnique({ where: { id }, select: { activeCycleId: true } });
-        return fixture?.activeCycleId ? display(transaction, fixture.activeCycleId) : null;
+        return fixture?.activeCycleId ? storedCycleDisplay(transaction, fixture.activeCycleId) : null;
       });
     },
     earlierRevisions(cycleId: string, { beforeRevision, limit = 30 }: Readonly<{ beforeRevision?: number; limit?: number }> = {}) {

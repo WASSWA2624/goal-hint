@@ -54,9 +54,13 @@ independent final-test evidence in the [evaluation runbook](../../docs/forecast-
 `predictions/` stores immutable prediction sets, explicit market snapshots,
 cycles and append-only schedule/audit history. Reuse the
 [history transaction and read contracts](../../docs/prediction-history.md).
-Later publication/lifecycle services supply verified decisions within the shared
-fixture transaction; these primitives do not establish publication eligibility
-or enqueue work. Read historical revisions without changing current/locked refs.
+Route every accepted snapshot through `createRevisionPublicationService` and its
+[publication contract](../../docs/revision-publication.md). It checks manifest,
+fresh observation, model/evidence/source identity, ownership, order and strict
+cutoff inside the shared transaction. History writers remain storage primitives
+for that service and later lifecycle decisions. Read historical revisions without
+changing current/locked refs. Durable refresh results/events remain separate from
+forecast payloads; no schedule or permissive live authority is mounted.
 
 `jobs/` provides the shared MySQL queue, typed registry, scoped transactional
 enqueue, renewable fenced leases and private trigger adapter. Use the
