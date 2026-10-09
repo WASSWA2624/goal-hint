@@ -55,7 +55,7 @@ test("malformed dates and ambiguous or unsupported statuses cannot produce feed 
     assert.throws(() => parseFeedView(date));
     assert.throws(() => feedHref({ date, status: "all" }));
   }
-  for (const status of ["", "Finished", "correct", "unknown", ["finished", "all"]]) {
+  for (const status of ["", "Finished", "correct", "provider-ft", ["finished", "all"]]) {
     assert.throws(() => parseFeedView("2026-10-07", status), RangeError);
   }
 });

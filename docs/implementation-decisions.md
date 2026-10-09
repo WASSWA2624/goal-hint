@@ -1364,3 +1364,62 @@ The public development demo was removed from the homepage when the shell took
 over; the isolated 015 styling fixture remains the primitive acceptance surface.
 No provider/database calls, visitor authentication, state store, feed query or
 later feature is introduced.
+
+## Prompt 017 — Request-safe state and versioned handoff
+
+Implemented on **9 October 2026 EAT**. The [client-state runbook](client-state.md)
+is the shared handoff for 028/032/033/034/037, including exact URL parameters,
+validation limits, snapshot projection and reconciliation actions.
+
+Each client provider lazily constructs a Redux Toolkit store and captures its
+own initial `serverState` for hydration. No module exports a store instance;
+Server Components pass typed data without accessing Redux. Applied filters
+come from URL parsing, while Redux holds drafts, preferences and transient
+fixture/list state. The interim feed initializes as unloaded (`data: null`) and
+keys its provider by the resolved query plus route/page selection. Changing
+provider `initial` props alone does not reset or refresh a mounted store.
+
+`feed-query.ts` now owns the Today/Results defaults previously in navigation.
+Both feed pages share strict parsing/serialization of explicit or relative EAT
+dates, inclusive ranges up to seven days, normalized search, canonical league
+IDs, status groups, the four approved markets, sort and bounded page position.
+Unknown/repeated/mixed parameters fail; public pages return 404. Probability
+sort carries its selected market and requires an explicit market in the URL;
+incompatible `sortMarket` aliases fail. Canonical list identity excludes page,
+includes resolved dates and all data filters, and preserves relative intent
+separately. This prepares a shared read contract without implementing queries.
+
+Visitor fixture snapshots reuse the market validator and canonical settlement
+status type. The catalog's unsigned BIGINT data version crosses JSON as positive
+decimal text; comparison is exact numeric arithmetic, never opaque ID order or
+floating-point conversion. Only a strictly newer version replaces an entire
+fixture/score/status/cycle/forecast snapshot. Equal versions preserve the accepted
+snapshot. An older record rejects the whole incoming page and membership with
+`stale-data`, allowing a current read to retry instead of mixing freshness.
+
+Every read ticket also carries a store-local sequence, query generation, key,
+page and mode. Latest-request matching prevents same-query races and A → B → A
+responses from changing active membership. Replace/append own membership;
+refresh updates entities while retaining loaded extent. Failure retains loaded
+records and position. The future feed must explicitly rebuild membership when
+needed. No browser provider requests, invented endpoints or poll timers exist.
+
+Back checkpoints store serializable IDs/pagination/scroll against a navigation
+entry, canonical query and starting page, with a 20-entry/30-minute limit.
+Restoration preserves the newest fixture versions, invalidates pending reads
+and rejects expired or mismatched checkpoints. Browser history, session storage
+and DOM scroll wiring remain with 034. Explicit forward-only EAT calendar events
+roll relative selections to page 1; historical applied dates/ranges and filter
+drafts stay unchanged. Prompt 037 owns the clock and URL coordination.
+
+Only the versioned anonymous density preference uses local storage. SSR and
+hydration start comfortable; an effect validates and applies stored preferences.
+Blocked storage is harmless. Fixture truth, searches and applied filters are
+never persisted there. Default Redux serializability/immutability checks remain
+enabled; the private-import lint boundary now includes `src/state`.
+
+Acceptance uses isolated production Next rendering with four concurrent requests
+and two providers per request, plus browser checks with gated JavaScript,
+stored/blocked preferences and parent rerenders. Synthetic fixtures remain in
+tests and temporary apps. No dependency versions, lockfile, schema, migration or
+operating/launch decisions changed.

@@ -23,6 +23,8 @@ assert.equal(root.response.status, 308);
 assert.equal(new URL(root.response.headers.get("location"), origin).pathname, "/en");
 
 for (const path of ["/en", todayPath, resultsPath, "/en/predictions/2020-02-29?status=finished",
+  "/en?when=tomorrow&status=scheduled&market=total-goals&sort=probability",
+  "/en/predictions/2020-02-29?to=2020-03-06&q=Synthetic&league=league-a&page=2&pageSize=40",
   ...informationPages.map((page) => `/en/${page}`)]) {
   const { response, html } = await request(path);
   assert.equal(response.status, 200, path);
@@ -42,6 +44,10 @@ for (const path of ["/en", todayPath, resultsPath, "/en/predictions/2020-02-29?s
   assert.ok(visibleHtml.includes(`href="${resultsPath}"`), `${path}: Results target`);
   assert.doesNotMatch(visibleHtml, /<select|sign[ -]?in|log[ -]?in|no fixtures|no matches|54%|Brand styling preview/i);
   for (const page of informationPages) assert.ok(visibleHtml.includes(`href="/en/${page}"`));
+  if (path.includes("to=2020-03-06")) {
+    assert.match(visibleHtml, /datetime="2020-02-29"/i);
+    assert.match(visibleHtml, /datetime="2020-03-06"/i);
+  }
   console.log(`PASS initial anonymous HTML: ${path}`);
 }
 
@@ -55,6 +61,8 @@ for (const [path, target] of [["/fr", "/en"], ["/sw/privacy", "/en/privacy"],
 
 for (const path of ["/en/predictions/2026-02-29", "/en/predictions/2026-1-01",
   "/en/predictions/2026-10-09?status=correct", "/en/predictions/2026-10-09?status=all&status=finished",
+  "/en?sort=probability", "/en?market=total-goals&sort=probability&sortMarket=match-result",
+  "/en?unknown=x", "/en?page=0", "/en?q=a&q=b", "/en?from=2026-10-09&to=2026-10-16",
   "/en/matches/unknown/home-v-away", "/en/results", "/en/not-a-page"]) {
   const { response, html } = await request(path);
   assert.equal(response.status, 404, path);

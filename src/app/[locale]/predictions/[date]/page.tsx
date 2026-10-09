@@ -1,20 +1,21 @@
 import { notFound } from "next/navigation";
 import { FeedShell } from "@/app/_components/feed-shell";
+import { getShellDate } from "@/app/_components/public-shell";
 import { CalendarValidationError } from "@/domain/calendar";
-import { parseFeedView } from "@/domain/navigation";
+import { parseFeedQuery } from "@/domain/feed-query";
 
 export default async function DatedFeedPage({ params, searchParams }: {
   params: Promise<{ locale: string; date: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale, date } = await params;
-  const { status } = await searchParams;
-  let view;
+  const today = await getShellDate();
+  let query;
   try {
-    view = parseFeedView(date, status);
+    query = parseFeedQuery(await searchParams, { today, locale, routeDate: date });
   } catch (error) {
-    if (error instanceof CalendarValidationError || error instanceof RangeError) notFound();
+    if (error instanceof RangeError || error instanceof CalendarValidationError) notFound();
     throw error;
   }
-  return <FeedShell locale={locale} view={view} />;
+  return <FeedShell query={query} today={today} />;
 }

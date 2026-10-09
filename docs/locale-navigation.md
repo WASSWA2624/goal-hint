@@ -16,7 +16,8 @@ provider and requires no visitor credentials, tokens or cookies.
 | `/en/privacy`, `/en/terms`, `/en/contact` | Interim information surfaces; replaced by 039–041. |
 | `/en/matches/fixture-id/home-v-away` | Link convention reserved for 035. Unknown fixtures currently return 404; no invented match pages. |
 
-`src/domain/navigation.ts` is the shared route contract. `feedDefaults` defines
+`src/domain/navigation.ts` is the shared route contract. `feedDefaults`, owned
+by `src/domain/feed-query.ts` and re-exported by navigation, defines
 Today as day offset **0**, status **all**, and Results as day offset **−1**,
 status **finished**. Both use `getFeedEntry` and `feedHref`; `/en/results` is
 intentionally not an independent application or route. The finished filter is a
@@ -24,8 +25,11 @@ language-neutral group for regulation, extra-time and penalty finals; actual
 query mapping belongs to 028/032. It does not imply a settled prediction.
 
 `parseFeedView` reuses strict calendar date validation and rejects unsupported
-or repeated status values. It accepts `all` and `finished` for this shell;
-017/028/033 extend the shared URL/filter contract when those controls exist.
+or repeated status values. Prompt 017 extends both pages with the validated
+[feed query and client-state contract](client-state.md), including relative
+dates, bounded ranges, search, league, status, market, sorting and pagination.
+The current feed remains an interim preview; real querying and controls belong
+to 028/032/033. Unknown and incompatible query parameters return 404.
 Invalid dates, unknown routes and unknown fixtures return 404 with navigation.
 `matchHref` validates path segments but establishes no fixture existence or
 canonical slug; 035 owns identity lookup and changed-slug redirects.

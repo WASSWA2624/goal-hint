@@ -14,3 +14,8 @@ inputs. Components and adapters should use it instead of duplicating arithmetic.
 The [market contract](../../docs/markets.md) owns versioned regulation-time
 probabilities, source-group consistency, deterministic picks, presentation and
 pure result adjudication. Reuse it in providers, publications, UI and settlement.
+
+The [client-state contract](../../docs/client-state.md) defines validated feed
+URL queries and visitor-facing versioned fixture snapshots. Pages, future public
+APIs and browser reconciliation must share these contracts rather than expose
+provider payloads or duplicate calendar/market validation.

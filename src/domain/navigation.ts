@@ -1,7 +1,9 @@
 import { addReportingDays, parseReportingDate, type ReportingDate } from "./calendar.ts";
 import { resolveLocale } from "../i18n/locales.ts";
+import { feedDefaults, parseFeedStatus, type FeedStatus } from "./feed-query.ts";
 
-export type FeedStatus = "all" | "finished";
+export { feedDefaults } from "./feed-query.ts";
+export type { FeedStatus } from "./feed-query.ts";
 export type FeedView = Readonly<{ date: ReportingDate; status: FeedStatus }>;
 export type FeedEntry = "today" | "results";
 export const informationPages = ["how-it-works", "privacy", "terms", "contact"] as const;
@@ -9,22 +11,13 @@ export type InformationPage = (typeof informationPages)[number];
 export type NavigationLocation = FeedEntry | InformationPage;
 
 /** Both entry points select the same feed. Results starts with yesterday's finals. */
-export const feedDefaults = Object.freeze({
-  today: Object.freeze({ dayOffset: 0, status: "all" }),
-  results: Object.freeze({ dayOffset: -1, status: "finished" }),
-} as const);
-
 export function getFeedEntry(today: ReportingDate, entry: FeedEntry): FeedView {
   const defaults = feedDefaults[entry];
   return { date: addReportingDays(today, defaults.dayOffset), status: defaults.status };
 }
 
 export function parseFeedView(date: unknown, status?: string | string[]): FeedView {
-  const selectedStatus = status ?? feedDefaults.today.status;
-  if (selectedStatus !== "all" && selectedStatus !== "finished") {
-    throw new RangeError("Unsupported feed status.");
-  }
-  return { date: parseReportingDate(date), status: selectedStatus };
+  return { date: parseReportingDate(date), status: parseFeedStatus(status) };
 }
 
 export function homeHref(locale?: string): string {

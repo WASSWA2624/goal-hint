@@ -1511,3 +1511,83 @@ indexing. The reserved match helper creates no public fixture placeholder;
 rollover belongs to 037. No unimplemented locale, language selector, decorative
 hero, feed query, simulated forecast/live state or legal assertion ships.
 **No blocker remains for 016.**
+
+## 017 — Request-safe client state
+
+Date: **9 October 2026 (Africa/Kampala)**.
+
+Implemented the client-state feature and its integration with the existing feed
+preview. The [state runbook](client-state.md) and
+[decision register](implementation-decisions.md#prompt-017--request-safe-state-and-versioned-handoff)
+record the contracts for subsequent API, feed, filter, pagination and polling
+prompts. No dependency version, lockfile, schema or migration changed.
+
+### Scope and changed files
+
+- `src/domain/feed-query.ts` owns reusable validated URL queries, canonical
+  serialization/hrefs/list keys and shared Today/Results defaults. It supports
+  EAT-relative dates, explicit historical dates and bounded ranges, normalized
+  search, league/status/market, market-attached probability sort and pagination.
+  Unknown, repeated, ambiguous and incompatible parameters fail closed.
+- `src/domain/fixture-snapshot.ts` validates a typed public fixture projection
+  with a coherent nullable cycle/run/revision forecast. It reuses the calendar,
+  market validation and settlement status contract. Fixture data versions are
+  exact unsigned BIGINT decimal strings; opaque IDs never determine freshness.
+- `src/state/{contracts,feed,store,hooks,provider,preferences}.ts[x]` supplies
+  per-provider stores, typed hooks, stable SSR/hydration handoff, mutable drafts,
+  allowlisted anonymous preferences, numeric version reconciliation and
+  generation/sequence/query/page request fencing. Whole snapshots replace only
+  at strictly newer versions. Stale batches and failed refreshes retain accepted
+  records, list membership and loaded position.
+- Serializable Back checkpoints hold loaded page extent/IDs/scroll against a
+  navigation entry, canonical query and starting page, bounded to 20 entries and
+  30 minutes. Explicit EAT events roll relative selections to page 1 and preserve
+  historical applied dates/ranges and historical drafts.
+- Both locale feed pages use the shared URL parser and pass an explicit unloaded
+  bootstrap into the provider through `src/app/_components/feed-shell.tsx`.
+  Date ranges and additional canonical status labels reuse the existing UI and
+  `src/i18n/messages/en.ts`. The feed still clearly identifies its preview state.
+  `src/domain/navigation.ts` reuses and re-exports the shared defaults/statuses.
+- `tests/{feed-query,client-state}.test.mjs` and the synthetic helper cover the
+  contracts. `scripts/verify-client-state-rendering.mjs` builds an isolated real
+  Next production fixture with two providers and verifies concurrent requests.
+  `package.json` exposes `test:state` and `test:state:rendering`.
+- `scripts/verify-navigation-rendering.mjs` adds valid full-query/range HTML and
+  invalid-query 404 checks. `eslint.config.mjs` and its boundary test protect
+  `src/state` from private imports; generated Playwright artifacts are excluded
+  from lint. State/domain guidance, navigation runbook, decision register, this
+  progress record and the tracker document the handoff.
+
+### Validation and evidence
+
+Checks ran on pinned **Node.js 24.18.1 / npm 11.16.0**. Browser checks used the
+Playwright skill/CLI and installed Chrome. Synthetic fixture data was confined
+to tests and temporary acceptance apps; it was never added to public routes.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed (exit 0): Prisma generation/schema validation, zero-warning lint, strict type-check, all **771 cases: 770 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the final Next.js production build. Log: `.tmp/017-check.log`. |
+| `npm run test:state` | All **16** focused tests passed: URL round trips/defaults/malformed values, sort-market validation, isolation, exact numeric versions above JS precision, changed probability/source/explanation snapshots, older/equal versions, cycle changes, unavailable forecasts, request/query races, atomic stale/invalid pages, append/refresh failures, Back identity/page/expiry/bounds, empty-vs-unloaded state, EAT rollover and historical drafts, preference allowlist. |
+| Isolated production SSR | Four concurrent requests each rendered two distinct providers with request-specific applied queries/drafts, version 9 fixture handoff and comfortable initial preferences. No response contained another request's query and no visitor cookie was issued. `test:state:rendering` passed. |
+| Hydration and provider isolation | Browser JavaScript was gated until the real server DOM was inspected with an existing compact preference. Both providers initially rendered comfortable; after scripts were released both hydrated to compact without warnings/errors. Updating A's draft left its applied query and B's state intact. Parent rerenders with changed bootstrap props retained each mounted store. |
+| Optional local storage | A context whose local-storage getter throws still hydrated and updated preferences/drafts. Sibling providers stayed isolated. A fresh context persisted only `goal-hint:preferences:v1` containing version/density; reload applied that preference after hydration. No fixtures, forecasts or queries were written. |
+| Integrated production HTML | Ten feed/information URLs passed, including a sorted relative Tomorrow view and a seven-day historical range with search/league/page inputs. Initial styles, navigation/current markers, range endpoints, noindex and anonymous access remain correct. Malformed/mixed/repeated/unknown queries and incompatible probability sorts return real 404s; root and locale fallbacks remain correct. |
+
+The browser acceptance result was `passed: true`, with `hydrationErrors: 0`.
+The screenshot `output/playwright/client-state-hydration.png` was visually
+inspected; the gated script/config remain beside it in ignored browser output.
+SSR fixture HTML/build logs are under `.tmp/client-state-*`. The initial fixture
+omitted public favicons, producing two resource 404s; the fixture builder was
+corrected to copy the real first-party brand assets before the clean browser
+acceptance run. No application behavior or test timeout was weakened.
+
+### Remaining scope
+
+The implementation deliberately provides state and reconciliation contracts.
+028 supplies public stored-data endpoints; 032 supplies the real match feed;
+033 wires controls to URLs; 034 chooses the persistent provider boundary and
+wires real Back/session/DOM restoration; 037 adds EAT triggers and polling.
+Current pages pass `data: null`; they do not imply empty fixture availability.
+There are no invented RTK Query endpoints, browser provider/AI requests,
+forecast persistence or active polling. Existing operating/launch gates remain
+with their owning prompts. **No blocker remains for 017.**
