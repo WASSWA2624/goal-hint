@@ -257,7 +257,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-17 Public performance-claim gates | **Unresolved / evidence required** | Define minimum market/source/horizon samples and permitted claims, then gather sufficient independent evidence. No fixed accuracy promise is approved. Below-threshold public metrics must show insufficient data/provisional status. §§8, 15; prompts 014/030/038. | Unassigned; user decision/evidence required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`; Deferred: public-claim minimum samples and qualification results | **014** defines gates; public consumers **030/038** |
 | OP-18 Bounded shadow authorization | **Unresolved / evidence required** | Approve a private bounded protocol, maximum jobs/spend and evidence locations after applicable private provider/evidence-use rights, account, independent budgets and pipeline-integrity checks pass. Public redistribution/logo-display rights are required for public use, not isolated private shadow evidence collection. Candidate quality may remain unqualified while shadow gathers evidence. Shadow cannot publish production forecasts or declare qualification; a trusted verifier must validate applicable recorded evidence. Prompt 002, index gate and prompt 047. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE=shadow`, `GOAL_HINT_SHADOW_MAX_JOBS`, `GOAL_HINT_SHADOW_BUDGET_USD_CENTS`, `GOAL_HINT_SHADOW_PROTOCOL_REF`, `GOAL_HINT_PIPELINE_INTEGRITY_REF`; private provider/account, independent infrastructure/AI/research budgets and evidence/freshness/calibration prerequisites also apply | **014** prospective protocol; execution **047** after pipeline checks |
 | OP-19 Durable queue, worker runtime and private identity | **Local implementation complete; deployment unresolved** | 020 implements/test-harnesses MySQL-backed durable delivery, native Node 24 `.ts`/`react-server` execution, typed registry, renewable fenced leases, bounded retries and a fail-closed private identity adapter. Approve the deployed queue/hosting, actual service/workload identity and operator ownership; qualify representative capacity and workload-specific lease/timeout/retry/concurrency/fallback settings. No managed subscription, deployment approval or continuous poller is inferred. §§9, 11, 13–15. | Unassigned; user decision/evidence required for deployment | Trusted worker/trigger bindings; Deferred: approved queue/worker hosting, actual identity and measured capacity; existing per-job limits and itemized infrastructure approval still apply | **020 local implementation**; hosted qualification **046**, poller **026** |
-| OP-20 Selection eligibility and degraded finalization | **Unresolved** | Trial-backed competition/status eligibility and an explicit recorded degraded-manifest finalization policy/action are required. A partial immutable manifest must expose missing coverage; it cannot be silently completed later or treated as authoritative emptiness. §§5, 11, 15; prompt 021. | Unassigned; user decision/evidence required | `GOAL_HINT_COMPETITION_IDS`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: manifest/status eligibility and degraded-finalization policy | **021** |
+| OP-20 Selection eligibility and degraded finalization | **Local implementation complete; live choices unresolved** | 021 implements immutable manifests, complete-date retries, explicit verified degraded actions, partial coverage, fenced recovery and recorded closed-cycle eligibility inputs. Approve trial-backed competition/status eligibility and a degradation policy/action authority before the affected live path runs. A committed subset cannot be filled in later or treated as authoritative emptiness. §§5, 11, 15. | Unassigned; user decision/evidence required for live choices | `GOAL_HINT_COMPETITION_IDS`, `GOAL_HINT_EVIDENCE_POLICY_REF`; implemented: versioned selection policy/authority, immutable manifest and recorded action; pending: approved competition/eligibility evidence and degraded-finalization policy | **021 local implementation**; live decisions remain pending |
 | OP-21 Publication-status freshness | **Unresolved** | Set the maximum age and conflict handling of provider kickoff/status observations used for publication/cutoff safety; stale or unknown eligibility cannot authorize a write. Acquire trial evidence first; use the bound transactionally. §§5, 7, 15; prompt 022. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`, `GOAL_HINT_EVIDENCE_POLICY_REF`; Deferred: fixture-status publication freshness bound | **022**; trial evidence **008** |
 | OP-22 Polling horizons and approach threshold | **Unresolved** | Choose approaching-kickoff lead time, active/result window, unresolved-result horizon and progressively slower correction checks with bounded stopping/review rules. Preserve visible unresolved fixtures after midnight/outside the prediction window. §§5, 11, 15; prompt 026. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: poller approach thresholds, unresolved/correction horizons/cadences | **026** |
 | OP-23 Public query/search limits | **Unresolved implementation choice** | Set reusable validated response/page/search limits and anonymous search throttling from workload/security evidence; about 30 initial cards is the specification's default. No visitor credential or provider work may be added. §§11, 13; prompt 028. | Unassigned; implementation evidence required | Deferred: public query/page/search rate limits | **028** |
@@ -1591,3 +1591,60 @@ recovery policy. Queue rollback disables worker/trigger code and retains all
 additive schema, jobs/attempts/events and forecast history; repairs roll forward
 after actual schema/migration-state inspection. Production activation and
 workload/host/budget/identity qualification remain explicit deployment blockers.
+
+## Prompt 021 — Immutable daily selection and recovery
+
+Implemented locally on **9 October 2026 EAT**. The
+[daily-selection runbook](daily-selection.md) documents the protected scheduler
+binding, storage grants, recorded policy/actions, cycle inputs and recovery.
+Selection reuses the canonical importer, API-Football adapter/shared limiter,
+history cycle writer and existing durable MySQL queue. No AI, publication,
+postponement detection, continuous polling or new public route is implemented.
+
+One original scheduled EAT midnight determines the run date, ordered `YYYYMMDD`
+identity and half-open seven-day window. Configure `0 21 * * *` in UTC and retain
+that occurrence across delivery retries. The private trigger only enqueues a
+typed selection job; a trusted worker binding runs the service. Actual host,
+identity and activation remain unselected deployment work.
+
+Persist each date attempt before provider I/O and keep its original absolute
+bounds. Retry incomplete imports before dispatch; reuse complete receipts and
+reconcile catalog-commit crashes without fetching again. The adapter follows the
+existing single-page fixture contract and treats unexpected pages as incomplete.
+Canonical retained fixtures remain known data even if a newer response is empty;
+failed current coverage never borrows an earlier completeness claim.
+
+Database-UTC renewable leases and monotonic fences protect selection effects.
+Run lock → canonical provider → fixture locks serialize manifest/cycle commit;
+provider calls remain outside locks. Initial cycle creation and immutable
+manifest/membership insertions share one transaction through the existing
+history writer. Lease expiry or a precommit crash rolls them all back.
+
+An append-only `DailyRunManifest` seals policy hash, boundaries, known coverage,
+exclusions, kickoff/cycle identities, deterministic nearest-kickoff ranks and job
+envelopes. `RunFixture` membership columns are immutable under application grants;
+only dispatch/outcome projections change. The manifest is the durable enqueue
+intent. One entry per transaction links missing queue jobs, and composite FKs
+plus existing refresh uniqueness prevent cross-refresh links or duplicate work.
+Late discoveries wait for another eligible run.
+
+Only a configured degradation policy plus a separately verified, recorded
+operator action can finalize an incomplete known subset. Preserve missing dates,
+reasons and page evidence, mark the manifest partial, and never fill it in later.
+Incomplete-date projections return partial/data-unavailable, never No fixtures.
+The configured eligible pre-match status is `scheduled`; there is no guessed
+competition list, cost allocation, model selection or permissive authority.
+
+Current eligible open cycles are reused. A new ordinal after closure requires an
+explicit `SelectionCycleEligibility` record for an already void or formally
+postponed closed cycle, exact previous version and matching new kickoff. Consume
+it once when the canonical fixture is scheduled. The old cycle remains closed;
+024 owns observing formal postponements and supplying lifecycle transitions.
+
+**OP-05/20 remain unresolved for live operation:** approved competition IDs and
+trial-backed eligibility evidence are missing; the degraded-finalization policy
+and operator action authority are unchosen. A complete import does not need a
+degraded action, but missing policy blocks the affected incomplete live path.
+OP-03–08 provider/account/retention qualification, OP-11 bounds, OP-19 host and
+workload identity, and 022–025 pipeline integrity remain separate activation
+gates. Synthetic verifiers and successful local checks approve none of these.

@@ -55,7 +55,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
   }
 
   async function withFixtureTransaction<Result>(fixtureId: string,
-    operation: (writer: PredictionHistoryWriter, transaction: HistoryTransaction) => Promise<Result>): Promise<Result> {
+    operation: (writer: PredictionHistoryWriter, transaction: HistoryTransaction) => Promise<Result>, existingTransaction?: HistoryTransaction): Promise<Result> {
     parseHistory(historyId, fixtureId);
     let domainError: PredictionHistoryError | undefined;
     try {
@@ -228,7 +228,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
         try { const result = await operation(writer, transaction); if (failed) throw failure; return result; }
         catch (error) { if (error instanceof PredictionHistoryError) domainError = error; throw error; }
         finally { active = false; }
-      });
+      }, existingTransaction);
     } catch { if (domainError) throw domainError; return historyFail("unavailable"); }
   }
 

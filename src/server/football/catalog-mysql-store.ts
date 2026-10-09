@@ -436,12 +436,16 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       return database.query((client) => client.footballTeam.findMany({ where: { OR: [{ nameSearch: { contains: search } },
         { aliases: { some: { normalizedSearch: { contains: search } } } }] }, include: { aliases: true }, take: limit, orderBy: { nameSearch: "asc" } }));
     },
-    withFixtureTransaction: <Result>(fixtureId: string, operation: (transaction: Prisma.TransactionClient, snapshot: CatalogFixtureSnapshot) => Promise<Result>) => write(async (transaction) => {
-      await lockFixture(transaction, fixtureId);
-      const row = await transaction.footballFixture.findUnique({ where: { id: fixtureId }, include: fixtureRelations });
-      if (!row) return fail("invalid-state");
-      return operation(transaction, catalogFixtureSnapshot(row));
-    }, false),
+    withFixtureTransaction: <Result>(fixtureId: string, operation: (transaction: Prisma.TransactionClient, snapshot: CatalogFixtureSnapshot) => Promise<Result>, existingTransaction?: Prisma.TransactionClient) => {
+      const execute = async (transaction: Prisma.TransactionClient) => {
+        if (existingTransaction) await lockCatalog(transaction);
+        await lockFixture(transaction, fixtureId);
+        const row = await transaction.footballFixture.findUnique({ where: { id: fixtureId }, include: fixtureRelations });
+        if (!row) return fail("invalid-state");
+        return operation(transaction, catalogFixtureSnapshot(row));
+      };
+      return existingTransaction ? execute(existingTransaction) : write(execute, false);
+    },
   });
 }
 export type FootballCatalogStore = ReturnType<typeof createFootballCatalogStore>;

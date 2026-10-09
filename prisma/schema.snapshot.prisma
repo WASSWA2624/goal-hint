@@ -406,10 +406,10 @@ model FixtureEvidenceSnapshot {
   predictionSets     PredictionSet[]
 
   @@unique([requestId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], map: "FixtureEvidenceSnapshot_binding_key")
+  @@unique([requestId, fixtureId, cycleId, runId, fixtureVersion, contentHash], map: "Evidence_prediction_binding_key")
   @@index([contentHash])
   @@index([fixtureId, analysisAt])
   @@index([cycleId, runId])
-  @@unique([requestId, fixtureId, cycleId, runId, fixtureVersion, contentHash], map: "Evidence_prediction_binding_key")
 }
 
 // Both composite foreign keys require every source to belong to the snapshot's
@@ -432,71 +432,147 @@ model FixtureEvidenceSnapshotSource {
 // Immutable predictor configurations. Job/retry ownership is pinned by the
 // caller and becomes durable with 020; this table does not store predictions.
 model ModelVersion {
-  id                   String    @id @db.Char(64)
-  provider             String    @db.VarChar(128)
-  model                String    @db.VarChar(128)
-  providerModelVersion String    @db.VarChar(128)
-  contractVersion      String    @db.VarChar(128)
-  promptVersion        String    @db.VarChar(128)
-  schemaVersion        String    @db.VarChar(128)
-  calibrationKind      String    @db.VarChar(16)
-  calibrationVersion   String    @db.VarChar(128)
-  evaluationStatus     String    @db.VarChar(16)
-  evaluationVersion    String    @db.VarChar(128)
-  trainingStartsAt     DateTime? @db.DateTime(3)
-  trainingEndsAt       DateTime? @db.DateTime(3)
-  validationStartsAt   DateTime? @db.DateTime(3)
-  validationEndsAt     DateTime? @db.DateTime(3)
-  calibrationStartsAt  DateTime? @db.DateTime(3)
-  calibrationEndsAt    DateTime? @db.DateTime(3)
-  finalTestStartsAt    DateTime? @db.DateTime(3)
-  finalTestEndsAt      DateTime? @db.DateTime(3)
-  integrity            String    @db.Char(64)
+  id                   String          @id @db.Char(64)
+  provider             String          @db.VarChar(128)
+  model                String          @db.VarChar(128)
+  providerModelVersion String          @db.VarChar(128)
+  contractVersion      String          @db.VarChar(128)
+  promptVersion        String          @db.VarChar(128)
+  schemaVersion        String          @db.VarChar(128)
+  calibrationKind      String          @db.VarChar(16)
+  calibrationVersion   String          @db.VarChar(128)
+  evaluationStatus     String          @db.VarChar(16)
+  evaluationVersion    String          @db.VarChar(128)
+  trainingStartsAt     DateTime?       @db.DateTime(3)
+  trainingEndsAt       DateTime?       @db.DateTime(3)
+  validationStartsAt   DateTime?       @db.DateTime(3)
+  validationEndsAt     DateTime?       @db.DateTime(3)
+  calibrationStartsAt  DateTime?       @db.DateTime(3)
+  calibrationEndsAt    DateTime?       @db.DateTime(3)
+  finalTestStartsAt    DateTime?       @db.DateTime(3)
+  finalTestEndsAt      DateTime?       @db.DateTime(3)
+  integrity            String          @db.Char(64)
   configurationJson    Json
-  createdAt            DateTime  @default(now()) @db.DateTime(3)
+  createdAt            DateTime        @default(now()) @db.DateTime(3)
   predictionSets       PredictionSet[]
 
   @@index([provider, model, providerModelVersion])
 }
 
-// Identity and order only. Selection manifests and job state belong to 021/020.
+// Immutable selection plus separate renewable ownership/progress projections.
 model DailyRun {
-  id        String          @id @default(uuid()) @db.Char(36)
-  sequence  BigInt          @unique @db.UnsignedBigInt
-  eatDate   DateTime        @unique @db.Date
-  createdAt DateTime        @db.DateTime(3)
-  sets      PredictionSet[]
-  jobs      DurableJob[]
+  id             String                      @id @default(uuid()) @db.Char(36)
+  sequence       BigInt                      @unique @db.UnsignedBigInt
+  eatDate        DateTime                    @unique @db.Date
+  createdAt      DateTime                    @db.DateTime(3)
+  sets           PredictionSet[]
+  jobs           DurableJob[]
+  selectionHash  String?                     @db.Char(64)
+  selectionJson  Json?
+  windowStart    DateTime?                   @db.DateTime(3)
+  windowEnd      DateTime?                   @db.DateTime(3)
+  committedAt    DateTime?                   @db.DateTime(3)
+  partial        Boolean                     @default(false)
+  ownerId        String?                     @db.Char(64)
+  fence          Int                         @default(0) @db.UnsignedInt
+  leaseExpiresAt DateTime?                   @db.DateTime(3)
+  totalJobs      Int                         @default(0) @db.UnsignedInt
+  completedJobs  Int                         @default(0) @db.UnsignedInt
+  terminalJobs   Int                         @default(0) @db.UnsignedInt
+  imports        DailyRunImport[]
+  fixtures       RunFixture[]
+  reopenings     SelectionCycleEligibility[]
+  manifest       DailyRunManifest?
 
   @@unique([id, sequence])
 }
 
+// INSERT/SELECT only for the application role. Never update a committed cohort.
+model DailyRunManifest {
+  runId        String   @id @db.Char(36)
+  manifestHash String   @db.Char(64)
+  manifestJson Json
+  run          DailyRun @relation(fields: [runId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
+// Durable original request and receipt for every date attempt, including failure.
+model DailyRunImport {
+  id          String    @id @db.Char(36)
+  runId       String    @db.Char(36)
+  eatDate     DateTime  @db.Date
+  attempt     Int       @db.UnsignedInt
+  requestJson Json
+  finishedAt  DateTime? @db.DateTime(3)
+  failure     String?   @db.VarChar(32)
+  run         DailyRun  @relation(fields: [runId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([runId, eatDate, attempt])
+}
+
+model RunFixture {
+  runId          String          @db.Char(36)
+  fixtureId      String          @db.Char(36)
+  cycleId        String          @db.Char(36)
+  rank           Int             @db.UnsignedInt
+  kickoffAt      DateTime        @db.DateTime(3)
+  envelopeJson   Json
+  jobId          String?         @unique @db.Char(64)
+  jobState       String          @default("undispatched") @db.VarChar(16)
+  terminalReason String?         @db.VarChar(32)
+  run            DailyRun        @relation(fields: [runId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle          PredictionCycle @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  job            DurableJob?     @relation(fields: [jobId, runId, fixtureId, cycleId], references: [id, refreshRunId, refreshFixtureId, refreshCycleId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([runId, fixtureId, cycleId])
+  @@unique([runId, rank])
+}
+
+// Explicit input from lifecycle 024/operator authority; selection never detects postponement.
+model SelectionCycleEligibility {
+  id              String          @id @db.Char(64)
+  fixtureId       String          @db.Char(36)
+  previousCycleId String          @unique @db.Char(36)
+  previousVersion Int             @db.UnsignedInt
+  kickoffAt       DateTime        @db.DateTime(3)
+  state           String          @db.VarChar(16)
+  actor           String          @db.VarChar(128)
+  evidenceRef     String          @db.VarChar(512)
+  recordedAt      DateTime        @db.DateTime(3)
+  consumedRunId   String?         @db.Char(36)
+  cycle           PredictionCycle @relation(fields: [previousCycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  run             DailyRun?       @relation(fields: [consumedRunId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([previousCycleId, fixtureId])
+}
+
 model PredictionCycle {
-  id                 String                    @id @default(uuid()) @db.Char(36)
-  fixtureId          String                    @db.Char(36)
-  creationKey        String                    @db.Char(64)
-  creationHash       String                    @db.Char(64)
-  ordinal            Int                       @db.UnsignedInt
-  version            Int                       @default(1) @db.UnsignedInt
-  scheduleVersion    Int                       @db.UnsignedInt
-  kickoffAt          DateTime                  @db.DateTime(3)
-  cutoffAt           DateTime                  @db.DateTime(3)
-  openedAt           DateTime                  @db.DateTime(3)
-  state              String                    @default("open") @db.VarChar(16)
-  currentSetId       String?                   @db.Char(36)
-  lockedSetId        String?                   @db.Char(36)
-  closedAt           DateTime?                 @db.DateTime(3)
-  lockedAt           DateTime?                 @db.DateTime(3)
-  voidedAt           DateTime?                 @db.DateTime(3)
-  voidReason         String?                   @db.VarChar(2000)
-  fixture            FootballFixture           @relation("FixturePredictionCycles", fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  activeForFixtures  FootballFixture[]         @relation("FixtureActiveCycle")
-  sets               PredictionSet[]           @relation("CyclePredictionSets")
-  currentSet         PredictionSet?            @relation("CycleCurrentSet", fields: [currentSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
-  lockedSet          PredictionSet?            @relation("CycleLockedSet", fields: [lockedSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
-  schedules          PredictionSchedule[]
-  audits             PredictionAudit[]
-  jobs               DurableJob[]
+  id                   String                     @id @default(uuid()) @db.Char(36)
+  fixtureId            String                     @db.Char(36)
+  creationKey          String                     @db.Char(64)
+  creationHash         String                     @db.Char(64)
+  ordinal              Int                        @db.UnsignedInt
+  version              Int                        @default(1) @db.UnsignedInt
+  scheduleVersion      Int                        @db.UnsignedInt
+  kickoffAt            DateTime                   @db.DateTime(3)
+  cutoffAt             DateTime                   @db.DateTime(3)
+  openedAt             DateTime                   @db.DateTime(3)
+  state                String                     @default("open") @db.VarChar(16)
+  currentSetId         String?                    @db.Char(36)
+  lockedSetId          String?                    @db.Char(36)
+  closedAt             DateTime?                  @db.DateTime(3)
+  lockedAt             DateTime?                  @db.DateTime(3)
+  voidedAt             DateTime?                  @db.DateTime(3)
+  voidReason           String?                    @db.VarChar(2000)
+  fixture              FootballFixture            @relation("FixturePredictionCycles", fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  activeForFixtures    FootballFixture[]          @relation("FixtureActiveCycle")
+  sets                 PredictionSet[]            @relation("CyclePredictionSets")
+  currentSet           PredictionSet?             @relation("CycleCurrentSet", fields: [currentSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  lockedSet            PredictionSet?             @relation("CycleLockedSet", fields: [lockedSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  schedules            PredictionSchedule[]
+  audits               PredictionAudit[]
+  jobs                 DurableJob[]
+  selections           RunFixture[]
+  selectionEligibility SelectionCycleEligibility?
 
   @@unique([id, fixtureId])
   @@unique([fixtureId, creationKey])
@@ -575,22 +651,22 @@ model PredictionSet {
 // Four explicit family rows, including unavailable families. DOUBLE preserves
 // the shared domain's binary64 values; canonical JSON retains full provenance.
 model MarketPrediction {
-  setId             String        @db.Char(36)
-  family            String        @db.VarChar(32)
-  available         Boolean
-  source            String?       @db.VarChar(16)
-  selection         String?       @db.VarChar(32)
-  selectedProbability Float?      @db.Double
-  probability1      Float?        @db.Double
-  probability2      Float?        @db.Double
-  probability3      Float?        @db.Double
-  unavailableReason String?       @db.VarChar(32)
-  generatedAt       DateTime?     @db.DateTime(3)
-  retrievedAt       DateTime?     @db.DateTime(3)
-  providerUpdatedAt DateTime?     @db.DateTime(3)
-  integrity         String        @db.Char(64)
-  payloadJson       Json
-  set               PredictionSet @relation(fields: [setId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  setId               String        @db.Char(36)
+  family              String        @db.VarChar(32)
+  available           Boolean
+  source              String?       @db.VarChar(16)
+  selection           String?       @db.VarChar(32)
+  selectedProbability Float?        @db.Double
+  probability1        Float?        @db.Double
+  probability2        Float?        @db.Double
+  probability3        Float?        @db.Double
+  unavailableReason   String?       @db.VarChar(32)
+  generatedAt         DateTime?     @db.DateTime(3)
+  retrievedAt         DateTime?     @db.DateTime(3)
+  providerUpdatedAt   DateTime?     @db.DateTime(3)
+  integrity           String        @db.Char(64)
+  payloadJson         Json
+  set                 PredictionSet @relation(fields: [setId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@id([setId, family])
   @@index([family, source])
@@ -625,56 +701,58 @@ model DurableJobEnqueueLock {
 }
 
 model DurableJob {
-  id                String             @id @db.Char(64)
-  type              String             @db.VarChar(64)
-  handlerVersion    Int                @db.UnsignedInt
-  idempotencyKey    String             @db.Char(64)
-  requestHash       String             @db.Char(64)
-  integrity         String             @db.Char(64)
+  id                String              @id @db.Char(64)
+  type              String              @db.VarChar(64)
+  handlerVersion    Int                 @db.UnsignedInt
+  idempotencyKey    String              @db.Char(64)
+  requestHash       String              @db.Char(64)
+  integrity         String              @db.Char(64)
   envelopeJson      Json
-  refreshRunId      String?            @db.Char(36)
-  refreshFixtureId  String?            @db.Char(36)
-  refreshCycleId    String?            @db.Char(36)
-  state             String             @default("pending") @db.VarChar(16)
-  version           Int                @default(1) @db.UnsignedInt
-  priority          Int                @db.UnsignedInt
-  availableAt       DateTime           @db.DateTime(3)
-  expiresAt         DateTime           @db.DateTime(3)
-  createdAt         DateTime           @db.DateTime(3)
-  updatedAt         DateTime           @db.DateTime(3)
-  attemptCount      Int                @default(0) @db.UnsignedInt
-  fence             Int                @default(0) @db.UnsignedInt
-  ownerId           String?            @db.Char(64)
-  leaseExpiresAt    DateTime?          @db.DateTime(3)
-  attemptDeadlineAt DateTime?          @db.DateTime(3)
-  finishedAt        DateTime?          @db.DateTime(3)
-  terminalReason    String?            @db.VarChar(32)
-  run               DailyRun?          @relation(fields: [refreshRunId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  cycle             PredictionCycle?   @relation(fields: [refreshCycleId, refreshFixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  refreshRunId      String?             @db.Char(36)
+  refreshFixtureId  String?             @db.Char(36)
+  refreshCycleId    String?             @db.Char(36)
+  state             String              @default("pending") @db.VarChar(16)
+  version           Int                 @default(1) @db.UnsignedInt
+  priority          Int                 @db.UnsignedInt
+  availableAt       DateTime            @db.DateTime(3)
+  expiresAt         DateTime            @db.DateTime(3)
+  createdAt         DateTime            @db.DateTime(3)
+  updatedAt         DateTime            @db.DateTime(3)
+  attemptCount      Int                 @default(0) @db.UnsignedInt
+  fence             Int                 @default(0) @db.UnsignedInt
+  ownerId           String?             @db.Char(64)
+  leaseExpiresAt    DateTime?           @db.DateTime(3)
+  attemptDeadlineAt DateTime?           @db.DateTime(3)
+  finishedAt        DateTime?           @db.DateTime(3)
+  terminalReason    String?             @db.VarChar(32)
+  run               DailyRun?           @relation(fields: [refreshRunId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle             PredictionCycle?    @relation(fields: [refreshCycleId, refreshFixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
   attempts          DurableJobAttempt[]
   events            DurableJobEvent[]
   usage             DurableJobUsage[]
+  selections        RunFixture[]
 
   @@unique([type, handlerVersion, idempotencyKey])
+  @@unique([id, refreshRunId, refreshFixtureId, refreshCycleId], map: "DurableJob_selection_key")
   @@unique([refreshRunId, refreshFixtureId, refreshCycleId], map: "DurableJob_refresh_key")
   @@index([type, handlerVersion, state, availableAt, priority])
   @@index([type, handlerVersion, state, leaseExpiresAt])
 }
 
 model DurableJobAttempt {
-  id             String            @id @db.Char(64)
-  jobId          String            @db.Char(64)
-  number         Int               @db.UnsignedInt
-  fence          Int               @db.UnsignedInt
-  ownerId        String            @db.Char(64)
-  startedAt      DateTime          @db.DateTime(3)
-  deadlineAt     DateTime          @db.DateTime(3)
-  finishedAt     DateTime?         @db.DateTime(3)
-  outcome        String            @db.VarChar(16)
-  reason         String?           @db.VarChar(32)
-  job            DurableJob        @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  events         DurableJobEvent[]
-  usage          DurableJobUsage[]
+  id         String            @id @db.Char(64)
+  jobId      String            @db.Char(64)
+  number     Int               @db.UnsignedInt
+  fence      Int               @db.UnsignedInt
+  ownerId    String            @db.Char(64)
+  startedAt  DateTime          @db.DateTime(3)
+  deadlineAt DateTime          @db.DateTime(3)
+  finishedAt DateTime?         @db.DateTime(3)
+  outcome    String            @db.VarChar(16)
+  reason     String?           @db.VarChar(32)
+  job        DurableJob        @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  events     DurableJobEvent[]
+  usage      DurableJobUsage[]
 
   @@unique([jobId, number])
   @@unique([id, jobId])

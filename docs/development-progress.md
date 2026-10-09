@@ -1845,3 +1845,101 @@ Rollback stops writers/workers and retains additive schema and all job/forecast
 history; reviewed corrections roll forward after schema-state inspection.
 011/012/014 retain their existing unresolved live qualification state. No local
 implementation or acceptance blocker remains for 020.
+
+## Prompt 021 — Daily selection
+
+**Date:** 9 October 2026 EAT. **Status:** local implementation and required
+acceptance checks complete; 021 ticked in `dev-tracker.md`. Live scheduling
+remains blocked by the decisions below. No later prompt was implemented.
+
+### Changes and schedule setup
+
+- `src/server/selection/selection-{contract,input,mysql-store,service,read,trigger}.ts`
+  add the strict policy/authority contract, seven-date orchestration, renewable
+  database-UTC ownership/fencing, coverage-aware date projection, typed durable
+  selection handler and authenticated scheduler adapter. The schedule constant
+  is `0 21 * * *` UTC, midnight `Africa/Kampala`. The scheduler must retain the
+  original occurrence; retries never derive another date from invocation time.
+- `prisma/schema.prisma`, its snapshot and additive migration
+  `20261009131134_daily_selection` extend `DailyRun` and add append-only
+  `DailyRunManifest`, durable `DailyRunImport`, immutable `RunFixture` membership
+  and explicit `SelectionCycleEligibility`. Native date/identity/rank/state
+  checks, refresh uniqueness and composite fixture/cycle/job FKs preserve the
+  cohort. Application column grants separate immutable content from progress.
+- Each date request is saved before I/O. Complete receipts are reused, incomplete
+  imports retried, original bounds retained, and receipt-commit crashes recovered
+  without fetching again. Existing API-Football adapter/gateway own requests and
+  pagination; unexpected fixture pages stay incomplete. Retained canonical
+  fixtures remain known data even after a newer empty response.
+- `src/server/football/catalog-mysql-store.ts` and
+  `src/server/predictions/history-mysql-store.ts` accept a caller-owned transaction
+  for the existing provider → fixture lock/writer boundary. Initial cycles,
+  selection entries and manifest commit now roll back together. Open cycles are
+  reused; a new ordinal after closure needs an explicit recorded eligible
+  postponed/void input. No cycle is reopened and no lifecycle event is inferred.
+- A committed manifest seals boundaries, policy hash, coverage/page evidence,
+  exclusions, fixture/cycle/kickoff identities and nearest-kickoff rank/envelope.
+  Reconciliation transactionally enqueues/links only missing entries, recovering
+  crashes before dispatch or partway through it. Later discoveries wait for
+  another eligible daily selection. Total/successful-completed/terminal counts
+  and per-entry queue outcomes persist separately without membership changes.
+- Partial finalization requires both a configured degradation policy and a
+  separately verified recorded action after import retries. Incomplete dates
+  return partial/data-unavailable, including zero-row dates. A committed partial
+  manifest is never silently completed or changed.
+- `src/server/jobs/job-trigger.ts` exports its existing bounded private body
+  parser for reuse. `tests/daily-selection.{test,integration}.mjs` and
+  `tests/helpers/selection-fixtures.mjs` exercise the feature through the real
+  catalog adapter/gateway, history and queue. `package.json` adds `test:selection`
+  without dependency changes. The runbook, server/worker guidance, operating
+  decisions and tracker document the handoff.
+
+### Verification and recovery evidence
+
+Checks used the available bundled **Node.js 24.19.0 / npm 11.17.0**, and owned
+throwaway **MySQL Community Server 8.4.11** instances selected through
+`MYSQL_TEST_SERVER_BINARY`. The repository's existing runtime pins remain
+24.18.1/11.16.0; exact-pin execution was not claimed. All provider bodies,
+permissions, policies and lifecycle inputs were synthetic. No application
+database, installed server service, provider/media request or hosted schedule
+was used. The ownership-checked harness removed its test servers/data.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:selection` | **18 passed, 0 failed/skipped**: five deterministic tests, the database harness and twelve substantive MySQL cases. Log: `.tmp/021-selection.log`. |
+| EAT boundaries | Proved 7 October starts at 6 October 21:00 UTC, includes 7–13 October, includes the last millisecond and excludes the next midnight boundary. Original scheduled occurrence remains identical on repeated trigger delivery. |
+| Migration/permissions | Fresh InnoDB deployment and `db:verify` passed without drift. Application DDL, manifest/membership/import/evidence changes and deletion were denied. Native progress checks and composite cross-refresh job links were verified. |
+| Concurrency/ownership | Competing triggers produced one active selector and one refresh per selected key. Heartbeats kept slow provider work owned; expired owners could neither renew nor commit before/after takeover. Fences increased monotonically. |
+| Import/restart | Unexpected pagination retried without dispatch or false completeness. Restart fetched only the incomplete date. A committed catalog receipt resumed without another fetch. A precommit crash rolled back cycle, membership and manifest effects. |
+| Commit/dispatch recovery | A committed manifest with zero dispatches resumed unchanged. A crash after a linked enqueue prefix recovered only the missing suffix; duplicate enqueue stayed one job per refresh. |
+| Partial/late discovery | Missing-date finalization required a verified recorded action. The partial date never became No fixtures. A late fixture could not join that manifest and was selected by another eligible daily run. |
+| Cycles/progress | Open cycles were reused. Unapproved closed/void cycles were excluded; explicit void and postponed inputs created later ordinals while prior cycles stayed closed. Queue success/failure outcomes persisted with unchanged manifest membership. |
+| `npm run test:history` | **22 passed, 0 failed/skipped** on MySQL 8.4.11. Log: `.tmp/021-history.log`. |
+| `npm run test:catalog` | **28 passed, 0 failed/skipped** on MySQL 8.4.11. Log: `.tmp/021-catalog.log`. |
+| `npm run test:jobs` | **23 passed, 0 failed/skipped** on MySQL 8.4.11, including existing actual child-process crash/restart checks. Log: `.tmp/021-jobs.log`. |
+| Existing fallback timing test | The first full check overlapped database work and hit an existing short-deadline fallback test. Its isolated suite passed **42/42**, with no fallback code change. Log: `.tmp/021-fallback.log`. |
+| `npm run check` | Passed, exit 0: Prisma generation/validation, zero-warning lint, strict type-check, **795 cases: 794 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the Next.js production build. Log: `.tmp/021-check.log`. |
+
+The first fresh migration attempt caught the need to match existing binary
+identity collations on foreign keys; the new migration was corrected before
+acceptance. Test wiring was also corrected to use the existing history writer's
+explicit transaction API and coherent closed-without-prediction references.
+Final MySQL runs passed. No UI changed, so visual acceptance was not required.
+
+### Live blockers and later integration
+
+OP-05/20 still need approved competitions/trial-backed eligibility evidence and
+an actual degraded-finalization policy/action authority. A complete manifest can
+commit without a degraded action; missing degradation approval blocks only the
+affected incomplete live path. OP-03–08 provider/account/retention qualification,
+OP-11 approved bounds and OP-19 hosting/workload identity remain unresolved.
+The protected factory and schedule configuration are ready, but no route,
+production binding or hosted cron is mounted or activated.
+
+022–025 own publication, locking, lifecycle detection/transitions and the refresh
+handler. The latter should synchronize the provided progress projection after
+terminal work; persisted queue outcomes remain authoritative until synchronized.
+026 polling cannot add selection jobs. 043 may call the same original-occurrence
+recovery contract. Rollback stops bindings/workers while retaining additive schema
+and immutable manifests, imports, cycles and jobs; repairs roll forward after
+schema-state inspection. Earlier live qualification gates remain unchanged.

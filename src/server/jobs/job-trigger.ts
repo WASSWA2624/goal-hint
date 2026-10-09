@@ -15,7 +15,7 @@ export function createBearerJobIdentity(readSecret: () => string | null): JobTri
     return timingSafeEqual(expected, createHash("sha256").update(header).digest());
   } });
 }
-async function body(request: Request): Promise<unknown> {
+export async function readPrivateJobBody(request: Request): Promise<unknown> {
   if (!request.body || request.headers.get("content-type")?.split(";")[0]?.trim() !== "application/json") return jobFail("invalid-request");
   const reader = request.body.getReader(); let size = 0, timedOut = false; const chunks: Uint8Array[] = [];
   const timer = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => {}); }, 2000);
@@ -35,7 +35,7 @@ export function createJobTrigger(input: Readonly<{ queue: JobQueue; registry: Jo
     catch { return Response.json({ error: "unauthorized" }, { status: 401 }); }
     if (request.method !== "POST") return Response.json({ error: "method-not-allowed" }, { status: 405, headers: { Allow: "POST" } });
     let envelope;
-    try { envelope = input.registry.validate(await body(request)); }
+    try { envelope = input.registry.validate(await readPrivateJobBody(request)); }
     catch { return Response.json({ error: "invalid-request" }, { status: 400 }); }
     try {
       const job = await input.queue.enqueue(envelope);

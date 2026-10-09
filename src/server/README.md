@@ -64,3 +64,9 @@ enqueue, renewable fenced leases and private trigger adapter. Use the
 usage references, shutdown and deployment blockers. The committed job row is
 the delivery record; no post-commit broker send is required. Keep visitor reads
 independent of enqueueing and supply trusted service/workload identity to triggers.
+
+`selection/` commits one immutable EAT seven-day cohort and reconciles its durable
+refresh jobs. Reuse the canonical importer, queue and history writer in the shared
+transaction. Its [runbook](../../docs/daily-selection.md) describes the protected
+midnight trigger, recorded degradation/cycle inputs, progress and recovery.
+Unchosen competition/status or degradation policy blocks the affected live path.

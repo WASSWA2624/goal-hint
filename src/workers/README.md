@@ -37,6 +37,13 @@ Later prediction workers resolve an independently approved model pin and invoke
 the job's model fixed across retries and restore its verified prior pin after
 restart. Preserve candidate provenance and family failure reasons for 013/019;
 the predictor performs no fallback selection, publication or durable scheduling.
+
+Prompt 021 supplies `defineDailySelectionJob(service)` for the existing registry
+and `createDailySelectionTrigger` for an authenticated scheduler binding at
+`0 21 * * *` UTC. Preserve the original scheduled occurrence on every retry.
+The [daily-selection runbook](../../docs/daily-selection.md) owns manifest,
+reconciliation and explicit degradation/lifecycle inputs. Live activation still
+requires selected coverage/bounds and the later publication/locking/worker gates.
 See the [predictor runbook](../../docs/ai-predictor.md) for actual integration
 decisions still required before live use.
 
