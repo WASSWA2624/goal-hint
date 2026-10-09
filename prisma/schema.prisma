@@ -530,6 +530,32 @@ model RunFixture {
   @@unique([runId, rank])
 }
 
+// Append-only orchestration intent, dispatch boundaries and final operational receipt.
+model PredictionRefreshIntent {
+  jobId     String     @id @db.Char(64)
+  integrity String     @db.Char(64)
+  body      Json
+  job       DurableJob @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
+model PredictionRefreshStage {
+  jobId     String     @db.Char(64)
+  phase     String     @db.VarChar(16)
+  kind      String     @db.VarChar(16)
+  integrity String     @db.Char(64)
+  body      Json
+  job       DurableJob @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([jobId, phase, kind])
+}
+
+model PredictionRefreshOutcome {
+  jobId     String     @id @db.Char(64)
+  integrity String     @db.Char(64)
+  body      Json
+  job       DurableJob @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
 // Explicit input from lifecycle 024/operator authority; selection never detects postponement.
 model SelectionCycleEligibility {
   id              String          @id @db.Char(64)
@@ -741,6 +767,9 @@ model DurableJob {
   usage              DurableJobUsage[]
   selections         RunFixture[]
   publicationResults PredictionRefreshResult[]
+  refreshIntent      PredictionRefreshIntent?
+  refreshStages      PredictionRefreshStage[]
+  refreshOutcome     PredictionRefreshOutcome?
 
   @@unique([type, handlerVersion, idempotencyKey])
   @@unique([id, refreshRunId, refreshFixtureId, refreshCycleId], map: "DurableJob_selection_key")

@@ -141,6 +141,16 @@ export function createMysqlJobQueue(database: DatabaseRuntime): JobQueue {
     const { job, at } = await owned(transaction, lease);
     return finish(transaction, job, lease.attemptId, at, "completed", false, true);
   }
+  async function recordUsageInTransaction(transaction: JobTransaction, lease: JobLease, input: JobUsage) {
+    const usage = parseJob(usageInput, input), requestHash = jobFingerprint(usage);
+    const id = jobFingerprint([lease.attemptId, usage.requestReference, usage.phase]);
+    const { job, at } = await owned(transaction, lease);
+    const known = await transaction.durableJobUsage.findUnique({ where: { id } });
+    if (known) { if (known.requestHash !== requestHash) jobFail("conflicting-request"); return; }
+    await transaction.durableJobUsage.create({ data: { ...usage, id, jobId: job.id, attemptId: lease.attemptId,
+      version: job.version + 1, requestHash, recordedAt: new Date(at) } });
+    await event(transaction, job, "usage-recorded", null, at, lease.attemptId);
+  }
   return Object.freeze({
     withTransaction, enqueueInTransaction: enqueue, enqueue: (input) => withTransaction((write) => write(input)),
     async claim(ownerId, types) {
@@ -193,17 +203,9 @@ export function createMysqlJobQueue(database: DatabaseRuntime): JobQueue {
       if (reason === "completed" || typeof retryable !== "boolean") return jobFail("invalid-request");
       return transact(async (transaction) => { const { job, at } = await owned(transaction, lease); return finish(transaction, job, lease.attemptId, at, reason, retryable); });
     },
+    recordUsageInTransaction,
     async recordUsage(lease: JobLease, input: JobUsage) {
-      const usage = parseJob(usageInput, input), requestHash = jobFingerprint(usage);
-      const id = jobFingerprint([lease.attemptId, usage.requestReference, usage.phase]);
-      await transact(async (transaction) => {
-        const { job, at } = await owned(transaction, lease);
-        const known = await transaction.durableJobUsage.findUnique({ where: { id } });
-        if (known) { if (known.requestHash !== requestHash) jobFail("conflicting-request"); return; }
-        await transaction.durableJobUsage.create({ data: { ...usage, id, jobId: job.id, attemptId: lease.attemptId,
-          version: job.version + 1, requestHash, recordedAt: new Date(at) } });
-        await event(transaction, job, "usage-recorded", null, at, lease.attemptId);
-      });
+      return transact((transaction) => recordUsageInTransaction(transaction, lease, input));
     },
     inspect(id) { parseJob(jobHash, id); return transact((transaction) => load(transaction, id), true); },
     history(id, afterVersion = 0, limit = 30) {

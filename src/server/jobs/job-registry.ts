@@ -2,7 +2,7 @@ import "server-only";
 
 import type { z } from "zod";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
-import { jobFail, type JobEnvelope, type JobLease, type JobQueue, type JobReason, type JobUsage } from "./job-contract.ts";
+import { jobFail, type JobEnvelope, type JobLease, type JobQueue, type JobReason, type JobUsage, type StoredJob } from "./job-contract.ts";
 import { jobFingerprint, jobType, jobVersion, parseJob, parseJobEnvelope } from "./job-input.ts";
 
 export type JobOutcome = Readonly<{ status: "succeeded" }> | Readonly<{ status: "failed"; reason: Exclude<JobReason, "completed">; retryable: boolean }>;
@@ -16,17 +16,20 @@ export type JobDefinition = Readonly<{
   type: string; handlerVersion: number; parse(payload: unknown): unknown;
   eligible(payload: unknown, signal: AbortSignal): Promise<boolean>;
   handle(payload: unknown, context: JobHandlerContext): Promise<JobOutcome>;
+  settled?(job: StoredJob): Promise<void>;
 }>;
 export function defineJob<Payload>(input: Readonly<{
   type: string; handlerVersion: number; payload: z.ZodType<Payload>;
   eligible?: (payload: Payload, signal: AbortSignal) => boolean | Promise<boolean>;
   handle(payload: Payload, context: JobHandlerContext): Promise<JobOutcome>;
+  settled?: (job: StoredJob) => Promise<void>;
 }>): JobDefinition {
   parseJob(jobType, input.type); parseJob(jobVersion, input.handlerVersion);
   const parse = (payload: unknown) => freezeEvidence(parseJob(input.payload, payload));
   return Object.freeze({ type: input.type, handlerVersion: input.handlerVersion, parse,
     async eligible(payload: unknown, signal: AbortSignal) { return input.eligible ? await input.eligible(parse(payload), signal) === true : true; },
     handle: (payload: unknown, context: JobHandlerContext) => input.handle(parse(payload), context),
+    ...(input.settled ? { settled: input.settled } : {}),
   });
 }
 export function createJobRegistry(definitions: readonly JobDefinition[]) {

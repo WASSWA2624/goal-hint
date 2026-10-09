@@ -2200,3 +2200,69 @@ authority proves local failure behavior and grants no live operation permission.
 is implemented or ticked. Rollback disables bindings and preserves additive schema,
 canonical identities and immutable forecasts/schedules/evidence/audits/events;
 inspect actual DDL state and repair forward. Visual acceptance is not required.
+
+## Prompt 025 — Prediction refresh worker
+
+Implemented `dev-plan/025-prediction-refresh-worker.md` as an operator-bound
+durable job definition, composing the existing services without another forecast
+validation/publication path. Public routes remain stored-data consumers.
+
+### Changed files and behavior
+
+- `src/server/refresh/refresh-{contract,input,mysql-store,observation,service}.ts`:
+  sealed manifest/current fixture/cycle/run eligibility; immutable reviewed plan
+  and model pin; explicit total football and separate research/AI allocations;
+  bounded evidence, primary prediction, fallback and final observation phases;
+  lifecycle recheck and atomic publication; five operational outcomes and precise
+  phase reasons/cost summaries; published replay and terminal progress repair.
+- `prisma/schema.prisma`, matching snapshot and
+  `20261009153335_prediction_refresh_worker/migration.sql`: additive append-only
+  `PredictionRefreshIntent`, `PredictionRefreshStage`, `PredictionRefreshOutcome`,
+  job foreign keys, existing binary identity collation and JSON shape checks.
+- Evidence/predictor/fallback services accept parent cancellation workflows.
+  Evidence reports separate football/research usage. Fallback's shared pure
+  resolver preserves valid AI after an interrupted provider attempt. Football
+  fixture lookup accepts the existing workflow boundary for final status checks.
+- Job contracts/registry/worker/MySQL queue: transaction-aware usage recording and
+  an optional awaited settled hook. Stage completion and usage commit together;
+  replay adds no duplicate count. Selection progress updates only changed member
+  state projections.
+- `tests/prediction-refresh.test.mjs`, `.integration.mjs`,
+  `tests/helpers/refresh-fixtures.mjs` and the extended reusable MySQL pipeline
+  harness; `npm run test:refresh`; `docs/prediction-refresh-worker.md` and the
+  decision register. No frontend/UI change.
+
+### Verification
+
+Used bundled **Node.js 24.19.0 / npm 11.17.0**, with repository pins unchanged,
+and owned throwaway **MySQL Community Server 8.4.11**. All provider transports,
+credentials, policy approvals, observations and model outputs were synthetic.
+No live provider, installed database service or application database was used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:refresh` | **30 passed, 0 failed/skipped**: four cancellation/resolution units, two real MySQL harnesses and twenty-four end-to-end cases. Log: `.tmp/025-refresh-final.log`. |
+| Final usage rollback check | Re-ran the complete manifest-owned harness after adding failure injection: **19 passed, 0 failed/skipped**. Invalid usage rolls back the completed stage; published replay preserves one AI usage count. Log: `.tmp/025-atomic-usage.log`. |
+| AI/fallback behavior | Valid AI, invalid output, provider/AI outage, actual AI timeout, insufficient evidence, AI budget exhaustion, partial fallback, no supported source and fallback timeout passed. Valid AI survives fallback failure; provider forecasts remain outside primary input. Limited news does not force fallback; research and AI ledger summaries remain separate. |
+| Durability/concurrency | Immutable model/cost intent survives restart; an unfinished AI boundary never redispatches. A real cost-gateway dispatch interrupted by worker shutdown retains charged liability and falls back without a second AI call. Ambiguous publication response returns the original revision without new usage. Two workers claim one delivery. Append-only worker grants and invalid allocation identities/budgets/reserves are enforced. |
+| Lifecycle/age/progress | Fresh early play and an earlier kickoff whose cutoff has passed close before publication. Stale original status cannot authorize publication. A newer daily run supersedes a leased older member; old work is ineligible. Zero valid families retain the previous complete set with original evidence/generation/publication times. Terminal progress distinguishes queue completion from publication and repairs expired/unclaimed work. |
+| Affected MySQL regressions | Eight suites (cost, cutoff, selection, jobs, evidence, predictor, publication, lifecycle), concurrency two: **151 passed, 0 failed/skipped**. Fresh migrations and component drift checks passed. Log: `.tmp/025-regression.log`. |
+| Repository units | `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`: **818 cases, 817 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Log: `.tmp/025-unit.log`. |
+| Prisma, lint and types | Generation, schema validation, zero-warning lint and strict type-check passed; schema and snapshot match. Logs: `.tmp/025-schema.log`, `.tmp/025-lint.log`, `.tmp/025-typecheck.log`. |
+| Production build | `npm run build` passed: compilation, TypeScript and production page generation. Log: `.tmp/025-build.log`. |
+
+The synthetic timeout test was expanded to allow database reservation time before
+the transport timeout, avoiding an overloaded test host exercising a different
+earlier timeout boundary. This changes no production allowance. Migration
+collation was aligned with existing job keys before final fresh deployments.
+
+### Live blockers and handoff
+
+The worker definition is ready for a reviewed trusted binding. Existing provider
+coverage/quota and reuse rights, research provider/license, model/calibration and
+evaluation proof, rates and separate account/job budgets, freshness/conflict
+policies, workload and hosting/worker identity remain OP-07/14/19/21 live gates.
+No production behavior is enabled by synthetic tests. Rollback disables the
+binding and preserves additive tables and immutable forecasts/evidence/history;
+inspect DDL and repair forward. 026 polling, 027 settlement, 031 event consumption
+and 043 watchdog discovery remain separate prompts. No later prompt is ticked.

@@ -45,6 +45,7 @@ export type JobQueue = Readonly<{
   acknowledge(lease: JobLease): Promise<StoredJob>;
   retry(lease: JobLease, reason: JobReason, retryable: boolean): Promise<StoredJob>;
   recordUsage(lease: JobLease, usage: JobUsage): Promise<void>;
+  recordUsageInTransaction(transaction: JobTransaction, lease: JobLease, usage: JobUsage): Promise<void>;
   assertOwned(transaction: JobTransaction, lease: JobLease): Promise<number>;
   completeInTransaction(transaction: JobTransaction, lease: JobLease): Promise<StoredJob>;
   inspect(id: string): Promise<StoredJob | null>;

@@ -21,8 +21,10 @@ export type EvidenceServiceReason = "invalid-request" | "not-authorized" | "unav
   "conflicting-request" | "fixture-changed" | "reuse-not-permitted" | "collection-denied" | "snapshot-too-large";
 type ResearchDenialReason = Extract<ResearchEvidenceCollection, { status: "denied" }>["reason"];
 export type EvidenceCollectionIssue = Readonly<{ kind: "research"; reason: ResearchDenialReason }>;
+export type EvidenceCollectionUsage = Readonly<{ football: Readonly<{ requests: number; uncertain: boolean }>;
+  research: Readonly<{ requests: number; uncertain: boolean }> }>;
 export type EvidenceServiceResult = Readonly<{ status: "collected" | "reused"; snapshot: EvidenceSnapshot;
-  requestsDispatched: number; requestCountUnknown: boolean; collectionIssues: readonly EvidenceCollectionIssue[] }> |
+  requestsDispatched: number; requestCountUnknown: boolean; collectionIssues: readonly EvidenceCollectionIssue[]; usage: EvidenceCollectionUsage }> |
   Readonly<{ status: "denied"; reason: EvidenceServiceReason }>;
 type EvidenceStore = Readonly<{
   find(requestId: string): Promise<StoredEvidenceSnapshot | null>;
@@ -74,7 +76,7 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
   football: FootballCollector; research: ResearchCollector | null; clock?: Clock }>) {
   const clock = options.clock ?? systemClock;
   const inflight = new Map<string, Readonly<{ fingerprint: string; promise: Promise<EvidenceServiceResult> }>>();
-  async function execute(request: EvidenceCollectionRequest, fingerprint: string, startedAt: number): Promise<EvidenceServiceResult> {
+  async function execute(request: EvidenceCollectionRequest, fingerprint: string, startedAt: number, parent?: EvidenceWorkflow): Promise<EvidenceServiceResult> {
     const controller = new AbortController(), remainingMs = request.maxElapsedMs - (performance.now() - startedAt);
     if (remainingMs <= 0) return denied("timeout");
     let firstNow: number, lastNow: number, deadlineAt: EvidenceWorkflow["deadlineAt"];
@@ -89,6 +91,8 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
     // Drain an unused expiration when all synchronous work fails before its first wait.
     void expiration.catch(() => undefined);
     function timeCheck() {
+      parent?.check();
+      if (parent?.signal.aborted) throw new ServiceFailure("timeout");
       let now: number; try { now = utcInstantFromEpochMilliseconds(clock.now()); } catch { throw new ServiceFailure("unavailable"); }
       if (now < lastNow) throw new ServiceFailure("clock-regression");
       lastNow = now;
@@ -104,7 +108,7 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
       } catch { throw new ServiceFailure("not-authorized"); }
       timeCheck();
     }
-    const workflow: EvidenceWorkflow = Object.freeze({ signal: controller.signal, deadlineAt, check });
+    const workflow: EvidenceWorkflow = Object.freeze({ signal: parent ? AbortSignal.any([controller.signal, parent.signal]) : controller.signal, deadlineAt, check });
     // The final MySQL permission check also observes this deadline, so a late save rolls back.
     const authority: EvidenceAuthority = Object.freeze({
       authorize(context) { if (evidenceFingerprint(context) !== evidenceFingerprint(request.context)) throw new ServiceFailure("not-authorized"); check(); },
@@ -131,9 +135,11 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
           evidenceFingerprint(snapshot.policy) !== evidenceFingerprint(request.policy)) throw new ServiceFailure("conflicting-request");
         const checked = buildEvidenceSnapshot({ context: request.context, policy: request.policy, sources: snapshot.sources }, authority);
         if (evidenceFingerprint(eligibleBody(checked)) !== evidenceFingerprint(eligibleBody(snapshot))) throw new ServiceFailure("reuse-not-permitted");
-        check(); return Object.freeze({ status: "reused", snapshot, requestsDispatched: 0, requestCountUnknown: false, collectionIssues: Object.freeze([]) });
+        check(); return Object.freeze({ status: "reused", snapshot, requestsDispatched: 0, requestCountUnknown: false, collectionIssues: Object.freeze([]),
+          usage: { football: { requests: 0, uncertain: false }, research: { requests: 0, uncertain: false } } });
       }
       let sources: readonly EvidenceSource[] = request.cachedSources, requestsDispatched = 0, requestCountUnknown = false;
+      const usage = { football: { requests: 0, uncertain: false }, research: { requests: 0, uncertain: false } };
       // A null plan explicitly selects stored sources only; a supplied football plan retains its requested optional fields.
       if (request.footballPlan !== null) {
         const collection = await wait(() => options.football.collect(request.context, request.policy, request.footballPlan!, workflow));
@@ -141,6 +147,7 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
           typeof collection.requestCountUnknown !== "boolean" || !Array.isArray(collection.sources)) throw new ServiceFailure("unavailable");
         sources = [...sources, ...collection.sources]; requestsDispatched = collection.requestsDispatched;
         requestCountUnknown = collection.requestCountUnknown;
+        usage.football = { requests: collection.requestsDispatched, uncertain: collection.requestCountUnknown };
       }
       let snapshot = buildEvidenceSnapshot({ context: request.context, policy: request.policy, sources }, authority); check();
       const collectionIssues: EvidenceCollectionIssue[] = [];
@@ -152,6 +159,7 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
           if (![0, 1].includes(collection.requestsDispatched) || typeof collection.requestCountUnknown !== "boolean" ||
             !Array.isArray(collection.sources)) throw new ServiceFailure("unavailable");
           requestsDispatched += collection.requestsDispatched; requestCountUnknown ||= collection.requestCountUnknown;
+          usage.research = { requests: collection.requestsDispatched, uncertain: collection.requestCountUnknown };
           if (!Number.isSafeInteger(requestsDispatched)) throw new ServiceFailure("unavailable");
           if (collection.status === "denied") {
             if (!researchReasons.has(collection.reason) || collection.sources.length !== 0) throw new ServiceFailure("unavailable");
@@ -165,7 +173,7 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
       const stored = await wait(() => options.store.save(request.requestId, fingerprint, snapshot, authority));
       const persisted = parseEvidenceSnapshot(stored.snapshot);
       if (stored.requestFingerprint !== fingerprint || persisted.hash !== snapshot.hash) throw new ServiceFailure("conflicting-request");
-      check(); return freezeEvidence({ status: "collected", snapshot: persisted, requestsDispatched, requestCountUnknown, collectionIssues });
+      check(); return freezeEvidence({ status: "collected", snapshot: persisted, requestsDispatched, requestCountUnknown, collectionIssues, usage });
     } catch (error) {
       controller.abort();
       if (error instanceof ServiceFailure) return denied(error.reason);
@@ -178,13 +186,13 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
       return denied("unavailable");
     } finally { controller.abort(); if (timer !== undefined) clearTimeout(timer); }
   }
-  return Object.freeze({ collect(input: unknown): Promise<EvidenceServiceResult> {
+  return Object.freeze({ collect(input: unknown, workflow?: EvidenceWorkflow): Promise<EvidenceServiceResult> {
     const startedAt = performance.now();
     let request: EvidenceCollectionRequest;
     try { request = parseEvidenceCollectionRequest(input); } catch { return Promise.resolve(denied("invalid-request")); }
     const fingerprint = evidenceCollectionFingerprint(request), running = inflight.get(request.requestId);
     if (running) return running.fingerprint === fingerprint ? running.promise : Promise.resolve(denied("conflicting-request"));
-    const promise = execute(request, fingerprint, startedAt).finally(() => { if (inflight.get(request.requestId)?.promise === promise) inflight.delete(request.requestId); });
+    const promise = execute(request, fingerprint, startedAt, workflow).finally(() => { if (inflight.get(request.requestId)?.promise === promise) inflight.delete(request.requestId); });
     inflight.set(request.requestId, { fingerprint, promise }); return promise;
   } });
 }

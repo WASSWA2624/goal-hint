@@ -437,9 +437,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     return keysAllowed(query, ["competitionId", "season", ...extraKeys]) && positive(query.competitionId) && positive(query.season) && query.season <= 9999
       ? { league: String(query.competitionId), season: String(query.season) } : null;
   }
-  const fixtureQueries = (query: FixtureQuery, bounds: ApiFootballBounds) => {
+  const fixtureQueries = (query: FixtureQuery, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => {
     const params = queryParams(query);
-    return run("fixtures", params ? [params] : null, bounds, normalizeFixture, query?.fixtureId === undefined ? undefined : [query.fixtureId]);
+    return run("fixtures", params ? [params] : null, bounds, normalizeFixture, query?.fixtureId === undefined ? undefined : [query.fixtureId], workflow);
   };
   return Object.freeze({
     evidence: Object.freeze({

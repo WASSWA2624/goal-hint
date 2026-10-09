@@ -35,7 +35,8 @@ const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvide
   'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballFixtureAudit','FootballImport','FootballIdentityReview'];
 const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEvidenceSnapshotSource','ModelVersion',
   'PredictionSet','MarketPrediction','PredictionSchedule','PredictionAudit','DailyRunManifest',
-  'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent','PredictionCycleOperation','FixtureLifecycleObservation'];
+  'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent','PredictionCycleOperation','FixtureLifecycleObservation',
+  'PredictionRefreshIntent','PredictionRefreshStage','PredictionRefreshOutcome','DurableJobUsage'];
 const target = (state) => ({ fixtureId: state.fixture.id, cycleId: state.cycle.id });
 
 export async function withPredictionPipeline(t, operation) {
@@ -83,21 +84,22 @@ export async function withPredictionPipeline(t, operation) {
     const first = locker(), second = locker(b), publisher = createRevisionPublicationService({ database: a, queue,
       policy: publicationPolicy(), authority: publicationAuthority() });
     const cohorts = new Map();
-    async function cohort(date = '2026-10-09', cutoff = first) {
+    async function cohort(date = '2026-10-09', cutoff = first, options = {}) {
       if (cohorts.has(date)) return cohorts.get(date);
-      const type = `test.cutoff-refresh-${date}`, rawPolicy = selectionPolicy(); rawPolicy.refresh = { ...rawPolicy.refresh, type };
-      const rows = Array.from({ length: 30 }, (_, index) => catalogFixture(3000 + index, {
+      const type = options.refresh?.type ?? `test.cutoff-refresh-${date}`, rawPolicy = selectionPolicy(); rawPolicy.refresh = { ...rawPolicy.refresh, type, ...options.refresh };
+      const rows = options.rows ?? Array.from({ length: 30 }, (_, index) => catalogFixture(3000 + index, {
         kickoff: index < 4 ? new Date(PUBLICATION_NOW + 301_000).toISOString()
           : index === 4 ? '2026-10-09T21:03:00Z' : '2026-10-12T12:00:00Z' }));
       const provider = createSyntheticCatalogAdapter({ respond: (url) => catalogResponse(url, rows.filter((row) => getReportingDate(Date.parse(row.fixture.date)) === url.searchParams.get('date'))) });
       const importer = createFootballCatalogImporter({ adapter: provider.adapter, store: catalog, authority: catalogSelectionAuthority, clock: provider.clock });
       const store = createMysqlDailySelectionStore(a, queue), service = createDailySelectionService({ policy: rawPolicy,
         authority: selectionAuthority(), store, importer, cutoff });
-      at = CATALOG_NOW;
+      at = options.selectionAt ?? CATALOG_NOW;
+      provider.clock.value = at;
       let selected;
-      try { selected = await service.run(SELECTION_FOR + (Number(date.slice(-2)) - 9) * 86_400_000); } finally { at = PUBLICATION_NOW; }
+      try { selected = await service.run(SELECTION_FOR + (Number(date.slice(-2)) - 9) * 86_400_000); } finally { at = options.afterSelectionAt ?? PUBLICATION_NOW; }
       const manifest = (await store.inspect(selected.runId)).manifest, leases = new Map();
-      for (let index = 0; index < selected.total; index++) {
+      for (let index = 0; options.claim !== false && index < selected.total; index++) {
         const lease = await queue.claim(evidenceHash(`cutoff-owner:${type}:${index}`), [{ type, handlerVersion: 1 }]);
         assert.ok(lease); leases.set(lease.job.envelope.refresh.fixtureId, lease);
       }

@@ -269,8 +269,9 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           const state = entry.job.state;
           if (state === "succeeded") completed++;
           if (["succeeded", "failed", "expired"].includes(state)) terminal++;
-          await tx.runFixture.update({ where: { runId_fixtureId_cycleId: { runId, fixtureId: entry.fixtureId, cycleId: entry.cycleId } },
-            data: { jobState: state, terminalReason: entry.job.terminalReason } });
+          if (entry.jobState !== state || entry.terminalReason !== entry.job.terminalReason)
+            await tx.runFixture.update({ where: { runId_fixtureId_cycleId: { runId, fixtureId: entry.fixtureId, cycleId: entry.cycleId } },
+              data: { jobState: state, terminalReason: entry.job.terminalReason } });
         }
         await tx.dailyRun.update({ where: { id: runId }, data: { completedJobs: completed, terminalJobs: terminal } });
         return freezeEvidence({ total: row.totalJobs, completed, terminal });

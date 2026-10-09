@@ -102,6 +102,14 @@ export function createJobWorker(input: Readonly<{ queue: JobQueue; registry: Job
       return lease !== null;
     } finally {
       clearTimeout(timeout); clearTimeout(heartbeat); controller.abort();
+      if (lease) {
+        // Durable completion is authoritative. A repairable progress projection
+        // failure must never redispatch an already completed paid job.
+        try {
+          const definition = input.registry.find(lease.job.envelope.type, lease.job.envelope.handlerVersion);
+          if (definition?.settled) { const job = await input.queue.inspect(lease.jobId); if (job) await definition.settled(job); }
+        } catch { emit("unavailable", lease); }
+      }
       stopSignal?.removeEventListener("abort", shutdown); running = false;
     }
   }

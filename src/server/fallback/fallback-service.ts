@@ -51,7 +51,7 @@ export function createFallbackService(options: Readonly<{
   const inflight = new Map<string, Readonly<{ fingerprint: string; promise: Promise<FallbackRefreshResult> }>>();
   const denied = (reason: FallbackRefreshReason, requestsDispatched = 0, requestCountUnknown = false): FallbackRefreshResult =>
     Object.freeze({ status: "denied", reason, requestsDispatched, requestCountUnknown });
-  async function execute(request: FallbackRefreshRequest, enteredNow: number, startedAt: number): Promise<FallbackRefreshResult> {
+  async function execute(request: FallbackRefreshRequest, enteredNow: number, startedAt: number, parent?: ApiFootballFallbackWorkflow): Promise<FallbackRefreshResult> {
     const cutoff = getPublicationDeadline(request.expected.context.kickoffAt);
     if (enteredNow >= cutoff) return denied("ineligible-refresh");
     const deadlineAt = utcInstantFromEpochMilliseconds(Math.min(enteredNow + request.maxElapsedMs, cutoff,
@@ -66,6 +66,8 @@ export function createFallbackService(options: Readonly<{
     }, remainingMs); });
     void expiration.catch(() => undefined);
     function timeCheck() {
+      parent?.check();
+      if (parent?.signal.aborted) throw new RefreshFailure("timeout");
       let current: number; try { current = now(); } catch { throw new RefreshFailure("unavailable"); }
       if (current < lastNow) throw new RefreshFailure("clock-regression");
       lastNow = current;
@@ -83,7 +85,7 @@ export function createFallbackService(options: Readonly<{
       } catch { throw new RefreshFailure("not-authorized"); }
       timeCheck();
     }
-    const workflow: ApiFootballFallbackWorkflow = Object.freeze({ signal: controller.signal, deadlineAt, check });
+    const workflow: ApiFootballFallbackWorkflow = Object.freeze({ signal: parent ? AbortSignal.any([controller.signal, parent.signal]) : controller.signal, deadlineAt, check });
     async function wait<Value>(operation: () => Promise<Value>): Promise<Value> {
       check();
       const pending = Promise.resolve().then(() => { check(); return operation(); });
@@ -152,14 +154,25 @@ export function createFallbackService(options: Readonly<{
       return denied("unavailable", requestsDispatched, requestCountUnknown || pendingFallback);
     } finally { controller.abort(); if (timer !== undefined) clearTimeout(timer); }
   }
-  return Object.freeze({ resolve(value: unknown): Promise<FallbackRefreshResult> {
+  return Object.freeze({
+    /** Recovery/timeout may discard the provider attempt while preserving independently valid AI groups. */
+    resolveWithoutProvider(value: unknown): FallbackRefreshResult {
+      try {
+        const request = parseFallbackRefreshRequest(value);
+        if (synchronous(options.verifyRequest(request)) !== true) return denied("not-authorized");
+        const result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, now: now(),
+          provider: { status: "denied", reason: "provider-unavailable", requestsDispatched: 0, requestCountUnknown: true } }, options.authority);
+        return freezeEvidence({ ...result, requestsDispatched: 0, requestCountUnknown: true });
+      } catch { return denied("unavailable", 0, true); }
+    },
+    resolve(value: unknown, workflow?: ApiFootballFallbackWorkflow): Promise<FallbackRefreshResult> {
     const startedAt = performance.now();
     let request: FallbackRefreshRequest, enteredNow: number;
     try { enteredNow = now(); request = parseFallbackRefreshRequest(value); } catch { return Promise.resolve(denied("invalid-request")); }
     const fingerprint = evidenceFingerprint(request), running = inflight.get(request.requestId);
     if (running) return running.fingerprint === fingerprint ? running.promise : Promise.resolve(denied("conflicting-request"));
     if (inflight.size >= options.maxInflight) return Promise.resolve(denied("capacity-exhausted"));
-    const promise = execute(request, enteredNow, startedAt).finally(() => {
+    const promise = execute(request, enteredNow, startedAt, workflow).finally(() => {
       if (inflight.get(request.requestId)?.promise === promise) inflight.delete(request.requestId);
     });
     inflight.set(request.requestId, { fingerprint, promise }); return promise;

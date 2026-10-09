@@ -71,7 +71,7 @@ export function createPredictorService(options: Readonly<{
   const denial = (reason: PredictorReason, dispatched: 0 | 1 = 0, unknown = false, markets?: MarketSnapshot): PredictorResult =>
     freezeEvidence({ status: "denied", reason, requestsDispatched: dispatched, requestCountUnknown: unknown,
       ...(markets === undefined ? {} : { markets }) });
-  async function execute(input: PredictorRequest, startedAt: number, enteredNow: number): Promise<PredictorResult> {
+  async function execute(input: PredictorRequest, startedAt: number, enteredNow: number, parent?: CostDispatchWorkflow): Promise<PredictorResult> {
     let lastNow = enteredNow, model: ModelVersion | undefined, prompt: BuiltPredictorPrompt | undefined;
     let dispatched: 0 | 1 = 0, countUnknown = false, adapterPending = false;
     const controller = new AbortController();
@@ -87,6 +87,8 @@ export function createPredictorService(options: Readonly<{
     }, remainingMs); });
     void expiration.catch(() => undefined);
     function timeCheck() {
+      parent?.check();
+      if (parent?.signal.aborted) throw new PredictorFailure("timeout");
       let current: number; try { current = now(); } catch { throw new PredictorFailure("unavailable"); }
       if (current < lastNow) throw new PredictorFailure("clock-regression");
       lastNow = current;
@@ -105,7 +107,7 @@ export function createPredictorService(options: Readonly<{
       } catch { throw new PredictorFailure("not-authorized"); }
       timeCheck();
     }
-    const workflow: CostDispatchWorkflow = Object.freeze({ signal: controller.signal, deadlineAt, check });
+    const workflow: CostDispatchWorkflow = Object.freeze({ signal: parent ? AbortSignal.any([controller.signal, parent.signal]) : controller.signal, deadlineAt, check });
     const evidenceAuthority: EvidenceAuthority = Object.freeze({
       authorize(context) { if (evidenceFingerprint(context) !== evidenceFingerprint(input.snapshot.context)) throw new Error(); check(); },
       verifyContext: (context) => options.evidenceAuthority.verifyContext(context),
@@ -174,14 +176,14 @@ export function createPredictorService(options: Readonly<{
       return denial("unavailable", dispatched, countUnknown || adapterPending);
     } finally { controller.abort(); if (timer !== undefined) clearTimeout(timer); }
   }
-  return Object.freeze({ predict(value: unknown): Promise<PredictorResult> {
+  return Object.freeze({ predict(value: unknown, workflow?: CostDispatchWorkflow): Promise<PredictorResult> {
     const startedAt = performance.now();
     let input: PredictorRequest, enteredNow: number;
     try { enteredNow = now(); input = parsePredictorRequest(value); } catch { return Promise.resolve(denial("invalid-request")); }
     const fingerprint = evidenceFingerprint(input), running = inflight.get(input.pin.invocationId);
     if (running) return running.fingerprint === fingerprint ? running.promise : Promise.resolve(denial("conflicting-invocation"));
     if (inflight.size >= options.maxInflight) return Promise.resolve(denial("capacity-exhausted"));
-    const promise = execute(input, startedAt, enteredNow).finally(() => {
+    const promise = execute(input, startedAt, enteredNow, workflow).finally(() => {
       if (inflight.get(input.pin.invocationId)?.promise === promise) inflight.delete(input.pin.invocationId);
     });
     inflight.set(input.pin.invocationId, { fingerprint, promise }); return promise;

@@ -1829,3 +1829,54 @@ commit. Rollback disables bindings and preserves schema and immutable history;
 inspect actual DDL state and repair forward. OP-07/14/19/21, real provider rights,
 retention/conflict/freshness approval, budgets, model quality and workload/hosting
 remain live gates. No UI or provider requests are introduced.
+
+## Prompt 025 — One manifest-owned refresh orchestration
+
+Use `createPredictionRefreshService` as an existing durable-worker job definition.
+Verify the sealed manifest and exact entry/envelope/job, canonical fixture/team
+identity, open cycle, schedule, current window, cutoff and ordered run before
+outbound work. Persist an immutable plan/model pin once per job. Reviewed server
+configuration supplies explicit evidence/model, separate research/AI account and
+job allocations, total football request capacity, phase deadlines, fallback and
+publication reserves and final-status freshness. No live choices are defaulted.
+
+Reuse the evidence service, primary predictor, fallback service and atomic
+publication service as the only forecast path. Provider forecasts remain outside
+AI input. A timeout/interrupted provider attempt uses the shared fallback resolver
+to preserve independent valid AI groups; match result and double chance retain
+one owner. Missing news alone follows the approved evidence threshold. Never
+copy previous markets into a partially supported replacement.
+
+Store sealed, append-only intent, started/completed phase boundaries and final
+operational outcomes. A started boundary without a completed receipt never
+authorizes another dispatch in that phase. Recovery uses original evidence,
+request IDs, cost policy, model configuration and timestamps. Potentially billable
+attempts retain the existing cost ledger liability, including later receipt
+reconciliation. Save phase completion and source-specific usage in one queue-owned
+transaction so replay cannot duplicate counts or leave a completed stage without
+its usage. Existing account/category locks and nearest-kickoff priority remain
+authoritative; all external I/O stays outside database transactions.
+
+Immediately before publication, obtain a bounded original fixture observation,
+route it through lifecycle handling and recheck freshness/status/schedule/cycle.
+Publication independently checks all invariants inside its existing transaction.
+An already published refresh recovers the original revision before consulting
+eligibility or current configuration. An empty valid snapshot uses existing
+retain-previous/unavailable rules and preserves previous age. Interrupted
+evidence/status acquisition fails conservatively rather than inventing eligibility.
+
+Queue acknowledgement and progress are repairable projections of the immutable
+operational/publication receipts. An optional awaited `settled` job hook runs after
+acknowledgement or failure; hook errors never change a committed queue result.
+`reconcileRun` repairs terminal receipts and aggregates, including pre-claim expiry
+and a crash before progress recording. Completion means every selected job is
+terminal, distinct from every job publishing a forecast.
+
+The additive InnoDB migration uses existing binary identity collation, foreign
+keys, JSON seals and shape checks; worker grants on new tables are SELECT/INSERT
+only. Disable the trusted binding for rollback and preserve immutable history;
+inspect actual DDL state and repair forward. Existing OP-07/14/19/21 rights,
+coverage, model/evaluation, budgets/rates, freshness and hosting/binding evidence
+remain activation gates. Synthetic MySQL/transport checks do not grant live
+permission. No polling, settlement, visitor-triggered AI or new manifest members
+are introduced.
