@@ -11,7 +11,7 @@ import { createMysqlPredictionHistoryStore } from "./history-mysql-store.ts";
 import { historyHash, historyId, historyVersion } from "./history-input.ts";
 import { historyTime, storedCycle, storedRevision } from "./history-read.ts";
 import { ScheduleLifecycleError, lifecycleFail, type LifecycleAuthority, type LifecycleInput, type LifecycleObservation, type LifecycleReceipt } from "./lifecycle-contract.ts";
-import { parseLifecycle, parseLifecycleInput, parseLifecyclePolicy } from "./lifecycle-input.ts";
+import { lifecycleObservationSchema, parseLifecycle, parseLifecycleInput, parseLifecyclePolicy } from "./lifecycle-input.ts";
 import { lifecycleContentHash, lifecycleDecision } from "./lifecycle-policy.ts";
 import { storedLifecycleReceipt } from "./lifecycle-read.ts";
 import { recordPublicationBarrier } from "./publication-barrier.ts";
@@ -41,9 +41,9 @@ export function createScheduleLifecycleService(options: Readonly<{
       checked(authority.verifyObservation(value), true);
     } catch { return lifecycleFail("unauthorized"); }
   }
-  async function ingest(input: LifecycleInput, existingTransaction?: Transaction,
+  async function ingest(input: LifecycleObservation, existingTransaction?: Transaction,
     canonical?: Readonly<{ apply(): Promise<unknown>; retain(): Promise<unknown> }>): Promise<LifecycleReceipt> {
-    const observation = parseLifecycleInput(input), id = evidenceFingerprint(observation);
+    const observation = parseLifecycle(lifecycleObservationSchema, input), id = evidenceFingerprint(observation);
     let failure: unknown;
     try { return await history.withFixtureTransaction(observation.fixtureId, async (writer, tx) => {
       try {
@@ -184,10 +184,12 @@ export function createScheduleLifecycleService(options: Readonly<{
   }
   const coordinateFixtureMutation: CatalogMutationCoordinator = async (mutation) => {
     if (!mutation.before || !mutation.observation) { await mutation.apply(); return; }
-    await ingest({ fixtureId: mutation.before.id, fixture: mutation.observation, actualStartedAt: null,
-      actor: "catalog-schedule-lifecycle", evidenceRef: mutation.evidenceRef! }, mutation.transaction, mutation);
+    await ingest(parseLifecycleInput({ fixtureId: mutation.before.id, fixture: mutation.observation, actualStartedAt: null,
+      actor: "catalog-schedule-lifecycle", evidenceRef: mutation.evidenceRef! }), mutation.transaction, mutation);
   };
-  return Object.freeze({ observe: (input: LifecycleInput) => ingest(input), coordinateFixtureMutation,
+  return Object.freeze({ observe: (input: LifecycleInput) => ingest(parseLifecycleInput(input)), coordinateFixtureMutation,
+    /** Private durable-ingestion boundary; the enclosing caller owns rollback. */
+    observeProjection: (input: LifecycleObservation, transaction: Transaction) => ingest(input, transaction),
     receipt(id: string) { parseLifecycle(historyHash, id); return database.transaction((tx) => storedLifecycleReceipt(tx, id)); },
     history(fixtureId: string, limit = 100) {
       parseLifecycle(historyId, fixtureId); parseLifecycle(historyVersion.max(100), limit);

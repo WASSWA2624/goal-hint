@@ -1880,3 +1880,64 @@ coverage, model/evaluation, budgets/rates, freshness and hosting/binding evidenc
 remain activation gates. Synthetic MySQL/transport checks do not grant live
 permission. No polling, settlement, visitor-triggered AI or new manifest members
 are introduced.
+
+## Prompt 026 — Shared fixture/result observations
+
+Implemented locally on **9 October 2026 EAT**. The
+[result synchronization contract](fixture-result-sync.md) defines binding,
+cadence, immutable responses/results, event semantics, grants and recovery.
+
+One continuous worker holds the existing provider account's renewable fenced
+lease. Use database time and transactional ownership checks for persistence,
+bounded adapter workflows and monotonic elapsed guards for dispatch. Reserve
+cadence before I/O; persist schedules/backoff across process death. Cold starts
+serialize against the permanent account row before lease insertion to avoid
+INSERT IGNORE lock upgrades. Keep provider I/O outside database transactions.
+
+Share the all-live response at 15 seconds during an explicitly approved approach
+and active window. Current EAT date synchronization runs every 60 seconds and
+detects resumption. Validate date boundaries and actual paging through the
+existing adapter; unsupported fixture pagination remains incomplete. Batch
+missing-live/cross-midnight IDs in groups of at most 20, excluding freshly
+observed canonical records. Historical final checks run before optional feeds;
+IDs and in-horizon finals use results-cutoff priority. Existing limiter caps,
+reserve, in-flight deduplication and authorized fresh cache reuse govern every
+request and retry. Failure backoff persists and never spends past the cap.
+
+Polling policy requires explicit coverage, approachMs, activeWindowMs, finite
+unresolved/corrections tiers, request/response bounds, lease and failure bounds.
+No live values are inferred. Tier boundaries are exclusive and intervals strictly
+increase from at least 60 seconds. Unresolved tier age begins after the active
+window from kickoff/first tracking; correction age begins at the first observed
+final, including original catalog observations. Corrections and restarts cannot
+reset this anchor. Record polling-horizon-exhausted without deleting or resolving
+the fixture. Approved real horizons, retention, rights, batching evidence,
+coverage/account proof, lifecycle policy and hosting/binding remain live gates.
+
+Persist sealed normalized ResultSyncBatch responses before applying them. Recover
+all pending batches with original clocks before new dispatch; a changed policy
+hash requires reviewed configuration. Apply each fixture under the existing
+provider/fixture transaction and lifecycle service. ResultProviderObservation
+retains unchanged/stale/conflicting evidence with same-fixture lifecycle foreign
+keys. FixtureResult appends material status/score/timing snapshots and predecessor
+links. Keep verified regulation separate from reported goals, extra time and
+penalties; missing regulation remains unresolved. Unchanged retrieval updates
+actual lastSyncAt without inventing new generation or result timestamps. An exact
+old lifecycle replay retains its original receipt outcome; result application
+also checks the current lifecycle/canonical cursor so an originally accepted
+cached response cannot regress newer scores.
+
+Material result revisions advance the shared fixture dataVersion and emit
+PredictionChangeEvent(kind=fixture-result, fixtureResultId). The composite
+fixture/version FK and exactly-one-binding shape check extend existing refresh,
+cycle and lifecycle events. Lifecycle and result effects commit together and may
+produce separate cursor versions. Consumers must be idempotent and read coherent
+projections. 027 owns settlement against immutable locked picks; 031 owns event
+delivery/acknowledgement and cache invalidation. No AI, refresh enqueue, manifest
+mutation or locked forecast rewrite is introduced.
+
+New tables use InnoDB and binary identity collation, with quota-account FK columns
+matching the existing account collation. Application grants retain append-only
+results/observations and response bodies; only response completion and mutable
+lease/age projections need UPDATE. Stop the binding for rollback and retain the
+additive schema and immutable evidence; inspect DDL state and repair forward.

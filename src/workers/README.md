@@ -17,6 +17,13 @@ schedule is registered by default. Read the
 [queue/runbook](../../docs/durable-jobs.md) for ownership, fallback deadlines,
 idempotency, least privilege and the unresolved hosting/identity deployment gates.
 
+Prompt 026 adds `npm run worker:results -- --binding /absolute/path/to/trusted-binding.mjs`
+for one continuous account-leased poller. Its `createResultSyncBinding` factory
+supplies worker authorization and constructs the shared result service. Read the
+[result sync runbook](../../docs/fixture-result-sync.md) for required horizons,
+provider/limiter/lifecycle composition, response replay and grants. No production
+polling binding or permissive configuration is registered by default.
+
 Later research/prediction workers must reuse `createPolicyCostService` and
 `createCostGateway` from the server cost-control boundary. Stable work identities
 and explicit joint allocations preserve job ceilings across retries; account

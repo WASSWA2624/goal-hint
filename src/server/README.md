@@ -73,10 +73,16 @@ separate operations.
 
 `createScheduleLifecycleService` consumes attributable normalized provider
 observations through the [schedule lifecycle contract](../../docs/schedule-lifecycle.md).
-Bind its coordinator to catalog imports and use `observe` from future polling.
+Bind its coordinator to catalog imports and use `observe` for normalized inputs.
 Kickoff corrections, postponement/void transitions, early-start proof, conflict
 holds and next-selection handoffs share publication/cutoff synchronization. No
 new prediction work or committed membership is created by an observation.
+
+`results/` supplies one account-leased continuous poller and durable normalized
+result observations. Reuse the provider adapter/limiter and lifecycle service;
+public reads never invoke it. The [result sync contract](../../docs/fixture-result-sync.md)
+defines explicit horizons, recovery, fixture versions and result events. Live
+activation requires a reviewed operator binding and approved operating settings.
 
 `jobs/` provides the shared MySQL queue, typed registry, scoped transactional
 enqueue, renewable fenced leases and private trigger adapter. Use the

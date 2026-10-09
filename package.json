@@ -46,6 +46,8 @@
     "test:lifecycle": "node --conditions=react-server --test tests/schedule-lifecycle.test.mjs tests/schedule-lifecycle.integration.mjs",
     "test:refresh": "node --conditions=react-server --test tests/prediction-refresh.test.mjs tests/prediction-refresh.integration.mjs",
     "worker:jobs": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/jobs.ts",
+    "worker:results": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/results.ts",
+    "test:results": "node --conditions=react-server --test tests/result-sync.test.mjs tests/result-sync.integration.mjs",
     "test": "node --conditions=react-server --test tests/*.test.mjs",
     "check": "npm run db:generate && npm run db:validate && npm run lint && npm run typecheck && npm test && npm run build"
   },

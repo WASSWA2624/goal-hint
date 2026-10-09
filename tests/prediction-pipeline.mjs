@@ -36,7 +36,8 @@ const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvide
 const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEvidenceSnapshotSource','ModelVersion',
   'PredictionSet','MarketPrediction','PredictionSchedule','PredictionAudit','DailyRunManifest',
   'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent','PredictionCycleOperation','FixtureLifecycleObservation',
-  'PredictionRefreshIntent','PredictionRefreshStage','PredictionRefreshOutcome','DurableJobUsage'];
+  'PredictionRefreshIntent','PredictionRefreshStage','PredictionRefreshOutcome','DurableJobUsage',
+  'FixtureResult','ResultProviderObservation'];
 const target = (state) => ({ fixtureId: state.fixture.id, cycleId: state.cycle.id });
 
 export async function withPredictionPipeline(t, operation) {
@@ -68,6 +69,10 @@ export async function withPredictionPipeline(t, operation) {
       appendOnly.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') + `
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureLifecycleState TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ResultPollerLease TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureResultState TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE (completedAt) ON goal_hint_test.ResultSyncBatch TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ApiQuotaAccount TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DailyRun TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (finishedAt, failure) ON goal_hint_test.DailyRunImport TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (jobId, jobState, terminalReason) ON goal_hint_test.RunFixture TO 'cutoff_app'@'127.0.0.1';

@@ -2266,3 +2266,84 @@ No production behavior is enabled by synthetic tests. Rollback disables the
 binding and preserves additive tables and immutable forecasts/evidence/history;
 inspect DDL and repair forward. 026 polling, 027 settlement, 031 event consumption
 and 043 watchdog discovery remain separate prompts. No later prompt is ticked.
+
+## Prompt 026 — Fixture and result synchronization
+
+Implemented and locally verified on **9 October 2026 EAT**. Prompt 026's
+implementation and acceptance checks are complete; its tracker row is ticked.
+Live activation still requires the operating inputs below. No later prompt is
+implemented or ticked.
+
+### Changed files and behavior
+
+- `src/server/results/result-sync-{contract,policy,mysql-store,service,command}.ts`:
+  one renewable account-wide fenced lease; persisted 15-second live/60-second
+  EAT-date cadence; idle pause/resume; locally filtered coverage; fresh-record
+  deduplication; at-most-20-ID missing-live/cross-midnight batches; finite slower
+  unresolved/correction tiers; persisted quota/outage backoff and delay reads.
+- `prisma/schema.prisma`, matching snapshot and
+  `20261009164940_fixture_result_sync/migration.sql`: additive InnoDB lease,
+  sealed response batch, result state, append-only result and provider observation
+  tables; same-fixture lifecycle/result foreign keys and four-way event binding.
+  Result revisions advance the shared fixture version and retain predecessors,
+  original clocks, separately verified regulation and extra-time/penalty totals.
+- Existing provider live/date/ID methods accept the shared cancellation/dispatch
+  workflow. Lifecycle exposes a validated transaction-scoped projection entry
+  point, keeping schedule/cutoff/result application under the same fixture lock.
+  No additional prediction validation/publication path is introduced.
+- `src/workers/results.ts`, `worker:results` and `test:results` package scripts;
+  result unit/integration suites and synthetic helper; extended reusable MySQL
+  pipeline grants; server/worker READMEs, the decision register and
+  [result synchronization runbook](fixture-result-sync.md).
+
+Responses commit before application. Recovery drains pending batches before new
+dispatch and resumes partial application per fixture without duplicate results
+or events. Original accepted lifecycle receipts cannot apply old cached scores
+over a newer cursor. Known catalog final timestamps anchor correction horizons;
+new retrievals and corrections cannot restart them. Exhaustion retains visible
+unresolved state. Forecast payloads, locked references and committed manifests
+remain immutable; polling does not enqueue refresh jobs or call AI.
+
+### Verification
+
+Used the pinned **Node.js 24.18.1 / npm 11.16.0** and owned throwaway
+**MySQL Community Server 8.4.11** via MYSQL_TEST_SERVER_BINARY. Provider transports,
+clocks, account evidence, score/mapping approvals and policies are synthetic.
+No live provider, application database or installed database service was used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:results` | **25 passed, 0 failed/skipped**: five units, a genuine MySQL harness and nineteen substantive database cases. Final log: `.tmp/026-results-final.log`. |
+| Cadence/ownership | Controlled exact 15s/60s boundaries, idle pause/resume, graceful restart without duplicate polls, six competing cold-start owners, exact lease expiry takeover, stale renew/release fencing and twenty concurrent ticks passed. Late in-flight old-owner responses cannot persist. |
+| Cross-midnight/missing data | Forty-six fixtures use **20/20/6** ID groups; already refreshed records avoid ID work. Missing live/ID entries preserve live status and explicit missing reasons. Outside-window unresolved fixtures slow down and remain stored after their polling horizon. |
+| Result integrity/recovery | Unverified regulation remains unknown despite extra-time/shootout totals. Verification and corrections append predecessor-linked versions/events. Unchanged results keep original observation/update clocks while actual sync advances. Saved-response and partial-application interruption recover without another fetch. Stale, conflicting and originally accepted cached observations cannot roll back newer scores. |
+| Quota/outages | The real shared limiter denies optional work at the essential reserve and permits one final ID batch before stopping exactly at **120,000** accounted requests. No cap excess occurred. Provider failures back off across restart while stored data remains readable. Unexpected pagination/date-boundary rows do not overwrite fixtures. |
+| Forecast invariants | Polling early play closes through lifecycle/cutoff handling; later final corrections retain the exact locked revision, picks, payload and manifest. Refresh job count is unchanged. The synthetic transport accepts only fixture endpoints; no AI calls occur. |
+| Migration/permissions | Fresh deployment and `db:verify` passed without drift. New tables use InnoDB; binary identities and quota-account FK collation agree. Result/observation/body UPDATE and DELETE are denied. Invalid unbound result events are rejected. |
+| Affected database regressions | Eight suites (catalog, cutoff, selection, jobs, refresh, quota, publication, lifecycle), concurrency two: **171 passed, 0 failed/skipped**. Log: `.tmp/026-regression.log`. |
+| Repository units | `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`: **823 cases, 822 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Log: `.tmp/026-unit.log`. |
+| Schema, lint and types | Prisma format/generation/validation and migration drift check passed; schema/snapshot match. Final `npm run lint` and `npm run typecheck` passed. Logs: `.tmp/026-lint.log`, `.tmp/026-typecheck.log`. |
+| Production build | Final `npm run build` passed: compilation, strict TypeScript and page generation. Log: `.tmp/026-build.log`. |
+
+Initial acceptance exposed a quota-account FK collation mismatch and concurrent
+first-lease insertion lock upgrades. The migration now matches the existing
+account columns, and acquisition locks the permanent account row before insert.
+Controlled clock jumps also verified immediate reacquisition after expiry.
+Expanded recovery checks caught the original-accepted-receipt cache edge case;
+application now checks the current lifecycle/canonical cursor before using its
+scores. All fixes passed the final acceptance suite.
+
+### Live blockers and handoff
+
+An approved approach threshold, active window, finite unresolved/correction
+tiers, resource/backoff bounds, competition/season coverage, retention/rights,
+real batch support, lifecycle mappings/conflict policy, verified account evidence
+and trusted continuous-host binding remain required. Missing settings fail
+configuration validation; no permissive live values or approval are inferred
+from tests. Existing OP-07/14/19/21 operating gates continue to apply.
+
+027 owns settlement against verified regulation and immutable locked selections;
+031 owns result-event delivery/cache invalidation; 043 owns watchdog discovery.
+Rollback stops the binding and retains additive schema, canonical identities,
+responses, result revisions, forecasts, manifests and audit/events. Inspect actual
+DDL state and repair forward. No UI change requires visual acceptance.

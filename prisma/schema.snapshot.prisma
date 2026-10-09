@@ -14,10 +14,12 @@ datasource db {
 
 // This stable coordination row serializes every reservation for one provider account.
 model ApiQuotaAccount {
-  id        String            @id @db.Char(64)
-  stateJson Json?
-  periods   ApiQuotaPeriod[]
-  attempts  ApiQuotaAttempt[]
+  id            String             @id @db.Char(64)
+  stateJson     Json?
+  periods       ApiQuotaPeriod[]
+  attempts      ApiQuotaAttempt[]
+  resultPoller  ResultPollerLease?
+  resultBatches ResultSyncBatch[]
 }
 
 model ApiQuotaPeriod {
@@ -167,6 +169,9 @@ model FootballSeason {
 
 model FootballFixture {
   id                    String                        @id @default(uuid()) @db.Char(36)
+  resultState           FixtureResultState?
+  results               FixtureResult[]
+  resultObservations    ResultProviderObservation[]
   provider              String                        @db.VarChar(32)
   externalId            BigInt                        @db.UnsignedBigInt
   homeTeamId            String                        @db.Char(36)
@@ -820,21 +825,107 @@ model PredictionPublicationBarrier {
 
 // Per-fixture data-version cursor. Delivery/acknowledgement belongs to future caching.
 model PredictionChangeEvent {
-  fixtureId   String                       @db.Char(36)
-  version     BigInt                       @db.UnsignedBigInt
-  resultId    String?                      @unique @db.Char(64)
-  operationId String?                      @unique @db.Char(64)
-  lifecycleId String?                      @unique @db.Char(64)
-  kind        String                       @db.VarChar(32)
-  at          DateTime                     @db.DateTime(3)
-  result      PredictionRefreshResult?     @relation(fields: [resultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
-  operation   PredictionCycleOperation?    @relation(fields: [operationId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
-  lifecycle   FixtureLifecycleObservation? @relation(fields: [lifecycleId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  fixtureId       String                       @db.Char(36)
+  version         BigInt                       @db.UnsignedBigInt
+  resultId        String?                      @unique @db.Char(64)
+  operationId     String?                      @unique @db.Char(64)
+  lifecycleId     String?                      @unique @db.Char(64)
+  fixtureResultId String?                      @unique @db.Char(64)
+  fixtureResult   FixtureResult?               @relation(fields: [fixtureResultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  kind            String                       @db.VarChar(32)
+  at              DateTime                     @db.DateTime(3)
+  result          PredictionRefreshResult?     @relation(fields: [resultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  operation       PredictionCycleOperation?    @relation(fields: [operationId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  lifecycle       FixtureLifecycleObservation? @relation(fields: [lifecycleId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
 
   @@id([fixtureId, version])
   @@unique([resultId, fixtureId, version], map: "PredictionChangeEvent_result_key")
   @@unique([operationId, fixtureId, version], map: "PredictionChangeEvent_operation_key")
   @@unique([lifecycleId, fixtureId, version], map: "PredictionChangeEvent_lifecycle_key")
+  @@unique([fixtureResultId, fixtureId, version], map: "PredictionChangeEvent_fixture_result_key")
+}
+
+// One continuous poller per provider account, independent of visitors and job delivery.
+model ResultPollerLease {
+  accountId    String          @id @db.Char(64)
+  ownerId      String?         @db.Char(64)
+  fence        BigInt          @default(0) @db.UnsignedBigInt
+  leaseUntil   DateTime        @db.DateTime(3)
+  nextLiveAt   DateTime        @db.DateTime(3)
+  nextDateAt   DateTime        @db.DateTime(3)
+  liveFailures Int             @default(0) @db.UnsignedInt
+  dateFailures Int             @default(0) @db.UnsignedInt
+  liveError    String?         @db.VarChar(128)
+  dateError    String?         @db.VarChar(128)
+  account      ApiQuotaAccount @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
+// Commit original normalized responses before applying any fixture. Only completedAt is mutable.
+model ResultSyncBatch {
+  id           String                      @id @db.Char(64)
+  accountId    String                      @db.Char(64)
+  receivedAt   DateTime                    @db.DateTime(3)
+  completedAt  DateTime?                   @db.DateTime(3)
+  integrity    String                      @db.Char(64)
+  body         Json
+  account      ApiQuotaAccount             @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  observations ResultProviderObservation[]
+
+  @@index([accountId, completedAt, receivedAt])
+}
+
+// Retrieval attempts/age are projections; result revisions and observations stay append-only.
+model FixtureResultState {
+  fixtureId      String          @id @db.Char(36)
+  resultId       String?         @db.Char(64)
+  firstTrackedAt DateTime        @db.DateTime(3)
+  firstFinalAt   DateTime?       @db.DateTime(3)
+  lastSyncAt     DateTime?       @db.DateTime(3)
+  lastAttemptAt  DateTime?       @db.DateTime(3)
+  nextCheckAt    DateTime?       @db.DateTime(3)
+  failures       Int             @default(0) @db.UnsignedInt
+  delayReason    String?         @db.VarChar(128)
+  fixture        FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  result         FixtureResult?  @relation(fields: [resultId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([nextCheckAt, fixtureId])
+}
+
+model FixtureResult {
+  id                 String                 @id @db.Char(64)
+  fixtureId          String                 @db.Char(36)
+  fixtureVersion     BigInt                 @db.UnsignedBigInt
+  observedAt         DateTime               @db.DateTime(3)
+  status             String                 @db.VarChar(32)
+  regulationVerified Boolean
+  regulationHome     Int?                   @db.UnsignedInt
+  regulationAway     Int?                   @db.UnsignedInt
+  contentHash        String                 @db.Char(64)
+  integrity          String                 @db.Char(64)
+  body               Json
+  fixture            FootballFixture        @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  states             FixtureResultState[]
+  event              PredictionChangeEvent?
+
+  @@unique([id, fixtureId])
+  @@unique([id, fixtureId, fixtureVersion], map: "FixtureResult_change_key")
+  @@index([fixtureId, observedAt, id])
+}
+
+model ResultProviderObservation {
+  id          String                      @id @db.Char(64)
+  batchId     String                      @db.Char(64)
+  fixtureId   String                      @db.Char(36)
+  lifecycleId String                      @db.Char(64)
+  retrievedAt DateTime                    @db.DateTime(3)
+  integrity   String                      @db.Char(64)
+  body        Json
+  fixture     FootballFixture             @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  batch       ResultSyncBatch             @relation(fields: [batchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lifecycle   FixtureLifecycleObservation @relation(fields: [lifecycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([batchId, fixtureId])
+  @@index([fixtureId, retrievedAt, id])
 }
 
 // Mutable eligibility/cursor projection, rebuilt from append-only observations.
@@ -850,20 +941,22 @@ model FixtureLifecycleState {
 
 // Attributable normalized schedule/status/result evidence, never raw payloads.
 model FixtureLifecycleObservation {
-  id             String                 @id @db.Char(64)
-  fixtureId      String                 @db.Char(36)
-  cycleId        String?                @db.Char(36)
-  fixtureVersion BigInt                 @db.UnsignedBigInt
-  at             DateTime               @db.DateTime(3)
-  retrievedAt    DateTime               @db.DateTime(3)
-  outcome        String                 @db.VarChar(16)
-  reason         String                 @db.VarChar(128)
-  integrity      String                 @db.Char(64)
-  receiptJson    Json
-  fixture        FootballFixture        @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  cycle          PredictionCycle?       @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
-  event          PredictionChangeEvent?
+  id                 String                      @id @db.Char(64)
+  fixtureId          String                      @db.Char(36)
+  cycleId            String?                     @db.Char(36)
+  fixtureVersion     BigInt                      @db.UnsignedBigInt
+  at                 DateTime                    @db.DateTime(3)
+  retrievedAt        DateTime                    @db.DateTime(3)
+  outcome            String                      @db.VarChar(16)
+  reason             String                      @db.VarChar(128)
+  integrity          String                      @db.Char(64)
+  receiptJson        Json
+  fixture            FootballFixture             @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle              PredictionCycle?            @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  event              PredictionChangeEvent?
+  resultObservations ResultProviderObservation[]
 
+  @@unique([id, fixtureId], map: "FixtureLifecycleObservation_result_key")
   @@unique([id, fixtureId, fixtureVersion], map: "FixtureLifecycleObservation_change_key")
   @@index([fixtureId, at, id])
 }

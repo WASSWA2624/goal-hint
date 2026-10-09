@@ -445,9 +445,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     evidence: Object.freeze({
       accountStatus: (bounds: ApiFootballBounds) => run("accountStatus", [{}], bounds, normalizeAccountStatus),
       fixtures: fixtureQueries,
-      fixturesByDate: (date: string, bounds: ApiFootballBounds) => fixtureQueries({ date }, bounds),
-      liveFixtures: (bounds: ApiFootballBounds) => run("fixtures", [{ live: "all", timezone: "Africa/Kampala" }], bounds, normalizeFixture),
-      unresolvedFixtures(ids: readonly number[], bounds: ApiFootballBounds): Promise<ApiFootballResult<NormalizedFixture>> {
+      fixturesByDate: (date: string, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => fixtureQueries({ date }, bounds, workflow),
+      liveFixtures: (bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("fixtures", [{ live: "all", timezone: "Africa/Kampala" }], bounds, normalizeFixture, undefined, workflow),
+      unresolvedFixtures(ids: readonly number[], bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow): Promise<ApiFootballResult<NormalizedFixture>> {
         if (!Array.isArray(ids) || ids.length === 0 || !ids.every(positive)) return run("fixtures", null, bounds, normalizeFixture);
         const requested = [...new Set(ids)].sort((a, b) => a - b);
         let maximum = 1;
@@ -461,7 +461,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           const chunk = requested.slice(offset, offset + maximum);
           queries.push({ [maximum === 1 ? "id" : "ids"]: chunk.join("-"), timezone: "Africa/Kampala" });
         }
-        return run("fixtures", queries, bounds, normalizeFixture, requested);
+        return run("fixtures", queries, bounds, normalizeFixture, requested, workflow);
       },
       teams(query: TeamQuery, bounds: ApiFootballBounds) {
         const params = keysAllowed(query, ["teamId"]) && "teamId" in query && positive(query.teamId) ? { id: String(query.teamId) } : paired(query as PlayerStatisticsQuery);
