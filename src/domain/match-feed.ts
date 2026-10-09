@@ -14,6 +14,8 @@ export const matchFeedRecordSchema = fixtureSnapshotSchema.safeExtend({ cycle: f
   unavailableMarkets: z.array(unavailableMarketSchema).max(4), update: fixtureUpdateSchema,
   availabilityMessage: z.string().max(256).nullable(), scorePeriod: z.enum(["regulation", "live"]).nullable() });
 export const matchFeedResponseSchema = z.strictObject({
+  leagues: z.array(z.strictObject({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u),
+    name: z.string().max(256).nullable(), country: z.string().max(128).nullable() })).max(1000).default([]),
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), page, nextPage: page.nullable(), previousPage: page.nullable(),
   pageSize: count.min(1).max(feedQueryRules.maximumPageSize), total: count, totalPages: count,
   links: z.strictObject({ next: pageLink, previous: pageLink }),
@@ -28,6 +30,7 @@ export const matchFeedResponseSchema = z.strictObject({
     completed: count, terminal: count, failed: count, published: count, partialCoverage: z.boolean(), message: z.string().max(256).nullable() }).nullable(),
 }).superRefine((value, ctx) => {
   if (value.records.length !== Math.min(value.pageSize, Math.max(0, value.total - (value.page - 1) * value.pageSize)) ||
+    new Set(value.leagues.map((league) => league.id)).size !== value.leagues.length ||
     value.totalPages !== Math.ceil(value.total / value.pageSize) ||
     new Set(value.records.map((record) => record.fixtureId)).size !== value.records.length ||
     value.nextPage !== null && value.nextPage !== value.page + 1 || value.previousPage !== null && value.previousPage >= value.page ||

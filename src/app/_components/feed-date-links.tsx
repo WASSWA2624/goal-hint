@@ -1,4 +1,3 @@
-import "server-only";
 import { ButtonLink, TextLink } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
 import type { ReportingDate } from "@/domain/calendar";

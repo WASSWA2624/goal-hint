@@ -2761,3 +2761,52 @@ and remote databases are unchanged. The page exposes a truthful temporary-failur
 surface for an unavailable production configuration. No paid call or schedule was
 activated. Rollback can restore the previous feed composition without altering
 source history, locks, results or response-cache schema.
+
+## 033 — Search and filter controls (10 October 2026)
+
+**Complete.** Added shareable, accessible search/league/status/market/order
+controls over the complete stored date cohort. Prompt 033 is checked in the
+tracker; 034 and later prompts remain unchanged.
+
+### Changes
+
+- Added reusable `SearchInput`/`FilterControl` to shared controls and
+  `components/match/feed-controls.tsx` for the native GET form, disclosure,
+  applied summary, Apply/Reset, focus return and selected-family ordering.
+- Added `domain/feed-controls.ts`. Draft text retains spaces until Apply;
+  `state/feed.ts` now preserves raw text without weakening applied-query checks.
+  Empty native GET league values normalize to null in the shared parser.
+- Added `app/_components/feed-surface.tsx`; simplified server page composition
+  and reused date/run presentation in the client surface. Server query changes
+  synchronize the per-provider draft while retaining field/panel focus. Explicit
+  transitions discard superseded navigation and preserve prior cards on failure,
+  with original reporting dates, filters and market clearly labeled.
+- Extended the public feed DTO/service with bounded full-cohort league options
+  and cache projection version 2. Options use the same RepeatableRead snapshot
+  as records and cannot disappear merely because search returns no cards.
+- Added draft/Reset/native URL tests, strict league projection checks, and genuine
+  SQL capture cases for aliases beyond the first page, countries, league aliases,
+  empty results and all market orders. Updated rendering/navigation verification
+  and the client state, feed page/API and new search/filter documentation.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Repository units | **921 cases: 920 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Log `.tmp/033-units.log`. |
+| Final contract checks | **34 passed** after adding strict league option validation. Covers raw draft spaces, normalization/limits, native GET equivalence, Reset dates/page size and API projection bounds/privacy. Log `.tmp/033-contracts-final.log`. |
+| Genuine stored page handoff | **7 passed, 0 failed/skipped** using owned MySQL 8.4.11, including full-cohort aliases/countries/league searches and options after an empty filter result. Logs in `.tmp/match-feed-71Ogu7/database.log`. |
+| Feed/cache regressions | **32 passed, 0 failed/skipped** on owned MySQL. Covers distinct unrounded selected-market ordering/ties/missing values, history/settlement, coverage, search limits, cache invalidation/recovery and zero provider/prediction side effects. Log `.tmp/033-db-regression.log`. |
+| Production rendering | **36 isolated SQL-captured scenarios pass**, including exact card order, original timestamps, initial CSS and all coverage/failure states. Four run-phase presentation variants remain explicitly synthetic. Final client code rebuilt against the same captures. Logs `.tmp/033-rendering.log`, `.tmp/033-fixture-final-build.log`; artifacts `.tmp/match-feed-71Ogu7/`. |
+| Browser | **66 assertions pass** in installed Chrome through the Playwright skill/CLI, French locale/Los Angeles timezone. Covers alias beyond the first page, country/league search, reload/Back/Forward/shared page, league/status controls, selected-market order, failed market change retaining original cards, rapid queries and A → B → A Reset, pagination reset, reporting date/range Reset, Escape/Close and submission focus, 320–1280 widths, 200% text, labels/focus/touch sizes, one status region, native forms/Reset without JavaScript, invalid URLs, no cookies/polling and no hydration errors. Expected logo 404s exercise fallback. Logs `.tmp/033-browser-final.log`, `.tmp/033-extra.log`; source/screenshots `output/playwright/033-*`. |
+| Static/build | Final lint, typecheck, production build and whitespace checks pass. Logs `.tmp/033-lint-final.log`, `.tmp/033-types-final.log`, `.tmp/033-build.log`. |
+| Actual production routes | Existing navigation HTML checks pass ten anonymous surfaces, redirects and invalid queries against the owned loopback production server with database capability disabled. Native GET empty-league/probability input is accepted and unavailable storage remains a truthful failure. Log `.tmp/033-production.log`. |
+
+The browser acceptance found and fixed Reset refreshing an unfinished search;
+the final A → B → A test passes. An initial generated-file encoding error was also
+corrected before final builds. No implementation or required acceptance blocker
+remains. Live operating/launch gates remain unchanged; these tests establish
+stored-query/UI behavior with synthetic inputs, not real forecast quality or
+hosted availability. No paid call, schedule or remote database change was made.
+No migration is required. Owned acceptance servers and browser sessions are
+stopped after verification; the installed database service remains untouched.

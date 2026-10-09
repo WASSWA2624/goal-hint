@@ -20,6 +20,9 @@ function emptyView(): LoadedView {
 function normalizeQuery(query: FeedQuery, today: FeedState["today"]): FeedQuery {
   return parseFeedQuery(serializeFeedQuery(query, today), { today, locale: query.locale });
 }
+function normalizeDraft(query: FeedQuery, today: FeedState["today"]): FeedQuery {
+  return { ...normalizeQuery({ ...query, search: "" }, today), search: query.search };
+}
 function validPage(data: FeedPage, pageSize: number): FeedPage {
   if (!Number.isSafeInteger(data.page) || data.page < 1 || data.page > feedQueryRules.maximumPage ||
       data.nextPage !== null && data.nextPage !== data.page + 1 ||
@@ -63,12 +66,12 @@ export function createFeedState(bootstrap: FeedBootstrap): FeedState {
 export function createFeedReducer(bootstrap: FeedBootstrap) {
   return createReducer(createFeedState(bootstrap), (builder) => {
     builder.addCase(queryApplied, (state, { payload }) => { applyQuery(state, payload); });
-    builder.addCase(draftChanged, (state, { payload }) => { state.draft = normalizeQuery(payload, state.today); });
+    builder.addCase(draftChanged, (state, { payload }) => { state.draft = normalizeDraft(payload, state.today); });
     builder.addCase(calendarChanged, (state, { payload }) => {
       const today = parseReportingDate(payload);
       if (today === state.today) return;
       if (today < state.today) throw new RangeError("Calendar events must not move reporting time backwards.");
-      const draft = normalizeQuery(state.draft, today);
+      const draft = normalizeDraft(state.draft, today);
       state.today = today;
       if (["today", "tomorrow", "next-7-days"].includes(state.query.dates.kind)) applyQuery(state, { ...state.query, page: 1 });
       state.draft = ["today", "tomorrow", "next-7-days"].includes(draft.dates.kind) ? { ...draft, page: 1 } : draft;

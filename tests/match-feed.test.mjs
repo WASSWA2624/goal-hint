@@ -63,4 +63,10 @@ test('public response schema rejects unknown internals and incoherent counts', (
   assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), workerLogs: [] }).success, false);
   assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), total: 1 }).success, false);
   assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), nextPage: 3 }).success, false);
+  const league = { id: 'league-a', name: 'Example', country: null };
+  assert.deepEqual(matchFeedResponseSchema.parse({ ...emptyPage(), leagues: [league] }).leagues, [league]);
+  for (const leagues of [[league, league], [{ ...league, providerCredentials: 'private' }], [{ ...league, id: '../x' }],
+    Array.from({ length: 1001 }, (_, index) => ({ ...league, id: `league-${index}` }))]) {
+    assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), leagues }).success, false);
+  }
 });

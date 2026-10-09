@@ -34,7 +34,7 @@ test("malformed, ambiguous, unbounded and unsupported URL values are rejected", 
   for (const input of ["other=x", "q=a&q=b", "date=2026-02-29", "date=2026-1-01", "date=2026-10-09&when=today",
     "date=2026-10-09&to=2026-10-10", "from=2026-10-09", "to=2026-10-09", "from=2026-10-10&to=2026-10-09",
     "from=2026-10-09&to=2026-10-16", "when=next-week", "q=%00", "q=%0a", `q=${"a".repeat(121)}`,
-    "league=../x", "league=", "status=correct", "status=", "market=exact-score", "market=", "sort=asc",
+    "league=../x", "status=correct", "status=", "market=exact-score", "market=", "sort=asc",
     "page=0", "page=-1", "page=01", "page=1.5", "page=1e2", "page=10001", "pageSize=101", "pageSize=0"]) {
     assert.throws(() => query(input), undefined, input);
   }

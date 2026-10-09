@@ -34,7 +34,7 @@
     "test:styling": "node scripts/verify-brand-rendering.mjs",
     "test:navigation": "node --conditions=react-server --test tests/navigation.test.mjs",
     "test:navigation:html": "node scripts/verify-navigation-rendering.mjs",
-    "test:state": "node --conditions=react-server --test tests/feed-query.test.mjs tests/client-state.test.mjs",
+    "test:state": "node --conditions=react-server --test tests/feed-query.test.mjs tests/feed-controls.test.mjs tests/client-state.test.mjs",
     "test:state:rendering": "node scripts/verify-client-state-rendering.mjs",
     "test:card": "node --conditions=react-server --test tests/match-card.test.mjs",
     "test:card:rendering": "node scripts/verify-match-card-rendering.mjs",

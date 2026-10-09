@@ -2251,3 +2251,40 @@ until 035. No production synthetic-data switch, schema or scheduler is introduce
 The existing live database/provider/rights/budget/hosting gates remain pending;
 local fixtures establish rendering and stored-read behavior only. See
 [match-feed-page.md](match-feed-page.md) for the page and acceptance contracts.
+
+## 033 — Search and filter controls (10 October 2026)
+
+Use shared `SearchInput`/`FilterControl` wrappers over the existing native labeled
+fields. Keep raw input in the per-provider Redux draft until explicit Apply;
+normalization/validation belongs to `applyFeedDraft` and the shared URL parser.
+No request is made while typing or choosing filters. Preserve mounted controls
+and focus across server query changes by explicitly synchronizing the draft.
+
+Use App Router transitions through canonical `feedQueryHref` destinations. Initial
+SSR, Apply, reload, shared URLs and Back use the same stored service and parser.
+Superseded navigation behavior is verified in Chrome, including A → B → A. If a
+navigation is pending, Reset must push its destination even when it equals the
+still-visible URL; refreshing that URL can otherwise refresh the pending search.
+Refresh is reserved for reapplying the current query with no pending navigation.
+
+Use a native GET form for progressive enhancement. Normalize its empty league
+option to null; retain strict duplicate/unknown/other parameter validation. Reset
+clears search/league, selects all statuses, match result and kickoff order, and
+resets page one while preserving reporting dates/range and page size. Probability
+sort always binds to the selected market; missing values remain last with stable
+kickoff/fixture-ID ties.
+
+Return bounded league options from the full date cohort in the records' existing
+RepeatableRead transaction, independent of active filters/page. Limit to 1,000
+unique public id/name/country entries, failing on overflow. Use feed projection
+version 2 in the cache descriptor; retain existing catalog invalidation, response
+size bounds and search budget. No migration is necessary.
+
+Retain the last successful server projection outside Redux's mutable UI draft.
+A failed query shows its own failure and labels retained cards with their original
+query, dates and market. Use a native dismissible disclosure with Escape/Close
+focus return, shared focus treatments and one restrained polite status region.
+No provider/AI call, browser polling, scheduler or deployment is introduced.
+Prompt 034 continues to own loaded-page/scroll restoration; 037 owns live refresh.
+See [search/filter contracts](search-filter-controls.md). Existing live operating
+and launch gates are unchanged.

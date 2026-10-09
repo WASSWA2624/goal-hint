@@ -94,7 +94,8 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const rawSearch = get("q") ?? "";
   if (rawSearch.length > feedQueryRules.maximumSearchLength || /[\u0000-\u001f\u007f]/u.test(rawSearch)) fail();
   const search = rawSearch.normalize("NFC").trim().replace(/\s+/gu, " ");
-  const league = get("league") ?? null;
+  // Native GET forms submit the empty all-leagues option.
+  const league = get("league") || null;
   if (league !== null && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(league)) fail();
   const market = get("market") ?? "match-result";
   if (!isMarketFamily(market)) fail();

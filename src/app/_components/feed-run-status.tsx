@@ -1,4 +1,3 @@
-import "server-only";
 import { BodyText, MutedText, Stack, Surface } from "@/components/ui/layout";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import type { MatchFeedResponse } from "@/domain/match-feed";

@@ -15,12 +15,14 @@ and immutability checks stay enabled.
 
 Server Components validate URL inputs and read server services. They pass a
 serializable `FeedBootstrap` across the client boundary and never read Redux.
-The current interim feed passes `data: null`, meaning **unloaded**, rather than
-claiming an empty fixture result. A real loaded page can have `records: []` and
-is **ready**. Bootstrap page position must equal `query.page`.
+The feed passes its stored response, or `data: null` on a read failure, meaning
+**unloaded** rather than claiming an empty fixture result. A loaded page can have
+`records: []` and is **ready**. Bootstrap position must equal `query.page`.
 
-The interim page provider is keyed by canonical resolved query and route/page
-selection. A changed URL or server-resolved EAT date creates a fresh instance.
+The filter provider persists across query changes, keyed by reporting day and
+locale. Applied server query props explicitly dispatch `queryApplied`, preserving
+mounted controls and keyboard focus. The surrounding client surface retains the
+last successful response across failed filter navigations, with its own query.
 When 034 needs a persistent feed across detail navigation, it must place the
 provider at the appropriate shared boundary and wire the checkpoint actions.
 Subsequent data uses explicit request/reconciliation actions, not replacement
@@ -42,7 +44,7 @@ validation response, rather than accepting a more permissive query.
 | Explicit date | `date=YYYY-MM-DD` is accepted at the feed root; canonical href is `/en/predictions/YYYY-MM-DD`. |
 | Range | `from` + `to` at the root, or `to` with the dated route. Inclusive, ordered, maximum seven days, including historical ranges. |
 | Search | `q`, maximum 120 UTF-16 code units before normalization; NFC, trimmed, collapsed whitespace, no ASCII control characters. Empty is omitted. |
-| League | `league`, canonical identifier text, 1–128 ASCII letters/digits/underscore/hyphen with an alphanumeric first character; default null. No display-name lookup. |
+| League | `league`, canonical identifier text, 1–128 ASCII letters/digits/underscore/hyphen with an alphanumeric first character; absent or empty means null. No display-name lookup. |
 | Status | `all` default; `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. Finished groups played finals; provider mapping/query implementation belongs to 028. |
 | Market | `match-result` default, `double-chance`, `total-goals`, `both-teams-to-score`. |
 | Sort | `kickoff` default, or `probability` requiring an explicit `market`. In state, probability sort carries that market. Optional inbound `sortMarket` must agree; serialization omits this redundant alias. |
@@ -61,11 +63,12 @@ the key is not a substitute for that intent. A Back checkpoint additionally
 checks its entry ID and original starting page.
 
 `draftChanged` edits Redux's filter draft without changing the applied query or
-loaded list. `queryApplied` accepts the validated query from URL navigation,
-resets pagination and invalidates outstanding requests. The future controls
-must navigate through `feedQueryHref`; Redux is not an alternate URL authority.
-Ordering and missing-probability placement are implemented by the future feed
-and API, using the selected market in this contract.
+loaded list. Raw search remains editable until `applyFeedDraft` normalizes and
+validates it on submission. `queryApplied` accepts a validated query, resets
+pagination and invalidates outstanding reconciliation requests. Controls navigate
+through `feedQueryHref`; Redux is not an alternate URL authority. The page and API
+order by the selected market. See [search/filter behavior](search-filter-controls.md)
+for navigation and Reset.
 
 ## Fixture handoff and reconciliation
 

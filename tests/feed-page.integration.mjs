@@ -30,6 +30,7 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
     }));
     rows[0].teams.home.name = 'Synthetic International Football Club ' + 'LongHomeIdentifier'.repeat(10);
     rows[0].teams.away.name = 'Synthetic Association Football Club ' + 'LongAwayIdentifier'.repeat(10);
+    rows[31].teams.home.name = 'Beyond Page Alias';
     const cohort = await p.cohort(today, p.first, { rows });
     const state = await p.setup(3000), other = await p.setup(3001), unlocked = await p.setup(3002);
     for (const item of [state, other]) {
@@ -73,6 +74,33 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
       const outside = await capture('outside', { date: '2026-10-16' });
       assert.ok(outside.records[0].availabilityMessage); assert.equal(outside.run, null);
       await capture('unavailable-predictions', { date: '2026-10-10' });
+    });
+    await t.test('control queries search aliases beyond page one and return complete league options', async () => {
+      const renamed = structuredClone(rows[31]); renamed.teams.home.name = 'Canonical Renamed Club';
+      renamed.teams.home.country = 'Faraway Land'; renamed.league.name = 'Canonical League';
+      const provider = createSyntheticCatalogAdapter({ respond: (url) => catalogResponse(url, [renamed]) });
+      provider.clock.value = importAt++;
+      await createFootballCatalogImporter({ adapter: provider.adapter, store: p.catalog, authority: catalogSelectionAuthority, clock: provider.clock })
+        .import(catalogRequest({ kind: 'fixtures', query: { fixtureId: 3031 } }, provider.clock.value));
+      const alias = await capture('search-alias', { q: 'bEyOnD pAgE aLiAs' });
+      assert.equal(alias.total, 1); assert.equal(alias.records[0].homeTeam.name, 'Canonical Renamed Club');
+      assert.ok(!captured.today.result.data.records.some((item) => item.fixtureId === alias.records[0].fixtureId));
+      const country = await capture('search-country', { q: 'FARAWAY LAND' }); assert.equal(country.total, 1);
+      assert.equal((await capture('search-league-alias', { q: 'SYNTHETIC COMPETITION 39' })).total, 32);
+      assert.equal((await capture('search-league', { q: 'CANONICAL LEAGUE' })).total, 32);
+      const empty = await capture('search-empty', { q: 'No such team' }); assert.equal(empty.state, 'no-filter-matches');
+      assert.deepEqual(empty.leagues, alias.leagues); assert.equal(empty.leagues.length, 1);
+      await capture('league-selected', { league: alias.leagues[0].id });
+      await capture('live-selected', { status: 'live' });
+      await capture('second-page', { page: '2' });
+      for (const market of ['match-result', 'total-goals', 'double-chance', 'both-teams-to-score']) {
+        const data = await capture(`probability-${market}`, { market, sort: 'probability' });
+        assert.equal(data.records.length, 30);
+        const valued = data.records.filter((item) => item.forecast?.markets.some((entry) => entry.market.family === market));
+        assert.equal(valued.length, 2);
+        assert.deepEqual(data.records.slice(0, 2).map((item) => item.fixtureId), valued.map((item) => item.fixtureId));
+      }
+      await capture('seven-search', { when: 'next-7-days', q: 'bEyOnD pAgE aLiAs' });
     });
     await t.test('coverage distinguishes confirmed empty, unknown, partial and failed imports', async () => {
       await importDate('2026-10-08'); assert.equal((await capture('empty', { date: '2026-10-08' })).state, 'no-fixtures');

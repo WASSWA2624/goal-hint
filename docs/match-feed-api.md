@@ -2,7 +2,7 @@
 
 `GET /api/matches` is an anonymous Node route. It calls the same
 `createMatchFeedService({ database, competitionIds, clock? }).query(parameters,
-{ locale?, routeDate? })` service that future server-rendered feeds can use.
+{ locale?, routeDate? })` service used by the server-rendered feed and its controls.
 `competitionIds` are the configured API-Football competition IDs; the `league`
 filter uses the canonical competition ID returned by this API. Missing database
 or competition configuration returns 503. There is no fixture-data fallback.
@@ -26,7 +26,7 @@ access. All SQL values, limits and offsets are bound parameters.
 | `from`, `to` | Both required; inclusive named EAT dates spanning at most seven days. |
 | `when` | `today` (default), `tomorrow`, `next-7-days`. Mutually exclusive with `date` or `from`/`to`. |
 | `q` | At most 120 characters under the shared URL validator; normalized, trimmed case-insensitive substring matching. Controls are rejected. `%`, `_` and `!` match literally. |
-| `league` | One canonical competition ID, matching the public record's `competition.id`. |
+| `league` | One canonical competition ID, matching `competition.id`; absent or empty selects all leagues. |
 | `market` | `match-result` (default), `double-chance`, `total-goals`, `both-teams-to-score`. |
 | `status` | `all` (default), `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. `finished` includes regulation, extra-time and penalty finals. |
 | `sort` | `kickoff` (default), or `probability` with an explicit `market`. Optional `sortMarket` must equal that family. |
@@ -57,6 +57,10 @@ back to the last reachable populated page (or page 1 when no rows exist).
 ## Public response
 
 `src/domain/match-feed.ts` validates the entire response and its counts.
+Prompt 033 adds `leagues`: up to 1,000 unique id/name/country entries for the full
+selected date cohort, independent of filters/page. Options share the records'
+database snapshot; overflow fails with 503. Omitted legacy options parse to `[]`.
+Feed cache projection version 2 avoids reusing earlier responses without options.
 `records` contains shared `FixtureSnapshot` values, with the feed metadata
 required by `matchFeedRecordSchema`. Maximum query size is 2,048 UTF-8 bytes;
 maximum serialized JSON response is 1 MiB. Responses that cannot be safely

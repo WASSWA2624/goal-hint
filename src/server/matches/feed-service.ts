@@ -43,6 +43,10 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       const read = () => database.transaction(async (tx) => {
         const sql = feedSql(query, range, competitionIds);
         const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.joins} WHERE ${sql.scope}`);
+        // Options cover the entire date cohort, independently of applied filters/page.
+        const leagues = await tx.$queryRaw<MatchFeedResponse["leagues"]>(Prisma.sql`
+          SELECT DISTINCT l.id, l.name, l.country ${sql.joins} WHERE ${sql.scope}
+          ORDER BY l.name, l.country, l.id LIMIT 1001`);
         const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available ${sql.joins} WHERE ${sql.where}`);
         if (!known || !matching) throw new MatchFeedError("unavailable");
@@ -66,7 +70,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           : total === 0 ? "no-filter-matches" : records.length === 0 ? "page-out-of-range" : matchingWithMarket === 0 ? "insufficient-data" : "ready";
         const keys: Partial<Record<typeof state, TextKey>> = { "data-unavailable": "feed.dataUnavailable", "no-fixtures": "feed.noFixtures",
           "no-filter-matches": "feed.noFilterMatches", "page-out-of-range": "feed.pageOutOfRange", "insufficient-data": "feed.insufficientData" };
-        const response = matchFeedResponseSchema.parse({ records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
+        const response = matchFeedResponseSchema.parse({ leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
           links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf, today,
           range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
           coverage: { partial, knownFixtures, matchingWithMarket, dates }, run });
@@ -74,7 +78,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range,
-        query: { ...query, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 2, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

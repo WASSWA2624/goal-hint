@@ -1,5 +1,10 @@
 # Stored match feed page
 
+Prompt 033 adds [search/filter controls](search-filter-controls.md) through a
+persistent client surface. Failed filter navigations retain and label the
+previous successful server projection. Load more and scroll restoration stay
+with 034.
+
 Prompt 032 connects `/en` and `/en/predictions/YYYY-MM-DD` to the existing feed
 service. Today and Results share `FeedShell` and `MatchFeedPage`; Results retains
 the yesterday/finished default. The first page contains at most the existing
@@ -14,9 +19,9 @@ render across dates. Cache hits preserve their original response/source clocks.
 Full-page HTTP caching remains disabled by dynamic request rendering.
 
 `FeedStateProvider` receives the original successful page as its bootstrap.
-Server components render its cards without reading Redux or starting browser
-requests. Later controls and pagination have composition slots above and below
-the list. Prompts 033–034 own their interactions; 037 owns live refresh and
+Initial server rendering supplies the cards without reading Redux or starting browser
+requests. Search/filter controls now use the shared persistent surface; the
+pagination composition slot remains for 034. Prompt 037 owns live refresh and
 open-tab midnight rollover. Search visits continue to consume the shared
 aggregate limiter before cache lookup.
 
@@ -72,7 +77,7 @@ npm run test:feed-page:rendering -- --serve
 
 The rendering script requires genuine isolated MySQL, captures visitor-facing
 projections from the real cache/service/loader, then builds a separate production
-Next app under ignored `.tmp/`. It checks 23 labeled scenarios. The four extra
+Next app under ignored `.tmp/`. It checks 36 labeled scenarios. The four extra
 run-phase presentation variants are explicitly synthetic; they do not establish
 real provider coverage or production run completion. Fixtures are test-only and
 cannot be selected by production URL parameters. Logs and initial HTML remain

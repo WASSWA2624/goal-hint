@@ -42,7 +42,7 @@ for (const path of ["/en", todayPath, resultsPath, "/en/predictions/2020-02-29?s
   assert.equal((visibleHtml.match(/aria-current="page"/g) ?? []).length, 1, `${path}: initial current location`);
   assert.ok(visibleHtml.includes(`href="${todayPath}"`), `${path}: Today target`);
   assert.ok(visibleHtml.includes(`href="${resultsPath}"`), `${path}: Results target`);
-  assert.doesNotMatch(visibleHtml, /<select|sign[ -]?in|log[ -]?in|Brand styling preview/i);
+  assert.doesNotMatch(visibleHtml, /sign[ -]?in|log[ -]?in|Brand styling preview/i);
   for (const page of informationPages) assert.ok(visibleHtml.includes(`href="/en/${page}"`));
   if (path.includes("to=2020-03-06")) {
     assert.match(visibleHtml, /datetime="2020-02-29"/i);
