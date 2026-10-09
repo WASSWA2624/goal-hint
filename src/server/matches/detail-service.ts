@@ -4,6 +4,7 @@ import { createPredictionWindow, getReportingDate, utcInstantFromEpochMillisecon
 import { matchDetailResponseSchema, type MatchDetailResponse } from "../../domain/match-detail.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
 import { matchHref } from "../../domain/navigation.ts";
+import { canonicalMatchSlug } from "../../domain/match-slug.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
@@ -15,11 +16,7 @@ import { detailHistoryLink, parseMatchDetailQuery } from "./detail-query.ts";
 import { publicDetailCycle, publicDetailRevision, publicDetailSnapshot } from "./detail-read.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 
-export function canonicalMatchSlug(home: string | null, away: string | null): string {
-  const part = (name: string | null, fallback: string) => name?.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 75).replace(/-+$/gu, "") || fallback;
-  return `${part(home, "home")}-vs-${part(away, "away")}`;
-}
+export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
 export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };

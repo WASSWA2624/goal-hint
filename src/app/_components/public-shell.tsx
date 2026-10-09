@@ -17,19 +17,21 @@ import {
 } from "@/components/navigation/shell-styles";
 
 /** One request-scoped EAT date; never freeze Today in the production build. */
-export const getShellDate = cache(async () => {
+export const getShellInstant = cache(async () => {
   await connection();
-  return getReportingDate(utcInstantFromEpochMilliseconds(Date.now()));
+  return utcInstantFromEpochMilliseconds(Date.now());
 });
+export const getShellDate = cache(async () => getReportingDate(await getShellInstant()));
 
-export async function PublicShell({ children, locale, current }: {
+export async function PublicShell({ children, locale, current, today: reportingDate }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
+  today?: Awaited<ReturnType<typeof getShellDate>>;
 }) {
   const language = resolveLocale(locale);
   const messages = createMessages(language);
-  const today = await getShellDate();
+  const today = reportingDate ?? await getShellDate();
 
   return (
     <ShellFrame>

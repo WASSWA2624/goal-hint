@@ -2700,3 +2700,64 @@ Rollback can remove the route wrappers while retaining cache tables, generations
 journals and trigger-definer rights. Repair partially applied DDL forward; do not
 erase source or forecast history. No local feature or acceptance blocker remains.
 031 is checked in the tracker; later rows are unchanged.
+
+## 032 — Match feed page (10 October 2026)
+
+### Implemented behavior and changed files
+
+Completed the shared server-rendered Today/Results feed with real stored-data
+reads, initial match HTML/CSS, EAT reporting dates, ordinary Today/Tomorrow/Next
+7 days and adjacent historical-date links, truthful coverage/error states and a
+shared stored run-status area. Current and locked forecasts use the existing
+projection; closed cycles without a selection stay unavailable. Actual publication,
+last-sync, coverage-observation and projection-observation clocks remain distinct.
+
+- Added `server/matches/public-feed.ts` and `feed-page.ts`; the page and matches
+  API share database/competition/cache composition, without an internal HTTP call.
+- Replaced the interim `feed-shell.tsx`; added `match-feed-page.tsx`,
+  `feed-date-links.tsx` and `feed-run-status.tsx`. Reused shared shell, controls,
+  feedback, card/list components and the per-provider client bootstrap. Added
+  optional composition slots for 033/034, with no unfinished public control.
+- The two locale feed routes share API query validation and stored-year limits.
+  `public-shell.tsx` now provides one request instant to date and service reads.
+- Added `domain/feed-date-navigation.ts`; extracted `domain/match-slug.ts` from
+  the detail service while preserving its public export and canonical behavior.
+- Extended the existing match card/messages with cycle state, missing lock,
+  update/availability and original last-sync presentation. First two cards use
+  eager remote logos; the remainder retain lazy native images and reserved sizes.
+- Added `tests/feed-page.test.mjs`, `feed-page.integration.mjs` and
+  `scripts/verify-match-feed-rendering.mjs`, with package commands. Updated the
+  navigation HTML check to allow actual stored forecast/empty content, the
+  navigation/card documentation and added `docs/match-feed-page.md`.
+- Updated this record, implementation decisions and tracker. No migration or
+  database schema change is required.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Page contracts | Five new unit tests pass: filters retained and page reset for every date link, EAT midnight and seven-day range, calendar endpoints, exact query/clock handoff, original cached response identity and sanitized failures. |
+| Genuine stored page handoff | **6 passed, 0 failed/skipped** on owned MySQL 8.4.11. Covers 30-card stable order/ties from 32 matches, run 2/34 counts, future boundaries, coverage states, missing lock, historical verified score/settlement, original clocks, repeated shared-cache reads and zero provider/prediction side effects. Log `.tmp/032-page-integration.log`. |
+| Existing feed regressions | **16 passed, 0 failed/skipped** on owned MySQL. Includes full-cohort search/aliases, ordering, coverage authority, progress, locks, voids, corrected settlement, no side effects and atomic shared search limits. Log `.tmp/032-feed-regression.log`. |
+| Production component HTML | `npm run test:feed-page:rendering -- --serve` builds an isolated Next production app from actual MySQL-captured projections. **23 scenarios pass** initial names/kickoff/prediction, original publication/sync clocks, CSS-before-content, exact card order, honest states, all run phases and seven-day messaging. Four run-phase presentation variants are explicitly synthetic. Artifacts `.tmp/match-feed-nS3vVG/`; the harness's repeated SQL preparation also passes all six cases. |
+| Browser acceptance | **72 assertions pass** through the Playwright skill/CLI using installed Chrome, French locale and Los Angeles timezone. Tests scripts held before hydration, unchanged labels after hydration, 404/429 logos, 320/360/390/430/1280 widths, one/two columns, 200% text, skip link/focus, all 30 keyboard analysis destinations, one Enter to an isolated canonical analysis target, date links/boundaries, every data/error state, retry and JavaScript-disabled date browsing. No hydration/browser errors or visitor cookies; no browser API polling. Log `.tmp/032-browser-final.log`; screenshots and acceptance source under ignored `output/playwright/feed-page-*`. |
+| Repository units | **918 cases: 917 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Command `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/032-units.log`. |
+| Static/build | Typecheck, lint, tracked/new-file whitespace checks and production build pass. Build retains dynamic dated/home feeds and all three APIs. Client chunk audit finds no database credentials/configuration, provider endpoint or worker/service implementation. Logs `.tmp/032-types-final.log`, `.tmp/032-lint-final.log`, `.tmp/032-build.log`. |
+| Actual production routes | Owned loopback production server with database capability disabled passes Today/Tomorrow/7-day/history/beyond-window failure rendering, actual EAT date after midnight, anonymous no-store/no-cookie behavior and no sample fallback. Existing navigation HTML checks pass all ten valid surfaces, redirects and invalid-route cases. API composition retains 400/503 and years below 1000 return 404. Log `.tmp/032-production.log`; server stopped. |
+
+### Operating gates and handoff
+
+No local implementation or required acceptance blocker remains. Prompt 032 is
+checked; 033 and subsequent rows remain unchanged. Search controls, Load more,
+Back restoration, real match analysis and live refresh retain their separate
+033–037 ownership. Browser analysis activation uses the isolated test destination;
+production match-detail pages are still supplied by 035.
+
+Existing approved database/provider/competition/model/reuse/budget/hosting inputs
+and launch qualification remain required for live public content. Nothing here
+claims real coverage, forecast quality or a deployed service. Genuine MySQL tests
+use owned throwaway servers and synthetic stored forecasts; installed services
+and remote databases are unchanged. The page exposes a truthful temporary-failure
+surface for an unavailable production configuration. No paid call or schedule was
+activated. Rollback can restore the previous feed composition without altering
+source history, locks, results or response-cache schema.

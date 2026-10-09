@@ -88,6 +88,13 @@ server data. Presentation makes no calibration claim. Update delayed is a
 forecast-wide supplied fact, Limited news coverage is selected-market-specific,
 and Partial coverage is fixture-wide. Missing notices do not imply full coverage.
 
+Prompt 032 also presents the optional stored cycle/update metadata: current or
+locked prediction, no locked selection for the selected family, an in-progress
+prediction refresh, outside-window availability and delayed result updates.
+`syncedAt` is displayed separately from publication using its actual EAT time;
+null remains Last sync unavailable. The card does not select another revision
+or change timestamps. Feed and detail links share `domain/match-slug.ts`.
+
 ## Remote logos and fallbacks
 
 `isSafeRemoteImageUrl` is shared with catalog import, provider normalization and

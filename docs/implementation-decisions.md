@@ -2220,3 +2220,34 @@ operation or paid service is authorized here. [The cache runbook](public-respons
 records grants, rollback, lifetimes and recovery commands. Local five-second
 freshness evidence supports the proposed 15/60-second cadence budget; actual
 provider/worker/network and hosted final-badge measurements remain pending.
+
+## 032 — Stored match feed page (10 October 2026)
+
+Use the same server-only feed composition for API and page reads, including
+configured competitions, validated URL parameters, the shared search limiter and
+MySQL response cache. Call the service directly from Server Components. Reuse a
+single request-scoped clock for reporting dates, navigation and service/cache
+window resolution; a render crossing EAT midnight retains one coherent date.
+
+Render the service's first page and bootstrap client state with that same data.
+Preserve the existing approximately 30-card default, kickoff/fixture-ID order,
+selected-market presentation and one/two-column list. Keep date navigation as
+ordinary links with prefetch disabled. Date changes retain filters and restart at
+page one. Previous/next links use explicit dates and stop at stored year bounds.
+Extract canonical slug generation for shared feed/detail use rather than querying
+detail analysis for every card.
+
+Use coverage authority from the reader, never the absence of records alone, to
+confirm no fixtures. Show incomplete imports independently of prediction data,
+retain stored forecasts and publication/sync times, and render genuine run
+completed/total counts with unknown totals omitted. Treat temporary reads and
+search throttling as separate retry states. Existing cycle projections remain
+authoritative for current, locked, void and missing locked predictions.
+
+Provide server composition slots for later controls and pagination. Search UI,
+Load more, Back restoration, real analysis pages and browser polling remain owned
+by 033–037. One-tap links are qualified with an isolated canonical analysis target
+until 035. No production synthetic-data switch, schema or scheduler is introduced.
+The existing live database/provider/rights/budget/hosting gates remain pending;
+local fixtures establish rendering and stored-read behavior only. See
+[match-feed-page.md](match-feed-page.md) for the page and acceptance contracts.

@@ -80,6 +80,15 @@ export function MatchCard({ fixture, analysisSlug, selectedFamily = "match-resul
         {messages.text(`market.source.${prediction.item.market.source}`)} · {messages.text("match.published")}: {" "}
         <time dateTime={toUtcIsoString(prediction.publishedAt)}>{messages.reportingInstant(prediction.publishedAt)}</time>
       </MutedText>}
+      {fixture.cycle?.state === "closed" && <MutedText>{messages.text(prediction ? "match.lockedPrediction" : "match.noLockedPrediction")}</MutedText>}
+      {fixture.cycle?.state === "void" && !prediction && <MutedText>{fixture.cycle.voidReason?.explanation}</MutedText>}
+      {fixture.cycle?.state === "open" && prediction && <MutedText>{messages.text("match.currentPrediction")}</MutedText>}
+      {fixture.update?.prediction === "updating" && <MutedText>{messages.text("match.predictionUpdating")}</MutedText>}
+      {fixture.availabilityMessage && <MutedText>{fixture.availabilityMessage}</MutedText>}
+      <MutedText>{fixture.syncedAt === null ? messages.text("match.syncUnknown") : <>
+        {messages.text("match.synced")}: <time dateTime={toUtcIsoString(fixture.syncedAt)}>{messages.reportingInstant(fixture.syncedAt)}</time>
+      </>}</MutedText>
+      {fixture.update?.result === "delayed" && <MutedText>{messages.text("match.resultDelayed")}</MutedText>}
       <Inline>
         {prediction?.provisional && <MutedText>{messages.text("match.provisional")}</MutedText>}
         {fixture.forecast?.updateDelayed && <MutedText>{messages.text("match.updateDelayed")}</MutedText>}

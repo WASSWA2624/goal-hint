@@ -36,7 +36,7 @@
 | ☑         | [029-match-detail-api.md](dev-plan/029-match-detail-api.md)                     |
 | ☑         | [030-performance-api.md](dev-plan/030-performance-api.md)                       |
 | ☑         | [031-public-response-cache.md](dev-plan/031-public-response-cache.md)           |
-| ☐         | [032-match-feed-page.md](dev-plan/032-match-feed-page.md)                       |
+| ☑         | [032-match-feed-page.md](dev-plan/032-match-feed-page.md)                       |
 | ☐         | [033-search-filter-controls.md](dev-plan/033-search-filter-controls.md)         |
 | ☐         | [034-pagination-navigation.md](dev-plan/034-pagination-navigation.md)           |
 | ☐         | [035-match-detail-page.md](dev-plan/035-match-detail-page.md)                   |

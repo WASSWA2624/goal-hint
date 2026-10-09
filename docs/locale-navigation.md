@@ -28,14 +28,15 @@ query mapping belongs to 028/032. It does not imply a settled prediction.
 or repeated status values. Prompt 017 extends both pages with the validated
 [feed query and client-state contract](client-state.md), including relative
 dates, bounded ranges, search, league, status, market, sorting and pagination.
-The current feed remains an interim preview; real querying and controls belong
-to 028/032/033. Unknown and incompatible query parameters return 404.
+Prompt 032 connects the feed to the shared cached stored-data service; controls
+belong to 033. Unknown and incompatible query parameters return 404.
 Invalid dates, unknown routes and unknown fixtures return 404 with navigation.
 `matchHref` validates path segments but establishes no fixture existence or
 canonical slug; 035 owns identity lookup and changed-slug redirects.
 
-The request-scoped `getShellDate` uses `connection()` and React `cache` to read
-one current instant after a request arrives. Shared calendar functions resolve
+The request-scoped `getShellInstant` uses `connection()` and React `cache` to read
+one current instant after a request arrives. `getShellDate` and feed reads use
+that same instant. Shared calendar functions resolve
 that instant to `Africa/Kampala`; a build cannot freeze the Today link. Every
 new server request uses the current EAT day. Live rollover in an already open
 tab belongs to 037. Links disable speculative prefetch while date-dependent
@@ -78,11 +79,10 @@ logo, light tokens, square corners, wrapping and logical spacing are reused.
 The earlier development primitive demo is no longer mounted on public pages;
 the isolated `test:styling` fixture remains available.
 
-All current locale pages inherit `noindex, follow`. The feed explicitly says it
-is a navigation preview; it does not assert empty fixtures, display invented
-forecasts or simulate loading/live progress. Methodology and information pages
-only identify content being prepared. Replace the feed in 032, methodology in
-038 and information pages in 039–041. Prompt 042 owns final indexing policy.
+All current locale pages inherit `noindex, follow`. The [032 feed](match-feed-page.md)
+renders stored fixtures, predictions, coverage and run progress, with truthful
+read-failure states. Methodology and information pages identify content being
+prepared; replace them in 038–041. Prompt 042 owns final indexing policy.
 
 ## Verification
 
