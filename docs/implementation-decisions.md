@@ -1767,3 +1767,65 @@ Actual workload/hosting, provider/rights/budgets/model qualification and
 publication freshness gates remain unresolved. 024–025 must pass before scheduled
 predictions run. Rollback stops bindings and preserves additive schema, forecasts,
 schedules, audit, receipts and events; inspect migration state and repair forward.
+
+## Prompt 024 — Audited schedule lifecycle
+
+Implemented locally on **9 October 2026 EAT**. The
+[schedule lifecycle runbook](schedule-lifecycle.md) defines the normalized
+ingestion, evidence policy, coordinator and private writer grants. Production
+bindings remain disabled; 025–027 own refresh execution, polling and settlement.
+
+Use one private service for catalog imports and future polling. Keep the original
+provider kickoff/status/result projection, retrieval/update clocks, separately
+verified actual start, actor, evidence reference and approved policy hash. Require
+the canonical provider fixture/team/competition/season identity; never deduplicate
+or remap an observation by names. Status mappings and unknown-update/conflict
+policy require synchronous evidence approval, with a second check before commit.
+No default production mapping approval, retention permission or live-call authority
+is inferred from synthetic tests.
+
+Serialize with publication/locking through the existing provider → fixture boundary.
+Canonical fields, append-only schedule/audit history, close/void receipts, cutoff
+enqueues, selection handoff, lifecycle cursor/receipt and durable change events
+commit together. Add transactional queue enqueue as a storage primitive; callers
+must roll back failed domain work. Default catalog imports refuse active-cycle
+kickoff/status changes without coordination. Empty feeds never create statuses.
+
+An ordinary kickoff adjustment changes the same cycle's cutoff/version and cutoff
+job, without a refresh job or manifest edit. Close passed corrected/previously
+elapsed cutoffs using accepted publication history. Actual-start proof narrows the
+safety boundary. A correction that invalidates an existing locked publication
+voids it while retaining that exact reference, payload, close and lock times.
+Closed cycles cannot reopen and no result selects a replacement prediction.
+
+Formal postponement before play voids the old cycle and retains its last forecast.
+An approved later scheduled observation prepares an unconsumed selection handoff;
+only the next eligible run after its recorded boundary creates a later ordinal.
+Repeated unchanged observations do not push that boundary forward. Repeated
+postponements can produce successive void cycles through successive daily runs,
+all under one canonical fixture. Handoff updates are a private mutable projection
+of append-only evidence; selection's own UPDATE grant remains consumedRunId only.
+Canceled/abandoned/awarded statuses void, while result observations and any verified
+score survive for later settlement. A later response without a score does not
+erase an already verified score for the unchanged status. Leaving the forward
+window stops refresh eligibility and preserves result tracking.
+
+Order by nondecreasing retrieval and known provider-update clocks. Store stale
+observations without rolling back canonical fields. Proven earlier actual starts
+remain safety evidence even when the enclosing observation is stale. Hold
+equal-time contradictory content, unknown mappings/kickoffs, held unknown update
+times and status regressions explicitly; selection/publication cannot proceed
+while the issue remains. A newer verified unambiguous observation may resolve
+the issue under policy. Independently verified mapped live proof still closes
+publication during a conflict; the disagreement remains visible rather than
+inventing a status or schedule winner.
+
+The additive InnoDB migration adds sealed append-only lifecycle observations and
+a mutable cursor/issue projection. PredictionChangeEvent has exactly one composite
+fixture/version binding to a refresh, cycle operation or lifecycle receipt. Material
+schedule/status/start/result/issue changes advance monotonic fixture versions.
+Exact retries return their original sealed receipt, including response loss after
+commit. Rollback disables bindings and preserves schema and immutable history;
+inspect actual DDL state and repair forward. OP-07/14/19/21, real provider rights,
+retention/conflict/freshness approval, budgets, model quality and workload/hosting
+remain live gates. No UI or provider requests are introduced.

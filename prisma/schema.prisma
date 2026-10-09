@@ -166,37 +166,39 @@ model FootballSeason {
 }
 
 model FootballFixture {
-  id                    String                    @id @default(uuid()) @db.Char(36)
-  provider              String                    @db.VarChar(32)
-  externalId            BigInt                    @db.UnsignedBigInt
-  homeTeamId            String                    @db.Char(36)
-  awayTeamId            String                    @db.Char(36)
-  seasonId              String                    @db.Char(36)
-  round                 String?                   @db.VarChar(512)
-  kickoff               DateTime?                 @db.DateTime(3)
-  eatDate               DateTime?                 @db.Date
-  status                String                    @default("unknown") @db.VarChar(32)
-  providerStatus        String?                   @db.VarChar(32)
+  id                    String                        @id @default(uuid()) @db.Char(36)
+  provider              String                        @db.VarChar(32)
+  externalId            BigInt                        @db.UnsignedBigInt
+  homeTeamId            String                        @db.Char(36)
+  awayTeamId            String                        @db.Char(36)
+  seasonId              String                        @db.Char(36)
+  round                 String?                       @db.VarChar(512)
+  kickoff               DateTime?                     @db.DateTime(3)
+  eatDate               DateTime?                     @db.Date
+  status                String                        @default("unknown") @db.VarChar(32)
+  providerStatus        String?                       @db.VarChar(32)
   elapsedMinutes        Int?
   regulationHome        Int?
   regulationAway        Int?
-  regulationEvidenceRef String?                   @db.VarChar(512)
-  regulationVerifiedAt  DateTime?                 @db.DateTime(3)
-  retrievedAt           DateTime                  @db.DateTime(3)
-  providerUpdatedAt     DateTime?                 @db.DateTime(3)
-  dataVersion           BigInt                    @default(1) @db.UnsignedBigInt
-  createdAt             DateTime                  @default(now()) @db.DateTime(3)
-  updatedAt             DateTime                  @updatedAt @db.DateTime(3)
-  homeTeam              FootballTeam              @relation("FootballHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  awayTeam              FootballTeam              @relation("FootballAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  season                FootballSeason            @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  regulationEvidenceRef String?                       @db.VarChar(512)
+  regulationVerifiedAt  DateTime?                     @db.DateTime(3)
+  retrievedAt           DateTime                      @db.DateTime(3)
+  providerUpdatedAt     DateTime?                     @db.DateTime(3)
+  dataVersion           BigInt                        @default(1) @db.UnsignedBigInt
+  createdAt             DateTime                      @default(now()) @db.DateTime(3)
+  updatedAt             DateTime                      @updatedAt @db.DateTime(3)
+  homeTeam              FootballTeam                  @relation("FootballHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  awayTeam              FootballTeam                  @relation("FootballAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  season                FootballSeason                @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   audits                FootballFixtureAudit[]
   evidenceSources       EvidenceSourceVersion[]
   evidenceSnapshots     FixtureEvidenceSnapshot[]
-  activeCycleId         String?                   @db.Char(36)
-  activeCycle           PredictionCycle?          @relation("FixtureActiveCycle", fields: [activeCycleId, id], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
-  predictionCycles      PredictionCycle[]         @relation("FixturePredictionCycles")
+  activeCycleId         String?                       @db.Char(36)
+  activeCycle           PredictionCycle?              @relation("FixtureActiveCycle", fields: [activeCycleId, id], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  predictionCycles      PredictionCycle[]             @relation("FixturePredictionCycles")
   predictionSets        PredictionSet[]
+  lifecycleState        FixtureLifecycleState?
+  lifecycleObservations FixtureLifecycleObservation[]
 
   @@unique([provider, externalId])
   @@index([eatDate, kickoff])
@@ -540,6 +542,7 @@ model SelectionCycleEligibility {
   evidenceRef     String          @db.VarChar(512)
   recordedAt      DateTime        @db.DateTime(3)
   consumedRunId   String?         @db.Char(36)
+  eligibleAfter   DateTime?       @db.DateTime(3)
   cycle           PredictionCycle @relation(fields: [previousCycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
   run             DailyRun?       @relation(fields: [consumedRunId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
@@ -547,35 +550,36 @@ model SelectionCycleEligibility {
 }
 
 model PredictionCycle {
-  id                   String                        @id @default(uuid()) @db.Char(36)
-  fixtureId            String                        @db.Char(36)
-  creationKey          String                        @db.Char(64)
-  creationHash         String                        @db.Char(64)
-  ordinal              Int                           @db.UnsignedInt
-  version              Int                           @default(1) @db.UnsignedInt
-  scheduleVersion      Int                           @db.UnsignedInt
-  kickoffAt            DateTime                      @db.DateTime(3)
-  cutoffAt             DateTime                      @db.DateTime(3)
-  openedAt             DateTime                      @db.DateTime(3)
-  state                String                        @default("open") @db.VarChar(16)
-  currentSetId         String?                       @db.Char(36)
-  lockedSetId          String?                       @db.Char(36)
-  closedAt             DateTime?                     @db.DateTime(3)
-  lockedAt             DateTime?                     @db.DateTime(3)
-  voidedAt             DateTime?                     @db.DateTime(3)
-  voidReason           String?                       @db.VarChar(2000)
-  fixture              FootballFixture               @relation("FixturePredictionCycles", fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  activeForFixtures    FootballFixture[]             @relation("FixtureActiveCycle")
-  sets                 PredictionSet[]               @relation("CyclePredictionSets")
-  currentSet           PredictionSet?                @relation("CycleCurrentSet", fields: [currentSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
-  lockedSet            PredictionSet?                @relation("CycleLockedSet", fields: [lockedSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
-  schedules            PredictionSchedule[]
-  audits               PredictionAudit[]
-  jobs                 DurableJob[]
-  selections           RunFixture[]
-  selectionEligibility SelectionCycleEligibility?
-  publicationBarrier   PredictionPublicationBarrier?
-  operations           PredictionCycleOperation[]
+  id                    String                        @id @default(uuid()) @db.Char(36)
+  fixtureId             String                        @db.Char(36)
+  creationKey           String                        @db.Char(64)
+  creationHash          String                        @db.Char(64)
+  ordinal               Int                           @db.UnsignedInt
+  version               Int                           @default(1) @db.UnsignedInt
+  scheduleVersion       Int                           @db.UnsignedInt
+  kickoffAt             DateTime                      @db.DateTime(3)
+  cutoffAt              DateTime                      @db.DateTime(3)
+  openedAt              DateTime                      @db.DateTime(3)
+  state                 String                        @default("open") @db.VarChar(16)
+  currentSetId          String?                       @db.Char(36)
+  lockedSetId           String?                       @db.Char(36)
+  closedAt              DateTime?                     @db.DateTime(3)
+  lockedAt              DateTime?                     @db.DateTime(3)
+  voidedAt              DateTime?                     @db.DateTime(3)
+  voidReason            String?                       @db.VarChar(2000)
+  fixture               FootballFixture               @relation("FixturePredictionCycles", fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  activeForFixtures     FootballFixture[]             @relation("FixtureActiveCycle")
+  sets                  PredictionSet[]               @relation("CyclePredictionSets")
+  currentSet            PredictionSet?                @relation("CycleCurrentSet", fields: [currentSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  lockedSet             PredictionSet?                @relation("CycleLockedSet", fields: [lockedSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  schedules             PredictionSchedule[]
+  audits                PredictionAudit[]
+  jobs                  DurableJob[]
+  selections            RunFixture[]
+  selectionEligibility  SelectionCycleEligibility?
+  publicationBarrier    PredictionPublicationBarrier?
+  operations            PredictionCycleOperation[]
+  lifecycleObservations FixtureLifecycleObservation[]
 
   @@unique([id, fixtureId])
   @@unique([fixtureId, creationKey])
@@ -787,18 +791,52 @@ model PredictionPublicationBarrier {
 
 // Per-fixture data-version cursor. Delivery/acknowledgement belongs to future caching.
 model PredictionChangeEvent {
-  fixtureId   String                    @db.Char(36)
-  version     BigInt                    @db.UnsignedBigInt
-  resultId    String?                   @unique @db.Char(64)
-  operationId String?                   @unique @db.Char(64)
-  kind        String                    @db.VarChar(32)
-  at          DateTime                  @db.DateTime(3)
-  result      PredictionRefreshResult?  @relation(fields: [resultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
-  operation   PredictionCycleOperation? @relation(fields: [operationId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  fixtureId   String                       @db.Char(36)
+  version     BigInt                       @db.UnsignedBigInt
+  resultId    String?                      @unique @db.Char(64)
+  operationId String?                      @unique @db.Char(64)
+  lifecycleId String?                      @unique @db.Char(64)
+  kind        String                       @db.VarChar(32)
+  at          DateTime                     @db.DateTime(3)
+  result      PredictionRefreshResult?     @relation(fields: [resultId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  operation   PredictionCycleOperation?    @relation(fields: [operationId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
+  lifecycle   FixtureLifecycleObservation? @relation(fields: [lifecycleId, fixtureId, version], references: [id, fixtureId, fixtureVersion], onDelete: Restrict, onUpdate: Restrict)
 
   @@id([fixtureId, version])
   @@unique([resultId, fixtureId, version], map: "PredictionChangeEvent_result_key")
   @@unique([operationId, fixtureId, version], map: "PredictionChangeEvent_operation_key")
+  @@unique([lifecycleId, fixtureId, version], map: "PredictionChangeEvent_lifecycle_key")
+}
+
+// Mutable eligibility/cursor projection, rebuilt from append-only observations.
+model FixtureLifecycleState {
+  fixtureId         String          @id @db.Char(36)
+  retrievedAt       DateTime        @db.DateTime(3)
+  providerUpdatedAt DateTime?       @db.DateTime(3)
+  contentHash       String?         @db.Char(64)
+  actualStartedAt   DateTime?       @db.DateTime(3)
+  issue             String?         @db.VarChar(128)
+  fixture           FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
+// Attributable normalized schedule/status/result evidence, never raw payloads.
+model FixtureLifecycleObservation {
+  id             String                 @id @db.Char(64)
+  fixtureId      String                 @db.Char(36)
+  cycleId        String?                @db.Char(36)
+  fixtureVersion BigInt                 @db.UnsignedBigInt
+  at             DateTime               @db.DateTime(3)
+  retrievedAt    DateTime               @db.DateTime(3)
+  outcome        String                 @db.VarChar(16)
+  reason         String                 @db.VarChar(128)
+  integrity      String                 @db.Char(64)
+  receiptJson    Json
+  fixture        FootballFixture        @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle          PredictionCycle?       @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  event          PredictionChangeEvent?
+
+  @@unique([id, fixtureId, fixtureVersion], map: "FixtureLifecycleObservation_change_key")
+  @@index([fixtureId, at, id])
 }
 
 // Immutable closure/void receipts remain separate from refresh and forecast payloads.

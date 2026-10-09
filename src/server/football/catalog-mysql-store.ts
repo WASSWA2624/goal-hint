@@ -5,7 +5,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma, FootballFixture, FootballImport, FootballTeam, FootballCompetition } from "../generated/prisma/client.ts";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
-import type { NormalizedTeam, NormalizedCompetition, SourceTimestamps } from "./api-football-normalize.ts";
+import type { NormalizedFixture, NormalizedTeam, NormalizedCompetition, SourceTimestamps } from "./api-football-normalize.ts";
 import type { CatalogAuthority, CatalogPreparedBatch, CatalogSelection, CatalogTeamMapping } from "./catalog-contract.ts";
 import { normalizeCatalogSearch, isSafeCatalogLogo, parseCatalogTeamMapping, catalogScopeKey, assertCatalogPreparedBatch, parseCatalogEvidenceRef } from "./catalog-input.ts";
 
@@ -86,7 +86,10 @@ export type CatalogMutationCoordinator = (mutation: Readonly<{
   transaction: Prisma.TransactionClient;
   before: CatalogFixtureSnapshot | null;
   proposed: Readonly<FixtureFields>;
+  observation?: NormalizedFixture;
+  evidenceRef?: string;
   apply(): Promise<CatalogFixtureSnapshot>;
+  retain(): Promise<CatalogFixtureSnapshot>;
 }>) => Promise<unknown>;
 
 async function lockCatalog(transaction: Prisma.TransactionClient) {
@@ -148,20 +151,32 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     } catch (error) { if (error instanceof CatalogStoreError) throw error; return fail("unavailable"); }
   }
   async function applyMutation(transaction: Prisma.TransactionClient, before: StoredFixture | null, proposed: FixtureFields,
-    operation: () => Promise<StoredFixture>): Promise<StoredFixture> {
+    operation: () => Promise<StoredFixture>, observation?: NormalizedFixture, evidenceRef?: string): Promise<{ row: StoredFixture; applied: boolean }> {
     let calls = 0, result: StoredFixture | undefined, pending: Promise<StoredFixture> | undefined;
+    let applied = false;
     const apply = () => {
       if (++calls !== 1) fail("coordination-failed");
+      applied = true;
       pending = operation().then((row) => { result = row; return row; });
       const snapshot = pending.then(catalogFixtureSnapshot);
       // An invalid coordinator may throw before awaiting its apply() result.
       void snapshot.catch(() => {});
       return snapshot;
     };
+    const retain = async () => {
+      if (++calls !== 1 || !before) return fail("coordination-failed");
+      result = before; pending = Promise.resolve(before);
+      return catalogFixtureSnapshot(before);
+    };
     try {
       if (options.coordinateFixtureMutation) await options.coordinateFixtureMutation({ transaction,
-        before: before === null ? null : catalogFixtureSnapshot(before), proposed: Object.freeze(proposed), apply });
-      else await apply();
+        before: before === null ? null : catalogFixtureSnapshot(before), proposed: Object.freeze(proposed),
+        ...(observation ? { observation } : {}), ...(evidenceRef ? { evidenceRef } : {}), apply, retain });
+      else {
+        if (before?.activeCycleId && (!same(before.kickoff, proposed.kickoff) || before.status !== proposed.status))
+          fail("coordination-failed");
+        await apply();
+      }
     } catch {
       await pending?.catch(() => {});
       fail("coordination-failed");
@@ -169,7 +184,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     if (calls !== 1 || pending === undefined) fail("coordination-failed");
     await pending;
     if (result === undefined) return fail("coordination-failed");
-    return result;
+    return { row: await transaction.footballFixture.findUniqueOrThrow({ where: { id: result.id }, include: fixtureRelations }), applied };
   }
   async function team(transaction: Prisma.TransactionClient, input: NormalizedTeam, authority: CatalogAuthority, changed: Set<string>, history: SharedHistory<FootballTeam>) {
     const mapping = await transaction.footballTeamProvider.findUnique({ where: { provider_externalId: { provider: PROVIDER, externalId: BigInt(input.id) } }, include: { team: true } });
@@ -294,7 +309,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         const previous = await transaction.footballFixture.findUnique({ where: { provider_externalId: { provider: PROVIDER, externalId: BigInt(input.id) } }, include: fixtureRelations });
         if (homeTeamId === awayTeamId) fail("invalid-state");
         if (previous) { fixtureIds.push(previous.id); await lockFixture(transaction, previous.id); }
-        if (previous && !fresh(input.source, previous)) continue;
+        if (previous && !fresh(input.source, previous) && !options.coordinateFixtureMutation) continue;
         const status = input.status === "unknown" && previous ? previous.status : input.status;
         const kickoff = input.kickoff === null ? previous?.kickoff ?? null : new Date(input.kickoff);
         const providerStatus = input.status === "unknown" && previous ? previous.providerStatus : input.providerStatus ?? previous?.providerStatus ?? null;
@@ -314,12 +329,14 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         const changes = materialChanges(previous ? fields(previous) : null, proposed), material = Object.keys(changes).length > 0;
         if (previous && previous.dataVersion >= MAX_VERSION && material) fail("invalid-state");
         const metadata = { retrievedAt: new Date(input.source.retrievedAt), providerUpdatedAt: timestamp(input.source.providerUpdatedAt) ?? previous?.providerUpdatedAt ?? null };
-        if (!previous || material) {
-          const row = await applyMutation(transaction, previous ? priorSnapshot(previous) : null, proposed, () => previous
-            ? transaction.footballFixture.update({ where: { id: previous.id }, data: { ...proposed, ...metadata, dataVersion: { increment: 1n } }, include: fixtureRelations })
-            : transaction.footballFixture.create({ data: { id: randomUUID(), provider: PROVIDER, externalId: BigInt(input.id), ...proposed, ...metadata }, include: fixtureRelations }));
+        if (!previous || material || options.coordinateFixtureMutation) {
+          const { row, applied } = await applyMutation(transaction, previous ? priorSnapshot(previous) : null, proposed, () => previous
+            ? transaction.footballFixture.update({ where: { id: previous.id }, data: { ...proposed, ...metadata,
+              ...(material ? { dataVersion: { increment: 1n } } : {}) }, include: fixtureRelations })
+            : transaction.footballFixture.create({ data: { id: randomUUID(), provider: PROVIDER, externalId: BigInt(input.id), ...proposed, ...metadata }, include: fixtureRelations }),
+            input, `catalog-import:${batch.request.id}`);
           if (!previous) { fixtureIds.push(row.id); insertedFixtures.add(row.id); }
-          changedFixtures.add(row.id); await audit(transaction, row, batch.request.id, input.source.retrievedAt, changes);
+          if (applied && material) { changedFixtures.add(row.id); await audit(transaction, row, batch.request.id, input.source.retrievedAt, changes); }
         } else await transaction.footballFixture.update({ where: { id: previous.id }, data: { ...metadata,
           regulationEvidenceRef: proposed.regulationEvidenceRef, regulationVerifiedAt: proposed.regulationVerifiedAt } });
       }
@@ -332,7 +349,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
           if (changedFixtures.has(previous.id)) continue;
           await lockFixture(transaction, previous.id);
           if (previous.dataVersion >= MAX_VERSION) fail("invalid-state");
-          const row = await applyMutation(transaction, priorSnapshot(previous), fields(previous), () => transaction.footballFixture.update({
+          const { row } = await applyMutation(transaction, priorSnapshot(previous), fields(previous), () => transaction.footballFixture.update({
             where: { id: previous.id }, data: { dataVersion: { increment: 1n } }, include: fixtureRelations }));
           changedFixtures.add(row.id); await audit(transaction, row, batch.request.id, batch.observedAt,
             { sharedIdentity: { teamIds: [...changedTeams], competitionIds: [...changedCompetitions] } });

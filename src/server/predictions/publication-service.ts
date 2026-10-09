@@ -103,6 +103,8 @@ export function createRevisionPublicationService(options: Readonly<{
             earlierCloseAt: barrier?.closedAt ?? null });
           // Do not let an older observation override newer canonical status/kickoff evidence.
           if (reason === null && input.observation.retrievedAt < fixture.retrievedAt.getTime()) reason = "stale-observation";
+          if (reason === null && (await tx.fixtureLifecycleState.findUnique({ where: { fixtureId: fixture.id } }))?.issue)
+            reason = "status-ineligible";
           const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" } });
           if (reason === null && latest && latest.runSequence >= run.sequence) reason = "older-run";
           let revision = null, outcome: RefreshPublicationResult["outcome"] = "skipped";

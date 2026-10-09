@@ -38,6 +38,7 @@ export type JobUsage = Readonly<{
 export type JobTransaction = Prisma.TransactionClient;
 export type JobQueue = Readonly<{
   enqueue(input: JobEnvelope): Promise<StoredJob>;
+  enqueueInTransaction(transaction: JobTransaction, input: JobEnvelope): Promise<StoredJob>;
   withTransaction<Result>(operation: (enqueue: (input: JobEnvelope) => Promise<StoredJob>, transaction: JobTransaction) => Promise<Result>): Promise<Result>;
   claim(ownerId: string, types: readonly Readonly<{ type: string; handlerVersion: number }>[]): Promise<JobLease | null>;
   renew(lease: JobLease): Promise<JobLease>;

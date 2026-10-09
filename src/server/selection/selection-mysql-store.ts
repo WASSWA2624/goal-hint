@@ -186,10 +186,11 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           await history.withFixtureTransaction(fixtureId, async (writer, nested) => {
             const fixture = await nested.footballFixture.findUniqueOrThrow({ where: { id: fixtureId }, include: {
               season: { include: { competition: { include: { providers: true } } } }, activeCycle: true,
-              _count: { select: { predictionCycles: true } } } });
+              lifecycleState: true, _count: { select: { predictionCycles: true } } } });
             const exclude = (reason: string) => { exclusions.push({ fixtureId, reason }); };
             const competition = fixture.season.competition.providers.some((mapping) => mapping.provider === "api-football" && policy.competitionIds.includes(Number(mapping.externalId)));
             if (!competition) return exclude("competition-ineligible");
+            if (fixture.lifecycleState?.issue) return exclude("lifecycle-conflict");
             if (!policy.eligibleStatuses.includes(fixture.status as "scheduled")) return exclude("status-ineligible");
             if (fixture.kickoff === null || !isInWindow(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), window)) return exclude("outside-window");
             const kickoffAt = utcInstantFromEpochMilliseconds(fixture.kickoff.getTime());
@@ -199,6 +200,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
             if (cycle?.state !== "open" && cycle) {
               const eligible = await nested.selectionCycleEligibility.findUnique({ where: { previousCycleId: cycle.id } });
               if (!eligible || eligible.consumedRunId !== null || eligible.previousVersion !== cycle.version ||
+                eligible.eligibleAfter !== null && eligible.eligibleAfter.getTime() >= window.startInclusive ||
                 eligible.kickoffAt.getTime() !== kickoffAt || (eligible.state === "void" ? cycle.state !== "void" : cycle.state !== "closed")) return exclude("closed-cycle");
               const next = await writer.createCycle({ fixtureId, creationKey: evidenceFingerprint({ eligibility: eligible.id }), kickoffAt, openedAt: now,
                 activate: true, actor: "daily-selection", reason: "Recorded eligible rescheduled cycle", evidenceRef: eligible.evidenceRef });

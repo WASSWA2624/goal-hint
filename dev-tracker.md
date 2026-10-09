@@ -28,7 +28,7 @@
 | ☑         | [021-daily-selection.md](dev-plan/021-daily-selection.md)                       |
 | ☑         | [022-revision-publication.md](dev-plan/022-revision-publication.md)             |
 | ☑         | [023-cutoff-locking.md](dev-plan/023-cutoff-locking.md)                         |
-| ☐         | [024-schedule-lifecycle.md](dev-plan/024-schedule-lifecycle.md)                 |
+| ☑         | [024-schedule-lifecycle.md](dev-plan/024-schedule-lifecycle.md)                 |
 | ☐         | [025-prediction-refresh-worker.md](dev-plan/025-prediction-refresh-worker.md)   |
 | ☐         | [026-fixture-result-sync.md](dev-plan/026-fixture-result-sync.md)               |
 | ☐         | [027-market-settlement.md](dev-plan/027-market-settlement.md)                   |

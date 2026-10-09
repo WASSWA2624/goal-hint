@@ -65,11 +65,11 @@ export function createCutoffLockingService(options: Readonly<{
       operationId: operation.id, kind: operation.kind === "close" ? "cycle-closed" : "cycle-voided", at: new Date(operation.at) } });
     return cutoffResult(tx, (await storedCutoffOperation(tx, operation.cycleId, operation.kind))!);
   }
-  async function scheduleCycle(input: CutoffTarget, recovery?: CutoffRecoveryInput) {
+  async function scheduleCycle(input: CutoffTarget, recovery?: CutoffRecoveryInput, existingTransaction?: Transaction) {
     const target = parseCutoffTarget(input);
     let failure: unknown;
     try {
-      return await queue.withTransaction(async (enqueue, tx) => {
+      const execute = async (enqueue: (input: ReturnType<typeof cutoffEnvelope>) => ReturnType<JobQueue["enqueue"]>, tx: Transaction) => {
         try {
           return await mutate(target, async (_writer, transaction) => {
             const action = recovery ? "recover" : "schedule", proof = recovery ? () => authority.verifyRecovery(recovery) : undefined;
@@ -85,13 +85,15 @@ export function createCutoffLockingService(options: Readonly<{
             return job;
           }, tx);
         } catch (error) { failure = error; throw error; }
-      });
+      };
+      return existingTransaction ? await execute((input) => queue.enqueueInTransaction(existingTransaction, input), existingTransaction)
+        : await queue.withTransaction(execute);
     } catch {
       if (failure instanceof CutoffLockingError) throw failure;
       return cutoffFail("unavailable");
     }
   }
-  async function close(input: CutoffTarget, lease?: JobLease, observation?: PublicationObservation): Promise<CutoffResult> {
+  async function close(input: CutoffTarget, lease?: JobLease, observation?: PublicationObservation, existingTransaction?: Transaction): Promise<CutoffResult> {
     const target = parseCutoffTarget(input);
     return mutate(target, async (writer, tx) => {
       const proof = observation === undefined ? undefined : () => authority.verifyObservation(observation);
@@ -100,6 +102,11 @@ export function createCutoffLockingService(options: Readonly<{
       if (previous) {
         if (previous.fixtureId !== target.fixtureId) return cutoffFail("wrong-cycle");
         return cutoffResult(tx, previous);
+      }
+      const voided = await storedCutoffOperation(tx, target.cycleId, "void");
+      if (voided) {
+        if (voided.fixtureId !== target.fixtureId) return cutoffFail("wrong-cycle");
+        return cutoffResult(tx, voided);
       }
       const cycle = await storedCycle(tx, target.cycleId);
       if (!cycle || cycle.fixtureId !== target.fixtureId || cycle.state !== "open") return cutoffFail("wrong-cycle");
@@ -156,9 +163,17 @@ export function createCutoffLockingService(options: Readonly<{
       authorize(observation ? "observe-play" : "close", target, proof);
       if (await serverNow(tx) < now) return cutoffFail("unavailable");
       return result;
-    });
+    }, existingTransaction);
   }
-  return Object.freeze({ scheduleCycle, close,
+  const service = Object.freeze({ scheduleCycle, close,
+    async voidLockedCycle(input: VoidLockedCycleInput): Promise<CutoffResult> {
+      const action = parseCutoffVoid(input);
+      return mutate(action, async (_writer, tx) => {
+        const cycle = await storedCycle(tx, action.cycleId);
+        if (!cycle || cycle.state === "open") return cutoffFail("wrong-cycle");
+        return service.voidCycle(action, tx);
+      });
+    },
     async scheduleRun(runId: string) {
       parseCutoff(historyId, runId);
       const entries = await database.query(async (tx) => {
@@ -177,7 +192,7 @@ export function createCutoffLockingService(options: Readonly<{
       const recovery = parseCutoffRecovery(input);
       return scheduleCycle({ fixtureId: recovery.fixtureId, cycleId: recovery.cycleId }, recovery);
     },
-    async voidLockedCycle(input: VoidLockedCycleInput): Promise<CutoffResult> {
+    async voidCycle(input: VoidLockedCycleInput, existingTransaction?: Transaction): Promise<CutoffResult> {
       const action = parseCutoffVoid(input), target = { fixtureId: action.fixtureId, cycleId: action.cycleId };
       return mutate(target, async (writer, tx) => {
         authorize("void", target, () => authority.verifyVoid(action));
@@ -187,22 +202,23 @@ export function createCutoffLockingService(options: Readonly<{
           return cutoffResult(tx, previous);
         }
         const cycle = await storedCycle(tx, target.cycleId);
-        if (!cycle || cycle.fixtureId !== target.fixtureId || cycle.state !== "closed") return cutoffFail("wrong-cycle");
+        if (!cycle || cycle.fixtureId !== target.fixtureId || cycle.state === "void") return cutoffFail("wrong-cycle");
         const now = await serverNow(tx), id = evidenceFingerprint({ cycleId: cycle.id, kind: "void" });
         const next = await writer.changeCycle({ actor: action.actor, reason: action.reason, evidenceRef: action.evidenceRef,
           cycleId: cycle.id, expectedVersion: cycle.version, eventKey: id, at: now,
-          next: { state: "void", currentSetId: cycle.currentSetId, lockedSetId: cycle.lockedSetId, closedAt: cycle.closedAt,
+          next: { state: "void", currentSetId: cycle.currentSetId, lockedSetId: cycle.lockedSetId, closedAt: cycle.closedAt ?? now,
             lockedAt: cycle.lockedAt, voidedAt: now, voidReason: action.reason } });
         const version = (await tx.footballFixture.findUniqueOrThrow({ where: { id: target.fixtureId }, select: { dataVersion: true } })).dataVersion;
         const result = await save(tx, freezeEvidence({ id, ...target, kind: "void", fixtureVersion: version, at: now,
-          effectiveCloseAt: cycle.closedAt!, actor: action.actor, reason: action.reason, evidenceRef: action.evidenceRef,
+          effectiveCloseAt: cycle.closedAt ?? now, actor: action.actor, reason: action.reason, evidenceRef: action.evidenceRef,
           scheduleHash: evidenceFingerprint(await schedules(tx, target)), cycle: next }));
         authorize("void", target, () => authority.verifyVoid(action));
         if (await serverNow(tx) < now) return cutoffFail("unavailable");
         return result;
-      });
+      }, existingTransaction);
     },
   });
+  return service;
 }
 export function createCutoffJob(service: ReturnType<typeof createCutoffLockingService>) {
   return defineJob({ type: CUTOFF_JOB_TYPE, handlerVersion: 1, payload: cutoffPayloadSchema,

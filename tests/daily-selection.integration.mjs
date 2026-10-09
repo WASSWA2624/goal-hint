@@ -55,6 +55,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
     }
     await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE ON goal_hint_test.${name} TO 'selection_app'@'127.0.0.1';`).join('\n') + `
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'selection_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.PredictionSchedule TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.PredictionAudit TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DailyRun TO 'selection_app'@'127.0.0.1';

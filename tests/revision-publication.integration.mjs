@@ -65,6 +65,7 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000
     await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE ON goal_hint_test.${name} TO 'publication_app'@'127.0.0.1';`).join('\n') +
       appendOnly.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'publication_app'@'127.0.0.1';`).join('\n') + `
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'publication_app'@'127.0.0.1';
+      GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'publication_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DailyRun TO 'publication_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (finishedAt, failure) ON goal_hint_test.DailyRunImport TO 'publication_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (jobId, jobState, terminalReason) ON goal_hint_test.RunFixture TO 'publication_app'@'127.0.0.1';

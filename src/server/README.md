@@ -71,6 +71,13 @@ The [cutoff contract](../../docs/cutoff-locking.md) defines recovery, grants and
 the shared durable change stream. Lifecycle detection and settlement remain
 separate operations.
 
+`createScheduleLifecycleService` consumes attributable normalized provider
+observations through the [schedule lifecycle contract](../../docs/schedule-lifecycle.md).
+Bind its coordinator to catalog imports and use `observe` from future polling.
+Kickoff corrections, postponement/void transitions, early-start proof, conflict
+holds and next-selection handoffs share publication/cutoff synchronization. No
+new prediction work or committed membership is created by an observation.
+
 `jobs/` provides the shared MySQL queue, typed registry, scoped transactional
 enqueue, renewable fenced leases and private trigger adapter. Use the
 [durable-jobs contract](../../docs/durable-jobs.md) for worker integration,

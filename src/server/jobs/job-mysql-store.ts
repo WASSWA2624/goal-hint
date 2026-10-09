@@ -142,7 +142,7 @@ export function createMysqlJobQueue(database: DatabaseRuntime): JobQueue {
     return finish(transaction, job, lease.attemptId, at, "completed", false, true);
   }
   return Object.freeze({
-    withTransaction, enqueue: (input) => withTransaction((write) => write(input)),
+    withTransaction, enqueueInTransaction: enqueue, enqueue: (input) => withTransaction((write) => write(input)),
     async claim(ownerId, types) {
       parseJob(jobHash, ownerId);
       if (types.length < 1 || types.length > 64) return jobFail("invalid-request");

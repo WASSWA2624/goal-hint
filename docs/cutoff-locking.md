@@ -114,6 +114,11 @@ This is the operation 024 can call after independently proving invalidation.
 It does not find or substitute another pick, infer rescheduling or settle a
 result. Closed and void cycles cannot reopen through history or publication.
 
+024 additionally uses `voidCycle` for a verified pre-lock postponement/terminal
+status. It preserves the current forecast without manufacturing a lock. Lifecycle
+calls close/void/schedule with its existing transaction so canonical changes,
+observations and cutoff jobs commit together. See [schedule lifecycle](schedule-lifecycle.md).
+
 Use the existing coherent history/publication readers: open cycles expose
 current forecasts; closed cycles expose their locked forecast or unavailable;
 void cycles retain the original forecast with the void reason. A closure retry
@@ -149,7 +154,7 @@ schedule history, invalid current references, score-independent selection,
 duplicate jobs, void immutability, rollback and ambiguous commit recovery.
 
 Live hosting/workload approval, actual job bounds, provider/rights/model/budget
-qualification and publication freshness gates remain pending. 024–025 must
-complete lifecycle coordination and prediction-worker integration before
+qualification and publication freshness gates remain pending. 024 implements
+lifecycle coordination; 025 must complete prediction-worker integration before
 scheduled predictions can be enabled. Actual results and blockers are recorded
 in [development progress](development-progress.md).

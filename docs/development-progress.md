@@ -2132,3 +2132,71 @@ corrections, 025 refresh orchestration, 027 settlement, 031 cache consumption an
 and the live gates. Rollback disables bindings and retains additive schema and
 immutable forecasts, schedules, audits, receipts and events; repairs roll forward.
 No UI changed, so visual acceptance is not required.
+
+## Prompt 024 — Schedule lifecycle
+
+**Date:** 9 October 2026 EAT. **Status:** implementation and required local
+acceptance complete. The tracker row is ticked; live activation remains gated.
+
+### Changed files and behavior
+
+- `predictions/lifecycle-{contract,input,policy,read,service}.ts` provide one
+  normalized, attributable observation service with explicit mapping/evidence
+  policy, immutable receipt replay, monotonic source ordering, conflict holds,
+  actual-start safety, cutoff corrections, postponement/terminal voids and
+  next-daily-selection rescheduling handoffs. No polling loop is introduced.
+- Catalog coordination now receives original normalized observations and an
+  explicit apply/retain choice, including stale/unchanged rows. Active-cycle
+  kickoff/status changes without coordination fail closed. Publication and
+  selection check the stored conflict projection. Refresh eligibility remains
+  separate from result tracking outside the rolling window.
+- Cutoff operations reuse the caller's transaction, enqueue updated cutoff jobs
+  atomically and permit audited pre-lock voids while preserving existing
+  closed-lock behavior. The shared queue exposes transactional enqueue. No
+  lifecycle observation creates a prediction-refresh job or edits a manifest.
+- Prisma schema/snapshot and migration `20261009150750_schedule_lifecycle`
+  add InnoDB/binary-identity lifecycle cursor and append-only observation tables,
+  a next-run handoff boundary, and composite lifecycle/fixture/version change
+  event bindings with native checks. Existing refresh/cycle event rows remain valid.
+- `tests/schedule-lifecycle.{test,integration}.mjs`, the synthetic lifecycle helper
+  and reusable prediction-pipeline harness cover real MySQL/selection/publication/
+  queue/history behavior. Existing cutoff/selection/publication harness grants
+  add SELECT on the conflict projection; forecasts and observations remain immutable.
+- The new [schedule runbook](schedule-lifecycle.md), cutoff/selection/publication
+  guides, server README and decision register describe evidence ordering, conflict
+  resolution, coordination, grants and live handoff. No UI changed.
+
+### Verification
+
+Checks use bundled **Node.js 24.19.0 / npm 11.17.0** and owned throwaway
+**MySQL Community Server 8.4.11** via MYSQL_TEST_SERVER_BINARY. Repository pins
+24.18.1/11.16.0 remain unchanged. Provider observations, clocks, policies and
+approvals are synthetic; no provider, production database or installed service
+is used. Initial lifecycle acceptance passed **23/23**, expanded acceptance
+passed **26/26**, and final acceptance passed **27/27**, including retained
+regulation scores after missing-score observations and final-to-live regression
+holds. No feature check remains skipped or pending.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:lifecycle` | **27 passed, 0 failed/skipped**: five deterministic tests, the genuine MySQL harness and twenty-one substantive database/concurrency cases. Log: `.tmp/024-lifecycle.log`. |
+| Migration and permissions | Fresh deployment and `db:verify` passed without drift. New tables use InnoDB and binary identity collation. Observation edits/deletes and unbound change events were denied. Existing publication/cycle events still passed their regressions. |
+| Lifecycle and selection | Ordinary delay preserves cycle/job/manifest identity. Passed corrected/previously elapsed cutoffs close from eligible history. Repeated postponements void/preserve earlier forecasts and create ordinals two/three only in later daily selections; unchanged polls retain the handoff boundary. Terminal statuses preserve normalized result observations and known verified scores. |
+| Safety and conflicts | Early play and earlier-start corrections close/void before and after locking. Same-time/unknown-mapping/regressed-status conflicts remain explicit and block publication. Stale evidence cannot roll back schedule fields; verified older start proof still invalidates a lock. Missing provider entries do not invent a terminal status. |
+| Races and atomicity | Competing lifecycle/publication/lock clients preserve irreversible closure and never replace a locked selection. Six duplicate observations create one receipt/transition. Failed scheduling, authority or identity validation rolls back canonical/history/event effects. Ambiguous committed-response replay returns the original receipt. No extra refresh job or changed committed manifest membership was observed. |
+| Affected MySQL regressions | `node --conditions=react-server --test --test-concurrency=2 tests/catalog.integration.mjs tests/prediction-history.integration.mjs tests/daily-selection.integration.mjs tests/revision-publication.integration.mjs tests/cutoff-locking.integration.mjs tests/durable-jobs.integration.mjs`: **113 passed, 0 failed/skipped**. Log: `.tmp/024-regression.log`. |
+| Repository units | `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`: **814 cases, 813 passed, 0 failed, 1 existing Windows POSIX-mode skip**. Reduced concurrency avoids the previously documented scheduler-sensitive fallback test. Log: `.tmp/024-unit.log`. |
+| Prisma, lint and types | Prisma format/generation/validation, zero-warning lint and strict type-check passed. Schema and snapshot agree. Exact pinned runtime execution is not claimed. |
+| `npm run build` | Passed, exit 0: production compilation, TypeScript and page generation. Log: `.tmp/024-build.log`. |
+
+### Live blockers and handoff
+
+Actual provider mappings, evidence/conflict/unknown-update and retention approval,
+rights, publication freshness, separate budgets, model/evaluation qualification,
+workload bounds and hosting identity remain live gates (OP-07/14/19/21). Synthetic
+authority proves local failure behavior and grants no live operation permission.
+025 owns spending/refresh orchestration, 026 shared polling/result synchronization,
+027 settlement, 031 event consumption and 043 watchdog discovery. No later prompt
+is implemented or ticked. Rollback disables bindings and preserves additive schema,
+canonical identities and immutable forecasts/schedules/evidence/audits/events;
+inspect actual DDL state and repair forward. Visual acceptance is not required.

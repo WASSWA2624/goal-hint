@@ -139,6 +139,13 @@ role. Preserve existing catalog/history/queue grants. Add:
 - `RunFixture`: SELECT, INSERT; UPDATE only `jobId`, `jobState`, `terminalReason`.
 - `SelectionCycleEligibility`: SELECT, INSERT; UPDATE only `consumedRunId`.
 
+024 supplies audited reschedule handoffs with an `eligibleAfter` boundary and
+checks stored lifecycle conflicts before selection. The lifecycle writer has
+additional column-scoped handoff permissions; selection retains its original
+restricted updates. Bind the catalog's lifecycle coordinator for active fixture
+imports. See [schedule lifecycle](schedule-lifecycle.md) for the transition/grant
+contract. New cycles still originate only in an eligible daily manifest commit.
+
 Native checks bind request dates, refresh identities, rank and state/outcome
 projections. Manifest hashes and policy hashes are checked on reads; operational
 updates cannot change sealed content. Never grant table-wide mutation of immutable
