@@ -38,6 +38,7 @@
     "test:state:rendering": "node scripts/verify-client-state-rendering.mjs",
     "test:card": "node --conditions=react-server --test tests/match-card.test.mjs",
     "test:card:rendering": "node scripts/verify-match-card-rendering.mjs",
+    "test:history": "node --conditions=react-server --test tests/prediction-history.test.mjs tests/prediction-history.integration.mjs",
     "test": "node --conditions=react-server --test tests/*.test.mjs",
     "check": "npm run db:generate && npm run db:validate && npm run lint && npm run typecheck && npm test && npm run build"
   },

@@ -1670,3 +1670,92 @@ destinations and 037 owns refresh/polling. Locked-revision projection and settle
 outcomes remain server responsibilities. Real media rights, provider operations,
 forecast qualification and launch gates retain their existing owners.
 **No blocker remains for 018.**
+
+## 019 — Immutable prediction history
+
+Date: **9 October 2026 (Africa/Kampala)**.
+
+Implemented prediction-history persistence and private read repositories. The
+[history runbook](prediction-history.md) and
+[decision register](implementation-decisions.md#prompt-019--immutable-prediction-cycle-and-revision-storage)
+document invariants, transaction handoff, least-privilege grants and rollback
+that preserves history. No dependency version or lockfile changed.
+
+### Scope and changed files
+
+- `prisma/schema.prisma`, its schema snapshot and migration
+  `20261009121009_prediction_history/migration.sql` add minimal `DailyRun`
+  identity/order, `PredictionCycle`, immutable `PredictionSet`/`MarketPrediction`,
+  and append-only `PredictionSchedule`/`PredictionAudit`. They extend existing
+  fixtures with an active-cycle reference and reuse evidence/model records.
+  Composite foreign keys bind cycle/fixture/current/locked/predecessor, run/order,
+  schedule and exact evidence identity/version/hash. Native probability, state,
+  timing, projection/integrity checks and lookup/uniqueness indexes supplement
+  the shared application rules. The migration contains no forecast seeds.
+- `src/server/predictions/{history-contract,history-input,history-read,history-mysql-store}.ts`
+  supplies strict commands/types, idempotent run/cycle creation, immutable
+  complete revisions, scoped serialized transactions and expected-version
+  cycle/reference changes. All four families are stored explicitly; unsupported
+  new families never inherit old values. Original provenance/fallback reasons,
+  evidence/model/rule versions and distinct clocks survive unchanged.
+- Mutations reuse the existing catalog provider→fixture lock order and increment
+  exact fixture data versions with their audit records. Failed callbacks roll
+  back all related SQL; caught writer errors also prevent commit. Immutable
+  payloads have no supported update/delete method, and test application grants
+  deny those operations. Closed/locked cycles cannot reopen or substitute picks.
+- Coherent read-only current/locked/display, revision/cycle history, audit and
+  schedule repositories use stable bounded cursors. Open reads current, closed
+  reads locked or unavailable, and void retains its last applicable prediction
+  and reason even without a lock. Empty cycles never invent a forecast.
+- `src/server/fallback/fallback-input.ts` adds reusable strict archive parsing
+  for resolved candidates, preserving the existing complete market validator,
+  coherent match-result/double-chance provenance, original clocks and flags.
+- `tests/prediction-history.{test,integration}.mjs` and its synthetic helper
+  exercise contracts and genuine isolated database behavior. `package.json`
+  exposes `test:history`. The server guidance, database/history runbooks,
+  implementation decisions, progress record and tracker document the handoff.
+
+### Validation and evidence
+
+Checks used pinned **Node.js 24.18.1 / npm 11.16.0** and owned throwaway
+**MySQL Community Server 8.4.11** instances selected with
+`MYSQL_TEST_SERVER_BINARY`. Separate migration/application users exercised real
+permissions. Tests made no football, news or AI provider request; all decisions,
+forecast inputs and permissions were synthetic. No installed MySQL service or
+application database was used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run check` | Passed (exit 0): Prisma generation/validation, zero-warning lint, strict type-check, **785 cases: 784 passed, 0 failed, 1 existing Windows POSIX-mode skip**, and the Next.js production build. Log: `.tmp/019-check.log`. |
+| `npm run test:history` | **22 passed, 0 failed/skipped**: five deterministic archive/command tests plus the database harness and 16 database cases. Log: `.tmp/019-history.log`. |
+| Migration/schema | All committed migrations deployed to fresh InnoDB databases. `db:verify` confirmed schema agreement with no drift; application DDL and migration-table access were denied. No live rows or seeds were introduced. |
+| Concurrency and bindings | Six independent-client retries each shared one run, cycle and refresh publication. Conflicting inputs, stale schedules/versions, older new runs, wrong evidence/fixture/cycle references and invalid probabilities were refused. Native composite keys also rejected cross-cycle/fixture refs and malformed probability payloads. |
+| Precision/provenance | Binary64 thirds, complete source provenance, explanations, model/evidence bindings, original publication/evidence/source times and unknown provider clocks round-tripped. Fixture versions above JavaScript's safe integer range remained exact. A newer partial fallback snapshot removed unsupported older AI families. |
+| Immutability/atomicity | Application UPDATE/DELETE attempts on sets/markets/schedules/audits and cycle identity edits failed. Throwing after revision/reference changes rolled back payloads, markets, references, audits and fixture versions. Catching a writer failure inside the callback still rolled back the entire transaction. Escaped writer calls failed. |
+| Read/lifecycle storage | Chronological cursors did not alter references/versions. Closed cycles used locked or unavailable data; locked picks could not be replaced/reopened. Schedule corrections appended observations/audits while preserving picks. Void cycles retained reasons/predictions without a lock; empty closed/void cycles stayed unavailable. Activating a new explicit cycle retained old history. |
+| Existing catalog integration | **28 passed, 0 failed/skipped** on MySQL 8.4.11. Canonical identities, import coordination, exact versions, concurrency and result provenance remained valid. Log: `.tmp/019-catalog.log`. |
+| Existing evidence integration | **20 passed, 0 failed/skipped** on MySQL 8.4.11. Immutable requests/sources, precision, native constraints, nullable cycle/run refs and archive preservation remained valid. Log: `.tmp/019-evidence.log`. |
+| Existing model integration | **12 passed, 0 failed/skipped** on MySQL 8.4.11. Immutable model configurations, pins, authority checks, native constraints and least privilege remained valid. Log: `.tmp/019-predictor.log`. |
+
+The initial isolated migration attempt caught MySQL's requirement for an
+explicit boolean comparison around COALESCE in CHECK expressions; the migration
+was corrected before acceptance. Real round trips also identified unsigned
+32-bit raw-query decoding and the evidence fixture's original authority binding;
+those were corrected without weakening validation or permissions. Later clean
+runs passed. The owned test instances were shut down and removed by their
+ownership-checked harness. No UI changed, so visual acceptance was not required.
+
+### Deferred interfaces and blockers
+
+020 owns durable job/lease identity, 021 committed daily manifests, 022
+transactional publication eligibility, 023 eligible cutoff locking, 024 lifecycle
+decisions/canonical schedule coordination, and 027 settlement/corrections.
+The provided transaction writer is their storage boundary; it is not an active
+publication service or a scheduler. Public read endpoints and history UI remain
+with 028/029/036. Rollback preserves additive schema and immutable history while
+disabling writers; corrections use reviewed forward migrations and drift checks.
+
+Live evidence/model/source approvals and quality gates in 011/012/014 remain
+pending with their existing tracker state, alongside production database
+grants/retention/recovery qualification. They do not block independent local
+storage acceptance. **No blocker remains for 019.**

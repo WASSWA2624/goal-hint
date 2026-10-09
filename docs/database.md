@@ -165,6 +165,11 @@ backups, workload capacity or production qualification.
 
 ## Migration workflow
 
+Prediction history from 019 extends canonical fixtures/evidence/model versions
+with additive cycles, immutable sets/markets and schedule/audit records. Read
+the [history runbook](prediction-history.md) for composite binding constraints,
+column-scoped cycle grants and rollback that preserves forecast history.
+
 | Command | Purpose and target |
 | --- | --- |
 | `npm run db:generate` | Reproduce the generated server client without connecting to a database. |

@@ -1470,3 +1470,58 @@ SSR/hydration and image behavior. Synthetic data and the acceptance destination
 are confined to tests/temporary apps. Public routes remain the honest development
 shell; real feed/detail/polling and existing operating gates retain their owners.
 No dependency, lockfile, schema or migration changed.
+
+## Prompt 019 — Immutable prediction-cycle and revision storage
+
+Implemented on **9 October 2026 EAT**. The
+[history runbook](prediction-history.md) defines schema invariants, private APIs,
+grants, transaction ownership and history-preserving migration rollback.
+
+The additive migration extends canonical fixtures with an optional active-cycle
+reference and reuses existing evidence snapshots/model versions. `DailyRun`
+contains only one identity per EAT date and a deterministic numeric YYYYMMDD
+order, so backfilled creation/worker completion cannot invert daily chronology.
+Manifest completeness/membership, job state and dispatch remain with 020/021.
+
+Cycles have durable caller creation keys, ordinals, schedule/mutation versions,
+cutoffs, states, current/locked references, closure/void times and public reasons.
+Schedule observations and audit events append; they do not replace earlier
+history. Composite foreign keys bind fixture/cycle/set/run/order/evidence/model
+references. One accepted `PredictionSet` per run/fixture/cycle identity survives
+retries and model changes; changed replay input is refused. Each cycle's accepted
+run order increases and its predecessor chain stays immutable. Exact older
+replays return their record without altering the current reference.
+
+Each set persists the complete resolved candidate and four explicit market rows.
+Shared market validation governs probabilities, deterministic picks, derivation
+and source consistency. DOUBLE/native JSON preserve binary64 probabilities;
+unsigned BIGINT fixture versions remain exact. Unsupported families are explicit
+unavailable rows, with no inheritance. Match result and double chance share
+provenance/clocks/fallback reasons. Evidence cutoff, generation completion,
+publication, recording and original provider clocks remain distinct; absent
+provider update/generation times stay unknown. The existing regulation market
+rule version also records the settlement rule contract.
+
+Storage callbacks reuse catalog provider→fixture locking and one Prisma
+transaction. They expose append-only revision writes and explicit versioned
+cycle/reference changes, together with a scoped transaction for later services.
+Any write failure rolls back the whole callback even if caught inside it.
+Accepted sets/markets, reference decisions, schedules/audits and fixture version
+changes commit atomically. Application grants deny payload/schedule/audit updates
+and deletes; cycle updates are scoped to mutable columns. Closure cannot reopen
+or replace locked picks through supported write paths.
+
+Read-only repositories use coherent Repeatable Read snapshots. Open cycles show
+current; closed cycles show locked or unavailable. Void cycles retain locked,
+otherwise current/last accepted forecasts, with the reason, including empty
+cycles. Explicit historical lookups and bounded revision/cycle/audit/schedule
+cursors never change references, versions or settlement. Sealed payloads and
+their native projections are revalidated when read.
+
+These storage primitives make no publication-eligibility, postponement, lock
+selection, settlement or provider-quality decision. 022–024/027 supply those
+decisions under the same transaction boundary. No endpoint, live prediction,
+seed, job/poller or UI was added. Production access/grants/retention and the
+unresolved live 011/012/014 gates keep their existing owners. Code rollback
+retains additive schema/history and disables writers; repairs roll forward
+after checking actual schema and migration state, never by resetting history.

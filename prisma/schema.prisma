@@ -193,6 +193,10 @@ model FootballFixture {
   audits                FootballFixtureAudit[]
   evidenceSources       EvidenceSourceVersion[]
   evidenceSnapshots     FixtureEvidenceSnapshot[]
+  activeCycleId         String?                   @db.Char(36)
+  activeCycle           PredictionCycle?          @relation("FixtureActiveCycle", fields: [activeCycleId, id], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  predictionCycles      PredictionCycle[]         @relation("FixturePredictionCycles")
+  predictionSets        PredictionSet[]
 
   @@unique([provider, externalId])
   @@index([eatDate, kickoff])
@@ -399,11 +403,13 @@ model FixtureEvidenceSnapshot {
   homeTeam           FootballTeam                    @relation("EvidenceSnapshotHomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   awayTeam           FootballTeam                    @relation("EvidenceSnapshotAwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sources            FixtureEvidenceSnapshotSource[]
+  predictionSets     PredictionSet[]
 
   @@unique([requestId, fixtureId, homeTeamId, awayTeamId, fixtureVersion], map: "FixtureEvidenceSnapshot_binding_key")
   @@index([contentHash])
   @@index([fixtureId, analysisAt])
   @@index([cycleId, runId])
+  @@unique([requestId, fixtureId, cycleId, runId, fixtureVersion, contentHash], map: "Evidence_prediction_binding_key")
 }
 
 // Both composite foreign keys require every source to belong to the snapshot's
@@ -448,6 +454,164 @@ model ModelVersion {
   integrity            String    @db.Char(64)
   configurationJson    Json
   createdAt            DateTime  @default(now()) @db.DateTime(3)
+  predictionSets       PredictionSet[]
 
   @@index([provider, model, providerModelVersion])
+}
+
+// Identity and order only. Selection manifests and job state belong to 021/020.
+model DailyRun {
+  id        String          @id @default(uuid()) @db.Char(36)
+  sequence  BigInt          @unique @db.UnsignedBigInt
+  eatDate   DateTime        @unique @db.Date
+  createdAt DateTime        @db.DateTime(3)
+  sets      PredictionSet[]
+
+  @@unique([id, sequence])
+}
+
+model PredictionCycle {
+  id                 String                    @id @default(uuid()) @db.Char(36)
+  fixtureId          String                    @db.Char(36)
+  creationKey        String                    @db.Char(64)
+  creationHash       String                    @db.Char(64)
+  ordinal            Int                       @db.UnsignedInt
+  version            Int                       @default(1) @db.UnsignedInt
+  scheduleVersion    Int                       @db.UnsignedInt
+  kickoffAt          DateTime                  @db.DateTime(3)
+  cutoffAt           DateTime                  @db.DateTime(3)
+  openedAt           DateTime                  @db.DateTime(3)
+  state              String                    @default("open") @db.VarChar(16)
+  currentSetId       String?                   @db.Char(36)
+  lockedSetId        String?                   @db.Char(36)
+  closedAt           DateTime?                 @db.DateTime(3)
+  lockedAt           DateTime?                 @db.DateTime(3)
+  voidedAt           DateTime?                 @db.DateTime(3)
+  voidReason         String?                   @db.VarChar(2000)
+  fixture            FootballFixture           @relation("FixturePredictionCycles", fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  activeForFixtures  FootballFixture[]         @relation("FixtureActiveCycle")
+  sets               PredictionSet[]           @relation("CyclePredictionSets")
+  currentSet         PredictionSet?            @relation("CycleCurrentSet", fields: [currentSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  lockedSet          PredictionSet?            @relation("CycleLockedSet", fields: [lockedSetId, id, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  schedules          PredictionSchedule[]
+  audits             PredictionAudit[]
+
+  @@unique([id, fixtureId])
+  @@unique([fixtureId, creationKey])
+  @@unique([fixtureId, ordinal])
+  @@index([state, cutoffAt])
+  @@index([currentSetId, id, fixtureId], map: "PredictionCycle_current_idx")
+  @@index([lockedSetId, id, fixtureId], map: "PredictionCycle_locked_idx")
+}
+
+// Append-only schedule observations, including corrections after closure.
+model PredictionSchedule {
+  id                 String          @id @default(uuid()) @db.Char(36)
+  fixtureId          String          @db.Char(36)
+  cycleId            String          @db.Char(36)
+  version            Int             @db.UnsignedInt
+  kickoffAt          DateTime        @db.DateTime(3)
+  cutoffAt           DateTime        @db.DateTime(3)
+  observedAt         DateTime        @db.DateTime(3)
+  providerObservedAt DateTime?       @db.DateTime(3)
+  actualStartedAt    DateTime?       @db.DateTime(3)
+  actor              String          @db.VarChar(128)
+  reason             String          @db.VarChar(2000)
+  evidenceRef        String          @db.VarChar(512)
+  cycle              PredictionCycle @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  sets               PredictionSet[]
+
+  @@unique([cycleId, version])
+  @@index([fixtureId, observedAt])
+}
+
+// A complete accepted snapshot; no application UPDATE/DELETE grants.
+model PredictionSet {
+  id                    String                  @id @default(uuid()) @db.Char(36)
+  fixtureId             String                  @db.Char(36)
+  fixtureVersion        BigInt                  @db.UnsignedBigInt
+  cycleId               String                  @db.Char(36)
+  runId                 String                  @db.Char(36)
+  runSequence           BigInt                  @db.UnsignedBigInt
+  jobId                 String                  @db.Char(64)
+  fixtureRevision       Int                     @db.UnsignedInt
+  cycleRevision         Int                     @db.UnsignedInt
+  predecessorId         String?                 @db.Char(36)
+  scheduleVersion       Int                     @db.UnsignedInt
+  modelVersionId        String?                 @db.Char(64)
+  evidenceSnapshotId    String                  @db.Char(64)
+  evidenceHash          String                  @db.Char(64)
+  evidenceCutoffAt      DateTime                @db.DateTime(3)
+  generationCompletedAt DateTime                @db.DateTime(3)
+  publishedAt           DateTime                @db.DateTime(3)
+  recordedAt            DateTime                @db.DateTime(3)
+  ruleVersion           String                  @db.VarChar(64)
+  requestHash           String                  @db.Char(64)
+  integrity             String                  @db.Char(64)
+  candidateJson         Json
+  fixture               FootballFixture         @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle                 PredictionCycle         @relation("CyclePredictionSets", fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  run                   DailyRun                @relation(fields: [runId, runSequence], references: [id, sequence], onDelete: Restrict, onUpdate: Restrict)
+  schedule              PredictionSchedule      @relation(fields: [cycleId, scheduleVersion], references: [cycleId, version], onDelete: Restrict, onUpdate: Restrict)
+  evidence              FixtureEvidenceSnapshot @relation(fields: [evidenceSnapshotId, fixtureId, cycleId, runId, fixtureVersion, evidenceHash], references: [requestId, fixtureId, cycleId, runId, fixtureVersion, contentHash], onDelete: Restrict, onUpdate: Restrict, map: "PredictionSet_evidence_fkey")
+  model                 ModelVersion?           @relation(fields: [modelVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  predecessor           PredictionSet?          @relation("PredictionPredecessor", fields: [predecessorId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  successors            PredictionSet[]         @relation("PredictionPredecessor")
+  currentForCycles      PredictionCycle[]       @relation("CycleCurrentSet")
+  lockedForCycles       PredictionCycle[]       @relation("CycleLockedSet")
+  markets               MarketPrediction[]
+
+  @@unique([id, cycleId, fixtureId])
+  @@unique([runId, fixtureId, cycleId], map: "PredictionSet_refresh_key")
+  @@unique([fixtureId, fixtureRevision])
+  @@unique([cycleId, cycleRevision])
+  @@index([cycleId, runSequence])
+  @@index([fixtureId, runSequence, fixtureRevision])
+  @@index([predecessorId, cycleId, fixtureId], map: "PredictionSet_predecessor_idx")
+}
+
+// Four explicit family rows, including unavailable families. DOUBLE preserves
+// the shared domain's binary64 values; canonical JSON retains full provenance.
+model MarketPrediction {
+  setId             String        @db.Char(36)
+  family            String        @db.VarChar(32)
+  available         Boolean
+  source            String?       @db.VarChar(16)
+  selection         String?       @db.VarChar(32)
+  selectedProbability Float?      @db.Double
+  probability1      Float?        @db.Double
+  probability2      Float?        @db.Double
+  probability3      Float?        @db.Double
+  unavailableReason String?       @db.VarChar(32)
+  generatedAt       DateTime?     @db.DateTime(3)
+  retrievedAt       DateTime?     @db.DateTime(3)
+  providerUpdatedAt DateTime?     @db.DateTime(3)
+  integrity         String        @db.Char(64)
+  payloadJson       Json
+  set               PredictionSet @relation(fields: [setId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([setId, family])
+  @@index([family, source])
+}
+
+model PredictionAudit {
+  id          String          @id @default(uuid()) @db.Char(36)
+  fixtureId   String          @db.Char(36)
+  cycleId     String          @db.Char(36)
+  version     Int             @db.UnsignedInt
+  eventKey    String          @db.Char(64)
+  requestHash String          @db.Char(64)
+  kind        String          @db.VarChar(32)
+  recordedAt  DateTime        @db.DateTime(3)
+  actor       String          @db.VarChar(128)
+  reason      String          @db.VarChar(2000)
+  evidenceRef String          @db.VarChar(512)
+  beforeJson  Json?
+  afterJson   Json
+  integrity   String          @db.Char(64)
+  cycle       PredictionCycle @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([cycleId, version])
+  @@unique([cycleId, eventKey])
+  @@index([fixtureId, recordedAt])
 }

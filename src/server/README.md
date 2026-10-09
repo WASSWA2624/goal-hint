@@ -50,3 +50,10 @@ regulation-result and history verifiers. Keep original clocks and matched
 fixture/cycle/horizon identities. Evaluation archives do not publish or promote
 models; real quality and public claims require the separately frozen gates and
 independent final-test evidence in the [evaluation runbook](../../docs/forecast-evaluation.md).
+
+`predictions/` stores immutable prediction sets, explicit market snapshots,
+cycles and append-only schedule/audit history. Reuse the
+[history transaction and read contracts](../../docs/prediction-history.md).
+Later publication/lifecycle services supply verified decisions within the shared
+fixture transaction; these primitives do not establish publication eligibility
+or enqueue work. Read historical revisions without changing current/locked refs.

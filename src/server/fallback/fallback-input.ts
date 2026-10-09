@@ -2,11 +2,11 @@ import "server-only";
 
 import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { marketRules, presentMarketProbabilities, validateMarketGroup, type MarketSnapshot, type MarketSource } from "../../domain/markets.ts";
+import { marketRules, presentMarketProbabilities, validateMarketGroup, validateMarketSnapshot, type MarketSnapshot, type MarketSource } from "../../domain/markets.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, isSafeEvidenceLink, parseEvidenceContext } from "../evidence/evidence-input.ts";
 import { parseModelPin } from "../predictor/predictor-input.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
-import type { FallbackContext, ForecastTimestamps, ProviderFallbackCandidate, ProviderFallbackResult } from "./fallback-contract.ts";
+import type { FallbackContext, ForecastTimestamps, ProviderFallbackCandidate, ProviderFallbackResult, ResolvedForecastCandidate } from "./fallback-contract.ts";
 
 export class FallbackInputError extends Error {
   readonly reason = "invalid-request";
@@ -141,4 +141,65 @@ export function parseProviderFallbackResult(value: unknown): ProviderFallbackRes
     z.object({ status: z.literal("denied"), reason: z.enum(fallbackProviderReasons), requestsDispatched: count, requestCountUnknown: z.boolean() }).strict()]), value);
   if (result.status === "candidate") parseProviderFallbackCandidate(result.candidate);
   return value as ProviderFallbackResult;
+}
+
+const resolvedProvenance = z.discriminatedUnion("kind", [
+  z.strictObject({ modelVersionId: aiOutput.shape.modelVersionId, evidenceHash: aiOutput.shape.evidenceHash,
+    calibration, evaluation, provisional: z.boolean(), sources: aiOutput.shape.sources,
+    evidence: aiOutput.shape.evidence, outputTiming: aiOutput.shape.outputTiming,
+    kind: z.literal("ai"), pin: z.unknown(), transportEvidenceRef: text }),
+  z.object({ kind: z.literal("api-football"), source: providerCandidate.shape.provenance,
+    policyVersion: text, policyEvidenceRef: text }).strict(),
+]);
+const resolvedMarket = z.discriminatedUnion("available", [
+  z.object({ available: z.literal(true), market: z.unknown(), timestamps, flags, provenance: resolvedProvenance,
+    fallback: z.object({ reason: z.enum(["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted",
+      "ai-missing-group", "ai-invalid-group"]), detail: text }).strict().nullable() }).strict(),
+  z.object({ available: z.literal(false), reason: z.enum([...marketReasons, ...fallbackProviderReasons, "invalid-timing"]) }).strict(),
+]);
+const publicExplanation = z.object({ text: plain, sourceUrls: z.array(link).max(10_000) }).strict();
+const resolvedCandidate = z.object({ context: z.unknown(), markets: z.object({
+  "match-result": resolvedMarket, "double-chance": resolvedMarket, "total-goals": resolvedMarket,
+  "both-teams-to-score": resolvedMarket }).strict(), issues: marketSnapshot.shape.issues,
+  reasons: z.array(publicExplanation).min(2).max(4), uncertainty: publicExplanation,
+  audit: z.object({ aiStatus: z.enum(["candidate", "denied"]), aiReason: text.nullable(),
+    providerStatus: z.enum(["candidate", "denied", "not-requested"]), providerReason: z.enum(fallbackProviderReasons).nullable() }).strict(),
+}).strict();
+
+/** Archive validation, not provider/ownership authorization or publication eligibility. */
+export function parseResolvedForecastCandidate(value: unknown): ResolvedForecastCandidate {
+  const parsed = parse(resolvedCandidate, value);
+  try {
+    const context = parseFallbackContext(parsed.context), inputs: Record<string, unknown> = {};
+    for (const family of groups) {
+      const item = parsed.markets[family];
+      if (!item.available) continue;
+      const market = item.market as { source: unknown; period: unknown; probabilities: unknown; line?: unknown };
+      inputs[family] = { source: market.source, period: market.period, probabilities: market.probabilities,
+        ...(family === "total-goals" ? { line: market.line } : {}) };
+    }
+    const checked = validateMarketSnapshot(inputs);
+    for (const family of Object.keys(parsed.markets) as (keyof typeof parsed.markets)[]) {
+      const item = parsed.markets[family], expected = checked.markets[family];
+      if (item.available !== expected.available) throw new Error();
+      if (!item.available || !expected.available) continue;
+      if (evidenceFingerprint(item.market) !== evidenceFingerprint(expected.market)) throw new Error();
+      checkFlags(item.timestamps, item.flags);
+      const provenance = item.provenance;
+      if (expected.market.source !== provenance.kind || item.timestamps.retrievedAt < context.context.analysisAt) throw new Error();
+      if (provenance.kind === "ai") {
+        const pin = parseModelPin(provenance.pin);
+        if (context.pin === null || pin.id !== context.pin.id || provenance.modelVersionId !== pin.modelVersionId ||
+          provenance.evidenceHash !== context.evidenceHash || item.fallback !== null ||
+          provenance.provisional !== (provenance.evaluation.status !== "evaluated")) throw new Error();
+      } else if (item.fallback === null || provenance.source.jobId !== context.jobId ||
+        provenance.source.externalFixtureId !== context.context.externalFixtureId) throw new Error();
+    }
+    const result = parsed.markets["match-result"], chance = parsed.markets["double-chance"];
+    if (result.available && chance.available) {
+      for (const key of ["provenance", "timestamps", "flags", "fallback"] as const)
+        if (evidenceFingerprint(result[key]) !== evidenceFingerprint(chance[key])) throw new Error();
+    } else if (!result.available && !chance.available && result.reason !== chance.reason) throw new Error();
+    return freezeEvidence({ ...parsed, context }) as ResolvedForecastCandidate;
+  } catch { throw new FallbackInputError(); }
 }

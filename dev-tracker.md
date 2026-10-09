@@ -22,7 +22,7 @@
 | ☑ | [016-locale-navigation.md](dev-plan/016-locale-navigation.md) |
 | ☑ | [017-client-state.md](dev-plan/017-client-state.md) |
 | ☑ | [018-match-card.md](dev-plan/018-match-card.md) |
-| ☐ | [019-prediction-history.md](dev-plan/019-prediction-history.md) |
+| ☑ | [019-prediction-history.md](dev-plan/019-prediction-history.md) |
 | ☐ | [020-durable-jobs.md](dev-plan/020-durable-jobs.md) |
 | ☐ | [021-daily-selection.md](dev-plan/021-daily-selection.md) |
 | ☐ | [022-revision-publication.md](dev-plan/022-revision-publication.md) |
