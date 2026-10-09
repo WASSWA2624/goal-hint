@@ -1308,3 +1308,59 @@ phone widths, doubled text, focus, native fields, reduced motion, contrast and
 private-output checks passed. **015 is complete and ticked**. Its reusable
 exports and acceptance workflow are documented in the [styling runbook](brand-styling.md).
 Outstanding operating choices for 011/012/014 are unchanged.
+
+## Prompt 016 — English routes and shared navigation
+
+Implemented on **9 October 2026 EAT**, retaining the pinned framework baseline.
+The [navigation runbook](locale-navigation.md) records the reusable contracts.
+
+`publicPolicy.locales` remains the authority for published locales, with only
+English enabled. `/` permanently redirects to `/en` regardless of browser
+language. Unsupported locale-like prefixes redirect temporarily to English,
+preserving path/query; the Next.js proxy excludes API/framework/assets and
+performs no identity, cookie or provider work. Locale layouts reject unsupported
+rendering values. Root `lang` remains the sole supported `en`; another complete
+locale will require a locale root document plus 042 metadata relationships.
+
+Today and Results select the **same dated feed**. Source-owned `feedDefaults`
+sets Today to current EAT day/all statuses and Results to previous EAT
+day/finished statuses. The specification leaves Results' initial day unspecified;
+yesterday provides a useful completed-day starting point without creating a
+second application. `finished` is a language-neutral group for terminal played
+fixtures, not a prediction outcome. No result query or settlement is added.
+`/en` uses the same feed presentation as `/en/predictions/YYYY-MM-DD`; no
+`/results` route exists. Future URL state and filter features extend this shared
+contract. Historical dates are independent of the seven-day prediction window.
+
+One request-scoped date comes from `connection()`, React `cache` and the existing
+EAT calendar. Navigation cannot retain a build-time date or use a visitor's
+timezone. New requests roll at EAT midnight; already-open-tab refresh belongs to
+037. Date-dependent links currently disable speculative prefetch.
+
+Server page composition belongs in `src/app/_components`, with `server-only`
+protection; client styling belongs in `src/components/navigation`. This preserves
+the existing browser-import boundary without permitting `next/server` inside
+browser component directories. The root registry/provider is reused once.
+Pages supply active navigation on the server. The skip link uses a native
+fragment anchor so activation moves focus to the focusable main landmark;
+ordinary page links reuse the existing Next.js control primitives.
+
+Flat namespaced keys live in `src/i18n/messages/en.ts`. Typed helpers provide
+per-key English fallback, cardinal plurals and `Intl` number/date formatting.
+Reporting labels always use explicit `Africa/Kampala` and Gregorian calendar
+inputs from the existing calendar. The prepared match-count plural is not
+displayed until real data exists. No market/status identity is translated.
+The i18n directory shares the private-import lint boundary.
+
+Interim pages all inherit **noindex, follow**. The feed labels its navigation
+preview without inventing fixture availability or forecasts; 032 replaces it.
+The methodology and information pages publish only preparation notices; 038–041
+replace them. No legal policy or contact identity is invented. The match URL
+builder reserves `/en/matches/fixture-id/home-v-away`, but no arbitrary fixture
+placeholder is rendered; unknown matches return 404 until 035 provides verified
+identity lookup and canonical-slug behavior. Full SEO remains with 042.
+
+The public development demo was removed from the homepage when the shell took
+over; the isolated 015 styling fixture remains the primitive acceptance surface.
+No provider/database calls, visitor authentication, state store, feed query or
+later feature is introduced.

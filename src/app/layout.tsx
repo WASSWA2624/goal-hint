@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import localFont from "next/font/local";
 import { publicPolicy } from "@/domain/public-policy";
 import { StyleProvider } from "@/styles/provider";
+import { createMessages } from "@/i18n/messages";
 
 const manrope = localFont({
   src: "../../assets/brand/source/fonts/Manrope-wght.ttf",
@@ -12,9 +13,11 @@ const manrope = localFont({
   fallback: ["Arial", "sans-serif"],
 });
 
+const messages = createMessages(publicPolicy.defaultLocale);
+
 export const metadata: Metadata = {
-  title: publicPolicy.name,
-  description: "Goal Hint is in development. Predictions are not yet available.",
+  title: messages.text("metadata.homeTitle"),
+  description: messages.text("metadata.description"),
   icons: {
     icon: [
       { url: "/brand/goal-hint-favicon.svg", type: "image/svg+xml" },

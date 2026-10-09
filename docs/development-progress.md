@@ -1426,3 +1426,88 @@ The scoped fixture and temporary production server were stopped after checks;
 the development homepage provides the preview for later primitive work. Live
 device performance and full feed/navigation acceptance belong to their later
 prompts and are not claimed by these isolated browser checks.
+
+## Prompt 016 — English locale navigation
+
+Implemented and verified on **9 October 2026 EAT**. **016 is complete** and its
+row is ticked in [the root tracker](../dev-tracker.md). The [navigation runbook](locale-navigation.md)
+documents route, message and component contracts. Existing operating gates for
+011/012/014 remain unchanged and do not block this independent public shell.
+
+### Implemented and changed files
+
+- `src/domain/navigation.ts` defines the shared dated-feed view, strict parsing,
+  Today/Results date/status defaults, information links and future match links.
+  Today uses current EAT day/all statuses; Results uses previous EAT
+  day/finished statuses. Both use `/en/predictions/YYYY-MM-DD`; `/en` renders the
+  same feed shell and `/en/results` is not a separate application.
+- `src/i18n/locales.ts`, `messages.ts` and `messages/en.ts` provide English-only
+  publication, fallback, stable externalized keys, cardinal plural messages and
+  `Intl` number/reporting-date formatting. Domain market/status IDs stay neutral.
+- `src/proxy.ts` redirects unsupported locale-like prefixes to English while
+  preserving path/query and excluding APIs/framework/assets. `src/app/page.tsx`
+  permanently redirects `/` to `/en`. `src/app/layout.tsx` externalizes metadata
+  copy while retaining the one shared provider, local font and English language.
+- `src/app/[locale]/layout.tsx`, `page.tsx`, `predictions/[date]/page.tsx` and
+  `how-it-works`, `privacy`, `terms`, `contact` page modules provide locale
+  validation, interim noindex surfaces and semantic current locations.
+  `src/app/not-found.tsx` provides a navigable English 404.
+- `src/app/_components/public-shell.tsx`, `feed-shell.tsx` and
+  `information-shell.tsx` compose server content. Request-scoped EAT dates use
+  the existing calendar after `connection()`; no build-time date is cached.
+  `src/components/navigation/shell-styles.tsx` reuses brand tokens, named logo,
+  existing layout/link controls, wrapping and square corners. A native skip
+  anchor moves keyboard focus to the main landmark. The old public development
+  primitive demo is no longer mounted; its isolated styling fixture remains.
+- `tests/navigation.test.mjs` covers fallback, routing, EAT midnight/year
+  boundaries, historical views, malformed inputs, plural/count formatting and
+  per-key fallback. `scripts/verify-navigation-rendering.mjs` checks the actual
+  production HTML and redirects; `package.json` exposes `test:navigation` and
+  `test:navigation:html`. The private-import lint guard and its boundary test now
+  include i18n. Component guidance, styling/navigation runbooks, decision
+  register, this record and tracker document the handoff. No dependency version,
+  lockfile, schema or migration changed.
+
+### Validation and evidence
+
+Checks used Node.js **24.18.1**, npm **11.16.0** and Playwright CLI with installed
+Chrome. This shell dispatched no football/AI/provider or application database
+requests and issued no visitor cookies.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run lint` | Passed with zero warnings after the final native skip-link change. Server page composition lives in the app's private component directory, preserving browser import restrictions. |
+| `npm run typecheck`, `npm run build` | Passed. The final Next.js 16.4 production build compiled and type-checked all locale, information, dated-feed and 404 routes plus the locale proxy. Public date-dependent routes render on demand. |
+| `npm run test:navigation` | All **9** contract tests passed, including both sides of 21:00 UTC/EAT midnight, year rollover, old leap-day reporting, fallback and malformed paths/statuses. |
+| Full existing suite | The final `node --conditions=react-server --test --test-reporter=dot tests/*.test.mjs` run exited 0: **755 cases, 754 passed and 1 existing Windows POSIX-mode skip**. Log: `.tmp/016-tests.log`. The first parallel run hit the existing offline Prisma-generation test's 60-second timeout while builds/checks competed for resources; that file passed alone, then the complete suite passed on rerun. No unrelated test or timeout was changed. |
+| Production HTML | `node scripts/verify-navigation-rendering.mjs` passed on the final build. Eight anonymous feed/information pages have initial CSS before the shell, one main/h1, current-location markup before hydration, all links and `noindex, follow`. Root returns 308 to `/en` even with French browser headers. Locale fallbacks return 307 with route/query preserved. Invalid dates/statuses, repeated statuses, unknown matches and unknown routes return real 404s. No selector, auth UI, invented forecasts or misleading empty-fixture state appears. |
+| Existing styling regression | `npm run test:styling` passed with one initial style element/35 registered rules, delayed styles preceding streamed DOM, two streamed style elements/12 unique registered rules, six response chunks and 13 browser chunks free of the private canary. Transient props remain absent. Final application chunks omit `BrandDemo` and the private canary. |
+| Fresh browser navigation | An isolated French-language/Los Angeles context followed root, Today, Results, home, every information link, Back and `/fr/predictions/...?...` fallback. Targets, EAT dates, headings and server/current markers matched. Zero visitor cookies; zero page errors and zero console warnings/errors. |
+| Keyboard | Tab order is skip → home → Today → Results → How it works → Privacy → Terms → Contact, with visible outlines. Shift+Tab reverses correctly. Activating the native skip link focuses `main-content`; the next Tab reaches footer navigation. The initial framework-link implementation scrolled without moving focus and was replaced before completion. |
+| Phone, desktop and expansion | Checked **320px** and **1280px**, 16→32px base-text enlargement at 320px, tripled English labels/body copy plus a long unbroken identifier, and **200% CSS layout zoom at 640px (320px effective width)**. Document width stays within the viewport. Text and navigation wrap without clipping; screenshots were visually inspected. |
+| Without JavaScript | A second isolated Swahili-language/Honolulu context disabled JavaScript. The inline Next queue remained undefined, with correct English language, 16px type, paper background, EAT date and a 320px document. Root, native skip, all six shell links and home worked with server-rendered current markers and zero cookies. The script assertion result was `passed: true`; its later optional console command was canceled during browser cleanup. |
+
+Browser scripts/configs and screenshots remain ignored under
+`output/playwright/locale-navigation-*`, including `320.png`,
+`320-text-200.png`, `expanded.png`, `zoom-200.png`, `desktop.png` and `nojs.png`.
+The production HTML verifier and domain tests are committed source; no browser
+test dependency was added. Local Markdown targets and changed-file whitespace
+were checked. Temporary acceptance browsers and the production server were
+stopped after verification.
+
+### Temporary surfaces and remaining scope
+
+| Surface | Replacement owner |
+| --- | --- |
+| `/en` and dated feed, including Results' finished filter | 032 supplies the real stored match feed; 017/028/033 extend shared URL/query/filter behavior. |
+| `/en/how-it-works` preparation notice | 038 supplies methodology and measured performance. |
+| `/en/privacy` preparation notice | 039 supplies the actual privacy notice. |
+| `/en/terms` preparation notice | 040 supplies actual terms. |
+| `/en/contact` preparation notice | 041 supplies verified owner contact information. |
+
+All interim surfaces remain `noindex, follow`; 042 owns final discovery and
+indexing. The reserved match helper creates no public fixture placeholder;
+035 owns verified match pages and canonical slugs. Already-open-tab midnight
+rollover belongs to 037. No unimplemented locale, language selector, decorative
+hero, feed query, simulated forecast/live state or legal assertion ships.
+**No blocker remains for 016.**

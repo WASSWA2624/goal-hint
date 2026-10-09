@@ -20,7 +20,7 @@ async function lint(source, filePath) {
 }
 
 test("browser components and domain contracts reject private imports and re-exports", async () => {
-  for (const filePath of ["src/components/example.ts", "src/domain/example.ts"]) {
+  for (const filePath of ["src/components/example.ts", "src/domain/example.ts", "src/i18n/example.ts"]) {
     for (const source of [
       'export { value } from "@/server/provider";',
       'export * from "../../server/provider";',

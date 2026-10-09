@@ -84,10 +84,10 @@ transition duration. No motion is needed to understand the interface.
 
 ## Development and acceptance
 
-`npm run dev` adds the component preview to the existing homepage only when
-`NODE_ENV` is `development`. It contains interface examples and a local form
-that sends no data. The conditional import is removed from the production
-page and browser chunks; there is no additional public demo route.
+Since prompt 016, the public homepage opens the locale navigation shell in
+development and production. The component preview is no longer mounted there.
+Use the isolated styling fixture below to inspect primitives without adding
+demonstration controls to the public application.
 
 Run the pinned Node.js and npm versions from `package.json`:
 
