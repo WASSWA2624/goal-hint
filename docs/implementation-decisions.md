@@ -267,7 +267,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-27 Operator identity, jurisdiction and legal facts | **Unresolved release blocker** | Obtain actual operator identity, audience/jurisdiction, lawful contact and owner-approved privacy/terms/dispute facts. “Prepared for” attribution supplies no legal identity, address, liability policy or signoff. Do not publish placeholders or invented legal assertions. §§13, 15; prompts 039–040. | Unassigned; user decision/evidence required | Deferred: approved operator/legal/privacy/terms content and factual evidence | **039**; terms **040** |
 | OP-28 Verified public contact route | **Unresolved release blocker; unavailable page implemented** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. Existing owner deferrals persist; 041 displays unavailable status and report guidance, not an operational intake. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
 | OP-29 Recovery watchdog ownership and thresholds | **Unresolved / live activation blocked** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Prompt 043 implements private CLI inspection, reviewed durable recovery and an operator runbook; synthetic settings do not approve live thresholds. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization, independent invocation frequency and recovery/incident owner | **043** |
-| OP-30 Alerts, destinations and monitoring service | **Unresolved** | Choose the authorized monitoring service, actionable outage/staleness/latency/quota/cost/expiry thresholds, severity/deduplication, recipients and notification approval. No recipient or unapproved test message is inferred. Telemetry must reconcile with privacy/retention decisions. §§11, 13–15; prompt 044. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget | **044** |
+| OP-30 Alerts, destinations and monitoring service | **Local verification only; live activation blocked by owner decision** | Prompt 044 implements authenticated private aggregate inspection, bounded MySQL alert state/fenced delivery and a local test sink. The owner explicitly keeps incident ownership, destinations, thresholds and retention unresolved. Approve the authorized monitoring service, actual outage/staleness/latency/quota/cost/expiry thresholds, recipients, privacy/retention and independent supervision before live activation; no external test message is authorized. §§11, 13–15. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget; see `docs/operations-monitoring.md` | **044** |
 | OP-31 Recovery objectives, backups and history retention | **Unresolved / evidence required** | Approve RPO/RTO, backup/PITR capabilities, encryption/access/retention and ownership for predictions, results, evidence, audits and structured source data within rights. Prove isolated restoration and safe limiter/job restart. No arbitrary deletion period or completed restore is inferred. §§13, 15; prompt 045. | Unassigned; user decision/evidence required | Deferred: RPO/RTO, backup/PITR and prediction/result/evidence/audit/backup retention policy | **045**; source retention prerequisites **009/011**, visitor notice **039** |
 | OP-32 Hosted deployment and account isolation | **Unresolved / evidence required** | Confirm actual web/database/queue/long-lived worker/poller infrastructure, scheduler/workload identity and authorized access. Choose account sharing vs genuinely separate provider accounts, durable cross-environment limits and poller observation/ownership transfer. Separate databases cannot create extra provider capacity. §§9, 11, 14–15; prompt 046. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE`, infrastructure/provider/budget references; Deferred: environment isolation, hosted runtime and poller ownership plan | **046**; database/queue choices earlier **003/020** |
 | OP-33 Quality qualification and measured commitments | **Evidence required** | Accumulate real prospective samples under the frozen protocol; prove market/source/horizon quality and coverage, calibrated-claim eligibility, full-slate cost/capacity and cadence/latency targets. Simulated load is not elapsed shadow observation or unapproved paid-call authority. §§8, 14–15; prompt 047. | Unassigned; user evidence/commitment decision required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: qualification report and approved measurement-supported commitments | **047**, with protocol choices fixed **014** |
@@ -2739,3 +2739,61 @@ now uses `goal_hint_db`, separate application/migration accounts and private
 generated administration credentials. All committed migrations are applied;
 this establishes no hosted or production qualification and does not resolve
 OP-29/30/31/32. See [local-database.md](local-database.md) for operating commands.
+
+## 044 Private monitoring and local verification
+
+**Decision date:** 10 October 2026. **Owner direction:** keep incident ownership,
+alert destinations, live thresholds and telemetry retention unresolved; implement
+local verification only. Preserve the existing no-visitor-analytics implementation.
+This is not approval of hosted monitoring, notification delivery or data recipients.
+
+- Private operator inspection reads canonical run/job/publication/lock/result,
+  recovery and shared quota ledgers. It uses the database clock, aggregate indexed
+  windows and bounded EAT run/fixture/cycle/job/model correlations, without raw
+  evidence, credentials, URL/query text, payloads or owner tokens. It never acquires
+  a poller/job lease or dispatches providers/recovery work.
+- `OperationsMonitorState` is one seeded MySQL row with at most 64 rule/scope
+  slots and 128 KiB. Fixed rules/scopes bound cardinality. Fenced claims and stable
+  delivery IDs support deduplication/retry across replicas and restarts; external
+  sinks must deduplicate uncertain sends. Unknown or older evidence cannot clear
+  newer incidents. No live destination or permissive operator binding is shipped.
+- Policy contracts require explicit verified incident owner, destination, every
+  threshold, finite retention/reminder/freshness intervals and approval references.
+  There are no live defaults. Approved finite alert retention is bounded at seven
+  days; active incidents remain one slot, and pruning occurs on authorized access.
+  Stopped processes/backups do not imply physical deletion. Canonical history
+  retention remains with OP-08/13/31. The local synthetic sink has bounded memory
+  and TTL; test owners/thresholds/recipients are not production decisions.
+- Critical severities cover outage, missing run, failed job, cutoff/lock failure,
+  credential/subscription failure and cost cap. Warning severities cover degradation,
+  staleness, impending expiry, pressure and missing evidence. Messages include the
+  owner, coded destination/approval, incident/delivery IDs and
+  [operations runbook](operations-monitoring.md). Primary/backup owner, response
+  procedure, independent heartbeat/schedule and approved severity routing remain
+  unresolved. No operating response-time commitment is made.
+- The US$45 football **monthly payable** ceiling stays separate from AI, research,
+  database, hosting/queue/workers, monitoring, network and domain caps. Cost inputs
+  require actual verified period/usage/rate/invoice evidence and explicit coverage.
+  Canonical AI/research liability is estimated rather than an invoice. Missing,
+  partial and stale bills stay pending, cannot be treated as free capacity, and
+  cannot clear known cost incidents without complete evidence. No alert changes
+  rates/plans/budgets or authorizes spend. Infrastructure/football billing adapters,
+  actual caps/fees and monitoring spend approval remain pending OP-12/14/30/32.
+- Reusable server HTTP/cache hooks start disabled. An approved private bootstrap
+  may install fixed process-local histograms/counters (five families, 25 series,
+  explicit window of at most one day). No visitor ID, cookie, beacon, SDK, raw
+  request, analytics upload or public diagnostic endpoint is added. OP-26/30/32
+  still gate activation and recipients/retention; [privacy data flows](privacy-page.md)
+  record both the disabled hooks and private alert state.
+- Mobile aggregate summaries preserve mobile laboratory/field and environment
+  labels, units, sample counts and nearest-rank p75 targets (2500 ms LCP, 200 ms
+  INP, 0.1 CLS). Synthetic/lab checks prove neither production traffic nor field
+  target compliance. Field source authorization, sampling qualification and real
+  traffic remain pending. Search impressions/indexed pages/CTR need an authorized
+  search source; return visits/match-detail visitor use remain disabled pending
+  analytics choices. No traffic numbers or service property are invented.
+
+OP-25/27/28 publication/legal/contact blockers and OP-29/30/31/32 operating gates
+remain open. The local database schema/grants can support this implementation,
+but its monitoring row stays empty and no live monitor/sink/scheduler is enabled.
+Prompt 045 has not been started.

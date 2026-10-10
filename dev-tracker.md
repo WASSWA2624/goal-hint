@@ -48,7 +48,7 @@
 | ☑         | [041-contact-page.md](dev-plan/041-contact-page.md)                             |
 | ☑         | [042-seo-discovery.md](dev-plan/042-seo-discovery.md)                           |
 | ☑         | [043-recovery-watchdog.md](dev-plan/043-recovery-watchdog.md)                   |
-| ☐         | [044-operations-monitoring.md](dev-plan/044-operations-monitoring.md)           |
+| ☑         | [044-operations-monitoring.md](dev-plan/044-operations-monitoring.md)           |
 | ☐         | [045-backup-restore.md](dev-plan/045-backup-restore.md)                         |
 | ☐         | [046-staging-deployment.md](dev-plan/046-staging-deployment.md)                 |
 | ☐         | [047-shadow-qualification.md](dev-plan/047-shadow-qualification.md)             |

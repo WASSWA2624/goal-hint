@@ -12,6 +12,12 @@ datasource db {
   provider = "mysql"
 }
 
+// One bounded private alert outbox. No visitor data or append-only telemetry log.
+model OperationsMonitorState {
+  id        Int  @id @db.UnsignedTinyInt
+  stateJson Json
+}
+
 // Aggregate public search budget only; no visitor identifiers or query text.
 model PublicSearchLimit {
   scope           String   @id @db.VarChar(32)
@@ -522,6 +528,7 @@ model DailyRunImport {
   run         DailyRun  @relation(fields: [runId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([runId, eatDate, attempt])
+  @@index([finishedAt])
 }
 
 model RunFixture {
@@ -697,6 +704,7 @@ model PredictionSet {
   @@index([cycleId, runSequence])
   @@index([fixtureId, runSequence, fixtureRevision])
   @@index([predecessorId, cycleId, fixtureId], map: "PredictionSet_predecessor_idx")
+  @@index([publishedAt])
 }
 
 // Four explicit family rows, including unavailable families. DOUBLE preserves
@@ -764,6 +772,7 @@ model RecoveryAudit {
 
   @@unique([jobId, actionId, phase])
   @@index([jobId, at])
+  @@index([at])
 }
 
 model DurableJob {
@@ -810,6 +819,8 @@ model DurableJob {
   @@index([type, handlerVersion, state, leaseExpiresAt])
   @@index([state, leaseExpiresAt, id])
   @@index([state, availableAt, id])
+  @@index([updatedAt])
+  @@index([finishedAt])
 }
 
 // Append-only refresh decisions, separate from immutable accepted forecasts.
@@ -837,6 +848,7 @@ model PredictionRefreshResult {
   @@unique([runId, fixtureId, cycleId, attemptKey], map: "PredictionRefreshResult_attempt_key")
   @@unique([id, fixtureId, fixtureVersion], map: "PredictionRefreshResult_change_key")
   @@index([fixtureId, cycleId, runSequence, fixtureVersion], map: "PredictionRefreshResult_latest_idx")
+  @@index([at])
 }
 
 // Safety latch only; 023 owns final closure/locking and 024 owns schedule changes.
@@ -1095,6 +1107,7 @@ model DurableJobAttempt {
 
   @@unique([jobId, number])
   @@unique([id, jobId])
+  @@index([finishedAt])
 }
 
 model DurableJobEvent {

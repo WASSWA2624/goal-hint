@@ -19,7 +19,7 @@ privileges. Root administration uses a generated secret in the private
 copy these credentials into documentation. Windows ACLs restrict the installation
 and environment file to the current user and SYSTEM.
 
-The application can read all 61 schema models. Append-only forecast, evidence,
+The application can read all 62 schema models after prompt 044. Append-only forecast, evidence,
 outcome and audit tables permit INSERT/SELECT; mutable projections receive
 table- or column-scoped UPDATE grants. DELETE is granted only for disposable
 `PublicResponseCache` rows. Application access excludes DDL, migration-history
@@ -27,6 +27,13 @@ reads and server-account administration. The actual local grants are recorded
 in the private installation's `application-grants.sql`. Revisit grants whenever
 a future migration adds a table or mutable column. Production role verification
 remains a separate deployment requirement.
+
+Prompt 044 adds the seeded `OperationsMonitorState` singleton and time-window
+indexes. The local application receives only SELECT and UPDATE (`stateJson`) on
+that table; INSERT/DELETE/DDL remain denied. Its empty initial state enables no
+monitoring, owner, destination, retention policy or telemetry recipient. Live
+monitoring remains blocked by the owner's local-verification-only decision; see
+[operations-monitoring.md](operations-monitoring.md).
 
 ## Start, stop and verify
 

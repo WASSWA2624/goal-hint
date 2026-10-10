@@ -3496,3 +3496,87 @@ XAMPP and the disposable test servers. See [local-database.md](local-database.md
 for private paths, account roles, start/stop commands and future migrations.
 No credentials are recorded in the repository. Live recovery, providers and
 publication retain their existing approval gates.
+
+## 044 — Operations monitoring (10 October 2026)
+
+**Status:** local implementation and acceptance complete; tracker 044 checked.
+**Scope:** private monitoring implementation and local verification, following
+the owner's explicit direction to keep incident ownership, destinations,
+thresholds and retention unresolved. Live activation and field/search/analytics
+evidence remain blocked. Prompt 045 was not started.
+
+### Implemented
+
+- `src/server/monitoring/monitoring-{contract,scan,rules}.ts`: strict allowlisted
+  database-clock snapshots, approved-policy/current-credential checks, bounded
+  EAT run/fixture/cycle/job/model breadcrumbs and fixed metric/reason dimensions.
+  Reads cover run progress, elapsed job duration/failures/retention, source
+  failures, cutoff misses/missing locks/stale data, poller ownership/delay,
+  unresolved/overdue results, unapplied batches, reliable final-badge delays and
+  recovery outcomes. Inspection never dispatches providers or mutates ownership,
+  quota, jobs, forecasts or recovery records.
+- Canonical quota-state schemas are reused from `football/quota-mysql-store.ts`.
+  Shared-account metrics distinguish conservative reservations from actual
+  launches/uncertainty; cover rolling second/minute use across provider periods,
+  remaining capacity, essential use/reserve consumption, 429s/provider errors,
+  pending reset reconciliation and credential/subscription failure/expiry.
+- `monitoring-alerts.ts` and `monitoring-mysql-store.ts`: one fixed-size durable
+  outbox, replica/restart deduplication, fenced notification claims/acknowledgment,
+  bounded delivery/deadlines, reminder/resolution/reopening and finite pruning.
+  Older/unknown evidence cannot clear newer incidents. Strict messages include
+  coded owner/destination/approval, severity, incident/delivery IDs and the runbook.
+  The local bounded memory sink makes no external/file writes.
+- `monitoring-evidence.ts`: eight separate budget categories; the monthly payable
+  football cap cannot exceed US$45. Canonical AI/research liability remains
+  estimated; exact integer usage/decimal rates and invoice/fee evidence stay
+  distinct. Stale/partial/missing bills stay pending and cannot clear known cost
+  alerts. No automatic plan change, increased cap or spending bypass exists.
+  Private mobile aggregate summaries preserve verified lab/field/environment
+  labels, units/sample counts and p75 targets. Actual field/search sources and
+  visitor usage metrics remain explicitly pending/disabled.
+- `server-measurements.ts`, public API route wrappers and the shared cache:
+  optional server latency/cache histograms with five fixed route families,
+  at most 25 series and explicit retention. Hooks start disabled, with no visitor
+  tracking or upload. Public stored reads remain usable if telemetry/cache fails.
+- Private `monitoring-command.ts` / `src/workers/monitoring.ts`, `npm run monitoring`
+  (`inspect`/`notify` with a trusted approved binding), `test:monitoring` and
+  `test:monitoring:overhead`. No permissive live binding, recipient, scheduler,
+  hosted account or public monitoring route is shipped.
+- Migration `20261010153000_operations_monitoring` adds the seeded singleton,
+  enforces `id=1`, and adds time-window indexes to existing operational tables;
+  Prisma schema and reviewed snapshot updated. The already-authorized local
+  MySQL instance now has 19 migrations/62 models. Its application receives only
+  SELECT/UPDATE (`stateJson`) on the new table; INSERT/DELETE/DDL remain denied.
+  The singleton stays empty/unapproved; this activates no monitor or telemetry.
+- Added `docs/operations-monitoring.md`; updated the privacy data-flow register,
+  OP-30/implementation decisions and local database runbook. The prelaunch public
+  privacy summary remains accurate; no public policy, owner/contact fact or
+  analytics consent assumption was invented.
+
+### Verification
+
+| Check | Actual result / evidence |
+| --- | --- |
+| Whole unit suite | **965 passed, zero failures, one existing Windows/POSIX-mode skip** (966 checks): `node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`; `.tmp/044-unit-final.log`. Eight new tests cover strict inputs/redaction/authorization, representative actionable alerts, concurrency/retry/revocation, unknown/older evidence, notification fencing, retention, separate budgets/rates, disabled bounded server hooks and lab/field labels. |
+| Genuine MySQL monitoring/cache acceptance | **32 passed, zero failures/skips**, including eight monitoring units, eight monitoring SQL checks (parent plus seven cases) and 16 shared-cache SQL checks: `.tmp/044-monitoring-sql-final.log`. Owned isolated MySQL Community Server **8.4.11**, synthetic clocks/policies/provider responses and separate DDL/application roles; no external provider call. Proves read-only collection, canonical correlations/quota reconciliation, replica/restart deduplication, stale locks/jobs/data, reliable final-result delay then canonical settlement, policy revocation/change refusal, bounded retention, permission denial and one-connection inspection. Cache regression proves original timestamps, invalidation/fill races, source permissions, outages and private maintenance. |
+| Final focused monitoring check | **16 passed, zero failures/skips** on the final code, including the whole-sample mobile-evidence verifier and launch guards; `.tmp/044-monitoring-accepted.log`. A stricter guard initially omitted MySQL's JSON `UNSIGNED INTEGER` subtype; genuine SQL assertions and a read-only literal probe caught the undercount. The final guard accepts signed/unsigned integer and double numeric representations while excluding null. Earlier guard attempts remain in `.tmp/044-monitoring-{final,confirmed,launch-diagnostic}.log` and do not count as acceptance. |
+| Measured overhead | `npm run test:monitoring:overhead`: five measured rounds of 250,000 records after warmup; median **0.841 µs/record**, disabled wrapper **0.267 µs/call**, exactly **25 series / 3,064 serialized bytes**; `.tmp/044-overhead.log`. This is a local CPU microbenchmark, not a load/uptime test or mobile production percentile. No live threshold was inferred. |
+| Static/build | Whole-repository lint, schema/client generation/validation, `npm run typecheck`, production build and whitespace checks passed; `.tmp/044-{lint-final,generate-final,validate,typecheck-final,build-final}.log`. Final focused lint/types passed in `.tmp/044-{lint-accepted,types-accepted}.log`. An initial direct TypeScript run raced the existing dev watcher's generated type files; normal Next type generation/typecheck subsequently passed. |
+| Installed local database | Forward migration, zero schema drift, readiness and actual application read/commit/rollback/protected-history checks passed for all **62 models**; `.tmp/044-local-db-{deploy,verify,health,application}.log`. No-op singleton update and denied INSERT/DELETE passed; `.tmp/044-local-monitoring.log`. No monitor policy, alert, recipient or provider data was seeded. |
+| Secret/flow review | Changed/untracked repository files were compared against configured private credential values without printing them. No local environment/admin file or configured credential is included. Privacy flow register distinguishes disabled hooks, the private outbox, local sink and unresolved hosted recipients/retention. |
+
+Early SQL attempts exposed two incorrect test-fixture calls (publication argument
+order and a null quota work key); corrected tests then passed on clean isolated
+servers. Those initial attempts do not count as acceptance. The existing XAMPP,
+persistent local MySQL and development processes were left running.
+
+**Remaining release/activation blockers:** OP-26 no visitor analytics decision/
+approved field source and privacy retention/recipients; OP-29/30 actual primary/
+backup incident owner, policy thresholds, destination/integration, independently
+supervised detection/heartbeat and approved live retention; OP-12/14 actual
+infrastructure and payable billing evidence; OP-31 backup/canonical retention;
+OP-32 hosting/account-wide deployment supervision. Search impressions/indexed
+pages/CTR have no authorized source, and returning visits/match-detail visitor
+use remain disabled. No production traffic percentile, uptime, final paid bill,
+provider qualification or live notification delivery is claimed. Existing
+OP-25/27/28 publication/legal/contact and source/model/quality gates persist.

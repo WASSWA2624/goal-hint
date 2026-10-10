@@ -45,6 +45,8 @@ const periodSchema = z.object({
   evidenceRef: z.string().min(1).max(512),
   observationRevision: counter,
 }).refine((value) => value.startsAt < value.endsAt && value.ordinaryUsed <= value.used);
+// Reuse the canonical durable-state contract for read-only private monitoring.
+export { accountSchema as quotaAccountStateSchema, periodSchema as quotaPeriodStateSchema };
 const attemptSchema = z.object({
   id: identifier,
   workKey: identifier.nullable(),
