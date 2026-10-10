@@ -46,7 +46,7 @@
 | ☑         | [039-privacy-page.md](dev-plan/039-privacy-page.md)                             |
 | ☑         | [040-terms-page.md](dev-plan/040-terms-page.md)                                 |
 | ☑         | [041-contact-page.md](dev-plan/041-contact-page.md)                             |
-| ☐         | [042-seo-discovery.md](dev-plan/042-seo-discovery.md)                           |
+| ☑         | [042-seo-discovery.md](dev-plan/042-seo-discovery.md)                           |
 | ☐         | [043-recovery-watchdog.md](dev-plan/043-recovery-watchdog.md)                   |
 | ☐         | [044-operations-monitoring.md](dev-plan/044-operations-monitoring.md)           |
 | ☐         | [045-backup-restore.md](dev-plan/045-backup-restore.md)                         |

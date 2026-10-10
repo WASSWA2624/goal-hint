@@ -68,7 +68,9 @@
     "test:methodology:rendering": "node scripts/verify-methodology-rendering.mjs",
     "test:privacy:html": "node scripts/verify-privacy-rendering.mjs",
     "test:terms:html": "node scripts/verify-terms-rendering.mjs",
-    "test:contact:html": "node scripts/verify-contact-rendering.mjs"
+    "test:contact:html": "node scripts/verify-contact-rendering.mjs",
+    "test:seo": "node --conditions=react-server --test tests/discovery.test.mjs tests/discovery.integration.mjs",
+    "test:seo:rendering": "node scripts/verify-seo-rendering.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.13.0",

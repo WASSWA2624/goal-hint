@@ -7,13 +7,14 @@ import { loadMatchDetailPage, matchDetailMetadata, matchDetailPageParameters, pa
 import { readPublicMatchDetail } from "@/server/matches/public-detail";
 import { MatchFeedError } from "@/server/matches/feed-error";
 import { getShellInstant } from "./public-shell";
+import { getDiscoveryPolicy } from "@/server/seo/policy";
 import { MatchDetailPage } from "./match-detail-page";
 
 type Props = { params: Promise<{ locale: string; fixtureId: string; slug: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** The production route and isolated stored-data acceptance use this same path. */
-export function createMatchDetailRoute(read: typeof readPublicMatchDetail = readPublicMatchDetail) {
+export function createMatchDetailRoute(read: typeof readPublicMatchDetail = readPublicMatchDetail, policy = getDiscoveryPolicy) {
   const loadCurrent = cache(async (id: string) => {
     const instant = await getShellInstant();
     return { result: await loadMatchDetailPage(id, { now: () => instant }, read), today: getReportingDate(instant), instant };
@@ -35,8 +36,8 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
   }
   return {
     async generateMetadata(props: Props) {
-      const { result, route } = await resolve(props);
-      return matchDetailMetadata(result, route.locale);
+      const { result, route, query } = await resolve(props);
+      return matchDetailMetadata(result, route.locale, query !== "", policy());
     },
     async Page(props: Props) {
       const { result, historyResult, query, today, route } = await resolve(props);

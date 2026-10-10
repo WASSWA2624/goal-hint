@@ -3308,3 +3308,66 @@ No mailbox, form backend, messaging service, test message, account, upload,
 comments system, analytics, paid provider call, worker activation, migration,
 deployment or later feature was introduced. Owned acceptance server/browser
 were stopped; existing services and the user's development server are untouched.
+
+## 042 - SEO and crawlable discovery
+
+Complete for local implementation and acceptance; tracker row 042 is ticked.
+Public indexing remains disabled pending verified release/publication decisions.
+Prompt 043 has not been started.
+
+### Changed behavior and files
+
+- Added `src/domain/discovery.ts` and `src/server/seo/{policy,metadata,proxy}.ts`
+  for fixed canonical origins, reusable complete social metadata, indexing policy,
+  safe WebSite JSON-LD and request-time noindex response headers. Preserved the
+  English locale/fallback, first-party brand assets and exact homepage title.
+- Added the stored-read `feed-route.tsx` factory and reused it in the home/date
+  routes; removed the superseded feed-shell wrapper. Metadata and initial HTML
+  share a request clock/read. Unique archive/page titles and genuine pagination
+  canonicals retain each collection/page identity. Match metadata uses the shared
+  helper, with revision/history variants noindex and canonicalized to the fixture.
+- Updated all four information routes and locale/root layouts to use consistent
+  canonical/social fields and dynamic indexing decisions. Root and stale-slug
+  redirects, known unavailable pages and unknown-fixture 404s are preserved.
+  Added the www HTTPS host redirect seam in `next.config.ts`.
+- Added `discovery-read.ts`, `discovery-routes.ts` and native robots/static/match/
+  archive sitemap routes. Reused the feed's public fixture SQL predicate, including
+  retained historical closed/void forecasts. Bounded 2,000-entry shards use stored
+  identity and material audit/change timestamps, not retrieval/request clocks.
+  Invalid/absent shards fail before a large-offset read. Robots advertises each
+  populated shard when indexing is approved and allows noindex variants to be read.
+- Added `GOAL_HINT_DEPLOYMENT_ENVIRONMENT` to `.env.example` and the recognized
+  runtime environment contract. Production classification and `NODE_ENV` cannot
+  replace verified release evidence or the privacy/terms/contact publication gates.
+  Their current false state retains noindex and empty prelaunch discovery XML.
+- Added `tests/discovery.test.mjs`, `tests/discovery.integration.mjs`,
+  `scripts/verify-seo-rendering.mjs`, `test:seo` and `test:seo:rendering`. Updated
+  the runtime-policy example contract and methodology rendering harness for the
+  metadata generator exports. Added `docs/seo-discovery.md` and the 042 decisions.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Whole unit suite | **953 passed, zero failures, one existing Windows/POSIX-mode skip**: `node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`; `.tmp/042-contracts-final.log`. The initial environment-example contract failure was corrected by registering the new classification field. Focused runtime/discovery/detail verification subsequently passed all **38** checks; final discovery boundary assertions passed all **6** checks. |
+| Genuine stored discovery | **Passed, no skips**, using owned isolated MySQL Community Server **8.4.11**; `.tmp/seo-capture-042/database.log`. Thirty-five genuine stored fixture projections exercised inventory, date/match queries, retrieval-only lastmod stability, audited rename/new canonical, closed historical retention after a competition-scope change, feed/detail/revision handoffs and no provider work. Missing-binary and an early owned-server identity-check failure did not count as acceptance; the clean isolated run passed. No installed service or existing database was targeted. |
+| Controlled production/staging HTML/XML | **84 passed: 24 staging, 60 synthetic approved production**; `.tmp/042-rendering-final.log`. The same staging-built artifact was restarted under each classification. Tests cover metadata/social assets, root/www/stale-slug redirects, true 404s, search/revision noindex, pagination self-canonicals, robots readability, native XML membership/lastmod and all 35 sitemap match destinations. Synthetic release evidence is bound only inside an ignored acceptance app. Node HTTP verifies the actual Host redirect because Node fetch ignores a custom Host header. |
+| Actual production release gate | **10 HTML/XML checks passed** with `GOAL_HINT_DEPLOYMENT_ENVIRONMENT=production`; `.tmp/042-actual.log`. The real final build retains noindex headers/metadata, no visitor cookies, empty discovery XML and no advertised sitemap while verified release and publication facts remain false. |
+| No-JavaScript browser and visual review | **69 passed** in installed Chrome via the Playwright skill/CLI; `.tmp/042-browser.log`, ignored scripts/screenshots `output/playwright/042-*`. Native keyboard skip/next-page/detail navigation and Back work; all 35 fixture links are reachable across two pages; stored prediction content, unavailable states, metadata and revision/search directives remain readable. Tests cover 320/390/1280 widths and English/EAT content under French locale/Los Angeles timezone. No visitor cookies, API polling, non-GET requests or page errors; remote requests were blocked. Desktop archive/mobile match screenshots were visually reviewed. |
+| Shared information integration | Actual production navigation, privacy, terms and contact HTML verifiers pass; `.tmp/042-{navigation,privacy,terms,contact}.log`. Updated methodology harness passes **13 stored presentation scenarios**, reconciling **1,554** counts, gates, links, clocks and canonical/noindex behavior; `.tmp/042-methodology.log`. |
+| Static/build checks | Typecheck, lint, final production build and whitespace checks pass; `.tmp/042-types.log`, `.tmp/042-lint-final.log`, `.tmp/042-build-final.log`. The final isolated native-metadata build/crawl also passes after shard-bound enforcement. |
+
+**Launch blockers remain:** OP-25 correction/dispute policy and ownership;
+OP-27 operator/legal publication facts; OP-28 verified public contact; prior
+source/public redistribution rights, forecast qualification, hosting and
+operational release decisions. The owner's 038/039 deferrals persist without
+another clarification or fabricated approval. The source-owned release record
+remains unverified and the three policy publication flags remain false. Prompts
+048–049 must integrate actual reviewed evidence before indexing or deployment.
+Noindex is a crawl directive, not access control or a deployment lock.
+
+No paid/provider call, subscription, worker activation, production migration,
+deployment, analytics, mailbox, external message or search-engine submission was
+introduced. Owned MySQL instances, acceptance servers and browser contexts were
+stopped after verification; existing services and the user's development server
+remain untouched. Details and reproduction: [seo-discovery.md](seo-discovery.md).

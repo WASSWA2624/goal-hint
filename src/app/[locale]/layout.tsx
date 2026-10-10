@@ -2,9 +2,14 @@ import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { isSupportedLocale } from "@/i18n/locales";
+import { connection } from "next/server";
+import { getDiscoveryPolicy } from "@/server/seo/policy";
 
-/** Every current public page is interim. Prompt 042 owns launch indexing. */
-export const metadata: Metadata = { robots: { index: false, follow: true } };
+/** Resolve deployment controls per request, independently of the build environment. */
+export async function generateMetadata(): Promise<Metadata> {
+  await connection();
+  return { robots: { index: getDiscoveryPolicy().index, follow: true } };
+}
 
 export default async function LocaleLayout({ children, params }: {
   children: ReactNode;

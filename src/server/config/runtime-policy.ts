@@ -115,6 +115,8 @@ const environmentSchema = z.object({
     .describe("Use development, test or production."),
   GOAL_HINT_OPERATION_SCOPE: z.enum(["disabled", "trial", "shadow", "production"]).default("disabled")
     .describe("Use disabled, trial, shadow or production; deployment mode does not qualify forecasts."),
+  GOAL_HINT_DEPLOYMENT_ENVIRONMENT: text
+    .describe("SEO deployment classification only; missing or unknown values disable indexing and production does not grant release approval."),
   GOAL_HINT_DATABASE_ENABLED: enabled.describe("Use true or false; database integration belongs to prompt 003."),
   GOAL_HINT_FOOTBALL_ENABLED: enabled.describe("Use true or false; paid calls require approved bounded policy."),
   GOAL_HINT_AI_ENABLED: enabled.describe("Use true or false; AI calls require an approved separate budget."),

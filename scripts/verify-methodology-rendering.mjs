@@ -49,7 +49,7 @@ async function prepare() {
     'tsconfig.json':JSON.stringify({extends:`${relative(root)}/tsconfig.json`,compilerOptions:{paths:{'@/*': [ `${relative(root)}/src/*` ]}},
       include:['app/**/*.tsx','.next/types/**/*.ts',`${relative(root)}/src/styles/styled.d.ts`],exclude:['node_modules']}),
     'app/layout.tsx':`export {default,metadata} from ${JSON.stringify('../'+relative(path.join(root,'src/app/layout')))};`,
-    'app/[locale]/layout.tsx':`export {default,metadata} from '@/app/[locale]/layout';`,
+    'app/[locale]/layout.tsx':`export {default,generateMetadata} from '@/app/[locale]/layout';`,
     'app/cases.json':JSON.stringify(cases),
     'app/[locale]/how-it-works/page.tsx':`import cases from '../../cases.json';
 import {createMethodologyRoute} from '@/app/_components/methodology-route';
@@ -58,7 +58,7 @@ import {parsePerformanceQuery} from '@/server/performance/performance-query';
 import {performanceParameters} from '@/server/performance/performance-page';
 import {MatchFeedError} from '@/server/matches/feed-error';
 import type {PerformanceResponse} from '@/domain/performance';
-export {metadata} from '@/app/[locale]/how-it-works/page';
+export {generateMetadata} from '@/app/[locale]/how-it-works/page';
 const stored=cases as unknown as Record<string,{data:PerformanceResponse}>;
 const at=utcInstantFromEpochMilliseconds(stored.default!.data.asOf);
 export default createMethodologyRoute(async parameters=>{

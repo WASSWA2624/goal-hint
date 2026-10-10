@@ -2647,3 +2647,39 @@ No live polling or later feature is activated. See
   changes, incident-monitoring activation or later feature is introduced. See
   [contact-page.md](contact-page.md) for the evidence boundary and remaining
   owner-dependent checks. Prior privacy/terms/source-rights release gates remain.
+
+## 042 - SEO and crawlable discovery
+
+- Fix all canonical and social URLs to `https://goalhint.com`; reuse the brand
+  kit and complete each page's Open Graph/Twitter metadata. Redirect the root
+  permanently to `/en` and configure the application's www host redirect while
+  leaving actual DNS/HTTPS/deployment verification to its owning prompts.
+- Reuse shared stored-read route factories and request-owned EAT clocks. Preserve
+  dated pagination canonicals, including page numbers. Relative date aliases pin
+  to a dated collection; search/filter variants retain their normalized query and
+  receive noindex. Revision variants receive noindex and the fixture canonical.
+  Robots permits these pages so crawlers can read the directive. Unknown fixtures
+  remain actual 404s; known unavailable fixtures remain meaningful valid pages.
+- Share the public fixture SQL predicate with sitemap discovery so retired
+  competition scopes retain closed/void historical forecasts. Use native dynamic
+  metadata routes with 2,000-entry match/date shards, advertised through robots.
+  Reject absent shard IDs before large-offset reads. Lastmod uses creation,
+  material fixture audits and public change events, never retrieval/request clocks.
+  Omit lastmod where no reliable aggregate stamp exists; never invent dates,
+  filtered destinations or revision sitemap entries.
+- Classify deployment at request time using
+  `GOAL_HINT_DEPLOYMENT_ENVIRONMENT`; unknown/missing/staging/development remains
+  noindex, including a production-mode staging build. Actual production indexing
+  also requires verified source-owned release approval and publication-ready
+  privacy/terms/contact. Those facts remain false, so no indexing is activated
+  and current sitemaps remain empty. Environment strings cannot clear the gates.
+  Carry forward the owner's OP-25/27/28 deferrals, rights/quality and operational
+  launch blockers. Prompts 048–049 own verified release/deployment integration.
+- Emit only the visible English WebSite identity, safely escaped as JSON-LD.
+  Preserve locale infrastructure without empty locales, selectors, fabricated
+  operators/ratings, traffic claims or rich-result promises.
+- Acceptance injects genuine isolated SQL projections and synthetic release
+  evidence only into an ignored standalone test app. The same staging-built
+  artifact is checked under staging and production runtime classifications.
+  This proves local behavior, not live rights, provider coverage, domain hosting
+  or release approval. See [seo-discovery.md](seo-discovery.md).
