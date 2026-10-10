@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import { CalendarIcon, ClockIcon } from "@/components/match/match-icons";
 import { featuredFamily, formLetters, marketRow } from "@/domain/match-details";
 import { noPickReason } from "@/domain/feed-presentation";
@@ -75,15 +75,26 @@ const Team = styled.div<{ $side: "home" | "away" }>`
   min-inline-size: 0;
   text-align: center;
   > :first-child { --gh-logo-size: 40px; --gh-logo-font: 15px; }
-  > strong { font-size: ${size("body")}; line-height: 1.2; overflow-wrap: anywhere; }
-  /* Desktop: both crests sit beside the score; the home name aligns towards it. */
+  /* Desktop: both crests sit beside the score, with the name centred on the crest and the home name aligned towards it. */
   ${desktop} {
-    grid-template-columns: auto minmax(0, 1fr);
-    justify-items: start;
-    column-gap: 12px;
-    text-align: start;
-    ${({ $side }) => $side === "home" && css`grid-template-columns: minmax(0, 1fr) auto; justify-items: end; text-align: end;`}
-    > :first-child { --gh-logo-size: 48px; --gh-logo-font: 18px; grid-row: span 2; ${({ $side }) => $side === "home" && "grid-column: 2;"} }
+    display: flex;
+    flex-direction: ${({ $side }) => $side === "home" ? "row-reverse" : "row"};
+    align-items: center;
+    gap: 12px;
+    text-align: ${({ $side }) => $side === "home" ? "end" : "start"};
+    > :first-child { --gh-logo-size: 48px; --gh-logo-font: 18px; flex: none; }
+  }
+`;
+/** Name over recent form; phones keep both as direct items of the centred team stack. */
+const TeamText = styled.div<{ $side: "home" | "away" }>`
+  display: contents;
+  > strong { font-size: ${size("body")}; line-height: 1.2; overflow-wrap: anywhere; }
+  ${desktop} {
+    display: grid;
+    flex: 1;
+    justify-items: ${({ $side }) => $side === "home" ? "end" : "start"};
+    gap: 4px;
+    min-inline-size: 0;
     > strong { font-size: 1.25rem; }
   }
 `;
@@ -185,12 +196,14 @@ export const MatchBanner = memo(function MatchBanner() {
     <h1 id="match-banner-title" style={{ position: "absolute", inlineSize: 1, blockSize: 1, overflow: "hidden", clipPath: "inset(50%)" }}>
       {messages.text("match.title", { home, away })}
     </h1>
-    <Team $side="home"><Crest name={fixture.homeTeam.name} url={fixture.homeTeam.logoUrl} size={48} eager /><strong>{home}</strong>{form("home")}</Team>
+    <Team $side="home"><Crest name={fixture.homeTeam.name} url={fixture.homeTeam.logoUrl} size={48} eager />
+      <TeamText $side="home"><strong>{home}</strong>{form("home")}</TeamText></Team>
     <Versus>
       {played ? <b data-score>{messages.number(fixture.score!.home)} – {messages.number(fixture.score!.away)}</b> : <b>{messages.text("details.versus")}</b>}
       {(played || fixture.status !== "scheduled") && <span data-live={fixture.status === "live" || undefined}>{status}</span>}
     </Versus>
-    <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager /><strong>{away}</strong>{form("away")}</Team>
+    <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager />
+      <TeamText $side="away"><strong>{away}</strong>{form("away")}</TeamText></Team>
     {row?.item ? <Featured type="button" $empty={false} data-featured-pick={featured!}
       onClick={() => update((current) => ({ ...current, marketsOpen: true, market: featured }))} aria-label={messages.text("details.featuredOpen", {
         market: marketName(messages, featured!), pick: pickLabel(messages, row.item.market.selection, home, away), probability: percent(messages, row.item.market.selectedProbability) })}>
