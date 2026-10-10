@@ -11,24 +11,54 @@ Import directly from the owning module under `@/components/match`:
 
 | Module | Public contract |
 | --- | --- |
-| `match-card` | `MatchCard`, `MatchCardProps`: validated `fixture`, required canonical `analysisSlug`, optional `selectedFamily` (default `match-result`), locale, heading level 2–4 (default 2), and `eagerLogos` (default false). |
-| `team-row` | `TeamRow`, `TeamRowProps`: public team, Home/Away side, nullable score, locale and optional eager logo loading. Names remain visible when a logo fails. |
+| `match-card` | `MatchCard`, `MatchCardProps`: validated `fixture`, required canonical `analysisSlug`, optional `selectedFamily` (default `match-result`), locale, heading level 2–4 (default 2), `eagerLogos` (default false) and an optional one-based `position` for the desktop `#` column. |
+| `team-row` | `TeamRow`, `TeamRowProps`: public team, Home/Away side, nullable score, locale and optional eager logo loading, used by the detail page. `TeamLogo` is shared with the card; containers size it with `--gh-logo-size` (default 32px). Names remain visible when a logo fails. |
 | `probability-label` | `ProbabilityLabel`, `ProbabilityLabelProps`: a complete `AcceptedMarket`, optional selection within that market, and locale. Displays an estimated probability using domain group rounding. |
 | `outcome-badge` | `OutcomeBadge`, `OutcomeBadgeProps`: one canonical settlement outcome status and locale. Explicit text plus the shared decorative icon; no live-region announcements for static cards. |
-| `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children, one column below the shared `lg` breakpoint (64rem), exactly two above it. Source order remains visual and keyboard order. |
+| `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children and an optional locale. One column below `md` (48rem), two from `md`, and an aligned table with a decorative navy column header from `lg` (64rem). Source order remains visual and keyboard order. |
+| `match-icons` | Decorative inline SVG icons (`aria-hidden`, not focusable). |
 
-Use the existing root style provider. The card reuses `Surface`, layout, text,
-control and feedback primitives and has square corners. Long names and words
-wrap inside bounded grid tracks. The analysis link uses `matchHref`, canonical
-fixture identity and the supplied slug, with prefetch disabled. The eventual
-detail route owns identity lookup and slug canonicalization.
+The card is deliberately visual and terse. It shows four bands:
+
+1. Header: competition (and country), compact EAT kickoff day and time in one
+   `time` element whose title carries the full EAT instant.
+2. Teams: logos and names either side of a centre state. Scheduled shows `VS`;
+   live shows the score and a red chip with the provider minute (`67′`) or
+   phase (`HT`, `Break`, `Penalties`…); finished shows the score with `FT`,
+   `AET*` or `Pens*` (the asterisk marks a 90-minute score, explained in the
+   chip title and hidden text); postponed/canceled/abandoned/awarded show a
+   neutral status chip.
+3. Pick: a soft market chip (code and family name) and a solid pill in the
+   family's colour with the selection and estimated percent. A padlock replaces
+   the bar icon once the prediction is locked. Correct, Incorrect and Void add a
+   round ✓/✗/⊘ mark with a tooltip and hidden text. Missing families show
+   No pick.
+4. Notes, only when supplied: updating, update delayed, result delayed, limited
+   news, partial coverage, no locked selection, void reasons and outside-window
+   availability.
+
+Source, provisional status and publication time move to the pill tooltip; sync
+time stays on the detail page. On desktop each card becomes one table row
+using `match-columns.ts` tracks and CSS subgrid: #, time, league, home, score,
+away, market, prediction and a chevron.
+
+Use the existing root style provider. Cards use `theme.border.cardRadius`,
+`theme.shadow.card` and the per-family `theme.color.market` hues (match result
+green, double chance purple, total goals blue, BTTS orange; every solid fill
+keeps white text at 4.5:1 or better). Long names and words wrap inside bounded
+grid tracks. The analysis link uses `matchHref`, canonical fixture identity and
+the supplied slug, with prefetch disabled. It covers the whole card, so the
+entire card or row is the click target. The eventual detail route owns identity
+lookup and slug canonicalization.
 
 The article's accessible heading names both teams and can match the page's
-heading hierarchy. Reading order is competition/kickoff/status, Home, Away,
-selected market/prediction, estimated probability, outcome, source/publication
-and supplied coverage notices, then View analysis. Each card has one keyboard
-destination, with a contextual accessible link name and shared visible focus.
-Scores have Home/Away labels; missing scores are announced as unavailable.
+heading hierarchy. Reading order is competition/kickoff, Home, match state,
+Away, selected market prediction with estimated probability and outcome,
+supplied notices, then View analysis. Decorative visual text (score digits,
+`VS`, short picks, percent, column headers) is `aria-hidden`; hidden text
+announces the score line, live phase and minute, and prediction in full. Each
+card has one keyboard destination, with a contextual accessible link name and
+shared visible focus. Missing scores are announced as unavailable.
 
 ## Versioned public data
 
@@ -42,6 +72,7 @@ Scores have Home/Away labels; missing scores are announced as unavailable.
 | Forecast | `updateDelayed?: boolean`, an actual delayed-update flag; `provisional?: boolean`, defaulting to true in presentation. |
 | Each forecast market | `limitedNews?: boolean` and optional `outcome`. |
 | Outcome | `cycleId`, `revisionId`, `selection`, canonical `status`, and nullable public `explanation`. Void requires a nonempty explanation. |
+| Fixture | `liveClock?: { phase, minute } | null`, present only while `status` is `live`. Phases: first-half, half-time, second-half, extra-time, break, penalties, interrupted, suspended, in-play. `minute` is the provider elapsed minute for running phases and null while play is paused. |
 
 These fields are part of the entire versioned fixture snapshot. A newer version
 replaces them together with score/status/forecast; equal or older versions
@@ -62,6 +93,12 @@ known final score alongside Pending or Unavailable prediction correctness.
 The score remains an overall display value, not a verified regulation score;
 the settlement domain/server owns regulation-time decisions.
 
+The server projection derives `liveClock` from the sealed, coherent
+`FixtureResult` version (`providerStatus` and `elapsedMinutes`) with
+`liveClockFromProvider`. A changed minute creates a new result and fixture data
+version, so the card's minute advances with the existing live-refresh cadence;
+the browser does not extrapolate the clock between refreshes.
+
 ## Probabilities, source and notices
 
 `probabilityEntry` calls `presentMarketProbabilities` on the complete accepted
@@ -72,27 +109,28 @@ remain independently rounded. Boundary labels are Less than 1% and More than
 validation. Switching families switches the pick, probability, source and
 outcome together; correctness never colors unrelated markets or the whole card.
 
-Correct and Incorrect use their existing green/red badge tones. Pending, Void
-and Unavailable use gray, each with explicit text and a distinct non-color icon.
-Fixture status and score labels remain separate from prediction outcome.
+Correct and Incorrect use their existing green/red outcome tones and Void uses
+gray, each with a distinct non-color icon, a tooltip and hidden explicit text.
+Pending and Unavailable add no mark; their status remains in hidden text and
+`data-outcome`. Fixture status and score remain separate from prediction outcome.
 
 Source comes from the selected market (AI prediction or API-Football fallback).
-Publication uses the actual forecast `publishedAt`, an ISO UTC `time` attribute
-and a full Gregorian EAT date/time label. Kickoff uses the same shared calendar
+The card's pill tooltip names the source and the actual forecast `publishedAt`
+as a full Gregorian EAT date/time label; the detail page keeps the visible
+publication `time`. Kickoff uses the same shared calendar
 validation and explicit Kampala time zone. Browser locale/time zone and the
 current clock cannot change the supplied instant. Formatting caches contain
 only immutable `Intl` formatters, never visitor data.
 
-Forecasts display Provisional unless explicitly qualified otherwise by trusted
-server data. Presentation makes no calibration claim. Update delayed is a
+The pill tooltip says Provisional estimate unless trusted server data
+qualifies the forecast otherwise. Presentation makes no calibration claim. Update delayed is a
 forecast-wide supplied fact, Limited news coverage is selected-market-specific,
 and Partial coverage is fixture-wide. Missing notices do not imply full coverage.
 
-Prompt 032 also presents the optional stored cycle/update metadata: current or
-locked prediction, no locked selection for the selected family, an in-progress
-prediction refresh, outside-window availability and delayed result updates.
-`syncedAt` is displayed separately from publication using its actual EAT time;
-null remains Last sync unavailable. The card does not select another revision
+Prompt 032 also presents the optional stored cycle/update metadata: locked
+prediction (padlock and hidden text), no locked selection for the selected
+family, an in-progress prediction refresh, outside-window availability and
+delayed result updates. `syncedAt` is shown on the detail page, not the card. The card does not select another revision
 or change timestamps. Feed and detail links share `domain/match-slug.ts`.
 
 ## Remote logos and fallbacks
@@ -104,8 +142,8 @@ grant media rights: the server catalog/provider approval still decides which
 exact URLs may be projected to visitors.
 
 Logos use native `styled.img` with the exact supplied URL, empty alt text,
-32px width/height and `object-fit: contain`. The 32px square is reserved before
-loading. Default loading is lazy; callers may explicitly opt into eager loading
+32px width/height attributes and `object-fit: contain`. The container reserves
+its `--gh-logo-size` square before loading (44px on cards, 28px in table rows). Default loading is lazy; callers may explicitly opt into eager loading
 for known above-the-fold cards. Requests use `no-referrer`. There is no Next
 optimizer, server proxy, binary download, image database column or asset copy.
 

@@ -55,6 +55,11 @@ export const unavailableMarketSchema = z.strictObject({
   family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
   reason: z.enum(["not-published", "no-locked-selection", "unsupported", "insufficient-data"]),
 });
+/** In-play phase and provider-reported minute, present only while the fixture is live. */
+export const liveClockPhases = ["first-half", "half-time", "second-half", "extra-time", "break", "penalties", "interrupted", "suspended", "in-play"] as const;
+export const liveClockSchema = z.strictObject({
+  phase: z.enum(liveClockPhases), minute: z.number().int().min(0).max(200).nullable(),
+});
 export const fixtureUpdateSchema = z.strictObject({
   prediction: z.enum(["updating", "delayed", "current", "unavailable", "outside-window", "locked"]),
   result: z.enum(["current", "delayed", "untracked"]),
@@ -131,7 +136,9 @@ export const fixtureSnapshotSchema = z.strictObject({
   update: fixtureUpdateSchema.optional(),
   availabilityMessage: z.string().max(256).nullable().optional(),
   scorePeriod: z.enum(["regulation", "live"]).nullable().optional(),
+  liveClock: liveClockSchema.nullable().optional(),
 }).superRefine((value, context) => {
+  if (value.liveClock && value.status !== "live") context.addIssue({ code: "custom", message: "A live clock requires a live fixture." });
   if (value.forecast !== null && value.cycleId === null) context.addIssue({ code: "custom", message: "A revision must belong to a cycle." });
   if (value.forecast?.markets.some((item) => item.outcome && item.outcome.cycleId !== value.cycleId)) {
     context.addIssue({ code: "custom", message: "Outcome must refer to this fixture cycle." });

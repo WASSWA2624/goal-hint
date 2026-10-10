@@ -33,7 +33,8 @@ export function cardExamples() {
   return [
     { label: "Example: correct match result, incorrect total goals and BTTS", fixture: cardFixture() },
     { label: "Example: incorrect API-Football fallback", fixture: cardFixture({ fixtureId: "card-incorrect", score: { home: 0, away: 1 } }, "api-football", "incorrect") },
-    { label: "Example: live score, pending prediction", fixture: cardFixture({ fixtureId: "card-pending", status: "live", score: { home: 2, away: 0 } }, "ai", null) },
+    { label: "Example: live score, pending prediction", fixture: cardFixture({ fixtureId: "card-pending", status: "live", score: { home: 2, away: 0 },
+      liveClock: { phase: "second-half", minute: 67 } }, "ai", null) },
     { label: "Example: void cycle", fixture: cardFixture({ fixtureId: "card-void", status: "postponed", score: null }, "ai", "void") },
     { label: "Example: unavailable forecast, known final score", fixture: cardFixture({ fixtureId: "card-unavailable", forecast: null }) },
     { label: "Example: delayed prediction retains publication time", fixture: delayed },

@@ -248,13 +248,13 @@ async function verify(origin, directory, scenarios) {
     for (const [index, record] of (scenario.result.data?.records ?? []).entries()) {
       const article = articles[index][2];
       assert.ok(article.includes(record.homeTeam.name)); assert.ok(article.includes(record.awayTeam.name));
-      assert.match(article, /Kickoff: <time/); assert.match(article, /Prediction:/); assert.match(article, /Last synced: <time/);
+      assert.match(article, /Kickoff: |Kickoff unavailable/); assert.match(article, /prediction: |prediction unavailable/);
       assert.equal((article.match(/<a\b/g) ?? []).length, 1);
-      if (record.forecast) assert.ok(article.includes(new Date(record.forecast.publishedAt).toISOString()));
-      if (record.syncedAt !== null) assert.ok(article.includes(new Date(record.syncedAt).toISOString()));
+      if (record.kickoffAt !== null) assert.ok(article.includes(new Date(record.kickoffAt).toISOString()));
+      if (record.forecast) assert.match(article, /Published: [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} EAT/);
       assert.doesNotMatch(article, /\/_next\/image|\s\$[\w-]+=/);
     }
-    if (name === 'today') { assert.match(visible, /Current prediction/); assert.match(visible, /No prediction was locked for this market/); assert.match(visible, /2 of 34 prediction jobs completed/); }
+    if (name === 'today') { assert.match(visible, /data-prediction="(?!none)/);assert.match(visible, /No prediction was locked for this market/); assert.match(visible, /2 of 34 prediction jobs completed/); }
     if (name === 'historical') { assert.match(visible, /Locked prediction/); assert.match(visible, /Final score/); assert.match(visible, /data-outcome="correct"/); }
     if (name === 'empty') assert.match(visible, /No fixtures confirmed/);
     if (['partial', 'partial-empty', 'failed-import', 'unknown'].includes(name)) { assert.match(visible, /Partial fixture coverage/); assert.doesNotMatch(visible, /No fixtures confirmed/); }

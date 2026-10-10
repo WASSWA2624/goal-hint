@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
+import { liveClockFromProvider } from "../../domain/match-card.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import type { InstantWindow } from "../../domain/calendar.ts";
 import type { MatchFeedRecord } from "../../domain/match-feed.ts";
@@ -57,16 +58,24 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     return { family, reason } as MatchFeedRecord["unavailableMarkets"][number];
   });
   const status = resultStatus.parse(fixture.status);
-  const coherentResult = fixtureResultMatchesCanonical(fixture, result, fixture.lifecycleState?.issue ?? null);
-  const regulation = coherentResult && result!.regulation.verified && result!.regulation.home === fixture.regulationHome && result!.regulation.away === fixture.regulationAway;
+  const issue = fixture.lifecycleState?.issue ?? null;
+  const coherentResult = fixtureResultMatchesCanonical(fixture, result, issue);
+  const sealedRegulation = coherentResult && result!.regulation.verified && result!.regulation.home === fixture.regulationHome && result!.regulation.away === fixture.regulationAway;
+  // Fixtures outside result tracking keep the catalog's provider-proven regulation score. A stored result that conflicts still hides it.
+  const catalogRegulation = result === null && issue === null && fixture.regulationHome !== null && fixture.regulationAway !== null &&
+    fixture.regulationVerifiedAt !== null && fixture.regulationEvidenceRef !== null;
+  const regulation = sealedRegulation || catalogRegulation;
+  const regulationScore = sealedRegulation ? { home: result!.regulation.home!, away: result!.regulation.away! }
+    : catalogRegulation ? { home: fixture.regulationHome!, away: fixture.regulationAway! } : null;
   const live = coherentResult && fixture.status === "live" && result!.reportedGoals.home !== null && result!.reportedGoals.away !== null;
   const team = (value: typeof fixture.homeTeam) => ({ id: value.id, name: text(value.name), logoUrl: isSafeRemoteImageUrl(value.logoUrl) ? value.logoUrl : null });
   return { fixtureId: id, dataVersion: String(fixture.dataVersion), homeTeam: team(fixture.homeTeam), awayTeam: team(fixture.awayTeam),
     competition: { id: fixture.season.competition.id, name: text(fixture.season.competition.name), country: text(fixture.season.competition.country) },
     kickoffAt: fixture.kickoff ? historyTime(fixture.kickoff) : null, syncedAt: historyTime(fixture.resultState?.lastSyncAt ?? fixture.retrievedAt),
-    status, score: isPlayedFinalStatus(status) && regulation
-      ? { home: result!.regulation.home!, away: result!.regulation.away! } : live ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,
+    status, score: isPlayedFinalStatus(status) && regulationScore
+      ? regulationScore : live ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,
     scorePeriod: isPlayedFinalStatus(status) && regulation ? "regulation" : live ? "live" : null,
+    liveClock: coherentResult && status === "live" ? liveClockFromProvider(result!.providerStatus, result!.elapsedMinutes) : null,
     partialCoverage, cycleId: cycle?.id ?? null, cycle: cycle ? { state: cycle.state, mode: display!.mode, ordinal: cycle.ordinal,
       lockedAt: cycle.lockedAt, voidReason } : null,
     forecast: revision ? { runId: revision.runId, runSequence: String(revision.runSequence), revisionId: revision.id, publishedAt: revision.publishedAt, markets,

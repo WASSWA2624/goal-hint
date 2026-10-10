@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fixtureSnapshotSchema, parseFixtureSnapshot } from "../src/domain/fixture-snapshot.ts";
-import { hasFinalScoreStatus, probabilityEntry, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
+import { hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
 import { marketRules, validateMarketGroup } from "../src/domain/markets.ts";
 import { isSafeRemoteImageUrl } from "../src/domain/remote-image.ts";
 import { createMessages } from "../src/i18n/messages.ts";
@@ -116,4 +116,31 @@ test("new presentation metadata participates in whole-fixture version reconcilia
   assert.equal(selectedCardPrediction(accepted).status, "pending");
   assert.equal(selectedCardPrediction(accepted).item.market.source, "api-football");
   assert.equal(accepted.partialCoverage, true);
+});
+
+test("live clock maps provider phases, hides paused minutes and requires a live fixture", () => {
+  assert.deepEqual(liveClockFromProvider("2H", 67), { phase: "second-half", minute: 67 });
+  assert.deepEqual(liveClockFromProvider("1H", 0), { phase: "first-half", minute: 0 });
+  assert.deepEqual(liveClockFromProvider("ET", 104), { phase: "extra-time", minute: 104 });
+  assert.deepEqual(liveClockFromProvider("HT", 45), { phase: "half-time", minute: null });
+  assert.deepEqual(liveClockFromProvider("P", 120), { phase: "penalties", minute: null });
+  assert.deepEqual(liveClockFromProvider("SUSP", 70), { phase: "suspended", minute: null });
+  assert.deepEqual(liveClockFromProvider(null, 12), { phase: "in-play", minute: 12 });
+  assert.deepEqual(liveClockFromProvider("toString", 12), { phase: "in-play", minute: 12 });
+  for (const elapsed of [null, -1, 201, 1.5]) assert.equal(liveClockFromProvider("2H", elapsed).minute, null);
+  const live = cardFixture({ fixtureId: "card-live", status: "live", score: { home: 1, away: 1 }, liveClock: { phase: "second-half", minute: 58 } }, "ai", null);
+  assert.deepEqual(live.liveClock, { phase: "second-half", minute: 58 });
+  assert.equal(parseFixtureSnapshot({ ...live, liveClock: undefined }).liveClock, undefined);
+  assert.throws(() => parseFixtureSnapshot({ ...live, status: "scheduled", score: null }));
+  assert.throws(() => parseFixtureSnapshot({ ...live, liveClock: { phase: "second-half", minute: 58, stoppage: 2 } }));
+  assert.throws(() => parseFixtureSnapshot({ ...live, liveClock: { phase: "overtime", minute: 58 } }));
+});
+
+test("compact kickoff parts use the EAT reporting zone regardless of the visitor clock", () => {
+  const messages = createMessages();
+  const kickoff = Date.UTC(2026, 9, 16, 18, 0);
+  assert.equal(messages.reportingTime(kickoff), "21:00");
+  assert.equal(messages.reportingDay(kickoff), "Fri, Oct 16");
+  assert.equal(messages.reportingTime(Date.UTC(2026, 9, 16, 21, 30)), "00:30");
+  assert.equal(messages.reportingDay(Date.UTC(2026, 9, 16, 21, 30)), "Sat, Oct 17");
 });

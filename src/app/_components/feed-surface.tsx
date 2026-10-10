@@ -64,10 +64,10 @@ function FeedResults({ data: initial, query, today, enabled, onStatus }: {
     {data.state !== "ready" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
     {records.length > 0 && <>
       <MutedText>{messages.text("feed.showingMatches", { shown: messages.number(records.length), total: messages.number(data.total) })}</MutedText>
-      <MatchCardList aria-label={messages.text("feed.matchList")}>
+      <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale}>
         {records.map((fixture, index) => <li key={fixture.fixtureId}>
           <MatchCard fixture={fixture} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
-            selectedFamily={query.market} locale={query.locale} eagerLogos={index < 2} />
+            selectedFamily={query.market} locale={query.locale} eagerLogos={index < 2} position={index + 1} />
         </li>)}
       </MatchCardList>
     </>}

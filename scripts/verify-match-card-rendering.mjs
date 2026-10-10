@@ -91,20 +91,26 @@ async function verify(origin, directory) {
   const byId = new Map(articles.map((match) => [match[1], match[2]]));
   assert.ok(html.indexOf("data-styled=") < html.indexOf("<main"));
   for (const [, article] of byId) {
-    const order = ["<header", 'data-team-side="home"', 'data-team-side="away"', "Prediction:", "Prediction outcome", "View analysis"];
+    const order = ["<header", 'data-team-side="home"', 'data-team-side="away"', "data-prediction=", "View analysis"];
     const positions = order.map((item) => article.indexOf(item));
     assert.ok(positions.every((value, index) => value >= 0 && (index === 0 || value > positions[index - 1])), "Card reading order");
     assert.match(article, /<svg[^>]*aria-hidden="true"[^>]*focusable="false"/);
     assert.equal((article.match(/<a\b/g) ?? []).length, 1, "One keyboard destination per card");
-    assert.match(article, /Published|Unavailable for this market/);
+    assert.match(article, /prediction: [^<]+, estimated probability|prediction unavailable/);
+    assert.match(article, /data-outcome="(?:correct|incorrect|pending|void|unavailable)"/);
     assert.doesNotMatch(article, /\s(?:\$[\w-]+|tone|variant|loaded)=/);
   }
   for (const [id, status] of [["card-correct", "correct"], ["card-incorrect", "incorrect"], ["card-pending", "pending"],
     ["card-void", "void"], ["card-unavailable", "unavailable"], ["card-missing-family", "unavailable"]]) {
     assert.match(byId.get(id), new RegExp(`data-outcome="${status}"`));
   }
-  assert.match(byId.get("card-correct"), /Final score/);
-  assert.match(byId.get("card-correct"), /Estimated probability:[\s\S]*54%/);
+  assert.match(byId.get("card-correct"), /Final score: Example Home FC 2, Example Away FC 1/);
+  assert.match(byId.get("card-correct"), /Match result prediction: Home win, estimated probability 54%/);
+  assert.match(byId.get("card-correct"), />FT</);
+  assert.match(byId.get("card-pending"), /data-live-minute="67"/);
+  assert.match(byId.get("card-pending"), /Live, 2nd half, 67 minutes played/);
+  assert.match(byId.get("card-pending"), /Live score: Example Home FC 2, Example Away FC 0/);
+  assert.match(byId.get("card-delayed"), /data-match-state="scheduled"/);
   assert.match(byId.get("card-correct"), /AI prediction/);
   assert.match(byId.get("card-incorrect"), /API-Football fallback/);
   assert.match(byId.get("card-delayed"), /Update delayed/);
@@ -123,7 +129,7 @@ async function verify(origin, directory) {
     assert.match(tag, /width="32"/);
     assert.match(tag, /height="32"/);
   }
-  console.log(`Match card SSR verification passed: ${articles.length} labeled examples, every outcome/source, coherent probability and direct remote image markup.`);
+  console.log(`Match card SSR verification passed: ${articles.length} labeled examples, every outcome/source, live minute, coherent probability and direct remote image markup.`);
 }
 
 try {

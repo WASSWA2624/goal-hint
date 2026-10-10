@@ -24,14 +24,17 @@ const Row = styled.div`
   gap: ${({ theme }) => theme.space.sm};
   min-inline-size: 0;
 `;
-const LogoBox = styled.span`
+/** Containers may set --gh-logo-size; 32px remains the reserved default. */
+const LogoBox = styled.span<{ $loaded: boolean }>`
   display: grid;
+  flex-shrink: 0;
   place-items: center;
   position: relative;
-  inline-size: 32px;
-  block-size: 32px;
+  inline-size: var(--gh-logo-size, 32px);
+  block-size: var(--gh-logo-size, 32px);
+  border-radius: var(--gh-logo-radius, 0);
   color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.surfaceMuted};
+  background: ${({ theme, $loaded }) => $loaded ? "transparent" : theme.color.surfaceMuted};
   font-size: ${({ theme }) => theme.typography.size.small};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: 1;
@@ -39,8 +42,8 @@ const LogoBox = styled.span`
 const LogoImage = styled.img<{ $loaded: boolean }>`
   position: absolute;
   inset: 0;
-  inline-size: 32px;
-  block-size: 32px;
+  inline-size: 100%;
+  block-size: 100%;
   object-fit: contain;
   opacity: ${({ $loaded }) => $loaded ? 1 : 0};
 `;
@@ -62,7 +65,7 @@ const Score = styled.span`
   font-variant-numeric: tabular-nums;
 `;
 
-function TeamLogo({ name, url, eager }: { name: string | null; url: string | undefined; eager: boolean }) {
+export function TeamLogo({ name, url, eager }: { name: string | null; url: string | undefined; eager: boolean }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const imageRef = useCallback((element: HTMLImageElement | null) => {
@@ -71,7 +74,7 @@ function TeamLogo({ name, url, eager }: { name: string | null; url: string | und
       else setFailed(true);
     }
   }, []);
-  return <LogoBox aria-hidden="true">
+  return <LogoBox aria-hidden="true" $loaded={loaded}>
     <span hidden={loaded}>{teamInitials(name)}</span>
     {url && !failed && <LogoImage ref={imageRef} src={url} alt="" width={32} height={32}
       loading={eager ? "eager" : "lazy"} decoding="async" referrerPolicy="no-referrer" $loaded={loaded}

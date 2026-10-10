@@ -3,7 +3,8 @@ import { publicPolicy } from "../domain/public-policy.ts";
 import { resolveLocale } from "./locales.ts";
 import { en } from "./messages/en.ts";
 
-type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat };
+type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
+  days: Intl.DateTimeFormat; times: Intl.DateTimeFormat };
 // Immutable formatters are shared by locale; translations and visitor data are never cached.
 const formattersByLocale = new Map<string, Formatters>();
 function formatters(language: string): Formatters {
@@ -15,6 +16,8 @@ function formatters(language: string): Formatters {
     plurals: new Intl.PluralRules(language),
     dates: new Intl.DateTimeFormat(language, { ...dateOptions, weekday: "long", month: "long", day: "numeric" }),
     instants: new Intl.DateTimeFormat(language, { ...dateOptions, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
+    days: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", weekday: "short", month: "short", day: "numeric" }),
+    times: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
   };
   formattersByLocale.set(language, created);
   return created;
@@ -30,7 +33,7 @@ export type MessageCatalog = Readonly<Record<TextKey, string> & Record<PluralKey
 /** Missing translations fall back per key. Only complete locales may be published. */
 export function createMessages(locale?: string, translations: Partial<MessageCatalog> = {}) {
   const language = resolveLocale(locale);
-  const { numbers, plurals, dates, instants } = formatters(language);
+  const { numbers, plurals, dates, instants, days, times } = formatters(language);
 
   return {
     text(key: TextKey, values: Readonly<Record<string, string>> = {}): string {
@@ -50,6 +53,13 @@ export function createMessages(locale?: string, translations: Partial<MessageCat
     reportingInstant(value: UtcInstant): string {
       const input = getKickoffDisplayInput(value);
       return instants.format(input.value) + " EAT";
+    },
+    /** Compact EAT kickoff parts for cards; full labels remain on reportingInstant. */
+    reportingDay(value: UtcInstant): string {
+      return days.format(getKickoffDisplayInput(value).value);
+    },
+    reportingTime(value: UtcInstant): string {
+      return times.format(getKickoffDisplayInput(value).value);
     },
   };
 }

@@ -150,7 +150,11 @@ export function MatchDetail({ data, locale = "en", history }: { data: MatchDetai
     </Stack>
     <Surface>
       <Stack>
-        <MutedText>{messages.text(scoreLabel)}</MutedText>
+        <MutedText data-live-minute={fixture.liveClock?.minute ?? undefined}>{messages.text(scoreLabel)}
+          {fixture.status === "live" && fixture.liveClock && <> · {fixture.liveClock.minute !== null
+            ? messages.text("match.clock.minuteLabel", { minute: messages.number(fixture.liveClock.minute) })
+            : messages.text(fixture.liveClock.phase === "half-time" ? "match.clock.halfTimeLabel" : `match.clock.${fixture.liveClock.phase}`)}</>}
+        </MutedText>
         <TeamRow team={fixture.homeTeam} side="home" score={fixture.score?.home ?? null} eagerLogo locale={locale} />
         <TeamRow team={fixture.awayTeam} side="away" score={fixture.score?.away ?? null} eagerLogo locale={locale} />
         <MarketPrediction data={data} family="match-result" locale={locale} sources={sources} />
