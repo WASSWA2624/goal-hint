@@ -9,27 +9,30 @@ import type { MarketFamily, MarketSelection } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { detailAnalysis, detailMarket } from "@/server/matches/detail-presentation";
-import { DetailArticle, DetailMarket, DetailMarketGrid, SourceDisclosure } from "@/components/match/detail-styles";
+import { DetailArticle, DetailMarket, DetailMarketGrid } from "@/components/match/detail-styles";
+import { Disclosure } from "@/components/ui/disclosure";
 import { TeamRow } from "@/components/match/team-row";
 import { ProbabilityLabel } from "@/components/match/probability-label";
 import { OutcomeBadge } from "@/components/match/outcome-badge";
 
-function DetailTime({ label, at, locale }: { label: TextKey; at: UtcInstant | null; locale: string }) {
+export function DetailTime({ label, at, locale }: { label: TextKey; at: UtcInstant | null; locale: string }) {
   const messages = createMessages(locale);
   return <MutedText>{messages.text(label)}: {at === null ? messages.text("detail.unknownTime")
     : <time dateTime={toUtcIsoString(at)}>{messages.reportingInstant(at)}</time>}</MutedText>;
 }
 
-function MarketPrediction({ data, family, locale, sources }: {
+function MarketPrediction({ data, family, locale, sources, scope = "" }: {
   data: MatchDetailResponse; family: MarketFamily; locale: string; sources: DetailSnapshot["analysis"]["sources"];
+  scope?: string;
 }) {
   const messages = createMessages(locale), { item, outcome, unavailableReason } = detailMarket(data, family);
   return <DetailMarket $gap="sm" data-detail-market={family}>
-    <SectionHeading id={`market-${family}`}>{messages.text(`market.family.${family}`)}</SectionHeading>
+    <SectionHeading id={`${scope}market-${family}`}>{messages.text(`market.family.${family}`)}</SectionHeading>
     <BodyText>{messages.text("match.prediction")}: <strong>{item
       ? messages.text(`market.selection.${item.market.selection}`) : messages.text("match.predictionUnavailable")}</strong></BodyText>
     {item && <ProbabilityLabel market={item.market} locale={locale} />}
-    <div><BodyText>{messages.text("match.outcome")}</BodyText><OutcomeBadge status={outcome?.status ?? "unavailable"} locale={locale} /></div>
+    {data.snapshot?.applicability === "historical" ? <MutedText>{messages.text("history.noSettlement")}</MutedText>
+      : <div><BodyText>{messages.text("match.outcome")}</BodyText><OutcomeBadge status={outcome?.status ?? "unavailable"} locale={locale} /></div>}
     {outcome && <>
       <MutedText>{outcome.explanation}</MutedText>
       {outcome.settledAt !== null && <DetailTime label="detail.settled" at={outcome.settledAt} locale={locale} />}
@@ -42,7 +45,7 @@ function MarketPrediction({ data, family, locale, sources }: {
       {item.source.provisional && <MutedText>{messages.text("match.provisional")}</MutedText>}
       {item.source.fallbackReason && <MutedText>{messages.text(`detail.fallback.${item.source.fallbackReason}`)}</MutedText>}
       <DetailTime label="match.published" at={data.snapshot!.publishedAt} locale={locale} />
-      <details>
+      <Disclosure $plain>
         <summary>{messages.text("detail.alternatives")}</summary>
         <Stack $gap="sm">
           {item.alternatives.map((alternative) => <div key={alternative.selection}>
@@ -51,8 +54,8 @@ function MarketPrediction({ data, family, locale, sources }: {
           </div>)}
           {family === "double-chance" && <MutedText>{messages.text("detail.overlappingProbabilities")}</MutedText>}
         </Stack>
-      </details>
-      <details>
+      </Disclosure>
+      <Disclosure $plain>
         <summary>{messages.text("detail.sourceTiming")}</summary>
         <Stack $gap="sm">
           <DetailTime label="detail.generated" at={item.timestamps.generatedAt} locale={locale} />
@@ -65,12 +68,14 @@ function MarketPrediction({ data, family, locale, sources }: {
               : <MutedText key={id}>{source.publisher}</MutedText>;
           })}
         </Stack>
-      </details>
+      </Disclosure>
     </>}
   </DetailMarket>;
 }
 
-function RevisionAnalysis({ snapshot, analysis, locale }: { snapshot: DetailSnapshot; analysis: DetailSnapshot["analysis"]; locale: string }) {
+function RevisionAnalysis({ snapshot, analysis, locale, scope = "detail-" }: {
+  snapshot: DetailSnapshot; analysis: DetailSnapshot["analysis"]; locale: string; scope?: string;
+}) {
   const messages = createMessages(locale);
   function citations(urls: readonly string[]) {
     return [...new Set(urls)].map((url) => {
@@ -79,9 +84,9 @@ function RevisionAnalysis({ snapshot, analysis, locale }: { snapshot: DetailSnap
     });
   }
   return <>
-    <Surface aria-labelledby="detail-analysis-title">
+    <Surface aria-labelledby={`${scope}analysis-title`}>
       <Stack>
-        <SectionHeading id="detail-analysis-title">{messages.text("detail.analysis")}</SectionHeading>
+        <SectionHeading id={`${scope}analysis-title`}>{messages.text("detail.analysis")}</SectionHeading>
         <BodyText>{messages.text("detail.analysisBasis")}</BodyText>
         {analysis.limitedNews && <MutedText>{messages.text("match.limitedNews")}</MutedText>}
         {analysis.state === "available" ? <>
@@ -99,10 +104,10 @@ function RevisionAnalysis({ snapshot, analysis, locale }: { snapshot: DetailSnap
         <BodyText>{messages.text("detail.probabilityDisclosure")}</BodyText>
       </Stack>
     </Surface>
-    <SourceDisclosure id="detail-sources">
+    <Disclosure id={`${scope}sources`}>
       <summary>{messages.text("detail.sources")}</summary>
       <Stack $gap="lg" as="ul">
-        {analysis.sources.map((source, index) => <li id={`detail-source-${index}`} key={source.id}>
+        {analysis.sources.map((source, index) => <li id={`${scope}source-${index}`} key={source.id}>
           <Stack $gap="sm">
             <BodyText>{source.publisher}</BodyText>
             <BodyText>{source.url ? <TextLink href={source.url} prefetch={false} rel="noopener noreferrer" referrerPolicy="no-referrer">{source.title}</TextLink> : source.title}</BodyText>
@@ -114,8 +119,23 @@ function RevisionAnalysis({ snapshot, analysis, locale }: { snapshot: DetailSnap
         </li>)}
       </Stack>
       {analysis.sources.length === 0 && <BodyText>{messages.text("detail.noSources")}</BodyText>}
-    </SourceDisclosure>
+    </Disclosure>
   </>;
+}
+
+/** A full isolated publication, without another fixture card or headline score. */
+export function HistorySnapshot({ data, locale }: { data: MatchDetailResponse; locale: string }) {
+  const snapshot = data.snapshot;
+  if (!snapshot) return null;
+  const analysis = detailAnalysis(snapshot.analysis), scope = `history-${snapshot.revisionId}-`;
+  return <Stack data-history-snapshot={snapshot.revisionId}>
+    <DetailMarketGrid>
+      {publicPolicy.markets.map((family) => <Surface key={family} aria-labelledby={`${scope}market-${family}`}>
+        <MarketPrediction data={data} family={family} locale={locale} sources={analysis.sources} scope={scope} />
+      </Surface>)}
+    </DetailMarketGrid>
+    <RevisionAnalysis snapshot={snapshot} analysis={analysis} locale={locale} scope={scope} />
+  </Stack>;
 }
 
 export function MatchDetail({ data, locale = "en", history }: { data: MatchDetailResponse; locale?: string; history?: ReactNode }) {
@@ -125,7 +145,7 @@ export function MatchDetail({ data, locale = "en", history }: { data: MatchDetai
   const scoreLabel = fixture.scorePeriod === "regulation" ? "detail.regulationScore" : fixture.scorePeriod === "live" ? "match.liveScore" : "detail.scoreUnavailable";
   return <DetailArticle $gap="lg" data-match-detail data-fixture-id={fixture.fixtureId} data-detail-revision={snapshot?.revisionId ?? ""}>
     <Stack $gap="sm">
-      <PageHeading>{messages.text("match.title", { home, away })}</PageHeading>
+      <PageHeading id="current-match-summary">{messages.text("match.title", { home, away })}</PageHeading>
       <BodyText>{fixture.competition.name || messages.text("match.competitionUnknown")}</BodyText>
       <DetailTime label="match.kickoff" at={fixture.kickoffAt} locale={locale} />
       <MutedText>{messages.text(`match.status.${fixture.status}`)} · {messages.text("feed.reportingTimeZone")}</MutedText>

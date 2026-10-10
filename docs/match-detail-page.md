@@ -12,8 +12,8 @@ Canonical UUID determines identity. Uppercase UUIDs and changed decorative slugs
 redirect permanently to the service's canonical path. Malformed identities and
 unknown fixtures return real HTTP 404s. Storage/configuration failures show
 a truthful temporary-failure page with an ordinary retry link; they cannot become
-an unpublished fixture or a false 404. This prompt accepts no detail query
-parameters: explicit revision/cycle selection and browsing belong to 036.
+an unpublished fixture or a false 404. Prompt 036 accepts the bounded API history
+query parameters on this same canonical page; see [revision history](revision-history-page.md).
 
 Initial HTML includes names, EAT kickoff, all four available/unavailable markets,
 selected probabilities, source labels, explanation and score/outcomes. Styled
@@ -51,8 +51,8 @@ indexing and structured data.
 - Exact-score prediction remains excluded by the recorded launch decision and
   disabled public policy. Displaying an actual regulation score does not enable it.
 
-`MatchDetailPage`/`MatchDetail` provide an optional `history` composition slot for
-036. There is no unfinished history control or revision browser in this prompt.
+`MatchDetailPage`/`MatchDetail` compose the read-only revision history below the
+primary match content. The optional `history` slot remains available for reuse.
 Shared team rows retain native reserved logos, broken-image initials and square
 controls. All public reads remain anonymous and cannot generate predictions,
 call providers, dispatch jobs or settle outcomes.

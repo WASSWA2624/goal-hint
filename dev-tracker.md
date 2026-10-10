@@ -40,7 +40,7 @@
 | ☑         | [033-search-filter-controls.md](dev-plan/033-search-filter-controls.md)         |
 | ☑         | [034-pagination-navigation.md](dev-plan/034-pagination-navigation.md)           |
 | ☑         | [035-match-detail-page.md](dev-plan/035-match-detail-page.md)                   |
-| ☐         | [036-revision-history.md](dev-plan/036-revision-history.md)                     |
+| ☑         | [036-revision-history.md](dev-plan/036-revision-history.md)                     |
 | ☐         | [037-live-client-refresh.md](dev-plan/037-live-client-refresh.md)               |
 | ☐         | [038-methodology-performance.md](dev-plan/038-methodology-performance.md)       |
 | ☐         | [039-privacy-page.md](dev-plan/039-privacy-page.md)                             |

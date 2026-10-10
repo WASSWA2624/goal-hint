@@ -12,16 +12,25 @@ import { readPublicMatchDetail } from "./public-detail.ts";
 export type DetailPageResult = Readonly<{ data: MatchDetailResponse; error: null } |
   { data: null; error: "not-found" | "unavailable" | "rate-limited" }>;
 
-/** Revision/history selection belongs to 036; this page shows the applicable set. */
+export function matchDetailPageParameters(parameters: Record<string, string | string[] | undefined>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(parameters)) {
+    if (value === undefined) continue;
+    if (typeof value !== "string") throw new MatchFeedError("invalid-query");
+    query.set(key, value);
+  }
+  query.sort();
+  return query;
+}
 export function parseMatchDetailPageInput(id: string, parameters: Record<string, string | string[] | undefined>) {
-  parseMatchDetailQuery(id, new URLSearchParams());
-  if (Object.keys(parameters).length !== 0) throw new MatchFeedError("invalid-query");
+  parseMatchDetailQuery(id, matchDetailPageParameters(parameters));
   return id.toLowerCase();
 }
-export async function loadMatchDetailPage(id: string, clock: Clock, read: typeof readPublicMatchDetail = readPublicMatchDetail): Promise<DetailPageResult> {
+export async function loadMatchDetailPage(id: string, clock: Clock, read: typeof readPublicMatchDetail = readPublicMatchDetail,
+  parameters = new URLSearchParams()): Promise<DetailPageResult> {
   try {
-    parseMatchDetailQuery(id, new URLSearchParams());
-    return { data: await read(id, new URLSearchParams(), clock), error: null };
+    parseMatchDetailQuery(id, parameters);
+    return { data: await read(id, parameters, clock), error: null };
   } catch (error) {
     return { data: null, error: error instanceof MatchFeedError && ["invalid-query", "not-found"].includes(error.code) ? "not-found"
       : error instanceof MatchFeedError && error.code === "rate-limited" ? "rate-limited" : "unavailable" };

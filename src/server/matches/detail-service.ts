@@ -8,7 +8,7 @@ import { canonicalMatchSlug } from "../../domain/match-slug.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
-import { storedCycle, storedCycleDisplay, storedRevision } from "../predictions/history-read.ts";
+import { runFromRow, storedCycle, storedCycleDisplay, storedRevision } from "../predictions/history-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
 import { storedFeedCoverage } from "./feed-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
@@ -60,9 +60,21 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
             orderBy: { fixtureRevision: "desc" }, take: query.limit + 1, select: { id: true } });
           const cycles = await tx.predictionCycle.findMany({ where: { fixtureId: id, ordinal: { lte: anchors.cycle ?? 0, ...(query.cycleBefore ? { lt: query.cycleBefore } : {}) } },
             orderBy: { ordinal: "desc" }, take: query.limit + 1, select: { id: true } });
-          const revisions = [], cycleHistory = [];
-          for (const row of rows.slice(0, query.limit)) revisions.push(publicDetailRevision((await storedRevision(tx, row.id))!));
-          for (const row of cycles.slice(0, query.limit)) cycleHistory.push(publicDetailCycle((await storedCycle(tx, row.id))!));
+          const revisions = [], cycleHistory = [], cycleCache = new Map<string, NonNullable<typeof display>["cycle"]>();
+          if (display) cycleCache.set(display.cycle.id, display.cycle);
+          const cycleFor = async (cycleId: string) => {
+            if (!cycleCache.has(cycleId)) cycleCache.set(cycleId, (await storedCycle(tx, cycleId))!);
+            return cycleCache.get(cycleId)!;
+          };
+          const published = [];
+          for (const row of rows.slice(0, query.limit)) published.push((await storedRevision(tx, row.id))!);
+          const runs = await tx.dailyRun.findMany({ where: { id: { in: [...new Set(published.map((entry) => entry.runId))] } },
+            select: { id: true, sequence: true, eatDate: true, createdAt: true } });
+          const runDates = new Map(runs.map((row) => { const run = runFromRow(row); return [run.id, run.eatDate]; }));
+          for (const entry of published) revisions.push({ ...publicDetailRevision(entry), runDate: runDates.get(entry.runId),
+            sources: [...new Set(Object.values(entry.candidate.markets).flatMap((market) => market.available ? [market.market.source] : []))],
+            cycle: publicDetailCycle(await cycleFor(entry.cycleId)) });
+          for (const row of cycles.slice(0, query.limit)) cycleHistory.push(publicDetailCycle(await cycleFor(row.id)));
           const slug = canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name);
           const response = matchDetailResponseSchema.parse({ fixture, asOf, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
             currentRevisionId, selection: query.revision ? "revision" : query.cycle ? "cycle" : "applicable", selectedCycle: display ? publicDetailCycle(display.cycle) : null, snapshot,

@@ -13,6 +13,10 @@ export const detailCycleSchema = z.strictObject({ id, ordinal: sequence, state: 
 export const detailRevisionSchema = z.strictObject({ revisionId: id, cycleId: id, runId: id, runSequence: z.string().regex(/^[1-9]\d*$/u),
   fixtureRevision: sequence, cycleRevision: sequence, fixtureDataVersion: matchFeedRecordSchema.shape.dataVersion,
   evidenceCutoffAt: at, generationCompletedAt: at, publishedAt: at });
+export const detailPublicationSchema = detailRevisionSchema.extend({
+  runDate: z.iso.date(), sources: z.array(z.enum(["ai", "api-football"])).min(1).max(2), cycle: detailCycleSchema,
+}).refine((v) => v.cycleId === v.cycle.id && v.runSequence === v.runDate.replaceAll("-", "") && new Set(v.sources).size === v.sources.length,
+  { message: "Incoherent publication provenance." });
 export const detailSnapshotSchema = publicForecastSchema.safeExtend({
   ...detailRevisionSchema.shape, historical: z.boolean(), applicability: z.enum(["current", "locked", "void", "historical"]), cycle: detailCycleSchema,
   markets: z.array(publicForecastSchema.shape.markets.element.safeExtend({
@@ -47,7 +51,7 @@ export const matchDetailResponseSchema = z.strictObject({ fixture: matchFeedReco
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: detailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
-    revisions: z.strictObject({ anchor: sequence.or(z.literal(0)), entries: z.array(detailRevisionSchema).max(matchDetailRules.maximumLimit), next: historyLink }),
+    revisions: z.strictObject({ anchor: sequence.or(z.literal(0)), entries: z.array(detailPublicationSchema).max(matchDetailRules.maximumLimit), next: historyLink }),
     cycles: z.strictObject({ anchor: sequence.or(z.literal(0)), entries: z.array(detailCycleSchema).max(matchDetailRules.maximumLimit), next: historyLink }) }),
 }).superRefine((v, ctx) => {
   if (v.route.fixtureId !== v.fixture.fixtureId || v.currentRevisionId !== (v.fixture.forecast?.revisionId ?? null) ||

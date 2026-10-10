@@ -27,7 +27,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
     let readAt = PUBLICATION_NOW;
     const service = createMatchDetailService({ database: p.a, clock: { now: () => readAt } });
     const states = new Map();
-    const captured = {}, capture = (name, data) => { captured[name] = { data, error: null }; };
+    const captured = {}, capture = (name, data, requestQuery = '') => { captured[name] = { data, error: null, requestQuery }; };
     async function publish(id, options = {}) {
       p.setTime(PUBLICATION_NOW); readAt = p.now();
       const state = await p.setup(id);
@@ -35,6 +35,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
         const context = state.snapshot.context, authority = evidenceAuthority();
         state.snapshot = buildEvidenceSnapshot({ context, policy: evidencePolicy(), sources: [evidenceSource(context, {
           sourceUrl: 'https://news.example.com/synthetic-match-preview', publishedAt: context.cutoffAt - 3000,
+          ...(id === 3010 ? { reuse: { retainUntil: context.analysisAt + 7 * 86_400_000 } } : {}),
         })] }, authority);
         state.input.evidenceSnapshotId = evidenceHash(randomUUID());
         await createMysqlEvidenceStore(p.a).save(state.input.evidenceSnapshotId, evidenceHash(`request:${state.input.evidenceSnapshotId}`), state.snapshot, authority);
@@ -118,27 +119,31 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       const next = await p.history.withFixtureTransaction(state.fixture.id, (writer) => writer.createCycle(cycleCreation(state.fixture, 'detail-rescheduled')));
       const current = await read(state); assert.equal(current.fixture.cycleId, next.id); assert.equal(current.snapshot, null);
       const previous = await read(state, `cycle=${state.cycle.id}&limit=1`);
+      capture('history-void-cycle', previous, `cycle=${state.cycle.id}&limit=1`);
+      capture('history-cycle-current', current);
       assert.equal(previous.snapshot.revisionId, state.revision.id); assert.equal(previous.snapshot.historical, true);
       assert.equal(previous.snapshot.cycle.voidReason.code, 'formal-postponement'); assert.ok(previous.history.cycles.next);
       await p.first.voidCycle({ fixtureId: state.fixture.id, cycleId: next.id, actor: 'synthetic-detail-test', reason: 'formal-postponement', evidenceRef: 'private-next-cycle-proof' });
       capture('void-without-prediction', await read(state));
       await p.history.withFixtureTransaction(state.fixture.id, (writer) => writer.createCycle(cycleCreation(state.fixture, 'third-detail-cycle')));
       const page = await read(state, new URL(previous.history.cycles.next, 'http://localhost').searchParams);
+      capture('history-cycle-page', page, new URL(previous.history.cycles.next, 'http://localhost').searchParams.toString());
       assert.equal(page.history.cycles.entries[0].id, state.cycle.id); assert.equal(page.history.cycles.next, null);
       assert.doesNotMatch(JSON.stringify(previous), /private-void-proof/u);
       const emptyAnchor = await read(state, 'revisionAnchor=0&cycleAnchor=0');
       assert.deepEqual(emptyAnchor.history.revisions.entries, []); assert.deepEqual(emptyAnchor.history.cycles.entries, []);
     });
     await t.test('earlier revision selection and anchored history stay stable under new publication', async () => {
-      const state = await publish(3010);
-      async function nextRevision(date) {
+      const state = await publish(3010, { linkedEvidence: true });
+      async function nextRevision(date, options = {}) {
         p.setTime(Date.parse(`${date}T08:00:04Z`)); readAt = p.now();
         const fixture = await p.catalog.fixtureByProviderId(3010), cycle = await p.history.findCycle(state.cycle.id), run = await p.history.createRun(date, p.now() - 4000);
         const context = evidenceContext(fixture, { runId: run.id, cycleId: cycle.id, analysisAt: p.now() - 4000, cutoffAt: p.now() - 4000,
           home: { teamId: fixture.homeTeamId, externalId: fixture.homeExternalIds[0] }, away: { teamId: fixture.awayTeamId, externalId: fixture.awayExternalIds[0] } });
-        const authority = evidenceAuthority(), snapshot = buildEvidenceSnapshot({ context, policy: evidencePolicy(), sources: [evidenceSource(context)] }, authority);
+        const authority = evidenceAuthority(), snapshot = buildEvidenceSnapshot({ context, policy: evidencePolicy(),
+          sources: [evidenceSource(context, { reuse: { retainUntil: context.analysisAt + 7 * 86_400_000 } })] }, authority);
         const evidenceId = evidenceHash(randomUUID()); await createMysqlEvidenceStore(p.a).save(evidenceId, evidenceHash(`request:${evidenceId}`), snapshot, authority);
-        const candidate = historyCandidate({ snapshot, model: modelVersion(), jobId: evidenceHash(randomUUID()) });
+        const candidate = historyCandidate({ snapshot, model: modelVersion(), jobId: evidenceHash(randomUUID()), ...options });
         return p.history.withFixtureTransaction(fixture.id, async (writer, tx) => {
           const revision = await writer.appendRevision(revisionInput(candidate, evidenceId, cycle.scheduleVersion));
           const current = await storedCycle(tx, cycle.id);
@@ -146,17 +151,33 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
           return revision;
         });
       }
-      const second = await nextRevision('2026-10-10'), third = await nextRevision('2026-10-11');
+      const second = await nextRevision('2026-10-10', { partial: true }), third = await nextRevision('2026-10-11');
       const firstPage = await read(state, `revision=${state.revision.id}&limit=1`);
       assert.equal(firstPage.snapshot.historical, true); assert.deepEqual(firstPage.snapshot.outcomes, []);
+      assert.equal(firstPage.snapshot.analysis.state, 'available');
+      assert.equal(firstPage.snapshot.analysis.sources[0].url, 'https://news.example.com/synthetic-match-preview');
       assert.equal(firstPage.currentRevisionId, third.id); assert.equal(firstPage.history.revisions.anchor, 3);
+      assert.deepEqual(firstPage.history.revisions.entries.map(entry => entry.runDate), ['2026-10-11']);
+      assert.deepEqual(firstPage.history.revisions.entries[0].sources, ['ai']);
+      assert.equal(firstPage.history.revisions.entries[0].cycle.ordinal, state.cycle.ordinal);
+      capture('history-old', firstPage, `revision=${state.revision.id}&limit=1`);
       const fourth = await nextRevision('2026-10-12');
       const secondPage = await read(state, new URL(firstPage.history.revisions.next, 'http://localhost').searchParams);
       assert.equal(secondPage.snapshot.revisionId, state.revision.id); assert.equal(secondPage.currentRevisionId, fourth.id);
       assert.deepEqual(secondPage.history.revisions.entries.map((r) => r.revisionId), [second.id]);
+      capture('history-page-two', secondPage, new URL(firstPage.history.revisions.next, 'http://localhost').searchParams.toString());
       const thirdPage = await read(state, new URL(secondPage.history.revisions.next, 'http://localhost').searchParams);
       assert.deepEqual(thirdPage.history.revisions.entries.map((r) => r.revisionId), [state.revision.id]); assert.equal(thirdPage.history.revisions.next, null);
       assert.ok(BigInt(secondPage.fixture.dataVersion) > BigInt(firstPage.fixture.dataVersion));
+      capture('history-page-three', thirdPage, new URL(secondPage.history.revisions.next, 'http://localhost').searchParams.toString());
+      capture('history-current', await read(state));
+      const partialQuery = `revision=${second.id}&limit=1`, partial = await read(state, partialQuery);
+      assert.equal(partial.snapshot.markets.length, 2); assert.equal(partial.snapshot.unavailableMarkets.length, 2);
+      assert.deepEqual(partial.snapshot.outcomes, []);
+      capture('history-partial', partial, partialQuery);
+      const currentQuery = `revision=${fourth.id}`, selected = await read(state, currentQuery);
+      assert.equal(selected.snapshot.historical, false);
+      capture('history-current-selection', selected, currentQuery);
     });
     await t.test('expired evidence suppresses analysis without replacing immutable probabilities or source clocks', async () => {
       const state = states.get(3000); readAt = PUBLICATION_NOW + 2 * 86_400_000;
@@ -225,6 +246,8 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
         const state = states.get(3000), handler = createMatchDetailHandler((id, parameters) => reader.query(id, parameters));
         const response = await handler(new Request(`http://localhost/api/matches/${state.fixture.id}?revision=${state.revision.id}`), { params: Promise.resolve({ id: state.fixture.id }) });
         assert.equal(response.status, 200); assert.equal(response.headers.get('set-cookie'), null);
+        capture('history-locked-selection', await response.json(), `revision=${state.revision.id}`);
+        capture('history-locked-current', await reader.query(state.fixture.id));
         await reader.query(states.get(3007).fixture.id, new URLSearchParams({ cycle: states.get(3007).cycle.id }));
         await reader.query(states.get(3010).fixture.id, new URLSearchParams({ revision: states.get(3010).revision.id, limit: '1' }));
       } finally { globalThis.fetch = fetch; }

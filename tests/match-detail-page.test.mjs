@@ -5,9 +5,13 @@ import { detailAnalysis, detailMarket } from '../src/server/matches/detail-prese
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', clock = { now: () => 1234 };
-test('detail page validates identity and reserves revision queries before stored reads', async () => {
+test('detail page validates fixture identity and bounded history queries before stored reads', async () => {
   assert.equal(parseMatchDetailPageInput(id.toUpperCase(), {}), id);
-  for (const query of [{ revision: id }, { cycle: id }, { limit: '1' }, { q: 'home' }, { token: 'private' }, { unknown: ['a', 'b'] }]) {
+  for (const query of [{ revision: id }, { cycle: id }, { limit: '1', revisionAnchor: '2', revisionBefore: '2' }]) {
+    assert.equal(parseMatchDetailPageInput(id, query), id);
+  }
+  for (const query of [{ revision: 'bad' }, { cycle: 'bad' }, { revision: id, cycle: id }, { limit: '21' },
+    { revisionBefore: '1' }, { q: 'home' }, { token: 'private' }, { revision: [id, id] }, { unknown: ['a', 'b'] }]) {
     assert.throws(() => parseMatchDetailPageInput(id, query), error => error.code === 'invalid-query');
   }
   let reads = 0;

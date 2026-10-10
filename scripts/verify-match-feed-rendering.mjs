@@ -10,10 +10,10 @@ import { promisify } from 'node:util';
 const root = fileURLToPath(new URL('../', import.meta.url)), execute = promisify(execFile);
 const nextCli = createRequire(import.meta.url).resolve('next/dist/bin/next');
 const args = process.argv.slice(2);
-assert.ok(args.every((argument) => ['--serve', '--detail'].includes(argument) || argument.startsWith('--reuse=')),
-  'Usage: node scripts/verify-match-feed-rendering.mjs [--serve] [--detail] [--reuse=.tmp/match-feed-ID]');
+assert.ok(args.every((argument) => ['--serve', '--detail', '--history'].includes(argument) || argument.startsWith('--reuse=')),
+  'Usage: node scripts/verify-match-feed-rendering.mjs [--serve] [--detail|--history] [--reuse=.tmp/match-feed-ID]');
 assert.ok(args.filter(argument => argument.startsWith('--reuse=')).length <= 1);
-const includeDetail = args.includes('--detail');
+const includeHistory = args.includes('--history'), includeDetail = includeHistory || args.includes('--detail');
 const environment = { ...process.env, NEXT_TELEMETRY_DISABLED: '1', FORCE_COLOR: '0' };
 let child, log = '';
 
@@ -132,12 +132,27 @@ export default async function Page({ params }: { params: Promise<{ fixtureId: st
     files['app/detail-scenarios.json'] = JSON.stringify(details);
     files['app/en/matches/[fixtureId]/[slug]/page.tsx'] = `import { createMatchDetailRoute } from '@/app/_components/match-detail-route';
 import { MatchFeedError } from '@/server/matches/feed-error';
+import { parseMatchDetailQuery } from '@/server/matches/detail-query';
 import type { DetailPageResult } from '@/server/matches/detail-page';
 import cases from '../../../../detail-scenarios.json';
-const scenarios = cases as unknown as Record<string, DetailPageResult>;
-const route = createMatchDetailRoute(async (id) => {
-  const selected = Object.values(scenarios).find(item => item.data?.fixture.fixtureId === id);
-  if (!selected?.data) throw new MatchFeedError('not-found'); return selected.data;
+const scenarios = cases as unknown as Record<string, DetailPageResult & { requestQuery?: string }>;
+let failNextHistory = true, busyNextHistory = true;
+const route = createMatchDetailRoute(async (id, parameters = new URLSearchParams()) => {
+  const query = parseMatchDetailQuery(id, parameters), values = Object.values(scenarios);
+  const primary = ['history-current', 'history-cycle-current', 'history-locked-current'].map(key => scenarios[key]).find(item => item?.data?.fixture.fixtureId === id)
+    ?? values.find(item => item.data?.fixture.fixtureId === id && item.data.selection === 'applicable');
+  if (!primary?.data) throw new MatchFeedError('not-found');
+  if (!parameters.size) return primary.data;
+  if (query.limit === 20 && failNextHistory) { failNextHistory = false; throw new MatchFeedError('unavailable'); }
+  if (query.limit === 19 && busyNextHistory) { busyNextHistory = false; throw new MatchFeedError('rate-limited'); }
+  const selected = values.find(item => item.data?.fixture.fixtureId === id &&
+    (query.revision ? item.data.selection === 'revision' && item.data.snapshot?.revisionId === query.revision
+      : query.cycle ? item.data.selection === 'cycle' && item.data.selectedCycle?.id === query.cycle : item.data.selection === 'applicable') &&
+    (query.revisionBefore === null || new URLSearchParams(item.requestQuery).get('revisionBefore') === String(query.revisionBefore)) &&
+    (query.cycleBefore === null || new URLSearchParams(item.requestQuery).get('cycleBefore') === String(query.cycleBefore)));
+  if (selected?.data) return selected.data;
+  if (query.revision || query.cycle) throw new MatchFeedError('not-found');
+  return primary.data;
 });
 type Props = { params: Promise<{ fixtureId: string; slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 const normalized = (props: Props) => ({ ...props, params: props.params.then(params => ({ ...params, locale: 'en' })) });
@@ -150,10 +165,16 @@ import { MatchDetailPage } from '@/app/_components/match-detail-page';
 import { parseReportingDate } from '@/domain/calendar';
 import type { DetailPageResult } from '@/server/matches/detail-page';
 import cases from '../../detail-scenarios.json';
-const scenarios = cases as unknown as Record<string, DetailPageResult>;
+const scenarios = cases as unknown as Record<string, DetailPageResult & { requestQuery?: string }>;
 export const dynamic = 'force-dynamic';
 export default async function Page({ params }: { params: Promise<{ scenario: string }> }) {
   const { scenario } = await params, selected = scenarios[scenario]; if (!selected) notFound();
+  if (scenario.startsWith('history-')) {
+    const primary = ['history-current', 'history-cycle-current', 'history-locked-current'].map(key => scenarios[key]).find(item => item?.data?.fixture.fixtureId === selected.data?.fixture.fixtureId);
+    if (!primary) notFound();
+    return <MatchDetailPage result={primary} historyResult={selected} historyQuery={selected.requestQuery ?? ''}
+      today={parseReportingDate('2026-10-09')} retryHref={primary.data!.route.path} />;
+  }
   return <MatchDetailPage result={selected} today={parseReportingDate('2026-10-09')} retryHref={selected.data?.route.path ?? '/detail-cases/open'} />;
 }`;
   }
@@ -206,6 +227,7 @@ async function verify(origin, directory, scenarios) {
 async function verifyDetail(origin, directory, scenarios) {
   const escaped = (value) => value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;' })[character]);
   for (const [name, scenario] of Object.entries(scenarios)) {
+    if (name.startsWith('history-')) continue;
     const response = await fetch(`${origin}/detail-cases/${name}`); assert.equal(response.status, 200, name);
     assert.equal(response.headers.get('set-cookie'), null);
     const html = await response.text(), visible = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/g, '').replace(/<!--[\s\S]*?-->/g, '');
@@ -237,7 +259,41 @@ async function verifyDetail(origin, directory, scenarios) {
   const canonical = await fetch(`${origin}${data.route.path}`); assert.equal(canonical.status, 200);
   const canonicalHtml = await canonical.text(); assert.ok(canonicalHtml.includes(`https://goalhint.com${data.route.path}`));
   assert.match(canonicalHtml, /property="og:title"/); assert.match(canonicalHtml, /noindex, follow/);
-  console.log(`PASS ${Object.keys(scenarios).length} stored detail HTML scenarios, canonical metadata/redirect and genuine unknown-fixture 404.`);
+  console.log(`PASS ${Object.keys(scenarios).filter(name => !name.startsWith('history-')).length} stored detail HTML scenarios, canonical metadata/redirect and genuine unknown-fixture 404.`);
+}
+
+async function verifyHistory(origin, directory, scenarios) {
+  const current = scenarios['history-current'].data, old = scenarios['history-old'].data, partial = scenarios['history-partial'].data;
+  const read = async (query) => {
+    const response = await fetch(`${origin}${current.route.path}${query ? '?'+query : ''}`);
+    assert.equal(response.status, 200); assert.equal(response.headers.get('set-cookie'), null);
+    const html = await response.text(); return { html, visible: html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/g, '') };
+  };
+  const primary = await read('');
+  assert.match(primary.visible, /data-revision-history/); assert.doesNotMatch(primary.visible, /data-history-snapshot=/);
+  for (const [name, data] of [['old', old], ['partial', partial]]) {
+    const { html, visible } = await read(`revision=${data.snapshot.revisionId}&limit=1`);
+    await writeFile(path.join(directory, `history-${name}.html`), html);
+    assert.ok(visible.includes(`data-detail-revision="${current.snapshot.revisionId}"`));
+    assert.ok(visible.includes(`data-history-snapshot="${data.snapshot.revisionId}"`));
+    assert.match(visible, /Historical prediction snapshot/); assert.match(visible, /Historical publication/);
+    assert.equal((visible.match(/data-detail-market=/g) ?? []).length, 8);
+    assert.equal((visible.match(/<article\b/g) ?? []).length, 1);
+    assert.match(html, /noindex, follow/); assert.ok(html.includes(`href="https://goalhint.com${current.route.path}"`));
+    assert.doesNotMatch(visible, /candidateJson|promptVersion|private-void-proof|rawJson/);
+    if (name === 'partial') assert.match(visible, /does not contain a supported probability group/);
+    const ids = [...visible.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]); assert.equal(new Set(ids).size, ids.length);
+  }
+  for (const query of [`revision=${scenarios.open.data.snapshot.revisionId}`, 'revision=00000000-0000-4000-8000-000000000000', 'revision=bad',
+    `revision=${old.snapshot.revisionId}&cycle=${old.snapshot.cycleId}`, 'limit=21', 'revisionBefore=1', `revision=${old.snapshot.revisionId}&revision=${old.snapshot.revisionId}`]) {
+    assert.equal((await fetch(`${origin}${current.route.path}?${query}`)).status, 404, query);
+  }
+  const failed = await read(`revision=${old.snapshot.revisionId}&limit=20`);
+  assert.match(failed.visible, /data-history-error/); assert.ok(failed.visible.includes(`data-detail-revision="${current.snapshot.revisionId}"`));
+  assert.match(failed.visible, /Try again/); assert.match(failed.visible, /data-history-revision=/);
+  const retried = await read(`revision=${old.snapshot.revisionId}&limit=20`); assert.match(retried.visible, /data-history-snapshot=/);
+  assert.doesNotMatch(retried.visible, /data-history-error/);
+  console.log('PASS revision history: separate primary/full historical/partial snapshots, fixture-scoped 404, canonical noindex, unique IDs and inline failure/retry.');
 }
 
 try {
@@ -261,8 +317,9 @@ try {
   }
   await verify(origin, directory, scenarios);
   if (details) await verifyDetail(origin, directory, details);
+  if (includeHistory) await verifyHistory(origin, directory, details);
   console.log(`Fixture artifacts: ${directory}`); console.log(`Fixture browser URL: ${origin}`);
-  await writeFile(path.join(root, `.tmp/${includeDetail ? '035' : '032'}-rendering-target.json`), JSON.stringify({ directory, origin }));
+  await writeFile(path.join(root, `.tmp/${includeHistory ? '036' : includeDetail ? '035' : '032'}-rendering-target.json`), JSON.stringify({ directory, origin }));
   if (args.includes('--serve')) await new Promise((resolve) => { process.once('SIGINT', resolve); process.once('SIGTERM', resolve); child.once('exit', resolve); });
 } catch (error) { console.error(error instanceof Error ? error.message : 'Match feed rendering verification failed.'); process.exitCode = 1; }
 finally {

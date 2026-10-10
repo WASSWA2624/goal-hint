@@ -65,7 +65,9 @@ exceed JavaScript's safe integer range are decimal strings.
   `historical` means the revision differs from `currentRevisionId`.
   `applicability` is `current`, `locked`, `void` or `historical`.
 - `history.revisions.entries` contains bounded public revision identities and
-  clocks, with no candidate payloads. `history.cycles.entries` contains public
+  clocks, persisted `runDate`, distinct available-market `sources` and the public
+  `cycle` projection (036). These support ordered publication labels without
+  fetching every full snapshot. There are no candidate payloads. `history.cycles.entries` contains public
   cycle states, current/locked references, schedule/lifecycle clocks and safe
   void reasons. Entries can be selected using their IDs.
 

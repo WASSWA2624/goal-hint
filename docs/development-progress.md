@@ -2929,3 +2929,69 @@ stored contracts and UI behavior, not forecast quality, real source rights or
 deployment. No paid football/research/AI operation, scheduler, remote database
 change or migration was activated. Owned acceptance servers/browser sessions are
 stopped after verification; the installed database service remains untouched.
+
+## 036 — Read-only revision history (10 October 2026)
+
+**Complete.** Added expandable publication/cycle history within the canonical
+match page. Prompt 036 is checked; 037 and later prompts remain unchanged.
+
+### Changes
+
+- Added `app/_components/revision-history.tsx` and
+  `server/matches/history-page.ts`. Publications use persisted fixture revision
+  order, EAT run dates, cycle/revision counters, source kinds, actual publication
+  times and reference-derived current/locked/superseded/void labels. Cycles keep
+  their separate ordinals, safe reasons and exposed schedule/lifecycle clocks.
+- Extended `domain/match-detail.ts` and `server/matches/detail-service.ts` with
+  bounded public publication summaries. Sealed revision/cycle readers and a
+  batch daily-run lookup supply provenance; no migration is required.
+- Extended `match-detail-{route,page,content}.tsx` and
+  `server/matches/detail-page.ts` to validate history queries and keep an
+  independent applicable forecast as primary content. One selected complete
+  snapshot appears below it, with all four available/unavailable families,
+  alternatives, original analysis, permitted sources and separate evidence clocks.
+  Superseded selections do not acquire settlement badges or performance entries.
+- Added reusable `components/ui/disclosure.tsx`, shared by history and existing
+  alternatives/sources. Native keyboard and accessible expanded state work before
+  hydration. Plain nested disclosures preserve readable 320 px market widths;
+  outer surfaces retain square borders and visible focus. DOM IDs are scoped per
+  snapshot. Updated shared detail styles and English messages.
+- Chose ordinary server-rendered selection/pagination/retry links. Both lists
+  retain the 029 ten/default, twenty/maximum bounds, independent keyset cursors
+  and pinned high-water marks. Failed historical reads preserve primary content
+  and available initial history with inline retry. Cross-fixture/missing IDs are
+  safe 404s. Canonical redirects preserve validated queries; canonical metadata
+  excludes them, with explicit existing `noindex, follow` on history views.
+- Added `tests/revision-history-page.test.mjs`, expanded detail SQL/page checks
+  and the production rendering harness's `--history` mode. Added package commands
+  `test:history-page` and `test:history-page:rendering`. Updated API/page contracts,
+  implementation decisions and `docs/revision-history-page.md`.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Repository units | **933 cases: 932 passed, 0 failed, 1 existing Windows POSIX-mode skip**. `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs`; log `.tmp/036-units.log`. |
+| History/detail contracts | **32 passed**, covering bounded/duplicate/invalid queries, fixture identity, canonical links, both anchors and independent cursors, current/locked/void labels, snapshot isolation, attribution and sanitized failures. Log `.tmp/036-contracts-complete.log`. |
+| Genuine MySQL page preparation | **18 passed, 0 failed/skipped**, owned MySQL 8.4.11. Covers stored feed membership/navigation plus older/current/locked/partial/void/corrected snapshots, accurate run/source clocks, anchored pagination during publication, source permissions and zero prediction/settlement/provider side effects. Log `.tmp/match-feed-w3KhSp/database.log`. |
+| Final SQL detail qualification | **10 passed, 0 failed/skipped**, explicitly capturing historical locked selection and its independent primary projection, permitted older explanations/links, partial prior revisions and old cycles. Proxy rejects writes and outbound calls; full reference/job/result/settlement/version invariants remain unchanged. Log `.tmp/036-detail-final.log`. |
+| Cache/performance regressions | **25 passed, 0 failed/skipped** on owned MySQL. Includes historical/void/superseded cohort counts, original locks, result corrections, policy revocation, cache invalidation, source expiry and recovery. Log `.tmp/036-db-regression.log`. |
+| Production HTML | **47 feed and 22 regular detail scenarios pass**, plus dedicated history checks for separate primary/historical/partial content, safe 404s, canonical noindex, unique IDs and failed-read retry. Final build reuses the qualified SQL captures without repeating their checks. Log `.tmp/036-rendering-complete.log`; artifacts `.tmp/match-feed-w3KhSp/`. |
+| Browser | **119 assertions pass**, installed Chrome through the Playwright skill/CLI. Covers keyboard Enter/Space/Tab and native accessibility-tree expanded state; complete older/current/locked/partial/void snapshots; permitted original links/timestamps; both-list anchors, older pages and Back; inline busy/retry preserving primary content; cross-fixture/missing/invalid 404s; 320–1280 widths, 200% text, square controls, no-JavaScript disclosure/analysis and EAT under French locale/Los Angeles timezone; no client provider/history polling, visitor cookies or hydration/page errors. Expected blocked-logo/404 network errors are injected acceptance cases. Log `.tmp/036-browser-final.log`, source/screenshots `output/playwright/036-*`. Desktop/mobile/market screenshots visually reviewed. |
+| Static and production routes | Final production build, typecheck, lint and whitespace checks pass. Logs `.tmp/036-build-final.log`, `.tmp/036-types-final.log`, `.tmp/036-lint-complete.log`. Actual build rejects malformed history before storage, preserves truthful disabled-storage retry HTML and anonymous API 400/503 responses without cookies; log `.tmp/036-production.log`. |
+
+No implementation or required acceptance blocker remains. An initial concurrent
+fixture run timed out during an owned migration; the independent rerun passed all
+18 cases. The isolated reader's optional query argument was corrected before its
+production build passed. Browser assertions were corrected to inspect Chrome's
+native disclosure expanded property and identify publication labels when void
+and publication times coincide. Visual review then removed unnecessary nested
+padding; final layout, HTML and browser checks pass.
+
+Existing live provider/model/rights/budget/hosting and release gates remain
+unchanged. Synthetic policies/forecasts/source permissions are isolated test
+evidence, not qualification of live predictions or redistribution rights. No
+paid provider/AI/research call, scheduled prediction, migration to an existing
+database, deployment or later feature was activated. Owned acceptance servers and
+browser were stopped; the user's development server and installed MySQL service
+remain untouched.

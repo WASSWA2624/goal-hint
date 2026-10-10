@@ -2371,3 +2371,41 @@ permissions are explicitly synthetic and are never fetched. Mobile/desktop Back
 through this real page completes 034's deferred destination check. No migration,
 provider/AI invocation, job, polling, deployment or live operating gate is added.
 See [match detail page contracts](match-detail-page.md).
+
+## 036 — Read-only publication inspection (10 October 2026)
+
+Use the canonical match route with the API's validated revision/cycle/keyset query
+parameters. Keep the applicable forecast as primary content and render one
+selected full snapshot in a separate expanded history disclosure. Fixture UUID
+ownership is verified by the existing stored service; malformed, missing and
+cross-fixture combinations return safe 404s. Preserve the history query on stale
+slug redirects. Canonical metadata always excludes history parameters, and the
+existing explicit `noindex, follow` policy covers revision and pagination views
+until 042 consolidates indexing.
+
+Choose server-rendered ordinary-link pagination rather than a second client data
+store. Both lists keep the 029 default ten/maximum twenty bounds and independent
+keyset cursors. Links pin both persisted high-water marks and preserve selection
+and the other cursor. “Latest history” resets anchors. Browser Back and native
+disclosures work without JavaScript. Only the chosen full snapshot is rendered;
+list rows carry public summaries, never complete private candidates. The schema
+adds persisted run date, source kinds and the safe cycle projection to revision
+summaries; existing sealed readers and a bounded batch run lookup supply them.
+No migration is required. Old cache envelopes fail strict parsing and rebuild
+through the existing cache recovery path.
+
+Reuse square native disclosure controls and primary snapshot presentation with
+scoped DOM IDs. Browser-native expanded state and Enter/Space behavior are
+available before hydration, with visible focus. Preserve complete snapshot
+semantics and original provenance; old missing families stay unavailable.
+Superseded publications have no settlement badges; locked/void historical
+outcomes remain bound to their own revision. Show only schedule clocks already
+in the public cycle contract, and safe void reasons; internal schedule evidence
+and audits remain private.
+
+Cache the independent primary and optional historical reads per request, shared
+with metadata. A failed extra history read leaves the primary forecast and its
+initial publication list visible, with inline same-query retry. History does not
+alter current/locked references, settlement, results, cohorts, jobs or feed cards.
+No live polling or later feature is activated. See
+[revision-history contracts](revision-history-page.md).
