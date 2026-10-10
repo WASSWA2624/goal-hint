@@ -3123,3 +3123,65 @@ No production forecast, paid provider/model call, worker activation, migration
 to an existing database, deployment or later feature was activated. Owned
 acceptance servers and browser were stopped; existing services and the user's
 development server remain untouched.
+
+## 039 - Privacy page
+
+Complete. The implementation and required local acceptance checks pass; tracker
+row 039 is ticked. Work on 040 has not started. The final privacy notice and
+public release remain blocked by the owner-deferred operating/legal facts.
+
+### Changed behavior and files
+
+- Replaced the interim `/en/privacy` surface with externalized English content
+  in the existing reusable information/public shell. `InformationShell` now
+  accepts content while retaining truthful interim fallbacks for later pages.
+  Added semantic sections, native topic links, shared readable typography,
+  square components, canonical metadata and the existing footer/current-page
+  navigation. Existing prelaunch noindex remains.
+- Added `domain/privacy-notice.ts`, `privacy-content.tsx` and the privacy message
+  catalog. The page explicitly identifies itself as a prelaunch data-handling
+  summary, with `releaseReady: false`, no effective date and the actual technical
+  review date, 10 October 2026. It contains no invented operator, email, address,
+  jurisdiction, regulator or response commitment.
+- Audited actual visitor flows and documented purposes, recipients and retention
+  distinctions in `docs/privacy-page.md`: request/log exposure, URL queries,
+  shared search protection/cache, optional local preference, session/history
+  restoration, page memory/refresh, remote images and external source records.
+  The search counter retains no search text, but cached pagination links can
+  contain it. Hash keys, reuse deadlines and age rejection do not prove physical
+  deletion or anonymity. No arbitrary source/log/backup retention was introduced.
+- Added production privacy HTML verification and `test:privacy:html`. Updated
+  shared navigation assertions to reject actual authentication controls/targets
+  while allowing factual prose explaining account-free access. Updated central
+  OP-26/27/28 release-blocker statuses and implementation decisions, including the
+  owner's explicit deferrals and conditional authoritative review references.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Data-flow inventory | Compared every public assertion with the referenced handlers, browser storage/history code, query/cache schemas, native logo component, source-permission rules, dependencies and runtime/public configuration. Hosting/log/source-retention contracts remain unresolved; no live provider or hosting facts are inferred. Detailed evidence: `docs/privacy-page.md`. |
+| Relevant behavior contracts | **47 passed, zero failures/skips**: navigation, client state, Back restoration, cache reuse/invalidation, live refresh and match-card behavior. Command: `node --conditions=react-server --test --test-concurrency=1 tests/navigation.test.mjs tests/client-state.test.mjs tests/feed-navigation.test.mjs tests/public-cache.test.mjs tests/live-client-refresh.test.mjs tests/match-card.test.mjs`; `.tmp/039-contracts.log`. |
+| Actual production privacy HTML | Both ordinary and untrusted-query requests pass initial content/CSS, semantic anchors, review date, canonical/noindex, release gate, disclosure values, no cookies/form/fake contact and query isolation; `.tmp/039-html.log`. |
+| Shared navigation HTML | All ten anonymous page cases, root redirect, English fallbacks and invalid/unknown-route 404 checks pass against the actual production server; `.tmp/039-navigation.log`. Includes footer/current-page links and unchanged interim terms/contact behavior. |
+| Browser | **59 assertions pass**, installed Chrome through the Playwright skill/CLI; `.tmp/039-browser.log`, source/screenshots `output/playwright/039-*`. Covers skip focus, visible focus, ten topic links in Tab order, Enter/hash/history Back, methodology/footer navigation, 320/360/390/430/1280 widths, 200% text, readable line lengths, square status surface, no-JavaScript and blocked-storage access. No third-party requests, storage writes, browser API polling, non-GET requests, visitor cookies or page/hydration errors on the privacy flow. Desktop/mobile/storage/no-JavaScript screenshots visually reviewed. |
+| Static/build checks | Production build, final typecheck/lint and changed-file whitespace checks pass; `.tmp/039-build.log`, `.tmp/039-types-final.log`, `.tmp/039-lint-final.log`. No database migration or data-service behavior changed. |
+
+Initial verification assumptions were corrected: raw server HTML uses a
+case-insensitive dateTime attribute; legal prose can mention signing in without
+creating authentication UI. The browser harness was corrected to use the CLI's
+page argument and await App Router anchor completion. Final checks pass; no
+product defect or required local acceptance check remains unresolved.
+
+**Release blockers remain explicit.** The user chose "Keep unresolved and record
+release blockers" for operator identity, audience/jurisdiction and public privacy
+contact, and "Keep current implementation; record unresolved decisions" for
+hosting/logs, analytics and retention. OP-26/27/28 and related OP-08/13/31/32 facts
+must be supplied and reviewed before final notice/public release. The current
+application remains without visitor analytics; ads remain disabled. A review date
+does not establish legal applicability, approval or an effective notice.
+
+No tracking, authentication, consent platform, advertising, contact backend,
+hosting, paid provider/model call, new retention service, deployment or later
+feature was activated. Owned acceptance server and browser were stopped;
+existing services and the user's development server remain untouched.

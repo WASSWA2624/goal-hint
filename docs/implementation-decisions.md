@@ -263,9 +263,9 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-23 Public query/search limits | **Initial implementation settled** | 028 reuses the URL validator: 30 default/100 maximum cards, seven-day ranges, page cap 10,000, 2 KiB query/1 MiB JSON bounds. Nonempty searches share an atomic MySQL UTC budget of 120/minute across replicas, retaining no visitor identity or search text. Genuine MySQL burst acceptance verifies the bound; tune against production workload evidence without treating synthetic tests as capacity approval. | Implemented in 028; operator owns later tuning | [Match feed contract](match-feed-api.md) | **028** |
 | OP-24 Shared cache strategy and lifetimes | **Local implementation complete; hosted qualification pending** | 031 reuses MySQL: five-second mutable envelopes, six-hour immutable revision payloads capped by source permissions, EAT rollover, transactional tag generations and durable receipt recovery. Hits preserve source clocks/versions; failures use bounded stored reads. See [cache policy](public-response-cache.md). Actual trigger/binlog capabilities, maintenance and capacity/cost evidence remain OP-01/12/19/32 gates. §§11, 13. | Implementation settled; operator owns hosted qualification | No new subscription; existing database authorization and per-table grants; private cache maintenance | **031 local implementation**; hosted measurement **046/047** |
 | OP-25 Correction/dispute ownership and public process | **Unresolved** | The audited correction mechanics are settled; assign the actual correction/dispute owner, intake/review process, supporting-evidence rules and factual public statements. Do not promise an unapproved response time or operational policy. §§8, 12–15; prompt 038. | Unassigned; user decision/evidence required | Deferred: correction/dispute owner and public process policy | **038**; intake/legal consumers **040–041** |
-| OP-26 Analytics and visitor/log retention | **Unresolved** | Inventory actual log/search/browser-preference/remote-image data flows; choose whether analytics is used, its providers/purposes/recipients/retention and applicable consent/data-handling requirements before enabling tracking. Ads stay disabled. Retention must match actual configuration and permissions. §§12–13, 15; prompts 039/044. | Unassigned; user decision/evidence required | Deferred: analytics enablement/provider, visitor/telemetry/log retention and privacy data-flow policy | **039** notice facts; telemetry activation **044** |
-| OP-27 Operator identity, jurisdiction and legal facts | **Unresolved** | Obtain actual operator identity, audience/jurisdiction, lawful contact and owner-approved privacy/terms/dispute facts. “Prepared for” attribution supplies no legal identity, address, liability policy or signoff. Do not publish placeholders or invented legal assertions. §§13, 15; prompts 039–040. | Unassigned; user decision/evidence required | Deferred: approved operator/legal/privacy/terms content and factual evidence | **039**; terms **040** |
-| OP-28 Verified public contact route | **Unresolved** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
+| OP-26 Analytics and visitor/log retention | **Current implementation retained; unresolved facts block release** | Inventory actual log/search/browser-preference/remote-image data flows; choose whether analytics is used, its providers/purposes/recipients/retention and applicable consent/data-handling requirements before enabling tracking. Ads stay disabled. Retention must match actual configuration and permissions. §§12–13, 15; prompts 039/044. | Unassigned; user decision/evidence required | Deferred: analytics enablement/provider, visitor/telemetry/log retention and privacy data-flow policy | **039** notice facts; telemetry activation **044** |
+| OP-27 Operator identity, jurisdiction and legal facts | **Unresolved release blocker** | Obtain actual operator identity, audience/jurisdiction, lawful contact and owner-approved privacy/terms/dispute facts. “Prepared for” attribution supplies no legal identity, address, liability policy or signoff. Do not publish placeholders or invented legal assertions. §§13, 15; prompts 039–040. | Unassigned; user decision/evidence required | Deferred: approved operator/legal/privacy/terms content and factual evidence | **039**; terms **040** |
+| OP-28 Verified public contact route | **Unresolved release blocker** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
 | OP-29 Recovery watchdog ownership and thresholds | **Unresolved** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15; prompt 043. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization and recovery/incident owner | **043** |
 | OP-30 Alerts, destinations and monitoring service | **Unresolved** | Choose the authorized monitoring service, actionable outage/staleness/latency/quota/cost/expiry thresholds, severity/deduplication, recipients and notification approval. No recipient or unapproved test message is inferred. Telemetry must reconcile with privacy/retention decisions. §§11, 13–15; prompt 044. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget | **044** |
 | OP-31 Recovery objectives, backups and history retention | **Unresolved / evidence required** | Approve RPO/RTO, backup/PITR capabilities, encryption/access/retention and ownership for predictions, results, evidence, audits and structured source data within rights. Prove isolated restoration and safe limiter/job restart. No arbitrary deletion period or completed restore is inferred. §§13, 15; prompt 045. | Unassigned; user decision/evidence required | Deferred: RPO/RTO, backup/PITR and prediction/result/evidence/audit/backup retention policy | **045**; source retention prerequisites **009/011**, visitor notice **039** |
@@ -2504,3 +2504,52 @@ No live polling or later feature is activated. See
   Retain prelaunch noindex and add the canonical methodology URL; broad SEO and
   the remaining legal/contact pages are outside 038. See
   [methodology-performance.md](methodology-performance.md).
+
+## 039 - Privacy notice and visitor data inventory
+
+- Implement a server-rendered English privacy page in the reusable information
+  shell. Keep the existing footer route, square tokens, readable paragraphs,
+  section anchors, absolute canonical and prelaunch noindex. Review date is
+  10 October 2026, the actual technical review date; no effective date or legal
+  approval is asserted.
+- **Final notice and public release remain blocked.** OP-26/27/28 still lack
+  owner-approved analytics/log-retention decisions, operator/audience/jurisdiction
+  facts and a verified public privacy contact/rights process. The user explicitly
+  chose "Keep unresolved and record release blockers" and "Keep current
+  implementation; record unresolved decisions" during 039. Hosting/locations,
+  contracts/transfers and source/evidence/audit/backup retention also need their
+  OP-08/13/31/32 evidence. These facts remain unresolved; deferral is not operating
+  approval. Author attribution and the user's timezone are not
+  a legal operator, jurisdiction or public contact.
+- `privacyNotice` records a prelaunch summary, `releaseReady: false` and a null
+  effective date. Visible copy explains this gate and the missing facts. Do not
+  substitute invented identities, addresses, email contacts, legal basis,
+  regulators, rights deadlines or expiry guarantees. Any final publication needs
+  actual owner decisions and jurisdiction-specific review; existing runtime
+  approvals do not satisfy this notice gate.
+- Inventory includes URL/search/filter requests, network/hosting logs, aggregate
+  search accounting, shared response caches, optional layout local storage,
+  tab/history restoration, page memory/refresh, remote image requests, external
+  links and separate source/football records. The shared search counter stores
+  no visitor identity/search string, **but cached pagination links can include
+  search text**. Hashing cache keys is not an anonymity guarantee.
+- Explain actual retention boundaries: layout preferences have no automatic
+  expiry; tab records older than 30 minutes are ignored/pruned on later saves,
+  not erased exactly at expiry; cache reuse lasts five seconds or at most six
+  hours with source/invalidation bounds, while deletion needs maintenance and
+  audit/backup retention is unresolved. Import/reuse permission deadlines do not
+  prove deletion of all stored source copies.
+- Current code sets no visitor cookies and enables no visitor analytics or ad
+  tags. Advertising stays disabled. No auth, consent platform, analytics,
+  messaging, hosting or retention service is introduced by this feature. Host
+  logging and external media cookies remain separate, unverified arrangements.
+- Approved team logos load directly from their actual remote host through native
+  images with `no-referrer`; the host still receives IP/request/browser data.
+  Competition URLs are stored but not currently displayed. First-party brand
+  assets/fonts stay bundled. Visiting/searching reads stored data and does not
+  send visitor searches to football/research/AI providers.
+- Reviewed Mozilla's storage/referrer documentation and EDPB transparency/rights
+  guidance as a conditional completeness reference. No law's applicability or
+  compliance is inferred while operator/audience facts are absent. See the
+  factual inventory, references and explicit release requirements in
+  [privacy-page.md](privacy-page.md). Terms/contact work remains with 040–041.

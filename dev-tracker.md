@@ -43,7 +43,7 @@
 | ☑         | [036-revision-history.md](dev-plan/036-revision-history.md)                     |
 | ☑         | [037-live-client-refresh.md](dev-plan/037-live-client-refresh.md)               |
 | ☑         | [038-methodology-performance.md](dev-plan/038-methodology-performance.md)       |
-| ☐         | [039-privacy-page.md](dev-plan/039-privacy-page.md)                             |
+| ☑         | [039-privacy-page.md](dev-plan/039-privacy-page.md)                             |
 | ☐         | [040-terms-page.md](dev-plan/040-terms-page.md)                                 |
 | ☐         | [041-contact-page.md](dev-plan/041-contact-page.md)                             |
 | ☐         | [042-seo-discovery.md](dev-plan/042-seo-discovery.md)                           |
