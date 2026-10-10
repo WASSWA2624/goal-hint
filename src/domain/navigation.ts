@@ -6,9 +6,10 @@ export { feedDefaults } from "./feed-query.ts";
 export type { FeedStatus } from "./feed-query.ts";
 export type FeedView = Readonly<{ date: ReportingDate; status: FeedStatus }>;
 export type FeedEntry = "today" | "results";
+export type AppSection = FeedEntry | "live";
 export const informationPages = ["how-it-works", "privacy", "terms", "contact"] as const;
 export type InformationPage = (typeof informationPages)[number];
-export type NavigationLocation = FeedEntry | InformationPage;
+export type NavigationLocation = AppSection | InformationPage;
 
 /** Both entry points select the same feed. Results starts with yesterday's finals. */
 export function getFeedEntry(today: ReportingDate, entry: FeedEntry): FeedView {
@@ -28,6 +29,10 @@ export function feedHref(view: FeedView, locale?: string): string {
   const parsed = parseFeedView(view.date, view.status);
   const path = `${homeHref(locale)}/predictions/${parsed.date}`;
   return parsed.status === feedDefaults.today.status ? path : `${path}?status=${parsed.status}`;
+}
+
+export function performanceHref(locale?: string): string {
+  return `${informationHref("how-it-works", locale)}#performance`;
 }
 
 export function informationHref(page: InformationPage, locale?: string): string {

@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useId } from "react";
+import { useId, useState } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
+import { bestCardFamily } from "@/domain/feed-presentation";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { hasFinalScoreStatus, selectedCardPrediction } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
+import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import type { OutcomeTone } from "@/styles/theme";
@@ -15,58 +17,63 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { BallIcon, BarsIcon, CalendarIcon, CheckIcon, ChevronIcon, ClockIcon, CrossIcon, LockIcon, NoticeIcon, TrophyIcon, VoidIcon } from "./match-icons";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-row";
-import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
   analysisSlug: string;
+  /** Families eligible for the shown pick; the most likely available pick among them is displayed. */
+  markets?: readonly MarketFamily[];
+  /** Single-family shorthand kept for existing callers. */
   selectedFamily?: MarketFamily;
   locale?: string;
   headingLevel?: 2 | 3 | 4;
   eagerLogos?: boolean;
-  /** One-based list position shown in the desktop table's # column. */
+  /** List position, continuous across pages; shown in the desktop # column. */
   position?: number;
 };
 
 type Messages = ReturnType<typeof createMessages>;
 const table = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
-/** Card layouts follow the card's own width, so two-column grids stay legible. */
-const roomy = "@container match-card (min-width: 30rem)";
+const wideTable = css`@media (min-width: ${({ theme }) => theme.breakpoint.xl})`;
 const pulse = keyframes`0%, 100% { opacity: 1; } 50% { opacity: 0.35; }`;
 
-const Card = styled.article`
+/** Phone cards carry a stripe in the shown market's colour; table rows drop it. */
+const Card = styled.article<{ $family: MarketFamily }>`
   position: relative;
   container: match-card / inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-  align-content: start;
+  gap: 6px;
   min-inline-size: 0;
+  padding: 9px 10px 10px 13px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.cardRadius};
-  box-shadow: ${({ theme }) => theme.shadow.card};
+  box-shadow: inset 4px 0 0 ${({ theme, $family }) => theme.color.market[$family].solid}, ${({ theme }) => theme.shadow.card};
   overflow-wrap: anywhere;
   transition: box-shadow 160ms ease, background-color 160ms ease;
-  &:hover { box-shadow: ${({ theme }) => theme.shadow.cardHover}; }
+  &:hover { box-shadow: inset 4px 0 0 ${({ theme, $family }) => theme.color.market[$family].solid}, ${({ theme }) => theme.shadow.cardHover}; }
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
     outline-offset: ${({ theme }) => theme.border.focusOffset};
   }
   @media (prefers-reduced-motion: reduce) { transition: none; }
   ${table} {
-    grid-template-columns: ${matchTableColumns};
-    grid-template-rows: none;
+    grid-template-columns: ${matchTableColumns.compact};
     column-gap: ${matchTableGap};
+    row-gap: 4px;
     align-items: center;
-    padding: 10px 16px;
+    padding: 6px 16px;
+    background: transparent;
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    font-size: 0.875rem;
     &:hover { box-shadow: none; background: ${({ theme }) => theme.color.rowHover}; }
     &:focus-visible { outline-offset: calc(-1 * ${({ theme }) => theme.border.focusWidth}); }
   }
+  ${wideTable} { grid-template-columns: ${matchTableColumns.full}; }
 `;
 
 const Meta = styled.header`
@@ -74,86 +81,46 @@ const Meta = styled.header`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 12px;
-  padding: 12px 16px;
-  background: ${({ theme }) => theme.color.cardHeader};
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-start-start-radius: ${({ theme }) => theme.border.cardRadius};
-  border-start-end-radius: ${({ theme }) => theme.border.cardRadius};
-  font-size: ${({ theme }) => theme.typography.size.small};
+  gap: 2px 12px;
+  font-size: 0.8125rem;
   line-height: ${({ theme }) => theme.typography.lineHeight.heading};
-  ${table} {
-    display: grid;
-    grid-column: 1 / span 3;
-    grid-template-columns: subgrid;
-    gap: normal;
-    padding: 0;
-    background: none;
-    border: 0;
-    border-radius: 0;
-  }
+  ${table} { display: grid; grid-column: 1 / span 3; grid-template-columns: subgrid; gap: normal; padding: 0; }
 `;
 const Index = styled.span`
   display: none;
-  ${table} {
-    display: block;
-    grid-column: 1;
-    color: ${({ theme }) => theme.color.mutedText};
-    font-variant-numeric: tabular-nums;
-  }
+  ${table} { display: block; grid-column: 1; grid-row: 1; color: ${({ theme }) => theme.color.text}; font-variant-numeric: tabular-nums; }
 `;
 const League = styled.p`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-inline-size: 0;
-  font-size: 0.9375rem;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  > svg { flex-shrink: 0; font-size: 1.25rem; }
-  ${table} {
-    grid-column: 3;
-    grid-row: 1;
-    font-size: ${({ theme }) => theme.typography.size.small};
-    font-weight: ${({ theme }) => theme.typography.weight.medium};
-    > svg { font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; }
-  }
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  > svg { flex: none; font-size: 1.125rem; color: ${({ theme }) => theme.color.mutedText}; }
+  ${table} { grid-column: 3; grid-row: 1; font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
-const LeagueText = styled.span`
-  display: flex;
-  flex-direction: column;
-  min-inline-size: 0;
-`;
-const Country = styled.span`
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  font-weight: ${({ theme }) => theme.typography.weight.body};
+const LeagueLogo = styled.img`
+  flex: none;
+  inline-size: 22px;
+  block-size: 22px;
+  object-fit: contain;
+  ${table} { inline-size: 20px; block-size: 20px; }
 `;
 const When = styled.time`
   display: flex;
   align-items: center;
   gap: 10px;
-  color: ${({ theme }) => theme.color.text};
   font-variant-numeric: tabular-nums;
-  ${table} {
-    grid-column: 2;
-    grid-row: 1;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
-  }
+  ${table} { grid-column: 2; grid-row: 1; flex-wrap: wrap; gap: 0 6px; }
 `;
-const WhenPart = styled.span<{ $primary?: boolean }>`
+const WhenPart = styled.span`
   display: inline-flex;
-  white-space: nowrap;
   align-items: center;
-  gap: 6px;
-  > svg { font-size: 1.125rem; color: ${({ theme }) => theme.color.text}; }
-  ${table} {
-    > svg { display: none; }
-    ${({ $primary, theme }) => $primary
-    ? css`order: -1; font-weight: ${theme.typography.weight.bold}; font-size: 0.9375rem;`
-    : css`color: ${theme.color.mutedText}; font-size: 0.75rem;`}
-  }
+  gap: 5px;
+  white-space: nowrap;
+  > svg { font-size: 1rem; color: ${({ theme }) => theme.color.accent.blue.solid}; }
+  &:last-child > svg { color: ${({ theme }) => theme.color.accent.violet.solid}; }
+  ${table} { > svg { display: none; } }
 `;
 const Divider = styled.span`
   inline-size: 1px;
@@ -163,32 +130,24 @@ const Divider = styled.span`
 `;
 
 const Teams = styled.div`
-  --gh-logo-size: 44px;
-  --gh-logo-radius: 12px;
+  --gh-logo-size: 34px;
+  --gh-logo-radius: 9px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
-  padding: 20px 16px 16px;
-  ${table} {
-    --gh-logo-size: 28px;
-    --gh-logo-radius: 8px;
-    grid-column: 4 / span 3;
-    grid-template-columns: subgrid;
-    gap: normal;
-    padding: 0;
-  }
+  gap: 8px;
+  ${table} { --gh-logo-size: 24px; --gh-logo-radius: 6px; grid-column: 4 / span 3; grid-template-columns: subgrid; gap: normal; padding: 0; }
 `;
 const Team = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-inline-size: 0;
   text-align: center;
-  ${roomy} {
+  @container match-card (min-width: 20rem) {
     flex-direction: row;
-    gap: 12px;
+    gap: 10px;
     text-align: start;
     &[data-team-side="away"] { flex-direction: row-reverse; text-align: end; }
   }
@@ -200,59 +159,54 @@ const Team = styled.div`
 const TeamName = styled.span`
   min-inline-size: 0;
   max-inline-size: 100%;
-  font-size: 1.0625rem;
+  font-size: 0.9375rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: ${({ theme }) => theme.typography.lineHeight.heading};
-  ${table} { font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  @container match-card (min-width: 20rem) { flex: 1; }
+  ${table} { font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 const Center = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  min-inline-size: 3.5rem;
-  ${table} { gap: 4px; min-inline-size: 0; }
+  gap: 4px;
+  min-inline-size: 3rem;
+  ${table} { min-inline-size: 0; gap: 2px; }
 `;
 const Versus = styled.span`
   display: grid;
   place-items: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
-  color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.color.surfaceMuted};
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  color: ${({ theme }) => theme.color.accent.violet.text};
+  background: linear-gradient(135deg, ${({ theme }) => theme.color.accent.blue.soft} 0%, ${({ theme }) => theme.color.accent.violet.soft} 100%);
   border-radius: ${({ theme }) => theme.border.pillRadius};
-  font-size: ${({ theme }) => theme.typography.size.small};
+  font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-transform: uppercase;
-  ${table} {
-    inline-size: auto;
-    block-size: auto;
-    background: none;
-    font-weight: ${({ theme }) => theme.typography.weight.body};
-    text-transform: none;
-  }
+  ${table} { inline-size: auto; block-size: auto; color: ${({ theme }) => theme.color.mutedText}; background: none; font-size: 0.875rem; text-transform: none; }
 `;
 const Score = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 1.75rem;
+  gap: 6px;
+  font-size: 1.375rem;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   > span:nth-child(2) { color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  ${table} { gap: 6px; font-size: 1.125rem; }
+  ${table} { font-size: 1rem; }
 `;
 const StateChip = styled.span<{ $tone: "live" | "final" | "halted" }>`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
+  gap: 5px;
+  padding: 1px 7px;
   border-radius: ${({ theme }) => theme.border.pillRadius};
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: nowrap;
   ${({ $tone, theme }) => $tone === "live"
     ? css`color: ${theme.color.live.text}; background: ${theme.color.live.soft};`
@@ -261,8 +215,8 @@ const StateChip = styled.span<{ $tone: "live" | "final" | "halted" }>`
         border: ${theme.border.width} solid ${theme.color.border};`}
 `;
 const LiveDot = styled.span`
-  inline-size: 8px;
-  block-size: 8px;
+  inline-size: 7px;
+  block-size: 7px;
   border-radius: 50%;
   background: ${({ theme }) => theme.color.live.solid};
   animation: ${pulse} 1.6s ease-in-out infinite;
@@ -271,132 +225,125 @@ const LiveDot = styled.span`
 
 const Pick = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
-  gap: 10px;
-  padding: 0 16px 16px;
-  ${table} {
-    grid-column: 7 / span 2;
-    grid-template-columns: subgrid;
-    gap: normal;
-    padding: 0;
-  }
+  grid-template-columns: minmax(0, 1.5fr) minmax(7rem, 1fr);
+  gap: 6px;
+  ${table} { grid-column: 7 / span 3; grid-template-columns: subgrid; gap: normal; }
 `;
-/** Narrow cards stack code over name; roomy cards use one divided row. */
+/** Phone: icon | code | pick. Table: the market family name only. */
 const MarketChip = styled.span<{ $family: MarketFamily }>`
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas: "icon code" "icon name";
+  display: flex;
   align-items: center;
-  gap: 0 10px;
+  gap: 8px;
   min-inline-size: 0;
-  padding: 10px 14px;
+  min-block-size: 2.375rem;
+  padding: 4px 10px;
   color: ${({ theme, $family }) => theme.color.market[$family].text};
   background: ${({ theme, $family }) => theme.color.market[$family].soft};
-  border-radius: 14px;
-  font-size: ${({ theme }) => theme.typography.size.small};
+  border-radius: 11px;
+  font-size: 0.8125rem;
   line-height: ${({ theme }) => theme.typography.lineHeight.heading};
-  > svg { grid-area: icon; font-size: 1.375rem; color: ${({ theme, $family }) => theme.color.market[$family].solid}; }
-  ${roomy} { display: flex; gap: 10px; }
+  > svg { flex: none; font-size: 1.25rem; color: ${({ theme, $family }) => theme.color.market[$family].solid}; }
   ${table} {
-    display: flex;
     justify-self: start;
-    padding: 4px 10px;
-    border-radius: 8px;
+    min-block-size: 0;
+    padding: 3px 10px;
+    border-radius: 6px;
     font-size: 0.8125rem;
-    font-weight: ${({ theme }) => theme.typography.weight.medium};
     > svg { display: none; }
   }
 `;
 const ChipRule = styled.span`
-  display: none;
-  flex-shrink: 0;
+  flex: none;
   inline-size: 1px;
   block-size: 1.25rem;
   background: currentColor;
   opacity: 0.25;
-  ${roomy} { display: block; }
   ${table} { display: none; }
 `;
 const ChipCode = styled.strong`
-  grid-area: code;
-  flex-shrink: 0;
-  font-size: 0.9375rem;
+  flex: none;
+  color: ${({ theme }) => theme.color.text};
+  font-size: 0.875rem;
   white-space: nowrap;
   ${table} { display: none; }
 `;
-const ChipName = styled.span`
-  grid-area: name;
+const ChipPick = styled.span`
   min-inline-size: 0;
-  overflow-wrap: break-word;
   color: ${({ theme }) => theme.color.text};
-  ${table} { color: inherit; }
-`;
-/** Narrow cards stack the percent over the pick; the table uses one inline row. */
-const Prediction = styled.span<{ $family: MarketFamily; $available: boolean }>`
-  display: grid;
-  grid-template-columns: auto auto auto;
-  grid-template-areas: "icon percent mark" "icon pick mark";
-  align-items: center;
-  justify-content: center;
-  gap: 2px 10px;
-  min-inline-size: 0;
-  padding: 10px 12px;
-  color: ${({ theme, $available }) => $available ? theme.color.onBrand : theme.color.mutedText};
-  background: ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.surfaceMuted};
-  border-radius: 14px;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.2;
-  > svg { grid-area: icon; font-size: 1.25rem; }
-  ${table} {
-    display: flex;
-    justify-content: flex-start;
-    gap: 8px;
-    padding: 0;
-    color: ${({ theme, $available }) => $available ? theme.color.text : theme.color.mutedText};
-    background: none;
-    > svg { display: none; }
-  }
-`;
-const PickFull = styled.span`
-  grid-area: pick;
-  min-inline-size: 0;
-  font-size: 0.8125rem;
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
   overflow-wrap: break-word;
   ${table} { display: none; }
+`;
+const ChipFamily = styled.span`
+  display: none;
+  ${table} { display: inline; }
+`;
+const Prediction = styled.span<{ $family: MarketFamily; $available: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-inline-size: 0;
+  min-block-size: 2.375rem;
+  padding: 4px 10px;
+  color: ${({ theme, $available }) => $available ? theme.color.onBrand : theme.color.mutedText};
+  background: ${({ theme, $family, $available }) => $available ? theme.color.market[$family].gradient : theme.color.surfaceMuted};
+  border-radius: 11px;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  > svg { flex: none; font-size: 1.125rem; }
+  ${table} {
+    display: contents;
+    > svg { display: none; }
+  }
 `;
 const PickShort = styled.span<{ $family: MarketFamily }>`
   display: none;
   ${table} {
     display: inline-flex;
+    grid-column: 2;
+    justify-self: start;
     justify-content: center;
-    min-inline-size: 2.5rem;
+    min-inline-size: 3.5rem;
     padding: 3px 10px;
     color: ${({ theme }) => theme.color.onBrand};
     background: ${({ theme, $family }) => theme.color.market[$family].solid};
-    border-radius: 8px;
+    border-radius: 6px;
     font-size: 0.8125rem;
   }
 `;
+const Probability = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  ${table} { grid-column: 3; gap: 10px; }
+`;
+/** 1.3rem bold is large text, so gradient pills keep 3:1 white contrast. */
 const Percent = styled.span`
-  grid-area: percent;
-  font-size: 1.375rem;
+  font-size: 1.3rem;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  ${table} { font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  ${table} { min-inline-size: 2.75rem; font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+`;
+const Bar = styled.span<{ $family: MarketFamily }>`
+  display: none;
+  ${wideTable} {
+    display: block;
+    flex: 1;
+    block-size: 8px;
+    background: ${({ theme }) => theme.color.surfaceMuted};
+    border-radius: 4px;
+    overflow: hidden;
+    > span { display: block; block-size: 100%; background: ${({ theme, $family }) => theme.color.market[$family].gradient}; border-radius: 4px; }
+  }
 `;
 const NoPick = styled.span`
-  grid-column: 1 / -1;
-  grid-row: 1 / -1;
-  font-size: ${({ theme }) => theme.typography.size.small};
-  ${table} { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  font-size: 0.875rem;
+  ${table} { grid-column: 2 / span 2; color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
 `;
 const Mark = styled.span<{ $tone: OutcomeTone }>`
-  grid-area: mark;
   display: inline-grid;
-  flex-shrink: 0;
+  flex: none;
   place-items: center;
   inline-size: 1.375rem;
   block-size: 1.375rem;
@@ -411,27 +358,27 @@ const Notes = styled.ul`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin: -4px 0 0;
-  padding: 0 16px 14px;
+  margin: 0;
+  padding: 0;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   line-height: 1.35;
   list-style: none;
-  ${table} { grid-column: 4 / span 5; margin: 0; padding: 6px 0 0; }
+  ${table} { grid-column: 4 / span 6; padding: 0; font-size: 0.75rem; }
 `;
 const Note = styled.li`
   display: inline-flex;
   align-items: flex-start;
   gap: 4px;
   min-inline-size: 0;
-  padding: 2px 8px;
-  background: ${({ theme }) => theme.color.cardHeader};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  padding: 1px 8px;
+  color: ${({ theme }) => theme.color.accent.amber.text};
+  background: ${({ theme }) => theme.color.accent.amber.soft};
   border-radius: 10px;
-  > svg { flex-shrink: 0; margin-block-start: 0.15em; }
+  > svg { flex: none; margin-block-start: 0.15em; }
 `;
 
-/** The whole card is the target; the visible chevron belongs to the desktop row only. */
+/** The whole card or row is the target; the chevron belongs to the desktop row only. */
 const Open = styled(Link)`
   position: absolute;
   inset: 0;
@@ -446,7 +393,7 @@ const Open = styled(Link)`
   ${table} {
     position: static;
     display: grid;
-    grid-column: 9;
+    grid-column: 10;
     grid-row: 1;
     place-items: center;
     > svg { display: block; font-size: 1.125rem; }
@@ -509,17 +456,26 @@ function CardTeam({ team, side, name, eager }: { team: FixtureSnapshot["homeTeam
   </Team>;
 }
 
-export function MatchCard({ fixture, analysisSlug, selectedFamily = "match-result", locale: requestedLocale,
+function CompetitionLogo({ url }: { url: string | null | undefined }) {
+  const [failed, setFailed] = useState(false);
+  return url && !failed && isSafeRemoteImageUrl(url)
+    ? <LeagueLogo src={url} alt="" width={22} height={22} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+    : <TrophyIcon />;
+}
+
+export function MatchCard({ fixture, analysisSlug, markets, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
+  const eligible = markets && markets.length > 0 ? markets : [selectedFamily ?? "match-result"];
+  const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
   const away = fixture.awayTeam.name?.trim() || messages.text("match.awayUnknown");
   const competition = fixture.competition.name?.trim() || messages.text("match.competitionUnknown");
   const country = fixture.competition.country?.trim();
-  const prediction = selectedCardPrediction(fixture, selectedFamily);
-  const family = messages.text(`market.family.${selectedFamily}`);
+  const prediction = selectedCardPrediction(fixture, shownFamily);
+  const family = messages.text(`market.family.${shownFamily}`);
   const locked = fixture.cycle?.state === "closed";
   const outcome = prediction?.status ?? "unavailable";
   const OutcomeIcon = outcome === "correct" || outcome === "incorrect" || outcome === "void" ? outcomeIcons[outcome] : null;
@@ -540,18 +496,20 @@ export function MatchCard({ fixture, analysisSlug, selectedFamily = "match-resul
     fixture.cycle?.state === "void" && !prediction && fixture.cycle.voidReason?.explanation,
     fixture.availabilityMessage,
   ].filter((note): note is string => typeof note === "string" && note.length > 0);
-  return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={selectedFamily}
+  const selection = prediction?.item.market.selection;
+  return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={shownFamily} $family={shownFamily}
     data-status={fixture.status}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{messages.text("match.title", { home, away })}</VisuallyHidden>
     <Meta>
       {position !== undefined && <Index aria-hidden="true">{messages.number(position)}</Index>}
-      <League><TrophyIcon /><LeagueText><span>{competition}</span>{country && <Country>{country}</Country>}</LeagueText></League>
+      <League title={country ?? undefined}><CompetitionLogo url={fixture.competition.logoUrl} /><span>{competition}</span>
+        {country && <VisuallyHidden>, {country}</VisuallyHidden>}</League>
       {fixture.kickoffAt === null ? <When as="p">{messages.text("match.kickoffUnknown")}</When>
         : <When dateTime={toUtcIsoString(fixture.kickoffAt)} title={messages.reportingInstant(fixture.kickoffAt)}>
           <VisuallyHidden>{messages.text("match.kickoff")}: </VisuallyHidden>
           <WhenPart><CalendarIcon />{messages.reportingDay(fixture.kickoffAt)}</WhenPart>
           <Divider aria-hidden="true" />
-          <WhenPart $primary><ClockIcon />{messages.reportingTime(fixture.kickoffAt)}<VisuallyHidden> EAT</VisuallyHidden></WhenPart>
+          <WhenPart><ClockIcon />{messages.reportingTime(fixture.kickoffAt)}<VisuallyHidden> EAT</VisuallyHidden></WhenPart>
         </When>}
     </Meta>
     <Teams>
@@ -560,28 +518,28 @@ export function MatchCard({ fixture, analysisSlug, selectedFamily = "match-resul
       <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} />
     </Teams>
     <Pick>
-      <MarketChip $family={selectedFamily} aria-hidden="true">
-        <BallIcon /><ChipCode>{messages.text(`market.code.${selectedFamily}`)}</ChipCode><ChipRule /><ChipName>{family}</ChipName>
+      <MarketChip $family={shownFamily} aria-hidden="true">
+        <BallIcon /><ChipCode>{messages.text(`market.code.${shownFamily}`)}</ChipCode><ChipRule />
+        <ChipPick>{selection ? messages.text(`market.selection.${selection}`) : family}</ChipPick><ChipFamily>{family}</ChipFamily>
       </MarketChip>
-      <Prediction $family={selectedFamily} $available={prediction !== null} data-prediction={prediction?.item.market.selection ?? "none"}
+      <Prediction $family={shownFamily} $available={prediction !== null} data-prediction={selection ?? "none"}
         data-outcome={outcome} title={details ?? undefined}>
-        {prediction ? <>
+        {prediction && selection ? <>
           {locked ? <LockIcon /> : <BarsIcon />}
-          <PickFull aria-hidden="true">{messages.text(`market.selection.${prediction.item.market.selection}`)}</PickFull>
-          <PickShort $family={selectedFamily} aria-hidden="true">{messages.text(`market.pick.${prediction.item.market.selection}`)}</PickShort>
-          <Percent aria-hidden="true">{percent}</Percent>
-          <VisuallyHidden>{messages.text("match.pickLabel", { market: family,
-            selection: messages.text(`market.selection.${prediction.item.market.selection}`),
+          <PickShort $family={shownFamily} aria-hidden="true">{messages.text(`market.pick.${selection}`)}</PickShort>
+          <Probability aria-hidden="true">
+            <Percent>{percent}</Percent>
+            <Bar $family={shownFamily}><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></Bar>
+            {OutcomeIcon && <Mark $tone={outcome} title={messages.text(`outcome.${outcome}`)}><OutcomeIcon /></Mark>}
+          </Probability>
+          <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: messages.text(`market.selection.${selection}`),
             probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
-            {locked && `. ${messages.text("match.lockedPrediction")}`}
+            {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}
           </VisuallyHidden>
         </> : <>
           <NoPick aria-hidden="true">{messages.text("match.noPick")}</NoPick>
           <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}</VisuallyHidden>
         </>}
-        {OutcomeIcon ? <Mark $tone={outcome} title={messages.text(`outcome.${outcome}`)}><OutcomeIcon />
-          <VisuallyHidden>{messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}</VisuallyHidden></Mark>
-          : prediction && <VisuallyHidden>{messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}</VisuallyHidden>}
       </Prediction>
     </Pick>
     {notes.length > 0 && <Notes>{notes.map((note, index) => <Note key={index}><NoticeIcon />{note}</Note>)}</Notes>}

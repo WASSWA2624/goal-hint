@@ -2,7 +2,7 @@
 
 **Product requirements and technical design**
 
-Prepared for Wasswa Wilson • 7 October 2026 • Version 1.7
+Prepared for Wasswa Wilson • 7 October 2026 • Version 1.8 (owner-approved feed redesign, 10 October 2026)
 
 | Product setting | Decision |
 | --- | --- |
@@ -43,11 +43,11 @@ AI is the primary predictor; validated API-Football predictions provide fallback
 
 | At launch | Prepared for later | Outside scope |
 | --- | --- | --- |
-| Seven-day fixtures and daily predictions<br>Search and filters<br>Four market families with probabilities and explanations<br>Revision history, results and performance<br>English and a light theme | Additional languages<br>Dark theme<br>Advertising | Betting and payments<br>Visitor accounts or subscriptions<br>Social feeds and comments<br>AI chat, native apps or an admin dashboard |
+| Seven-day daily predictions; fixture browsing up to 31 days<br>Search and multi-value filters<br>Four market families with probabilities and explanations<br>Revision history, results and performance<br>English and a light, colourful theme | Additional languages<br>Dark theme<br>Advertising<br>Provider odds display and filtering<br>Every provider market (section 4)<br>Anonymous on-device picks, alerts and preferences | Betting and payments<br>Visitor accounts or subscriptions<br>Social feeds and comments<br>AI chat, native apps or an admin dashboard |
 
 Use stable Next.js with the App Router and TypeScript, Prisma, MySQL, Redux Toolkit and styled-components. Server code and durable workers own business logic.
 
-Every public feature and read endpoint works without registration, sign-in, visitor tokens or authentication cookies. Do not add account screens, an auth SDK or user/session tables. Store anonymous preferences in the URL or browser storage. Private jobs use service credentials or hosting controls.
+Every public feature and read endpoint works without registration, sign-in, visitor tokens or authentication cookies. Do not add account screens, an auth SDK or user/session tables. Store anonymous preferences in the URL or browser storage. "My Picks", match alerts and the Profile screen in the layout templates are on-device features of this kind: starred matches and preferences live in browser storage, alerts appear only while the site is open, and nothing identifies a visitor to the server. Private jobs use service credentials or hosting controls.
 
 Cover enabled competitions available through the selected plan, expanding only as data quality and operating budgets allow. Do not promise worldwide coverage, guaranteed wins or search rankings. Keep one canonical record per team. Third-party images load from remote URLs; original Goal Hint branding may be bundled locally as described in section 6.
 
@@ -64,11 +64,11 @@ The homepage opens directly to today’s matches in `Africa/Kampala` time, with 
 
 ### Search and filters
 
-Search team, league and country names, including aliases and case-insensitive matches, across the entire selected date/range, including unloaded cards. Use compact league, status and market filters with clear active states and Reset.
+The feed screens follow the layout templates in `dev-plan/templates/` on phones and desktops; the templates fix layout, while theme tokens and stored data supply branding and content. Search team, league and country names, including aliases and case-insensitive matches, across the entire selected date/range. Offer a single date or a range of up to 31 days with Today, Next 3 days, Next 7 days and Next 30 days presets; multi-select league, country and market filters; a probability range; and an odds range once provider odds are stored. Use clear active states, Reset and an Apply action that shows the matching count. Live and Results are navigation sections over the same feed.
 
-Default to kickoff order with fixture ID as a stable tie-breaker. Offer probability sorting only for the selected market; missing probabilities sort last. Never compare unrelated market probabilities in one ranking.
+Each card shows one pick: the most likely available pick among the selected markets, ties broken in policy order. Probability sorting and the probability range use that shown pick, so different markets may be ranked together; the card always names the market. Default to kickoff order with fixture ID as a stable tie-breaker; either order can be reversed, and missing probabilities sort last.
 
-Show available forecasts throughout today plus six days. Beyond that window, display “Predictions become available within seven days of the match.” Preserve applied filters in URLs and restore loaded position and scroll on Back. Use Load more with ordinary pagination links for accessibility and discovery.
+Show available forecasts throughout today plus six days. Beyond that window, display “Predictions become available within seven days of the match.” Preserve applied filters in URLs and restore position and scroll on Back. Paginate with numbered page links (`‹ 1 2 3 4 … N ›`); row numbering continues across pages.
 
 ### Detail and feedback
 
@@ -84,10 +84,10 @@ Use an article with this reading order: competition and kickoff, home team, away
 
 For example: “Home win · 54% estimated probability”, followed by “AI prediction · Updated 00:18 EAT”. A final score and the prediction outcome are separate labels. Any illustrative probabilities must be identified as examples.
 
-- Use one column on phones and at most two on larger screens; start with 16 px body text, 28–32 px logos and roughly 44 px touch targets.
+- Use one column on phones, two on tablets and an aligned table on desktops; keep cards compact with 24–34 px logos and touch targets of at least 36 px.
 - Allow long names to wrap without overflow. Team names provide identity; broken logos fall back to styled initials.
-- Use the Goal Hint brand assets and shared color tokens, strong contrast and restrained accents. Pair outcome colors with text and icons.
-- Prefer square corners across cards, buttons, inputs and badges. Avoid carousels, large decorative heroes and controls that cover content.
+- Use the Goal Hint brand assets and shared colour tokens. A colourful accent palette (one hue per filter, market family and section, plus gradient actions) must keep text contrast at 4.5:1, or 3:1 for large text on gradients. Pair outcome colours with text and icons.
+- Use the rounded cards, pills and segmented controls of the layout templates. Avoid carousels, large decorative heroes and controls that cover content.
 
 ### Styling and rendering
 
@@ -108,11 +108,13 @@ All four launch families use regulation time, including stoppage time and exclud
 | Total goals | Over 2.5, Under 2.5 | Over: at least 3 goals. Under: at most 2. |
 | Both teams to score | Yes, No | Yes: both score. No: at least one scores zero. |
 
-Select the highest unrounded probability per available family, breaking exact ties in the table’s order. Cards default to match result; the market filter changes the displayed family. Show alternatives on the detail page. Match-result probabilities sum to one, as does each binary pair. Derive double chance from the same match-result distribution; its overlapping selections do not sum to one.
+Select the highest unrounded probability per available family, breaking exact ties in the table’s order. Cards default to match result; with several markets selected, a card shows the most likely of their picks (section 2). Show alternatives on the detail page. Match-result probabilities sum to one, as does each binary pair. Derive double chance from the same match-result distribution; its overlapping selections do not sum to one.
 
 Each publication is a complete revision. At cutoff, lock one eligible revision for all settlement. Headline hit rates count only its selected pick once per family per played fixture. Evaluate full probability distributions separately; neither alternative selections nor superseded revisions add headline predictions.
 
 Exact score is optional secondary information, requiring a validated score distribution and its own probability. Report exact-score performance separately.
+
+**Approved expansion (owner decision, 10 October 2026).** Later phases cover every market API-Football lists in `/odds/bets`, not only these four. Goal-based markets (all over/under lines, half-time and second-half results, HT/FT, exact score, team totals, odd/even, clean sheet, win to nil, handicaps and combinations) derive from an AI-predicted full-time and half-time score distribution. Non-goal markets such as corners and cards use de-margined bookmaker probabilities, labelled as market-implied and never mixed with AI groups. No market becomes visible until its settlement rule, source labelling and performance reporting are specified and tested.
 
 ### Outcome labels
 
@@ -423,7 +425,7 @@ Initially render about 30 cards and paginate. Reserve logo dimensions and lazy-l
 
 Support 320 px through desktop widths, 200% text zoom and long names without overflow. Use semantic headings, buttons, links, labeled controls, visible focus and logical tab order. Statuses need text as well as color; team names provide accessible identity without redundant logo announcements.
 
-Announce search counts and failures without repeated interruptions. Filter panels must dismiss clearly and restore trigger focus. Respect reduced motion and maintain contrast in each theme. Prefer square corners and shared styling tokens across components.
+Announce search counts and failures without repeated interruptions. Filter panels must dismiss clearly and restore trigger focus. Respect reduced motion and maintain contrast in each theme. Use shared styling tokens and the template corner radii across components.
 
 ### Optional themes
 
@@ -495,7 +497,7 @@ These handoff requirements need recorded evidence. Confirm proposed workload and
 | Area | Required evidence |
 | --- | --- |
 | Navigation and access | Today’s picks appear immediately; search includes unloaded cards and a card opens analysis in one tap. Fresh-session public pages/read endpoints need no account/token/cookie; no visitor auth screens, SDK or user/session tables exist. Unauthorized job triggers are rejected. |
-| Layout and rendering | At 320, 360, 390 and 430 px, long names, broken logos, keyboard use and zoom remain usable. Shared components use square corners and consistent Goal Hint branding. Match HTML and styled-components CSS exist before hydration without flashes/errors. |
+| Layout and rendering | At 320, 360, 390 and 430 px, long names, broken logos, keyboard use and zoom remain usable. Shared components follow the layout templates with consistent Goal Hint branding. Match HTML and styled-components CSS exist before hydration without flashes/errors. |
 | Images and teams | Third-party images remain URL-only and load directly without app storage/proxy/cache; first-party brand assets may be bundled. Broken or throttled logos show text. Concurrent/repeated imports across competitions/seasons produce one canonical team; ambiguous identities are held for resolution. |
 | Schedule | Prove today plus six days, exclusive day-seven boundary, 21:00 UTC trigger, midnight rollover and rejection outside eligibility. Prior-day predictions remain usable for eligible early kickoffs. |
 | Publication and locking | At most one revision per refresh job; newer valid runs supersede older ones, and late workers/stale client responses cannot roll them back. Reject publication exactly at cutoff and after early starts; test earlier kickoff corrections and closure without a prediction. Partial revisions drop unsupported old markets. Retained output shows age; history and locked revisions remain immutable. |

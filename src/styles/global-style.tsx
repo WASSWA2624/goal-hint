@@ -20,7 +20,9 @@ export const GlobalStyle = createGlobalStyle`
     margin: 0;
     min-block-size: 100vh;
     min-block-size: 100dvh;
-    background: ${({ theme }) => theme.color.page};
+    background: ${({ theme }) => theme.gradient.page};
+    background-repeat: no-repeat;
+    background-color: ${({ theme }) => theme.color.page};
     color: ${({ theme }) => theme.color.text};
     font-family: ${({ theme }) => theme.typography.family};
     font-size: ${({ theme }) => theme.typography.size.body};

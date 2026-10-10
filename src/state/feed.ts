@@ -1,6 +1,6 @@
 import { createAction, createReducer } from "@reduxjs/toolkit";
 import { parseReportingDate, utcInstantFromEpochMilliseconds, type UtcInstant } from "../domain/calendar.ts";
-import { feedQueryKey, feedQueryRules, parseFeedQuery, serializeFeedQuery, type FeedQuery } from "../domain/feed-query.ts";
+import { feedQueryKey, feedQueryRules, isFeedDatePreset, parseFeedQuery, serializeFeedQuery, type FeedQuery } from "../domain/feed-query.ts";
 import { compareFixtureVersions, parseFixtureSnapshot } from "../domain/fixture-snapshot.ts";
 import type { FeedBootstrap, FeedFailure, FeedPage, FeedRequest, FeedState, LoadedView } from "./contracts.ts";
 import { restorationRules } from "../domain/feed-navigation.ts";
@@ -74,8 +74,8 @@ export function createFeedReducer(bootstrap: FeedBootstrap) {
       if (today < state.today) throw new RangeError("Calendar events must not move reporting time backwards.");
       const draft = normalizeDraft(state.draft, today);
       state.today = today;
-      if (["today", "tomorrow", "next-7-days"].includes(state.query.dates.kind)) applyQuery(state, { ...state.query, page: 1 });
-      state.draft = ["today", "tomorrow", "next-7-days"].includes(draft.dates.kind) ? { ...draft, page: 1 } : draft;
+      if (isFeedDatePreset(state.query.dates.kind)) applyQuery(state, { ...state.query, page: 1 });
+      state.draft = isFeedDatePreset(draft.dates.kind) ? { ...draft, page: 1 } : draft;
     });
     builder.addCase(requestStarted, (state, { payload }) => {
       if (!Number.isSafeInteger(payload.page) || payload.page < 1 || payload.page > feedQueryRules.maximumPage ||

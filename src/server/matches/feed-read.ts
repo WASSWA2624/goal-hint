@@ -1,7 +1,8 @@
 import "server-only";
 
 import { addReportingDays, type ReportingDateRange, type ReportingDate } from "../../domain/calendar.ts";
-import type { FeedQuery } from "../../domain/feed-query.ts";
+import { isAnyProbability, type FeedQuery } from "../../domain/feed-query.ts";
+import { publicPolicy } from "../../domain/public-policy.ts";
 import type { MatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { catalogScopeKey, normalizeCatalogSearch, parseCatalogImportRequest } from "../football/catalog-input.ts";
@@ -18,19 +19,33 @@ export function publicFixtureScope(competitionIds: readonly number[]) {
 export function publicFixtureCohortScope(range: ReportingDateRange, competitionIds: readonly number[]) {
   return Prisma.sql`${publicFixtureScope(competitionIds)} AND f.kickoff>=${new Date(range.window.startInclusive)} AND f.kickoff<${new Date(range.window.endExclusive)}`;
 }
-export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[]) {
-  const joins = Prisma.sql`FROM FootballFixture f JOIN FootballTeam h ON h.id=f.homeTeamId JOIN FootballTeam a ON a.id=f.awayTeamId
-    JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
-    LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id
-    LEFT JOIN MarketPrediction m ON m.family=${query.market} AND m.setId=CASE
+/** Displayed revision for the applicable cycle: current while open, locked when closed, latest retained when void. */
+const displayedSet = Prisma.sql`CASE
       WHEN c.state='open' THEN c.currentSetId WHEN c.state='closed' THEN c.lockedSetId
       WHEN c.state='void' THEN COALESCE(c.lockedSetId,c.currentSetId,
         (SELECT p.id FROM PredictionSet p WHERE p.cycleId=c.id ORDER BY p.cycleRevision DESC LIMIT 1)) END`;
+
+export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[]) {
+  const markets = Prisma.join(query.markets);
+  // One shown pick per fixture: the highest selected probability among the chosen families,
+  // ties broken by policy order. Browser presentation applies the same rule to the same doubles.
+  const joins = Prisma.sql`FROM FootballFixture f JOIN FootballTeam h ON h.id=f.homeTeamId JOIN FootballTeam a ON a.id=f.awayTeamId
+    JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
+    LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id
+    LEFT JOIN MarketPrediction m ON m.setId=${displayedSet} AND m.family=(SELECT b.family FROM MarketPrediction b
+      WHERE b.setId=${displayedSet} AND b.family IN (${markets}) AND b.available=TRUE
+      ORDER BY b.selectedProbability DESC, FIELD(b.family, ${Prisma.join(publicPolicy.markets)}) ASC LIMIT 1)`;
   const scope = publicFixtureCohortScope(range, competitionIds);
   const filters: Prisma.Sql[] = [scope];
-  if (query.league) filters.push(Prisma.sql`l.id=${query.league}`);
+  if (query.leagues.length > 0) filters.push(Prisma.sql`l.id IN (${Prisma.join(query.leagues)})`);
+  if (query.countries.length > 0) filters.push(Prisma.sql`l.country IN (${Prisma.join(query.countries)})`);
   if (query.status !== "all") filters.push(query.status === "finished"
     ? Prisma.sql`f.status IN ('finished-regulation','finished-extra-time','finished-penalties')` : Prisma.sql`f.status=${query.status}`);
+  if (!isAnyProbability(query.probability)) {
+    // Whole-percent bounds include values that display as the boundary percentage.
+    filters.push(Prisma.sql`m.available=TRUE AND m.selectedProbability>=${(query.probability.min - 0.5) / 100}
+      AND m.selectedProbability<${(query.probability.max + 0.5) / 100}`);
+  }
   if (query.search) {
     // Match %, _ and the escape character literally. Values never become SQL.
     const pattern = `%${normalizeCatalogSearch(query.search).replace(/[!%_]/gu, "!$&")}%`;
@@ -41,10 +56,10 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
       OR EXISTS (SELECT 1 FROM FootballTeamAlias t WHERE t.teamId=a.id AND t.normalizedSearch LIKE ${pattern} ESCAPE '!')
       OR EXISTS (SELECT 1 FROM FootballCompetitionAlias ca WHERE ca.competitionId=l.id AND ca.normalizedSearch LIKE ${pattern} ESCAPE '!'))`);
   }
+  const descending = query.sort.direction === "desc";
   return { joins, scope, where: Prisma.join(filters, " AND "), order: query.sort.by === "probability"
-    ? Prisma.sql`CASE WHEN m.available=TRUE THEN m.selectedProbability ELSE NULL END IS NULL ASC,
-        CASE WHEN m.available=TRUE THEN m.selectedProbability ELSE NULL END DESC, f.kickoff ASC, f.id ASC`
-    : Prisma.sql`f.kickoff ASC, f.id ASC` };
+    ? Prisma.sql`m.selectedProbability IS NULL ASC, m.selectedProbability ${descending ? Prisma.sql`DESC` : Prisma.sql`ASC`}, f.kickoff ASC, f.id ASC`
+    : descending ? Prisma.sql`f.kickoff DESC, f.id DESC` : Prisma.sql`f.kickoff ASC, f.id ASC` };
 }
 
 export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Promise<MatchFeedResponse["coverage"]["dates"]> {

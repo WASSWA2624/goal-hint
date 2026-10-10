@@ -70,7 +70,8 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
   const live = coherentResult && fixture.status === "live" && result!.reportedGoals.home !== null && result!.reportedGoals.away !== null;
   const team = (value: typeof fixture.homeTeam) => ({ id: value.id, name: text(value.name), logoUrl: isSafeRemoteImageUrl(value.logoUrl) ? value.logoUrl : null });
   return { fixtureId: id, dataVersion: String(fixture.dataVersion), homeTeam: team(fixture.homeTeam), awayTeam: team(fixture.awayTeam),
-    competition: { id: fixture.season.competition.id, name: text(fixture.season.competition.name), country: text(fixture.season.competition.country) },
+    competition: { id: fixture.season.competition.id, name: text(fixture.season.competition.name), country: text(fixture.season.competition.country),
+      logoUrl: isSafeRemoteImageUrl(fixture.season.competition.logoUrl) ? fixture.season.competition.logoUrl : null },
     kickoffAt: fixture.kickoff ? historyTime(fixture.kickoff) : null, syncedAt: historyTime(fixture.resultState?.lastSyncAt ?? fixture.retrievedAt),
     status, score: isPlayedFinalStatus(status) && regulationScore
       ? regulationScore : live ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,

@@ -54,3 +54,10 @@
 | ☐         | [047-shadow-qualification.md](dev-plan/047-shadow-qualification.md)             |
 | ☐         | [048-release-readiness.md](dev-plan/048-release-readiness.md)                   |
 | ☐         | [049-production-deployment.md](dev-plan/049-production-deployment.md)           |
+| ☐         | [050-feed-query-extensions.md](dev-plan/050-feed-query-extensions.md)           |
+| ☐         | [051-feed-screen-layout.md](dev-plan/051-feed-screen-layout.md)                 |
+| ☐         | [052-provider-odds-import.md](dev-plan/052-provider-odds-import.md)             |
+| ☐         | [053-score-distribution-markets.md](dev-plan/053-score-distribution-markets.md) |
+| ☐         | [054-market-implied-markets.md](dev-plan/054-market-implied-markets.md)         |
+| ☐         | [055-on-device-picks.md](dev-plan/055-on-device-picks.md)                       |
+| ☐         | [056-leagues-and-tips-pages.md](dev-plan/056-leagues-and-tips-pages.md)         |

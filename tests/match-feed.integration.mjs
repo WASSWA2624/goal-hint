@@ -131,6 +131,16 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       assert.equal(goals.records[0].fixtureId, published.get(3003).fixture.id);
       assert.equal(goals.coverage.matchingWithMarket, 5);
       assert.ok(goals.records.slice(5).every((item) => !item.forecast?.markets.some((market) => market.market.family === 'total-goals')));
+      // Several markets: each fixture is ranked by its best available pick; ties keep kickoff/ID order.
+      const ids = (page) => page.records.slice(0, 6).map((item) => item.fixtureId);
+      const pick = (...numbers) => numbers.map((id) => published.get(id).fixture.id);
+      const best = await query({ sort: 'probability', market: 'match-result,total-goals', pageSize: '100' });
+      assert.deepEqual(ids(best), pick(3003, 3002, 3001, 3005, 3000, 3004));
+      const ascending = await query({ sort: 'probability', dir: 'asc', market: 'match-result,total-goals', pageSize: '100' });
+      assert.deepEqual(ids(ascending), pick(3004, 3000, 3001, 3005, 3002, 3003));
+      const confident = await query({ market: 'match-result,total-goals', prob: '60-100', pageSize: '100' });
+      assert.equal(confident.total, 5);
+      assert.deepEqual(new Set(confident.records.map((item) => item.fixtureId)), new Set(pick(3003, 3002, 3001, 3005, 3000)));
       const partial = await card(3004);
       assert.equal(partial.unavailableMarkets.length, 2); assert.ok(partial.unavailableMarkets.every((item) => item.reason === 'unsupported'));
       await publish(3006, 0.45, 0.65);

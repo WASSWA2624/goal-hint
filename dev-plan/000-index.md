@@ -2,7 +2,7 @@
 
 Run these prompts in numeric order to build the application described in [app-write-up.md](../app-write-up.md). That specification is the product source of truth; this folder organizes its implementation without replacing it. The existing [brand guide](../assets/brand/README.md) governs brand asset usage.
 
-There are **49 implementation prompts**, one feature per file. This index is the execution guide, not an application feature. Creating this plan does not execute any of its prompts or indicate that development is complete.
+There are **56 implementation prompts**, one feature per file. This index is the execution guide, not an application feature. Creating this plan does not execute any of its prompts or indicate that development is complete.
 
 ## How to run a prompt
 
@@ -141,13 +141,27 @@ The early runtime, database and domain work exists to support the specification'
 
 **Gate:** real shadow observations and recovery evidence precede release approval. A deployed staging app or a passing unit suite alone does not establish production readiness. Never fabricate elapsed observation time or sufficient sample sizes.
 
+### 050–056 Feed screen redesign and expansion
+
+| Prompt | Feature delivered |
+| --- | --- |
+| [050 Feed query extensions](050-feed-query-extensions.md) | Multi-value league/country filters, probability range, sort direction and numbered-pagination data. |
+| [051 Feed screen layout](051-feed-screen-layout.md) | Mobile and desktop feed screens reproducing the [layout templates](templates/). |
+| [052 Provider odds import](052-provider-odds-import.md) | Stored pre-match odds, price display and the odds-range filter. |
+| [053 Score-distribution markets](053-score-distribution-markets.md) | Every goal-based provider market derived from AI full-time and half-time score distributions. |
+| [054 Market-implied markets](054-market-implied-markets.md) | Corners, cards and other non-goal markets from de-margined odds, with settlement. |
+| [055 On-device picks, alerts and profile](055-on-device-picks.md) | My Picks, the notifications bell and Profile preferences without accounts. |
+| [056 Leagues and tips pages](056-leagues-and-tips-pages.md) | League directory and daily top-picks sections. |
+
+**Gate:** the owner-approved specification edits (version 1.8) precede behaviour changes. Templates fix layout only; theme tokens and real data supply branding and content. Prompts 052–054 stay within the API-Football budget in section 14; no market is shown before its settlement rule is tested.
+
 ## Requirement coverage
 
 | Specification requirement | Implementation ownership |
 | --- | --- |
 | Scope, stack and operating decisions (§§1, 9, 14–15) | 001–003, 008, 010, 014, 046–049 |
-| Navigation, cards and styling (§§2–3) | 015–018, 032–037 |
-| Market probabilities and outcomes (§§4, 7–8) | 005, 012–014, 022–024, 027, 030, 038 |
+| Navigation, cards and styling (§§2–3) | 015–018, 032–037, 050–051, 055–056 |
+| Market probabilities and outcomes (§§4, 7–8) | 005, 012–014, 022–024, 027, 030, 038, 052–054 |
 | EAT windows, daily selection and cadence (§5) | 004, 020–026, 037, 043 |
 | Provider, research, canonical identities and images (§§6, 10) | 006–013, 018–019, 026 |
 | Database integrity, immutable history and APIs (§§9–11) | 003, 009, 011–012, 019–031, 036 |

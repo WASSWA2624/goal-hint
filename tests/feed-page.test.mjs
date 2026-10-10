@@ -9,16 +9,18 @@ import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 const today = parseReportingDate('2026-10-09'), clock = { now: () => parseUtcInstant('2026-10-09T08:00:00Z') };
 
 test('date navigation retains all applied filters and resets pagination for every link', () => {
-  const query = parseFeedQuery({ date: '2020-02-29', q: 'São Club', league: 'league-1', status: 'finished',
-    market: 'total-goals', sort: 'probability', page: '9', pageSize: '40' }, { today });
+  const query = parseFeedQuery({ date: '2020-02-29', q: 'São Club', league: 'league-1,league-2', country: 'Brazil', status: 'finished',
+    market: 'total-goals,both-teams-to-score', prob: '55-100', sort: 'probability', dir: 'asc', page: '9', pageSize: '40' }, { today });
   const links = feedDateNavigation(query, today);
   assert.equal(links.previous.date, '2020-02-28'); assert.equal(links.next.date, '2020-03-01');
   for (const { href } of [...links.presets, links.previous, links.next]) {
     const url = new URL(href, 'https://example.test'), routeDate = url.pathname.split('/predictions/')[1];
     const next = parseFeedQuery(url.searchParams, { today, ...(routeDate ? { routeDate } : {}) });
-    assert.equal(next.search, query.search); assert.equal(next.league, query.league); assert.equal(next.status, query.status);
-    assert.equal(next.market, query.market); assert.deepEqual(next.sort, query.sort); assert.equal(next.page, 1); assert.equal(next.pageSize, 40);
+    assert.equal(next.search, query.search); assert.deepEqual(next.leagues, query.leagues); assert.deepEqual(next.countries, query.countries);
+    assert.equal(next.status, query.status); assert.deepEqual(next.markets, query.markets); assert.deepEqual(next.probability, query.probability);
+    assert.deepEqual(next.sort, query.sort); assert.equal(next.page, 1); assert.equal(next.pageSize, 40);
   }
+  assert.deepEqual(links.presets.map((link) => link.kind), ['today', 'tomorrow', 'next-3-days', 'next-7-days', 'next-30-days']);
   assert.ok(links.presets.every((link) => !link.current));
 });
 

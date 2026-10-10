@@ -4,7 +4,7 @@ import { resolveLocale } from "./locales.ts";
 import { en } from "./messages/en.ts";
 
 type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
-  days: Intl.DateTimeFormat; times: Intl.DateTimeFormat };
+  days: Intl.DateTimeFormat; times: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat };
 // Immutable formatters are shared by locale; translations and visitor data are never cached.
 const formattersByLocale = new Map<string, Formatters>();
 function formatters(language: string): Formatters {
@@ -18,6 +18,7 @@ function formatters(language: string): Formatters {
     instants: new Intl.DateTimeFormat(language, { ...dateOptions, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
     days: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", weekday: "short", month: "short", day: "numeric" }),
     times: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
+    mediumDates: new Intl.DateTimeFormat(language, { ...dateOptions, weekday: "short", month: "short", day: "numeric" }),
   };
   formattersByLocale.set(language, created);
   return created;
@@ -33,7 +34,7 @@ export type MessageCatalog = Readonly<Record<TextKey, string> & Record<PluralKey
 /** Missing translations fall back per key. Only complete locales may be published. */
 export function createMessages(locale?: string, translations: Partial<MessageCatalog> = {}) {
   const language = resolveLocale(locale);
-  const { numbers, plurals, dates, instants, days, times } = formatters(language);
+  const { numbers, plurals, dates, instants, days, times, mediumDates } = formatters(language);
 
   return {
     text(key: TextKey, values: Readonly<Record<string, string>> = {}): string {
@@ -49,6 +50,14 @@ export function createMessages(locale?: string, translations: Partial<MessageCat
     },
     reportingDate(value: ReportingDate): string {
       return dates.format(getReportingDayBounds(value).startInclusive);
+    },
+    /** Weekday, month and day of an EAT reporting date, for narrow date controls. */
+    reportingDateShort(value: ReportingDate): string {
+      return days.format(getReportingDayBounds(value).startInclusive);
+    },
+    /** Compact EAT reporting date with weekday and year, for date controls. */
+    reportingDateMedium(value: ReportingDate): string {
+      return mediumDates.format(getReportingDayBounds(value).startInclusive);
     },
     reportingInstant(value: UtcInstant): string {
       const input = getKickoffDisplayInput(value);

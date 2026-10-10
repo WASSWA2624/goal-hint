@@ -8,6 +8,7 @@ import { createMessages, type TextKey } from "../../i18n/messages.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
+import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 import { feedSql, storedFeedCoverage, storedFeedRun } from "./feed-read.ts";
@@ -50,9 +51,11 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const sql = feedSql(query, range, competitionIds);
         const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.joins} WHERE ${sql.scope}`);
         // Options cover the entire date cohort, independently of applied filters/page.
-        const leagues = await tx.$queryRaw<MatchFeedResponse["leagues"]>(Prisma.sql`
-          SELECT DISTINCT l.id, l.name, l.country ${sql.joins} WHERE ${sql.scope}
-          ORDER BY l.name, l.country, l.id LIMIT 1001`);
+        const leagueRows = await tx.$queryRaw<{ id: string; name: string | null; country: string | null; logoUrl: string | null; fixtures: bigint }[]>(Prisma.sql`
+          SELECT l.id, l.name, l.country, l.logoUrl, COUNT(*) AS fixtures ${sql.joins} WHERE ${sql.scope}
+          GROUP BY l.id, l.name, l.country, l.logoUrl ORDER BY l.name, l.country, l.id LIMIT 1001`);
+        const leagues = leagueRows.map((row) => ({ id: row.id, name: row.name, country: row.country,
+          logoUrl: isSafeRemoteImageUrl(row.logoUrl) ? row.logoUrl : null, fixtures: Number(row.fixtures) }));
         const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
           SELECT COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available ${sql.joins} WHERE ${sql.where}`);
         if (!known || !matching) throw new MatchFeedError("unavailable");
@@ -84,7 +87,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range,
-        query: { ...query, projection: 4, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 5, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

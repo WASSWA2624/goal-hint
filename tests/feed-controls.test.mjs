@@ -23,17 +23,22 @@ test('typing preserves spaces in Redux; Apply normalizes once and resets page', 
 });
 test('native GET controls and canonical URLs produce the same applied query', () => {
   const query = parseFeedQuery(new URLSearchParams('when=next-7-days&q=++bEyOnD+++Alias+&league=&status=all&market=total-goals&sort=probability&pageSize=40'), { today });
-  assert.equal(query.league, null); assert.equal(query.search, 'bEyOnD Alias');
-  assert.deepEqual(query.sort, { by: 'probability', market: 'total-goals' });
+  assert.deepEqual(query.leagues, []); assert.equal(query.search, 'bEyOnD Alias');
+  assert.deepEqual(query.markets, ['total-goals']);
+  assert.deepEqual(query.sort, { by: 'probability', direction: 'desc' });
   assert.deepEqual(parseFeedQuery(new URL(feedQueryHref(query, today), 'http://localhost').searchParams, { today }), query);
-  assert.throws(() => applyFeedDraft({ ...query, market: 'match-result' }, today));
+  assert.throws(() => applyFeedDraft({ ...query, markets: [] }, today));
+  assert.throws(() => applyFeedDraft({ ...query, probability: { min: 80, max: 20 } }, today));
 });
-test('Reset preserves absolute/range/relative dates and page size with consistent defaults', () => {
-  for (const dates of [{ date: today }, { from: today, to: '2026-10-15' }, { when: 'tomorrow' }]) {
-    const query = parseFeedQuery({ ...dates, q: 'team', league: 'league-a', status: 'live', market: 'total-goals', sort: 'probability', page: '3', pageSize: '40' }, { today });
+test('Reset preserves dates, status entry and page size with consistent defaults', () => {
+  for (const dates of [{ date: today }, { from: today, to: '2026-10-15' }, { when: 'tomorrow' }, { when: 'next-30-days' }]) {
+    const query = parseFeedQuery({ ...dates, q: 'team', league: 'league-a,league-b', country: 'Spain', status: 'live', market: 'total-goals,both-teams-to-score',
+      prob: '60-100', sort: 'probability', dir: 'asc', page: '3', pageSize: '40' }, { today });
     const reset = resetFeedFilters(query);
     assert.deepEqual(reset.dates, query.dates); assert.equal(reset.pageSize, 40); assert.equal(reset.page, 1);
-    assert.equal(reset.search, ''); assert.equal(reset.league, null); assert.equal(reset.status, 'all');
-    assert.equal(reset.market, 'match-result'); assert.deepEqual(reset.sort, { by: 'kickoff' });
+    assert.equal(reset.search, ''); assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
+    assert.equal(reset.status, 'live', 'Live and Results are navigation sections, not filters');
+    assert.deepEqual(reset.markets, ['match-result']); assert.deepEqual(reset.probability, { min: 0, max: 100 });
+    assert.deepEqual(reset.sort, { by: 'kickoff', direction: 'asc' });
   }
 });

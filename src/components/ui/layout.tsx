@@ -2,9 +2,10 @@
 
 import styled from "styled-components";
 
-export const Container = styled.div`
+/** `$wide` suits dense tables such as the desktop match feed. */
+export const Container = styled.div<{ $wide?: boolean }>`
   inline-size: 100%;
-  max-inline-size: ${({ theme }) => theme.layout.maxWidth};
+  max-inline-size: ${({ theme, $wide }) => $wide ? theme.layout.wideMaxWidth : theme.layout.maxWidth};
   margin-inline: auto;
   padding-inline: ${({ theme }) => theme.layout.gutter};
   min-inline-size: 0;

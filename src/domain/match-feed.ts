@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parseReportingDate } from "./calendar.ts";
 import { feedQueryRules, maximumCompetitionScope } from "./feed-query.ts";
+import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { fixtureSnapshotSchema, fixtureCycleSchema, fixtureUpdateSchema, unavailableMarketSchema } from "./fixture-snapshot.ts";
 
 export const matchFeedRules = Object.freeze({ maximumQueryBytes: 2048, maximumResponseBytes: 1_048_576,
@@ -21,7 +22,10 @@ export const dailyRunProgressSchema = z.strictObject({ id: z.uuid().nullable(), 
 export const matchFeedResponseSchema = z.strictObject({
   paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null),
   leagues: z.array(z.strictObject({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u),
-    name: z.string().max(256).nullable(), country: z.string().max(128).nullable() })).max(maximumCompetitionScope).default([]),
+    name: z.string().max(256).nullable(), country: z.string().max(128).nullable(),
+    logoUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe logo URL.").nullable().default(null),
+    /** Fixtures in the unfiltered date cohort, for ordering filter suggestions. */
+    fixtures: count.default(0) })).max(maximumCompetitionScope).default([]),
   records: z.array(matchFeedRecordSchema).max(feedQueryRules.maximumPageSize), page, nextPage: page.nullable(), previousPage: page.nullable(),
   pageSize: count.min(1).max(feedQueryRules.maximumPageSize), total: count, totalPages: count,
   links: z.strictObject({ next: pageLink, previous: pageLink }),
@@ -30,7 +34,7 @@ export const matchFeedResponseSchema = z.strictObject({
   message: z.string().max(512).nullable(),
   coverage: z.strictObject({ partial: z.boolean(), knownFixtures: count, matchingWithMarket: count,
     dates: z.array(z.strictObject({ date, status: z.enum(["complete", "partial", "degraded", "failed", "unknown", "pending"]),
-      observedAt: at.nullable(), authoritative: z.boolean() })).min(1).max(7) }),
+      observedAt: at.nullable(), authoritative: z.boolean() })).min(1).max(feedQueryRules.maximumDays) }),
   run: dailyRunProgressSchema,
 }).superRefine((value, ctx) => {
   if (value.records.length !== Math.min(value.pageSize, Math.max(0, value.total - (value.page - 1) * value.pageSize)) ||

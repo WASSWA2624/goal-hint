@@ -1,5 +1,5 @@
 import type { ReportingDate } from "./calendar.ts";
-import { parseFeedQuery, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
+import { anyProbability, defaultMarkets, parseFeedQuery, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
 
 /** Draft text stays editable; normalization happens once, at submission. */
 export function applyFeedDraft(draft: FeedQuery, today: ReportingDate): FeedQuery {
@@ -8,7 +8,8 @@ export function applyFeedDraft(draft: FeedQuery, today: ReportingDate): FeedQuer
   return parseFeedQuery(parameters, { today, locale: draft.locale });
 }
 
-/** Reset filters/order while retaining the reporting selection and page size. */
+/** Reset filters/order while retaining the reporting selection, status entry and page size. */
 export function resetFeedFilters(query: FeedQuery): FeedQuery {
-  return { ...query, search: "", league: null, status: "all", market: "match-result", sort: { by: "kickoff" }, page: 1 };
+  return { ...query, search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability,
+    sort: { by: "kickoff", direction: "asc" }, page: 1 };
 }

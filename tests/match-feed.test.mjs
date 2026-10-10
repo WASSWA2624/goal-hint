@@ -17,10 +17,10 @@ function emptyPage() {
       dates: [{ date: today, status: 'complete', observedAt: Date.parse('2026-10-09T08:00:00Z'), authoritative: true }] }, run: null };
 }
 
-for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'from=2026-10-09&to=2026-10-16',
+for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'from=2026-10-09&to=2026-11-09',
   'from=2026-10-09', 'from=2026-10-10&to=2026-10-09', 'date=2026-10-09&when=today',
   'date=2026-10-09&date=2026-10-10', 'status=FT', 'status=untrusted', 'market=corners',
-  'sort=probability', 'market=match-result&sort=probability&sortMarket=total-goals', 'sort=score',
+  'sort=probability&dir=up', 'market=match-result&sort=probability&sortMarket=total-goals', 'sort=score', 'prob=90-10', 'country=x%3Cscript%3E',
   'page=0', 'page=10001', 'page=01', 'pageSize=101', 'pageSize=0', 'pageSize=1.5',
   'league=x%27+OR+1=1', 'q=%00', `q=${'x'.repeat(121)}`, `q=${'%F0%9F%98%80'.repeat(240)}`, 'token=anonymous']) {
   test(`public query rejects ${query.slice(0, 70)}`, async () => {
@@ -34,7 +34,9 @@ for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'f
 }
 test('public parsing preserves shared URL defaults, historical dates and SSR route context', () => {
   const defaults = parseMatchFeedQuery(new URLSearchParams(), today);
-  assert.equal(defaults.pageSize, 30); assert.equal(defaults.page, 1); assert.equal(defaults.market, 'match-result');
+  assert.equal(defaults.pageSize, 30); assert.equal(defaults.page, 1); assert.deepEqual(defaults.markets, ['match-result']);
+  assert.deepEqual(defaults.sort, { by: 'kickoff', direction: 'asc' }); assert.deepEqual(defaults.probability, { min: 0, max: 100 });
+  assert.equal(parseMatchFeedQuery(new URLSearchParams('from=2026-10-09&to=2026-11-08'), today).dates.kind, 'range');
   assert.equal(parseMatchFeedQuery(new URLSearchParams('date=1000-01-02'), today).dates.date, '1000-01-02');
   assert.equal(parseMatchFeedQuery({ to: '2026-10-15', pageSize: '100' }, today, { routeDate: today }).dates.kind, 'range');
   assert.throws(() => parseMatchFeedQuery({ page: ['1', '2'] }, today), MatchFeedError);
@@ -65,8 +67,12 @@ test('public response schema rejects unknown internals and incoherent counts', (
   assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), total: 1 }).success, false);
   assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), nextPage: 3 }).success, false);
   const league = { id: 'league-a', name: 'Example', country: null };
-  assert.deepEqual(matchFeedResponseSchema.parse({ ...emptyPage(), leagues: [league] }).leagues, [league]);
+  // Older cached pages without logos or counts still parse, with explicit defaults.
+  assert.deepEqual(matchFeedResponseSchema.parse({ ...emptyPage(), leagues: [league] }).leagues, [{ ...league, logoUrl: null, fixtures: 0 }]);
+  const logo = { ...league, logoUrl: 'https://media.example.test/league.png', fixtures: 12 };
+  assert.deepEqual(matchFeedResponseSchema.parse({ ...emptyPage(), leagues: [logo] }).leagues, [logo]);
   for (const leagues of [[league, league], [{ ...league, providerCredentials: 'private' }], [{ ...league, id: '../x' }],
+    [{ ...league, logoUrl: 'http://media.example.test/a.png' }], [{ ...league, fixtures: -1 }],
     Array.from({ length: maximumCompetitionScope + 1 }, (_, index) => ({ ...league, id: `league-${index}` }))]) {
     assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), leagues }).success, false);
   }
