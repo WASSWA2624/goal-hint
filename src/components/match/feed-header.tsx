@@ -132,17 +132,19 @@ export function FeedHeader({ query, today, onApply, filters }: {
   </>;
 }
 
+/** Count and ordering share one line; on the narrowest phones the controls drop below the count. */
 const Toolbar = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 16px;
+  gap: 6px 8px;
 `;
 const Count = styled.div`
   display: grid;
   gap: 0;
   min-inline-size: 0;
-  > h2 { font-size: 0.875rem; white-space: nowrap; ${desktop} { font-size: 1.25rem; } }
+  > h2 { font-size: 0.8125rem; white-space: nowrap; ${desktop} { font-size: 1.25rem; } }
   > p { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: block; } }
 `;
 const PhoneText = styled.span`${desktop} { display: none; }`;
@@ -152,7 +154,7 @@ const SortGroup = styled.div`
   flex: none;
   align-items: center;
   gap: 4px;
-  > label { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; }
+  > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
 `;
 const SelectWrap = styled.span<{ $phone?: boolean }>`
   position: relative;
@@ -160,11 +162,11 @@ const SelectWrap = styled.span<{ $phone?: boolean }>`
   ${desktop} { display: ${({ $phone }) => $phone ? "none" : "inline-flex"}; }
   > select {
     min-block-size: 1.75rem;
-    padding-inline: 8px 24px;
+    padding-inline: 7px 22px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme, $phone }) => $phone ? theme.color.cardHeader : theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 10px;
+    border-radius: 6px;
     font: inherit;
     font-size: 0.6875rem;
     appearance: none;
@@ -172,9 +174,11 @@ const SelectWrap = styled.span<{ $phone?: boolean }>`
     ${focusRing}
     ${desktop} { min-block-size: 2.375rem; font-size: 0.875rem; }
   }
-  > svg { position: absolute; inset-inline-end: 10px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
+  > svg { position: absolute; inset-inline-end: 7px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
 `;
 const ReverseButton = styled(IconButton)`
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
   ${desktop} { display: none; }
 `;
 /** Toggle chip: keeps only matches that have a prediction. */
@@ -183,11 +187,11 @@ const PicksToggle = styled.button`
   align-items: center;
   gap: 5px;
   min-block-size: 1.75rem;
-  padding-inline: 9px;
+  padding-inline: 7px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surfaceMuted};
   border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
   font: inherit;
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};

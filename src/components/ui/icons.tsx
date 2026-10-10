@@ -24,5 +24,8 @@ export const HomeIcon = (props: IconProps) => <Icon {...props}><path d="M4 11.5 
 export const LiveIcon = (props: IconProps) => <Icon {...props}>
   <circle cx="12" cy="12" r="2.5" /><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14" />
 </Icon>;
-export const ResultsIcon = (props: IconProps) => <Icon {...props}><path d="M6 20v-7M12 20V5M18 20v-10" /></Icon>;
+/** Finished matches: a completed check. */
+export const ResultsIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="m8 12.5 2.75 2.75L16.5 9.5" /></Icon>;
+/** Performance statistics: a rising line chart. */
+export const StatsIcon = (props: IconProps) => <Icon {...props}><path d="M4 4v16h16M7.5 14.5l3.5-3.5 3 3 5-5.5" /><path d="M15 8.5h4v4" /></Icon>;
 export const MoreIcon = (props: IconProps) => <Icon {...props}><circle cx="5" cy="12" r="1.25" /><circle cx="12" cy="12" r="1.25" /><circle cx="19" cy="12" r="1.25" /></Icon>;

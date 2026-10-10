@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import type { ReportingDate } from "@/domain/calendar";
@@ -12,39 +12,47 @@ import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
 import { focusRing } from "./filter-parts";
 
+const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
 const Bar = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 16px;
-  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; }
+  gap: 8px 16px;
+  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; ${desktop} { font-size: 0.875rem; } }
+  > nav { min-inline-size: 0; max-inline-size: 100%; }
 `;
+/** Always one row: buttons shrink together on narrow phones instead of wrapping. */
 const Pages = styled.ol`
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 2.25rem);
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
+  font-size: 0.8125rem;
+  ${desktop} { gap: 6px; font-size: 0.875rem; }
+  > li { min-inline-size: 0; }
   > li > a, > li > span {
-    display: inline-grid;
+    display: grid;
     place-items: center;
-    min-inline-size: 2.25rem;
-    block-size: 2.25rem;
-    padding-inline: 8px;
+    inline-size: 100%;
+    block-size: 2rem;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 10px;
+    border-radius: 6px;
     font-variant-numeric: tabular-nums;
     text-decoration: none;
+    white-space: nowrap;
     ${focusRing}
+    ${desktop} { block-size: 2.25rem; }
   }
   > li > a:hover { color: ${({ theme }) => theme.color.accent.blue.text}; border-color: ${({ theme }) => theme.color.accent.blue.solid}; }
   > li > a[aria-current="page"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.gradient.action}; border-color: transparent; font-weight: ${({ theme }) => theme.typography.weight.bold}; box-shadow: 0 3px 10px rgb(37 99 235 / 25%); }
-  > li > span[data-gap] { min-inline-size: 1.5rem; background: none; border: 0; color: ${({ theme }) => theme.color.mutedText}; }
+  > li > span[data-gap] { background: none; border: 0; color: ${({ theme }) => theme.color.mutedText}; }
   > li > span[aria-disabled] { color: ${({ theme }) => theme.color.disabledText}; }
   svg { font-size: 1.125rem; }
 `;

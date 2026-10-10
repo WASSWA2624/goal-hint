@@ -86,10 +86,11 @@ export const TopNavList = styled.ul`
   > li { display: flex; position: relative; }
 `;
 
-const topLink = css`
+/** Each section's icon carries its own accent, matching the phone tab bar. */
+const topLink = css<{ $tone?: AccentName }>`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding-inline: 12px;
   color: ${({ theme }) => theme.color.text};
   border-block-end: 3px solid transparent;
@@ -98,6 +99,7 @@ const topLink = css`
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
   cursor: pointer;
+  > svg:first-child { flex: none; font-size: 1.125rem; color: ${({ theme, $tone = "teal" }) => theme.color.accent[$tone].solid}; }
   &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; }
   &[aria-current="page"] {
     color: ${({ theme }) => theme.color.brand};
@@ -106,12 +108,12 @@ const topLink = css`
   }
   ${focusRing}
 `;
-export const TopNavLink = styled(Link)`${topLink}`;
+export const TopNavLink = styled(Link)<{ $tone?: AccentName }>`${topLink}`;
 
-export const MoreMenu = styled.details`
+export const MoreMenu = styled.details<{ $tone?: AccentName }>`
   display: flex;
-  > summary { ${topLink} list-style: none; &::-webkit-details-marker { display: none; } > svg { font-size: 1rem; } }
-  &[open] > summary > svg { transform: rotate(180deg); }
+  > summary { ${topLink} list-style: none; &::-webkit-details-marker { display: none; } > svg:last-child { font-size: 1rem; } }
+  &[open] > summary > svg:last-child { transform: rotate(180deg); }
 `;
 export const MoreList = styled.ul`
   position: absolute;

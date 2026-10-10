@@ -4,7 +4,7 @@ import { cache } from "react";
 import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { TextLink } from "@/components/ui/controls";
-import { ChevronDownIcon, HomeIcon, InfoIcon, LiveIcon, ResultsIcon, SearchIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, HomeIcon, InfoIcon, LiveIcon, ResultsIcon, SearchIcon, StatsIcon } from "@/components/ui/icons";
 import { Container, PageMain } from "@/components/ui/layout";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import {
@@ -62,13 +62,13 @@ export async function PublicShell({ children, locale, current, today: reportingD
           </HomeLink>
           <DesktopNav aria-label={messages.text("navigation.primary")}>
             <TopNavList>
-              {sections.map((section) => <li key={section.key}>
-                <TopNavLink href={section.href} prefetch={false} aria-current={current === section.key ? "page" : undefined}>{section.label}</TopNavLink>
+              {sections.map(({ key, href, label, Icon, tone }) => <li key={key}>
+                <TopNavLink href={href} prefetch={false} $tone={tone} aria-current={current === key ? "page" : undefined}><Icon />{label}</TopNavLink>
               </li>)}
-              <li><TopNavLink href={performanceHref(language)} prefetch={false}>{messages.text("navigation.stats")}</TopNavLink></li>
+              <li><TopNavLink href={performanceHref(language)} prefetch={false} $tone="amber"><StatsIcon />{messages.text("navigation.stats")}</TopNavLink></li>
               <li>
-                <MoreMenu>
-                  <summary aria-current={informationCurrent ? "page" : undefined}>{messages.text("navigation.more")}<ChevronDownIcon /></summary>
+                <MoreMenu $tone="blue">
+                  <summary aria-current={informationCurrent ? "page" : undefined}><InfoIcon />{messages.text("navigation.more")}<ChevronDownIcon /></summary>
                   <MoreList>
                     {informationPages.map((page) => <li key={page}>
                       <TextLink href={informationHref(page, language)} prefetch={false} aria-current={current === page ? "page" : undefined}>
