@@ -50,7 +50,7 @@ const Card = styled.article<{ $family: MarketFamily }>`
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   line-height: 1.3;
   overflow-wrap: anywhere;
   transition: background-color 160ms ease;
@@ -60,10 +60,10 @@ const Card = styled.article<{ $family: MarketFamily }>`
   }
   @media (prefers-reduced-motion: reduce) { transition: none; }
   ${tile} {
-    grid-template-columns: minmax(0, 1fr) auto minmax(6.75rem, 8rem);
+    grid-template-columns: minmax(0, 1fr) auto minmax(6.25rem, 7.5rem);
     grid-template-areas: "league state when" "home home pick" "away away pick" "notes notes notes";
-    gap: 2px 8px;
-    padding: 6px 8px 6px 11px;
+    gap: 1px 8px;
+    padding: 5px 8px 5px 10px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: 0;
     box-shadow: inset 3px 0 0 ${({ theme, $family }) => theme.color.market[$family].solid};
@@ -100,17 +100,17 @@ const League = styled.p`
   ${tile} {
     grid-area: league;
     align-self: center;
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     color: ${({ theme }) => theme.color.mutedText};
-    > svg { font-size: 0.8125rem; }
+    > svg { font-size: 0.75rem; }
   }
   ${table} { grid-column: 3; grid-row: 1; gap: 8px; > svg { font-size: 1rem; } > span { white-space: normal; } }
 `;
 const LeagueLogo = styled.img`
   flex: none;
-  inline-size: 14px;
-  block-size: 14px;
+  inline-size: 12px;
+  block-size: 12px;
   object-fit: contain;
   ${table} { inline-size: 18px; block-size: 18px; }
 `;
@@ -120,7 +120,7 @@ const When = styled.time`
   gap: 4px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  ${tile} { grid-area: when; justify-self: end; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
+  ${tile} { grid-area: when; justify-self: end; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; }
   ${table} { grid-column: 2; grid-row: 1; flex-wrap: wrap; gap: 0 6px; white-space: normal; }
 `;
 const Dot = styled.span`
@@ -129,9 +129,9 @@ const Dot = styled.span`
 `;
 
 const Teams = styled.div`
-  --gh-logo-size: 18px;
+  --gh-logo-size: 16px;
   --gh-logo-radius: 0;
-  --gh-logo-font: 0.5rem;
+  --gh-logo-font: 0.4375rem;
   ${tile} { display: contents; }
   ${table} { --gh-logo-size: 22px; --gh-logo-font: 0.625rem; display: grid; grid-column: 4 / span 3; grid-template-columns: subgrid; align-items: center; }
 `;
@@ -155,9 +155,9 @@ const TeamName = styled.span`
 /** Per-team score for the tile; the table shows the combined score column instead. */
 const TeamScore = styled.span<{ $live: boolean }>`
   flex: none;
-  min-inline-size: 1.25rem;
+  min-inline-size: 1.125rem;
   color: ${({ theme, $live }) => $live ? theme.color.live.text : theme.color.text};
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 800;
   text-align: end;
   font-variant-numeric: tabular-nums;
@@ -190,8 +190,8 @@ const StateChip = styled.span<{ $tone: "live" | "final" | "halted" }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 5px;
-  font-size: 0.625rem;
+  padding: 0 4px;
+  font-size: 0.5625rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: 1.6;
   white-space: nowrap;
@@ -218,14 +218,14 @@ const Pick = styled.div<{ $family: MarketFamily }>`
     justify-content: center;
     gap: 1px;
     min-inline-size: 0;
-    padding: 3px 7px;
+    padding: 2px 6px;
     color: ${({ theme, $family }) => theme.color.market[$family].text};
     background: ${({ theme, $family }) => theme.color.market[$family].soft};
   }
   ${table} { display: grid; grid-column: 7 / span 3; grid-template-columns: subgrid; align-items: center; }
 `;
 const MarketName = styled.span<{ $family: MarketFamily }>`
-  font-size: 0.625rem;
+  font-size: 0.5625rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   ${ellipsis}
   ${table} {
@@ -248,7 +248,7 @@ const Prediction = styled.span<{ $available: boolean }>`
 `;
 const PickLabel = styled.span`
   flex: 1;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   ${ellipsis}
   ${table} { display: none; }
@@ -276,7 +276,7 @@ const Probability = styled.span`
   ${table} { grid-column: 3; gap: 8px; }
 `;
 const Percent = styled.span`
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -295,7 +295,7 @@ const Bar = styled.span<{ $family: MarketFamily }>`
   }
 `;
 const NoPick = styled.span`
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   ${table} { grid-column: 2 / span 2; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
 `;
 const Mark = styled.span<{ $tone: OutcomeTone }>`
@@ -318,7 +318,7 @@ const Notes = styled.ul`
   gap: 4px;
   margin: 0;
   padding: 0;
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   line-height: 1.35;
   list-style: none;
   ${tile} { grid-area: notes; padding-block-start: 2px; }

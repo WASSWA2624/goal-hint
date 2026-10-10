@@ -29,13 +29,14 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   flex: none;
   align-items: center;
   gap: 5px;
-  min-block-size: 1.75rem;
-  padding-inline: 10px;
+  min-block-size: 1.625rem;
+  padding-inline: 9px;
   color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].text : theme.color.text};
   background: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].soft : theme.color.surfaceMuted};
   border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 8px;
-  font-size: 0.75rem;
+  border-radius: 7px;
+  font-size: 0.6875rem;
+  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) { min-block-size: 1.75rem; font-size: 0.75rem; }
   font-weight: ${({ theme, $selected }) => $selected ? theme.typography.weight.bold : theme.typography.weight.body};
   line-height: 1.2;
   white-space: nowrap;
@@ -77,8 +78,8 @@ export const IconButton = styled.button`
   display: inline-grid;
   flex: none;
   place-items: center;
-  inline-size: 2rem;
-  block-size: 2rem;
+  inline-size: 1.875rem;
+  block-size: 1.875rem;
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: transparent;
@@ -193,11 +194,11 @@ export const Segmented = styled.div`
   > a {
     display: grid;
     place-items: center;
-    min-block-size: 1.875rem;
-    padding-inline: 12px;
+    min-block-size: 1.75rem;
+    padding-inline: 11px;
     color: ${({ theme }) => theme.color.text};
     border-radius: 7px;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     white-space: nowrap;
     text-decoration: none;

@@ -60,17 +60,20 @@ const EmptyContainer = styled.section`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.radius};
   overflow-wrap: anywhere;
+  @media (max-width: 63.99rem) { padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md}; font-size: 0.75rem; }
 `;
 
 const EmptyTitle = styled.h2`
   margin: 0;
   font-size: ${({ theme }) => theme.typography.size.h3};
+  @media (max-width: 63.99rem) { font-size: 0.875rem; }
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: ${({ theme }) => theme.typography.lineHeight.heading};
 `;
 
 const EmptyDescription = styled.div`
   margin-block-start: ${({ theme }) => theme.space.sm};
+  @media (max-width: 63.99rem) { margin-block-start: 2px; }
   color: ${({ theme }) => theme.color.mutedText};
 `;
 

@@ -55,6 +55,14 @@ export const GlobalStyle = createGlobalStyle`
   h2 { font-size: ${({ theme }) => theme.typography.size.h2}; }
   h3 { font-size: ${({ theme }) => theme.typography.size.h3}; }
 
+  /* Phones and tablets use a denser type scale; desktop keeps the base sizes. */
+  @media (max-width: 63.99rem) {
+    body { font-size: 0.875rem; line-height: 1.5; }
+    h1 { font-size: 1.375rem; }
+    h2 { font-size: 1.125rem; }
+    h3 { font-size: 1rem; }
+  }
+
   :where(a) {
     color: ${({ theme }) => theme.color.brand};
     text-decoration-thickness: 0.08em;

@@ -15,18 +15,19 @@ const field = css`
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-block-size: 2.125rem;
-  padding-inline: 10px;
+  gap: 5px;
+  min-block-size: 1.875rem;
+  padding-inline: 9px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 8px;
+  border-radius: 7px;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   white-space: nowrap;
+  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) { min-block-size: 2.375rem; font-size: 0.875rem; }
   cursor: pointer;
-  > svg { flex: none; font-size: 0.9375rem; }
+  > svg { flex: none; font-size: 0.875rem; }
   > svg:first-child { color: ${({ theme }) => theme.color.accent.teal.solid}; }
   &:hover { border-color: ${({ theme }) => theme.color.accent.teal.solid}; }
   ${focusRing}
@@ -150,10 +151,10 @@ const Stepper = styled.div`
   > a, > span {
     display: grid;
     place-items: center;
-    inline-size: 2.125rem;
-    min-block-size: 2rem;
+    inline-size: 2rem;
+    min-block-size: 1.75rem;
     color: ${({ theme }) => theme.color.accent.blue.text};
-    font-size: 1rem;
+    font-size: 0.9375rem;
     &:hover { background: ${({ theme }) => theme.color.accent.blue.soft}; }
     ${focusRing}
   }

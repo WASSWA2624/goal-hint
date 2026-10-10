@@ -208,12 +208,12 @@ export const TabLink = styled(Link)<{ $tone: AccentName }>`
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-block-size: 3.75rem;
+  min-block-size: 3.125rem;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.8125rem;
+  font-size: 0.625rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
-  > svg { font-size: 1.5rem; }
+  > svg { font-size: 1.25rem; }
   &[aria-current="page"] {
     color: ${({ theme, $tone }) => theme.color.accent[$tone].solid};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -232,7 +232,7 @@ export const TabLink = styled(Link)<{ $tone: AccentName }>`
 `;
 
 export const Footer = styled.footer`
-  padding-block: ${({ theme }) => theme.space.lg} calc(${({ theme }) => theme.space.lg} + 4rem + env(safe-area-inset-bottom));
+  padding-block: ${({ theme }) => theme.space.lg} calc(${({ theme }) => theme.space.lg} + 3.25rem + env(safe-area-inset-bottom));
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   ${desktop} { padding-block-end: ${({ theme }) => theme.space.lg}; }
 
