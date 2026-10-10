@@ -73,7 +73,10 @@ database. The existing development watcher reloads `.env.local` changes.
 Keep the data directory across code updates. Do not use a migration reset or
 delete the installation to resolve a connection failure. Inspect the private
 server log and credentials, check port ownership and use reviewed forward
-migrations. Backup/restore policy remains with prompts 045/046 and the owner.
+migrations. Prompt 045 adds encrypted backup/restore tooling and a disposable
+local drill; see [backup runbook](backup-restore.md). The owner keeps recovery
+objectives, ownership, retention and hosted PITR unresolved. No backup schedule,
+binlog setting, source-data deletion or restore is applied to this instance.
 Database readiness does not approve provider calls, forecasts, publication,
 recovery credentials, indexing or production release.
 

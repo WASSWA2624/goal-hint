@@ -8,6 +8,11 @@ infrastructure budgets remain owner-supplied decisions. See the current
 [decision register](implementation-decisions.md) and actual
 [verification results](development-progress.md).
 
+Prompt 045 implements private encrypted snapshot/isolated restore tooling and
+local PITR verification. [Backup and restore](backup-restore.md) records the
+current local-only scope, grants/compatibility and safe worker/quota restart.
+Hosted backup transport, live objectives/retention and DR proof remain blocked.
+
 The separately authorized local MySQL 8.4 development instance and its private
 start/stop/configuration procedures are documented in
 [local-database.md](local-database.md). Hosted and production approvals remain open.

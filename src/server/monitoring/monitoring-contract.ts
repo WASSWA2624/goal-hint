@@ -31,7 +31,8 @@ export const monitoringPolicySchema = z.strictObject({ version: z.literal(1), ev
 export type MonitoringPolicy = z.infer<typeof monitoringPolicySchema>;
 export const operationMetrics = ["available", "missing-runs", "partial-runs", "stalled-runs", "failed-jobs", "stalled-jobs",
   "source-failures", "cutoff-misses", "missing-locks", "stale-data", "poller-missing", "unresolved-results",
-  "poller-delayed", "result-backlog", "final-badge-delays", "delayed-results", "recovery-failures", "recovery-completed", "jobs-completed", "job-duration-ms", "job-duration-count"] as const;
+  "poller-delayed", "result-backlog", "final-badge-delays", "delayed-results", "recovery-failures", "recovery-completed", "jobs-completed", "job-duration-ms", "job-duration-count",
+  "backup-failures", "backup-stale", "restore-verification-pending"] as const;
 export type OperationMetric = typeof operationMetrics[number];
 export const budgetCategories = ["football", "ai", "research", "database", "hosting", "monitoring", "network", "domain"] as const;
 export type BudgetCategory = typeof budgetCategories[number];

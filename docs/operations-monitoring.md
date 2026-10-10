@@ -1,5 +1,13 @@
 # Private operations monitoring
 
+Prompt 045 adds optional approved backup-health evidence to this inspector:
+fixed `backup-failures`, `backup-stale`, `restore-verification-pending` metrics
+reuse the deduplicated alert outbox. The trusted binding supplies `backup.read`
+and `backup.verify`, including explicit approved maximum snapshot/archive/drill
+ages. Missing, malformed, stale, future or revoked evidence remains null/pending;
+it cannot clear an incident. No live backup adapter, cadence or destination is
+enabled. See [backup and restore](backup-restore.md).
+
 Prompt 044 implements private read-only operational inspection and a bounded,
 durable alert outbox. **The owner explicitly chose local verification only.**
 There is no approved incident owner, destination, monitoring/hosting provider,

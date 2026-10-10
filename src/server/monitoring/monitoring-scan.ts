@@ -4,18 +4,21 @@ import { addReportingDays, createPredictionWindow, getReportingDate, utcInstantF
 import type { DatabaseRuntime } from "../database/client.ts";
 import { operatingRules } from "../config/runtime-policy.ts";
 import { quotaAccountStateSchema, quotaPeriodStateSchema } from "../football/quota-mysql-store.ts";
+import { assessBackupHealth, type BackupMonitoringSource } from "./monitoring-backup.ts";
 import { authorizeMonitoring, monitoringPolicySchema, monitoringSnapshotSchema, monitoringReasons, operationMetrics,
   parseMonitoring, type MonitoringAuthority, type MonitoringCost, type MonitoringSnapshot } from "./monitoring-contract.ts";
 
 /** Aggregate reads only; no provider calls, lease acquisition or forecast/recovery mutations. */
 export function createMonitoringInspector(options: Readonly<{ database: DatabaseRuntime; policy: unknown;
-  authority: MonitoringAuthority; costs?: () => Promise<readonly MonitoringCost[]> }>) {
+  authority: MonitoringAuthority; costs?: () => Promise<readonly MonitoringCost[]>; backup?: BackupMonitoringSource }>) {
   const policy = parseMonitoring(monitoringPolicySchema, options.policy);
   return Object.freeze({ async inspect(): Promise<MonitoringSnapshot> {
     await authorizeMonitoring(options.authority, policy, "inspect");
     let costs: readonly MonitoringCost[] = [];
     try { costs = await options.costs?.() ?? []; } catch { /* Missing billing evidence stays pending. */ }
     costs = parseMonitoring(monitoringSnapshotSchema.shape.costs, costs);
+    let backupEvidence: unknown;
+    try { backupEvidence = await options.backup?.read(); } catch { /* Backup status remains pending. */ }
     await authorizeMonitoring(options.authority, policy, "inspect");
     try {
       const snapshot = await options.database.transaction(async (tx) => {
@@ -25,6 +28,7 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
         const t = policy.thresholds;
         const metrics = Object.fromEntries(operationMetrics.map((key) => [key, 0])) as MonitoringSnapshot["metrics"];
         metrics.available = 1;
+        Object.assign(metrics, assessBackupHealth(backupEvidence, at, policy.evidenceMaxAgeMs, options.backup?.verify));
         const runs = await tx.dailyRun.findMany({ where: { eatDate: { gte: new Date(`${firstDate}T00:00:00Z`), lte: new Date(`${today}T00:00:00Z`) } },
           select: { id: true, eatDate: true, createdAt: true, committedAt: true, partial: true, totalJobs: true, terminalJobs: true,
             jobs: { orderBy: { updatedAt: "desc" }, take: 1, select: { updatedAt: true } } }, take: 7 });

@@ -10,9 +10,10 @@ import { createOperationsMonitor, type MonitoringSink } from "./monitoring-alert
 import { createMysqlMonitoringStore } from "./monitoring-mysql-store.ts";
 import { createMonitoringInspector } from "./monitoring-scan.ts";
 import { discoveryMeasurementStatus } from "./monitoring-evidence.ts";
+import type { BackupMonitoringSource } from "./monitoring-backup.ts";
 
 export type MonitoringBinding = Readonly<{ policy: unknown; authority: MonitoringAuthority; sink?: MonitoringSink;
-  verifyDatabaseEvidence?: EvidenceVerifier; costs?: () => Promise<readonly MonitoringCost[]>; close?(): Promise<void> }>;
+  verifyDatabaseEvidence?: EvidenceVerifier; costs?: () => Promise<readonly MonitoringCost[]>; backup?: BackupMonitoringSource; close?(): Promise<void> }>;
 /** Trusted operator module, never a path supplied by a public request. No bundled live authorization. */
 export async function runMonitoringCommand(args: readonly string[], signal: AbortSignal) {
   const [mode, flag, path, ...rest] = args;
@@ -28,7 +29,8 @@ export async function runMonitoringCommand(args: readonly string[], signal: Abor
     if (signal.aborted || mode === "notify" && !binding.sink) return monitoringFail("invalid-input");
     const database = createDatabase(runtime, binding.verifyDatabaseEvidence);
     try {
-      const inspector = createMonitoringInspector({ database, policy, authority: binding.authority, ...(binding.costs ? { costs: binding.costs } : {}) });
+      const inspector = createMonitoringInspector({ database, policy, authority: binding.authority, ...(binding.costs ? { costs: binding.costs } : {}),
+        ...(binding.backup ? { backup: binding.backup } : {}) });
       const snapshot = await inspector.inspect();
       if (mode === "inspect") return { snapshot, discovery: discoveryMeasurementStatus };
       const monitor = createOperationsMonitor({ policy, authority: binding.authority,

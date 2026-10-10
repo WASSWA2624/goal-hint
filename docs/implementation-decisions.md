@@ -268,7 +268,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-28 Verified public contact route | **Unresolved release blocker; unavailable page implemented** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. Existing owner deferrals persist; 041 displays unavailable status and report guidance, not an operational intake. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
 | OP-29 Recovery watchdog ownership and thresholds | **Unresolved / live activation blocked** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Prompt 043 implements private CLI inspection, reviewed durable recovery and an operator runbook; synthetic settings do not approve live thresholds. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization, independent invocation frequency and recovery/incident owner | **043** |
 | OP-30 Alerts, destinations and monitoring service | **Local verification only; live activation blocked by owner decision** | Prompt 044 implements authenticated private aggregate inspection, bounded MySQL alert state/fenced delivery and a local test sink. The owner explicitly keeps incident ownership, destinations, thresholds and retention unresolved. Approve the authorized monitoring service, actual outage/staleness/latency/quota/cost/expiry thresholds, recipients, privacy/retention and independent supervision before live activation; no external test message is authorized. §§11, 13–15. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget; see `docs/operations-monitoring.md` | **044** |
-| OP-31 Recovery objectives, backups and history retention | **Unresolved / evidence required** | Approve RPO/RTO, backup/PITR capabilities, encryption/access/retention and ownership for predictions, results, evidence, audits and structured source data within rights. Prove isolated restoration and safe limiter/job restart. No arbitrary deletion period or completed restore is inferred. §§13, 15; prompt 045. | Unassigned; user decision/evidence required | Deferred: RPO/RTO, backup/PITR and prediction/result/evidence/audit/backup retention policy | **045**; source retention prerequisites **009/011**, visitor notice **039** |
+| OP-31 Recovery objectives, backups and history retention | **Local verification only; live recovery blocked by owner decision** | For 045 the owner explicitly keeps ownership, RPO/RTO, retention and hosted storage/PITR unresolved. Implement encrypted private snapshots, isolated restoration/log replay, integrity/access and conservative worker/quota acceptance locally. No live schedule, production restore, deletion period, approved objective or hosted DR proof is inferred. See `docs/backup-restore.md`. §§13, 15. | Unassigned; user decision/evidence required for live recovery | Deferred: approved RPO/RTO, backup/PITR hosting, key escrow/access, snapshot/archive cadence and per-class source/history/backup retention | **045 local scope**; hosted proof **046/048**; source permissions **009/011**, visitor notice **039** |
 | OP-32 Hosted deployment and account isolation | **Unresolved / evidence required** | Confirm actual web/database/queue/long-lived worker/poller infrastructure, scheduler/workload identity and authorized access. Choose account sharing vs genuinely separate provider accounts, durable cross-environment limits and poller observation/ownership transfer. Separate databases cannot create extra provider capacity. §§9, 11, 14–15; prompt 046. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE`, infrastructure/provider/budget references; Deferred: environment isolation, hosted runtime and poller ownership plan | **046**; database/queue choices earlier **003/020** |
 | OP-33 Quality qualification and measured commitments | **Evidence required** | Accumulate real prospective samples under the frozen protocol; prove market/source/horizon quality and coverage, calibrated-claim eligibility, full-slate cost/capacity and cadence/latency targets. Simulated load is not elapsed shadow observation or unapproved paid-call authority. §§8, 14–15; prompt 047. | Unassigned; user evidence/commitment decision required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: qualification report and approved measurement-supported commitments | **047**, with protocol choices fixed **014** |
 | OP-34 Release decision and signoff | **Unresolved / evidence required** | Assign production release authority and record actual go/no-go evidence tied to build/configuration. All required rights/account/budget/quality/recovery/monitoring/legal gates must pass; an environment reference cannot substitute for missing evidence or owner approval. §§14–15; prompt 048. | Unassigned; user decision/evidence required | `GOAL_HINT_RELEASE_APPROVAL_REF`, `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_OPERATION_SCOPE=production`; Deferred: release owner and readiness report | **048** |
@@ -2797,3 +2797,56 @@ OP-25/27/28 publication/legal/contact blockers and OP-29/30/31/32 operating gate
 remain open. The local database schema/grants can support this implementation,
 but its monitoring row stays empty and no live monitor/sink/scheduler is enabled.
 Prompt 045 has not been started.
+
+## 045 Backup and isolated restore verification
+
+The owner explicitly selected **keep unresolved; verify locally only** on
+10 October 2026. OP-31 remains a live release blocker. No primary/backup recovery
+owner, RPO/RTO, source/history/backup retention, hosted storage/PITR capability,
+key escrow or scheduled cadence is approved by this implementation.
+
+- Private one-shot commands require a trusted operator binding, full-policy
+  authorization, storage/access verification and a verified writer/DDL fence.
+  Local mode accepts only process-owned disposable MySQL sources. No public
+  recovery route, permissive live binding, persistent database change, scheduler,
+  provider call, paid service or production restore is introduced.
+- InnoDB snapshots stream through gzip and AES-256-GCM, with authenticated source
+  identity, exact binlog coordinate, migration checksums, schema/dependency hashes,
+  grants/policy references and complete table inventories. Snapshot consistency,
+  table counts/row hashes, foreign keys and trigger definitions must match.
+  Encryption keys/credentials stay outside Git. Test keys are ephemeral; live
+  access, ACLs, independent encrypted storage and key recovery require proof.
+- The local ROW-log archive seals contiguous closed logs and a recovery-point
+  catalog. Replay uses one mysqlbinlog process and one SQL session through an
+  exact completed-transaction position. Hosted log transport is deliberately
+  unavailable until the selected infrastructure is qualified; the runbook gives
+  the configuration, privileges, overlap, retention and off-host drill steps.
+- Restore authenticates artifacts and exact schema/release compatibility before
+  creating a new owned target. There is no target-URL or promotion operation.
+  Events are disabled, workload credentials are absent, and a required trusted
+  verifier checks history/access and conservative reconciliation. Only reviewed
+  database-scoped principals/trigger definers are recreated with fresh secrets;
+  server accounts and old authentication material are not imported.
+- Original forecasts, evidence/publication clocks, canonical IDs, locked/current
+  references, manifests, audit/correction history and idempotency receipts remain
+  authoritative. Existing fenced recovery transitions handle stale leases. Before
+  any future outbound activation, independently establish current account-wide
+  capacity, reconcile lost/uncertain dispatches conservatively and use the
+  existing counted reset-probe protocol. An older backup cannot grant spending
+  capacity, reopen a closed cycle or duplicate a published forecast.
+- Permission revocations, expiry and deletion obligations must be reapplied from
+  an independent current record before any future promotion. Integrity does not
+  grant reuse rights or unlimited retention. Privacy inventory records actual
+  synthetic local artifacts and possible future cache/source/operational data;
+  public retention claims and the no-visitor-analytics implementation stay as-is.
+- Allowlisted backup events measure elapsed time and recoverable UTC points.
+  The private monitor accepts only fresh approved aggregate backup evidence and
+  explicit age limits; absent or unverified evidence stays pending. No live sink
+  or threshold is inferred. Local restore duration includes allocation, import,
+  verification, reconciliation checks and cleanup, but excludes live incident
+  response/promotion. Null objectives are reported as **unapproved**.
+
+See [backup and restore runbook](backup-restore.md) for procedures and
+[development evidence](development-progress.md) for executed checks. OP-08/13/26/
+29/30/31/32 and existing legal/contact/source/model/release gates remain open.
+Prompt 046 has not been started.

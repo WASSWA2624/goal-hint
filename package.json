@@ -52,6 +52,8 @@
     "monitoring": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/monitoring.ts",
     "test:monitoring": "node --conditions=react-server --test --test-isolation=none --test-concurrency=1 tests/operations-monitoring.test.mjs tests/operations-monitoring.integration.mjs",
     "test:monitoring:overhead": "node --conditions=react-server scripts/verify-monitoring-overhead.mjs",
+    "backup": "node --conditions=react-server --env-file-if-exists=.env.local scripts/backup.mjs",
+    "test:backup": "node --conditions=react-server --test --test-concurrency=1 tests/backup-restore.test.mjs tests/backup-restore.integration.mjs",
     "test:results": "node --conditions=react-server --test tests/result-sync.test.mjs tests/result-sync.integration.mjs",
     "test:settlement": "node --conditions=react-server --test tests/market-settlement.test.mjs tests/market-settlement.integration.mjs",
     "test:feed": "node --conditions=react-server --test tests/match-feed.test.mjs tests/match-feed.integration.mjs",

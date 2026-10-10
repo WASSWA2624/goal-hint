@@ -6,7 +6,7 @@ import { budgetCategories, monitoringSnapshotSchema, parseMonitoring, type Monit
 export const alertRules = ["outage", "missing-runs", "partial-runs", "stalled-runs", "failed-jobs", "stalled-jobs", "source-failures",
   "cutoff-misses", "missing-locks", "stale-data", "poller-missing", "poller-delayed", "result-backlog", "final-badge-delays", "delayed-results", "recovery-failures", "quota-pressure",
   "essential-reserve", "rate-limited", "reset-pending", "credential-failure", "subscription-expired", "subscription-expiry",
-  "cost-pressure", "cost-cap", "evidence-pending"] as const;
+  "cost-pressure", "cost-cap", "evidence-pending", "backup-failures", "backup-stale", "restore-verification-pending"] as const;
 export type AlertRule = typeof alertRules[number];
 export type AlertCondition = Readonly<{ rule: AlertRule; scope: "application" | typeof budgetCategories[number];
   active: boolean | null; severity: "warning" | "critical"; value: number | string | null }>;
@@ -19,10 +19,12 @@ export function evaluateMonitoring(input: unknown, policy: MonitoringPolicy): re
     conditions.push({ rule, scope, active, value, severity });
   add("outage", "application", snapshot.metrics.available === null ? null : snapshot.metrics.available === 0, snapshot.metrics.available, "critical");
   for (const rule of ["missing-runs", "partial-runs", "stalled-runs", "failed-jobs", "stalled-jobs", "source-failures",
-    "cutoff-misses", "missing-locks", "stale-data", "poller-missing", "poller-delayed", "result-backlog", "final-badge-delays", "delayed-results", "recovery-failures"] as const) {
+    "cutoff-misses", "missing-locks", "stale-data", "poller-missing", "poller-delayed", "result-backlog", "final-badge-delays", "delayed-results", "recovery-failures",
+    "backup-failures", "backup-stale", "restore-verification-pending"] as const) {
     const value = snapshot.metrics[rule];
-    add(rule, "application", value === null ? null : value >= t.failureCount, value,
-      ["missing-locks", "cutoff-misses", "failed-jobs", "missing-runs"].includes(rule) ? "critical" : "warning");
+    const threshold = rule === "backup-stale" || rule === "restore-verification-pending" ? 1 : t.failureCount;
+    add(rule, "application", value === null ? null : value >= threshold, value,
+      ["missing-locks", "cutoff-misses", "failed-jobs", "missing-runs", "backup-failures", "backup-stale"].includes(rule) ? "critical" : "warning");
   }
   const q = snapshot.quota;
   for (const [rule, active, value] of [

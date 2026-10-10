@@ -40,9 +40,9 @@ const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEv
   'FixtureResult','ResultProviderObservation','SettlementBatch','MarketSettlementRevision','SettlementEventReceipt'];
 const target = (state) => ({ fixtureId: state.fixture.id, cycleId: state.cycle.id });
 
-export async function withPredictionPipeline(t, operation) {
+export async function withPredictionPipeline(t, operation, instanceOptions) {
   let instance;
-  try { instance = await startIsolatedMysql(); }
+  try { instance = await startIsolatedMysql(instanceOptions); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(`${error.message} Cutoff acceptance remains pending.`); return; }
   t.diagnostic(`Owned MySQL ${instance.version}; synthetic policies, clocks and forecasts, no provider calls.`);
   const migrationPassword = randomBytes(24).toString('hex'), appPassword = randomBytes(24).toString('hex');

@@ -128,6 +128,15 @@ test('private monitoring collection and durable alert delivery on isolated genui
         const snapshot = await createMonitoringInspector({ database, policy, authority }).inspect();
         assert.equal(snapshot.metrics.available, 1);
         assert.deepEqual(snapshot.costs, []); // Actual billing integrations are pending, never zeroed.
+        assert.equal(snapshot.metrics['backup-failures'], null);
+        assert.equal(snapshot.metrics['backup-stale'], null);
+        const approved = await createMonitoringInspector({ database, policy, authority, backup: {
+          read: async () => ({ evidenceRef: 'synthetic-backup-evidence', measuredAt: Date.now(),
+            snapshotAt: Date.now() - 1000, archiveAt: Date.now() - 1000, restoreAt: Date.now() - 1000,
+            failureCount: 0, snapshotMaxAgeMs: 60_000, archiveMaxAgeMs: 60_000, restoreMaxAgeMs: 60_000 }), verify: () => true,
+        } }).inspect();
+        assert.equal(approved.metrics['backup-stale'], 0);
+        assert.equal(approved.metrics['restore-verification-pending'], 0);
       } finally { await database.disconnect(); }
     });
   });

@@ -3580,3 +3580,69 @@ pages/CTR have no authorized source, and returning visits/match-detail visitor
 use remain disabled. No production traffic percentile, uptime, final paid bill,
 provider qualification or live notification delivery is claimed. Existing
 OP-25/27/28 publication/legal/contact and source/model/quality gates persist.
+
+## 045 — Backup and restore (10 October 2026)
+
+**Status:** local implementation and acceptance complete; tracker 045 checked.
+The owner explicitly chose **keep unresolved; verify locally only**. Live
+recovery ownership, RPO/RTO, retention, storage/PITR and scheduled operation
+remain release blockers. Prompt 046 has not been started.
+
+**Changed files and behavior:**
+
+- `scripts/backup.mjs`, `scripts/lib/backup-{contract,crypto,engine}.mjs` and
+  `scripts/lib/mysql-{backup,tools}.mjs` implement private one-shot encrypted
+  snapshot, owned-log archive and disposable base/PITR restore. A trusted binding
+  verifies full policy, storage/access, writer/DDL fencing and current approvals.
+  There is no bundled live authorization, production target or promotion command.
+  Artifacts authenticate identity, exact coordinates, compatibility and inventory;
+  credentials/keys stay outside Git and raw private diagnostics are withheld.
+- `scripts/lib/isolated-mysql.mjs` reuses the existing ownership-checked local
+  server helper, with an explicit opt-in ROW-binlog drill and disabled events.
+  `tests/helpers/mysql-instance.mjs` preserves its existing import interface;
+  `tests/prediction-pipeline.mjs` accepts optional isolated instance settings.
+  No installed service, persistent database setting or application schema changed.
+- `src/server/monitoring/monitoring-backup.ts` and the existing monitoring
+  contract/rules/scan/command accept fresh approved aggregate backup evidence.
+  Fixed backup-failure, stale-backup and pending-restore conditions reuse the
+  private deduplicated outbox; missing/unverified evidence stays pending.
+  No live adapter, destination, visitor analytics or arbitrary cadence is enabled.
+- `tests/backup-restore.{test,integration}.mjs`,
+  `tests/helpers/backup-fixtures.mjs` and monitoring SQL assertions exercise
+  encryption, corruption, authorization, log continuity, real restoration,
+  permissions, original history and conservative worker/quota restart.
+  `package.json` adds `backup` and `test:backup`; `.gitignore` excludes artifacts.
+- `docs/backup-restore.md` supplies local/operator procedures, exact hosted
+  qualification steps, compatible rollback, source-permission reconciliation,
+  safe resumption and health requirements. Database/local-database/monitoring/
+  privacy inventories and implementation decisions record actual local scope and
+  unresolved release requirements without inventing retention or public promises.
+
+**Executed evidence:**
+
+| Check | Actual result |
+| --- | --- |
+| Encrypted backup and real restore | **9 passed, zero failures/skips**: `npm run test:backup`, genuine isolated MySQL Community Server **8.4.11**; `.tmp/045-restore-final.log`. Synthetic source, 19 migrations, 62 application models plus migration history (**63 tables**), two immutable forecasts, sealed manifests, locked/current references, schedule correction, recovery audits, result/settlement corrections and a counted uncertain dispatch. Base import and two-log replay matched complete-row counts/hashes, schema, FKs/orphan checks and triggers. Wrong keys/corruption and broken chains refuse; tampering refuses before account preparation. |
+| Measured recovery | Base restore **19,103 ms**, recoverable UTC **2026-10-10T06:17:17.203Z**; two-log PITR **13,300 ms**, recoverable UTC **2026-10-10T06:17:22.724Z**. Durations include target creation, import/replay, verification/reconciliation and cleanup. RPO/RTO comparison is **unapproved**; these are local observations, not hosted disaster-recovery qualification or future incident/cutover times. |
+| Restored access and safe restart | Fresh scoped principals/definers; events disabled; no initial app identity/provider credentials. Application DELETE against protected history, DDL and migration-history access are denied. Restored evidence is rebuilt under current authority, then revocation and expiry deny reuse without changing stored content. Publication/cutoff receipts return the original forecast, stale acknowledgement fails, expired work stays expired, and independently verified synthetic exhausted capacity prevents outbound reservation; older larger capacity cannot refill it and the next unconfirmed reset stays blocked. No upstream call occurs. |
+| Monitoring regression | **16 passed, zero failures/skips**: `npm run test:monitoring`; `.tmp/045-monitoring-final.log`. Genuine MySQL verifies existing collection/delivery/recovery/retention/grants and single-connection collection with pending or explicitly approved backup health. |
+| Whole unit suite | **970 passed, zero failures, one existing Windows/POSIX-mode skip** (971 checks): `node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`; `.tmp/045-unit-all.log`. Final backup units also passed in the restore command after import cleanup and the restored-evidence test correction. |
+| Static/build | Whole-repository lint, Next type generation/TypeScript, production build and whitespace checks passed: `.tmp/045-{lint-final,typecheck-final,build-final}.log`. Configured-credential review passed across all 28 changed/untracked files without exposing values; no local environment/admin file is included. No schema migration was needed. |
+
+Initial drill attempts exposed a slow per-table process collector, a Windows
+table-name casing assumption and a test that passed a deserialized snapshot to
+an in-process prepared-object assertion. The collector now batches queries;
+tests handle server casing and rebuild evidence with the same verified authority
+before exercising revocation/expiry. Final clean disposable drills passed;
+earlier attempts are not acceptance evidence. Owned sources, targets and artifacts
+were cleaned up. Existing XAMPP, persistent MySQL and development processes were
+left running.
+
+**Remaining release blockers:** OP-31 primary/backup owner, numeric RPO/RTO,
+approved snapshot/archive/drill cadence, per-class source/history/backup/binlog
+retention, storage/failure-domain/provider capability, TLS/access/key escrow and
+off-host restore proof; OP-08/13 permission-compatible reuse/deletion obligations;
+OP-26/30 telemetry retention and independently supervised approved alerts;
+OP-12/14/32 infrastructure budget/hosting; existing legal/contact/source/model/
+quality/release approval gates. There is no live backup schedule, hosted log
+transport, source-data deletion, production restore or claimed DR completion.
