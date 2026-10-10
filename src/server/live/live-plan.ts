@@ -11,7 +11,7 @@ import type { CutoffPolicy } from "../predictions/cutoff-contract.ts";
 import type { LifecyclePolicy } from "../predictions/lifecycle-contract.ts";
 import type { PublicationPolicy } from "../predictions/publication-contract.ts";
 import { refreshReference } from "../refresh/refresh-input.ts";
-import type { RefreshMember, RefreshPlan } from "../refresh/refresh-contract.ts";
+import { refreshFail, type RefreshMember, type RefreshPlan } from "../refresh/refresh-contract.ts";
 import type { ResultSyncPolicy } from "../results/result-sync-contract.ts";
 import type { SelectionPolicy } from "../selection/selection-contract.ts";
 
@@ -22,23 +22,29 @@ export const REFRESH_REQUESTS_PER_JOB = 2;
 const SELECTION_REQUESTS = 14; // Seven dates with one retry each.
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
 
+/** "slow" plans allow under one request per second, so a provider call may wait most of a rolling minute for a slot. */
+export type RefreshPacing = "standard" | "slow";
 export type LiveWorkload = Readonly<{
   dailyLimit: number; refreshCapacity: number; refreshFloor: number; workers: number; importDays: number;
+  pacing: RefreshPacing; refreshLeadMs: number;
   cadence: NonNullable<ResultSyncPolicy["cadence"]>; unresolved: ResultSyncPolicy["unresolved"]; corrections: ResultSyncPolicy["corrections"];
   maxBatchesPerTick: number;
 }>;
 /** Sizes work from the verified account limit so a plan change needs no code change.
  * A quarter of the day goes to result polling and refresh jobs stop above a floor
  * that keeps tomorrow's selection and result checks possible. */
-export function liveWorkload(dailyLimit: number, secondLimit: number, plan = ""): LiveWorkload {
+export function liveWorkload(dailyLimit: number, secondLimit: number, plan = "", minuteLimit = Number.POSITIVE_INFINITY): LiveWorkload {
   const usable = Math.min(dailyLimit, operatingRules.football.requestsPerProviderDay);
   const resultsShare = Math.max(4, Math.floor(usable * 0.25));
   const dateMs = clamp(Math.ceil(DAY / resultsShare / MINUTE) * MINUTE, MINUTE, 2 * HOUR);
   const activeMs = dateMs;
   const reserve = Math.max(SELECTION_REQUESTS, Math.floor(usable * 0.1));
   const refreshCapacity = clamp(Math.floor((usable - SELECTION_REQUESTS - resultsShare - reserve) / REFRESH_REQUESTS_PER_JOB), 0, 2000);
+  const pacing: RefreshPacing = minuteLimit < 60 ? "slow" : "standard", workers = clamp(Math.floor(secondLimit / 2), 1, 6);
+  // Selected fixtures must still be refreshable once the queue reaches them: skip cutoffs closer than the queue's drain time.
+  const refreshLeadMs = clamp(Math.ceil(refreshCapacity / workers) * refreshEnvelopeFor(pacing).timeoutMs, 10 * MINUTE, 2 * HOUR);
   return Object.freeze({
-    dailyLimit, refreshCapacity, refreshFloor: Math.min(usable, resultsShare + reserve), workers: clamp(Math.floor(secondLimit / 2), 1, 6),
+    dailyLimit, refreshCapacity, refreshFloor: Math.min(usable, resultsShare + reserve), workers, pacing, refreshLeadMs,
     // API-Football's free plan serves date queries only around today (observed coverage-error beyond tomorrow).
     importDays: plan.trim().toLowerCase() === "free" ? 2 : 7,
     // The 15-second shared live feed costs ~5,760 requests on a busy day; smaller plans observe live status through date sync.
@@ -70,15 +76,20 @@ export function liveReferences(policy: RuntimePolicy): LiveReferences {
 
 export const refreshEnvelope = Object.freeze({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, maxAttempts: 16, timeoutMs: 120_000,
   leaseMs: 30_000, fallbackReserveMs: 60_000, backoff: Object.freeze({ baseMs: MINUTE, maxMs: HOUR }) });
+/** Slow plans give both provider calls time to wait out a full rolling minute, plus publication. */
+export function refreshEnvelopeFor(pacing: RefreshPacing) {
+  return pacing === "slow" ? Object.freeze({ ...refreshEnvelope, timeoutMs: 5 * MINUTE, fallbackReserveMs: 200_000 }) : refreshEnvelope;
+}
 export function selectionPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload): SelectionPolicy {
   const competitionIds = policy.choices.competitionIds;
   if (competitionIds === null) throw new Error("Missing GOAL_HINT_COMPETITION_IDS.");
   return Object.freeze({ version: 1, evidenceRef: refs.selection, competitionIds, eligibleStatuses: ["scheduled"] as const,
     degradationPolicyRef: refs.degradation, retentionEvidenceRef: refs.retention, leaseMs: 120_000, attemptsPerInvocation: 2,
     maxFixtures: 10_000, refreshCapacity: workload.refreshCapacity, ...(workload.importDays < 7 ? { importDays: workload.importDays } : {}),
+    refreshLeadMs: workload.refreshLeadMs,
     importBounds: { priority: "daily-inputs" as const, deadlineMs: 10 * MINUTE, timeoutMs: 30 * SECOND, maxRequests: 2, maxPages: 1,
       maxRows: 5000, maxResponseBytes: 40_000_000, retry: { maxAttempts: 6, baseDelayMs: 2 * SECOND, maxDelayMs: 10 * SECOND }, cacheMaxAgeMs: 0 },
-    refresh: { ...refreshEnvelope, payload: { policyRef: refs.refresh } } });
+    refresh: { ...refreshEnvelopeFor(workload.pacing), payload: { policyRef: refs.refresh } } });
 }
 export const selectionTriggerBounds = Object.freeze({ maxAttempts: 16, timeoutMs: 45 * MINUTE, leaseMs: MINUTE, fallbackReserveMs: 0,
   backoff: Object.freeze({ baseMs: MINUTE, maxMs: HOUR }), expiresAfterMs: 2 * DAY }) satisfies
@@ -130,18 +141,30 @@ export function resultSyncPolicy(refs: LiveReferences, workload: LiveWorkload,
 }
 
 const single = (priority: ApiFootballBounds["priority"], deadlineAt: UtcInstant, timeoutMs: number, maxResponseBytes: number,
-  cacheScope?: string): ApiFootballBounds => Object.freeze({ priority, deadlineAt, timeoutMs, maxRequests: 1, maxPages: 1, maxRows: 1,
-  // Retries only wait out limiter pacing: one request allowance means one dispatch.
-  maxResponseBytes, retry: { maxAttempts: 8, baseDelayMs: 250, maxDelayMs: 2000 }, cacheMaxAgeMs: 0, ...(cacheScope ? { cacheScope } : {}) });
-/** One fallback-only refresh: no AI dispatch, one provider prediction and one fresh status read. */
-export function fallbackRefreshPlan(member: RefreshMember, refs: LiveReferences): RefreshPlan {
-  const envelope = member.entry.envelope;
+  cacheScope?: string, pacing: RefreshPacing = "standard"): ApiFootballBounds => Object.freeze({ priority, deadlineAt, timeoutMs, maxRequests: 1, maxPages: 1, maxRows: 1,
+  // Retries only wait out limiter pacing: one request allowance means one dispatch. Slow plans wait for the slot the limiter names.
+  maxResponseBytes, retry: pacing === "slow" ? { maxAttempts: 40, baseDelayMs: 1000, maxDelayMs: 5000 } : { maxAttempts: 8, baseDelayMs: 250, maxDelayMs: 2000 },
+  cacheMaxAgeMs: 0, ...(cacheScope ? { cacheScope } : {}) });
+const refreshTimings = Object.freeze({
+  standard: { fallbackTimeoutMs: 20 * SECOND, fallbackMaxMs: 25 * SECOND, observationTimeoutMs: 15 * SECOND },
+  slow: { fallbackTimeoutMs: 75 * SECOND, fallbackMaxMs: 80 * SECOND, observationTimeoutMs: 75 * SECOND },
+} as const);
+const PUBLICATION_RESERVE_MS = 10 * SECOND, EVIDENCE_MAX_MS = 10 * SECOND;
+/** One fallback-only refresh: no AI dispatch, one provider prediction and one fresh status read.
+ * A cycle whose cutoff is too close for the plan's waits is skipped, not failed: no prediction could publish in time. */
+export function fallbackRefreshPlan(member: RefreshMember, refs: LiveReferences, pacing: RefreshPacing = "standard"): RefreshPlan {
+  const envelope = member.entry.envelope, timing = refreshTimings[pacing];
   const hardDeadline = utcInstantFromEpochMilliseconds(Math.min(envelope.expiresAt, member.now + envelope.timeoutMs, member.cycle.cutoffAt));
+  // Mirrors the refresh plan's own validation: evidence must finish before the reserve that covers both provider calls and publication.
+  const providerAndPublicationMs = timing.fallbackMaxMs + timing.observationTimeoutMs + PUBLICATION_RESERVE_MS;
+  if (envelope.fallbackReserveMs < providerAndPublicationMs || hardDeadline - member.now < EVIDENCE_MAX_MS + envelope.fallbackReserveMs) {
+    refreshFail("ineligible", "insufficient-time");
+  }
   return Object.freeze({ version: 1, evidenceRef: refs.refresh, modelVersionId: null,
     evidence: { requestId: refreshReference(member.jobId, "evidence"), context: member.context, policy: evidencePolicy(refs),
-      footballPlan: null, researchPlan: null, cachedSources: [], maxElapsedMs: 10 * SECOND },
+      footballPlan: null, researchPlan: null, cachedSources: [], maxElapsedMs: EVIDENCE_MAX_MS },
     ai: null,
-    fallback: { bounds: single("near-kickoff-fallback", hardDeadline, 20 * SECOND, 2_000_000, member.jobId), maxElapsedMs: 25 * SECOND },
-    observation: { bounds: single("results-cutoff", hardDeadline, 15 * SECOND, 2_000_000), maxAgeMs: 2 * MINUTE },
-    publicationReserveMs: 10 * SECOND, footballRequestLimit: REFRESH_REQUESTS_PER_JOB });
+    fallback: { bounds: single("near-kickoff-fallback", hardDeadline, timing.fallbackTimeoutMs, 2_000_000, member.jobId, pacing), maxElapsedMs: timing.fallbackMaxMs },
+    observation: { bounds: single("results-cutoff", hardDeadline, timing.observationTimeoutMs, 2_000_000, undefined, pacing), maxAgeMs: 2 * MINUTE },
+    publicationReserveMs: PUBLICATION_RESERVE_MS, footballRequestLimit: REFRESH_REQUESTS_PER_JOB });
 }

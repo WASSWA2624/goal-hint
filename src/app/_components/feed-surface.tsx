@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { FeedAppliedSummary } from "@/components/match/feed-controls";
 import { FeedFilters } from "@/components/match/feed-filters";
-import { FeedHeader, ResultsToolbar, RunBanner } from "@/components/match/feed-header";
+import { FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
 import { RefreshStatus } from "@/components/match/refresh-status";
 import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { liveRefreshRules } from "@/domain/live-refresh";
@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { BodyText, MutedText, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { createPredictionWindow, parseReportingDate, toUtcIsoString, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
-import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
+import { feedQueryHref, isFeedDatePreset, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
@@ -25,7 +25,6 @@ import { performanceHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import type { FeedPageResult } from "@/server/matches/feed-page";
 import { FeedStateProvider } from "@/state/provider";
-import { FeedRunStatus } from "./feed-run-status";
 
 function FeedResults({ data: initial, query, today, enabled, onStatus, onApply }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
@@ -44,20 +43,11 @@ function FeedResults({ data: initial, query, today, enabled, onStatus, onApply }
       } else router.refresh();
     } });
   const first = feedRowNumber(view.firstPage, data.pageSize, 0);
-  return <Stack $gap="md" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
+  return <Stack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
     <RefreshStatus error={refreshError} asOf={data.asOf} locale={query.locale} retry={() => { void refresh(); }} />
-    {data.run && <FeedRunStatus run={data.run} asOf={data.asOf} locale={query.locale} />}
-    {data.coverage.partial && <RunBanner aria-label={messages.text("feed.partialCoverageTitle")} $tone="orange">
-      <p title={messages.text("feed.partialCoverageDescription")}><strong>{messages.text("feed.partialCoverageTitle")}</strong> · {messages.text("feed.partialCoverageDescription")}</p>
-      {data.coverage.dates.filter((entry) => !entry.authoritative).slice(0, 7).map((entry) => <span key={entry.date}>
-        <time dateTime={entry.date}>{messages.reportingDateMedium(parseReportingDate(entry.date))}</time>: {messages.text(`feed.coverage.${entry.status}`)}
-        {entry.observedAt !== null && <> · {messages.text("feed.coverageObserved")}: <time dateTime={toUtcIsoString(utcInstantFromEpochMilliseconds(entry.observedAt))}>
-          {messages.reportingInstant(utcInstantFromEpochMilliseconds(entry.observedAt))}
-        </time></>}
-      </span>)}
-    </RunBanner>}
-    {data.state !== "ready" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
+    {/* Fixtures without the selected market still list; each row states why it has no pick. */}
+    {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
     {(records.length > 0 || data.total > 0) && <ResultsToolbar query={query} total={data.total} first={first}
       last={first + records.length - 1} onApply={onApply} />}
     {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale}>
@@ -75,6 +65,8 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
+  // Phone filters start collapsed behind the header toggle; desktops always show them.
+  const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId();
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
   const onPaginationStatus = useCallback((href: string, message: string) => { setPaginationStatus({ href, message }); }, []);
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
@@ -94,16 +86,19 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   const announcement = pending ? messages.text("feed.filters.loading") : result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
     : paginationStatus?.href === href ? paginationStatus.message
-    : result.data.state === "ready" ? messages.plural("feed.matchCount", result.data.total) : messages.text(`feed.state.${result.data.state}`);
-  return <Stack $gap="md">
-    <FeedHeader query={query} today={today} onApply={apply} />
-    <FeedFilters query={query} today={today} leagues={leagues} total={result.data?.total ?? null} onApply={apply} />
+    : result.data.state === "ready" || result.data.state === "insufficient-data" ? messages.plural("feed.matchCount", result.data.total)
+    : messages.text(`feed.state.${result.data.state}`);
+  return <Stack $gap="sm">
+    <FeedHeader query={query} today={today} onApply={apply}
+      filters={{ open: filtersOpen, count: panelFilterCount(query), controls: filtersId, onToggle: () => setFiltersOpen(!filtersOpen) }} />
+    <FeedFilters query={query} today={today} leagues={leagues} total={result.data?.total ?? null} onApply={apply}
+      phoneOpen={filtersOpen} phoneId={filtersId} />
     {query.status === "finished" && <TextLink href={performanceHref(query.locale)} prefetch={false}>{messages.text("performance.resultsLink")}</TextLink>}
     {controls}
     {range.endDate > createPredictionWindow(today).lastDate && <MutedText>{messages.text("feed.sevenDayAvailability")}</MutedText>}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     {pending && <MutedText>{messages.text("feed.filters.loading")}</MutedText>}
-    <Stack $gap="lg" aria-busy={pending} data-feed-results>
+    <Stack $gap="md" aria-busy={pending} data-feed-results>
       {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
         description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}
         action={<ButtonLink href={href} prefetch={false} variant="secondary" onClick={(event) => {

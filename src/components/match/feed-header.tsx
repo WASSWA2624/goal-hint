@@ -2,14 +2,13 @@
 
 import { useRef, useState } from "react";
 import styled, { css } from "styled-components";
-import { ChevronDownIcon, CloseIcon, SearchIcon, SortIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon, SortIcon } from "@/components/ui/icons";
 import { PageHeading } from "@/components/ui/layout";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
 import { DatePresets, DateRangePicker } from "./feed-dates";
 import { focusRing, IconButton } from "./filter-parts";
-import type { AccentName } from "@/styles/theme";
 
 const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
 
@@ -24,8 +23,8 @@ const Titles = styled.div`
   display: grid;
   gap: 0;
   min-inline-size: 0;
-  > h1 { font-size: 1.125rem; ${desktop} { font-size: 1.75rem; } }
-  > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; ${desktop} { font-size: 0.9375rem; } }
+  > h1 { font-size: 1.125rem; line-height: 1.2; ${desktop} { font-size: 1.5rem; } }
+  > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.6875rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.medium}; ${desktop} { font-size: 0.8125rem; } }
 `;
 const PhoneActions = styled.div`
   display: flex;
@@ -40,9 +39,30 @@ const RoundButton = styled(IconButton)`
   border-radius: 50%;
   font-size: 1rem;
 `;
+/** Phone filter toggle; the badge counts the choices hidden in the collapsed panel. */
+const FilterToggle = styled(RoundButton)`
+  position: relative;
+  &[aria-expanded="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.gradient.action}; }
+  > b {
+    position: absolute;
+    inset-block-start: -3px;
+    inset-inline-end: -3px;
+    display: grid;
+    place-items: center;
+    min-inline-size: 1rem;
+    block-size: 1rem;
+    padding-inline: 3px;
+    color: ${({ theme }) => theme.color.onBrand};
+    background: ${({ theme }) => theme.color.accent.pink.solid};
+    border: 1.5px solid ${({ theme }) => theme.color.surface};
+    border-radius: 999px;
+    font-size: 0.5625rem;
+    line-height: 1;
+  }
+`;
 const DesktopActions = styled.div`
   display: none;
-  ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+  ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 `;
 const SearchForm = styled.form`
   display: flex;
@@ -52,7 +72,7 @@ const SearchForm = styled.form`
   min-block-size: 3rem;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
-  border-radius: 12px;
+  border-radius: 6px;
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1.125rem; }
   > input { flex: 1; min-inline-size: 0; border: 0; background: none; color: ${({ theme }) => theme.color.text}; font: inherit; outline: none; }
   ${desktop} { display: none; }
@@ -68,7 +88,11 @@ export function feedHeading(query: FeedQuery, today: ReportingDate, messages: Re
 }
 
 /** Title and subtitle; phones add a search toggle, desktops a date range and quick presets. */
-export function FeedHeader({ query, today, onApply }: { query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void }) {
+export type FilterToggleState = Readonly<{ open: boolean; count: number; controls: string; onToggle: () => void }>;
+
+export function FeedHeader({ query, today, onApply, filters }: {
+  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void; filters?: FilterToggleState;
+}) {
   const messages = createMessages(query.locale);
   const [searching, setSearching] = useState(query.search !== ""), [value, setValue] = useState(query.search);
   const input = useRef<HTMLInputElement>(null), toggle = useRef<HTMLButtonElement>(null);
@@ -80,6 +104,11 @@ export function FeedHeader({ query, today, onApply }: { query: FeedQuery; today:
         <p>{messages.text("feed.subtitle")}</p>
       </Titles>
       <PhoneActions>
+        {filters && <FilterToggle type="button" aria-expanded={filters.open} aria-controls={filters.controls} title={messages.text("feed.filters.toggle")}
+          aria-label={filters.count > 0 ? messages.plural("feed.filters.toggleCount", filters.count) : messages.text("feed.filters.toggle")}
+          onClick={filters.onToggle}>
+          <FilterIcon />{filters.count > 0 && <b aria-hidden="true">{messages.number(filters.count)}</b>}
+        </FilterToggle>}
         <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
           onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => input.current?.focus()); }}>
           {searching ? <CloseIcon /> : <SearchIcon />}
@@ -148,6 +177,32 @@ const SelectWrap = styled.span<{ $phone?: boolean }>`
 const ReverseButton = styled(IconButton)`
   ${desktop} { display: none; }
 `;
+/** Toggle chip: keeps only matches that have a prediction. */
+const PicksToggle = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-block-size: 1.75rem;
+  padding-inline: 9px;
+  color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.color.surfaceMuted};
+  border: ${({ theme }) => theme.border.width} solid transparent;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  white-space: nowrap;
+  cursor: pointer;
+  &::before { content: ""; inline-size: 8px; block-size: 8px; border: 1.5px solid currentColor; border-radius: 2px; }
+  &[aria-pressed="true"] {
+    color: ${({ theme }) => theme.color.accent.emerald.text};
+    background: ${({ theme }) => theme.color.accent.emerald.soft};
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
+    &::before { background: currentColor; }
+  }
+  ${focusRing}
+  ${desktop} { min-block-size: 2.375rem; padding-inline: 12px; font-size: 0.875rem; }
+`;
 
 const sortOptions: readonly FeedSort[] = [
   { by: "probability", direction: "desc" }, { by: "probability", direction: "asc" },
@@ -168,6 +223,10 @@ export function ResultsToolbar({ query, total, first, last, onApply }: {
         : messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>
     </Count>
     <SortGroup>
+      <PicksToggle type="button" aria-pressed={query.picks === "only"} title={messages.text("feed.picks.onlyHelp")}
+        onClick={() => onApply({ ...query, picks: query.picks === "only" ? "all" : "only", page: 1 })}>
+        {messages.text("feed.picks.only")}
+      </PicksToggle>
       <SelectWrap $phone>
         <select aria-label={messages.text("feed.sort.label")} value={query.sort.by} onChange={(event) => {
           const by = event.target.value as FeedSort["by"];
@@ -196,21 +255,3 @@ export function ResultsToolbar({ query, total, first, last, onApply }: {
     </SortGroup>
   </Toolbar>;
 }
-
-/** Slim status line for the daily run and coverage notices, tinted by meaning. */
-export const RunBanner = styled.section<{ $tone?: AccentName }>`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 14px;
-  padding: 4px 8px;
-  line-height: 1.4;
-  color: ${({ theme, $tone = "blue" }) => theme.color.accent[$tone].text};
-  background: ${({ theme, $tone = "blue" }) => theme.color.accent[$tone].soft};
-  border-inline-start: 4px solid ${({ theme, $tone = "blue" }) => theme.color.accent[$tone].solid};
-  border-radius: 7px;
-  font-size: 0.625rem;
-  ${desktop} { font-size: 0.8125rem; }
-  /* Phones keep the banner to two lines; the full text stays in the DOM for assistive technology. */
-  > p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; ${desktop} { display: block; } }
-`;

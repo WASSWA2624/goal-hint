@@ -21,11 +21,11 @@ const field = css`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 7px;
+  border-radius: 6px;
   font: inherit;
   font-size: 0.6875rem;
   white-space: nowrap;
-  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) { min-block-size: 2.375rem; font-size: 0.875rem; }
+  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) { min-block-size: 2.125rem; font-size: 0.8125rem; }
   cursor: pointer;
   > svg { flex: none; font-size: 0.875rem; }
   > svg:first-child { color: ${({ theme }) => theme.color.accent.teal.solid}; }
@@ -54,7 +54,7 @@ const Popover = styled.div`
   padding: ${({ theme }) => theme.space.md};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 12px;
+  border-radius: 6px;
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
   label { display: grid; gap: 4px; font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   input {
@@ -193,13 +193,13 @@ const PresetList = styled.div`
   > a {
     display: inline-grid;
     place-items: center;
-    min-block-size: 2.375rem;
-    padding-inline: 14px;
+    min-block-size: 2.125rem;
+    padding-inline: 12px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 10px;
-    font-size: 0.875rem;
+    border-radius: 6px;
+    font-size: 0.8125rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     white-space: nowrap;
     text-decoration: none;

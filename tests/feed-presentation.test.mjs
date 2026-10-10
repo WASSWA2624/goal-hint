@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bestCardFamily, countryOptions, feedRowNumber, leagueOptions, paginationItems } from "../src/domain/feed-presentation.ts";
+import { bestCardFamily, countryOptions, feedRowNumber, leagueOptions, noPickReason, paginationItems } from "../src/domain/feed-presentation.ts";
 import { cardFixture } from "./helpers/match-card-fixtures.mjs";
 
 const pages = (current, total) => paginationItems(current, total).map((item) => item.kind === "gap" ? "…" : item.current ? `[${item.page}]` : String(item.page)).join(" ");
@@ -55,4 +55,16 @@ test("league and country options order by fixture count, then name", () => {
   ];
   assert.deepEqual(leagueOptions(leagues, "Unknown").map((option) => [option.value, option.label]), [["b", "Unknown"], ["c", "Cup"], ["a", "Alpha League"], ["d", "Delta"]]);
   assert.deepEqual(countryOptions(leagues).map((option) => [option.value, option.fixtures]), [["England", 11], ["Spain", 9]]);
+});
+
+test("missing picks explain themselves from stored cycle and update facts only", () => {
+  const cycle = (state) => ({ state, mode: { open: "current", closed: "locked", void: "void" }[state], ordinal: 1, lockedAt: null, voidReason: null });
+  const update = (prediction) => ({ prediction, result: "untracked" });
+  assert.equal(noPickReason({ forecast: { markets: [] }, cycle: cycle("open"), update: update("current") }), "market");
+  assert.equal(noPickReason({ forecast: null, cycle: null, update: update("unavailable") }), "unselected");
+  assert.equal(noPickReason({ forecast: null, cycle: null, update: update("outside-window") }), "outside");
+  assert.equal(noPickReason({ forecast: null, cycle: cycle("open"), update: update("updating") }), "updating");
+  assert.equal(noPickReason({ forecast: null, cycle: cycle("open"), update: update("delayed") }), "failed");
+  assert.equal(noPickReason({ forecast: null, cycle: cycle("open"), update: update("unavailable") }), "awaiting");
+  assert.equal(noPickReason({ forecast: null, cycle: cycle("closed"), update: update("locked") }), "closed");
 });

@@ -85,7 +85,13 @@ export function createPredictionRefreshService(options: Readonly<{
     }
     let intent = await options.store.intent(lease.jobId);
     if (!intent) {
-      const plan = parseRefreshPlan(options.configure(member), member);
+      let configured: RefreshPlan;
+      try { configured = options.configure(member); }
+      catch (error) {
+        if (error instanceof PredictionRefreshError && error.reason === "ineligible") return finish("skipped", error.detail);
+        throw error;
+      }
+      const plan = parseRefreshPlan(configured, member);
       intent = await options.store.saveIntent(lease, freezeEvidence({ member, plan, pin: refreshPin(member, plan) }));
     }
     const saved: RefreshIntent = intent, plan = saved.plan;

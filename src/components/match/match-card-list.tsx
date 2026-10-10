@@ -13,7 +13,7 @@ const Board = styled.div`
     overflow: hidden;
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 14px;
+    border-radius: ${({ theme }) => theme.border.cardRadius};
     box-shadow: ${({ theme }) => theme.shadow.card};
   }
 `;

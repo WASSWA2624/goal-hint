@@ -57,9 +57,9 @@ for an empty lock.
 | Stored/read condition | Page behavior |
 | --- | --- |
 | Complete imports and no known fixtures | No fixtures confirmed. |
-| Missing, pending, failed, partial or degraded coverage | Partial fixture coverage, affected dates, import status and actual observation time where known. Empty unknown dates say Fixture data unavailable. |
-| Matching fixtures without the selected family | Prediction data unavailable; available fixture cards remain visible. |
-| Stored fixtures with no filter matches | No matches for these filters; coverage notice remains independent. |
+| Missing, pending, failed, partial or degraded coverage | No page-level banner; stored fixtures still list and each affected card notes partial coverage. Empty unknown dates say Fixture data unavailable. |
+| Matching fixtures without the selected family | No page-level notice; the fixture cards remain visible and each row states why it has no pick. |
+| Stored fixtures with no filter matches | No matches for these filters. |
 | Direct page beyond the matching list | Match page unavailable; no invented cards. Previous page links return to a populated page when available. |
 | Temporary database/configuration/read failure | Matches temporarily unavailable with an ordinary retry link; no fixture count or fictional run. |
 | Aggregate search budget exhausted | Search temporarily busy with retry. |

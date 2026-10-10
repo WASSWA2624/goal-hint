@@ -23,6 +23,8 @@ export type SelectionPolicy = Readonly<{
   refreshCapacity?: number;
   /** Dates the provider plan can serve, from the run date; omitted imports all seven. */
   importDays?: number;
+  /** Budgeted runs skip fixtures whose publication cutoff is closer than this, so queued refreshes can still finish. */
+  refreshLeadMs?: number;
   importBounds: Omit<ApiFootballBounds, "deadlineAt"> & Readonly<{ deadlineMs: number }>;
   refresh: Omit<JobEnvelope, "version" | "idempotencyKey" | "refresh" | "notBefore" | "expiresAt" | "priority">;
 }>;

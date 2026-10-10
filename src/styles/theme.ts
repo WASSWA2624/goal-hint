@@ -169,7 +169,7 @@ export const lightTheme: GoalHintTheme = {
   border: {
     width: "1px",
     radius: brandTokens.shape.componentRadius,
-    cardRadius: "16px",
+    cardRadius: "4px",
     pillRadius: "999px",
     focusWidth: "3px",
     focusOffset: "3px",

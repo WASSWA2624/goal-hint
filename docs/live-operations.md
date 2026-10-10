@@ -55,6 +55,14 @@ UTC provider day. Nothing is hard-coded to a plan.
 | Ultra (75,000) | 2,000 | 3 | 15 s | 1 min |
 | Mega (150,000; app ceiling 120,000) | 2,000 | 6 | 15 s | 60 s |
 
+**Slow plans (under 60 requests/minute, e.g. Free at 10/minute).** A provider call may have to wait most of a
+rolling minute for a limiter slot. Refresh jobs on these plans get a 5-minute timeout and a 200-second reserve, and
+each provider call waits up to 75 seconds for the slot the limiter names instead of giving up after 15–20 seconds;
+waiting never adds a second dispatch. Selection also skips fixtures whose publication cutoff falls inside the time
+the refresh queue needs to drain (`cutoff-too-close`, at most two hours), so the daily capacity goes to matches that
+can still be predicted. A refresh whose cycle has too little time left is recorded as skipped (`insufficient-time`)
+rather than failed. These settings apply to runs created after the runner restarts.
+
 On upgrade, the runner detects the new plan within 10 minutes and rebuilds its workload from the new limits;
 no code change is needed. The essential quota reserve is 20,000 of the 120,000 ceiling (spec) and the same
 one-sixth share on smaller plans.

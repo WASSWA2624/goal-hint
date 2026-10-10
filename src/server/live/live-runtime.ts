@@ -75,7 +75,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const queue = createMysqlJobQueue(database);
     const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher }) });
     const day: QuotaDay = await quota.refresh();
-    const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan);
+    const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit);
     const selection = selectionPolicy(policy, refs, workload), statusEvidenceRef = `${refs.freshness}#status`;
     let results: ResultSyncPolicy | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results });
@@ -101,7 +101,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
       verifyRequest: authorities.verifyFallbackRequest });
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: createMysqlRefreshStore(database, queue),
-      selection: selectionStore, authority: authorities.refresh, configure: (member) => fallbackRefreshPlan(member, refs),
+      selection: selectionStore, authority: authorities.refresh, configure: (member) => fallbackRefreshPlan(member, refs, workload.pacing),
       models: { async resolve() { throw new ModelRegistryError("unavailable"); } },
       predictor: { async predict() { return { status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false }; } },
       evidence, fallback, lifecycle, publisher, costs: { ai: null, research: null },

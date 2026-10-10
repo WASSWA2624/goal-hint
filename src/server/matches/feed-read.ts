@@ -41,6 +41,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   if (query.countries.length > 0) filters.push(Prisma.sql`l.country IN (${Prisma.join(query.countries)})`);
   if (query.status !== "all") filters.push(query.status === "finished"
     ? Prisma.sql`f.status IN ('finished-regulation','finished-extra-time','finished-penalties')` : Prisma.sql`f.status=${query.status}`);
+  if (query.picks === "only") filters.push(Prisma.sql`m.available=TRUE`);
   if (!isAnyProbability(query.probability)) {
     // Whole-percent bounds include values that display as the boundary percentage.
     filters.push(Prisma.sql`m.available=TRUE AND m.selectedProbability>=${(query.probability.min - 0.5) / 100}

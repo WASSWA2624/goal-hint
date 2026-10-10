@@ -76,18 +76,6 @@ export const DesktopNav = styled.nav`
   ${desktop} { display: flex; }
 `;
 
-export const NavigationList = styled.ul`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: ${({ theme }) => theme.space.sm};
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  > li { min-inline-size: 0; max-inline-size: 100%; }
-`;
-
 export const TopNavList = styled.ul`
   display: flex;
   align-items: stretch;
@@ -136,7 +124,7 @@ export const MoreList = styled.ul`
   list-style: none;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 12px;
+  border-radius: 6px;
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
   a {
     display: flex;
@@ -231,14 +219,58 @@ export const TabLink = styled(Link)<{ $tone: AccentName }>`
   &:focus-visible { outline-offset: -4px; }
 `;
 
+/** Matches the header: white surface, multicolour edge, compact muted links; clears the phone tab bar. */
 export const Footer = styled.footer`
-  padding-block: ${({ theme }) => theme.space.lg} calc(${({ theme }) => theme.space.lg} + 3.25rem + env(safe-area-inset-bottom));
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  ${desktop} { padding-block-end: ${({ theme }) => theme.space.lg}; }
-
-  a[aria-current="page"] {
-    color: ${({ theme }) => theme.color.text};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    text-decoration-thickness: 0.15em;
+  padding-block: 12px calc(12px + 3.25rem + env(safe-area-inset-bottom));
+  color: ${({ theme }) => theme.color.mutedText};
+  background: ${({ theme }) => theme.gradient.edge} top / 100% 2px no-repeat, ${({ theme }) => theme.color.surface};
+  font-size: 0.75rem;
+  line-height: 1.4;
+  ${desktop} { padding-block: 14px; font-size: 0.8125rem; }
+`;
+export const FooterContent = styled(Container)`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  gap: 6px;
+  @media (min-width: ${({ theme }) => theme.breakpoint.md}) {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 24px;
   }
+`;
+export const FooterBrand = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: ${({ theme }) => theme.color.text};
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  white-space: nowrap;
+  > span:first-child { padding: 0 4px 0 0; }
+  > span:first-child > img { inline-size: 20px; block-size: 20px; }
+`;
+export const FooterLinks = styled.ul`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 4px;
+  margin: 0 0 0 -8px;
+  padding: 0;
+  list-style: none;
+`;
+export const FooterLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.75rem;
+  padding-inline: 8px;
+  color: ${({ theme }) => theme.color.mutedText};
+  border-radius: 4px;
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  text-decoration: none;
+  &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; background: ${({ theme }) => theme.color.surfaceMuted}; }
+  &[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  ${focusRing}
+`;
+export const FooterNote = styled.p`
+  margin: 0;
+  @media (min-width: ${({ theme }) => theme.breakpoint.md}) { justify-self: end; text-align: end; }
 `;

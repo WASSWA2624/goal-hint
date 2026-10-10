@@ -2,7 +2,7 @@ import "server-only";
 import type { ReactNode } from "react";
 import { cache } from "react";
 import { connection } from "next/server";
-import { BrandLogo } from "@/components/ui/brand";
+import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { TextLink } from "@/components/ui/controls";
 import { ChevronDownIcon, HomeIcon, InfoIcon, LiveIcon, ResultsIcon, SearchIcon } from "@/components/ui/icons";
 import { Container, PageMain } from "@/components/ui/layout";
@@ -15,7 +15,8 @@ import { feedQueryRules } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import {
-  DesktopNav, Footer, Header, HeaderContent, HeaderSearch, HomeLink, MoreList, MoreMenu, NavigationList, ShellFrame, SkipLink,
+  DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderContent, HeaderSearch, HomeLink,
+  MoreList, MoreMenu, ShellFrame, SkipLink,
   TabBar, TabLink, TabList, TopNavLink, TopNavList,
 } from "@/components/navigation/shell-styles";
 
@@ -87,24 +88,29 @@ export async function PublicShell({ children, locale, current, today: reportingD
           </HeaderSearch>
         </HeaderContent>
       </Header>
-      <PageMain id="main-content" tabIndex={-1}>
+      <PageMain id="main-content" tabIndex={-1} $app={app}>
         <Container $wide={app}>{children}</Container>
       </PageMain>
       <Footer>
-        <Container>
+        <FooterContent $wide={app}>
+          <FooterBrand>
+            <BrandMark alt="" />
+            <span>{messages.text("navigation.copyright", { year: today.slice(0, 4) })}</span>
+          </FooterBrand>
           <nav aria-label={messages.text("navigation.footer")}>
-            <NavigationList>
+            <FooterLinks>
               {informationPages.map((page) => (
                 <li key={page}>
-                  <TextLink href={informationHref(page, language)}
+                  <FooterLink href={informationHref(page, language)}
                     aria-current={current === page ? "page" : undefined} prefetch={false}>
                     {messages.text(`navigation.${page}`)}
-                  </TextLink>
+                  </FooterLink>
                 </li>
               ))}
-            </NavigationList>
+            </FooterLinks>
           </nav>
-        </Container>
+          <FooterNote>{messages.text("navigation.footerNote")}</FooterNote>
+        </FooterContent>
       </Footer>
       <TabBar aria-label={messages.text("navigation.tabs")}>
         <TabList>

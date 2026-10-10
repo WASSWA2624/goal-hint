@@ -36,9 +36,13 @@ export const Surface = styled.section`
   border-radius: ${({ theme }) => theme.border.radius};
 `;
 
-export const PageMain = styled.main`
-  padding-block: ${({ theme }) => theme.space.xl};
+/** App screens (feeds) start close to the header; content pages keep generous spacing. */
+export const PageMain = styled.main<{ $app?: boolean }>`
+  padding-block: ${({ theme, $app }) => $app ? `10px ${theme.space.lg}` : theme.space.xl};
   min-inline-size: 0;
+  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) {
+    padding-block: ${({ theme, $app }) => $app ? `14px ${theme.space.xl}` : theme.space.xl};
+  }
 `;
 
 export const PageHeading = styled.h1`

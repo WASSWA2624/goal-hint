@@ -21,6 +21,8 @@ export type FeedSortField = "kickoff" | "probability";
 export type FeedSortDirection = "asc" | "desc";
 export type FeedSort = Readonly<{ by: FeedSortField; direction: FeedSortDirection }>;
 export type ProbabilityRange = Readonly<{ min: number; max: number }>;
+/** "only" keeps fixtures whose shown pick exists; "all" includes fixtures without a prediction. */
+export type PicksFilter = "all" | "only";
 export type FeedQuery = Readonly<{
   locale: Locale;
   dates: DateSelection;
@@ -34,6 +36,7 @@ export type FeedQuery = Readonly<{
   markets: MarketFamily[];
   /** Whole-percent bounds applied to the shown pick; 0–100 applies no filter. */
   probability: ProbabilityRange;
+  picks: PicksFilter;
   sort: FeedSort;
   page: number;
   pageSize: number;
@@ -55,7 +58,7 @@ export class FeedQueryError extends RangeError {
   constructor() { super("Invalid or incompatible feed parameters."); this.name = "FeedQueryError"; }
 }
 function fail(): never { throw new FeedQueryError(); }
-const keys = new Set(["date", "from", "to", "when", "q", "league", "country", "status", "market", "prob", "sort", "dir", "page", "pageSize"]);
+const keys = new Set(["date", "from", "to", "when", "q", "league", "country", "status", "market", "prob", "picks", "sort", "dir", "page", "pageSize"]);
 const leaguePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 const countryPattern = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .'()&-]{0,127}$/u;
 
@@ -161,11 +164,13 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const marketValue = get("market");
   const markets = marketValue === undefined ? [...defaultMarkets] : canonicalMarkets(marketValue.split(","));
   if (marketValue !== undefined && marketValue.split(",").length !== markets.length) fail();
+  const picks = get("picks") ?? "all";
+  if (picks !== "all" && picks !== "only") fail();
   const by = get("sort") ?? "kickoff", direction = get("dir");
   if (by !== "kickoff" && by !== "probability" || direction !== undefined && direction !== "asc" && direction !== "desc") fail();
   return {
     locale: resolveLocale(context.locale), dates, search, leagues, countries, status: parseFeedStatus(get("status")), markets,
-    probability: probabilityRange(get("prob")),
+    probability: probabilityRange(get("prob")), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
     page: integer(get("page"), 1, feedQueryRules.maximumPage),
     pageSize: integer(get("pageSize"), feedQueryRules.pageSize, feedQueryRules.maximumPageSize),
@@ -192,6 +197,8 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   const markets = canonicalMarkets(query.markets);
   if (!sameList(markets, defaultMarkets)) result.set("market", markets.join(","));
   if (!isAnyProbability(query.probability)) result.set("prob", `${query.probability.min}-${query.probability.max}`);
+  if (query.picks === "only") result.set("picks", "only");
+  else if (query.picks !== "all") fail();
   if (query.sort.by !== "kickoff") result.set("sort", query.sort.by);
   if (query.sort.direction !== defaultSortDirection[query.sort.by]) result.set("dir", query.sort.direction);
   if (query.page !== 1) result.set("page", String(query.page));
@@ -201,7 +208,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   if (checked.search !== query.search || checked.page !== query.page || checked.pageSize !== query.pageSize ||
       checked.locale !== query.locale || !sameList(checked.leagues, leagues) || !sameList(checked.countries, countries) ||
       checked.status !== query.status || !sameList(checked.markets, markets) ||
-      checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max) fail();
+      checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max || checked.picks !== query.picks) fail();
   return result;
 }
 
@@ -226,8 +233,13 @@ export function feedQueryKey(query: FeedQuery, today: ReportingDate): string {
 }
 
 /** Filters that narrow the cohort (dates and order excluded). */
+/** Choices made inside the filter panel itself: leagues, countries, markets and probability. */
+export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability">): number {
+  return query.leagues.length + query.countries.length +
+    Number(!sameList(canonicalMarkets(query.markets), defaultMarkets)) + Number(!isAnyProbability(query.probability));
+}
+
 export function activeFeedFilterCount(query: FeedQuery): number {
-  return Number(query.search !== "") + query.leagues.length + query.countries.length +
-    Number(!sameList(canonicalMarkets(query.markets), defaultMarkets)) + Number(!isAnyProbability(query.probability)) +
+  return Number(query.search !== "") + panelFilterCount(query) + Number(query.picks === "only") +
     Number(query.status !== feedDefaults.today.status);
 }

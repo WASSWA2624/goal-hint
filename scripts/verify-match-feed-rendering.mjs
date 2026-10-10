@@ -254,11 +254,12 @@ async function verify(origin, directory, scenarios) {
       if (record.forecast) assert.match(article, /Published: [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} EAT/);
       assert.doesNotMatch(article, /\/_next\/image|\s\$[\w-]+=/);
     }
-    if (name === 'today') { assert.match(visible, /data-prediction="(?!none)/);assert.match(visible, /No prediction was locked for this market/); assert.match(visible, /2 of 34 prediction jobs completed/); }
+    if (name === 'today') { assert.match(visible, /data-prediction="(?!none)/);assert.match(visible, /No prediction was locked for this market/); }
+    // Run-status and coverage banners are not shown; affected rows carry their own notes.
+    assert.doesNotMatch(visible, /prediction jobs completed|Partial fixture coverage|Prediction data unavailable/);
     if (name === 'historical') { assert.match(visible, /Locked prediction/); assert.match(visible, /Final score/); assert.match(visible, /data-outcome="correct"/); }
     if (name === 'empty') assert.match(visible, /No fixtures confirmed/);
-    if (['partial', 'partial-empty', 'failed-import', 'unknown'].includes(name)) { assert.match(visible, /Partial fixture coverage/); assert.doesNotMatch(visible, /No fixtures confirmed/); }
-    if (name === 'unavailable-predictions') assert.match(visible, /Prediction data unavailable/);
+    if (['partial', 'partial-empty', 'failed-import', 'unknown'].includes(name)) assert.doesNotMatch(visible, /No fixtures confirmed/);
     if (name === 'failure') { assert.match(visible, /Matches temporarily unavailable/); assert.match(visible, /Try again/); assert.doesNotMatch(visible, /No fixtures confirmed|prediction jobs completed/); }
     if (name === 'outside') assert.match(visible, /Predictions become available within seven days of the match/);
     if (['today', 'last-day', 'historical'].includes(name)) assert.doesNotMatch(visible, /Predictions become available within seven days of the match/);

@@ -192,6 +192,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
             if (fixture.kickoff === null || !isInWindow(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), window)) return exclude("outside-window");
             const kickoffAt = utcInstantFromEpochMilliseconds(fixture.kickoff.getTime());
             if (getPublicationDeadline(kickoffAt) <= now) return exclude("cutoff-passed");
+            if (policy.refreshLeadMs !== undefined && getPublicationDeadline(kickoffAt) <= now + policy.refreshLeadMs) return exclude("cutoff-too-close");
             if (capacity !== undefined && entries.length >= capacity) return exclude("refresh-capacity");
             let cycle = fixture.activeCycle;
             if (!cycle && fixture._count.predictionCycles > 0) return exclude("no-active-cycle");

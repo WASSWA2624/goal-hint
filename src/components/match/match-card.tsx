@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useId, useState } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
-import { bestCardFamily } from "@/domain/feed-presentation";
+import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { hasFinalScoreStatus, selectedCardPrediction } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
@@ -295,7 +295,13 @@ const Bar = styled.span<{ $family: MarketFamily }>`
   }
 `;
 const NoPick = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-inline-size: 0;
   font-size: 0.6875rem;
+  > b { font-weight: 800; }
+  > span { ${ellipsis} }
   ${table} { grid-column: 2 / span 2; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
 `;
 const Mark = styled.span<{ $tone: OutcomeTone }>`
@@ -496,8 +502,8 @@ export function MatchCard({ fixture, analysisSlug, markets, selectedFamily, loca
             {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}
           </VisuallyHidden>
         </> : <>
-          <NoPick aria-hidden="true">{messages.text("match.noPick")}</NoPick>
-          <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}</VisuallyHidden>
+          <NoPick aria-hidden="true" data-no-pick={noPickReason(fixture)}><b>—</b><span>{messages.text(`match.noPickReason.${noPickReason(fixture)}`)}</span></NoPick>
+          <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {messages.text(`match.noPickReason.${noPickReason(fixture)}`)}</VisuallyHidden>
         </>}
       </Prediction>
     </Pick>

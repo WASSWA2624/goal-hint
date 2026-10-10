@@ -18,7 +18,7 @@ try {
   policy ??= parseRuntimePolicy({ ...process.env, GOAL_HINT_OPERATION_SCOPE: 'trial', GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT: '1' });
   verify ??= ownerEvidenceVerifier(loadOwnerApprovals());
   const status = await createAccountStatusReader({ policy, verifyEvidence: verify })();
-  const workload = liveWorkload(status.dailyLimit, status.secondLimit, status.plan);
+  const workload = liveWorkload(status.dailyLimit, status.secondLimit, status.plan, status.minuteLimit);
   console.log(JSON.stringify({ ready: gaps.length === 0, gaps,
     plan: status.plan, active: status.active, expiresAt: status.expiresAt === null ? null : new Date(status.expiresAt).toISOString(),
     dailyLimit: status.dailyLimit, usedToday: status.usedToday, minuteLimit: status.minuteLimit,

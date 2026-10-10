@@ -7,14 +7,14 @@ test("URL queries round trip with one canonical order and explicit EAT context",
   for (const parameters of ["", "when=tomorrow", "when=next-3-days", "when=next-7-days", "when=next-30-days", "date=2020-02-29",
     "from=2020-02-29&to=2020-03-06", "from=2026-10-01&to=2026-10-31",
     "q=Example+FC&league=league-b,league-a&country=Spain,England&status=live&market=total-goals,match-result&prob=55-90&sort=probability&dir=asc&page=3&pageSize=40",
-    "sort=probability", "sort=kickoff&dir=desc", "status=finished", "market=both-teams-to-score", "market=double-chance", "prob=0-60"]) {
+    "sort=probability", "sort=kickoff&dir=desc", "status=finished", "market=both-teams-to-score", "market=double-chance", "prob=0-60", "picks=only"]) {
     const parsed = query(parameters);
     assert.deepEqual(query(serializeFeedQuery(parsed, today).toString()), parsed);
     const url = new URL(feedQueryHref(parsed, today), "https://example.test");
     const date = url.pathname.split("/")[3];
     assert.deepEqual(query(url.searchParams.toString(), date ? { routeDate: date } : {}), parsed);
   }
-  assert.equal(serializeFeedQuery(query("page=1&status=all&market=match-result&prob=0-100&sort=kickoff&dir=asc&when=today"), today).toString(), "");
+  assert.equal(serializeFeedQuery(query("page=1&status=all&market=match-result&prob=0-100&picks=all&sort=kickoff&dir=asc&when=today"), today).toString(), "");
   assert.equal(serializeFeedQuery(query("q=+Cafe%CC%81+++FC+"), today).toString(), "q=Caf%C3%A9+FC");
   assert.equal(feedQueryHref(query("from=2020-02-29&to=2020-03-06&status=finished"), today),
     "/en/predictions/2020-02-29?to=2020-03-06&status=finished");
@@ -32,6 +32,7 @@ test("list filters are deduplicated, sorted and in policy order, so equivalent U
   assert.deepEqual(query("league=").leagues, []);
   assert.equal(activeFeedFilterCount(query()), 0);
   assert.equal(activeFeedFilterCount(query("q=x&league=a,b&country=Spain&market=total-goals&prob=50-100&status=live")), 7);
+  assert.equal(activeFeedFilterCount(query("picks=only")), 1);
 });
 
 test("canonical list identity includes filters, order, locale and resolved dates, but excludes loaded page", () => {
@@ -54,7 +55,7 @@ test("malformed, ambiguous, unbounded and unsupported URL values are rejected", 
     "from=2026-10-09&to=2026-11-09", "when=next-week", "q=%00", "q=%0a", `q=${"a".repeat(121)}`,
     "league=../x", "league=a,,b", "league=a,", "league=a&league=", `league=${Array.from({ length: 51 }, (_, index) => `l${index}`).join(",")}`,
     "country=Eng%2Fland", "country=+Spain", "country=Spain,", "status=correct", "status=", "market=exact-score", "market=", "market=match-result,match-result",
-    "prob=50", "prob=60-50", "prob=0-101", "prob=-1-50", "prob=05-50", "sort=asc", "sort=score", "dir=up", "sortMarket=match-result",
+    "picks=yes", "picks=", "picks=only&picks=only", "prob=50", "prob=60-50", "prob=0-101", "prob=-1-50", "prob=05-50", "sort=asc", "sort=score", "dir=up", "sortMarket=match-result",
     "page=0", "page=-1", "page=01", "page=1.5", "page=1e2", "page=10001", "pageSize=101", "pageSize=0"]) {
     assert.throws(() => query(input), undefined, input);
   }

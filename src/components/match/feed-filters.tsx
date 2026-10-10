@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import styled, { css } from "styled-components";
-import { ChevronDownIcon, InfoIcon, ResetIcon, FilterIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, ResetIcon, FilterIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
+import { addReportingDays, type ReportingDate } from "@/domain/calendar";
 import { applyFeedDraft, resetFeedFilters } from "@/domain/feed-controls";
 import { pinnedFeedQuery } from "@/domain/feed-pagination";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
@@ -25,7 +25,6 @@ import { ChipText, FilterChip, focusRing, OptionPicker, plainClick, RangeSlider,
 
 type Messages = ReturnType<typeof createMessages>;
 const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
-const wide = css`@media (min-width: ${({ theme }) => theme.breakpoint.xl})`;
 const probabilityPresets = [anyProbability, { min: 50, max: 100 }, { min: 60, max: 100 }, { min: 70, max: 100 }, { min: 80, max: 100 }, { min: 90, max: 100 }];
 const suggestionCount = 6;
 /** Phone selections settle for this long before one navigation applies them all. */
@@ -75,15 +74,30 @@ const Panel = styled.section`
   display: grid;
   gap: 6px;
   min-inline-size: 0;
-  padding: 10px 10px 8px;
-  background: ${({ theme }) => theme.gradient.edge} top / 100% 4px no-repeat, ${({ theme }) => theme.color.surface};
+  padding: 8px 10px;
+  background: ${({ theme }) => theme.gradient.edge} top / 100% 3px no-repeat, ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.cardRadius};
   box-shadow: ${({ theme }) => theme.shadow.card};
-  ${desktop} { gap: 14px; padding: 16px 20px 14px; }
+  ${desktop} { padding: 12px 14px 10px; }
 `;
-const PhoneOnly = styled.div`display: grid; gap: 6px; min-inline-size: 0; container: phone-filters / inline-size; ${desktop} { display: none; }`;
-const DesktopOnly = styled.div`display: none; ${desktop} { display: grid; gap: 14px; }`;
+const PhoneOnly = styled.div`
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  container: phone-filters / inline-size;
+  ${desktop} { display: none; }
+`;
+/** Collapsed by default on phones; the header toggle reveals the rows below the dates. */
+const PhoneMore = styled.div`
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  padding-block-start: 6px;
+  border-block-start: ${({ theme }) => theme.border.width} dashed ${({ theme }) => theme.color.border};
+  &[hidden] { display: none; }
+`;
+const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 
 const DateRow = styled.div`
   display: grid;
@@ -147,7 +161,7 @@ const SelectBox = styled.span`
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 7px;
+    border-radius: 6px;
     font: inherit;
     font-size: 0.6875rem;
     font-weight: ${({ theme }) => theme.typography.weight.body};
@@ -168,7 +182,7 @@ const QuietLink = styled(Link)`
   color: ${({ theme }) => theme.color.accent.red.text};
   background: ${({ theme }) => theme.color.accent.red.soft};
   border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
@@ -178,148 +192,131 @@ const QuietLink = styled(Link)`
   ${focusRing}
 `;
 
-/** Date, leagues, countries and markets share one row at every desktop width. */
+/**
+ * Desktop: two dense rows of inline-labelled fields. Leagues, countries and markets fill the first,
+ * odds and probability the second; Apply and Clear All share a trailing column.
+ * Dates live in the header's range picker and presets directly above.
+ */
 const DesktopGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(12rem, 0.9fr) repeat(3, minmax(0, 1fr));
-  gap: 12px 18px;
-  ${wide} { gap: 12px 24px; }
+  grid-template-columns: repeat(6, minmax(0, 1fr)) minmax(12.5rem, auto);
+  align-items: center;
+  gap: 8px 10px;
+  > [data-span="2"] { grid-column: span 2; }
+  > [data-span="3"] { grid-column: span 3; }
 `;
-const Block = styled.div`
-  display: grid;
-  align-content: start;
-  gap: 6px;
+const Field = styled.div<{ $accent: AccentName; $disabled?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-inline-size: 0;
+  min-block-size: 2.375rem;
+  padding-inline: 10px 4px;
+  background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-radius: 6px;
+  &:hover, &:focus-within { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; }
 `;
-const BlockLabel = styled.span<{ $accent: AccentName }>`
+const FieldName = styled.span<{ $accent: AccentName }>`
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  &::before { content: ""; inline-size: 8px; block-size: 8px; border-radius: 50%; background: ${({ theme, $accent }) => theme.color.accent[$accent].gradient}; }
-  > svg { color: ${({ theme }) => theme.color.mutedText}; }
+  white-space: nowrap;
+  &::before { content: ""; inline-size: 7px; block-size: 7px; border-radius: 50%; background: ${({ theme, $accent }) => theme.color.accent[$accent].gradient}; }
 `;
-const MultiBox = styled.div<{ $accent: AccentName }>`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px;
-  min-block-size: 2.5rem;
-  padding: 3px 3px 3px 6px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 10px;
-  &:focus-within, &:hover { border-color: ${({ theme, $accent }) => theme.color.accent[$accent].solid}; }
-`;
-const ChipWrap = styled.div`
+/** Selected values on one line: chips shrink with an ellipsis and the remainder becomes "+N". */
+const ChipLine = styled.div`
   display: flex;
-  flex-wrap: wrap;
+  flex: 1;
+  align-items: center;
   gap: 4px;
   min-inline-size: 0;
-  > span[data-placeholder] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; padding-inline: 4px; }
-`;
-const DateInputs = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-block-size: 2.5rem;
-  padding-inline: 10px;
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 10px;
-  &:focus-within, &:hover { border-color: ${({ theme }) => theme.color.accent.teal.solid}; }
-  > input {
-    flex: 1;
-    min-inline-size: 0;
-    min-block-size: 2.25rem;
-    color: ${({ theme }) => theme.color.text};
-    background: none;
-    border: 0;
-    font: inherit;
-    font-size: 0.875rem;
-    ${focusRing}
-  }
-  > span { color: ${({ theme }) => theme.color.accent.teal.solid}; }
-`;
-const WideSegmented = styled(Segmented)`
-  display: grid;
-  > a { padding-inline: 8px; font-size: 0.8125rem; }
-`;
-const SecondRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: center;
-  gap: 10px 24px;
-  > :last-child { grid-column: 1 / -1; justify-self: end; }
-  ${wide} { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 32px; > :last-child { grid-column: auto; justify-self: start; } }
-`;
-const RangeRow = styled.div`
-  display: grid;
-  grid-template-columns: minmax(8rem, 1fr) auto;
-  align-items: center;
-  gap: 16px;
-`;
-const RangeEnds = styled.div`
-  display: flex;
-  justify-content: space-between;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  > a, > span { flex: 0 1 auto; min-inline-size: 0; }
+  > [data-more] { flex: none; }
+  > span[data-placeholder] { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
 const NumberPair = styled.div<{ $disabled?: boolean }>`
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  background: ${({ theme }) => theme.color.cardHeader};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 9px;
+  gap: 3px;
+  padding-inline-end: 6px;
   color: ${({ theme, $disabled }) => $disabled ? theme.color.disabledText : theme.color.mutedText};
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
   > input {
-    inline-size: 3.25rem;
-    min-block-size: 2rem;
+    inline-size: 2.75rem;
+    min-block-size: 1.75rem;
     color: ${({ theme }) => theme.color.text};
-    background: none;
-    border: 0;
+    background: ${({ theme }) => theme.color.cardHeader};
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-radius: 4px;
     font: inherit;
     text-align: center;
-    font-variant-numeric: tabular-nums;
     ${focusRing}
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; }
   }
 `;
-const Actions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-`;
 const ApplyLink = styled(Link)`
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  min-block-size: 2.625rem;
-  padding-inline: 20px;
+  min-block-size: 2.375rem;
+  padding-inline: 14px;
   color: ${({ theme }) => theme.color.onBrand};
   background: ${({ theme }) => theme.gradient.action};
-  border-radius: 10px;
-  box-shadow: 0 4px 14px rgb(37 99 235 / 25%);
+  border-radius: 6px;
+  box-shadow: 0 3px 10px rgb(37 99 235 / 22%);
+  font-size: 0.875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
   text-decoration: none;
-  > svg { font-size: 1.0625rem; }
+  > svg { flex: none; font-size: 1rem; }
   &:hover { filter: brightness(0.95); }
   ${focusRing}
 `;
 const OutlineLink = styled(QuietLink)`
-  min-block-size: 2.5rem;
-  padding-inline: 16px;
-  font-size: 0.875rem;
+  min-block-size: 2.375rem;
+  font-size: 0.8125rem;
 `;
 
-export function FeedFilters({ query, today, leagues, total, onApply }: {
+/** Whole-number entry that commits on Enter or blur, never per keystroke; arrow keys step by one. */
+function WholeNumberInput({ value, min, max, label, onCommit }: {
+  value: number; min: number; max: number; label: string; onCommit: (value: number) => void;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  const settle = (raw: string) => {
+    setText(null);
+    const trimmed = raw.trim().replace(/%$/u, ""), parsed = Number(trimmed);
+    if (trimmed === "" || !Number.isFinite(parsed)) return;
+    const next = Math.round(Math.min(max, Math.max(min, parsed)));
+    if (next !== value) onCommit(next);
+  };
+  const step = (delta: number) => {
+    setText(null);
+    const next = Math.min(max, Math.max(min, value + delta));
+    if (next !== value) onCommit(next);
+  };
+  return <input type="text" inputMode="numeric" value={text ?? String(value)} aria-label={label} autoComplete="off"
+    onFocus={(event) => event.currentTarget.select()} onChange={(event) => setText(event.target.value)}
+    onBlur={(event) => settle(event.target.value)}
+    onKeyDown={(event) => {
+      if (event.key === "Enter") { event.preventDefault(); settle(event.currentTarget.value); }
+      else if (event.key === "Escape") setText(null);
+      else if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); step(event.key === "ArrowUp" ? 1 : -1); }
+    }} />;
+}
+
+export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen = true, phoneId }: {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; total: number | null; onApply: (query: FeedQuery) => void;
+  /** Phones show only the dates until the header toggle opens the remaining rows. */
+  phoneOpen?: boolean; phoneId?: string;
 }) {
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
   const pending = useRef<number | null>(null), latest = useRef<FeedQuery | null>(null), applyRef = useRef(onApply);
@@ -394,43 +391,43 @@ export function FeedFilters({ query, today, leagues, total, onApply }: {
     </ChipRow>;
   }
 
-  function multiBox(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
+  function multiField(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
     const label = messages.text(`feed.filters.${kind}`);
     const accent: AccentName = kind === "leagues" ? "blue" : kind === "countries" ? "orange" : "violet";
     const selected: readonly string[] = draft[kind];
     const chosen = selected.map((value) => options.find((option) => option.value === value)
       ?? { value, label: value, detail: null, logoUrl: null, fixtures: 0 });
-    const visible = chosen.slice(0, 4), extra = chosen.length - visible.length;
+    const visible = chosen.slice(0, 2), extra = chosen.length - visible.length;
     const toggle = (value: string): FeedQuery | null => kind === "markets" ? toggledMarkets(draft, value as MarketFamily)
       : { ...draft, [kind]: toggled(draft[kind], value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) };
     const appliedToggle = (value: string): FeedQuery => (kind === "markets" ? toggledMarkets(query, value as MarketFamily)
       : { ...query, [kind]: toggled(query[kind], value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) }) ?? query;
-    return <Block>
-      <BlockLabel id={`filters-${kind}`} $accent={accent}>{label}</BlockLabel>
-      <MultiBox role="group" aria-labelledby={`filters-${kind}`} $accent={accent}>
-        <ChipWrap>
-          {visible.length === 0 && <span data-placeholder>{messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.any")}</span>}
-          {visible.map((option) => {
-            const next = toggle(option.value);
-            return next ? <FilterChip key={option.value} label={option.label} selected accent={accent} href={href(appliedToggle(option.value))}
-              logoUrl={kind === "leagues" ? option.logoUrl : null} onSelect={() => edit(next)}
-              actionLabel={messages.text("feed.filters.remove", { label: option.label })} />
-              : <ChipText key={option.value} $selected $accent={accent} title={messages.text("feed.filters.oneMarket")}>{option.label}</ChipText>;
-          })}
-          {extra > 0 && <ChipText $selected $accent={accent}>{messages.text("feed.filters.moreCount", { count: messages.number(extra) })}</ChipText>}
-        </ChipWrap>
-        <OptionPicker title={messages.text("feed.filters.showAll", { label })} options={options} selected={selected}
-          searchable={kind !== "markets"} onToggle={(value) => { const next = toggle(value); if (next) edit(next); }}
-          findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")} />
-      </MultiBox>
-    </Block>;
+    return <Field data-span="2" $accent={accent} role="group" aria-labelledby={`filters-${kind}`}>
+      <FieldName id={`filters-${kind}`} $accent={accent}>{label}</FieldName>
+      <ChipLine>
+        {visible.length === 0 && <span data-placeholder>{messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.any")}</span>}
+        {visible.map((option) => {
+          const next = toggle(option.value);
+          return next ? <FilterChip key={option.value} label={option.label} selected accent={accent} href={href(appliedToggle(option.value))}
+            logoUrl={kind === "leagues" ? option.logoUrl : null} onSelect={() => edit(next)}
+            actionLabel={messages.text("feed.filters.remove", { label: option.label })} />
+            : <ChipText key={option.value} $selected $accent={accent} title={messages.text("feed.filters.oneMarket")}><span>{option.label}</span></ChipText>;
+        })}
+        {extra > 0 && <ChipText data-more $selected $accent={accent} title={chosen.slice(2).map((option) => option.label).join(", ")}>
+          {messages.text("feed.filters.moreCount", { count: messages.number(extra) })}
+        </ChipText>}
+      </ChipLine>
+      <OptionPicker title={messages.text("feed.filters.showAll", { label })} options={options} selected={selected}
+        searchable={kind !== "markets"} onToggle={(value) => { const next = toggle(value); if (next) edit(next); }}
+        findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")} />
+    </Field>;
   }
 
   const probabilityOptions = probabilityPresets.some((preset) => preset.min === draft.probability.min && preset.max === draft.probability.max)
     ? probabilityPresets : [...probabilityPresets, draft.probability];
-  const draftRange = resolveFeedDates(draft, today), draftSingle = draftRange.dayCount === 1;
-  const setDraftDates = (dates: DateSelection) => edit({ ...draft, dates });
-  const probabilityLabel = messages.text("feed.filters.probability"), oddsLabel = messages.text("feed.filters.odds");
+  const oddsLabel = messages.text("feed.filters.oddsLabel"), probabilityLabel = messages.text("feed.filters.probabilityLabel");
+  const percent = (value: number) => `${messages.number(value)}%`, odds = (value: number) => (value / 100).toFixed(2);
+  const setProbability = (min: number, max: number) => edit({ ...draft, probability: { min, max } });
 
   return <Panel aria-label={messages.text("feed.filters.form")}>
     <PhoneOnly>
@@ -448,120 +445,81 @@ export function FeedFilters({ query, today, leagues, total, onApply }: {
         {single ? <SingleDatePicker query={phone} today={today} onApply={apply} /> : <DateRangePicker query={phone} today={today} onApply={apply} compact />}
         <DateStepper query={phone} today={today} onApply={apply} />
       </DateRow>
-      <ChipRow>
-        <RowLabel aria-hidden="true" $accent="violet">{messages.text("feed.filters.markets")}</RowLabel>
-        <ChipStrip role="group" aria-label={messages.text("feed.filters.markets")}>
-          {publicPolicy.markets.map((family) => {
-            const on = phone.markets.includes(family), next = toggledMarkets(phone, family), name = messages.text(`market.family.${family}`);
-            return next ? <FilterChip key={family} label={name} selected={on} accent="violet" href={href(toggledMarkets(query, family) ?? query)} onSelect={() => choose(next)}
-              actionLabel={messages.text(on ? "feed.filters.remove" : "feed.filters.add", { label: name })} />
-              : <ChipText key={family} $selected $accent="violet" title={messages.text("feed.filters.oneMarket")}>{name}</ChipText>;
-          })}
-        </ChipStrip>
-        <OptionPicker title={messages.text("feed.filters.showAll", { label: messages.text("feed.filters.markets") })} options={marketList}
-          selected={phone.markets} searchable={false} onToggle={(value) => { const next = toggledMarkets(phone, value as MarketFamily); if (next) choose(next); }}
-          findLabel={messages.text("feed.filters.markets")} emptyLabel={messages.text("feed.filters.noOptions")} />
-      </ChipRow>
-      {strip("leagues", leagueList, messages.text("feed.filters.leagues"))}
-      {strip("countries", countryList, messages.text("feed.filters.countries"))}
-      <BottomRow>
-        <SelectGroup title={messages.text("feed.filters.oddsPending")} $accent="amber">
-          {messages.text("feed.filters.oddsLabel")}
-          <SelectBox><select disabled aria-label={oddsLabel}>
-            <option>{messages.text("feed.filters.any")}</option>
-          </select><ChevronDownIcon /></SelectBox>
-        </SelectGroup>
-        <SelectGroup $accent="pink">
-          {messages.text("feed.filters.probabilityLabel")}
-          <SelectBox><select aria-label={probabilityLabel} value={`${phone.probability.min}-${phone.probability.max}`} onChange={(event) => {
-            const [min, max] = event.target.value.split("-").map(Number);
-            choose({ ...phone, probability: { min: min!, max: max! } });
-          }}>
-            {probabilityOptions.map((preset) => <option key={`${preset.min}-${preset.max}`} value={`${preset.min}-${preset.max}`}>{rangeText(messages, preset)}</option>)}
-          </select><ChevronDownIcon /></SelectBox>
-        </SelectGroup>
-        <QuietLink href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}>{messages.text("feed.filters.reset")}</QuietLink>
-      </BottomRow>
+      <PhoneMore id={phoneId} hidden={!phoneOpen}>
+        <ChipRow>
+          <RowLabel aria-hidden="true" $accent="violet">{messages.text("feed.filters.markets")}</RowLabel>
+          <ChipStrip role="group" aria-label={messages.text("feed.filters.markets")}>
+            {publicPolicy.markets.map((family) => {
+              const on = phone.markets.includes(family), next = toggledMarkets(phone, family), name = messages.text(`market.family.${family}`);
+              return next ? <FilterChip key={family} label={name} selected={on} accent="violet" href={href(toggledMarkets(query, family) ?? query)} onSelect={() => choose(next)}
+                actionLabel={messages.text(on ? "feed.filters.remove" : "feed.filters.add", { label: name })} />
+                : <ChipText key={family} $selected $accent="violet" title={messages.text("feed.filters.oneMarket")}>{name}</ChipText>;
+            })}
+          </ChipStrip>
+          <OptionPicker title={messages.text("feed.filters.showAll", { label: messages.text("feed.filters.markets") })} options={marketList}
+            selected={phone.markets} searchable={false} onToggle={(value) => { const next = toggledMarkets(phone, value as MarketFamily); if (next) choose(next); }}
+            findLabel={messages.text("feed.filters.markets")} emptyLabel={messages.text("feed.filters.noOptions")} />
+        </ChipRow>
+        {strip("leagues", leagueList, messages.text("feed.filters.leagues"))}
+        {strip("countries", countryList, messages.text("feed.filters.countries"))}
+        <BottomRow>
+          <SelectGroup title={messages.text("feed.filters.oddsPending")} $accent="amber">
+            {oddsLabel}
+            <SelectBox><select disabled aria-label={messages.text("feed.filters.odds")}>
+              <option>{messages.text("feed.filters.any")}</option>
+            </select><ChevronDownIcon /></SelectBox>
+          </SelectGroup>
+          <SelectGroup $accent="pink">
+            {probabilityLabel}
+            <SelectBox><select aria-label={messages.text("feed.filters.probability")} value={`${phone.probability.min}-${phone.probability.max}`} onChange={(event) => {
+              const [min, max] = event.target.value.split("-").map(Number);
+              choose({ ...phone, probability: { min: min!, max: max! } });
+            }}>
+              {probabilityOptions.map((preset) => <option key={`${preset.min}-${preset.max}`} value={`${preset.min}-${preset.max}`}>{rangeText(messages, preset)}</option>)}
+            </select><ChevronDownIcon /></SelectBox>
+          </SelectGroup>
+          <QuietLink href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}>{messages.text("feed.filters.reset")}</QuietLink>
+        </BottomRow>
+      </PhoneMore>
     </PhoneOnly>
 
     <DesktopOnly>
       <DesktopGrid>
-        <Block>
-          <BlockLabel $accent="teal">{messages.text("feed.date.mode")}</BlockLabel>
-          <WideSegmented role="group" aria-label={messages.text("feed.date.mode")}>
-            <Link href={href({ ...query, dates: singleDates })} prefetch={false} aria-current={draftSingle ? "true" : undefined}
-              onClick={(event) => plainClick(event, () => setDraftDates({ kind: "date", date: draftRange.startDate }))}>{messages.text("feed.date.single")}</Link>
-            <Link href={href({ ...query, dates: single ? rangeDates : query.dates })} prefetch={false} aria-current={draftSingle ? undefined : "true"}
-              onClick={(event) => plainClick(event, () => setDraftDates({ kind: "range", from: draftRange.startDate,
-                to: draftSingle ? addReportingDays(draftRange.startDate, 6) : draftRange.endDate }))}>{messages.text("feed.date.range")}</Link>
-          </WideSegmented>
-          <DateInputs>
-            <input type="date" value={draftRange.startDate} aria-label={messages.text(draftSingle ? "feed.date.choose" : "feed.date.from")}
-              onChange={(event) => {
-                try {
-                  const start = parseReportingDate(event.target.value);
-                  setDraftDates(draftSingle ? { kind: "date", date: start }
-                    : { kind: "range", from: start, to: draftRange.endDate < start ? start : draftRange.endDate });
-                } catch { /* Incomplete native values keep the draft. */ }
-              }} />
-            {!draftSingle && <>
-              <span aria-hidden="true">→</span>
-              <input type="date" value={draftRange.endDate} min={draftRange.startDate} aria-label={messages.text("feed.date.to")}
-                max={addReportingDays(draftRange.startDate, feedQueryRules.maximumDays - 1)} onChange={(event) => {
-                  try { setDraftDates({ kind: "range", from: draftRange.startDate, to: parseReportingDate(event.target.value) }); }
-                  catch { /* Incomplete native values keep the draft. */ }
-                }} />
-            </>}
-          </DateInputs>
-        </Block>
-        {multiBox("leagues", leagueList)}
-        {multiBox("countries", countryList)}
-        {multiBox("markets", marketList)}
-      </DesktopGrid>
-      <SecondRow>
-        <Block>
-          <BlockLabel title={messages.text("feed.filters.oddsPending")} $accent="amber">{oddsLabel}<InfoIcon aria-hidden="true" /></BlockLabel>
-          <RangeRow>
-            <div>
-              <RangeSlider min={120} max={500} step={5} low={120} high={500} disabled accent="amber" onChange={() => {}}
-                lowLabel={messages.text("feed.filters.minimum", { label: oddsLabel })} highLabel={messages.text("feed.filters.maximum", { label: oddsLabel })} />
-              <RangeEnds aria-hidden="true"><span>1.20</span><span>5.00</span></RangeEnds>
-            </div>
-            <NumberPair $disabled><input disabled value="1.20" readOnly aria-label={messages.text("feed.filters.minimum", { label: oddsLabel })} />–
-              <input disabled value="5.00" readOnly aria-label={messages.text("feed.filters.maximum", { label: oddsLabel })} /></NumberPair>
-          </RangeRow>
+        {multiField("leagues", leagueList)}
+        {multiField("countries", countryList)}
+        {multiField("markets", marketList)}
+        <ApplyLink href={href(draft)} prefetch={false} onClick={(event) => plainClick(event, () => {
+          try { onApply(applyFeedDraft(draft, today)); } catch { /* An invalid draft is never applied. */ }
+        })}>
+          <FilterIcon />{draftTotal === null ? messages.text("feed.filters.applyPlain") : messages.plural("feed.filters.applyCount", draftTotal)}
+        </ApplyLink>
+        <Field data-span="3" $accent="amber" $disabled role="group" aria-labelledby="filters-odds" title={messages.text("feed.filters.oddsPending")}>
+          <FieldName id="filters-odds" $accent="amber">{oddsLabel}</FieldName>
+          <RangeSlider min={120} max={500} step={5} low={120} high={500} disabled accent="amber" format={odds} onCommit={() => {}}
+            lowLabel={messages.text("feed.filters.minimum", { label: oddsLabel })} highLabel={messages.text("feed.filters.maximum", { label: oddsLabel })} />
+          <NumberPair $disabled>
+            <input disabled value="1.20" readOnly aria-label={messages.text("feed.filters.minimum", { label: oddsLabel })} />–
+            <input disabled value="5.00" readOnly aria-label={messages.text("feed.filters.maximum", { label: oddsLabel })} />
+          </NumberPair>
           <VisuallyHidden>{messages.text("feed.filters.oddsPending")}</VisuallyHidden>
-        </Block>
-        <Block>
-          <BlockLabel title={messages.text("feed.filters.probabilityHelp")} $accent="pink">{probabilityLabel}<InfoIcon aria-hidden="true" /></BlockLabel>
-          <RangeRow>
-            <div>
-              <RangeSlider min={0} max={100} step={1} low={draft.probability.min} high={draft.probability.max} accent="pink"
-                onChange={(min, max) => edit({ ...draft, probability: { min, max } })}
-                lowLabel={messages.text("feed.filters.minimum", { label: probabilityLabel })} highLabel={messages.text("feed.filters.maximum", { label: probabilityLabel })} />
-              <RangeEnds aria-hidden="true"><span>0%</span><span>100%</span></RangeEnds>
-            </div>
-            <NumberPair>
-              <input type="number" min={0} max={100} value={draft.probability.min} aria-label={messages.text("feed.filters.minimum", { label: probabilityLabel })}
-                onChange={(event) => { const min = Math.max(0, Math.min(Number(event.target.value) || 0, draft.probability.max)); edit({ ...draft, probability: { ...draft.probability, min } }); }} />%
-              {" – "}
-              <input type="number" min={0} max={100} value={draft.probability.max} aria-label={messages.text("feed.filters.maximum", { label: probabilityLabel })}
-                onChange={(event) => { const max = Math.min(100, Math.max(Number(event.target.value) || 0, draft.probability.min)); edit({ ...draft, probability: { ...draft.probability, max } }); }} />%
-            </NumberPair>
-          </RangeRow>
+        </Field>
+        <Field data-span="3" $accent="pink" role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
+          <FieldName id="filters-probability" $accent="pink">{probabilityLabel}</FieldName>
+          <RangeSlider min={0} max={100} step={1} low={draft.probability.min} high={draft.probability.max} accent="pink" format={percent}
+            onCommit={setProbability}
+            lowLabel={messages.text("feed.filters.minimum", { label: probabilityLabel })} highLabel={messages.text("feed.filters.maximum", { label: probabilityLabel })} />
+          <NumberPair>
+            <WholeNumberInput value={draft.probability.min} min={0} max={draft.probability.max} label={messages.text("feed.filters.minimum", { label: probabilityLabel })}
+              onCommit={(min) => setProbability(min, draft.probability.max)} />–
+            <WholeNumberInput value={draft.probability.max} min={draft.probability.min} max={100} label={messages.text("feed.filters.maximum", { label: probabilityLabel })}
+              onCommit={(max) => setProbability(draft.probability.min, max)} />%
+          </NumberPair>
           <VisuallyHidden>{messages.text("feed.filters.probabilityHelp")}</VisuallyHidden>
-        </Block>
-        <Actions>
-          <ApplyLink href={href(draft)} prefetch={false} onClick={(event) => plainClick(event, () => {
-            try { onApply(applyFeedDraft(draft, today)); } catch { /* An invalid draft is never applied. */ }
-          })}>
-            <FilterIcon />{draftTotal === null ? messages.text("feed.filters.applyPlain") : messages.plural("feed.filters.applyCount", draftTotal)}
-          </ApplyLink>
-          <OutlineLink href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}>
-            <ResetIcon />{messages.text("feed.filters.clearAll")}
-          </OutlineLink>
-        </Actions>
-      </SecondRow>
+        </Field>
+        <OutlineLink href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}>
+          <ResetIcon />{messages.text("feed.filters.clearAll")}
+        </OutlineLink>
+      </DesktopGrid>
     </DesktopOnly>
   </Panel>;
 }

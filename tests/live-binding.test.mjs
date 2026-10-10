@@ -4,7 +4,9 @@ import { createAccountStatusReader, createQuotaRouter, LiveAccountError, parseAc
   PROVIDER_DAY_SETTLE_MS } from '../src/server/live/live-account.ts';
 import { missingOwnerApprovals, OwnerApprovalError, ownerEvidenceVerifier, parseOwnerApprovals } from '../src/server/live/live-approvals.ts';
 import { liveWorkload, REFRESH_REQUESTS_PER_JOB, resultSyncPolicy, selectionPolicy, liveReferences, publicationPolicy,
-  providerFallbackPolicy, cutoffPolicy, lifecyclePolicy } from '../src/server/live/live-plan.ts';
+  providerFallbackPolicy, cutoffPolicy, lifecyclePolicy, fallbackRefreshPlan, refreshEnvelopeFor } from '../src/server/live/live-plan.ts';
+import { parseRefreshPlan } from '../src/server/refresh/refresh-input.ts';
+import { refreshReference } from '../src/server/refresh/refresh-input.ts';
 import { latestSelectionOccurrence } from '../src/server/live/live-runner.ts';
 import { liveReadiness, LiveConfigurationError } from '../src/server/live/live-runtime.ts';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
@@ -157,4 +159,39 @@ test('owner approvals verify exact references per requirement and readiness name
   assert.throws(() => liveReadiness(parseRuntimePolicy({ ...refsEnv, GOAL_HINT_OPERATION_SCOPE: 'shadow',
     GOAL_HINT_SHADOW_MAX_JOBS: '1', GOAL_HINT_SHADOW_BUDGET_USD_CENTS: '1', GOAL_HINT_SHADOW_PROTOCOL_REF: 'synthetic-protocol' })),
   (error) => error instanceof LiveConfigurationError && error.issues.some((issue) => issue.includes('GOAL_HINT_OPERATION_SCOPE')));
+});
+
+test('slow per-minute plans wait out the rolling minute and skip cutoffs the queue cannot reach', () => {
+  const free = liveWorkload(100, 1, 'Free', 10), mega = liveWorkload(150_000, 12, 'Mega', 900);
+  assert.equal(free.pacing, 'slow'); assert.equal(mega.pacing, 'standard');
+  assert.equal(liveWorkload(100, 1, 'Free').pacing, 'standard', 'an unknown minute limit keeps the original timings');
+  assert.equal(free.refreshLeadMs, free.refreshCapacity * 5 * 60_000, 'one worker drains the whole budget before the last cutoff');
+  assert.equal(mega.refreshLeadMs, 2 * 60 * 60_000, 'large plans cap the lead at two hours');
+  const policy = parseRuntimePolicy(refsEnv), refs = liveReferences(policy);
+  const selection = parseSelectionPolicy(selectionPolicy(policy, refs, free));
+  assert.equal(selection.refreshLeadMs, free.refreshLeadMs);
+  assert.equal(selection.refresh.timeoutMs, 300_000); assert.equal(selection.refresh.fallbackReserveMs, 200_000);
+  assert.equal(parseSelectionPolicy(selectionPolicy(policy, refs, mega)).refresh.timeoutMs, 120_000);
+
+  const now = Date.parse('2026-10-10T08:00:00Z'), jobId = 'a'.repeat(64);
+  const member = (pacing, cutoffInMs) => ({ jobId, now, cycle: { cutoffAt: now + cutoffInMs },
+    entry: { envelope: { ...refreshEnvelopeFor(pacing), expiresAt: now + 3_600_000 } },
+    context: { fixtureId: '0ae713f1-54af-45e1-814c-8902e59ae2f6', fixtureVersion: 1n, provider: 'api-football', externalFixtureId: 1234,
+      home: { teamId: '25be93db-17de-4132-ac27-a3ce599f87ad', externalId: 1 }, away: { teamId: '2ed7644e-34d7-42f7-a1db-8a4e15ffcbad', externalId: 2 },
+      // The evidence cutoff precedes analysis; the cycle carries the publication cutoff.
+      kickoffAt: now + cutoffInMs + 300_000, analysisAt: now, cutoffAt: now, cycleId: 'cfe189b5-82b6-4f14-9479-917ca029ba09',
+      runId: '27dec311-9453-4b58-9603-d4443307d8ea' } });
+  for (const pacing of ['slow', 'standard']) {
+    const candidate = member(pacing, 3_600_000), plan = fallbackRefreshPlan(candidate, refs, pacing);
+    assert.equal(plan.evidence.requestId, refreshReference(jobId, 'evidence'));
+    parseRefreshPlan(plan, candidate);
+    if (pacing === 'slow') {
+      assert.equal(plan.observation.bounds.timeoutMs, 75_000, 'a status read can wait for the next rolling-minute slot');
+      assert.ok(plan.fallback.bounds.retry.maxAttempts * plan.fallback.bounds.retry.maxDelayMs >= 60_000);
+      assert.equal(plan.fallback.bounds.maxRequests, 1, 'waiting never adds a second dispatch');
+    }
+  }
+  assert.throws(() => fallbackRefreshPlan(member('slow', 120_000), refs, 'slow'), (error) => error.reason === 'ineligible' && error.detail === 'insufficient-time');
+  assert.throws(() => fallbackRefreshPlan({ ...member('slow', 3_600_000), entry: { envelope: { ...refreshEnvelopeFor('standard'), expiresAt: now + 3_600_000 } } }, refs, 'slow'),
+    (error) => error.reason === 'ineligible', 'a job created with the old short reserve is skipped instead of failing validation');
 });

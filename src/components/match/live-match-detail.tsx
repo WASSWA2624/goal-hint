@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { MatchDetail } from "@/app/_components/match-detail-content";
-import { FeedRunStatus } from "@/app/_components/feed-run-status";
 import type { ReportingDate } from "@/domain/calendar";
 import { parseFeedQuery } from "@/domain/feed-query";
 import { liveRefreshRules, mergeLiveDetail } from "@/domain/live-refresh";
@@ -46,7 +45,6 @@ function LiveDetail({ initial, today, locale, children }: {
     refresh, rollover: () => router.refresh() });
   return <>
     <RefreshStatus error={error} asOf={data.asOf} locale={locale} retry={() => { void refresh(); }} />
-    {data.run && <FeedRunStatus run={data.run} asOf={data.asOf} locale={locale} />}
     <MatchDetail data={data} locale={locale} history={children} />
   </>;
 }

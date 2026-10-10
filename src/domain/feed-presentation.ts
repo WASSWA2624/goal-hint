@@ -19,6 +19,22 @@ export function bestCardFamily(fixture: Pick<FixtureSnapshot, "forecast">, marke
   return best?.family ?? null;
 }
 
+export type NoPickReason = "market" | "outside" | "updating" | "unselected" | "closed" | "failed" | "awaiting";
+
+/**
+ * Why a fixture shows no pick, from stored cycle/update facts only: no cycle means the fixture was
+ * not selected for a prediction run; a failed or expired job surfaces as a delayed update.
+ */
+export function noPickReason(fixture: Pick<FixtureSnapshot, "forecast" | "cycle" | "update">): NoPickReason {
+  if (fixture.forecast) return "market";
+  const update = fixture.update?.prediction;
+  if (update === "outside-window") return "outside";
+  if (update === "updating") return "updating";
+  if (!fixture.cycle) return "unselected";
+  if (fixture.cycle.state !== "open") return "closed";
+  return update === "delayed" ? "failed" : "awaiting";
+}
+
 /** List numbering continues across pages. */
 export function feedRowNumber(page: number, pageSize: number, index: number): number {
   return (page - 1) * pageSize + index + 1;

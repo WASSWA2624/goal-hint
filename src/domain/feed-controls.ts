@@ -10,6 +10,6 @@ export function applyFeedDraft(draft: FeedQuery, today: ReportingDate): FeedQuer
 
 /** Reset filters/order while retaining the reporting selection, status entry and page size. */
 export function resetFeedFilters(query: FeedQuery): FeedQuery {
-  return { ...query, search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability,
+  return { ...query, search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, picks: "all",
     sort: { by: "kickoff", direction: "asc" }, page: 1 };
 }
