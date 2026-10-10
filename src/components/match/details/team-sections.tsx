@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { formLetters, goalTotals, marketRow } from "@/domain/match-details";
@@ -11,10 +11,11 @@ import {
 } from "@/domain/match-insights";
 import { formWindows, openItem, type FormWindow, type MatchSection, type VenueFocus } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
+import { media } from "@/styles/theme";
 import { CompareIcon, FormIcon, HeadToHeadIcon } from "./details-icons";
 import {
-  ChoiceGroup, Crest, Facts, FormLetters, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, Track,
-  desktop, useDetails, type Messages,
+  Bar, ChoiceGroup, Crest, Facts, FormLetters, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong,
+  desktop, size, useDetails, useStableDetails, type Messages,
 } from "./details-ui";
 import { ItemPanel, SectionCard, useReturnFocus } from "./section-card";
 import { useInsightSection } from "./use-match-view";
@@ -33,28 +34,32 @@ const TeamsRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 0.75rem;
+  font-size: ${size("secondary")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   > span { display: inline-flex; align-items: center; gap: 6px; min-inline-size: 0; }
   > span > span[data-name] { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  ${desktop} { font-size: 0.8125rem; }
+  ${desktop} { font-size: ${size("body")}; }
 `;
-/** Mirrored comparison bars: home value and bar, metric label, away bar and value. */
+/**
+ * Mirrored comparison bars: home value and bar, metric label, away bar and value. Narrow cards put
+ * the label on its own row above equal-width bars, so it stays on one line.
+ */
 const CompareRows = styled.div`
   display: grid;
   gap: 5px;
   > div, > button {
     display: grid;
-    grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem;
-    grid-template-areas: "hv label av" "hb hb ab";
+    grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) 2rem;
+    grid-template-areas: "label label label label" "hv hb ab av";
     align-items: center;
-    gap: 2px 6px;
-    font-size: 0.6875rem;
+    gap: 1px 4px;
+    font-size: ${size("caption")};
     font-variant-numeric: tabular-nums;
     @container details-card (min-width: 24rem) {
       grid-template-columns: 2.75rem minmax(0, 1fr) minmax(6rem, 1.2fr) minmax(0, 1fr) 2.75rem;
       grid-template-areas: "hv hb label ab av";
-      font-size: 0.75rem;
+      gap: 2px 6px;
+      font-size: ${size("secondary")};
     }
   }
   b[data-home] { grid-area: hv; } b[data-away] { grid-area: av; text-align: end; }
@@ -63,16 +68,16 @@ const CompareRows = styled.div`
 `;
 
 function Comparison({ home, away, limit }: { home: readonly InsightResult[]; away: readonly InsightResult[]; limit?: number }) {
-  const { data, messages } = useDetails();
+  const { data, messages } = useStableDetails();
   const { rows } = teamComparison(home, away, data.fixture.homeTeam.id, data.fixture.awayTeam.id);
   return <CompareRows>
     {rows.slice(0, limit).map((row) => {
       const scale = row.kind === "rate" ? 1 : Math.max(row.home ?? 0, row.away ?? 0, 0.0001);
       return <div key={row.metric}>
         <b data-home>{metricText(messages, row.kind, row.home)}</b>
-        <span data-home-bar><Track $value={(row.home ?? 0) / scale} $reverse aria-hidden="true" /></span>
+        <span data-home-bar><Bar value={(row.home ?? 0) / scale} $reverse aria-hidden="true" /></span>
         <span data-label>{messages.text(`details.metric.${row.metric}`)}</span>
-        <span data-away-bar><Track $value={(row.away ?? 0) / scale} $accent="blue" aria-hidden="true" /></span>
+        <span data-away-bar><Bar value={(row.away ?? 0) / scale} $accent="blue" aria-hidden="true" /></span>
         <b data-away>{metricText(messages, row.kind, row.away)}</b>
       </div>;
     })}
@@ -80,7 +85,7 @@ function Comparison({ home, away, limit }: { home: readonly InsightResult[]; awa
 }
 
 function Teams() {
-  const { data, home, away } = useDetails();
+  const { data, home, away } = useStableDetails();
   return <TeamsRow aria-hidden="true">
     <span><Crest name={data.fixture.homeTeam.name} url={data.fixture.homeTeam.logoUrl} /><span data-name>{home}</span></span>
     <span><span data-name>{away}</span><Crest name={data.fixture.awayTeam.name} url={data.fixture.awayTeam.logoUrl} /></span>
@@ -89,7 +94,7 @@ function Teams() {
 
 /** Score, competition and date of one stored verified result, with a link to its own match page. */
 export function RecordPanel({ record }: { record: InsightResult }) {
-  const { messages, locale } = useDetails();
+  const { messages, locale } = useStableDetails();
   const name = (team: InsightResult["home"]) => team.name ?? messages.text("details.teamUnknown");
   return <ItemPanel itemKey={record.fixtureId} title={messages.text("match.title", { home: name(record.home), away: name(record.away) })}>
     <Facts>
@@ -114,13 +119,13 @@ const RecordRow = styled(RowButton)`
 function ResultRows({ records, perspective, section, show = "both" }: {
   records: readonly InsightResult[]; perspective: string; section: MatchSection; show?: "both" | "opponent";
 }) {
-  const { messages, view, go } = useDetails();
+  const { messages, update } = useStableDetails();
   return <RowList>
     {records.map((record) => {
       const letter = resultFor(record, perspective), home = record.home.id === perspective;
       const opponent = home ? record.away : record.home;
       return <li key={record.fixtureId}>
-        <RecordRow type="button" data-item-key={record.fixtureId} onClick={() => go(openItem(view, section, record.fixtureId))}>
+        <RecordRow type="button" data-item-key={record.fixtureId} onClick={() => update((current) => openItem(current, section, record.fixtureId))}>
           <time dateTime={toUtcIsoString(at(record.kickoffAt))}>{messages.reportingDay(at(record.kickoffAt))}</time>
           <span data-teams>{show === "opponent" ? <>
             <Pill $accent={home ? "teal" : "violet"} title={messages.text(home ? "details.atHome" : "details.away")}>{messages.text(home ? "details.homeShort" : "details.awayShort")}</Pill>
@@ -139,19 +144,19 @@ function ResultRows({ records, perspective, section, show = "both" }: {
 
 /** Window and venue filters shared by form and comparison; values live in the URL. */
 function FormFilters({ venueLabels }: { venueLabels?: Record<VenueFocus, string> }) {
-  const { messages, view, go } = useDetails();
+  const { messages, view, update } = useDetails();
   return <PanelBar>
-    <ChoiceGroup label={messages.text("details.window")} value={view.window} onChange={(window: FormWindow) => go({ ...view, window, page: 1 }, "replace")}
+    <ChoiceGroup label={messages.text("details.window")} value={view.window} onChange={(window: FormWindow) => update((current) => ({ ...current, window, page: 1 }), "replace")}
       options={formWindows.map((window) => ({ value: window, label: window === 0 ? messages.text("details.allStored") : messages.text("details.lastN", { count: String(window) }) }))} />
-    <ChoiceGroup label={messages.text("details.venue")} value={view.venue} onChange={(venue: VenueFocus) => go({ ...view, venue, page: 1 }, "replace")}
+    <ChoiceGroup label={messages.text("details.venue")} value={view.venue} onChange={(venue: VenueFocus) => update((current) => ({ ...current, venue, page: 1 }), "replace")}
       options={(["all", "home", "away"] as const).map((venue) => ({ value: venue, label: venueLabels?.[venue] ?? messages.text(`details.venue.${venue}`) }))} />
   </PanelBar>;
 }
 
-export function StatsSection() {
-  const { data, preview, messages, home, away, view, go, fixtureId } = useDetails();
+export const StatsSection = memo(function StatsSection() {
+  const { data, preview, messages, home, away, view, update, fixtureId } = useDetails();
   const open = view.section === "stats";
-  const form = useInsightSection(fixtureId, "form", open), stats = useInsightSection(fixtureId, "stats", open);
+  const form = useInsightSection(fixtureId, "form", open, preview), stats = useInsightSection(fixtureId, "stats", open, preview);
   const homeId = data.fixture.homeTeam.id, awayId = data.fixture.awayTeam.id;
   const previewForm = preview?.sections.form ?? { home: [], away: [] };
   const all = form.data ?? previewForm;
@@ -193,12 +198,12 @@ export function StatsSection() {
       <CompareRows>
         {teamComparison(homeRecords, awayRecords, homeId, awayId).rows.map((row) => {
           const scale = row.kind === "rate" ? 1 : Math.max(row.home ?? 0, row.away ?? 0, 0.0001);
-          return <RowButton key={row.metric} type="button" data-item-key={row.metric} onClick={() => go({ ...view, item: row.metric })}
+          return <RowButton key={row.metric} type="button" data-item-key={row.metric} onClick={() => update((current) => ({ ...current, item: row.metric }))}
             aria-label={messages.text("details.metricOpen", { metric: messages.text(`details.metric.${row.metric}`) })} style={{ padding: "3px 2px" }}>
             <b data-home>{metricText(messages, row.kind, row.home)}</b>
-            <span data-home-bar><Track $value={(row.home ?? 0) / scale} $reverse aria-hidden="true" /></span>
+            <span data-home-bar><Bar value={(row.home ?? 0) / scale} $reverse aria-hidden="true" /></span>
             <span data-label>{messages.text(`details.metric.${row.metric}`)}</span>
-            <span data-away-bar><Track $value={(row.away ?? 0) / scale} $accent="blue" aria-hidden="true" /></span>
+            <span data-away-bar><Bar value={(row.away ?? 0) / scale} $accent="blue" aria-hidden="true" /></span>
             <b data-away>{metricText(messages, row.kind, row.away)}</b>
           </RowButton>;
         })}
@@ -215,7 +220,7 @@ export function StatsSection() {
       <Note>{messages.text("details.statsNotCollected")}</Note>
     </div>}
   </SectionCard>;
-}
+});
 
 const Spark = styled.svg`
   inline-size: 100%;
@@ -233,19 +238,27 @@ function Sparkline({ series }: { series: readonly number[] }) {
     <polyline points={points} fill="none" stroke="currentColor" strokeWidth={2} vectorEffect="non-scaling-stroke" />
   </Spark>;
 }
+/** Two-up phone cards stack the teams: full names, five letters on one line, no sparkline. */
 const FormTeams = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   > div { display: grid; gap: 4px; min-inline-size: 0; }
-  > div > span:first-child { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; white-space: nowrap; }
+  > div > span:first-child { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; white-space: nowrap; }
   > div > span:first-child > span[data-name] { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+  ${media.belowDesktop} {
+    @container details-card (max-width: 17rem) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+      > div > svg { display: none; }
+    }
+  }
 `;
 
-export function FormSection() {
-  const { data, preview, messages, home, away, view, go, fixtureId } = useDetails();
+export const FormSection = memo(function FormSection() {
+  const { data, preview, messages, home, away, view, update, fixtureId } = useDetails();
   const open = view.section === "form";
-  const form = useInsightSection(fixtureId, "form", open);
+  const form = useInsightSection(fixtureId, "form", open, preview);
   const all = form.data ?? preview?.sections.form ?? { home: [], away: [] };
   const sides = view.team === "both" ? (["home", "away"] as const) : [view.team];
   const team = (side: "home" | "away") => side === "home" ? data.fixture.homeTeam : data.fixture.awayTeam;
@@ -267,7 +280,7 @@ export function FormSection() {
     <SectionState loading={form.loading} error={form.error} onRetry={form.retry} />
     {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar>
-        <ChoiceGroup label={messages.text("details.team")} value={view.team} onChange={(value) => go({ ...view, team: value, page: 1 }, "replace")}
+        <ChoiceGroup label={messages.text("details.team")} value={view.team} onChange={(value) => update((current) => ({ ...current, team: value, page: 1 }), "replace")}
           options={[{ value: "both", label: messages.text("details.bothTeams") }, { value: "home", label: home }, { value: "away", label: away }]} />
       </PanelBar>
       <FormFilters />
@@ -280,20 +293,22 @@ export function FormSection() {
             <Note>{messages.text("details.formSummary", { wins: messages.number(summary.wins), draws: messages.number(summary.draws), losses: messages.number(summary.losses),
               scored: messages.number(summary.goalsFor), conceded: messages.number(summary.goalsAgainst), count: messages.plural("details.sampleResults", records.length) })}</Note>
             <ResultRows records={paged.items} perspective={team(side).id} section="form" show="opponent" />
-            <Pager page={paged.page} pages={paged.pages} onPage={(page) => go({ ...view, page }, "replace")} />
+            <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
           </> : <Note>{messages.text("details.noStoredResults")}</Note>}
         </div>;
       })}
     </div>}
   </SectionCard>;
-}
+});
 
+/** In a narrow card the letters move under the label instead of squeezing it. */
 const H2HSummary = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  font-size: 0.75rem;
+  gap: 4px 6px;
+  font-size: ${size("secondary")};
   > span { color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const PreviewRows = styled.div`
@@ -301,10 +316,10 @@ const PreviewRows = styled.div`
   @container details-card (min-width: 17rem) { display: block; }
 `;
 
-export function H2HSection() {
-  const { data, preview, messages, home, away, view, go, fixtureId } = useDetails();
+export const H2HSection = memo(function H2HSection() {
+  const { data, preview, messages, home, away, view, update, fixtureId } = useDetails();
   const open = view.section === "h2h";
-  const h2h = useInsightSection(fixtureId, "h2h", open);
+  const h2h = useInsightSection(fixtureId, "h2h", open, preview);
   const meetings = h2h.data?.meetings ?? preview?.sections.h2h.meetings ?? [];
   const total = h2h.data?.meetings.length ?? preview?.totals.meetings ?? 0;
   const homeId = data.fixture.homeTeam.id;
@@ -336,16 +351,16 @@ export function H2HSection() {
         <dt>{messages.text("details.metric.over25Rate")}</dt><dd>{percent(messages, totals.over25Rate)}</dd>
       </Facts>
       <PanelBar>
-        <ChoiceGroup label={messages.text("details.venue")} value={view.venue} onChange={(venue: VenueFocus) => go({ ...view, venue, page: 1 }, "replace")}
+        <ChoiceGroup label={messages.text("details.venue")} value={view.venue} onChange={(venue: VenueFocus) => update((current) => ({ ...current, venue, page: 1 }), "replace")}
           options={[{ value: "all", label: messages.text("details.venue.all") }, { value: "home", label: messages.text("details.hostedBy", { team: home }) },
             { value: "away", label: messages.text("details.hostedBy", { team: away }) }]} />
         {competitions.length > 1 && <ChoiceGroup label={messages.text("details.competition")} value={view.competition ?? ""}
-          onChange={(value) => go({ ...view, competition: value || null, page: 1 }, "replace")}
+          onChange={(value) => update((current) => ({ ...current, competition: value || null, page: 1 }), "replace")}
           options={[{ value: "", label: messages.text("details.allCompetitions") }, ...competitions.map(([id, name]) => ({ value: id, label: name }))]} />}
       </PanelBar>
       {paged.items.length ? <ResultRows records={paged.items} perspective={homeId} section="h2h" /> : <Note>{messages.text(meetings.length ? "details.noFilteredMeetings" : "details.noMeetings")}</Note>}
-      <Pager page={paged.page} pages={paged.pages} onPage={(page) => go({ ...view, page }, "replace")} />
+      <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
       <Note>{messages.text("details.h2hBasis")}</Note>
     </div>}
   </SectionCard>;
-}
+});

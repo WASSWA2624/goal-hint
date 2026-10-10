@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
+import { memo, useId, useState } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
-import { hasFinalScoreStatus, selectedCardPrediction } from "@/domain/match-card";
+import { hasFinalScoreStatus, sameCardFixture, selectedCardPrediction } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
-import type { OutcomeTone } from "@/styles/theme";
+import { media, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { CheckIcon, ChevronIcon, CrossIcon, LockIcon, NoticeIcon, TrophyIcon, VoidIcon } from "./match-icons";
 import { matchTableColumns, matchTableGap } from "./match-columns";
@@ -33,10 +33,9 @@ export type MatchCardProps = {
 };
 
 type Messages = ReturnType<typeof createMessages>;
-/** Placement for the dense phone/tablet tile; the table query restyles the same DOM as one row. */
-const tile = css`@media (max-width: 63.99rem)`;
-const table = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
-const wideTable = css`@media (min-width: ${({ theme }) => theme.breakpoint.xl})`;
+/** Placement for the dense phone/tablet tile; the table query restyles the same DOM as one row.
+ * Static strings, so the media blocks need no theme lookup per card render. */
+const tile = media.belowDesktop, table = media.desktop, wideTable = media.wide;
 const pulse = keyframes`0%, 100% { opacity: 1; } 50% { opacity: 0.35; }`;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
 
@@ -67,7 +66,6 @@ const Card = styled.article<{ $family: MarketFamily }>`
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: 0;
     box-shadow: inset 3px 0 0 ${({ theme, $family }) => theme.color.market[$family].solid};
-    &:hover { background: ${({ theme }) => theme.color.rowHover}; }
   }
   ${table} {
     grid-template-columns: ${matchTableColumns.compact};
@@ -77,9 +75,10 @@ const Card = styled.article<{ $family: MarketFamily }>`
     padding: 6px 16px;
     background: transparent;
     font-size: 0.8125rem;
-    &:hover { background: ${({ theme }) => theme.color.rowHover}; }
   }
   ${wideTable} { grid-template-columns: ${matchTableColumns.full}; }
+  /* Touch taps would otherwise leave a stuck tint after returning to the list. */
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
 `;
 
 const Meta = styled.header`
@@ -100,7 +99,7 @@ const League = styled.p`
   ${tile} {
     grid-area: league;
     align-self: center;
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     color: ${({ theme }) => theme.color.mutedText};
     > svg { font-size: 0.75rem; }
@@ -120,7 +119,7 @@ const When = styled.time`
   gap: 4px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  ${tile} { grid-area: when; justify-self: end; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.625rem; }
+  ${tile} { grid-area: when; justify-self: end; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
   ${table} { grid-column: 2; grid-row: 1; flex-wrap: wrap; gap: 0 6px; white-space: normal; }
 `;
 const Dot = styled.span`
@@ -131,7 +130,7 @@ const Dot = styled.span`
 const Teams = styled.div`
   --gh-logo-size: 16px;
   --gh-logo-radius: 0;
-  --gh-logo-font: 0.4375rem;
+  --gh-logo-font: 0.5rem;
   ${tile} { display: contents; }
   ${table} { --gh-logo-size: 22px; --gh-logo-font: 0.625rem; display: grid; grid-column: 4 / span 3; grid-template-columns: subgrid; align-items: center; }
 `;
@@ -144,7 +143,8 @@ const Team = styled.div`
     &[data-team-side="home"] { grid-area: home; }
     &[data-team-side="away"] { grid-area: away; }
   }
-  ${table} { gap: 8px; }
+  /* Both crests sit beside the score; the home name aligns towards it. */
+  ${table} { gap: 8px; &[data-team-side="home"] { flex-direction: row-reverse; text-align: end; } }
 `;
 const TeamName = styled.span`
   flex: 1;
@@ -195,6 +195,7 @@ const StateChip = styled.span<{ $tone: "live" | "final" | "halted" }>`
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: 1.6;
   white-space: nowrap;
+  ${tile} { padding: 0 5px; font-size: 0.625rem; line-height: 1.5; }
   ${({ $tone, theme }) => $tone === "live"
     ? css`color: ${theme.color.live.text}; background: ${theme.color.live.soft};`
     : $tone === "final" ? css`color: ${theme.color.mutedText}; background: ${theme.color.surfaceMuted};`
@@ -225,7 +226,7 @@ const Pick = styled.div<{ $family: MarketFamily }>`
   ${table} { display: grid; grid-column: 7 / span 3; grid-template-columns: subgrid; align-items: center; }
 `;
 const MarketName = styled.span<{ $family: MarketFamily }>`
-  font-size: 0.5625rem;
+  font-size: 0.625rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   ${ellipsis}
   ${table} {
@@ -360,7 +361,7 @@ const Open = styled(Link)`
     place-items: center;
     > svg { display: block; font-size: 1rem; }
     &::after { content: ""; position: absolute; inset: 0; z-index: 1; }
-    &:hover { color: ${({ theme }) => theme.color.brand}; }
+    ${media.hover} { &:hover { color: ${({ theme }) => theme.color.brand}; } }
     &:focus-visible { outline: none; }
     &:focus-visible::after {
       outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
@@ -428,7 +429,7 @@ function CompetitionLogo({ url }: { url: string | null | undefined }) {
     : <TrophyIcon />;
 }
 
-export function MatchCard({ fixture, analysisSlug, markets, selectedFamily, locale: requestedLocale,
+function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
@@ -513,3 +514,17 @@ export function MatchCard({ fixture, analysisSlug, markets, selectedFamily, loca
     </Open>
   </Card>;
 }
+
+/** Polls hand every card a fresh record; equal-version observations that look the same skip rendering.
+ * A server refresh of the same query also brings an equal but new `markets` array. */
+function sameCardProps(previous: MatchCardProps, next: MatchCardProps): boolean {
+  if (!sameCardFixture(previous.fixture, next.fixture)) return false;
+  for (const key of new Set([...Object.keys(previous), ...Object.keys(next)]) as Set<keyof MatchCardProps>) {
+    if (key === "fixture" || Object.is(previous[key], next[key])) continue;
+    if (key !== "markets" || previous.markets?.length !== next.markets?.length ||
+        previous.markets?.some((family, index) => family !== next.markets?.[index])) return false;
+  }
+  return true;
+}
+
+export const MatchCard = memo(MatchCardView, sameCardProps);

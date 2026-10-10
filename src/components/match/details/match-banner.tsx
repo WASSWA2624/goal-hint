@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import styled, { css } from "styled-components";
 import { CalendarIcon, ClockIcon } from "@/components/match/match-icons";
 import { featuredFamily, formLetters, marketRow } from "@/domain/match-details";
@@ -7,13 +8,11 @@ import { noPickReason } from "@/domain/feed-presentation";
 import type { MarketFamily } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
 import { toUtcIsoString } from "@/domain/calendar";
-import type { AccentName } from "@/styles/theme";
+import { media, type AccentName } from "@/styles/theme";
 import { BothTeamsIcon, GoalsIcon, ResultIcon, ShieldIcon, StarIcon } from "./details-icons";
-import { Crest, FormLetters, focusRing, IconBadge, useDetails } from "./details-ui";
+import { Crest, FormLetters, desktop, focusRing, IconBadge, scrollClearance, size, useStableDetails } from "./details-ui";
 import { marketName, percent, pickLabel } from "./labels";
 
-const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
-const tablet = css`@media (min-width: ${({ theme }) => theme.breakpoint.md})`;
 export const familyIcon: Record<MarketFamily, typeof ResultIcon> = {
   "match-result": ResultIcon, "double-chance": ShieldIcon, "total-goals": GoalsIcon, "both-teams-to-score": BothTeamsIcon,
 };
@@ -32,6 +31,7 @@ const Box = styled.section`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.cardRadius};
   box-shadow: ${({ theme }) => theme.shadow.card};
+  ${scrollClearance}
   ${desktop} {
     grid-template-columns: minmax(9rem, 0.75fr) minmax(0, 1fr) auto minmax(0, 1fr) minmax(15rem, 1fr);
     grid-template-areas: "comp home when away pick" "comp home vs away pick";
@@ -47,8 +47,8 @@ const Competition = styled.div`
   min-inline-size: 0;
   > img { flex: none; inline-size: 28px; block-size: 28px; object-fit: contain; ${desktop} { inline-size: 44px; block-size: 44px; } }
   > div { min-inline-size: 0; }
-  strong { display: block; font-size: 0.8125rem; line-height: 1.25; overflow-wrap: anywhere; ${desktop} { font-size: 1rem; } }
-  span { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; ${desktop} { font-size: 0.8125rem; } }
+  strong { display: block; font-size: ${size("body")}; line-height: 1.25; overflow-wrap: anywhere; ${desktop} { font-size: 1rem; } }
+  span { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; ${desktop} { font-size: ${size("body")}; } }
 `;
 const CompetitionLogo = styled.img``;
 const When = styled.p`
@@ -59,13 +59,14 @@ const When = styled.p`
   justify-content: flex-end;
   gap: 2px 10px;
   margin: 0;
-  font-size: 0.75rem;
+  font-size: ${size("secondary")};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   > span { display: inline-flex; align-items: center; gap: 4px; }
-  svg { color: ${({ theme }) => theme.color.accent.blue.solid}; font-size: 0.9375rem; }
-  ${desktop} { justify-content: center; align-self: end; font-size: 0.875rem; }
+  svg { color: ${({ theme }) => theme.color.accent.blue.solid}; font-size: ${size("body")}; }
+  ${desktop} { justify-content: center; align-self: end; font-size: ${size("emphasis")}; svg { font-size: 0.9375rem; } }
 `;
+/** Phones: 40px crests and 13px names keep long names such as "Manchester United" on one line. */
 const Team = styled.div<{ $side: "home" | "away" }>`
   grid-area: ${({ $side }) => $side};
   display: grid;
@@ -73,14 +74,16 @@ const Team = styled.div<{ $side: "home" | "away" }>`
   gap: 4px;
   min-inline-size: 0;
   text-align: center;
-  > strong { font-size: 0.875rem; line-height: 1.2; overflow-wrap: anywhere; }
+  > :first-child { --gh-logo-size: 40px; --gh-logo-font: 15px; }
+  > strong { font-size: ${size("body")}; line-height: 1.2; overflow-wrap: anywhere; }
+  /* Desktop: both crests sit beside the score; the home name aligns towards it. */
   ${desktop} {
     grid-template-columns: auto minmax(0, 1fr);
     justify-items: start;
     column-gap: 12px;
     text-align: start;
-    ${({ $side }) => $side === "away" && css`grid-template-columns: minmax(0, 1fr) auto; justify-items: end; text-align: end;`}
-    > :first-child { grid-row: span 2; ${({ $side }) => $side === "away" && "grid-column: 2;"} }
+    ${({ $side }) => $side === "home" && css`grid-template-columns: minmax(0, 1fr) auto; justify-items: end; text-align: end;`}
+    > :first-child { --gh-logo-size: 48px; --gh-logo-font: 18px; grid-row: span 2; ${({ $side }) => $side === "home" && "grid-column: 2;"} }
     > strong { font-size: 1.25rem; }
   }
 `;
@@ -92,19 +95,23 @@ const Versus = styled.div`
   > b {
     display: grid;
     place-items: center;
-    min-inline-size: 2.5rem;
-    block-size: 2.5rem;
+    min-inline-size: 2.25rem;
+    block-size: 2.25rem;
     padding-inline: 6px;
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surfaceMuted};
     border-radius: 999px;
-    font-size: 0.9375rem;
+    font-size: ${size("body")};
     font-variant-numeric: tabular-nums;
   }
-  > b[data-score] { color: ${({ theme }) => theme.color.text}; background: none; font-size: 1.375rem; }
-  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  > b[data-score] { color: ${({ theme }) => theme.color.text}; background: none; font-size: ${size("hero")}; }
+  > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > span[data-live] { color: ${({ theme }) => theme.color.live.text}; }
-  ${desktop} { align-self: start; > b { min-inline-size: 3rem; block-size: 3rem; } }
+  ${desktop} {
+    align-self: start;
+    > b { min-inline-size: 3rem; block-size: 3rem; font-size: 0.9375rem; }
+    > b[data-score] { font-size: 1.375rem; }
+  }
 `;
 const Featured = styled.button<{ $empty: boolean }>`
   grid-area: pick;
@@ -122,11 +129,12 @@ const Featured = styled.button<{ $empty: boolean }>`
   text-align: start;
   cursor: ${({ $empty }) => $empty ? "default" : "pointer"};
   ${focusRing}
-  &:hover:not(:disabled) { border-color: ${({ theme }) => theme.color.accent.orange.solid}; }
+  ${media.hover} { &:hover:not(:disabled) { border-color: ${({ theme }) => theme.color.accent.orange.solid}; } }
   > div { display: grid; gap: 1px; min-inline-size: 0; }
-  > div > span[data-label] { display: inline-flex; align-items: center; gap: 4px; color: ${({ theme }) => theme.color.accent.orange.text}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  > div > strong { font-size: 1rem; line-height: 1.2; overflow-wrap: anywhere; ${desktop} { font-size: 1.0625rem; } }
-  > div > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
+  > div > span[data-label] { display: inline-flex; align-items: center; gap: 4px; color: ${({ theme }) => theme.color.accent.orange.text}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  > div > strong { font-size: ${size("emphasis")}; line-height: 1.2; overflow-wrap: anywhere; ${desktop} { font-size: 1.0625rem; } }
+  > div > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
+  /* Phones wrap the probability label so the pick keeps the width. */
   > span[data-probability] {
     display: grid;
     justify-items: center;
@@ -135,14 +143,21 @@ const Featured = styled.button<{ $empty: boolean }>`
     color: ${({ theme }) => theme.color.onBrand};
     background: ${({ theme }) => theme.color.accent.orange.gradient};
     border-radius: 4px;
-    > b { font-size: 1.375rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
-    > small { font-size: 0.625rem; opacity: 0.92; white-space: nowrap; }
+    > b { font-size: ${size("title")}; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    > small { max-inline-size: 4.5rem; font-size: ${size("micro")}; line-height: 1.15; text-align: center; opacity: 0.92; }
+    ${desktop} {
+      > b { font-size: 1.375rem; }
+      > small { max-inline-size: none; line-height: inherit; white-space: nowrap; }
+    }
   }
 `;
 
-/** Fixture banner: competition, teams with recent form, kickoff in EAT, score when played, and the featured pick. */
-export function MatchBanner() {
-  const { data, preview, messages, home, away, view, go } = useDetails();
+/**
+ * Fixture banner: competition, teams with recent form, kickoff in EAT, score when played, and the
+ * featured pick. It reads no view state, so section and filter changes skip it.
+ */
+export const MatchBanner = memo(function MatchBanner() {
+  const { data, preview, messages, home, away, update } = useStableDetails();
   const fixture = data.fixture, context = preview?.sections.context;
   const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
   const played = fixture.score && (fixture.status === "live" || fixture.status.startsWith("finished") || fixture.status === "awarded");
@@ -153,7 +168,7 @@ export function MatchBanner() {
   const status = fixture.status === "live" && fixture.liveClock
     ? fixture.liveClock.minute !== null ? messages.text("match.clock.minute", { minute: messages.number(fixture.liveClock.minute) }) : messages.text(`match.clock.${fixture.liveClock.phase}`)
     : messages.text(`match.status.${fixture.status}`);
-  return <Box aria-labelledby="match-banner-title">
+  return <Box id="current-match-summary" aria-labelledby="match-banner-title">
     <Competition>
       {fixture.competition.logoUrl && <CompetitionLogo src={fixture.competition.logoUrl} alt="" width={44} height={44} referrerPolicy="no-referrer" />}
       <div>
@@ -177,7 +192,7 @@ export function MatchBanner() {
     </Versus>
     <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager /><strong>{away}</strong>{form("away")}</Team>
     {row?.item ? <Featured type="button" $empty={false} data-featured-pick={featured!}
-      onClick={() => go({ ...view, marketsOpen: true, market: featured })} aria-label={messages.text("details.featuredOpen", {
+      onClick={() => update((current) => ({ ...current, marketsOpen: true, market: featured }))} aria-label={messages.text("details.featuredOpen", {
         market: marketName(messages, featured!), pick: pickLabel(messages, row.item.market.selection, home, away), probability: percent(messages, row.item.market.selectedProbability) })}>
       <div>
         <span data-label><StarIcon />{messages.text("details.topPick")}</span>
@@ -193,13 +208,13 @@ export function MatchBanner() {
       </div>
     </Featured>}
   </Box>;
-}
+});
 
 const Tiles = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
-  ${tablet} { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  ${media.tablet} { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   ${desktop} { gap: 10px; }
 `;
 const Tile = styled.button<{ $featured: boolean }>`
@@ -219,27 +234,33 @@ const Tile = styled.button<{ $featured: boolean }>`
   text-align: start;
   cursor: pointer;
   ${focusRing}
-  &:hover { border-color: ${({ theme }) => theme.color.accent.blue.solid}; }
+  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.blue.solid}; } }
   > span:first-child { grid-area: icon; }
-  > b { grid-area: name; font-size: 0.75rem; line-height: 1.2; }
-  > span[data-pick] { grid-area: pick; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; white-space: nowrap; text-overflow: ellipsis; }
-  > span[data-value] { grid-area: value; display: flex; align-items: baseline; gap: 6px; }
-  > span[data-value] > strong { color: ${({ theme, $featured }) => $featured ? theme.color.accent.orange.text : theme.color.text}; font-size: 1rem; font-variant-numeric: tabular-nums; }
-  > span[data-value] > small { padding: 0 6px; color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted}; border-radius: 4px; font-size: 0.6875rem; }
+  > b { grid-area: name; font-size: ${size("secondary")}; line-height: 1.2; }
+  > span[data-pick] { grid-area: pick; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
+  > span[data-value] { grid-area: value; display: flex; align-items: baseline; gap: 6px; line-height: 1.2; }
+  > span[data-value] > strong { color: ${({ theme, $featured }) => $featured ? theme.color.accent.orange.text : theme.color.text}; font-size: ${size("section")}; font-variant-numeric: tabular-nums; }
+  > span[data-value] > small { padding: 0 6px; color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted}; border-radius: 4px; font-size: ${size("caption")}; }
   > svg:last-child { grid-area: chevron; color: ${({ theme }) => theme.color.mutedText}; }
-  ${desktop} { padding: 9px 12px; > b { font-size: 0.8125rem; } > span[data-value] > strong { font-size: 1.125rem; } }
+  ${desktop} {
+    padding: 9px 12px;
+    > b { font-size: ${size("body")}; }
+    > span[data-pick] { line-height: inherit; }
+    > span[data-value] { line-height: inherit; }
+    > span[data-value] > strong { font-size: 1.125rem; }
+  }
 `;
 
 /** One compact tile per published market family; each opens that market's details. */
-export function MarketTiles() {
-  const { data, messages, home, away, view, go } = useDetails();
+export const MarketTiles = memo(function MarketTiles() {
+  const { data, messages, home, away, update } = useStableDetails();
   const featured = featuredFamily(data);
   return <Tiles role="list" aria-label={messages.text("details.marketSummary")}>
     {publicPolicy.markets.map((family) => {
       const { item } = marketRow(data, family), Icon = familyIcon[family];
       const pick = item ? pickLabel(messages, item.market.selection, home, away) : messages.text("details.notAvailable");
       return <div role="listitem" key={family} style={{ display: "grid", minInlineSize: 0 }}>
-        <Tile type="button" $featured={family === featured} data-market-tile={family} onClick={() => go({ ...view, marketsOpen: true, market: family })}
+        <Tile type="button" $featured={family === featured} data-market-tile={family} onClick={() => update((current) => ({ ...current, marketsOpen: true, market: family }))}
           aria-label={messages.text("details.tileOpen", { market: marketName(messages, family), pick, probability: percent(messages, item?.market.selectedProbability ?? null) })}>
           <IconBadge $accent={familyAccent[family]}><Icon /></IconBadge>
           <b>{messages.text(`market.code.${family}`)}</b>
@@ -250,4 +271,4 @@ export function MarketTiles() {
       </div>;
     })}
   </Tiles>;
-}
+});

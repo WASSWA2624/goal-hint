@@ -22,7 +22,8 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   const [refreshError, setRefreshError] = useState(false);
   const [view, setView] = useState(() => initialLoadedFeed(data));
   const [phase, setPhase] = useState<Mode | null>(null), [error, setError] = useState<FeedPaginationError["code"] | null>(null);
-  const root = useRef<HTMLDivElement>(null), viewRef = useRef(view), enabledRef = useRef(enabled);
+  // A refreshed server query with the same canonical href must not tear down the listeners below.
+  const root = useRef<HTMLDivElement>(null), viewRef = useRef(view), enabledRef = useRef(enabled), queryRef = useRef(query);
   const mounted = useRef(false), request = useRef<AbortController | null>(null), entryId = useRef<string | null>(null);
   const restored = useRef(true), retryCheckpoint = useRef<FeedCheckpoint | null>(null), failedMode = useRef<Mode>("append");
   const focusTarget = useRef<FocusTarget | null>(null);
@@ -49,7 +50,8 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     const controller = new AbortController(); request.current = controller;
     const deadline = window.setTimeout(() => controller.abort(new DOMException("Refresh timed out.", "TimeoutError")), 30_000);
     if (mode !== "background") { setPhase(mode); setError(null); announce(mode === "restore" ? "restoring" : "loading"); }
-    const fetchPage = (page: number) => consumeRefresh(dispatch(refreshApi.endpoints.feed.initiate({ query, today, page },
+    const applied = queryRef.current;
+    const fetchPage = (page: number) => consumeRefresh(dispatch(refreshApi.endpoints.feed.initiate({ query: applied, today, page },
       { forceRefetch: true })), controller.signal);
     try {
       let next: LoadedFeed;
@@ -86,8 +88,9 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       clearTimeout(deadline);
       if (request.current === controller) { request.current = null; if (mounted.current) setPhase(null); }
     }
-  }, [announce, dispatch, query, today]);
+  }, [announce, dispatch, today]);
 
+  useLayoutEffect(() => { queryRef.current = query; }, [query]);
   useLayoutEffect(() => {
     viewRef.current = view; enabledRef.current = enabled;
     const target = focusTarget.current;

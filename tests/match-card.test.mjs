@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { fixtureSnapshotSchema, parseFixtureSnapshot } from "../src/domain/fixture-snapshot.ts";
-import { hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
+import { hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, sameCardFixture, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
+import { mergeFixtureObservation } from "../src/domain/fixture-reconciliation.ts";
 import { marketRules, validateMarketGroup } from "../src/domain/markets.ts";
 import { isSafeRemoteImageUrl } from "../src/domain/remote-image.ts";
 import { createMessages } from "../src/i18n/messages.ts";
@@ -116,6 +117,18 @@ test("new presentation metadata participates in whole-fixture version reconcilia
   assert.equal(selectedCardPrediction(accepted).status, "pending");
   assert.equal(selectedCardPrediction(accepted).item.market.source, "api-football");
   assert.equal(accepted.partialCoverage, true);
+});
+
+test("memoized cards notice every observation field an equal-version refresh can change", () => {
+  const previous = cardFixture({ update: { prediction: "current", result: "current" }, availabilityMessage: null });
+  const merge = (change) => { const next = structuredClone(previous); change(next); return mergeFixtureObservation(previous, next); };
+  assert.equal(sameCardFixture(previous, merge((next) => { next.syncedAt = (next.syncedAt ?? 0) + 1000; })), true);
+  for (const change of [(next) => { next.partialCoverage = !next.partialCoverage; }, (next) => { next.availabilityMessage = "Window closed"; },
+    (next) => { next.update.prediction = "updating"; }, (next) => { next.update.result = "delayed"; },
+    (next) => { next.forecast.updateDelayed = !next.forecast.updateDelayed; }]) {
+    assert.equal(sameCardFixture(previous, merge(change)), false);
+  }
+  assert.equal(sameCardFixture(previous, { ...previous, dataVersion: "99" }), false);
 });
 
 test("live clock maps provider phases, hides paused minutes and requires a live fixture", () => {

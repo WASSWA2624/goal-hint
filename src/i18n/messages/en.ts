@@ -1,13 +1,15 @@
-import { methodologyMessages } from "./methodology.ts";
-import { privacyMessages } from "./privacy.ts";
-import { termsMessages } from "./terms.ts";
-import { contactMessages } from "./contact.ts";
-
+// Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
+// only the page metadata read by server/seo/metadata.ts and the feed's results link stay here.
 export const en = {
-  ...methodologyMessages,
-  ...privacyMessages,
-  ...termsMessages,
-  ...contactMessages,
+  "methodology.metadataTitle": "How it works | Goal Hint",
+  "methodology.description": "How Goal Hint estimates football probabilities, locks forecasts and reports measured performance and limitations.",
+  "privacy.metadataTitle": "Privacy and data handling | Goal Hint",
+  "privacy.description": "Current Goal Hint data handling: account-free access, browser storage, search protection, remote images and privacy decisions required before release.",
+  "terms.metadataTitle": "Terms of use | Goal Hint",
+  "terms.description": "Prelaunch terms for Goal Hint's free football information service: forecast limits, daily updates, source attribution and decisions required before release.",
+  "contact.metadataTitle": "Contact and corrections | Goal Hint",
+  "contact.description": "Goal Hint contact availability, useful details for correction reports, and how verified result corrections preserve the locked forecast.",
+  "performance.resultsLink": "How we measure prediction performance",
   "metadata.homeTitle": "Goal Hint | Daily Football Predictions",
   "metadata.description": "Free, account-free football information: estimated probabilities, available analysis, match results and auditable forecast history. No forecast guarantees a result.",
   "metadata.socialAlt": "Goal Hint — Football predictions. Clearly explained.",
@@ -140,6 +142,7 @@ export const en = {
   "feed.filters.probabilityHelp": "Applies to each match's shown pick: the most likely pick among the selected markets.",
   "feed.filters.any": "Any",
   "feed.filters.percentRange": "{min}% - {max}%",
+  "feed.filters.percentMin": "{min}%+",
   "feed.filters.minimum": "Minimum {label}",
   "feed.filters.maximum": "Maximum {label}",
   "feed.filters.moreCount": "+{count}",

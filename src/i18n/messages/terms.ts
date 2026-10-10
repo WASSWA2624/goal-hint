@@ -1,6 +1,5 @@
+// Server-only page prose (see ../content-messages.ts); page metadata lives in en.ts.
 export const termsMessages = {
-  "terms.metadataTitle": "Terms of use | Goal Hint",
-  "terms.description": "Prelaunch terms for Goal Hint's free football information service: forecast limits, daily updates, source attribution and decisions required before release.",
   "terms.intro": "Goal Hint is built as a free, account-free football information service. This draft describes the implemented service and its limits while the required operator and legal decisions remain unresolved.",
   "terms.status.title": "Prelaunch terms draft",
   "terms.status.body": "These are not completed, effective terms of use. The legal operator, applicable jurisdiction and public dispute/contact process have not been confirmed. Final terms publication and public release remain blocked until the required facts, permissions and legal review are complete.",

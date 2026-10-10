@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, type ReactNode, type Ref } from "react";
-import styled, { css } from "styled-components";
+import { createContext, useContext, useEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import styled, { css, type DefaultTheme } from "styled-components";
 import { ChevronRightIcon } from "@/components/ui/icons";
 import { TeamLogo } from "@/components/match/team-row";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -9,33 +9,44 @@ import { paginationItems } from "@/domain/feed-presentation";
 import type { FormLetter } from "@/domain/match-details";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
-import type { MatchView } from "@/domain/match-view";
+import { defaultMatchView, type MatchView } from "@/domain/match-view";
 import { createMessages } from "@/i18n/messages";
-import type { AccentName } from "@/styles/theme";
-import type { ViewNavigation } from "./use-match-view";
+import { media, type AccentName } from "@/styles/theme";
+import type { ViewNavigation, ViewUpdate } from "./use-match-view";
 
 export type Messages = ReturnType<typeof createMessages>;
-export type DetailsContextValue = Readonly<{
+/** Values that change only with the data, never with the view. */
+export type StableDetails = Readonly<{
   data: MatchDetailResponse; preview: InsightsPreview | null; locale: string; messages: Messages;
-  view: MatchView; go: (next: MatchView, mode?: ViewNavigation) => void;
+  go: (next: MatchView, mode?: ViewNavigation) => void; update: ViewUpdate;
   home: string; away: string; fixtureId: string; history: ReactNode;
 }>;
-const DetailsContext = createContext<DetailsContextValue | null>(null);
+export type DetailsContextValue = StableDetails & Readonly<{ view: MatchView }>;
+const DetailsContext = createContext<StableDetails | null>(null);
 export const DetailsProvider = DetailsContext.Provider;
-export function useDetails(): DetailsContextValue {
+/** The view as one card sees it; closed cards receive a value that only changes with the open section. */
+const ViewContext = createContext<MatchView>(defaultMatchView);
+export const ViewProvider = ViewContext.Provider;
+/** For components that read no view: they skip every view-only change. Handlers use `update`. */
+export function useStableDetails(): StableDetails {
   const value = useContext(DetailsContext);
   if (!value) throw new Error("Match details context is missing.");
   return value;
 }
+export function useDetails(): DetailsContextValue {
+  return { ...useStableDetails(), view: useContext(ViewContext) };
+}
 
-export const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
+export const desktop = media.desktop;
+/** One step of the compact type scale (theme.typography.scale). */
+export const size = (step: keyof DefaultTheme["typography"]["scale"]) => ({ theme }: { theme: DefaultTheme }) => theme.typography.scale[step];
 export const focusRing = css`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;
 /** Focus targets clear the sticky desktop header and the phone tab bar. */
 export const scrollClearance = css`
   scroll-margin-block: 0.75rem 4.5rem;
-  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) { scroll-margin-block: 5rem 1rem; }
+  ${media.desktop} { scroll-margin-block: 5rem 1rem; }
 `;
 
 /** Compact card; open sections widen to the full content width. */
@@ -46,7 +57,7 @@ export const Card = styled.section<{ $open?: boolean; $accent?: AccentName }>`
   align-content: start;
   gap: 8px;
   min-inline-size: 0;
-  padding: 9px 10px 10px;
+  padding: 9px 8px 10px;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme, $open, $accent = "blue" }) => $open ? theme.color.accent[$accent].solid : theme.color.border};
   border-radius: ${({ theme }) => theme.border.cardRadius};
@@ -63,10 +74,11 @@ const HeadRow = styled.div`
   min-inline-size: 0;
   > h2 { flex: 1; min-inline-size: 0; margin: 0; font-size: inherit; }
 `;
+/** Two-up phone cards leave the title about 6rem: titles wrap between words, in balanced lines. */
 const HeadButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   inline-size: 100%;
   min-block-size: 1.875rem;
   padding: 0;
@@ -77,24 +89,32 @@ const HeadButton = styled.button`
   text-align: start;
   cursor: pointer;
   ${focusRing}
-  > span[data-title] { min-inline-size: 0; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.2; ${desktop} { font-size: 1rem; } }
-  > small { min-inline-size: 0; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; white-space: nowrap; text-overflow: ellipsis; ${desktop} { font-size: 0.75rem; } }
+  > span[data-title] {
+    min-inline-size: 0;
+    font-size: ${size("body")};
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
+    line-height: 1.15;
+    ${media.belowDesktop} { overflow-wrap: normal; text-wrap: balance; }
+    ${desktop} { font-size: 1rem; line-height: 1.2; }
+  }
+  > small { min-inline-size: 0; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; white-space: nowrap; text-overflow: ellipsis; ${desktop} { font-size: ${size("secondary")}; } }
   @container details-card (max-width: 16rem) { > small { display: none; } }
-  > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.9375rem; transition: transform 160ms ease; }
+  > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; transition: transform 160ms ease; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(90deg); color: ${({ theme }) => theme.color.accent.blue.solid}; }
-  &:hover > span[data-title] { color: ${({ theme }) => theme.color.accent.blue.text}; }
+  ${media.hover} { &:hover > span[data-title] { color: ${({ theme }) => theme.color.accent.blue.text}; } }
+  ${desktop} { gap: 8px; > svg:last-child { font-size: 0.9375rem; } }
   @media (prefers-reduced-motion: reduce) { > svg:last-child { transition: none; } }
 `;
 export const IconBadge = styled.span<{ $accent: AccentName }>`
   display: inline-grid;
   flex: none;
   place-items: center;
-  inline-size: 1.375rem;
-  block-size: 1.375rem;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
   color: ${({ theme, $accent }) => theme.color.accent[$accent].solid};
   background: ${({ theme, $accent }) => theme.color.accent[$accent].soft};
   border-radius: 4px;
-  font-size: 0.8125rem;
+  font-size: ${size("secondary")};
   ${desktop} { inline-size: 1.625rem; block-size: 1.625rem; font-size: 0.9375rem; }
 `;
 
@@ -121,7 +141,7 @@ export const PreviewArea = styled.div`
   min-inline-size: 0;
   cursor: pointer;
   border-radius: 3px;
-  &:hover { background: ${({ theme }) => theme.color.rowHover}; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
 `;
 
 /** Text-like action; its arrow icon flows with the last line of wrapped text. */
@@ -135,27 +155,27 @@ export const LinkButton = styled.button`
   background: none;
   border: 0;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: ${size("secondary")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
-  > svg { margin-inline-start: 4px; font-size: 0.875rem; vertical-align: -0.15em; }
-  &:hover { text-decoration: underline; }
+  > svg { margin-inline-start: 4px; font-size: ${size("emphasis")}; vertical-align: -0.15em; }
+  ${media.hover} { &:hover { text-decoration: underline; } }
   ${focusRing}
 `;
 
 export const Breadcrumb = styled.nav`
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.6875rem;
+  font-size: ${size("caption")};
   > ol { display: flex; flex-wrap: wrap; gap: 2px 6px; margin: 0; padding: 0; list-style: none; }
   > ol > li { display: inline-flex; gap: 6px; min-inline-size: 0; }
   > ol > li + li::before { content: "/"; color: ${({ theme }) => theme.color.border}; }
   button { padding: 0; color: ${({ theme }) => theme.color.accent.blue.solid}; background: none; border: 0; font: inherit; cursor: pointer; ${focusRing} }
   [aria-current] { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
-  ${desktop} { font-size: 0.75rem; }
+  ${desktop} { font-size: ${size("secondary")}; }
 `;
 export function Crumbs({ items }: { items: readonly { label: string; onSelect?: () => void }[] }) {
-  const { messages } = useDetails();
+  const { messages } = useStableDetails();
   return <Breadcrumb aria-label={messages.text("details.breadcrumb")}>
     <ol>{items.map((item, index) => <li key={index}>
       {item.onSelect ? <button type="button" onClick={item.onSelect}>{item.label}</button> : <span aria-current="location">{item.label}</span>}
@@ -166,7 +186,7 @@ export function Crumbs({ items }: { items: readonly { label: string; onSelect?: 
 /** Heading of an opened panel; receives focus when the panel opens. */
 export const PanelHeading = styled.h3`
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: ${size("emphasis")};
   line-height: 1.25;
   outline: none;
   overflow-wrap: anywhere;
@@ -220,14 +240,14 @@ export const Choices = styled.div`
     border: ${({ theme }) => theme.border.width} solid transparent;
     border-radius: 4px;
     font: inherit;
-    font-size: 0.6875rem;
+    font-size: ${size("caption")};
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     white-space: nowrap;
     cursor: pointer;
     ${focusRing}
-    &:hover { border-color: ${({ theme }) => theme.color.border}; }
+    ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.border}; } }
     &[aria-pressed="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.accent.blue.solid}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-    ${desktop} { font-size: 0.75rem; }
+    ${desktop} { font-size: ${size("secondary")}; }
   }
 `;
 export function ChoiceGroup<T extends string | number>({ label, value, options, onChange }: {
@@ -242,21 +262,22 @@ export function ChoiceGroup<T extends string | number>({ label, value, options, 
 export const Note = styled.p`
   margin: 0;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
+  font-size: ${size("secondary")};
   line-height: 1.45;
-  ${desktop} { font-size: 0.8125rem; }
+  ${desktop} { font-size: ${size("body")}; }
 `;
 export const Strong = styled.strong`font-weight: ${({ theme }) => theme.typography.weight.bold};`;
 
 /** Section-level loading and failure; the preview above stays visible and only this section retries. */
 export function SectionState({ loading, error, onRetry }: { loading: boolean; error: boolean; onRetry: () => void }) {
-  const { messages } = useDetails();
+  const { messages } = useStableDetails();
   if (error) return <Note role="alert">{messages.text("details.sectionFailed")}{" "}
     <LinkButton type="button" onClick={onRetry}>{messages.text("feed.retry")}</LinkButton></Note>;
   return loading ? <Note role="status">{messages.text("details.sectionLoading")}</Note> : null;
 }
 
-export const Track = styled.span<{ $accent?: AccentName; $value: number; $reverse?: boolean }>`
+/** The fill width is a custom property, so every value shares one class per accent and direction. */
+const Track = styled.span<{ $accent?: AccentName; $reverse?: boolean }>`
   position: relative;
   display: block;
   flex: 1;
@@ -270,11 +291,15 @@ export const Track = styled.span<{ $accent?: AccentName; $value: number; $revers
     position: absolute;
     inset-block: 0;
     ${({ $reverse }) => $reverse ? "inset-inline-end: 0;" : "inset-inline-start: 0;"}
-    inline-size: ${({ $value }) => `${Math.max(0, Math.min(1, $value)) * 100}%`};
+    inline-size: calc(var(--track, 0) * 100%);
     background: ${({ theme, $accent = "orange" }) => theme.color.accent[$accent].gradient};
     border-radius: 3px;
   }
 `;
+/** A probability or comparison bar; `value` is clamped to 0–1. */
+export function Bar({ value, style, ...rest }: { value: number; $accent?: AccentName; $reverse?: boolean } & HTMLAttributes<HTMLSpanElement>) {
+  return <Track {...rest} style={{ ...style, "--track": Math.max(0, Math.min(1, value)) } as CSSProperties} />;
+}
 
 const LetterChip = styled.abbr<{ $letter: FormLetter }>`
   display: inline-grid;
@@ -284,7 +309,7 @@ const LetterChip = styled.abbr<{ $letter: FormLetter }>`
   color: ${({ theme, $letter }) => $letter === "D" ? theme.color.text : theme.color.onBrand};
   background: ${({ theme, $letter }) => $letter === "W" ? theme.color.accent.emerald.solid : $letter === "L" ? theme.color.accent.red.solid : theme.color.border};
   border-radius: 50%;
-  font-size: 0.5625rem;
+  font-size: ${size("micro")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   text-decoration: none;
   cursor: default;
@@ -292,7 +317,7 @@ const LetterChip = styled.abbr<{ $letter: FormLetter }>`
 const Letters = styled.span`display: inline-flex; flex-wrap: wrap; gap: 3px;`;
 /** W/D/L letters, oldest first, with full words for assistive technology. */
 export function FormLetters({ letters, label }: { letters: readonly FormLetter[]; label: string }) {
-  const { messages } = useDetails();
+  const { messages } = useStableDetails();
   if (letters.length === 0) return <Note>{messages.text("details.noResults")}</Note>;
   return <Letters role="img" aria-label={`${label}: ${letters.map((letter) => messages.text(`details.result.${letter}`)).join(", ")}`}>
     {letters.map((letter, index) => <LetterChip key={index} $letter={letter} title={messages.text(`details.result.${letter}`)} aria-hidden="true">{letter}</LetterChip>)}
@@ -329,7 +354,7 @@ const PagerList = styled.ol`
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: 4px;
     font: inherit;
-    font-size: 0.75rem;
+    font-size: ${size("secondary")};
     font-variant-numeric: tabular-nums;
     cursor: pointer;
     ${focusRing}
@@ -340,7 +365,7 @@ const PagerList = styled.ol`
 `;
 /** Every page of a section's complete collection; the URL keeps the page for Back and refresh. */
 export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
-  const { messages } = useDetails();
+  const { messages } = useStableDetails();
   if (pages <= 1) return null;
   return <nav aria-label={messages.text("details.pages")}>
     <PagerList>
@@ -372,14 +397,14 @@ export const RowButton = styled.button`
   background: none;
   border: 0;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: ${size("secondary")};
   text-align: start;
   cursor: pointer;
   ${focusRing}
   ${scrollClearance}
-  &:hover { background: ${({ theme }) => theme.color.rowHover}; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   > * { min-inline-size: 0; }
-  ${desktop} { font-size: 0.8125rem; }
+  ${desktop} { font-size: ${size("body")}; }
 `;
 
 export const Pill = styled.span<{ $accent?: AccentName; $solid?: boolean }>`
@@ -392,37 +417,43 @@ export const Pill = styled.span<{ $accent?: AccentName; $solid?: boolean }>`
   color: ${({ theme, $accent = "blue", $solid }) => $solid ? theme.color.onBrand : theme.color.accent[$accent].text};
   background: ${({ theme, $accent = "blue", $solid }) => $solid ? theme.color.accent[$accent].solid : theme.color.accent[$accent].soft};
   border-radius: 4px;
-  font-size: 0.6875rem;
+  font-size: ${size("caption")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: 1.5;
   white-space: nowrap;
   text-overflow: ellipsis;
-  ${desktop} { font-size: 0.75rem; }
+  ${desktop} { font-size: ${size("secondary")}; }
 `;
 
-/** Definition rows for facts with their own label; missing values say so explicitly. */
+const factColumns = css`
+  grid-template-columns: fit-content(40%) minmax(0, 1fr);
+  gap: 4px 12px;
+  > dt { font-size: inherit; }
+  > dd { margin: 0; }
+`;
+/** Definition rows for facts with their own label; missing values say so explicitly. Label and value
+ * sit side by side from 20rem, or 18rem below desktop (a full-width card on a 360px phone). */
 export const Facts = styled.dl`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 0 12px;
   margin: 0;
-  font-size: 0.75rem;
-  > dt { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
+  font-size: ${size("secondary")};
+  > dt { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
   > dd { margin: 0 0 4px; min-inline-size: 0; overflow-wrap: anywhere; }
-  @container details-card (min-width: 20rem) {
-    grid-template-columns: fit-content(40%) minmax(0, 1fr);
-    gap: 4px 12px;
-    > dt { font-size: inherit; }
-    > dd { margin: 0; }
-  }
-  ${desktop} { font-size: 0.8125rem; }
+  ${media.belowDesktop} { @container details-card (min-width: 18rem) { ${factColumns} } }
+  @container details-card (min-width: 20rem) { ${factColumns} }
+  ${desktop} { font-size: ${size("body")}; }
 `;
 
+type PendingReveal = { restoration: ScrollRestoration; timer?: number; show?: (() => void) | undefined };
 /** Focus and reveal an opened panel; on close, return focus to whatever opened it. */
 export function useRevealOnOpen<T extends HTMLElement>(open: boolean, key: string | null, reveal: "card" | "self" = "self") {
   const target = useRef<T>(null), previous = useRef<string | null>(null), first = useRef(true);
   useEffect(() => {
     const current = open ? key : null;
+    // A deep-link reveal still waiting for `load` when the panel closes or the page leaves.
+    let pending: PendingReveal | null = null;
     if (current !== null && current !== previous.current && target.current) {
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       target.current.focus({ preventScroll: true });
@@ -432,13 +463,25 @@ export function useRevealOnOpen<T extends HTMLElement>(open: boolean, key: strin
       if (!initial) scroll();
       else {
         // A deep link wins over the browser restoring this URL's previous scroll position, once.
-        const restoration = window.history.scrollRestoration;
+        const waiting: PendingReveal = { restoration: window.history.scrollRestoration };
+        pending = waiting;
         window.history.scrollRestoration = "manual";
-        const show = () => window.setTimeout(() => { scroll(); window.history.scrollRestoration = restoration; }, 60);
-        if (document.readyState === "complete") show(); else window.addEventListener("load", show, { once: true });
+        const show = () => {
+          waiting.show = undefined;
+          waiting.timer = window.setTimeout(() => { scroll(); window.history.scrollRestoration = waiting.restoration; pending = null; }, 60);
+        };
+        if (document.readyState === "complete") show(); else { waiting.show = show; window.addEventListener("load", show, { once: true }); }
       }
     }
     previous.current = current; first.current = false;
+    return () => {
+      if (!pending) return;
+      if (pending.show) window.removeEventListener("load", pending.show);
+      window.clearTimeout(pending.timer);
+      window.history.scrollRestoration = pending.restoration;
+      // A re-run (Strict Mode, or the same panel reopening) schedules the reveal again.
+      previous.current = null; first.current = true;
+    };
   }, [key, open, reveal]);
   return target;
 }

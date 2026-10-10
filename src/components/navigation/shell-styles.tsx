@@ -4,9 +4,9 @@ import Link from "next/link";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { Container } from "@/components/ui/layout";
-import type { AccentName } from "@/styles/theme";
+import { media, type AccentName } from "@/styles/theme";
 
-const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
+const desktop = media.desktop;
 const focusRing = css`
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
@@ -61,13 +61,21 @@ export const HeaderContent = styled(Container)`
   gap: ${({ theme }) => theme.space.lg};
   min-block-size: 3.5rem;
   ${desktop} { gap: ${({ theme }) => theme.space.lg}; min-block-size: 4rem; }
-  @media (min-width: ${({ theme }) => theme.breakpoint.xl}) { gap: ${({ theme }) => theme.space.xl}; }
+  ${media.wide} { gap: ${({ theme }) => theme.space.xl}; }
 `;
 
+/**
+ * Below desktop the logo sits at the brand-kit minimum (160px) with 9px clear space, above a
+ * quarter of the displayed mark, so the phone bar stays at its 3.5rem minimum.
+ */
 export const HomeLink = styled(TextLink)`
   flex: none;
   display: inline-flex;
   text-decoration: none;
+  ${media.belowDesktop} {
+    > span { padding: 9px; }
+    > span > img { inline-size: 160px; }
+  }
 `;
 
 /** The section links keep their natural width; the search box absorbs narrower desktops. */
@@ -102,7 +110,7 @@ const topLink = css<{ $tone?: AccentName }>`
   text-decoration: none;
   cursor: pointer;
   > svg:first-child { flex: none; font-size: 1.125rem; color: ${({ theme, $tone = "teal" }) => theme.color.accent[$tone].solid}; }
-  &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; }
+  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; } }
   &[aria-current="page"] {
     color: ${({ theme }) => theme.color.brand};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -138,7 +146,7 @@ export const MoreList = styled.ul`
     color: ${({ theme }) => theme.color.text};
     border-radius: 8px;
     text-decoration: none;
-    &:hover { background: ${({ theme }) => theme.color.rowHover}; }
+    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
     &[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
     ${focusRing}
   }
@@ -239,7 +247,7 @@ export const FooterContent = styled(Container)`
   grid-template-columns: minmax(0, 1fr);
   justify-items: start;
   gap: 6px;
-  @media (min-width: ${({ theme }) => theme.breakpoint.md}) {
+  ${media.tablet} {
     grid-template-columns: auto auto minmax(0, 1fr);
     align-items: center;
     gap: 8px 24px;
@@ -272,11 +280,11 @@ export const FooterLink = styled(Link)`
   border-radius: 4px;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
-  &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; background: ${({ theme }) => theme.color.surfaceMuted}; }
+  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; background: ${({ theme }) => theme.color.surfaceMuted}; } }
   &[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   ${focusRing}
 `;
 export const FooterNote = styled.p`
   margin: 0;
-  @media (min-width: ${({ theme }) => theme.breakpoint.md}) { justify-self: end; text-align: end; }
+  ${media.tablet} { justify-self: end; text-align: end; }
 `;

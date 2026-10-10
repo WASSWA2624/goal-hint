@@ -15,9 +15,11 @@ and immutability checks stay enabled.
 
 Server Components validate URL inputs and read server services. They pass a
 serializable `FeedBootstrap` across the client boundary and never read Redux.
-The feed passes its stored response, or `data: null` on a read failure, meaning
-**unloaded** rather than claiming an empty fixture result. A loaded page can have
-`records: []` and is **ready**. Bootstrap position must equal `query.page`.
+`data: null` means **unloaded** rather than claiming an empty fixture result. The
+feed always passes it: its cards render from server props and `useFeedPagination`,
+and nothing reads bootstrapped records, so hydration skips re-validating them.
+The match page passes it too. A loaded page can have `records: []` and is
+**ready**. Bootstrap position must equal `query.page`.
 
 The filter provider persists across query changes, keyed by reporting day and
 locale. Applied server query props explicitly dispatch `queryApplied`, preserving

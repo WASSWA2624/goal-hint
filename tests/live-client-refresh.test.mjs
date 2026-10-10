@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { fixtureAdvance } from '../src/domain/fixture-reconciliation.ts';
-import { acceptRun, mergeLiveDetail, startLiveRefresh } from '../src/domain/live-refresh.ts';
+import { acceptRun, feedRefreshInterval, liveRefreshRules, mergeLiveDetail, startLiveRefresh } from '../src/domain/live-refresh.ts';
 import { initialLoadedFeed, replaceFeedPages } from '../src/domain/feed-pagination.ts';
 import { feedQueryHref } from '../src/domain/feed-query.ts';
 import { matchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { makeStore } from '../src/state/store.ts';
 import { consumeRefresh, refreshApi } from '../src/state/refresh-api.ts';
+import { detailApi } from '../src/state/detail-api.ts';
 import { liveDetail, liveFeed, liveRecord, liveRun, ids, query, today, now } from './helpers/live-refresh-fixtures.mjs';
 
 test('reversed publication, locking, score/status and correction responses cannot undo accepted snapshots', () => {
@@ -103,7 +104,7 @@ test('RTK Query deduplicates consumers, cancels an obsolete consumer, and only m
   assert.equal(calls.length, 1); assert.equal(calls[0].options.signal.aborted, false);
   const response = liveFeed(); pending.shift()(Response.json(response));
   assert.deepEqual(await second.unwrap(), response); second.unsubscribe();
-  assert.match(calls[0].href, /^\/api\/matches\?date=/); assert.equal(calls[0].options.credentials, 'omit');
+  assert.match(calls[0].href, /^\/api\/matches\?date=.*&leagues=0$/); assert.equal(calls[0].options.credentials, 'omit');
   assert.equal(calls[0].options.cache, 'no-store'); assert.equal(calls[0].options.method, undefined); assert.equal(calls[0].options.body, undefined);
   assert.equal(makeStore({ today, query: query(), data: null }).getState().publicRefresh.queries[calls[0].href], undefined);
 });
@@ -115,7 +116,7 @@ test('refresh endpoint errors and historical/foreign detail responses cannot bec
   for (const [body, status, code] of [[{}, 503, 'unavailable'], [{}, 429, 'rate-limited'], [{}, 200, 'invalid-response'],
     [liveDetail(liveRecord(), { selection: 'cycle' }), 200, 'invalid-response'], [foreign, 200, 'invalid-response']]) {
     globalThis.fetch = async () => Response.json(body, { status });
-    const request = store.dispatch(refreshApi.endpoints.detail.initiate(ids.fixture, { forceRefetch: true }));
+    const request = store.dispatch(detailApi.endpoints.detail.initiate(ids.fixture, { forceRefetch: true }));
     await assert.rejects(request.unwrap(), e => e.code === code); request.unsubscribe();
   }
 });
@@ -129,6 +130,18 @@ function clock(at = now) {
     visible: async value => { visible = value; event?.(); await new Promise(setImmediate); },
     connected: async value => { connected = value; event?.(); await new Promise(setImmediate); } };
 }
+test('feeds poll fast only for an updating run, a live match or a kickoff within 30 minutes', () => {
+  const { activeMs, quietMs, kickoffLeadMs } = liveRefreshRules, quiet = { run: liveRun({ phase: 'complete' }) };
+  const scheduled = (offset) => ({ status: 'scheduled', kickoffAt: now + offset });
+  assert.equal(feedRefreshInterval({ run: liveRun() }, [], now), activeMs);
+  assert.equal(feedRefreshInterval(quiet, [{ status: 'live', kickoffAt: now - 600000 }], now), activeMs);
+  assert.equal(feedRefreshInterval(quiet, [scheduled(kickoffLeadMs)], now), activeMs);
+  assert.equal(feedRefreshInterval(quiet, [scheduled(-kickoffLeadMs)], now), activeMs);
+  // A relative-date list of later or stale scheduled kickoffs, finals and unknown times stays quiet.
+  assert.equal(feedRefreshInterval(quiet, [scheduled(kickoffLeadMs + 1), scheduled(-kickoffLeadMs - 1),
+    { status: 'finished-regulation', kickoffAt: now }, { status: 'scheduled', kickoffAt: null }], now), quietMs);
+  assert.equal(feedRefreshInterval({ run: null }, [], now), quietMs);
+});
 test('visible polling is serial at 20 seconds, pauses hidden/offline, resumes once and stops on unmount', async () => {
   const c = clock(); let reads = 0, finish;
   const stop = startLiveRefresh({ today, interval: () => 20000, refresh: () => { reads++; return new Promise(resolve => { finish = resolve; }); }, rollover: () => {} }, c.env);

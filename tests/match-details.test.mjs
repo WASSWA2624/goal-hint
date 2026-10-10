@@ -7,14 +7,15 @@ import {
   defaultMatchView, openItem, openSection, parseMatchView, serializeMatchView, splitMatchViewParameters,
 } from '../src/domain/match-view.ts';
 import {
-  formRecords, headToHead, insightsPreview, matchInsightsSchema, pageOf, perMatchValue, previewRules, resultFor, summarize, teamComparison,
+  formRecords, headToHead, insightsPreview, matchInsightsSchema, pageOf, perMatchValue, previewHoldsSection, previewRules, resultFor, summarize,
+  teamComparison,
 } from '../src/domain/match-insights.ts';
 import {
   featuredFamily, formLetters, goalTotals, marketCategoryMembers, marketOutcomes, marketRow, parsePlayerKey, pitchRows, playerKey,
   positionGroup, visibleMarkets,
 } from '../src/domain/match-details.ts';
 import { makeStore } from '../src/state/store.ts';
-import { refreshApi } from '../src/state/refresh-api.ts';
+import { detailApi } from '../src/state/detail-api.ts';
 
 const home = 'home-team', away = 'away-team', other = 'other-team';
 const team = (id, name = id) => ({ id, name, logoUrl: null });
@@ -111,6 +112,11 @@ test('overview previews truncate each collection and keep complete totals for Vi
   assert.equal(preview.sections.context.restDays.home, 3.5); assert.deepEqual(preview.sections.referee, { state: 'not-available' });
   // The source collections are not mutated.
   assert.equal(full.sections.form.home.length, 14);
+  // A section the preview already holds in full needs no request when it opens.
+  for (const section of ['form', 'h2h', 'players', 'news', 'stats']) assert.equal(previewHoldsSection(preview, section), false, section);
+  for (const section of ['lineups', 'context', 'referee', 'history']) assert.equal(previewHoldsSection(preview, section), true, section);
+  const small = insightsPreview(preview);
+  for (const section of ['form', 'h2h', 'stats', 'players', 'injuries', 'news']) assert.equal(previewHoldsSection(small, section), true, section);
 });
 
 const market = (family, selection, probabilities) => ({ market: { family, selection, selectedProbability: probabilities[selection], probabilities, source: 'api-football' },
@@ -154,21 +160,21 @@ test('section data loads once per fixture and section, shared by simultaneous co
   const today = parseReportingDate('2026-10-10'), id = randomUUID(), original = globalThis.fetch, calls = [], pending = [];
   globalThis.fetch = async (href, options) => { calls.push({ href, options }); return new Promise((resolve) => pending.push(resolve)); };
   const store = makeStore({ today, query: parseFeedQuery(new URLSearchParams(), { today }), data: null });
-  t.after(() => { globalThis.fetch = original; store.dispatch(refreshApi.util.resetApiState()); });
-  const first = store.dispatch(refreshApi.endpoints.insights.initiate({ id, section: 'h2h' }));
-  const second = store.dispatch(refreshApi.endpoints.insights.initiate({ id, section: 'h2h' }));
+  t.after(() => { globalThis.fetch = original; store.dispatch(detailApi.util.resetApiState()); });
+  const first = store.dispatch(detailApi.endpoints.insights.initiate({ id, section: 'h2h' }));
+  const second = store.dispatch(detailApi.endpoints.insights.initiate({ id, section: 'h2h' }));
   assert.equal(calls.length, 1); assert.equal(calls[0].href, `/api/matches/${id}/insights?section=h2h`);
   assert.equal(calls[0].options.credentials, 'omit');
   pending.shift()(Response.json({ fixtureId: id, asOf: 7, section: 'h2h', data: { meetings: [] } }));
   assert.deepEqual((await first.unwrap()).data, { meetings: [] }); assert.deepEqual((await second.unwrap()).data, { meetings: [] });
   // A cached section is reused instead of refetched.
-  const again = store.dispatch(refreshApi.endpoints.insights.initiate({ id, section: 'h2h' }));
+  const again = store.dispatch(detailApi.endpoints.insights.initiate({ id, section: 'h2h' }));
   await again.unwrap(); assert.equal(calls.length, 1);
   first.unsubscribe(); second.unsubscribe(); again.unsubscribe();
   for (const body of [{ fixtureId: randomUUID(), asOf: 1, section: 'news', data: { items: [], limitedNews: false } },
     { fixtureId: id, asOf: 1, section: 'h2h', data: { items: [] } }, { fixtureId: id, asOf: 1, section: 'news', data: { items: 'x', limitedNews: false } }]) {
     globalThis.fetch = async () => Response.json(body);
-    const request = store.dispatch(refreshApi.endpoints.insights.initiate({ id, section: 'news' }, { forceRefetch: true }));
+    const request = store.dispatch(detailApi.endpoints.insights.initiate({ id, section: 'news' }, { forceRefetch: true }));
     await assert.rejects(request.unwrap(), (error) => error.code === 'invalid-response'); request.unsubscribe();
   }
 });

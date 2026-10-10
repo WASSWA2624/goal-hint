@@ -1,6 +1,5 @@
+// Server-only page prose (see ../content-messages.ts); page metadata lives in en.ts.
 export const contactMessages = {
-  "contact.metadataTitle": "Contact and corrections | Goal Hint",
-  "contact.description": "Goal Hint contact availability, useful details for correction reports, and how verified result corrections preserve the locked forecast.",
   "contact.intro": "Use this page to check contact availability and find guidance about fixture, source and result concerns.",
   "contact.reviewed": "Technical review: {date}.",
   "contact.reviewScope": "This date records a review of the application. It does not verify a contact destination or approve a public response process.",

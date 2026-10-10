@@ -33,6 +33,18 @@ export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketF
     updateDelayed: forecast.updateDelayed === true };
 }
 
+/**
+ * Whether a card renders a refreshed record exactly as before. A version bump replaces the whole
+ * record; at an equal version only the fields `mergeFixtureObservation` refreshes can differ.
+ * Keep this list in step with it. `syncedAt` is not shown on cards.
+ */
+export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot): boolean {
+  return previous === next || previous.fixtureId === next.fixtureId && previous.dataVersion === next.dataVersion &&
+    previous.partialCoverage === next.partialCoverage && previous.availabilityMessage === next.availabilityMessage &&
+    previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
+    previous.forecast?.updateDelayed === next.forecast?.updateDelayed;
+}
+
 export type LiveClock = { phase: (typeof liveClockPhases)[number]; minute: number | null };
 const providerClockPhases: Readonly<Record<string, LiveClock["phase"]>> = Object.freeze({
   "1H": "first-half", HT: "half-time", "2H": "second-half", ET: "extra-time", BT: "break",

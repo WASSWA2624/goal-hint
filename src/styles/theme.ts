@@ -55,6 +55,7 @@ export interface GoalHintTheme {
   };
   readonly typography: {
     readonly family: string;
+    /** Desktop (lg and up) sizes. */
     readonly size: {
       readonly body: string;
       readonly small: string;
@@ -62,10 +63,30 @@ export interface GoalHintTheme {
       readonly h2: string;
       readonly h3: string;
     };
+    /** Compact phone-first scale; base styles use it and widen at `breakpoint.md`/`lg`. */
+    readonly scale: {
+      /** 10px: badges, chips and counters; the floor for meaningful text. */
+      readonly micro: string;
+      /** 11px: captions, meta lines and field labels in dense rows. */
+      readonly caption: string;
+      /** 12px: secondary text, hints and muted notes. */
+      readonly secondary: string;
+      /** 13px: phone body, control labels and team names. */
+      readonly body: string;
+      /** 14px: emphasized card titles. */
+      readonly emphasis: string;
+      /** 16px: section headings. */
+      readonly section: string;
+      /** 18px: page titles. */
+      readonly title: string;
+      /** 20px: hero figures such as the detail score. */
+      readonly hero: string;
+    };
     readonly weight: {
       readonly body: number;
       readonly medium: number;
       readonly bold: number;
+      readonly heavy: number;
     };
     readonly lineHeight: {
       readonly body: number;
@@ -100,7 +121,10 @@ export interface GoalHintTheme {
     readonly gutter: string;
   };
   readonly control: {
+    /** Desktop (lg and up) control height. */
     readonly minHeight: string;
+    /** Phone and tablet control height; still above the 24px WCAG 2.5.8 target. */
+    readonly compactHeight: string;
   };
   readonly shadow: {
     readonly card: string;
@@ -157,10 +181,21 @@ export const lightTheme: GoalHintTheme = {
   typography: {
     family: "var(--font-manrope), Arial, sans-serif",
     size: { body: "1rem", small: "0.875rem", h1: "2rem", h2: "1.5rem", h3: "1.125rem" },
+    scale: {
+      micro: "0.625rem",
+      caption: "0.6875rem",
+      secondary: "0.75rem",
+      body: "0.8125rem",
+      emphasis: "0.875rem",
+      section: "1rem",
+      title: "1.125rem",
+      hero: "1.25rem",
+    },
     weight: {
       body: brandTokens.typography.bodyWeight,
       medium: 600,
       bold: brandTokens.typography.headingWeight,
+      heavy: 800,
     },
     lineHeight: { body: 1.6, heading: 1.25 },
   },
@@ -175,7 +210,7 @@ export const lightTheme: GoalHintTheme = {
     focusOffset: "3px",
   },
   layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px" },
-  control: { minHeight: "2.75rem" },
+  control: { minHeight: "2.75rem", compactHeight: "2.25rem" },
   gradient: {
     action: "linear-gradient(135deg, #0F766E 0%, #2563EB 100%)",
     tableHeader: "linear-gradient(90deg, #0B1F33 0%, #172F63 55%, #0F5E6E 100%)",
@@ -187,3 +222,17 @@ export const lightTheme: GoalHintTheme = {
     cardHover: "0 2px 4px rgb(11 31 51 / 8%), 0 10px 28px rgb(11 31 51 / 10%)",
   },
 };
+
+/**
+ * Static media queries for styled rules. Plain strings keep a rule static, so styled-components
+ * does not re-flatten it per render the way a `${({ theme }) => …}` breakpoint lookup does.
+ */
+export const media = {
+  /** Phones and tablets: the compact tile layouts below the desktop table. */
+  belowDesktop: "@media (max-width: 63.99rem)",
+  tablet: `@media (min-width: ${lightTheme.breakpoint.md})`,
+  desktop: `@media (min-width: ${lightTheme.breakpoint.lg})`,
+  wide: `@media (min-width: ${lightTheme.breakpoint.xl})`,
+  /** Hover feedback only where a pointer can hover, so taps do not leave a stuck state. */
+  hover: "@media (hover: hover)",
+} as const;

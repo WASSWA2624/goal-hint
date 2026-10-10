@@ -14,8 +14,8 @@ a 30-second operation deadline prevent duplicate or obsolete loads. All response
 schemas, positions, reporting bounds and page sizes are checked before commit.
 Failures retain loaded cards and expose a focused Retry control and one polite
 status announcement. A successful append focuses the first new article without
-changing the current scroll position. Remote logos retain reserved dimensions;
-only the original first two cards may use eager logos.
+changing the current scroll position. Remote logos retain reserved dimensions
+and load lazily.
 
 ## Consistency
 

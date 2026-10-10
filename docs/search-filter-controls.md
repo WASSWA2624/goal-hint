@@ -9,7 +9,10 @@ selecting controls make no requests.
 Apply navigates through `feedQueryHref` using the App Router and a transition.
 The same parser and stored service handle initial rendering, Apply, reload,
 shared URLs and Back. Next discards superseded navigations. Reapplying the current
-query refreshes its server projection. The native GET form also works without
+query does nothing, unless it must supersede a pending navigation or retry a
+failed read, which refreshes its server projection. The desktop Apply count reads
+`/api/matches` with `pageSize=1&leagues=0`, on desktops only; phones apply their
+selections directly and never request it. The native GET form also works without
 JavaScript. Its empty all-leagues option parses as null and is omitted from
 canonical URLs; duplicate, unknown and other malformed parameters remain invalid.
 

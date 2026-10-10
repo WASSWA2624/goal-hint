@@ -1,10 +1,11 @@
-"use client";
-
 import type { ReactNode, SVGProps } from "react";
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, "children">;
 
-/** Decorative 24px stroke icons; adjacent text or accessible names carry meaning. */
+/**
+ * Decorative 24px stroke icons; adjacent text or accessible names carry meaning.
+ * A shared module (no "use client"): Server Components render plain SVG instead of client references.
+ */
 function Icon({ children, ...props }: IconProps & { children: ReactNode }) {
   return <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2}
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" {...props}>{children}</svg>;

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import styled, { css } from "styled-components";
-import { ChevronDownIcon, ResetIcon, FilterIcon } from "@/components/ui/icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import styled from "styled-components";
+import { ResetIcon, FilterIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { addReportingDays, type ReportingDate } from "@/domain/calendar";
 import { applyFeedDraft, resetFeedFilters } from "@/domain/feed-controls";
@@ -15,16 +15,18 @@ import {
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import type { MarketFamily } from "@/domain/markets";
-import type { AccentName } from "@/styles/theme";
+import { media, type AccentName } from "@/styles/theme";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { DateRangePicker, DateStepper, SingleDatePicker } from "./feed-dates";
-import { ChipText, FilterChip, focusRing, OptionPicker, plainClick, RangeSlider, Segmented } from "./filter-parts";
+import { ChipText, CompactSelect, FilterChip, focusRing, OptionPicker, plainClick, RangeSlider, Segmented } from "./filter-parts";
 
 type Messages = ReturnType<typeof createMessages>;
-const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
+const desktop = media.desktop;
+/** The draft count belongs to the desktop Apply button; phones apply selections directly. */
+const desktopQuery = media.desktop.replace("@media ", "");
 const probabilityPresets = [anyProbability, { min: 50, max: 100 }, { min: 60, max: 100 }, { min: 70, max: 100 }, { min: 80, max: 100 }, { min: 90, max: 100 }];
 const suggestionCount = 6;
 /** Phone selections settle for this long before one navigation applies them all. */
@@ -42,22 +44,24 @@ function toggledMarkets(query: FeedQuery, family: MarketFamily): FeedQuery | nul
   if (has && query.markets.length === 1) return null;
   return { ...query, markets: canonicalMarkets(has ? query.markets.filter((item) => item !== family) : [...query.markets, family]), page: 1 };
 }
+/** Presets read "50%+"; the narrow phone select has no room for "50% - 100%". */
 function rangeText(messages: Messages, range: FeedQuery["probability"]) {
   return range.min === 0 && range.max === 100 ? messages.text("feed.filters.any")
+    : range.max === 100 ? messages.text("feed.filters.percentMin", { min: messages.number(range.min) })
     : messages.text("feed.filters.percentRange", { min: messages.number(range.min), max: messages.number(range.max) });
 }
 
-/** Debounced count for the desktop draft, using the public feed endpoint with a one-row page. */
+/** Debounced desktop draft count, from the public feed endpoint with a one-row page and no league options. */
 function useDraftTotal(draft: FeedQuery, query: FeedQuery, today: ReportingDate, appliedTotal: number | null) {
   const key = (() => { try { return feedQueryKey(draft, today); } catch { return null; } })(), appliedKey = feedQueryKey(query, today);
   const [counted, setCounted] = useState<{ key: string; total: number } | null>(null);
   useEffect(() => {
-    if (key === null || key === appliedKey) return;
+    if (key === null || key === appliedKey || !window.matchMedia(desktopQuery).matches) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
         const parameters = serializeFeedQuery({ ...pinnedFeedQuery(draft, today), page: 1, pageSize: 1 }, today);
-        const response = await fetch(`/api/matches?${parameters}`, { signal: controller.signal, headers: { accept: "application/json" } });
+        const response = await fetch(`/api/matches?${parameters}&leagues=0`, { signal: controller.signal, headers: { accept: "application/json" } });
         if (!response.ok) return;
         const body: unknown = await response.json();
         const total = (body as { total?: unknown } | null)?.total;
@@ -81,7 +85,10 @@ const Panel = styled.section`
   box-shadow: ${({ theme }) => theme.shadow.card};
   ${desktop} { padding: 12px 14px 10px; }
 `;
+/** Raised above the cards' full-row links, so the date and option popovers that overlap them stay usable. */
 const PhoneOnly = styled.div`
+  position: relative;
+  z-index: 2;
   display: grid;
   gap: 6px;
   min-inline-size: 0;
@@ -99,7 +106,9 @@ const PhoneMore = styled.div`
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 
+/** The range popover spans this whole row, so it never runs past the screen's left edge. */
 const DateRow = styled.div`
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -130,13 +139,13 @@ const ChipStrip = styled.div`
   &::-webkit-scrollbar { display: none; }
   a:focus-visible { outline-offset: -3px; }
 `;
-/** Odds, probability and Reset share one line; very narrow phones move Reset below. */
+/** Odds, probability and Reset share one line from 360px phones; narrower ones move Reset below. */
 const BottomRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
   gap: 6px 8px;
-  @container phone-filters (min-width: 19.5rem) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto; }
+  @container phone-filters (min-width: 18.5rem) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto; }
 `;
 const SelectGroup = styled.label<{ $accent: AccentName }>`
   display: inline-flex;
@@ -147,31 +156,7 @@ const SelectGroup = styled.label<{ $accent: AccentName }>`
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;
-const SelectBox = styled.span`
-  position: relative;
-  display: flex;
-  flex: 1;
-  min-inline-size: 0;
-  color: ${({ theme }) => theme.color.text};
-  > select {
-    flex: 1;
-    min-inline-size: 0;
-    min-block-size: 1.875rem;
-    padding-inline: 8px 22px;
-    color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 6px;
-    font: inherit;
-    font-size: 0.6875rem;
-    font-weight: ${({ theme }) => theme.typography.weight.body};
-    appearance: none;
-    cursor: pointer;
-    ${focusRing}
-    &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: not-allowed; }
-  }
-  > svg { position: absolute; inset-inline-end: 8px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
-`;
+const SelectBox = styled(CompactSelect)`flex: 1;`;
 const QuietLink = styled(Link)`
   display: inline-flex;
   align-items: center;
@@ -188,7 +173,7 @@ const QuietLink = styled(Link)`
   white-space: nowrap;
   text-decoration: none;
   > svg { font-size: 1rem; }
-  &:hover { border-color: ${({ theme }) => theme.color.accent.red.solid}; }
+  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.red.solid}; } }
   ${focusRing}
 `;
 
@@ -215,7 +200,8 @@ const Field = styled.div<{ $accent: AccentName; $disabled?: boolean }>`
   background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 6px;
-  &:hover, &:focus-within { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; }
+  &:focus-within { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; }
+  ${media.hover} { &:hover { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; } }
 `;
 const FieldName = styled.span<{ $accent: AccentName }>`
   display: inline-flex;
@@ -278,7 +264,7 @@ const ApplyLink = styled(Link)`
   white-space: nowrap;
   text-decoration: none;
   > svg { flex: none; font-size: 1rem; }
-  &:hover { filter: brightness(0.95); }
+  ${media.hover} { &:hover { filter: brightness(0.95); } }
   ${focusRing}
 `;
 const OutlineLink = styled(QuietLink)`
@@ -330,9 +316,11 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
   useEffect(() => () => { if (pending.current !== null) window.clearTimeout(pending.current); }, []);
   const draft = valid(storedDraft, today) ? storedDraft : query;
   const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
-  const leagueList = leagueOptions(leagues, messages.text("match.competitionUnknown")), countryList = countryOptions(leagues);
-  const marketList: FilterOption[] = publicPolicy.markets.map((family) => ({ value: family, label: messages.text(`market.family.${family}`),
-    detail: null, logoUrl: null, fixtures: 0 }));
+  // Hundreds of leagues are sorted once per cohort, not on every chip tap.
+  const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
+  const countryList = useMemo(() => countryOptions(leagues), [leagues]);
+  const marketList = useMemo((): FilterOption[] => publicPolicy.markets.map((family) => ({ value: family,
+    label: createMessages(query.locale).text(`market.family.${family}`), detail: null, logoUrl: null, fixtures: 0 })), [query.locale]);
   const href = (next: FeedQuery) => feedQueryHref({ ...next, page: 1 }, today);
   const edit = (next: FeedQuery) => { if (valid(next, today)) dispatch(draftChanged({ ...next, page: 1 })); };
   /** Immediate navigation (dates, Reset, Clear All); any pending phone selection is folded in or discarded by the caller. */
@@ -465,18 +453,17 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
         <BottomRow>
           <SelectGroup title={messages.text("feed.filters.oddsPending")} $accent="amber">
             {oddsLabel}
-            <SelectBox><select disabled aria-label={messages.text("feed.filters.odds")}>
-              <option>{messages.text("feed.filters.any")}</option>
-            </select><ChevronDownIcon /></SelectBox>
+            <SelectBox disabled aria-label={messages.text("feed.filters.odds")} value="any"
+              options={[{ value: "any", label: messages.text("feed.filters.any") }]} />
           </SelectGroup>
           <SelectGroup $accent="pink">
             {probabilityLabel}
-            <SelectBox><select aria-label={messages.text("feed.filters.probability")} value={`${phone.probability.min}-${phone.probability.max}`} onChange={(event) => {
-              const [min, max] = event.target.value.split("-").map(Number);
-              choose({ ...phone, probability: { min: min!, max: max! } });
-            }}>
-              {probabilityOptions.map((preset) => <option key={`${preset.min}-${preset.max}`} value={`${preset.min}-${preset.max}`}>{rangeText(messages, preset)}</option>)}
-            </select><ChevronDownIcon /></SelectBox>
+            <SelectBox aria-label={messages.text("feed.filters.probability")} value={`${phone.probability.min}-${phone.probability.max}`}
+              options={probabilityOptions.map((preset) => ({ value: `${preset.min}-${preset.max}`, label: rangeText(messages, preset) }))}
+              onChange={(event) => {
+                const [min, max] = event.target.value.split("-").map(Number);
+                choose({ ...phone, probability: { min: min!, max: max! } });
+              }} />
           </SelectGroup>
           <QuietLink href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}>{messages.text("feed.filters.reset")}</QuietLink>
         </BottomRow>

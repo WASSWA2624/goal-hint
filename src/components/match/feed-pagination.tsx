@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import type { ReportingDate } from "@/domain/calendar";
@@ -10,9 +10,10 @@ import { paginationItems } from "@/domain/feed-presentation";
 import type { FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
+import { media } from "@/styles/theme";
 import { focusRing } from "./filter-parts";
 
-const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
+const desktop = media.desktop;
 const Bar = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -50,7 +51,7 @@ const Pages = styled.ol`
     ${focusRing}
     ${desktop} { block-size: 2.25rem; }
   }
-  > li > a:hover { color: ${({ theme }) => theme.color.accent.blue.text}; border-color: ${({ theme }) => theme.color.accent.blue.solid}; }
+  ${media.hover} { > li > a:hover { color: ${({ theme }) => theme.color.accent.blue.text}; border-color: ${({ theme }) => theme.color.accent.blue.solid}; } }
   > li > a[aria-current="page"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.gradient.action}; border-color: transparent; font-weight: ${({ theme }) => theme.typography.weight.bold}; box-shadow: 0 3px 10px rgb(37 99 235 / 25%); }
   > li > span[data-gap] { background: none; border: 0; color: ${({ theme }) => theme.color.mutedText}; }
   > li > span[aria-disabled] { color: ${({ theme }) => theme.color.disabledText}; }

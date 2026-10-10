@@ -4,11 +4,11 @@ import { TextLink } from "@/components/ui/controls";
 import { BodyText, Inline, SectionHeading, Stack } from "@/components/ui/layout";
 import { contactNotice } from "@/domain/contact-notice";
 import { informationHref } from "@/domain/navigation";
-import { createMessages } from "@/i18n/messages";
+import { createContentMessages } from "@/i18n/content-messages";
 import { InformationNotice } from "./information-notice";
 
 export function ContactContent({ locale }: { locale: string }) {
-  const messages = createMessages(locale);
+  const messages = createContentMessages(locale);
   return <Stack $gap="xl" data-contact-status={contactNotice.publication} data-contact-release-ready={contactNotice.releaseReady}>
     <InformationNotice locale={locale} kind="contact" reviewedOn={contactNotice.reviewedOn} />
     <Stack as="section" id="contact-report" aria-labelledby="contact-report-heading" $gap="md">

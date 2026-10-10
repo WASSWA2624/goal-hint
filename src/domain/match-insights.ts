@@ -135,6 +135,20 @@ export const insightsPreviewSchema = z.strictObject({ fixtureId: id, asOf: at, h
   sections: insightSectionsSchema, totals: totalsSchema });
 export type InsightsPreview = z.infer<typeof insightsPreviewSchema>;
 
+/** Whether the overview preview already holds every entry of a section: previews truncate only lists. */
+export function previewHoldsSection(preview: InsightsPreview, section: MatchSection): boolean {
+  const { sections: s, totals: t } = preview;
+  switch (section) {
+    case "form": return s.form.home.length >= t.formHome && s.form.away.length >= t.formAway;
+    case "h2h": return s.h2h.meetings.length >= t.meetings;
+    case "stats": return s.stats.evidence.length >= t.stats;
+    case "players": return s.players.players.length >= t.players;
+    case "injuries": return s.injuries.injuries.length >= t.injuries;
+    case "news": return s.news.items.length >= t.news;
+    default: return true;
+  }
+}
+
 /** Truncates each collection for the overview and records the complete totals for "View all" labels. */
 export function insightsPreview(insights: MatchInsights): InsightsPreview {
   const s = insights.sections;

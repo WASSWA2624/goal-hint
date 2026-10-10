@@ -1,6 +1,5 @@
+// Server-only page prose (see ../content-messages.ts); metadata and the feed's results link live in en.ts.
 export const methodologyMessages = {
-  "methodology.metadataTitle": "How it works | Goal Hint",
-  "methodology.description": "How Goal Hint estimates football probabilities, locks forecasts and reports measured performance and limitations.",
   "methodology.intro": "Goal Hint provides free football forecasts without an account. Estimated probabilities describe uncertainty; no forecast guarantees a result.",
   "methodology.contents": "On this page",
   "methodology.probabilities.title": "Understanding estimated probabilities",
@@ -28,7 +27,6 @@ export const methodologyMessages = {
   "methodology.corrections.body": "Provider result corrections can change an outcome after an audited resettlement, using the same immutable locked pick. While a correction awaits settlement, the old outcome becomes pending. Correction times remain visible. If a schedule or start correction invalidates a lock, the cycle is voided with a reason; a different pick is never substituted.",
   "methodology.corrections.pending": "Public correction and dispute submissions are not yet available. A responsible owner, intake channel and review process have not been confirmed. No response time is promised. This public process must be approved before release.",
   "performance.title": "Measured performance",
-  "performance.resultsLink": "How we measure prediction performance",
   "performance.intro": "These are stored observations, not an accuracy promise. Estimates remain provisional; descriptive results do not establish independent qualification or calibration.",
   "performance.filters": "Choose a performance cohort",
   "performance.from": "From (EAT date)",

@@ -56,7 +56,9 @@ test("malformed, ambiguous, unbounded and unsupported URL values are rejected", 
     "league=../x", "league=a,,b", "league=a,", "league=a&league=", `league=${Array.from({ length: 51 }, (_, index) => `l${index}`).join(",")}`,
     "country=Eng%2Fland", "country=+Spain", "country=Spain,", "status=correct", "status=", "market=exact-score", "market=", "market=match-result,match-result",
     "picks=yes", "picks=", "picks=only&picks=only", "prob=50", "prob=60-50", "prob=0-101", "prob=-1-50", "prob=05-50", "sort=asc", "sort=score", "dir=up", "sortMarket=match-result",
-    "page=0", "page=-1", "page=01", "page=1.5", "page=1e2", "page=10001", "pageSize=101", "pageSize=0"]) {
+    "page=0", "page=-1", "page=01", "page=1.5", "page=1e2", "page=10001", "pageSize=101", "pageSize=0",
+    // The API's `leagues=0` response option is never part of a feed query or page URL.
+    "leagues=0"]) {
     assert.throws(() => query(input), undefined, input);
   }
   assert.throws(() => query("when=today", { routeDate: "2026-10-09" }));

@@ -2,17 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { InsightSections } from "@/domain/match-insights";
+import { previewHoldsSection, type InsightSections, type InsightsPreview } from "@/domain/match-insights";
 import { parseMatchView, serializeMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
-import { refreshApi } from "@/state/refresh-api";
+import { detailApi } from "@/state/detail-api";
 
 export type ViewNavigation = "push" | "replace";
+export type ViewUpdate = (change: (current: MatchView) => MatchView, mode?: ViewNavigation) => void;
 
 /**
  * The details view lives in the URL: opening sections and items adds history entries (Back and
  * Forward step through them), while tabs, filters and pages replace the current entry. Other
- * query parameters, such as revision history, are preserved.
+ * query parameters, such as revision history, are preserved. `update` derives the next view from
+ * the URL at call time, so handlers need no rendered view and closed cards can skip view changes.
  */
 export function useMatchView() {
   const parameters = useSearchParams();
@@ -24,23 +26,30 @@ export function useMatchView() {
     if (mode === "push") window.history.pushState(null, "", url);
     else window.history.replaceState(null, "", url);
   }, []);
-  return { view, go };
+  const update = useCallback<ViewUpdate>((change, mode = "push") =>
+    go(change(parseMatchView(new URLSearchParams(window.location.search))), mode), [go]);
+  return { view, go, update };
 }
+
+/** A complete preview older than this is refetched when its section opens. */
+const previewReuseMs = 5 * 60_000;
 
 /**
  * One complete section, fetched on first expansion through the shared cached endpoint. Simultaneous
- * consumers share one request; the preview stays visible while loading or after a failure.
+ * consumers share one request; the preview stays visible while loading or after a failure. When the
+ * page's recent preview already holds the whole collection, no request is made.
  */
-export function useInsightSection<S extends MatchSection>(id: string, section: S, enabled: boolean) {
+export function useInsightSection<S extends MatchSection>(id: string, section: S, enabled: boolean, preview: InsightsPreview | null = null) {
   const dispatch = useAppDispatch();
   const [attempt, setAttempt] = useState(0);
-  const select = useMemo(() => refreshApi.endpoints.insights.select({ id, section }), [id, section]);
+  const select = useMemo(() => detailApi.endpoints.insights.select({ id, section }), [id, section]);
   const state = useAppSelector(select);
+  const completeAt = preview && previewHoldsSection(preview, section) ? preview.asOf : null;
   useEffect(() => {
-    if (!enabled) return;
-    const request = dispatch(refreshApi.endpoints.insights.initiate({ id, section }, attempt > 0 ? { forceRefetch: true } : undefined));
+    if (!enabled || (completeAt !== null && Date.now() - completeAt < previewReuseMs)) return;
+    const request = dispatch(detailApi.endpoints.insights.initiate({ id, section }, attempt > 0 ? { forceRefetch: true } : undefined));
     return () => request.unsubscribe();
-  }, [attempt, dispatch, enabled, id, section]);
+  }, [attempt, completeAt, dispatch, enabled, id, section]);
   return {
     // The endpoint validated this payload against the section's own schema.
     data: state.data?.section === section ? state.data.data as InsightSections[S] : null,

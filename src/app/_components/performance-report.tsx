@@ -7,10 +7,11 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { BodyText, Inline, MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { parseReportingDate, toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { performanceFamilies, type PerformanceCell, type PerformanceResponse } from "@/domain/performance";
-import { createMessages, type TextKey } from "@/i18n/messages";
+import { createContentMessages, type ContentTextKey } from "@/i18n/content-messages";
 import { performanceParameters, type PerformancePageResult } from "@/server/performance/performance-page";
+import { LineGroup } from "./information-styles";
 
-const reasonKeys: Record<string, TextKey> = {
+const reasonKeys: Record<string, ContentTextKey> = {
   "unapproved-policy": "performance.reason.policy", "no-settled-samples": "performance.reason.samples",
   "insufficient-settled-samples": "performance.reason.samples", "outside-approved-policy-scope": "performance.reason.scope",
   "mixed-or-unknown-horizons-use-horizon-cells": "performance.reason.horizon",
@@ -18,13 +19,13 @@ const reasonKeys: Record<string, TextKey> = {
   "insufficient-matched-baseline-samples": "performance.reason.baseline",
 };
 function ReportTime({ at, locale }: { at: number | null; locale: string }) {
-  const messages = createMessages(locale);
+  const messages = createContentMessages(locale);
   return at === null ? messages.text("performance.none") : <time dateTime={toUtcIsoString(utcInstantFromEpochMilliseconds(at))}>
     {messages.reportingInstant(utcInstantFromEpochMilliseconds(at))}</time>;
 }
 
 function PerformanceCell({ cell, locale }: { cell: PerformanceCell; locale: string }) {
-  const messages = createMessages(locale), { coverage, metrics } = cell;
+  const messages = createContentMessages(locale), { coverage, metrics } = cell;
   const number = (value: number) => messages.number(value, { maximumFractionDigits: 4 });
   const percent = (value: number) => messages.number(value, { style: "percent", maximumFractionDigits: 2 });
   const missing = messages.text("performance.noSamples");
@@ -62,7 +63,7 @@ function PerformanceCell({ cell, locale }: { cell: PerformanceCell; locale: stri
                 <thead><tr>{(["selection", "band", "eventCount", "mean", "frequency", "interval"] as const).map((key) =>
                   <th scope="col" key={key}>{messages.text(`performance.${key}`)}</th>)}</tr></thead>
                 <tbody>{metrics.calibration.map((band) => <tr key={`${band.selection}:${band.lower}`}>
-                  <th scope="row">{messages.text(`market.selection.${band.selection}` as TextKey)}</th>
+                  <th scope="row">{messages.text(`market.selection.${band.selection}` as ContentTextKey)}</th>
                   <td>{percent(band.lower)} – {percent(band.upper)}</td><td>{messages.number(band.count)}</td>
                   <td>{band.meanProbability === null ? missing : percent(band.meanProbability)}</td>
                   <td>{band.observedFrequency === null ? missing : percent(band.observedFrequency)}</td>
@@ -96,25 +97,28 @@ function PerformanceCell({ cell, locale }: { cell: PerformanceCell; locale: stri
 }
 
 function StoredReport({ data, locale }: { data: PerformanceResponse; locale: string }) {
-  const messages = createMessages(locale);
+  const messages = createContentMessages(locale);
   const horizons = [...new Map(data.cells.map((cell) => [cell.horizon?.id ?? "overall", cell.horizon])).values()];
   const overall = data.cells.filter((cell) => cell.horizon === null);
   const operationCounts = { historicalVoid: data.historicalCycles.void, historicalPostponed: data.historicalCycles.postponed,
     jobs: data.operations.total, failed: data.operations.failed, failedFixtures: data.operations.failedFixtures,
     pendingJobs: data.operations.pending, delayed: data.operations.delayedRefreshes, delayedFixtures: data.operations.delayedFixtures };
   return <Stack $gap="lg" data-stored-performance>
-    <BodyText>{messages.text("performance.period", { from: messages.reportingDate(parseReportingDate(data.cohort.from)), to: messages.reportingDate(parseReportingDate(data.cohort.to)) })}</BodyText>
-    <BodyText>{messages.text("performance.filtersApplied", { source: messages.text(`performance.source.${data.filters.source}`),
-      model: data.filters.model ?? messages.text("performance.any"), version: data.filters.version ?? messages.text("performance.any") })}</BodyText>
-    <BodyText>{messages.text("performance.cohort", { count: messages.number(data.cohort.fixtureCount) })}</BodyText>
-    <BodyText>{messages.text(data.policy.state === "unapproved" ? "performance.unapproved" : "performance.verified")}</BodyText>
-    {data.cohort.fixtureCount === 0 && <BodyText>{messages.text("performance.empty")}</BodyText>}
-    <MutedText>{messages.text("performance.asOf")}: <ReportTime at={data.asOf} locale={locale} /></MutedText>
-    <MutedText>{messages.text("performance.lastSettled")}: <ReportTime at={data.freshness.lastSettledAt} locale={locale} /></MutedText>
-    <MutedText>{messages.text("performance.lastCorrected")}: <ReportTime at={data.freshness.lastCorrectedAt} locale={locale} /></MutedText>
-    <BodyText>{messages.text("performance.accounting")}</BodyText>
-    <BodyText>{messages.text("performance.scoreContext")}</BodyText>
-    <BodyText>{messages.text("performance.comparison")}</BodyText>
+    {/* One-line report facts read as a single block below desktop; families and operations keep the outer gap. */}
+    <LineGroup>
+      <BodyText>{messages.text("performance.period", { from: messages.reportingDate(parseReportingDate(data.cohort.from)), to: messages.reportingDate(parseReportingDate(data.cohort.to)) })}</BodyText>
+      <BodyText>{messages.text("performance.filtersApplied", { source: messages.text(`performance.source.${data.filters.source}`),
+        model: data.filters.model ?? messages.text("performance.any"), version: data.filters.version ?? messages.text("performance.any") })}</BodyText>
+      <BodyText>{messages.text("performance.cohort", { count: messages.number(data.cohort.fixtureCount) })}</BodyText>
+      <BodyText>{messages.text(data.policy.state === "unapproved" ? "performance.unapproved" : "performance.verified")}</BodyText>
+      {data.cohort.fixtureCount === 0 && <BodyText>{messages.text("performance.empty")}</BodyText>}
+      <MutedText>{messages.text("performance.asOf")}: <ReportTime at={data.asOf} locale={locale} /></MutedText>
+      <MutedText>{messages.text("performance.lastSettled")}: <ReportTime at={data.freshness.lastSettledAt} locale={locale} /></MutedText>
+      <MutedText>{messages.text("performance.lastCorrected")}: <ReportTime at={data.freshness.lastCorrectedAt} locale={locale} /></MutedText>
+      <BodyText>{messages.text("performance.accounting")}</BodyText>
+      <BodyText>{messages.text("performance.scoreContext")}</BodyText>
+      <BodyText>{messages.text("performance.comparison")}</BodyText>
+    </LineGroup>
     {performanceFamilies.filter((family) => overall.some((cell) => cell.family === family)).map((family) => <Stack as="section" key={family} aria-labelledby={`performance-${family}`} $gap="md">
       <h3 id={`performance-${family}`}>{messages.text(`market.family.${family}`)}</h3>
       {family === "double-chance" && <BodyText>{messages.text("performance.doubleChance")}</BodyText>}
@@ -130,14 +134,14 @@ function StoredReport({ data, locale }: { data: PerformanceResponse; locale: str
     <Disclosure><summary>{messages.text("performance.operations")}</summary><Stack $gap="md">
       <BodyText>{messages.text("performance.operationsHint")}</BodyText>
       <DefinitionList>{Object.entries(operationCounts).map(([key, value]) => <Fragment key={key}>
-        <dt>{messages.text(`performance.${key}` as TextKey)}</dt><dd>{messages.number(value)}</dd>
+        <dt>{messages.text(`performance.${key}` as ContentTextKey)}</dt><dd>{messages.number(value)}</dd>
       </Fragment>)}</DefinitionList>
     </Stack></Disclosure>
   </Stack>;
 }
 
 export function PerformanceReport({ result, locale }: { result: PerformancePageResult; locale: string }) {
-  const messages = createMessages(locale), query = result.query;
+  const messages = createContentMessages(locale), query = result.query;
   const retry = query ? `/en/how-it-works?${performanceParameters(query)}#performance` : "/en/how-it-works#performance";
   return <Stack as="section" id="performance" aria-labelledby="performance-heading" $gap="lg">
     <SectionHeading id="performance-heading">{messages.text("performance.title")}</SectionHeading>

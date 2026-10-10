@@ -58,6 +58,14 @@ implement its metadata/canonical relationships under 042.
 
 `src/i18n/messages/en.ts` owns stable, flat, namespaced interface keys.
 `createMessages` exposes `text`, `plural`, `number` and `reportingDate`.
+Without translations it returns one frozen helper per locale, and option-specific
+number formatters are cached, so per-card and per-row calls stay cheap.
+Information-page prose (`messages/methodology.ts`, `privacy.ts`, `terms.ts`,
+`contact.ts`) is not part of `en`, which every Client Component bundles. Server
+Components read it through the `server-only` `createContentMessages` in
+`src/i18n/content-messages.ts`, typed by `ContentTextKey`. Page metadata titles
+and descriptions and `performance.resultsLink` stay in `en` because shared
+metadata and the client feed read them.
 Translations can fall back per key; plural messages require `other`, select
 forms through `Intl.PluralRules` and format counts through `Intl.NumberFormat`.
 `feed.matchCount` is prepared but is not displayed without real feed data.

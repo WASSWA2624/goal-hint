@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled from "styled-components";
 import { CloseIcon, SearchIcon } from "@/components/ui/icons";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
+import { defaultMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
 import { feedReturnStorageKey, homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
+import { media } from "@/styles/theme";
 import { BackIcon } from "./details-icons";
-import { DetailsProvider, Note, desktop, focusRing } from "./details-ui";
+import { DetailsProvider, Note, ViewProvider, desktop, focusRing, size, useStableDetails } from "./details-ui";
 import { ContextSection, HistorySection, NewsSection, RefereeSection } from "./info-sections";
 import { MarketTiles, MatchBanner } from "./match-banner";
 import { MarketsCard } from "./markets-card";
@@ -31,7 +33,7 @@ const PhoneBar = styled.div`
   align-items: center;
   gap: 8px;
   ${desktop} { display: none; }
-  > p { margin: 0; font-size: 1.0625rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
+  > p { margin: 0; font-size: ${size("title")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
 `;
 const RoundLink = styled(Link)`
   display: grid;
@@ -41,7 +43,7 @@ const RoundLink = styled(Link)`
   color: ${({ theme }) => theme.color.text};
   border-radius: 50%;
   font-size: 1.125rem;
-  &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; } }
   ${focusRing}
 `;
 const RoundButton = styled.button`
@@ -69,8 +71,8 @@ const SearchForm = styled.form`
   border-radius: 6px;
   ${desktop} { display: none; }
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
-  > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; font: inherit; font-size: 0.875rem; outline: none; }
-  > button { padding: 4px 8px; color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; border: 0; border-radius: 4px; font: inherit; font-size: 0.75rem; cursor: pointer; ${focusRing} }
+  > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; font: inherit; font-size: ${size("emphasis")}; outline: none; }
+  > button { padding: 4px 8px; color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; border: 0; border-radius: 4px; font: inherit; font-size: ${size("secondary")}; cursor: pointer; ${focusRing} }
 `;
 const BackLink = styled(Link)`
   display: none;
@@ -80,9 +82,9 @@ const BackLink = styled(Link)`
     gap: 4px;
     justify-self: start;
     color: ${({ theme }) => theme.color.mutedText};
-    font-size: 0.8125rem;
+    font-size: ${size("body")};
     text-decoration: none;
-    &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; }
+    ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; } }
     ${focusRing}
   }
 `;
@@ -102,7 +104,12 @@ const Grid = styled.div`
   @media (min-width: 22rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   ${desktop} { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   > [data-section="markets"], > [data-section="history"], > [data-open] { grid-column: 1 / -1; }
-  @media (min-width: ${({ theme }) => theme.breakpoint.xl}) {
+  /* Two-up, Referee would sit alone beside an empty cell whenever eight other cards pair up. */
+  @media (min-width: 22rem) and (max-width: 63.99rem) {
+    &:not([data-open-section]) > [data-section="referee"],
+    &[data-open-section="history"] > [data-section="referee"] { grid-column: 1 / -1; }
+  }
+  ${media.wide} {
     grid-template-columns: minmax(0, 22fr) repeat(24, minmax(0, 1fr));
     align-items: stretch;
     > [data-section="markets"] { grid-column: 1; grid-row: span 3; }
@@ -125,18 +132,55 @@ const subscribeNever = () => () => {};
 function readFeedReturn(): string | null {
   try { return window.sessionStorage.getItem(feedReturnStorageKey); } catch { return null; }
 }
+/** The stored feed URL resolves after hydration inside this link alone, not across the whole page. */
+function useBackHref(locale: string) {
+  const stored = useSyncExternalStore(subscribeNever, readFeedReturn, () => null);
+  return stored && stored.startsWith(homeHref(locale)) && !stored.includes("//") ? stored : homeHref(locale);
+}
+function DesktopBackLink() {
+  const { locale, messages } = useStableDetails();
+  return <BackLink href={useBackHref(locale)} prefetch={false}><BackIcon />{messages.text("details.backToPredictions")}</BackLink>;
+}
+/** Phone header with back and search; opening search re-renders only this header. */
+function PhoneHeader() {
+  const { locale, messages } = useStableDetails();
+  const backHref = useBackHref(locale);
+  const [searching, setSearching] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  return <>
+    <PhoneBar>
+      <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
+      <p>{messages.text("details.title")}</p>
+      <RoundButton type="button" aria-expanded={searching} aria-controls="details-search" aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
+        onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => searchInput.current?.focus()); }}>
+        {searching ? <CloseIcon /> : <SearchIcon />}
+      </RoundButton>
+    </PhoneBar>
+    {searching && <SearchForm id="details-search" action={homeHref(locale)} method="get" role="search" aria-label={messages.text("feed.search.open")}>
+      <SearchIcon aria-hidden="true" />
+      <input ref={searchInput} type="search" name="q" maxLength={100} autoComplete="off" placeholder={messages.text("navigation.search")}
+        aria-label={messages.text("feed.filters.search")} />
+      <button type="submit">{messages.text("feed.search.submit")}</button>
+    </SearchForm>}
+  </>;
+}
 
-export function MatchDetails({ data, preview, locale = "en", history, historyRequested = false }: {
+/**
+ * Each card reads the view through its own provider. The open card gets the live view; closed cards
+ * share one value that changes only with the open section, so filters, pages and items inside one
+ * section (and market changes) re-render that card alone. Handlers read the URL through `update`.
+ */
+function SectionView({ section, view, closed, children }: { section: MatchSection; view: MatchView; closed: MatchView; children: ReactNode }) {
+  return <ViewProvider value={view.section === section ? view : closed}>{children}</ViewProvider>;
+}
+
+export const MatchDetails = memo(function MatchDetails({ data, preview, locale = "en", history, historyRequested = false }: {
   data: MatchDetailResponse; preview: InsightsPreview | null; locale?: string; history?: ReactNode; historyRequested?: boolean;
 }) {
-  const { view, go } = useMatchView();
+  const { view, go, update } = useMatchView();
   const messages = useMemo(() => createMessages(locale), [locale]);
   const fixture = data.fixture;
   const home = fixture.homeTeam.name || messages.text("match.homeUnknown"), away = fixture.awayTeam.name || messages.text("match.awayUnknown");
-  const stored = useSyncExternalStore(subscribeNever, readFeedReturn, () => null);
-  const backHref = stored && stored.startsWith(homeHref(locale)) && !stored.includes("//") ? stored : homeHref(locale);
-  const [searching, setSearching] = useState(false);
-  const searchInput = useRef<HTMLInputElement>(null);
   // Revision-history links arrive without a section; open the history section for them once.
   const opened = useRef(false);
   useEffect(() => {
@@ -144,41 +188,33 @@ export function MatchDetails({ data, preview, locale = "en", history, historyReq
     opened.current = true;
     if (historyRequested && view.section === null) go({ ...view, section: "history" }, "replace");
   }, [go, historyRequested, view]);
-  const value = useMemo(() => ({ data, preview, locale, messages, view, go, home, away, fixtureId: fixture.fixtureId, history }),
-    [away, data, fixture.fixtureId, go, history, home, locale, messages, preview, view]);
+  const value = useMemo(() => ({ data, preview, locale, messages, go, update, home, away, fixtureId: fixture.fixtureId, history }),
+    [away, data, fixture.fixtureId, go, history, home, locale, messages, preview, update]);
+  const closed = useMemo(() => ({ ...defaultMatchView, section: view.section }), [view.section]);
+  const { marketsOpen, market, marketCategory, marketSearch } = view;
+  const markets = useMemo(() => ({ ...defaultMatchView, marketsOpen, market, marketCategory, marketSearch }),
+    [market, marketCategory, marketSearch, marketsOpen]);
+  const scoped = { view, closed };
   return <DetailsProvider value={value}>
     <Page data-match-detail data-fixture-id={fixture.fixtureId} data-detail-revision={data.snapshot?.revisionId ?? ""}>
-      <PhoneBar>
-        <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
-        <p>{messages.text("details.title")}</p>
-        <RoundButton type="button" aria-expanded={searching} aria-controls="details-search" aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
-          onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => searchInput.current?.focus()); }}>
-          {searching ? <CloseIcon /> : <SearchIcon />}
-        </RoundButton>
-      </PhoneBar>
-      {searching && <SearchForm id="details-search" action={homeHref(locale)} method="get" role="search" aria-label={messages.text("feed.search.open")}>
-        <SearchIcon aria-hidden="true" />
-        <input ref={searchInput} type="search" name="q" maxLength={100} autoComplete="off" placeholder={messages.text("navigation.search")}
-          aria-label={messages.text("feed.filters.search")} />
-        <button type="submit">{messages.text("feed.search.submit")}</button>
-      </SearchForm>}
-      <BackLink href={backHref} prefetch={false}><BackIcon />{messages.text("details.backToPredictions")}</BackLink>
+      <PhoneHeader />
+      <DesktopBackLink />
       <MatchBanner />
       <MarketTiles />
       <Grid data-open-section={view.section ?? undefined}>
-        <MarketsCard />
-        <StatsSection />
-        <H2HSection />
-        <FormSection />
-        <LineupsSection />
-        <PlayersSection />
-        <NewsSection />
-        <InjuriesSection />
-        <ContextSection />
-        <RefereeSection />
-        <HistorySection />
+        <ViewProvider value={markets}><MarketsCard /></ViewProvider>
+        <SectionView section="stats" {...scoped}><StatsSection /></SectionView>
+        <SectionView section="h2h" {...scoped}><H2HSection /></SectionView>
+        <SectionView section="form" {...scoped}><FormSection /></SectionView>
+        <SectionView section="lineups" {...scoped}><LineupsSection /></SectionView>
+        <SectionView section="players" {...scoped}><PlayersSection /></SectionView>
+        <SectionView section="news" {...scoped}><NewsSection /></SectionView>
+        <SectionView section="injuries" {...scoped}><InjuriesSection /></SectionView>
+        <SectionView section="context" {...scoped}><ContextSection /></SectionView>
+        <SectionView section="referee" {...scoped}><RefereeSection /></SectionView>
+        <SectionView section="history" {...scoped}><HistorySection /></SectionView>
       </Grid>
       <Note>{messages.text("details.disclaimer")}</Note>
     </Page>
   </DetailsProvider>;
-}
+});

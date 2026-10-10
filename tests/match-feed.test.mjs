@@ -22,7 +22,8 @@ for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'f
   'date=2026-10-09&date=2026-10-10', 'status=FT', 'status=untrusted', 'market=corners',
   'sort=probability&dir=up', 'market=match-result&sort=probability&sortMarket=total-goals', 'sort=score', 'prob=90-10', 'country=x%3Cscript%3E',
   'page=0', 'page=10001', 'page=01', 'pageSize=101', 'pageSize=0', 'pageSize=1.5',
-  'league=x%27+OR+1=1', 'q=%00', `q=${'x'.repeat(121)}`, `q=${'%F0%9F%98%80'.repeat(240)}`, 'token=anonymous']) {
+  'league=x%27+OR+1=1', 'q=%00', `q=${'x'.repeat(121)}`, `q=${'%F0%9F%98%80'.repeat(240)}`, 'token=anonymous',
+  'leagues=1', 'leagues=', 'leagues=0&leagues=0', 'leagues=0&token=anonymous']) {
   test(`public query rejects ${query.slice(0, 70)}`, async () => {
     let reads = 0;
     const response = await createMatchFeedHandler(async () => { reads++; return emptyPage(); })(request(query));
@@ -46,6 +47,24 @@ test('anonymous GET uses no account, authentication cookie, token or cache', asy
   assert.equal(response.status, 200); assert.equal(response.headers.get('set-cookie'), null);
   assert.equal(response.headers.get('cdn-cache-control'), 'no-store');
   assert.equal(matchFeedResponseSchema.parse(await response.json()).state, 'no-fixtures');
+});
+test('leagues=0 omits filter options and never reaches the feed query parser', async () => {
+  const league = { id: 'league-a', name: 'Example', country: null, logoUrl: null, fixtures: 1 }, seen = [];
+  const handler = createMatchFeedHandler(async (parameters) => { seen.push(parameters.toString()); return { ...emptyPage(), leagues: [league] }; });
+  const lean = await handler(request('date=2026-10-09&leagues=0'));
+  assert.equal(lean.status, 200); assert.deepEqual(matchFeedResponseSchema.parse(await lean.json()).leagues, []);
+  const full = await handler(request('date=2026-10-09'));
+  assert.deepEqual(matchFeedResponseSchema.parse(await full.json()).leagues, [league]);
+  assert.deepEqual(seen, ['date=2026-10-09', 'date=2026-10-09']);
+});
+test('leagues=0 is not charged to the 2 KiB query limit', async () => {
+  const handler = createMatchFeedHandler(async () => emptyPage());
+  const base = `date=2026-10-09&league=${Array.from({ length: 19 }, (_, index) => `league-${index}`.padEnd(100, 'x')).join('%2C')}&q=`;
+  // "?" plus this query is exactly 2,048 bytes, as sent and as re-serialized.
+  const largest = base + 'a'.repeat(2047 - base.length);
+  assert.equal((await handler(request(largest))).status, 200);
+  assert.equal((await handler(request(`${largest}&leagues=0`))).status, 200);
+  assert.equal((await handler(request(`${largest}a&leagues=0`))).status, 400);
 });
 for (const [error, status, code, retry] of [[new Error('mysql://private:password@internal/prompt-log'), 503, 'unavailable', '5'],
   [new MatchFeedError('rate-limited', 17), 429, 'rate-limited', '17']]) {

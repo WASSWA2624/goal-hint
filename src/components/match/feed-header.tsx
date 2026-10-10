@@ -1,16 +1,17 @@
 "use client";
 
 import { useRef, useState } from "react";
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon, SortIcon } from "@/components/ui/icons";
 import { PageHeading } from "@/components/ui/layout";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
+import { media } from "@/styles/theme";
 import { DatePresets, DateRangePicker } from "./feed-dates";
-import { focusRing, IconButton } from "./filter-parts";
+import { CompactSelect, focusRing, IconButton } from "./filter-parts";
 
-const desktop = css`@media (min-width: ${({ theme }) => theme.breakpoint.lg})`;
+const desktop = media.desktop;
 
 const Row = styled.div`
   display: flex;
@@ -56,25 +57,28 @@ const FilterToggle = styled(RoundButton)`
     background: ${({ theme }) => theme.color.accent.pink.solid};
     border: 1.5px solid ${({ theme }) => theme.color.surface};
     border-radius: 999px;
-    font-size: 0.5625rem;
+    font-size: 0.625rem;
     line-height: 1;
+    font-variant-numeric: tabular-nums;
   }
 `;
 const DesktopActions = styled.div`
   display: none;
   ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 `;
+/** Phone search, as tall as the other secondary controls, with 16px icons. */
 const SearchForm = styled.form`
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-inline: 14px 6px;
-  min-block-size: 3rem;
+  gap: 6px;
+  padding-inline: 10px 2px;
+  min-block-size: ${({ theme }) => theme.control.compactHeight};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
   border-radius: 6px;
-  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1.125rem; }
+  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
   > input { flex: 1; min-inline-size: 0; border: 0; background: none; color: ${({ theme }) => theme.color.text}; font: inherit; outline: none; }
+  > button { inline-size: 2rem; block-size: 2rem; font-size: 1rem; }
   ${desktop} { display: none; }
 `;
 
@@ -156,29 +160,36 @@ const SortGroup = styled.div`
   gap: 4px;
   > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
 `;
-const SelectWrap = styled.span<{ $phone?: boolean }>`
+const SelectWrap = styled.span`
   position: relative;
-  display: ${({ $phone }) => $phone ? "inline-flex" : "none"};
-  ${desktop} { display: ${({ $phone }) => $phone ? "none" : "inline-flex"}; }
+  display: none;
+  ${desktop} { display: inline-flex; }
   > select {
-    min-block-size: 1.75rem;
+    min-block-size: 2.375rem;
     padding-inline: 7px 22px;
     color: ${({ theme }) => theme.color.text};
-    background: ${({ theme, $phone }) => $phone ? theme.color.cardHeader : theme.color.surface};
+    background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: 6px;
     font: inherit;
-    font-size: 0.6875rem;
+    font-size: 0.875rem;
     appearance: none;
     cursor: pointer;
     ${focusRing}
-    ${desktop} { min-block-size: 2.375rem; font-size: 0.875rem; }
   }
   > svg { position: absolute; inset-inline-end: 7px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
+`;
+const PhoneSort = styled(CompactSelect)`
+  min-block-size: 1.75rem;
+  padding-inline: 7px 22px;
+  background: ${({ theme }) => theme.color.cardHeader};
+  > svg { inset-inline-end: 7px; }
+  ${desktop} { display: none; }
 `;
 const ReverseButton = styled(IconButton)`
   inline-size: 1.75rem;
   block-size: 1.75rem;
+  font-size: 0.875rem;
   ${desktop} { display: none; }
 `;
 /** Toggle chip: keeps only matches that have a prediction. */
@@ -231,16 +242,11 @@ export function ResultsToolbar({ query, total, first, last, onApply }: {
         onClick={() => onApply({ ...query, picks: query.picks === "only" ? "all" : "only", page: 1 })}>
         {messages.text("feed.picks.only")}
       </PicksToggle>
-      <SelectWrap $phone>
-        <select aria-label={messages.text("feed.sort.label")} value={query.sort.by} onChange={(event) => {
-          const by = event.target.value as FeedSort["by"];
-          choose({ by, direction: by === "probability" ? "desc" : "asc" });
-        }}>
-          <option value="kickoff">{messages.text("feed.sort.short.kickoff")}</option>
-          <option value="probability">{messages.text("feed.sort.short.probability")}</option>
-        </select>
-        <ChevronDownIcon />
-      </SelectWrap>
+      <PhoneSort aria-label={messages.text("feed.sort.label")} value={query.sort.by} onChange={(event) => {
+        const by = event.target.value as FeedSort["by"];
+        choose({ by, direction: by === "probability" ? "desc" : "asc" });
+      }} options={[{ value: "kickoff", label: messages.text("feed.sort.short.kickoff") },
+        { value: "probability", label: messages.text("feed.sort.short.probability") }]} />
       <ReverseButton type="button" aria-label={`${messages.text("feed.sort.reverse")}: ${messages.text(`feed.sort.${query.sort.by}-${query.sort.direction}`)}`}
         title={messages.text("feed.sort.reverse")}
         onClick={() => choose({ by: query.sort.by, direction: query.sort.direction === "asc" ? "desc" : "asc" })}><SortIcon /></ReverseButton>

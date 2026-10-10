@@ -11,9 +11,14 @@ another consumer's shared request. No forecast data is persisted in the browser.
 
 ## Cadence and lifecycle
 
-Visible relative-date, scheduled/live and updating views refresh at 20-second
-intervals. Quiet historical/finished views use 60 seconds, retaining correction
-checks. Each view serializes its work; slow responses cannot create overlapping
+Visible feeds refresh at 20-second intervals only while something can change
+soon: an updating run, a live match, or a scheduled kickoff within 30 minutes
+either side of now (`feedRefreshInterval`). Every other view, relative dates
+included, uses 60 seconds and retains correction checks; the loop still wakes at
+EAT midnight for rollover. Details poll fast while live or updating, and for a scheduled match within 30
+minutes of kickoff; a detail poll re-renders only when something shown changed.
+Feed polls and Load more send `leagues=0`, since they never read filter options.
+Each view serializes its work; slow responses cannot create overlapping
 batches. Hidden or offline pages schedule no reads. Visibility restoration,
 reconnection and a persisted browser-cache `pageshow` resume safely. The initial
 `pageshow` does not trigger a duplicate hydration request. Unmount and query

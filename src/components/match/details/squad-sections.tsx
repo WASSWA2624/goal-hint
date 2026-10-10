@@ -1,14 +1,15 @@
 "use client";
 
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { parsePlayerKey, pitchRows, playerKey, positionGroup, type PositionGroup } from "@/domain/match-details";
 import { pageOf, type InsightSections } from "@/domain/match-insights";
 import { openItem, type TeamFocus } from "@/domain/match-view";
+import { media } from "@/styles/theme";
 import { InjuryIcon, LineupIcon, PlayerIcon } from "./details-icons";
 import {
-  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, desktop, useDetails, type Messages,
+  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, desktop, size, useDetails, type Messages,
 } from "./details-ui";
 import { ItemPanel, SectionCard, useReturnFocus } from "./section-card";
 import { useInsightSection } from "./use-match-view";
@@ -25,8 +26,8 @@ function playerName(messages: Messages, player: { name: string | null } | null |
 
 /** Team switch shared by squad sections; "both" lists home then away. */
 function TeamChoice() {
-  const { messages, home, away, view, go } = useDetails();
-  return <ChoiceGroup label={messages.text("details.team")} value={view.team} onChange={(team: TeamFocus) => go({ ...view, team, page: 1 }, "replace")}
+  const { messages, home, away, view, update } = useDetails();
+  return <ChoiceGroup label={messages.text("details.team")} value={view.team} onChange={(team: TeamFocus) => update((current) => ({ ...current, team, page: 1 }), "replace")}
     options={[{ value: "both", label: messages.text("details.bothTeams") }, { value: "home", label: home }, { value: "away", label: away }]} />;
 }
 
@@ -58,8 +59,9 @@ function PlayerPanel({ player, injury, lineup }: { player: Player | null; injury
 /** Looks a player up across the players, lineups and injuries collections. */
 function usePlayerLookup(open: boolean) {
   const { preview, view, fixtureId } = useDetails();
-  const players = useInsightSection(fixtureId, "players", open), injuries = useInsightSection(fixtureId, "injuries", open);
-  const lineups = useInsightSection(fixtureId, "lineups", open);
+  // Sections the preview already holds in full (lineups always) need no request.
+  const players = useInsightSection(fixtureId, "players", open, preview), injuries = useInsightSection(fixtureId, "injuries", open, preview);
+  const lineups = useInsightSection(fixtureId, "lineups", open, preview);
   const allPlayers = players.data?.players ?? preview?.sections.players.players ?? [];
   const allInjuries = injuries.data?.injuries ?? preview?.sections.injuries.injuries ?? [];
   const allLineups = lineups.data ?? preview?.sections.lineups ?? { home: null, away: null };
@@ -113,16 +115,16 @@ const Pitch = styled.ol`
     border: 0;
     border-radius: 4px;
     font: inherit;
-    font-size: 0.625rem;
+    font-size: ${size("micro")};
     line-height: 1.15;
     text-align: center;
     cursor: pointer;
     &:focus-visible { outline: 2px solid #fff; }
-    &:hover { background: rgb(255 255 255 / 15%); }
-    > b { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; color: ${({ theme }) => theme.color.text}; background: #fff; border-radius: 50%; font-size: 0.6875rem; }
+    ${media.hover} { &:hover { background: rgb(255 255 255 / 15%); } }
+    > b { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; color: ${({ theme }) => theme.color.text}; background: #fff; border-radius: 50%; font-size: ${size("caption")}; }
     > span { overflow-wrap: anywhere; }
   }
-  ${desktop} { button { font-size: 0.6875rem; } }
+  ${desktop} { button { font-size: ${size("caption")}; } }
 `;
 const PlayerRow = styled(RowButton)`
   grid-template-columns: 1.75rem minmax(0, 1fr) auto auto;
@@ -142,8 +144,8 @@ function short(name: string | null) {
   return parts.length > 1 ? parts.at(-1)! : name;
 }
 
-export function LineupsSection() {
-  const { data, messages, home, away, view, go } = useDetails();
+export const LineupsSection = memo(function LineupsSection() {
+  const { data, messages, home, away, view, update } = useDetails();
   const open = view.section === "lineups";
   const lookup = usePlayerLookup(open);
   const list = useRef<HTMLDivElement>(null);
@@ -153,7 +155,7 @@ export function LineupsSection() {
   const team = (side: "home" | "away") => side === "home" ? data.fixture.homeTeam : data.fixture.awayTeam;
   const playerButton = (player: Lineup["starters"][number]) => {
     const key = playerKey(player.team, player.id);
-    return <button type="button" key={key} data-item-key={key} onClick={() => go({ ...view, item: key })}
+    return <button type="button" key={key} data-item-key={key} onClick={() => update((current) => ({ ...current, item: key }))}
       aria-label={messages.text("details.playerOpen", { player: playerName(messages, player) })}>
       <b>{player.number ?? "–"}</b><span>{short(player.name)}</span>
     </button>;
@@ -194,12 +196,12 @@ export function LineupsSection() {
               </Pitch>}
               <Strong>{messages.text("details.starters")}</Strong>
               <RowList>{lineup.starters.map((player) => <li key={player.id}><PlayerRow type="button" data-item-key={playerKey(side, player.id)}
-                onClick={() => go({ ...view, item: playerKey(side, player.id) })}>
+                onClick={() => update((current) => ({ ...current, item: playerKey(side, player.id) }))}>
                 <span data-number>{player.number ?? "–"}</span><span data-name>{playerName(messages, player)}</span><span>{player.position ?? ""}</span><span />
               </PlayerRow></li>)}</RowList>
               <Strong>{messages.text("details.substitutes")}</Strong>
               {lineup.substitutes.length ? <RowList>{lineup.substitutes.map((player) => <li key={player.id}><PlayerRow type="button" data-item-key={playerKey(side, player.id)}
-                onClick={() => go({ ...view, item: playerKey(side, player.id) })}>
+                onClick={() => update((current) => ({ ...current, item: playerKey(side, player.id) }))}>
                 <span data-number>{player.number ?? "–"}</span><span data-name>{playerName(messages, player)}</span><span>{player.position ?? ""}</span><span />
               </PlayerRow></li>)}</RowList> : <Note>{messages.text("details.noSubstitutes")}</Note>}
               <Note>{messages.text("details.managerMissing")}</Note>
@@ -209,7 +211,7 @@ export function LineupsSection() {
       </LineupGrid>
     </div>}
   </SectionCard>;
-}
+});
 
 const Avatar = styled.span`
   display: grid;
@@ -226,12 +228,12 @@ const SquadRow = styled(RowButton)`
   grid-template-columns: 1.5rem minmax(0, 1fr) auto;
   > span[data-name] { display: grid; min-inline-size: 0; }
   > span[data-name] > b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  > span[data-name] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
+  > span[data-name] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
 `;
 const initials = (name: string | null) => name?.split(/\s+/u).map((part) => [...part][0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
 
-export function PlayersSection() {
-  const { preview, messages, home, away, view, go } = useDetails();
+export const PlayersSection = memo(function PlayersSection() {
+  const { preview, messages, home, away, view, update } = useDetails();
   const open = view.section === "players";
   const lookup = usePlayerLookup(open);
   const list = useRef<HTMLDivElement>(null);
@@ -243,7 +245,7 @@ export function PlayersSection() {
   const total = lookup.allPlayers.length || preview?.totals.players || 0;
   const row = (player: Player) => {
     const key = playerKey(player.team, player.id), injury = injuryFor(player);
-    return <li key={key}><SquadRow type="button" data-item-key={key} onClick={() => go(openItem(view, "players", key))}>
+    return <li key={key}><SquadRow type="button" data-item-key={key} onClick={() => update((current) => openItem(current, "players", key))}>
       <Avatar aria-hidden="true">{initials(player.name)}</Avatar>
       <span data-name><b>{playerName(messages, player)}</b><small>{[player.team === "home" ? home : away, player.position, player.number !== null ? `#${player.number}` : null].filter(Boolean).join(" · ")}</small></span>
       {injury ? <Pill $accent={statusAccent[injury.status]}>{messages.text(`details.injury.${injury.status}`)}</Pill>
@@ -259,27 +261,27 @@ export function PlayersSection() {
     {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar>
         <TeamChoice />
-        <ChoiceGroup label={messages.text("details.position")} value={group ?? "all"} onChange={(value: string) => go({ ...view, tab: value === "all" ? null : value, page: 1 }, "replace")}
+        <ChoiceGroup label={messages.text("details.position")} value={group ?? "all"} onChange={(value: string) => update((current) => ({ ...current, tab: value === "all" ? null : value, page: 1 }), "replace")}
           options={[{ value: "all", label: messages.text("details.allPositions") },
             ...(["G", "D", "M", "F"] as PositionGroup[]).map((value) => ({ value, label: messages.text(`details.positionGroup.${value}`) }))]} />
       </PanelBar>
       {paged.items.length ? <RowList>{paged.items.map(row)}</RowList> : <Note>{messages.text(lookup.allPlayers.length ? "details.noFilteredPlayers" : "details.playersNone")}</Note>}
-      <Pager page={paged.page} pages={paged.pages} onPage={(page) => go({ ...view, page }, "replace")} />
+      <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
       <Note>{messages.text("details.playerStatsMissing")}</Note>
     </div>}
   </SectionCard>;
-}
+});
 
 const InjuryRow = styled(RowButton)`
   grid-template-columns: 1rem minmax(0, 1fr) auto;
   > svg { color: ${({ theme }) => theme.color.accent.red.solid}; }
   > span[data-name] { display: grid; min-inline-size: 0; }
   > span[data-name] > b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  > span[data-name] > small { overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; white-space: nowrap; text-overflow: ellipsis; }
+  > span[data-name] > small { overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; white-space: nowrap; text-overflow: ellipsis; }
 `;
 
-export function InjuriesSection() {
-  const { preview, messages, home, away, view, go } = useDetails();
+export const InjuriesSection = memo(function InjuriesSection() {
+  const { preview, messages, home, away, view, update } = useDetails();
   const open = view.section === "injuries";
   const lookup = usePlayerLookup(open);
   const list = useRef<HTMLDivElement>(null);
@@ -290,7 +292,7 @@ export function InjuriesSection() {
   const total = lookup.allInjuries.length || preview?.totals.injuries || 0;
   const row = (injury: Injury) => {
     const key = playerKey(injury.team, injury.playerId);
-    return <li key={`${key}-${injury.type ?? ""}`}><InjuryRow type="button" data-item-key={key} onClick={() => go(openItem(view, "injuries", key))}>
+    return <li key={`${key}-${injury.type ?? ""}`}><InjuryRow type="button" data-item-key={key} onClick={() => update((current) => openItem(current, "injuries", key))}>
       <InjuryIcon />
       <span data-name><b>{playerName(messages, { name: injury.playerName })}</b>
         <small>{[injury.team === "home" ? home : away, injury.type, injury.reason].filter(Boolean).join(" · ")}</small></span>
@@ -306,13 +308,13 @@ export function InjuriesSection() {
     {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar>
         <TeamChoice />
-        <ChoiceGroup label={messages.text("details.status")} value={status ?? "all"} onChange={(value: string) => go({ ...view, tab: value === "all" ? null : value, page: 1 }, "replace")}
+        <ChoiceGroup label={messages.text("details.status")} value={status ?? "all"} onChange={(value: string) => update((current) => ({ ...current, tab: value === "all" ? null : value, page: 1 }), "replace")}
           options={[{ value: "all", label: messages.text("details.allStatuses") },
             ...(["out", "doubtful", "unknown"] as const).map((value) => ({ value, label: messages.text(`details.injury.${value}`) }))]} />
       </PanelBar>
       {paged.items.length ? <RowList>{paged.items.map(row)}</RowList> : <Note>{messages.text(lookup.allInjuries.length ? "details.noFilteredInjuries" : "details.injuriesNone")}</Note>}
-      <Pager page={paged.page} pages={paged.pages} onPage={(page) => go({ ...view, page }, "replace")} />
+      <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
       <Note>{messages.text("details.injuryBasis")}</Note>
     </div>}
   </SectionCard>;
-}
+});

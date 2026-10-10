@@ -4,7 +4,17 @@ import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliatio
 import type { MatchDetailResponse } from "./match-detail.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";
 
-export const liveRefreshRules = Object.freeze({ activeMs: 20_000, quietMs: 60_000, timeoutMs: 30_000 });
+export const liveRefreshRules = Object.freeze({ activeMs: 20_000, quietMs: 60_000, timeoutMs: 30_000, kickoffLeadMs: 30 * 60_000 });
+
+/** Fast polling only while something can change soon: an updating run, a live match or a scheduled
+ * kickoff within the lead either side of now. Other views, relative dates included, poll quietly;
+ * the loop still wakes at EAT midnight. */
+export function feedRefreshInterval(data: Pick<MatchFeedResponse, "run">,
+  records: readonly Pick<MatchFeedResponse["records"][number], "status" | "kickoffAt">[], now: number): number {
+  const active = data.run?.phase === "updating" || records.some((record) => record.status === "live" ||
+    record.status === "scheduled" && record.kickoffAt !== null && Math.abs(record.kickoffAt - now) <= liveRefreshRules.kickoffLeadMs);
+  return active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs;
+}
 
 export function acceptRun(previous: MatchFeedResponse["run"], next: MatchFeedResponse["run"], today?: string) {
   if (!previous || next === null && today !== undefined && today > previous.date) return next;

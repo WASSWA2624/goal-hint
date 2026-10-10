@@ -32,6 +32,7 @@ access. All SQL values, limits and offsets are bound parameters.
 | `sort` | `kickoff` (default), or `probability` with an explicit `market`. Optional `sortMarket` must equal that family. |
 | `page` | Integer 1–10,000, default 1. |
 | `pageSize` | Integer 1–100, default 30. |
+| `leagues` | Optional response option, only `0`: the response carries `leagues: []`. Live polls, Load more and the desktop draft count use it because they never read filter options. It is removed before query parsing and not charged to the 2 KiB query limit, so it never enters the canonical query, cache key or page links. |
 
 The range resolves to UTC `[startInclusive, endExclusive)` using the shared EAT
 calendar. Enabled competitions are included, together with stored historical

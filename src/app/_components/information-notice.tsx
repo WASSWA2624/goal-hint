@@ -2,13 +2,13 @@ import "server-only";
 
 import { BodyText, MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { parseReportingDate } from "@/domain/calendar";
-import { createMessages } from "@/i18n/messages";
+import { createContentMessages } from "@/i18n/content-messages";
 
 /** Shared factual-review header; publication status is supplied by each document. */
 export function InformationNotice({ locale, kind, reviewedOn }: {
   locale: string; kind: "privacy" | "terms" | "contact"; reviewedOn: string;
 }) {
-  const messages = createMessages(locale);
+  const messages = createContentMessages(locale);
   const statusId = `${kind}-status-heading`;
   return <>
     <Stack $gap="sm">

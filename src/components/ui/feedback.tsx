@@ -2,7 +2,7 @@
 
 import { useId, type ComponentPropsWithRef, type ReactNode } from "react";
 import styled from "styled-components";
-import type { OutcomeTone } from "@/styles/theme";
+import { media, type OutcomeTone } from "@/styles/theme";
 
 export type StatusTextProps = Omit<
   ComponentPropsWithRef<"span">,
@@ -24,19 +24,26 @@ export type EmptyStateProps = Omit<
   headingLevel?: 1 | 2 | 3 | 4;
 };
 
+/** A compact chip on phones and tablets; the roomier desktop chip from `lg`. */
 const StatusContainer = styled.span<{ $tone: OutcomeTone }>`
   display: inline-flex;
   align-items: flex-start;
   gap: ${({ theme }) => theme.space.xs};
   max-inline-size: 100%;
-  padding-block: ${({ theme }) => theme.space.xs};
-  padding-inline: ${({ theme }) => theme.space.sm};
+  padding: 1px 6px;
   color: ${({ theme, $tone }) => theme.color.outcome[$tone].text};
   background: ${({ theme, $tone }) => theme.color.outcome[$tone].background};
   border: ${({ theme }) => theme.border.width} solid
     ${({ theme, $tone }) => theme.color.outcome[$tone].border};
   border-radius: ${({ theme }) => theme.border.radius};
-  line-height: ${({ theme }) => theme.typography.lineHeight.body};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  line-height: 1.3;
+  ${media.desktop} {
+    padding-block: ${({ theme }) => theme.space.xs};
+    padding-inline: ${({ theme }) => theme.space.sm};
+    font-size: inherit;
+    line-height: ${({ theme }) => theme.typography.lineHeight.body};
+  }
 `;
 
 const StatusLabel = styled.span`
@@ -44,44 +51,52 @@ const StatusLabel = styled.span`
   overflow-wrap: anywhere;
 `;
 
+/** Phones: centred on the first 1.3 line, (1.3 - 1.1) / 2 = 0.1em. */
 const StatusIcon = styled.svg`
   flex-shrink: 0;
-  inline-size: 1.25em;
-  block-size: 1.25em;
-  margin-block-start: 0.125em;
+  inline-size: 1.1em;
+  block-size: 1.1em;
+  margin-block-start: 0.1em;
+  ${media.desktop} {
+    inline-size: 1.25em;
+    block-size: 1.25em;
+    margin-block-start: 0.125em;
+  }
 `;
 
 const EmptyContainer = styled.section`
   min-inline-size: 0;
   max-inline-size: 100%;
-  padding: ${({ theme }) => theme.space.lg};
+  padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.radius};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
   overflow-wrap: anywhere;
-  @media (max-width: 63.99rem) { padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md}; font-size: 0.75rem; }
+  ${media.desktop} { padding: ${({ theme }) => theme.space.lg}; font-size: inherit; }
 `;
 
 const EmptyTitle = styled.h2`
   margin: 0;
-  font-size: ${({ theme }) => theme.typography.size.h3};
-  @media (max-width: 63.99rem) { font-size: 0.875rem; }
+  font-size: ${({ theme }) => theme.typography.scale.emphasis};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: ${({ theme }) => theme.typography.lineHeight.heading};
+  ${media.desktop} { font-size: ${({ theme }) => theme.typography.size.h3}; }
 `;
 
 const EmptyDescription = styled.div`
-  margin-block-start: ${({ theme }) => theme.space.sm};
-  @media (max-width: 63.99rem) { margin-block-start: 2px; }
+  margin-block-start: 2px;
   color: ${({ theme }) => theme.color.mutedText};
+  ${media.desktop} { margin-block-start: ${({ theme }) => theme.space.sm}; }
 `;
 
 const EmptyAction = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: ${({ theme }) => theme.space.sm};
-  margin-block-start: ${({ theme }) => theme.space.md};
+  margin-block-start: ${({ theme }) => theme.space.sm};
+  ${media.desktop} { margin-block-start: ${({ theme }) => theme.space.md}; }
 `;
 
 function OutcomeIcon({ tone }: { tone: OutcomeTone }) {

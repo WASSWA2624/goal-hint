@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { pageOf, type InsightResult, type InsightSections } from "@/domain/match-insights";
 import { openItem } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
+import { media } from "@/styles/theme";
 import { ContextIcon, ExternalIcon, HistoryIcon, NewsIcon, RefereeIcon } from "./details-icons";
-import { ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, focusRing, useDetails } from "./details-ui";
+import {
+  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, focusRing, size, useDetails, useStableDetails,
+} from "./details-ui";
 import { ItemPanel, SectionCard, useReturnFocus } from "./section-card";
 import { RecordPanel } from "./team-sections";
 import { useInsightSection } from "./use-match-view";
@@ -22,7 +25,7 @@ const NewsRow = styled(RowButton)`
   @container details-card (min-width: 16rem) { grid-template-columns: auto minmax(0, 1fr); }
   > span[data-text] { display: grid; gap: 1px; min-inline-size: 0; }
   > span[data-text] > b { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  > span[data-text] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
+  > span[data-text] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
 `;
 const PreviewNews = styled(RowList)`
   > li:nth-child(n + 2) { display: none; }
@@ -35,25 +38,45 @@ const ExternalLink = styled.a`
   gap: 4px;
   justify-self: start;
   color: ${({ theme }) => theme.color.accent.blue.solid};
-  font-size: 0.8125rem;
+  font-size: ${size("body")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   ${focusRing}
 `;
+/**
+ * The locked revision history inside the phone and tablet card: no second box inside the card, and
+ * sub-headings, gaps and nested panels sized for a card rather than a page. Desktop is unchanged.
+ */
+const HistoryBody = styled.div`
+  min-inline-size: 0;
+  ${media.belowDesktop} {
+    font-size: ${size("body")};
+    line-height: 1.45;
+    > #revision-history { padding: 0; background: none; border: 0; }
+    > #revision-history > summary { min-block-size: 1.75rem; padding-block: 4px; }
+    > #revision-history > div { gap: 12px; }
+    & :is(h2, h3) { font-size: ${size("emphasis")}; line-height: 1.25; }
+    & section { padding: 10px; }
+    & ol { gap: 10px; }
+    & li > div { gap: 4px; }
+    /* Text links (not the Retry and Older buttons) keep a 28px target. */
+    & li a, > #revision-history > div > a { min-block-size: 1.75rem; }
+  }
+`;
 
 function NewsRows({ items }: { items: readonly NewsItem[] }) {
-  const { messages, view, go } = useDetails();
+  const { messages, update } = useStableDetails();
   return <>{items.map((item) => <li key={item.id}>
-    <NewsRow type="button" data-item-key={item.id} onClick={() => go(openItem(view, "news", item.id))}>
+    <NewsRow type="button" data-item-key={item.id} onClick={() => update((current) => openItem(current, "news", item.id))}>
       <Pill $accent={item.kind === "analysis" ? "violet" : "blue"}>{messages.text(`details.newsKind.${item.kind}`)}</Pill>
       <span data-text><b>{item.title}</b><small>{item.publisher}{item.publishedAt !== null && <> · {messages.reportingInstant(at(item.publishedAt))}</>}</small></span>
     </NewsRow>
   </li>)}</>;
 }
 
-export function NewsSection() {
-  const { preview, messages, view, go, fixtureId } = useDetails();
+export const NewsSection = memo(function NewsSection() {
+  const { preview, messages, view, update, fixtureId } = useDetails();
   const open = view.section === "news";
-  const news = useInsightSection(fixtureId, "news", open);
+  const news = useInsightSection(fixtureId, "news", open, preview);
   const items = news.data?.items ?? preview?.sections.news.items ?? [];
   const total = news.data?.items.length ?? preview?.totals.news ?? 0;
   const kind = (["report", "analysis"] as const).find((entry) => entry === view.tab) ?? null;
@@ -84,22 +107,22 @@ export function NewsSection() {
         {messages.text("details.readOriginal")}<ExternalIcon /></ExternalLink>}
     </ItemPanel> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar>
-        <ChoiceGroup label={messages.text("details.newsType")} value={kind ?? "all"} onChange={(value: string) => go({ ...view, tab: value === "all" ? null : value, page: 1 }, "replace")}
+        <ChoiceGroup label={messages.text("details.newsType")} value={kind ?? "all"} onChange={(value: string) => update((current) => ({ ...current, tab: value === "all" ? null : value, page: 1 }), "replace")}
           options={[{ value: "all", label: messages.text("details.allItems") }, { value: "report", label: messages.text("details.newsKind.report") },
             { value: "analysis", label: messages.text("details.newsKind.analysis") }]} />
       </PanelBar>
       {paged.items.length ? <RowList><NewsRows items={paged.items} /></RowList> : <Note>{messages.text("details.newsNone")}</Note>}
-      <Pager page={paged.page} pages={paged.pages} onPage={(page) => go({ ...view, page }, "replace")} />
+      <Pager page={paged.page} pages={paged.pages} onPage={(page) => update((current) => ({ ...current, page }), "replace")} />
       {limited && <Note>{messages.text("match.limitedNews")}</Note>}
       <Note>{messages.text("details.newsBasis")}</Note>
     </div>}
   </SectionCard>;
-}
+});
 
-export function ContextSection() {
-  const { data, preview, messages, home, away, view, go, fixtureId, locale } = useDetails();
+export const ContextSection = memo(function ContextSection() {
+  const { data, preview, messages, home, away, view, update, fixtureId, locale } = useDetails();
   const open = view.section === "context";
-  const context = useInsightSection(fixtureId, "context", open);
+  const context = useInsightSection(fixtureId, "context", open, preview);
   const value = context.data ?? preview?.sections.context ?? null;
   const fixture = data.fixture;
   const lastResults = value ? [value.lastResults.home, value.lastResults.away].filter((entry): entry is InsightResult => entry !== null) : [];
@@ -139,7 +162,7 @@ export function ContextSection() {
           const last = value?.lastResults[side] ?? null, next = value?.nextFixtures[side] ?? null, name = side === "home" ? home : away;
           return <li key={side} style={{ display: "grid", gap: 4, padding: "6px 4px", fontSize: "0.75rem" }}>
             <Strong>{name}</Strong>
-            {last ? <RowButton type="button" data-item-key={last.fixtureId} onClick={() => go({ ...view, item: last.fixtureId })} style={{ gridTemplateColumns: "auto minmax(0,1fr) auto" }}>
+            {last ? <RowButton type="button" data-item-key={last.fixtureId} onClick={() => update((current) => ({ ...current, item: last.fixtureId }))} style={{ gridTemplateColumns: "auto minmax(0,1fr) auto" }}>
               <Pill $accent="teal">{messages.text("details.lastResult")}</Pill>
               <span>{last.home.name} {messages.number(last.homeGoals)}–{messages.number(last.awayGoals)} {last.away.name}</span>
               <time dateTime={toUtcIsoString(at(last.kickoffAt))}>{messages.reportingDay(at(last.kickoffAt))}</time>
@@ -155,10 +178,10 @@ export function ContextSection() {
       <Note>{messages.text("details.contextMissing")}</Note>
     </div>}
   </SectionCard>;
-}
+});
 
-export function RefereeSection() {
-  const { messages } = useDetails();
+export const RefereeSection = memo(function RefereeSection() {
+  const { messages } = useStableDetails();
   return <SectionCard section="referee" icon={<RefereeIcon />} accent="violet" title={messages.text("details.section.referee")}
     viewAll={messages.text("details.viewAll.referee")}
     preview={<Facts><dt>{messages.text("details.official")}</dt><dd>{messages.text("details.notAvailable")}</dd></Facts>}>
@@ -168,17 +191,17 @@ export function RefereeSection() {
     </Facts>
     <Note>{messages.text("details.refereeMissing")}</Note>
   </SectionCard>;
-}
+});
 
 /** The existing locked revision history, opened inside this match view. */
-export function HistorySection() {
-  const { data, messages, history } = useDetails();
+export const HistorySection = memo(function HistorySection() {
+  const { data, messages, history } = useStableDetails();
   const latest = data.history.revisions.entries[0] ?? null, count = data.history.revisions.entries.length;
   return <SectionCard section="history" icon={<HistoryIcon />} accent="teal" title={messages.text("details.section.history")}
     meta={count ? messages.plural("details.revisionCount", count) + (data.history.revisions.next ? "+" : "") : null} viewAll={messages.text("details.viewAll.history")}
     preview={latest ? <Note>{messages.text("details.latestRevision")}{" "}
       <time dateTime={toUtcIsoString(latest.publishedAt)}>{messages.reportingInstant(latest.publishedAt)}</time></Note>
       : <Note>{messages.text("details.noRevisions")}</Note>}>
-    {history ?? <Note>{messages.text("details.noRevisions")}</Note>}
+    <HistoryBody>{history ?? <Note>{messages.text("details.noRevisions")}</Note>}</HistoryBody>
   </SectionCard>;
-}
+});

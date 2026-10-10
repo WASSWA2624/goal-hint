@@ -1,18 +1,19 @@
 import "server-only";
 
 import { TextLink } from "@/components/ui/controls";
-import { BodyText, Inline, SectionHeading, Stack } from "@/components/ui/layout";
+import { BodyText, SectionHeading, Stack } from "@/components/ui/layout";
 import { restorationRules } from "@/domain/feed-navigation";
 import { informationHref } from "@/domain/navigation";
 import { privacyNotice } from "@/domain/privacy-notice";
-import { createMessages, type TextKey } from "@/i18n/messages";
+import { createContentMessages, type ContentTextKey } from "@/i18n/content-messages";
 import { publicCacheRules } from "@/server/cache/public-cache";
 import { InformationNotice } from "./information-notice";
+import { ContentsNav } from "./information-styles";
 
 const sections = ["access", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"] as const;
 
 export function PrivacyContent({ locale }: { locale: string }) {
-  const messages = createMessages(locale);
+  const messages = createContentMessages(locale);
   const values = { entries: messages.number(restorationRules.maximumEntries), minutes: messages.number(restorationRules.maximumAgeMilliseconds / 60_000),
     seconds: messages.number(publicCacheRules.mutableMs / 1000), hours: messages.number(publicCacheRules.immutableMs / 3_600_000) };
   const paragraphs = { access: ["body"], requests: ["body", "logs"], search: ["body", "counter", "refresh"], storage: [],
@@ -20,16 +21,17 @@ export function PrivacyContent({ locale }: { locale: string }) {
     choices: ["body", "contact"], release: ["body"] } as const;
   return <Stack $gap="xl" data-privacy-status={privacyNotice.publication} data-privacy-release-ready={privacyNotice.releaseReady}>
     <InformationNotice locale={locale} kind="privacy" reviewedOn={privacyNotice.reviewedOn} />
-    <nav aria-label={messages.text("privacy.contents")}><Inline>
+    <ContentsNav aria-label={messages.text("privacy.contents")}>
       {sections.map((id) => <TextLink key={id} href={`#privacy-${id}`} prefetch={false}>{messages.text(`privacy.${id}.title`)}</TextLink>)}
-    </Inline></nav>
+    </ContentsNav>
     {sections.map((id) => <Stack as="section" id={`privacy-${id}`} key={id} aria-labelledby={`privacy-${id}-heading`} $gap="md">
       <SectionHeading id={`privacy-${id}-heading`}>{messages.text(`privacy.${id}.title`)}</SectionHeading>
-      {paragraphs[id].map((part) => <BodyText key={part}>{messages.text(`privacy.${id}.${part}` as TextKey, values)}</BodyText>)}
+      {paragraphs[id].map((part) => <BodyText key={part}>{messages.text(`privacy.${id}.${part}` as ContentTextKey, values)}</BodyText>)}
       {id === "storage" && <>
-        <h3>{messages.text("privacy.storage.preferences.title")}</h3><BodyText>{messages.text("privacy.storage.preferences.body")}</BodyText>
-        <h3>{messages.text("privacy.storage.navigation.title")}</h3><BodyText>{messages.text("privacy.storage.navigation.body")}</BodyText>
-        <BodyText>{messages.text("privacy.storage.navigation.retention", values)}</BodyText><BodyText>{messages.text("privacy.storage.memory")}</BodyText>
+        <Stack $gap="sm"><h3>{messages.text("privacy.storage.preferences.title")}</h3><BodyText>{messages.text("privacy.storage.preferences.body")}</BodyText></Stack>
+        <Stack $gap="sm"><h3>{messages.text("privacy.storage.navigation.title")}</h3><BodyText>{messages.text("privacy.storage.navigation.body")}</BodyText>
+          <BodyText>{messages.text("privacy.storage.navigation.retention", values)}</BodyText></Stack>
+        <BodyText>{messages.text("privacy.storage.memory")}</BodyText>
       </>}
       {id === "release" && <ul>{privacyNotice.blockers.map((blocker) => <li key={blocker}><BodyText>{messages.text(`privacy.blocker.${blocker}`)}</BodyText></li>)}</ul>}
       {id === "choices" && <TextLink href={informationHref("contact", locale)} prefetch={false}>{messages.text("contact.link")}</TextLink>}

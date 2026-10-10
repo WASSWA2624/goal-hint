@@ -3,13 +3,14 @@
 import type { ComponentPropsWithRef } from "react";
 import styled from "styled-components";
 import { createMessages } from "@/i18n/messages";
+import { media } from "@/styles/theme";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 
 export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & { locale?: string };
 
 const Board = styled.div`
   min-inline-size: 0;
-  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) {
+  ${media.desktop} {
     overflow: hidden;
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
@@ -20,7 +21,7 @@ const Board = styled.div`
 /** Decorative column labels; every row repeats its meaning in accessible text. */
 const Columns = styled.div`
   display: none;
-  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) {
+  ${media.desktop} {
     display: grid;
     grid-template-columns: ${matchTableColumns.compact};
     column-gap: ${matchTableGap};
@@ -30,10 +31,11 @@ const Columns = styled.div`
     font-size: 0.8125rem;
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     line-height: ${({ theme }) => theme.typography.lineHeight.heading};
+    > span:nth-child(4) { text-align: end; }
     > span:nth-child(5) { text-align: center; }
     [data-full] { display: none; }
   }
-  @media (min-width: ${({ theme }) => theme.breakpoint.xl}) {
+  ${media.wide} {
     grid-template-columns: ${matchTableColumns.full};
     [data-short] { display: none; }
     [data-full] { display: inline; }
@@ -50,7 +52,7 @@ const List = styled.ul`
 
   > li { display: grid; min-inline-size: 0; }
 
-  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) {
+  ${media.desktop} {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
     > li + li { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }

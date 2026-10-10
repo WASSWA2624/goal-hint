@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import {
+  useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type ReactNode,
+} from "react";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon, CloseIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import type { FilterOption } from "@/domain/feed-presentation";
-import type { AccentName } from "@/styles/theme";
+import { media, type AccentName } from "@/styles/theme";
 
 export const focusRing = css`
   &:focus-visible {
@@ -36,7 +38,7 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   border: ${({ theme }) => theme.border.width} solid transparent;
   border-radius: 7px;
   font-size: 0.6875rem;
-  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) { min-block-size: 1.75rem; font-size: 0.75rem; }
+  ${media.desktop} { min-block-size: 1.75rem; font-size: 0.75rem; }
   font-weight: ${({ theme, $selected }) => $selected ? theme.typography.weight.bold : theme.typography.weight.body};
   line-height: 1.2;
   white-space: nowrap;
@@ -45,7 +47,9 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   > svg { flex: none; font-size: 0.8125rem; }
   > img { flex: none; inline-size: 14px; block-size: 14px; object-fit: contain; }
   > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
-  &:hover { border-color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].solid : theme.color.border}; }
+  ${media.hover} {
+    &:hover { border-color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].solid : theme.color.border}; }
+  }
   &[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
   ${focusRing}
 `;
@@ -86,12 +90,64 @@ export const IconButton = styled.button`
   background: transparent;
   border: 0;
   border-radius: 10px;
-  font-size: 1.25rem;
+  /* 16px glyphs sit with the 11px phone controls; desktop keeps 20px. */
+  font-size: 1rem;
   cursor: pointer;
-  &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; }
+  ${media.desktop} { font-size: 1.25rem; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; } }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   ${focusRing}
 `;
+
+/**
+ * Phone select. A compact face shows the current choice; the transparent native select over it
+ * stays at 16px, so iOS opens its picker without zooming the page. Every label shares one grid
+ * cell, so the face keeps the widest option's width, as a native select does.
+ */
+const SelectFace = styled.span`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-inline-size: 0;
+  min-block-size: 1.875rem;
+  padding-inline: 8px 22px;
+  color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: ${({ theme }) => theme.typography.weight.body};
+  > span { display: grid; min-inline-size: 0; }
+  > span > span { grid-area: 1 / 1; min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  > span > span:not([data-current]) { visibility: hidden; }
+  > select {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    opacity: 0;
+    font-size: 16px;
+    appearance: none;
+    cursor: pointer;
+    &:disabled { cursor: not-allowed; }
+  }
+  > svg { position: absolute; inset-inline-end: 8px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
+  &:has(select:focus-visible) {
+    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
+    outline-offset: 2px;
+  }
+  &:has(select:disabled) { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; }
+`;
+export type CompactSelectOption = Readonly<{ value: string; label: string }>;
+export function CompactSelect({ options, value, className, ...props }: Omit<ComponentPropsWithoutRef<"select">, "children" | "value"> & {
+  options: readonly CompactSelectOption[]; value: string;
+}) {
+  return <SelectFace className={className}>
+    <span aria-hidden="true">{options.map((option) => <span key={option.value} data-current={option.value === value || undefined}>{option.label}</span>)}</span>
+    <select value={value} {...props}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+    <ChevronDownIcon />
+  </SelectFace>;
+}
 
 const PickerRoot = styled.div`
   position: relative;
@@ -111,16 +167,18 @@ const PickerPanel = styled.div`
   border-radius: 6px;
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
 `;
+/** Phones list compact 36px rows at 13px; desktop keeps its 40px rows at 15px. */
 const PickerSearch = styled.input`
-  min-block-size: 2.5rem;
+  min-block-size: 2.25rem;
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 8px;
+  border-radius: 6px;
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
   ${focusRing}
+  ${media.desktop} { min-block-size: 2.5rem; border-radius: 8px; font-size: 0.9375rem; }
 `;
 const PickerList = styled.ul`
   max-block-size: 16rem;
@@ -131,23 +189,33 @@ const PickerList = styled.ul`
   > li > label {
     display: flex;
     align-items: center;
-    gap: ${({ theme }) => theme.space.sm};
-    min-block-size: 2.5rem;
+    gap: 6px;
+    min-block-size: 2.25rem;
     padding-inline: ${({ theme }) => theme.space.sm};
-    border-radius: 8px;
-    font-size: 0.9375rem;
+    border-radius: 6px;
+    font-size: 0.8125rem;
     cursor: pointer;
-    &:hover { background: ${({ theme }) => theme.color.rowHover}; }
-    > input { flex: none; inline-size: 1.125rem; block-size: 1.125rem; accent-color: ${({ theme }) => theme.color.brand}; }
-    > img { flex: none; inline-size: 20px; block-size: 20px; object-fit: contain; }
+    ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+    > input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
+    > img { flex: none; inline-size: 16px; block-size: 16px; object-fit: contain; }
     > span { min-inline-size: 0; flex: 1; }
-    > small { color: ${({ theme }) => theme.color.mutedText}; font-variant-numeric: tabular-nums; }
+    > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+    ${media.desktop} {
+      gap: ${({ theme }) => theme.space.sm};
+      min-block-size: 2.5rem;
+      border-radius: 8px;
+      font-size: 0.9375rem;
+      > input { inline-size: 1.125rem; block-size: 1.125rem; }
+      > img { inline-size: 20px; block-size: 20px; }
+      > small { font-size: smaller; }
+    }
   }
 `;
 const PickerEmpty = styled.p`
   padding: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.875rem;
+  font-size: 0.75rem;
+  ${media.desktop} { font-size: 0.875rem; }
 `;
 
 /** Full option list behind a chevron: searchable checkboxes, Escape and outside clicks close it. */
@@ -185,20 +253,21 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   </PickerRoot>;
 }
 
+/** 30px track, matching the date field and stepper beside it on phones. */
 export const Segmented = styled.div`
   display: inline-grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
-  padding: 3px;
+  padding: 2px;
   background: ${({ theme }) => theme.color.surfaceMuted};
-  border-radius: 12px;
+  border-radius: 8px;
   > a {
     display: grid;
     place-items: center;
-    min-block-size: 1.75rem;
-    padding-inline: 11px;
+    min-block-size: 1.625rem;
+    padding-inline: 9px;
     color: ${({ theme }) => theme.color.text};
-    border-radius: 7px;
+    border-radius: 6px;
     font-size: 0.6875rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     white-space: nowrap;
@@ -270,14 +339,19 @@ export function RangeSlider({ min, max, step, low, high, onCommit, format = Stri
   format?: (value: number) => string; lowLabel: string; highLabel: string; disabled?: boolean; accent?: AccentName;
 }) {
   const [drag, setDrag] = useState<{ thumb: 0 | 1; values: [number, number] } | null>(null);
-  const rail = useRef<HTMLSpanElement>(null);
+  // The rail is measured once per press and moves are applied once per frame, so dragging
+  // never forces a layout read after each inline-style write.
+  const rail = useRef<HTMLSpanElement>(null), box = useRef<DOMRect | null>(null);
+  const frame = useRef<number | null>(null), pointerX = useRef(0);
+  useEffect(() => () => { if (frame.current !== null) cancelAnimationFrame(frame.current); }, []);
   const values: [number, number] = drag?.values ?? [low, high];
   const percent = (value: number) => ((value - min) / (max - min)) * 100;
   const snap = (value: number) => Math.min(max, Math.max(min, Math.round((value - min) / step) * step + min));
   const at = (clientX: number) => {
-    const box = rail.current?.getBoundingClientRect();
-    return box && box.width > 0 ? snap(min + ((clientX - box.left) / box.width) * (max - min)) : null;
+    const rect = box.current;
+    return rect && rect.width > 0 ? snap(min + ((clientX - rect.left) / rect.width) * (max - min)) : null;
   };
+  const settle = () => { if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null; } };
   const place = (thumb: 0 | 1, value: number, current: [number, number]): [number, number] =>
     thumb === 0 ? [Math.min(value, current[1]), current[1]] : [current[0], Math.max(value, current[0])];
   const commit = (next: [number, number]) => { if (next[0] !== low || next[1] !== high) onCommit(next[0], next[1]); };
@@ -294,6 +368,7 @@ export function RangeSlider({ min, max, step, low, high, onCommit, format = Stri
   return <SliderRoot $disabled={disabled}
     onPointerDown={(event) => {
       if (disabled || event.button !== 0) return;
+      box.current = rail.current?.getBoundingClientRect() ?? null;
       const value = at(event.clientX);
       if (value === null) return;
       // The nearer thumb moves; ties favour the one that can travel in the pressed direction.
@@ -305,11 +380,22 @@ export function RangeSlider({ min, max, step, low, high, onCommit, format = Stri
     }}
     onPointerMove={(event) => {
       if (!drag) return;
-      const value = at(event.clientX);
-      if (value !== null && value !== drag.values[drag.thumb]) setDrag({ thumb: drag.thumb, values: place(drag.thumb, value, drag.values) });
+      pointerX.current = event.clientX;
+      frame.current ??= requestAnimationFrame(() => {
+        frame.current = null;
+        const value = at(pointerX.current);
+        if (value !== null) setDrag((current) => current && value !== current.values[current.thumb]
+          ? { thumb: current.thumb, values: place(current.thumb, value, current.values) } : current);
+      });
     }}
-    onPointerUp={() => { if (drag) { commit(drag.values); setDrag(null); } }}
-    onPointerCancel={() => setDrag(null)}>
+    onPointerUp={(event) => {
+      if (!drag) return;
+      // A move still waiting for its frame is part of the release position.
+      settle();
+      const value = at(event.clientX), final = value === null ? drag.values : place(drag.thumb, value, drag.values);
+      commit(final); setDrag(null);
+    }}
+    onPointerCancel={() => { settle(); setDrag(null); }}>
     <SliderRail ref={rail} aria-hidden="true" $accent={accent}>
       <span style={{ insetInlineStart: `${percent(values[0])}%`, insetInlineEnd: `${100 - percent(values[1])}%` }} />
     </SliderRail>

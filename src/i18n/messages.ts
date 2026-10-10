@@ -1,4 +1,4 @@
-import { getKickoffDisplayInput, getReportingDayBounds, type ReportingDate, type UtcInstant } from "../domain/calendar.ts";
+import { getKickoffDisplayInput, getReportingDayBounds, utcInstantFromEpochMilliseconds, type ReportingDate, type UtcInstant } from "../domain/calendar.ts";
 import { publicPolicy } from "../domain/public-policy.ts";
 import { resolveLocale } from "./locales.ts";
 import { en } from "./messages/en.ts";
@@ -24,6 +24,30 @@ function formatters(language: string): Formatters {
   return created;
 }
 
+// Option shapes are code literals; the cap keeps a data-derived shape from growing the map.
+const numberFormats = new Map<string, Intl.NumberFormat>();
+function numberFormat(language: string, options: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = `${language}|${JSON.stringify(options)}`;
+  const existing = numberFormats.get(key);
+  if (existing) return existing;
+  const created = new Intl.NumberFormat(language, options);
+  if (numberFormats.size < 64) numberFormats.set(key, created);
+  return created;
+}
+
+// Instants in years 1000–9000 cannot fail getReportingDate's 0001–9999 check, so they skip its
+// formatToParts; instants outside keep the full getKickoffDisplayInput validation.
+const plainDisplayStart = Date.UTC(1000, 0, 1), plainDisplayEnd = Date.UTC(9000, 0, 1);
+function displayInstant(value: UtcInstant): UtcInstant {
+  const instant = utcInstantFromEpochMilliseconds(value);
+  return instant > plainDisplayStart && instant < plainDisplayEnd ? instant : getKickoffDisplayInput(instant).value;
+}
+
+/** Replaces `{name}` placeholders; unknown names stay visible. */
+export function fillMessage(message: string, values: Readonly<Record<string, string>>): string {
+  return message.replace(/\{(\w+)\}/gu, (placeholder, name: string) => values[name] ?? placeholder);
+}
+
 export type TextKey = {
   [Key in keyof typeof en]: (typeof en)[Key] extends string ? Key : never;
 }[keyof typeof en];
@@ -31,14 +55,28 @@ export type PluralKey = Exclude<keyof typeof en, TextKey>;
 type PluralMessage = Readonly<Partial<Record<Intl.LDMLPluralRule, string>> & { other: string }>;
 export type MessageCatalog = Readonly<Record<TextKey, string> & Record<PluralKey, PluralMessage>>;
 
+export type Messages = ReturnType<typeof buildMessages>;
+// The default-catalog helper holds no translations or visitor data, so one frozen instance per
+// locale serves every card, row and label render.
+const defaultsByLocale = new Map<string, Messages>();
+
 /** Missing translations fall back per key. Only complete locales may be published. */
-export function createMessages(locale?: string, translations: Partial<MessageCatalog> = {}) {
+export function createMessages(locale?: string, translations?: Partial<MessageCatalog>): Messages {
   const language = resolveLocale(locale);
+  if (translations) return buildMessages(language, translations);
+  const existing = defaultsByLocale.get(language);
+  if (existing) return existing;
+  const created = Object.freeze(buildMessages(language, {}));
+  defaultsByLocale.set(language, created);
+  return created;
+}
+
+function buildMessages(language: string, translations: Partial<MessageCatalog>) {
   const { numbers, plurals, dates, instants, days, times, mediumDates } = formatters(language);
 
   return {
     text(key: TextKey, values: Readonly<Record<string, string>> = {}): string {
-      return (translations[key] ?? en[key]).replace(/\{(\w+)\}/gu, (placeholder, name: string) => values[name] ?? placeholder);
+      return fillMessage(translations[key] ?? en[key], values);
     },
     plural(key: PluralKey, count: number): string {
       if (!Number.isSafeInteger(count) || count < 0) throw new RangeError("Count must be a nonnegative safe integer.");
@@ -46,7 +84,7 @@ export function createMessages(locale?: string, translations: Partial<MessageCat
       return (message[plurals.select(count)] ?? message.other).replaceAll("{count}", numbers.format(count));
     },
     number(value: number, options?: Intl.NumberFormatOptions): string {
-      return options ? new Intl.NumberFormat(language, options).format(value) : numbers.format(value);
+      return (options ? numberFormat(language, options) : numbers).format(value);
     },
     reportingDate(value: ReportingDate): string {
       return dates.format(getReportingDayBounds(value).startInclusive);
@@ -60,15 +98,14 @@ export function createMessages(locale?: string, translations: Partial<MessageCat
       return mediumDates.format(getReportingDayBounds(value).startInclusive);
     },
     reportingInstant(value: UtcInstant): string {
-      const input = getKickoffDisplayInput(value);
-      return instants.format(input.value) + " EAT";
+      return instants.format(displayInstant(value)) + " EAT";
     },
     /** Compact EAT kickoff parts for cards; full labels remain on reportingInstant. */
     reportingDay(value: UtcInstant): string {
-      return days.format(getKickoffDisplayInput(value).value);
+      return days.format(displayInstant(value));
     },
     reportingTime(value: UtcInstant): string {
-      return times.format(getKickoffDisplayInput(value).value);
+      return times.format(displayInstant(value));
     },
   };
 }

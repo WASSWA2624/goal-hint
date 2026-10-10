@@ -19,7 +19,9 @@ header, reporting date and page read so an EAT midnight cannot split a single
 render across dates. Cache hits preserve their original response/source clocks.
 Full-page HTTP caching remains disabled by dynamic request rendering.
 
-`FeedStateProvider` receives the original successful page as its bootstrap.
+`FeedStateProvider` receives the query with `data: null`: cards render from the
+server projection props and the store only holds the filter draft, so hydration
+does not validate the page's records a second time.
 Initial server rendering supplies the cards without reading Redux or starting browser
 requests. Search/filter controls now use the shared persistent surface; the
 pagination uses the same surface and a bounded metadata-only checkpoint. Prompt 037 owns live refresh and
@@ -35,9 +37,12 @@ Historical navigation stops at the MySQL-supported years 1000–9999. Direct
 invalid or incompatible dates/queries return the existing 404 shell.
 
 The page uses the shared light shell, square controls, feedback and match cards.
-Cards form one column below 64rem and two above it. The first two cards opt into
-eager remote logos; remaining logos are lazy with reserved dimensions and initials
-fallbacks. Native images keep the exact approved remote URL without an optimizer
+Cards form one column below 64rem and two above it. Every feed logo is lazy with
+reserved dimensions and initials fallbacks; an eager logo would be hoisted as a
+third-party image preload competing with the page's own font, CSS and scripts.
+`MatchCard` is memoized: a poll that changes nothing a card shows, and header or
+filter state changes, re-render no cards. A pending navigation dims the list in
+place (`aria-busy`) instead of inserting a loading line above it. Native images keep the exact approved remote URL without an optimizer
 or proxy. Names, kickoff, prediction, probability and styled-components CSS exist
 before hydration. Canonical slugs reuse the detail service's extracted helper.
 Prompt 035 supplies the real [match-detail destination](match-detail-page.md).

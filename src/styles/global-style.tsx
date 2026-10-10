@@ -25,9 +25,9 @@ export const GlobalStyle = createGlobalStyle`
     background-color: ${({ theme }) => theme.color.page};
     color: ${({ theme }) => theme.color.text};
     font-family: ${({ theme }) => theme.typography.family};
-    font-size: ${({ theme }) => theme.typography.size.body};
+    font-size: ${({ theme }) => theme.typography.scale.body};
     font-weight: ${({ theme }) => theme.typography.weight.body};
-    line-height: ${({ theme }) => theme.typography.lineHeight.body};
+    line-height: 1.5;
     overflow-wrap: anywhere;
   }
 
@@ -41,6 +41,16 @@ export const GlobalStyle = createGlobalStyle`
     margin: 0;
   }
 
+  /* Zero specificity, so any styled list still sets its own spacing. */
+  :where(ul, ol) {
+    margin-block: 0;
+    padding-inline-start: 1.25rem;
+  }
+
+  :where(dl, dd) {
+    margin: 0;
+  }
+
   h1,
   h2,
   h3,
@@ -51,16 +61,36 @@ export const GlobalStyle = createGlobalStyle`
     line-height: ${({ theme }) => theme.typography.lineHeight.heading};
   }
 
-  h1 { font-size: ${({ theme }) => theme.typography.size.h1}; }
-  h2 { font-size: ${({ theme }) => theme.typography.size.h2}; }
-  h3 { font-size: ${({ theme }) => theme.typography.size.h3}; }
+  /* Mobile first: the compact phone scale, one step up on tablets, full sizes on desktop. */
+  h1 { font-size: ${({ theme }) => theme.typography.scale.title}; }
+  h2 { font-size: ${({ theme }) => theme.typography.scale.section}; }
+  h3 { font-size: ${({ theme }) => theme.typography.scale.emphasis}; }
 
-  /* Phones and tablets use a denser type scale; desktop keeps the base sizes. */
-  @media (max-width: 63.99rem) {
-    body { font-size: 0.875rem; line-height: 1.5; }
+  @media (min-width: ${({ theme }) => theme.breakpoint.md}) {
+    body { font-size: ${({ theme }) => theme.typography.size.small}; }
     h1 { font-size: 1.375rem; }
     h2 { font-size: 1.125rem; }
     h3 { font-size: 1rem; }
+  }
+
+  @media (min-width: ${({ theme }) => theme.breakpoint.lg}) {
+    body {
+      font-size: ${({ theme }) => theme.typography.size.body};
+      line-height: ${({ theme }) => theme.typography.lineHeight.body};
+    }
+    h1 { font-size: ${({ theme }) => theme.typography.size.h1}; }
+    h2 { font-size: ${({ theme }) => theme.typography.size.h2}; }
+    h3 { font-size: ${({ theme }) => theme.typography.size.h3}; }
+  }
+
+  /* iOS Safari zooms the page when a focused text field is under 16px. */
+  @supports (-webkit-touch-callout: none) {
+    @media (max-width: 63.99rem) {
+      input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"]),
+      textarea {
+        font-size: 16px !important;
+      }
+    }
   }
 
   :where(a) {
@@ -69,8 +99,10 @@ export const GlobalStyle = createGlobalStyle`
     text-underline-offset: 0.2em;
   }
 
-  :where(a:hover) {
-    color: ${({ theme }) => theme.color.brandHover};
+  @media (hover: hover) {
+    :where(a:hover) {
+      color: ${({ theme }) => theme.color.brandHover};
+    }
   }
 
   button,

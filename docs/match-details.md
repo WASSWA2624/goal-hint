@@ -10,7 +10,7 @@ opens its complete section inside the page, and rows inside a section open neste
 | Width | Layout |
 | --- | --- |
 | Phones (< 22rem) | One column. Phone header with back and search; banner, featured pick, 2×2 market tiles, All Markets & Odds, then cards. |
-| Phones and tablets (22–64rem) | Market tiles 2×2 (4 across from 48rem); cards two-up. An opened section spans the full width in place. |
+| Phones and tablets (22–64rem) | Market tiles 2×2 (4 across from 48rem); cards two-up. An opened section spans the full width in place. Referee spans the row when it would otherwise sit beside an empty cell. The opened history drops its own frame inside the card. |
 | Small desktop (64–80rem) | Desktop header and "Back to Predictions"; cards three-up. |
 | Wide desktop (≥ 80rem) | Reference grid: All Markets & Odds on the left over three rows; Team Comparison and Head to Head; Team Form, Lineups and Players; News, Injuries, Match Context and Referee. An opened section moves to the top of the grid at full width. |
 
@@ -18,7 +18,8 @@ opens its complete section inside the page, and rows inside a section open neste
 
 The view is addressable, survives refresh and supports Back/Forward. Opening or closing a section,
 item or market adds a history entry; tabs, filters, categories, search and pages replace the current
-entry. Unknown or invalid values fall back to defaults. Revision-history parameters are preserved.
+entry. Market search filters as you type and writes `mq` after a 300 ms pause; Back/Forward restore
+it. Unknown or invalid values fall back to defaults. Revision-history parameters are preserved.
 
 | Key | Meaning |
 | --- | --- |
@@ -41,8 +42,14 @@ and anchors), so a match URL with view state never becomes a 404.
   truncated by `insightsPreview` with complete totals. A failed read leaves each section with its own
   retry.
 - **Full sections:** `/api/matches/{id}/insights?section=…`, loaded on first expansion through the
-  RTK Query `insights` endpoint (deduplicated, reused for ten minutes). Opening a section never starts
-  a prediction job or a provider request.
+  RTK Query `insights` endpoint (`state/detail-api.ts`; deduplicated, reused for ten minutes). No
+  request is made when a preview under five minutes old already holds the whole section (lineups and
+  context always; the other lists when their totals fit the preview). Concurrent section requests
+  for one fixture share one stored read on the server. Opening a section never starts a prediction
+  job or a provider request.
+- **Live refresh:** `GET /api/matches/{id}` every 20 seconds while the match is live, the daily run
+  is updating, or a scheduled kickoff is within 30 minutes of the last read; 60 seconds otherwise. A
+  poll re-renders the page only when something shown changed.
 - **Back link:** the feed stores its current URL in session storage; the match page returns to it so
   the visitor's filters are kept.
 

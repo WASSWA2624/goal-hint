@@ -44,10 +44,12 @@ export function BrandLogo({ alt = "Goal Hint", variant = "primary" }: BrandImage
   );
 }
 
+/** Lazy, so React does not hoist a preload for this below-the-fold footer mark. */
 export function BrandMark({ alt = "Goal Hint", variant = "primary" }: BrandImageProps) {
   return (
     <MarkSpace>
-      <MarkImage src={`/brand/goal-hint-mark-${variant}.svg`} alt={alt} width={160} height={160} />
+      <MarkImage src={`/brand/goal-hint-mark-${variant}.svg`} alt={alt} width={160} height={160}
+        loading="lazy" decoding="async" />
     </MarkSpace>
   );
 }

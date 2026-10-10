@@ -6,8 +6,9 @@ import { StyleProvider } from "@/styles/provider";
 import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
 
+// Latin WOFF2 subset of the variable source TTF (see docs/brand-styling.md); other scripts use the fallback.
 const manrope = localFont({
-  src: "../../assets/brand/source/fonts/Manrope-wght.ttf",
+  src: "../../assets/brand/source/fonts/Manrope-wght-latin.woff2",
   variable: "--font-manrope",
   weight: "200 800",
   display: "swap",

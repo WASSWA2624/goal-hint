@@ -1,15 +1,24 @@
 "use client";
 
+import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
 import type { FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
+import { media } from "@/styles/theme";
+
+/** Secondary feed notes: 12px on phones and tablets so they never outrank cards and controls. */
+export const FeedNote = styled(MutedText)`
+  font-size: 0.75rem;
+  line-height: 1.4;
+  ${media.desktop} { font-size: inherit; line-height: inherit; }
+`;
 
 /** Plain-text summary of an applied query, shown beside a retained earlier result. */
 export function FeedAppliedSummary({ query, leagues }: { query: FeedQuery; leagues: MatchFeedResponse["leagues"] }) {
   const messages = createMessages(query.locale);
   const leagueNames = query.leagues.map((id) => leagues.find((item) => item.id === id)?.name ?? id);
-  return <MutedText data-applied-filters>
+  return <FeedNote data-applied-filters>
     {messages.text("feed.filters.applied")}: {query.markets.map((family) => messages.text(`market.family.${family}`)).join(", ")}
     {" · "}{messages.text(`feed.status.${query.status}`)}
     {" · "}{messages.text(`feed.sort.${query.sort.by}-${query.sort.direction}`)}
@@ -18,5 +27,5 @@ export function FeedAppliedSummary({ query, leagues }: { query: FeedQuery; leagu
     {(query.probability.min !== 0 || query.probability.max !== 100) && <> · {messages.text("feed.filters.percentRange",
       { min: messages.number(query.probability.min), max: messages.number(query.probability.max) })}</>}
     {query.search && <> · {messages.text("feed.filters.search")}: “{query.search}”</>}
-  </MutedText>;
+  </FeedNote>;
 }

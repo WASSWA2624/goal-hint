@@ -28,11 +28,20 @@ as `$gap`, instead of sending styling fields to native elements. The ESLint
 private-import boundary also covers `src/styles`.
 
 The existing licensed Manrope variable font is loaded with `next/font/local`;
-no font-service request is required. Its [SIL Open Font License](../assets/brand/source/fonts/OFL.txt)
-remains alongside the source. Typography uses rem units with a 16px default.
+no font-service request is required. Pages preload
+`assets/brand/source/fonts/Manrope-wght-latin.woff2` (36,636 bytes), a Latin
+WOFF2 subset of the unmodified 164,700-byte `Manrope-wght.ttf`. It keeps the
+variable `wght` axis (200–800), every OpenType layout feature and Basic Latin,
+Latin-1, Latin Extended-A/B and Additional, IPA modifiers, combining marks,
+punctuation, currency, letterlike and arrow symbols. Characters outside it,
+such as Cyrillic or Greek team names, use the Arial fallback. Regenerate it
+from the TTF with fontTools and brotli:
+`pyftsubset Manrope-wght.ttf --flavor=woff2 --layout-features='*' --name-IDs='*' --name-languages='*' --unicodes="U+0000-024F,U+0259,U+02B0-02FF,U+0300-036F,U+1E00-1EFF,U+2000-206F,U+20A0-20CF,U+2100-214F,U+2190-21FF,U+2212,U+2215,U+FEFF,U+FFFD" --output-file=Manrope-wght-latin.woff2`.
+Its [SIL Open Font License](../assets/brand/source/fonts/OFL.txt) remains
+alongside the source and covers the subset, which keeps the license name records. Typography uses rem units with a 16px default.
 Spacing and the page gutter use fixed pixel tokens so enlarging text leaves
-usable content width. Controls have a 2.75rem minimum height (44px at default
-text size). Components have square corners.
+usable content width. Controls have a 2.75rem (44px) minimum height from 64rem;
+phones and tablets use the 2.25rem (36px) compact height. Components have square corners.
 
 ## Reusable exports
 
@@ -41,7 +50,7 @@ Import directly from the owning module to keep dependencies clear:
 | Module | Exports and use |
 | --- | --- |
 | `@/styles/provider` | `StyleProvider`, used once by the root layout. |
-| `@/styles/theme` | `lightTheme`, `GoalHintTheme`, `OutcomeTone`. |
+| `@/styles/theme` | `lightTheme`, `GoalHintTheme`, `OutcomeTone`, and static `media` query strings. |
 | `@/components/ui/brand` | `BrandLogo`, `BrandMark`, `BrandImageProps`. Named primary, inverse and monochrome variants with reserved dimensions and clear space. |
 | `@/components/ui/layout` | `Container`, `Stack`, `Inline`, `Surface`, `PageMain`, `PageHeading`, `SectionHeading`, `BodyText`, `MutedText`. Logical spacing, wrapping and bounded content width. |
 | `@/components/ui/controls` | `Button`, `ButtonLink`, `TextLink`, `TextInput`, `SelectInput` and their prop types. Native button, Next.js link and labeled native form semantics. |
@@ -51,6 +60,17 @@ Import directly from the owning module to keep dependencies clear:
 Prompt 018 composes these primitives into the shared
 [match-card components and responsive list](match-card.md). Reuse their
 selected-market, outcome and remote-image contracts on later public pages.
+
+The primitives are mobile first. Base rules use the compact `typography.scale`
+and the 2.25rem (36px) `control.compactHeight` on phones and tablets; the full
+`typography.size` values, 24px surface padding and the 2.75rem (44px) control
+minimum apply from 64rem. Page and section headings are 18/16px on phones,
+22/18px from 48rem and 32/24px on desktop. Below desktop, `Stack` gaps are
+8/12/16/24px, `Inline` uses 6px by 12px, `Surface` pads 12px (16px from 48rem),
+muted notes, field hints and outcome chips are 12px, and text links keep a 2rem
+target. Content-page `section[id]` anchors clear the sticky header. Hover styles
+apply only under `media.hover`; prefer the static `media` strings over
+theme-function breakpoints in list components.
 
 `Button` defaults to `type="button"`; use `type="submit"` deliberately inside
 forms. Variants are `primary`, `secondary` and `quiet`. Native disabled buttons
@@ -70,7 +90,10 @@ outcome lists. `EmptyState` defaults to a level-two heading and accepts
 `headingLevel` to fit the page hierarchy. It does not invent a data-state claim.
 
 `BrandLogo` displays the 553:128 SVG at 176px wide with 12px clear space on all
-sides; `BrandMark` displays a 32px mark with 8px clear space. Use `alt=""` when
+sides; below 64rem the header shows it at the 160px brand minimum with 9px clear
+space, so the phone bar stays 56px tall. `BrandMark` displays a 32px mark with
+8px clear space and loads lazily, so the footer mark is not preloaded; the
+header logo stays eager. Use `alt=""` when
 nearby text already names the brand, and an accessible “Goal Hint home” name
 for a logo-only home link. Inverse assets require a compatible navy surface.
 The primitives load first-party branding only. Later football images must
