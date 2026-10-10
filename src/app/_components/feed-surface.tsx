@@ -49,8 +49,7 @@ function FeedResults({ data: initial, query, today, enabled, onStatus, onApply }
     <RefreshStatus error={refreshError} asOf={data.asOf} locale={query.locale} retry={() => { void refresh(); }} />
     {data.run && <FeedRunStatus run={data.run} asOf={data.asOf} locale={query.locale} />}
     {data.coverage.partial && <RunBanner aria-label={messages.text("feed.partialCoverageTitle")} $tone="orange">
-      <strong>{messages.text("feed.partialCoverageTitle")}</strong>
-      <span>{messages.text("feed.partialCoverageDescription")}</span>
+      <p title={messages.text("feed.partialCoverageDescription")}><strong>{messages.text("feed.partialCoverageTitle")}</strong> · {messages.text("feed.partialCoverageDescription")}</p>
       {data.coverage.dates.filter((entry) => !entry.authoritative).slice(0, 7).map((entry) => <span key={entry.date}>
         <time dateTime={entry.date}>{messages.reportingDateMedium(parseReportingDate(entry.date))}</time>: {messages.text(`feed.coverage.${entry.status}`)}
         {entry.observedAt !== null && <> · {messages.text("feed.coverageObserved")}: <time dateTime={toUtcIsoString(utcInstantFromEpochMilliseconds(entry.observedAt))}>

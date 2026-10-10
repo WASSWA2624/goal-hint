@@ -12,8 +12,9 @@ export function FeedRunStatus({ run, asOf, locale }: { run: NonNullable<MatchFee
     run.partialCoverage ? messages.text("feed.partialRun") : null,
   ].filter((part): part is string => part !== null);
   const tone = run.phase === "complete" ? "emerald" : run.phase === "partial" ? "amber" : run.phase === "not-started" ? "teal" : "blue";
+  const summary = [messages.text(`feed.run.${run.phase}`), ...parts, `${messages.text("feed.statusAsOf")}: ${messages.reportingInstant(observedAt)}`].join(" · ");
   return <RunBanner aria-label={messages.text("feed.runStatus")} data-run-phase={run.phase} $tone={tone}>
-    <p><strong>{messages.text(`feed.run.${run.phase}`)}</strong>{parts.map((part) => <span key={part}> · {part}</span>)}
+    <p title={summary}><strong>{messages.text(`feed.run.${run.phase}`)}</strong>{parts.map((part) => <span key={part}> · {part}</span>)}
       <span> · {messages.text("feed.statusAsOf")}: <time dateTime={toUtcIsoString(observedAt)}>{messages.reportingInstant(observedAt)}</time></span></p>
   </RunBanner>;
 }

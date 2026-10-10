@@ -24,8 +24,8 @@ const Titles = styled.div`
   display: grid;
   gap: 0;
   min-inline-size: 0;
-  > h1 { font-size: 1.625rem; ${desktop} { font-size: 1.875rem; } }
-  > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  > h1 { font-size: 1.375rem; ${desktop} { font-size: 1.75rem; } }
+  > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; ${desktop} { font-size: 0.9375rem; } }
 `;
 const PhoneActions = styled.div`
   display: flex;
@@ -33,8 +33,8 @@ const PhoneActions = styled.div`
   ${desktop} { display: none; }
 `;
 const RoundButton = styled(IconButton)`
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
+  inline-size: 2.375rem;
+  block-size: 2.375rem;
   color: ${({ theme }) => theme.color.accent.blue.text};
   background: ${({ theme }) => theme.color.accent.blue.soft};
   border-radius: 50%;
@@ -113,7 +113,7 @@ const Count = styled.div`
   display: grid;
   gap: 0;
   min-inline-size: 0;
-  > h2 { font-size: 1.1875rem; white-space: nowrap; ${desktop} { font-size: 1.3125rem; } }
+  > h2 { font-size: 1rem; white-space: nowrap; ${desktop} { font-size: 1.25rem; } }
   > p { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: block; } }
 `;
 const PhoneText = styled.span`${desktop} { display: none; }`;
@@ -130,17 +130,18 @@ const SelectWrap = styled.span<{ $phone?: boolean }>`
   display: ${({ $phone }) => $phone ? "inline-flex" : "none"};
   ${desktop} { display: ${({ $phone }) => $phone ? "none" : "inline-flex"}; }
   > select {
-    min-block-size: 2.375rem;
-    padding-inline: 12px 30px;
+    min-block-size: 2rem;
+    padding-inline: 10px 28px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme, $phone }) => $phone ? theme.color.cardHeader : theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: 10px;
     font: inherit;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     appearance: none;
     cursor: pointer;
     ${focusRing}
+    ${desktop} { min-block-size: 2.375rem; font-size: 0.875rem; }
   }
   > svg { position: absolute; inset-inline-end: 10px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
 `;
@@ -202,11 +203,13 @@ export const RunBanner = styled.section<{ $tone?: AccentName }>`
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 14px;
-  padding: 8px 12px;
-  line-height: 1.45;
+  padding: 6px 10px;
+  line-height: 1.4;
   color: ${({ theme, $tone = "blue" }) => theme.color.accent[$tone].text};
   background: ${({ theme, $tone = "blue" }) => theme.color.accent[$tone].soft};
   border-inline-start: 4px solid ${({ theme, $tone = "blue" }) => theme.color.accent[$tone].solid};
-  border-radius: 10px;
-  font-size: 0.8125rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  /* Phones keep the banner to two lines; the full text stays in the DOM for assistive technology. */
+  > p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; ${desktop} { display: block; } }
 `;

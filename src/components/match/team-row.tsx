@@ -35,7 +35,7 @@ const LogoBox = styled.span<{ $loaded: boolean }>`
   border-radius: var(--gh-logo-radius, 0);
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme, $loaded }) => $loaded ? "transparent" : theme.color.surfaceMuted};
-  font-size: ${({ theme }) => theme.typography.size.small};
+  font-size: var(--gh-logo-font, ${({ theme }) => theme.typography.size.small});
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: 1;
 `;

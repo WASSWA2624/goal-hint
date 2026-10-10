@@ -42,7 +42,7 @@ const Columns = styled.div`
 const List = styled.ul`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: ${({ theme }) => theme.space.md};
+  gap: 6px;
   padding: 0;
   margin: 0;
   list-style: none;
@@ -52,6 +52,7 @@ const List = styled.ul`
 
   @media (min-width: ${({ theme }) => theme.breakpoint.md}) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
   @media (min-width: ${({ theme }) => theme.breakpoint.lg}) {
     grid-template-columns: minmax(0, 1fr);

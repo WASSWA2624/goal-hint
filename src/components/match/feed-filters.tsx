@@ -93,13 +93,13 @@ const DateRow = styled.div`
 `;
 const ChipRow = styled.div`
   display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 4.25rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px;
 `;
 const RowLabel = styled.span<{ $accent: AccentName }>`
   color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;
 /** One scrolling line per filter, as in the phone layout; focus rings sit inside the scroller. */
@@ -119,8 +119,8 @@ const BottomRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
-  @container phone-filters (min-width: 20rem) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto; }
+  gap: 6px 8px;
+  @container phone-filters (min-width: 19.5rem) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto; }
 `;
 const SelectGroup = styled.label<{ $accent: AccentName }>`
   display: inline-flex;
@@ -128,7 +128,7 @@ const SelectGroup = styled.label<{ $accent: AccentName }>`
   gap: 6px;
   min-inline-size: 0;
   color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;
 const SelectBox = styled.span`
@@ -140,14 +140,14 @@ const SelectBox = styled.span`
   > select {
     flex: 1;
     min-inline-size: 0;
-    min-block-size: 2.25rem;
-    padding-inline: 10px 26px;
+    min-block-size: 2rem;
+    padding-inline: 8px 24px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 9px;
+    border-radius: 8px;
     font: inherit;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: ${({ theme }) => theme.typography.weight.body};
     appearance: none;
     cursor: pointer;
@@ -161,13 +161,13 @@ const QuietLink = styled(Link)`
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-block-size: 2.25rem;
-  padding-inline: 14px;
+  min-block-size: 2rem;
+  padding-inline: 12px;
   color: ${({ theme }) => theme.color.accent.red.text};
   background: ${({ theme }) => theme.color.accent.red.soft};
   border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 9px;
-  font-size: 0.875rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
   text-decoration: none;
@@ -194,7 +194,7 @@ const BlockLabel = styled.span<{ $accent: AccentName }>`
   align-items: center;
   gap: 6px;
   color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   &::before { content: ""; inline-size: 8px; block-size: 8px; border-radius: 50%; background: ${({ theme, $accent }) => theme.color.accent[$accent].gradient}; }
   > svg { color: ${({ theme }) => theme.color.mutedText}; }
@@ -311,9 +311,9 @@ const ApplyLink = styled(Link)`
   ${focusRing}
 `;
 const OutlineLink = styled(QuietLink)`
-  min-block-size: 2.625rem;
+  min-block-size: 2.5rem;
   padding-inline: 16px;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
 `;
 
 export function FeedFilters({ query, today, leagues, total, onApply }: {
@@ -406,41 +406,41 @@ export function FeedFilters({ query, today, leagues, total, onApply }: {
         <Segmented role="group" aria-label={messages.text("feed.date.mode")}>
           <Link href={href({ ...query, dates: singleDates })} prefetch={false} aria-current={single ? "true" : undefined}
             aria-label={messages.text("feed.date.single")} onClick={(event) => plainClick(event, () => apply({ ...query, dates: singleDates }))}>
-            {messages.text("feed.date.singleShort")}
+            {messages.text("feed.date.dayToggle")}
           </Link>
           <Link href={href({ ...query, dates: single ? rangeDates : query.dates })} prefetch={false} aria-current={single ? undefined : "true"}
             aria-label={messages.text("feed.date.range")} onClick={(event) => plainClick(event, () => apply({ ...query, dates: single ? rangeDates : query.dates }))}>
-            {messages.text("feed.date.rangeShort")}
+            {messages.text("feed.date.rangeToggle")}
           </Link>
         </Segmented>
         {single ? <SingleDatePicker query={query} today={today} onApply={apply} /> : <DateRangePicker query={query} today={today} onApply={apply} compact />}
         <DateStepper query={query} today={today} onApply={apply} />
       </DateRow>
       <ChipRow>
-        <RowLabel aria-hidden="true" $accent="violet">{messages.text("feed.filters.marketsShort")}</RowLabel>
+        <RowLabel aria-hidden="true" $accent="violet">{messages.text("feed.filters.markets")}</RowLabel>
         <ChipStrip role="group" aria-label={messages.text("feed.filters.markets")}>
           {[...query.markets, ...publicPolicy.markets.filter((family) => !query.markets.includes(family))].map((family) => {
             const on = query.markets.includes(family), next = toggledMarkets(query, family), name = messages.text(`market.family.${family}`);
-            return next ? <FilterChip key={family} label={messages.text(`market.code.${family}`)} selected={on} accent="violet" href={href(next)} onSelect={() => apply(next)}
+            return next ? <FilterChip key={family} label={name} selected={on} accent="violet" href={href(next)} onSelect={() => apply(next)}
               actionLabel={messages.text(on ? "feed.filters.remove" : "feed.filters.add", { label: name })} />
-              : <ChipText key={family} $selected $accent="violet" title={messages.text("feed.filters.oneMarket")}>{messages.text(`market.code.${family}`)}<VisuallyHidden>, {name}</VisuallyHidden></ChipText>;
+              : <ChipText key={family} $selected $accent="violet" title={messages.text("feed.filters.oneMarket")}>{name}</ChipText>;
           })}
         </ChipStrip>
         <OptionPicker title={messages.text("feed.filters.showAll", { label: messages.text("feed.filters.markets") })} options={marketList}
           selected={query.markets} searchable={false} onToggle={(value) => { const next = toggledMarkets(query, value as MarketFamily); if (next) apply(next); }}
           findLabel={messages.text("feed.filters.markets")} emptyLabel={messages.text("feed.filters.noOptions")} />
       </ChipRow>
-      {strip("leagues", leagueList, messages.text("feed.filters.leaguesShort"))}
-      {strip("countries", countryList, messages.text("feed.filters.countriesShort"))}
+      {strip("leagues", leagueList, messages.text("feed.filters.leagues"))}
+      {strip("countries", countryList, messages.text("feed.filters.countries"))}
       <BottomRow>
         <SelectGroup title={messages.text("feed.filters.oddsPending")} $accent="amber">
-          {messages.text("feed.filters.oddsShort")}
+          {messages.text("feed.filters.oddsLabel")}
           <SelectBox><select disabled aria-label={oddsLabel}>
             <option>{messages.text("feed.filters.any")}</option>
           </select><ChevronDownIcon /></SelectBox>
         </SelectGroup>
         <SelectGroup $accent="pink">
-          {messages.text("feed.filters.probabilityShort")}
+          {messages.text("feed.filters.probabilityLabel")}
           <SelectBox><select aria-label={probabilityLabel} value={`${query.probability.min}-${query.probability.max}`} onChange={(event) => {
             const [min, max] = event.target.value.split("-").map(Number);
             apply({ ...query, probability: { min: min!, max: max! } });

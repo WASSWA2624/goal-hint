@@ -15,18 +15,18 @@ const field = css`
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-block-size: 2.375rem;
-  padding-inline: 12px;
+  gap: 6px;
+  min-block-size: 2.125rem;
+  padding-inline: 10px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 10px;
+  border-radius: 8px;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   white-space: nowrap;
   cursor: pointer;
-  > svg { flex: none; font-size: 1.0625rem; }
+  > svg { flex: none; font-size: 0.9375rem; }
   > svg:first-child { color: ${({ theme }) => theme.color.accent.teal.solid}; }
   &:hover { border-color: ${({ theme }) => theme.color.accent.teal.solid}; }
   ${focusRing}
@@ -150,10 +150,10 @@ const Stepper = styled.div`
   > a, > span {
     display: grid;
     place-items: center;
-    inline-size: 2.5rem;
-    min-block-size: 2.25rem;
+    inline-size: 2.125rem;
+    min-block-size: 2rem;
     color: ${({ theme }) => theme.color.accent.blue.text};
-    font-size: 1.125rem;
+    font-size: 1rem;
     &:hover { background: ${({ theme }) => theme.color.accent.blue.soft}; }
     ${focusRing}
   }

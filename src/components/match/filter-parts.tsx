@@ -28,21 +28,21 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
-  min-block-size: 2rem;
-  padding-inline: 12px;
+  gap: 5px;
+  min-block-size: 1.75rem;
+  padding-inline: 10px;
   color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].text : theme.color.text};
   background: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].soft : theme.color.surfaceMuted};
   border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 9px;
-  font-size: 0.8125rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
   font-weight: ${({ theme, $selected }) => $selected ? theme.typography.weight.bold : theme.typography.weight.body};
   line-height: 1.2;
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
-  > svg { flex: none; font-size: 0.875rem; }
-  > img { flex: none; inline-size: 16px; block-size: 16px; object-fit: contain; }
+  > svg { flex: none; font-size: 0.8125rem; }
+  > img { flex: none; inline-size: 14px; block-size: 14px; object-fit: contain; }
   &:hover { border-color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].solid : theme.color.border}; }
   &[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
   ${focusRing}
@@ -77,8 +77,8 @@ export const IconButton = styled.button`
   display: inline-grid;
   flex: none;
   place-items: center;
-  inline-size: 2.25rem;
-  block-size: 2.25rem;
+  inline-size: 2rem;
+  block-size: 2rem;
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: transparent;
@@ -193,11 +193,11 @@ export const Segmented = styled.div`
   > a {
     display: grid;
     place-items: center;
-    min-block-size: 2.125rem;
-    padding-inline: 14px;
+    min-block-size: 1.875rem;
+    padding-inline: 12px;
     color: ${({ theme }) => theme.color.text};
-    border-radius: 9px;
-    font-size: 0.875rem;
+    border-radius: 7px;
+    font-size: 0.75rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     white-space: nowrap;
     text-decoration: none;
