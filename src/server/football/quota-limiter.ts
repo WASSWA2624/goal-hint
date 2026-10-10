@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { operatingRules } from "../config/runtime-policy.ts";
 import {
-  quotaPriorities,
+  essentialReserveFor, quotaPriorities,
   type QuotaAccountState, type QuotaAttempt, type QuotaDecision, type QuotaDenialReason,
   type QuotaEvidenceVerifier, type QuotaFeedback, type QuotaPeriodEvidence,
   type QuotaPeriodState, type QuotaPermit, type QuotaRequest, type QuotaStore, type QuotaTransaction,
@@ -175,14 +175,14 @@ export function createQuotaLimiter(options: {
         await expire(tx, attempt);
         return denied("daily-limit", period.endsAt);
       }
-      if (!attempt.essential && period.used >= Math.max(0, period.dayLimit - limits.essentialReserveRequests)) {
+      if (!attempt.essential && period.used >= period.dayLimit - essentialReserveFor(period.dayLimit)) {
         await expire(tx, attempt);
         return denied("essential-reserve", period.endsAt);
       }
       const head = await tx.queueHead(ctx.now);
       // An ordinary waiter cannot block use of the protected essential reserve.
       if (head && head.id !== attempt.id && !(attempt.essential && !head.essential &&
-          period.used >= Math.max(0, period.dayLimit - limits.essentialReserveRequests))) return denied("priority-wait");
+          period.used >= period.dayLimit - essentialReserveFor(period.dayLimit))) return denied("priority-wait");
     }
     const rate = await rateDecision(tx, ctx.account, period, ctx.now);
     if (rate) return rate;
@@ -248,6 +248,16 @@ export function createQuotaLimiter(options: {
         return { status: "initialized" as const };
       });
     },
+    /** A caller that stops waiting releases its queued, never-dispatched place; nothing else changes. */
+    async abandon(requestId: string): Promise<{ status: "abandoned" | "unchanged" } | Denial> {
+      if (!identifier.test(requestId)) return denied("invalid-request");
+      return transact(async (tx) => {
+        const attempt = await tx.attempt(requestId);
+        if (!attempt || attempt.state !== "queued" || attempt.dispatchedAt !== null) return { status: "unchanged" as const };
+        await expire(tx, attempt);
+        return { status: "abandoned" as const };
+      });
+    },
     async reserve(request: QuotaRequest): Promise<QuotaDecision> {
       if (!validRequest(request)) return denied("invalid-request");
       return transact(async (tx) => {
@@ -281,7 +291,7 @@ export function createQuotaLimiter(options: {
         if (period.observationRevision !== attempt.observationRevision) {
           if (period.dayRemaining === 0 || period.used > period.dayLimit) return denied("daily-limit");
           if (period.minuteRemaining === 0) return denied("minute-limit");
-          if (!attempt.essential && period.used > Math.max(0, period.dayLimit - limits.essentialReserveRequests)) return denied("essential-reserve");
+          if (!attempt.essential && period.used > period.dayLimit - essentialReserveFor(period.dayLimit)) return denied("essential-reserve");
         }
         const earliest = ctx.account.lastLaunchedAt + spacing(period);
         if (ctx.now < earliest) return denied("pacing", instant(earliest));

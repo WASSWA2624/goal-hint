@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { resultSyncFail, type ResultSyncPolicy, type TrackedResultFixture } from "./result-sync-contract.ts";
 
@@ -10,8 +11,10 @@ const tiers = z.array(z.strictObject({ untilAgeMs: z.number().int().positive().m
     row.untilAgeMs > rows[i - 1]!.untilAgeMs && row.intervalMs > rows[i - 1]!.intervalMs));
 const schema = z.strictObject({ version: z.literal(1), evidenceRef: z.string().trim().min(1).max(512),
   coverage: z.array(z.strictObject({ competitionId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-    season: z.number().int().min(1).max(9999) })).min(1).max(1000),
+    season: z.number().int().min(1).max(9999) })).min(1).max(maximumCompetitionScope),
   approachMs: duration, activeWindowMs: duration, unresolved: tiers, corrections: tiers,
+  // Omitted keeps the spec cadence and its original policy hash; budget-limited accounts may poll more slowly.
+  cadence: z.strictObject({ liveMs: duration.min(15_000).nullable(), dateMs: duration.min(60_000), activeMs: duration.min(60_000) }).exactOptional(),
   leaseMs: duration, tickMs: duration.max(10_000), maxBatchesPerTick: z.number().int().min(1).max(100),
   failureBaseMs: duration.min(60_000), failureMaxMs: duration, requestWindowMs: duration,
   request: z.strictObject({ timeoutMs: duration, maxRequests: z.number().int().min(1).max(100),
@@ -27,6 +30,8 @@ export function parseResultSyncPolicy(value: unknown): ResultSyncPolicy {
   const parsed = schema.safeParse(value);
   return parsed.success ? freezeEvidence(parsed.data) : resultSyncFail("policy-required");
 }
+const specCadence = Object.freeze({ liveMs: 15_000, dateMs: 60_000, activeMs: 60_000 });
+export function resultCadence(policy: ResultSyncPolicy): NonNullable<ResultSyncPolicy["cadence"]> { return policy.cadence ?? specCadence; }
 export function finalStatus(status: string) {
   return ["finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded"].includes(status);
 }
@@ -37,12 +42,13 @@ export function pollingInterval(fixture: TrackedResultFixture, policy: ResultSyn
   }
   const age = now - (fixture.kickoffAt ?? fixture.firstTrackedAt);
   if (fixture.kickoffAt !== null && age < -policy.approachMs) return null;
-  if (age < policy.activeWindowMs) return 60_000;
+  if (age < policy.activeWindowMs) return resultCadence(policy).activeMs;
   return policy.unresolved.find((tier) => age - policy.activeWindowMs < tier.untilAgeMs)?.intervalMs ?? null;
 }
 export function shouldPollLive(fixtures: readonly TrackedResultFixture[], policy: ResultSyncPolicy, now: number) {
+  if (resultCadence(policy).liveMs === null) return false;
   return fixtures.some((fixture) => fixture.firstFinalAt === null && now - (fixture.kickoffAt ?? fixture.firstTrackedAt) < policy.activeWindowMs &&
-    pollingInterval(fixture, policy, now) === 60_000 &&
+    !(fixture.kickoffAt !== null && now - fixture.kickoffAt < -policy.approachMs) &&
     (fixture.status === "live" || fixture.status === "scheduled" && fixture.kickoffAt !== null &&
       now >= fixture.kickoffAt - policy.approachMs));
 }

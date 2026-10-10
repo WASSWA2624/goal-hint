@@ -77,3 +77,9 @@ result versions for the offline evaluation harness. Its report authorizes no
 provider call or model promotion; live trial work still uses the shared cost and
 quota gateways under the approved shadow/pipeline bounds. See the
 [evaluation runbook](../../docs/forecast-evaluation.md).
+
+`npm run live` (`live.ts`) is the composed fallback-only runner for real API-Football data:
+daily selection scheduling, refresh/cutoff workers, the leased result poller, settlement and
+public-cache maintenance in one private process. It loads `.env.local` then `.env.operations`
+and the owner register in `.goal-hint/owner-approvals.json`. Read the
+[live operations runbook](../../docs/live-operations.md).

@@ -25,8 +25,10 @@ import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql
 const execute = promisify(execFile), workspace = fileURLToPath(new URL('../', import.meta.url));
 const script = fileURLToPath(new URL('../scripts/database.mjs', import.meta.url));
 const denied = (reason) => (error) => error instanceof DailySelectionError && error.reason === reason;
+// Import receipts and audits are append-only, matching the application role.
+const catalogAppendOnly = ['FootballFixtureAudit', 'FootballImport'];
 const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvider','FootballTeamAlias','FootballCompetition',
-  'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballFixtureAudit','FootballImport','FootballIdentityReview'];
+  'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballIdentityReview', ...catalogAppendOnly];
 const day = 86_400_000;
 const occurrence = (offset) => SELECTION_FOR + offset * day;
 const kickoff = (offset, hours = 12) => new Date(occurrence(offset) + hours * 3_600_000).toISOString();
@@ -53,7 +55,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       const diagnostic = await instance.executeAdmin("SELECT migration_name, LEFT(logs, 1800) FROM _prisma_migrations WHERE finished_at IS NULL");
       t.diagnostic(diagnostic.stdout); throw error;
     }
-    await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE ON goal_hint_test.${name} TO 'selection_app'@'127.0.0.1';`).join('\n') + `
+    await instance.executeAdmin(catalogTables.map((name) => `GRANT ${catalogAppendOnly.includes(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE'} ON goal_hint_test.${name} TO 'selection_app'@'127.0.0.1';`).join('\n') + `
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'selection_app'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'selection_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.PredictionSchedule TO 'selection_app'@'127.0.0.1';
@@ -279,6 +281,38 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
         runId: id, fixtureId: original.fixtureId, cycleId: original.cycleId } },
         data: { jobId: unrelated.id, jobState: 'pending', terminalReason: null } })));
       await assert.rejects(setup({ policy: selectionPolicy({ competitionIds: [40] }) }).service.run(occurrence(0)), denied('conflicting-request'));
+    });
+    await t.test('refresh capacity keeps the nearest kickoffs and records later fixtures as deferred without cycles', async () => {
+      // Provider IDs deliberately invert kickoff order so ID order cannot satisfy the budget.
+      const rows = [catalogFixture(2005, { kickoff: kickoff(20, 6) }), catalogFixture(2004, { kickoff: kickoff(20, 30) }),
+        catalogFixture(2003, { kickoff: kickoff(20, 54) }), catalogFixture(2002, { kickoff: kickoff(20, 78) }),
+        catalogFixture(2001, { kickoff: kickoff(20, 102) })];
+      const policy = { ...policyFor(rows), refreshCapacity: 2 }; policy.refresh = { ...policy.refresh, type: 'test.selection-capacity' };
+      const result = await setup({ rows, policy }).service.run(occurrence(20));
+      assert.equal(result.total, 2);
+      const manifest = (await store.inspect(result.runId)).manifest;
+      const ids = async (externalIds) => Promise.all(externalIds.map(async (id) => (await catalog.fixtureByProviderId(id)).id));
+      assert.deepEqual(manifest.entries.map((entry) => entry.fixtureId), await ids([2005, 2004]));
+      assert.deepEqual(manifest.exclusions.filter((entry) => entry.reason === 'refresh-capacity').map((entry) => entry.fixtureId).sort(),
+        (await ids([2003, 2002, 2001])).sort());
+      const deferred = await ids([2003, 2002, 2001]);
+      assert.equal(await database.query((tx) => tx.predictionCycle.count({ where: { fixtureId: { in: deferred } } })), 0);
+      assert.equal(await database.query((tx) => tx.durableJob.count({ where: { refreshRunId: result.runId } })), 2);
+      assert.throws(() => parseSelectionPolicy({ ...policy, refreshCapacity: -1 }));
+    });
+    await t.test('a plan horizon requests only its dates and finalizes the rest as explicit partial coverage', async () => {
+      const rows = [catalogFixture(2101, { kickoff: kickoff(22, 6) }), catalogFixture(2102, { kickoff: kickoff(22, 78) })];
+      const policy = { ...policyFor(rows), importDays: 2 }; policy.refresh = { ...policy.refresh, type: 'test.selection-horizon' };
+      const state = setup({ rows, policy });
+      await assert.rejects(state.service.run(occurrence(22)), denied('incomplete-import'));
+      assert.equal(state.provider.network.length, 2, 'dates beyond the horizon are never requested');
+      const result = await setup({ rows, policy }).service.run(occurrence(22), degradedAction);
+      assert.equal(result.status, 'committed'); assert.equal(result.total, 1);
+      const manifest = (await store.inspect(result.runId)).manifest;
+      assert.equal(manifest.partial, true); assert.deepEqual(manifest.degradedAction, degradedAction);
+      assert.deepEqual(manifest.coverage.map((entry) => entry.status), ['complete', 'complete', 'failed', 'failed', 'failed', 'failed', 'failed']);
+      assert.ok(manifest.coverage.slice(2).every((entry) => entry.missingCoverage.includes('date-not-retrieved')));
+      assert.throws(() => parseSelectionPolicy({ ...policy, importDays: 8 }));
     });
   } finally {
     await Promise.all(databases.map((db) => db.disconnect().catch(() => {}))); await instance.stop();

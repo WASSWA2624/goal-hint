@@ -28,6 +28,10 @@ in the private installation's `application-grants.sql`. Revisit grants whenever
 a future migration adds a table or mutable column. Production role verification
 remains a separate deployment requirement.
 
+`FootballImport` and `FootballFixtureAudit` stay insert-only: the catalog importer
+writes each receipt and audit once, with final values, so the live runner needs no
+additional grant.
+
 Prompt 044 adds the seeded `OperationsMonitorState` singleton and time-window
 indexes. The local application receives only SELECT and UPDATE (`stateJson`) on
 that table; INSERT/DELETE/DDL remain denied. Its empty initial state enables no

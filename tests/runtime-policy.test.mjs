@@ -351,7 +351,10 @@ test("bounded trial authorization does not invent later qualification prerequisi
   assert.equal(trial.choices.qualityQualificationRef, null);
   assert.equal(trial.choices.releaseApprovalRef, null);
   policyError(() => assertOperationAllowed(trial, "publication"), ["GOAL_HINT_OPERATION_SCOPE"]);
-  policyError(() => parseRuntimePolicy({ ...syntheticTrial, API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: "0" }), ["API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS"]);
+  assert.equal(parseRuntimePolicy({ ...syntheticTrial, API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: "0" }).choices.football.payableMonthlyUsdCents, 0,
+    "a free provider plan records a zero payable amount");
+  policyError(() => parseRuntimePolicy({ ...syntheticTrial, API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: undefined }), ["API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS"]);
+  policyError(() => parseRuntimePolicy({ ...syntheticTrial, API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS: "4501" }), ["API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS"]);
   policyError(() => parseRuntimePolicy({ ...syntheticTrial, GOAL_HINT_BUDGET_APPROVAL_REF: "" }), ["GOAL_HINT_BUDGET_APPROVAL_REF"]);
 });
 
@@ -389,6 +392,38 @@ test("production publication requires measured qualification and release approva
     policyError(() => parseRuntimePolicy({ ...syntheticProduction, [field]: undefined }), [field]);
   }
   policyError(() => parseRuntimePolicy({ ...syntheticProduction, NODE_ENV: "development" }), ["NODE_ENV"]);
+  const database = { GOAL_HINT_DATABASE_ENABLED: "true" };
+  const local = parseRuntimePolicy({ ...syntheticProduction, ...database, NODE_ENV: "development",
+    DATABASE_URL: "mysql://synthetic:secret@127.0.0.1:3307/goal_hint_local" });
+  assert.equal(local.scope, "production");
+  assert.doesNotThrow(() => assertOperationAllowed(local, "publication", verifySyntheticEvidence));
+  policyError(() => parseRuntimePolicy({ ...syntheticProduction, ...database, NODE_ENV: "development",
+    DATABASE_URL: "mysql://synthetic:secret@db.example.test:3306/goal_hint" }), ["NODE_ENV"]);
+  policyError(() => parseRuntimePolicy({ ...syntheticProduction, ...database, NODE_ENV: "test",
+    TEST_DATABASE_URL: "mysql://synthetic:secret@127.0.0.1:3307/goal_hint_test" }), ["NODE_ENV"]);
+});
+
+test("fallback-only publication keeps every non-AI gate when AI is disabled", () => {
+  const withoutAi = Object.fromEntries(Object.entries(syntheticProduction).filter(([key]) =>
+    !["GOAL_HINT_AI_ENABLED", "AI_API_KEY", "GOAL_HINT_AI_PROVIDER", "GOAL_HINT_AI_MODEL", "GOAL_HINT_JOB_TOKEN_LIMIT",
+      "GOAL_HINT_CALIBRATION_REF"].includes(key)));
+  const policy = parseRuntimePolicy(withoutAi);
+  assert.equal(policy.capabilities.ai, false);
+  assert.doesNotThrow(() => assertOperationAllowed(policy, "publication", verifySyntheticEvidence));
+  assert.doesNotThrow(() => assertOperationAllowed(policy, "football", verifySyntheticEvidence));
+  policyError(() => assertOperationAllowed(policy, "ai", verifySyntheticEvidence), ["GOAL_HINT_AI_ENABLED"]);
+  for (const field of ["GOAL_HINT_JOB_REQUEST_LIMIT", "GOAL_HINT_JOB_TIMEOUT_SECONDS", "GOAL_HINT_PIPELINE_INTEGRITY_REF",
+    "GOAL_HINT_RELEASE_APPROVAL_REF", "GOAL_HINT_QUALITY_QUALIFICATION_REF", "GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF"]) {
+    policyError(() => parseRuntimePolicy({ ...withoutAi, [field]: undefined }), [field]);
+  }
+  for (const requirement of ["release-approval", "quality-qualification", "pipeline-integrity", "football-public-rights"]) {
+    policyError(() => assertOperationAllowed(policy, "publication", (_reference, requested) => requested !== requirement));
+  }
+  const verified = [];
+  assertOperationAllowed(policy, "publication", (_reference, requirement) => { verified.push(requirement); return true; });
+  assert.ok(!verified.includes("calibration-configuration"));
+  policyError(() => parseRuntimePolicy({ ...withoutAi, GOAL_HINT_AI_ENABLED: "true" }), ["AI_API_KEY", "GOAL_HINT_JOB_TOKEN_LIMIT"]);
+  policyError(() => parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_CALIBRATION_REF: undefined }), ["GOAL_HINT_CALIBRATION_REF"]);
 });
 
 test("references require a trusted verifier at the affected operation boundary", () => {

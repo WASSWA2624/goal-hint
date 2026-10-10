@@ -65,6 +65,23 @@ separate check because Next.js 16 builds do not run it automatically. Tests use
 Node's built-in runner and isolated temporary projects; the default tests make no
 provider or database calls. Database-backed checks use the separate isolated harness.
 
+## Live data
+
+`npm run dev` only reads stored data. To fill it from the real API-Football account,
+run the private live runner beside it. Daily selection at 00:00 EAT, provisional
+API-Football fallback forecasts, cutoff locks, result polling and settlement are all
+sized from the account's verified plan limits, so an upgrade needs no code change.
+
+```sh
+npm run live:status
+npm run live:competitions -- --write
+npm run live
+```
+
+Read the [live operations runbook](docs/live-operations.md) first: it covers the ignored
+`.env.operations` and owner-approval files and what remains outside live operation (AI,
+research, qualification, hosting).
+
 ## Environment workflow
 
 The minimal public page works with no environment variables. Copy `.env.example`

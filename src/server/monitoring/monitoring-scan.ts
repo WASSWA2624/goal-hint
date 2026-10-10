@@ -2,7 +2,7 @@ import "server-only";
 
 import { addReportingDays, createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
-import { operatingRules } from "../config/runtime-policy.ts";
+import { essentialReserveFor } from "../football/quota-contract.ts";
 import { quotaAccountStateSchema, quotaPeriodStateSchema } from "../football/quota-mysql-store.ts";
 import { assessBackupHealth, type BackupMonitoringSource } from "./monitoring-backup.ts";
 import { authorizeMonitoring, monitoringPolicySchema, monitoringSnapshotSchema, monitoringReasons, operationMetrics,
@@ -97,9 +97,9 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
                 COALESCE(SUM(JSON_TYPE(JSON_EXTRACT(payloadJson, '$.launchedAt')) IN ('INTEGER', 'UNSIGNED INTEGER', 'DOUBLE') AND JSON_EXTRACT(payloadJson, '$.launchedAt') >= ${at - 60_000}), 0) AS minute
                 FROM ApiQuotaAttempt WHERE accountId = ${policy.accountId} AND dispatchedAt >= ${new Date(at - 61_000)}`)[0]!;
               quota = { remaining, reserved: period.used, launched: Number(counts.launched), uncertain: Number(counts.uncertain),
-                essentialUsed: period.used - period.ordinaryUsed, essentialRemaining: Math.min(operatingRules.football.essentialReserveRequests, remaining),
-                essentialReserveUsed: Math.min(operatingRules.football.essentialReserveRequests,
-                  Math.max(0, period.used - Math.max(0, period.dayLimit - operatingRules.football.essentialReserveRequests))),
+                essentialUsed: period.used - period.ordinaryUsed, essentialRemaining: Math.min(essentialReserveFor(period.dayLimit), remaining),
+                essentialReserveUsed: Math.min(essentialReserveFor(period.dayLimit),
+                  Math.max(0, period.used - (period.dayLimit - essentialReserveFor(period.dayLimit)))),
                 rollingSecondLaunches: Number(rolling.second), rollingMinuteLaunches: Number(rolling.minute),
                 rateLimited: Number(counts.rateLimited), providerErrors: Number(counts.providerErrors),
                 resetPending: account.candidatePeriodId !== null || at >= period.endsAt,

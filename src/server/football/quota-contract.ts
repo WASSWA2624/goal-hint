@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { UtcInstant } from "../../domain/calendar.ts";
+import { operatingRules } from "../config/runtime-policy.ts";
 
 export const quotaPriorities = Object.freeze({
   "results-cutoff": Object.freeze({ rank: 0, essential: true }),
@@ -12,6 +13,12 @@ export const quotaPriorities = Object.freeze({
 } as const);
 
 export type QuotaPriority = keyof typeof quotaPriorities;
+/** The essential reserve is 20,000 of the 120,000-request ceiling. Smaller verified
+ * plans keep the same one-sixth share, so ordinary daily work still has capacity. */
+export function essentialReserveFor(dayLimit: number): number {
+  const { essentialReserveRequests, requestsPerProviderDay } = operatingRules.football;
+  return Math.min(essentialReserveRequests, Math.floor(Math.max(0, dayLimit) * essentialReserveRequests / requestsPerProviderDay));
+}
 export type QuotaPeriodEvidence = Readonly<{
   accountId: string;
   periodId: string;

@@ -23,9 +23,11 @@ import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql
 const execute = promisify(execFile), workspace = fileURLToPath(new URL('../', import.meta.url));
 const script = fileURLToPath(new URL('../scripts/database.mjs', import.meta.url));
 const denied = (reason) => (error) => error instanceof PredictionHistoryError && error.reason === reason;
+// Import receipts and audits are append-only, matching the application role.
+const catalogAppendOnly = ['FootballFixtureAudit', 'FootballImport'];
 const catalogTables = ['FootballCatalogLock', 'FootballTeam', 'FootballTeamProvider', 'FootballTeamAlias',
   'FootballCompetition', 'FootballCompetitionProvider', 'FootballCompetitionAlias', 'FootballSeason',
-  'FootballFixture', 'FootballFixtureAudit', 'FootballImport', 'FootballIdentityReview'];
+  'FootballFixture', 'FootballIdentityReview', ...catalogAppendOnly];
 const immutableTables = ['EvidenceSourceVersion', 'FixtureEvidenceSnapshot', 'FixtureEvidenceSnapshotSource', 'ModelVersion',
   'DailyRun', 'PredictionSet', 'MarketPrediction', 'PredictionSchedule', 'PredictionAudit'];
 function environment(applicationUrl, migrationUrl) {
@@ -61,7 +63,7 @@ test('immutable prediction history on isolated genuine MySQL', { timeout: 300000
       CREATE USER 'history_application'@'127.0.0.1' IDENTIFIED BY '${applicationPassword}';
       GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'history_migration'@'127.0.0.1';`);
     await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 60000 });
-    await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.${name} TO 'history_application'@'127.0.0.1';`).join('\n') +
+    await instance.executeAdmin(catalogTables.map((name) => `GRANT ${catalogAppendOnly.includes(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE, DELETE'} ON goal_hint_test.${name} TO 'history_application'@'127.0.0.1';`).join('\n') +
       immutableTables.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'history_application'@'127.0.0.1';`).join('\n') +
       `GRANT SELECT, INSERT ON goal_hint_test.PredictionCycle TO 'history_application'@'127.0.0.1';
        GRANT UPDATE (version, scheduleVersion, kickoffAt, cutoffAt, state, currentSetId, lockedSetId, closedAt, lockedAt, voidedAt, voidReason)

@@ -248,14 +248,28 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       const f = fixture(firstDatabase, "lower-day", { providerDailyLimit: 30000, dailyRemaining: 20001 });
       await f.initialize();
       const first = await dispatch(f.limiter, f.request("daily-inputs"));
-      await f.limiter.complete(first, { kind: "success", dailyLimit: 25000, dailyRemaining: 15000 });
+      // 25,000/day keeps a proportional 4,166 essential reserve; 21,000 used enters it.
+      await f.limiter.complete(first, { kind: "success", dailyLimit: 25000, dailyRemaining: 4000 });
       f.clock.now += 84;
       denied(await f.limiter.reserve(f.request("enrichment")), "essential-reserve");
       const second = await dispatch(f.limiter, f.request("near-kickoff-fallback"));
       await f.limiter.complete(second, { kind: "success", dailyLimit: 150000, dailyRemaining: 140000 });
       assert.equal((await f.state()).period.dayLimit, 25000);
       assert.equal((await f.state()).period.providerDailyLimit, 25000);
-      assert.ok((await f.state()).period.dayRemaining <= 15000);
+      assert.ok((await f.state()).period.dayRemaining <= 4000);
+    });
+
+    await t.test("small plans keep a proportional essential reserve instead of blocking all ordinary work", async () => {
+      const f = fixture(firstDatabase, "free-plan", { providerDailyLimit: 100, dailyRemaining: 100, secondLimit: 1, minuteLimit: 10 });
+      await f.initialize();
+      const ordinary = await dispatch(f.limiter, f.request("daily-inputs"));
+      await f.limiter.complete(ordinary, { kind: "success", dailyLimit: 100, dailyRemaining: 16 });
+      f.clock.now += 6000;
+      // 100/day keeps 16 essential requests: after 84 are used only essential work may continue.
+      denied(await f.limiter.reserve(f.request("daily-inputs")), "essential-reserve");
+      const essential = await dispatch(f.limiter, f.request("results-cutoff"));
+      await f.limiter.complete(essential, { kind: "success" });
+      assert.equal((await f.state()).period.dayLimit, 100);
     });
 
     await t.test("uncertain attempts, crashes and replacement replicas never refund durable reservations", async () => {
@@ -495,6 +509,25 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       await dispatch(f.limiter, enrichment);
     });
 
+    await t.test("an abandoned queued waiter releases the head without spending capacity", async () => {
+      const f = fixture(firstDatabase, "abandon");
+      await f.initialize();
+      const first = await dispatch(f.limiter, f.request());
+      await f.limiter.complete(first, { kind: "success" });
+      const gone = f.request("results-cutoff"), next = f.request("daily-inputs");
+      denied(await f.limiter.reserve(gone), "pacing");
+      denied(await f.limiter.reserve(next), ["pacing", "priority-wait"]);
+      f.clock.now += 84;
+      denied(await f.limiter.reserve(next), "priority-wait");
+      const before = (await f.state()).period.used;
+      assert.deepEqual(await f.limiter.abandon(gone.requestId), { status: "abandoned" });
+      assert.deepEqual(await f.limiter.abandon(gone.requestId), { status: "unchanged" });
+      await dispatch(f.limiter, next);
+      assert.equal((await f.state()).period.used, before + 1, "the abandoned waiter consumed nothing");
+      assert.deepEqual(await f.limiter.abandon(next.requestId), { status: "unchanged" }, "dispatched attempts stay counted");
+      denied(await f.limiter.reserve(gone), "already-attempted");
+    });
+
     await t.test("a safety caller promotes duplicated queued enrichment without spending a second reservation", async () => {
       const f = fixture(firstDatabase, "priority-promotion", { dailyRemaining: 50002 });
       await f.initialize();
@@ -523,7 +556,8 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       f.clock.now += 84;
       const ordinary = await f.limiter.reserve(f.request("daily-inputs"));
       assert.equal(ordinary.status, "reserved");
-      await f.limiter.complete(earlier, { kind: "success", dailyLimit: 20000, dailyRemaining: 19998 });
+      // 20,000/day keeps a proportional 3,333 essential reserve; 17,000 used enters it.
+      await f.limiter.complete(earlier, { kind: "success", dailyLimit: 20000, dailyRemaining: 3000 });
       denied(await f.limiter.claimLaunch(ordinary.permit), "essential-reserve");
       const state = (await f.state()).period;
       assert.equal(state.dayLimit, 20000);

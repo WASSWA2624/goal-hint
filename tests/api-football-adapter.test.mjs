@@ -922,3 +922,21 @@ test("fallback workflow rechecks a cached page after cache permission callbacks"
   assert.equal(result.error.reason, "operation-not-authorized");
   assert.equal(state.network.length, 1);
 });
+
+test("a caller that stops waiting releases its queued request, bounded by its workflow deadline", async () => {
+  const reservations = [], abandoned = [];
+  const limiter = {
+    async reserve(request) { reservations.push(request); return { status: "denied", reason: "minute-limit", retryAt: NOW + 60_000 }; },
+    async claimLaunch() { assert.fail("a denied request never launches"); },
+    async complete() { assert.fail("a denied request never completes"); },
+    async abandon(requestId) { abandoned.push(requestId); return { status: "abandoned" }; },
+  };
+  const adapter = createApiFootballAdapter({ accountId: hash("synthetic-account"), credential: { read: () => KEY },
+    gateway: createQuotaGateway({ limiter, authorize() {} }), authorize() {}, clock: { now: () => NOW }, random: () => 0.5,
+    sleep: async () => {}, fetcher: async () => assert.fail("no dispatch without a reservation") });
+  const workflow = { signal: new AbortController().signal, deadlineAt: NOW + 500, check() {} };
+  const result = await adapter.evidence.fixtures({ fixtureId: 101 }, bounds({ deadlineAt: NOW + 60_000 }), workflow);
+  assert.equal(result.error.reason, "quota-denied");
+  assert.equal(reservations[0].deadlineAt, NOW + 500, "the queue reservation never outlives the caller");
+  assert.deepEqual(abandoned, [reservations[0].requestId]);
+});

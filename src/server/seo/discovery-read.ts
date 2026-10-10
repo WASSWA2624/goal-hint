@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { discoveryRules } from "../../domain/discovery.ts";
+import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { canonicalMatchSlug } from "../../domain/match-slug.ts";
 import { parseReportingDate } from "../../domain/calendar.ts";
 import { matchHref } from "../../domain/navigation.ts";
@@ -20,7 +21,7 @@ const joins = Prisma.sql`FROM FootballFixture f JOIN FootballSeason s ON s.id=f.
   JOIN FootballCompetition l ON l.id=s.competitionId LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id`;
 
 export function createDiscoveryReader(database: DatabaseRuntime, competitionIds: readonly number[]): DiscoveryReader {
-  const ids = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(1000).parse(competitionIds);
+  const ids = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope).parse(competitionIds);
   if (new Set(ids).size !== ids.length) throw new RangeError("Invalid discovery scope.");
   const scope = publicFixtureScope(ids), size = discoveryRules.sitemapBatchSize;
   function offset(page: number) {

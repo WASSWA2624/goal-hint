@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
 import { performanceFamilies, performanceResponseSchema, performanceRules, type PerformanceCell, type PerformanceCoverage, type PerformanceResponse, type PerformanceSource } from "../../domain/performance.ts";
 import type { MarketFamily } from "../../domain/markets.ts";
@@ -136,7 +137,7 @@ export function createPerformanceService(options: Readonly<{ database: DatabaseR
   const policy = options.policy ?? null;
   return Object.freeze({ async query(parameters = new URLSearchParams()): Promise<PerformanceResponse> {
     const asOf = clock.now(), query = parsePerformanceQuery(parameters, getReportingDate(asOf));
-    const configured = z.array(z.number().int().positive().max(2_147_483_647)).min(1).max(1000).safeParse(options.competitionIds);
+    const configured = z.array(z.number().int().positive().max(2_147_483_647)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
     if (!configured.success || new Set(configured.data).size !== configured.data.length) throw new MatchFeedError("unavailable");
     const protocol = verifiedPolicy(policy, asOf);
     try {

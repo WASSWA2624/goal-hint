@@ -72,7 +72,10 @@ Nearest kickoff sorts first, with canonical fixture ID as the stable tie-breaker
 Queue priority decreases through the first 256 ranks; distinct original-window
 availability milliseconds retain order among remaining equal-priority entries.
 The fixture cap refuses an oversized cohort rather than silently dropping its
-tail. Jobs expire at the selected kickoff minus five minutes. Later workers must
+tail. An optional `refreshCapacity` applies nearest-kickoff budget priority:
+fixtures are visited in kickoff order and eligible fixtures beyond it are recorded
+as `refresh-capacity` exclusions before any cycle is created. Omitting it keeps
+every eligible fixture and the original policy hash. Jobs expire at the selected kickoff minus five minutes. Later workers must
 independently recheck publication eligibility and current schedule/status.
 
 ## Explicit degradation and cycle eligibility

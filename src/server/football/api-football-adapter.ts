@@ -22,7 +22,7 @@ export type PlayerStatisticsQuery = Readonly<{ competitionId: number; season: nu
 export type ApiFootballAdapterOptions = Readonly<{
   accountId: string;
   credential: Readonly<{ read(): string }>;
-  gateway: Pick<ReturnType<typeof createQuotaGateway>, "execute">;
+  gateway: Pick<ReturnType<typeof createQuotaGateway>, "execute"> & Partial<Pick<ReturnType<typeof createQuotaGateway>, "abandon">>;
   authorize: () => void;
   fetcher?: typeof fetch;
   clock?: Clock;
@@ -249,8 +249,18 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     try { return await pending; } finally { inFlight.delete(joinKey); }
 
     async function dispatch(): Promise<PageOutcome<T>> {
+      // This caller's request still waiting in the shared queue; released if the caller gives up.
+      let queued: string | null = null;
+      const outcome = await attempts();
+      if (outcome.error && queued !== null) await options.gateway.abandon?.(queued);
+      return outcome;
+    async function attempts(): Promise<PageOutcome<T>> {
       let lastError: ApiFootballFailure = failure("transport-error", true);
       let attemptId = randomBytes(32).toString("hex");
+      // A queued reservation never outlives its caller: an abandoned waiter would otherwise
+      // hold the shared priority queue until its own, later deadline.
+      const deadlineAt = workflow === undefined ? bounds.deadlineAt
+        : utcInstantFromEpochMilliseconds(Math.min(bounds.deadlineAt, workflow.deadlineAt));
       for (let attempt = 0; attempt < bounds.retry.maxAttempts; attempt++) {
         if (!workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
         try {
@@ -258,7 +268,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           if (reserveCheck instanceof Promise) void reserveCheck.catch(() => undefined);
           if (reserveCheck !== undefined || !workflowAllowed(workflow)) return { error: failure("operation-not-authorized") };
         } catch { return { error: failure("operation-not-authorized") }; }
-        if (clock.now() >= bounds.deadlineAt) return { error: failure("deadline-exceeded") };
+        if (clock.now() >= deadlineAt) return { error: failure("deadline-exceeded") };
         if (budget.requests >= bounds.maxRequests) return { error: failure("request-budget-exhausted") };
         const key = credential();
         if (!key) return { error: failure("invalid-credential") };
@@ -266,7 +276,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         let responseObservation: ApiFootballPageProvenance | null = null;
         let didDispatch = false;
         const result = await options.gateway.execute({ requestId: attemptId, workKey, priority: bounds.priority,
-          deadlineAt: bounds.deadlineAt, timeoutMs: Math.min(bounds.timeoutMs, bounds.deadlineAt - clock.now()) }, async (signal, _permit, observe) => {
+          deadlineAt, timeoutMs: Math.min(bounds.timeoutMs, deadlineAt - clock.now()) }, async (signal, _permit, observe) => {
           if (!workflowAllowed(workflow)) throw new Error("Fallback refresh is no longer authorized.");
           const dispatchCheck: unknown = workflow?.beforeDispatch?.();
           if (dispatchCheck instanceof Promise) void dispatchCheck.catch(() => undefined);
@@ -350,6 +360,7 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           failedObservations.push(Object.freeze({ ...observed, quota: Object.freeze({ ...observed.quota,
             kind: result.status === "failed" ? result.reason : "uncertain" }) }));
         }
+        queued = result.status === "denied" && result.reason !== "operation-not-authorized" && !didDispatch ? attemptId : null;
         if (result.status === "joined") return { error: failure("shared-work-pending") };
         if (result.status === "denied") {
           if (result.reason === "operation-not-authorized") return { error: failure("operation-not-authorized") };
@@ -361,10 +372,11 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         const jitter = Math.min(1, Math.max(0, random()));
         const backoff = Math.ceil(Math.min(bounds.retry.maxDelayMs, bounds.retry.baseDelayMs * 2 ** Math.min(attempt, 30)) * jitter);
         const delay = Math.max(backoff, lastError.retryAfterMs ?? 0, lastError.retryAt === undefined ? 0 : lastError.retryAt - clock.now());
-        if (!nonnegative(delay) || delay >= bounds.deadlineAt - clock.now() || delay > 2_147_483_647) return { error: lastError };
+        if (!nonnegative(delay) || delay >= deadlineAt - clock.now() || delay > 2_147_483_647) return { error: lastError };
         await sleep(delay);
       }
       return { error: lastError };
+    }
     }
   }
   function finished<T>(data: readonly T[], pages: readonly ApiFootballPageProvenance[], missingCoverage: readonly string[],

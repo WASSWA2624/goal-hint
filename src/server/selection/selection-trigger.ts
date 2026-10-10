@@ -29,12 +29,21 @@ export function defineDailySelectionJob(service: ReturnType<typeof createDailySe
     } });
 }
 
+export type DailySelectionBounds = Pick<JobEnvelope, "maxAttempts" | "timeoutMs" | "leaseMs" | "fallbackReserveMs" | "backoff"> &
+  Readonly<{ expiresAfterMs: number }>;
+/** The one durable envelope per EAT run date, shared by HTTP and in-process schedulers. */
+export function dailySelectionEnvelope(scheduledFor: unknown, input: DailySelectionBounds): JobEnvelope {
+  const payload = parseSelection(scheduledSelection, { scheduledFor }), window = selectionWindow(payload.scheduledFor);
+  const { expiresAfterMs, ...bounds } = input;
+  if (!Number.isSafeInteger(expiresAfterMs) || expiresAfterMs <= 0 || payload.scheduledFor + expiresAfterMs > window.endExclusive) throw new Error();
+  return parseJobEnvelope({ ...bounds, version: 1, type: "daily.selection", handlerVersion: 1,
+    idempotencyKey: evidenceFingerprint({ type: "daily.selection", runDate: window.runDate }), payload, refresh: null,
+    notBefore: window.startInclusive, expiresAt: window.startInclusive + expiresAfterMs, priority: 0 });
+}
 /** The scheduler supplies its original occurrence, retained through every retry.
  * This protected adapter enqueues bounded durable work and does no provider I/O. */
 export function createDailySelectionTrigger(input: Readonly<{
-  identity: JobTriggerIdentity; queue: JobQueue;
-  bounds: Pick<JobEnvelope, "maxAttempts" | "timeoutMs" | "leaseMs" | "fallbackReserveMs" | "backoff"> &
-    Readonly<{ expiresAfterMs: number }>;
+  identity: JobTriggerIdentity; queue: JobQueue; bounds: DailySelectionBounds;
 }>) {
   return async (request: Request): Promise<Response> => {
     const headers = { "Cache-Control": "no-store" };
@@ -43,12 +52,8 @@ export function createDailySelectionTrigger(input: Readonly<{
     if (request.method !== "POST") return Response.json({ error: "method-not-allowed" }, { status: 405, headers: { ...headers, Allow: "POST" } });
     let envelope;
     try {
-      const payload = parseSelection(scheduledSelection, await readPrivateJobBody(request)), window = selectionWindow(payload.scheduledFor);
-      const { expiresAfterMs, ...bounds } = input.bounds;
-      if (!Number.isSafeInteger(expiresAfterMs) || expiresAfterMs <= 0 || payload.scheduledFor + expiresAfterMs > window.endExclusive) throw new Error();
-      envelope = parseJobEnvelope({ ...bounds, version: 1, type: "daily.selection", handlerVersion: 1,
-        idempotencyKey: evidenceFingerprint({ type: "daily.selection", runDate: window.runDate }), payload, refresh: null,
-        notBefore: window.startInclusive, expiresAt: window.startInclusive + expiresAfterMs, priority: 0 });
+      const body = parseSelection(scheduledSelection, await readPrivateJobBody(request));
+      envelope = dailySelectionEnvelope(body.scheduledFor, input.bounds);
     } catch { return Response.json({ error: "invalid-request" }, { status: 400, headers }); }
     try {
       const job = await input.queue.enqueue(envelope);

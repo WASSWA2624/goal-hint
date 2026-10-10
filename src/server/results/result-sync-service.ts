@@ -11,7 +11,7 @@ import { parseLifecycleInput } from "../predictions/lifecycle-input.ts";
 import { historyHash } from "../predictions/history-input.ts";
 import { ResultSyncError, resultSyncFail, type PollChannel, type PollLease, type ResultSyncAuthority, type ResultSyncBatch,
   type ResultSyncStore, type TrackedResultFixture } from "./result-sync-contract.ts";
-import { failureDelay, parseResultSyncPolicy, pollingInterval, shouldPollLive } from "./result-sync-policy.ts";
+import { failureDelay, parseResultSyncPolicy, pollingInterval, resultCadence, shouldPollLive } from "./result-sync-policy.ts";
 
 export function createResultSyncService(options: Readonly<{
   accountId: string; ownerId?: string; policy: unknown; authority: ResultSyncAuthority; store: ResultSyncStore;
@@ -53,7 +53,8 @@ export function createResultSyncService(options: Readonly<{
   async function poll(channel: PollChannel, tracked: readonly TrackedResultFixture[], ids: readonly number[], signal?: AbortSignal) {
     await renew();
     const requestedAt = clock.now(), date = channel === "date" ? getReportingDate(requestedAt) : null;
-    const cadence = channel === "live" ? 15_000 : 60_000;
+    const { liveMs, dateMs, activeMs } = resultCadence(policy);
+    const cadence = channel === "live" ? liveMs ?? dateMs : channel === "date" ? dateMs : activeMs;
     const previousFailures = channel === "live" ? lease!.liveFailures : channel === "date" ? lease!.dateFailures : Math.max(0, ...tracked.map((fixture) => fixture.failures));
     // Reserve the cadence before dispatch; a crash never immediately repeats it.
     if (channel === "ids") await store.attempts(lease!, tracked.map((fixture) => ({ fixtureId: fixture.fixtureId, nextAt: requestedAt + cadence, failures: fixture.failures, error: "request-in-progress" })));

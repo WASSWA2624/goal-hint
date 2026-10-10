@@ -39,7 +39,7 @@ export function createPredictionRefreshService(options: Readonly<{
   observation: Pick<ReturnType<typeof createRefreshObservationCollector>, "collect">;
   lifecycle: Pick<ReturnType<typeof createScheduleLifecycleService>, "observe" | "refreshEligibility">;
   publisher: Pick<ReturnType<typeof createRevisionPublicationService>, "publish">;
-  costs: Readonly<{ ai: CostReader; research: CostReader | null }>; clock?: Clock;
+  costs: Readonly<{ ai: CostReader | null; research: CostReader | null }>; clock?: Clock;
 }>) {
   const now = () => utcInstantFromEpochMilliseconds(options.clock?.now() ?? Date.now());
   async function costs(jobId: string): Promise<RefreshOutcome["costs"]> {
@@ -97,9 +97,11 @@ export function createPredictionRefreshService(options: Readonly<{
     if (member.context.kickoffAt !== saved.member.context.kickoffAt || member.cycle.scheduleVersion !== saved.member.cycle.scheduleVersion)
       return finish("skipped", "schedule-changed");
     await context.checkpoint();
-    const resolved = await options.models.resolve(saved.pin);
-    if (resolved.pin.id !== saved.pin.id || resolved.model.id !== plan.modelVersionId || resolved.model.provider !== plan.ai.request.provider ||
-      resolved.model.model !== plan.ai.request.model) return refreshFail("unauthorized");
+    if (saved.pin !== null) {
+      const resolved = await options.models.resolve(saved.pin);
+      if (plan.ai === null || resolved.pin.id !== saved.pin.id || resolved.model.id !== plan.modelVersionId ||
+        resolved.model.provider !== plan.ai.request.provider || resolved.model.model !== plan.ai.request.model) return refreshFail("unauthorized");
+    } else if (plan.ai !== null || plan.modelVersionId !== null) return refreshFail("unauthorized");
     async function checkpoint() {
       await context.checkpoint(); authorize();
       const current = await options.store.loadMember(lease);
@@ -121,7 +123,7 @@ export function createPredictionRefreshService(options: Readonly<{
         }
         const result = value as PredictorResult | FallbackRefreshResult | Observation | null;
         return [item(name === "ai" ? "ai" : "football", name, result?.requestsDispatched ?? 0,
-          result?.requestCountUnknown ?? true, name === "ai" ? plan.ai.request.attemptId : null)];
+          result?.requestCountUnknown ?? true, name === "ai" ? plan.ai?.request.attemptId ?? null : null)];
       };
       await checkpoint();
       const known = await options.store.stage(lease.jobId, name, "completed");
@@ -163,9 +165,13 @@ export function createPredictionRefreshService(options: Readonly<{
       const evidence = await phase<EvidenceServiceResult>("evidence", plan.evidence.maxElapsedMs, lease.job.envelope.fallbackReserveMs,
         (workflow) => options.evidence.collect(plan.evidence, workflow), () => ({ status: "denied", reason: "unavailable" }));
       if (evidence.status === "denied") return finish("failed", `evidence:${evidence.reason}`);
-      const rawAi = await phase<PredictorResult>("ai", plan.ai.maxElapsedMs, lease.job.envelope.fallbackReserveMs,
-        (workflow) => options.predictor.predict({ ...plan.ai, pin: saved.pin, snapshot: evidence.snapshot }, workflow),
-        () => ({ status: "denied", reason: "uncertain-usage", requestsDispatched: 0, requestCountUnknown: true }));
+      const aiPlan = plan.ai, pin = saved.pin;
+      // A fallback-only plan never dispatches AI; its denial is explicit and costs nothing.
+      const rawAi: PredictorResult = aiPlan === null || pin === null
+        ? Object.freeze({ status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false })
+        : await phase<PredictorResult>("ai", aiPlan.maxElapsedMs, lease.job.envelope.fallbackReserveMs,
+          (workflow) => options.predictor.predict({ ...aiPlan, pin, snapshot: evidence.snapshot }, workflow),
+          () => ({ status: "denied", reason: "uncertain-usage", requestsDispatched: 0, requestCountUnknown: true }));
       const ai = parseFallbackAiResult(rawAi);
       if (ai.status === "denied") phases.ai = ai.reason;
       const request: FallbackRefreshRequest = { requestId: refreshReference(lease.jobId, "fallback"),

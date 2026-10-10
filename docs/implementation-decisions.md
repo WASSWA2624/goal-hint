@@ -2850,3 +2850,39 @@ See [backup and restore runbook](backup-restore.md) for procedures and
 [development evidence](development-progress.md) for executed checks. OP-08/13/26/
 29/30/31/32 and existing legal/contact/source/model/release gates remain open.
 Prompt 046 has not been started.
+
+## Live API-Football operation (10 October 2026)
+
+Owner decisions in chat, recorded locally in the ignored `.goal-hint/owner-approvals.json`.
+See the [live operations runbook](live-operations.md).
+
+- **Fallback-only forecasts.** AI and research stay disabled until 011/012 have a selected,
+  integrated provider. Publication and shadow gates no longer require AI configuration when
+  `GOAL_HINT_AI_ENABLED=false`; enabling AI restores every AI and calibration requirement.
+  Refresh plans may set `ai: null` with `modelVersionId: null` (null pin), admitted by the
+  forward migration `20261010170000_fallback_only_refresh_intent`.
+- **Provisional publication before 047/048.** The owner recorded release and quality
+  approvals for local provisional publication. API-Football forecasts keep the existing
+  *Provisional estimate* label; no accuracy or calibration claim is made.
+- **Loopback production scope.** `GOAL_HINT_OPERATION_SCOPE=production` may run in
+  development mode only when `DATABASE_URL` is loopback. Any remote/hosted target still
+  requires `NODE_ENV=production` and verified TLS.
+- **Free-plan operation.** `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS=0` is now a valid recorded
+  amount (still capped at US$45). The essential reserve is 20,000 of the 120,000 ceiling and the
+  same one-sixth share on smaller plans; the previous rule made every plan below 20,000/day
+  essential-only, so daily imports could never run.
+- **Provider-day reconciliation.** Each account, plan and UTC provider day has its own durable
+  limiter account seeded from the provider's `/status` remaining count (an uncounted endpoint),
+  opened one minute after 00:00 UTC. This is the operator reconciliation the limiter runbook
+  requires for missed periods and plan changes; old counters remain intact.
+- **Budget-sized workload.** Refresh capacity, worker count and result cadence derive from the
+  verified daily limit. Daily selection may cap refreshes by nearest kickoff (`refreshCapacity`)
+  and records deferred fixtures; result sync accepts an optional slower `cadence`. Both are
+  optional, so existing policy hashes are unchanged.
+- **Single-dispatch pacing retries.** Refresh fallback/status bounds may retry only when
+  `maxRequests` is 1, so retries wait out limiter pacing without a second HTTP request.
+- **Append-only catalog receipts.** The catalog importer previously inserted a `FootballImport`
+  row and later updated its fixture ID lists, and updated `FootballFixtureAudit` rows to merge
+  shared-identity changes. The local role grants both tables insert-only (their intended
+  semantics), so the importer now inserts the receipt and its audits once, at the end of the same
+  transaction, with final values. Integration tests grant both tables insert-only.

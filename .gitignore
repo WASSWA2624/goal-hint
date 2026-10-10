@@ -16,3 +16,4 @@ npm-debug.log*
 .vercel/
 .DS_Store
 Thumbs.db
+.goal-hint/

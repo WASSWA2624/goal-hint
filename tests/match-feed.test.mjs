@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate } from '../src/domain/calendar.ts';
+import { maximumCompetitionScope } from '../src/domain/feed-query.ts';
 import { matchFeedErrorSchema, matchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { parseMatchFeedQuery, createMatchFeedService } from '../src/server/matches/feed-service.ts';
@@ -66,7 +67,7 @@ test('public response schema rejects unknown internals and incoherent counts', (
   const league = { id: 'league-a', name: 'Example', country: null };
   assert.deepEqual(matchFeedResponseSchema.parse({ ...emptyPage(), leagues: [league] }).leagues, [league]);
   for (const leagues of [[league, league], [{ ...league, providerCredentials: 'private' }], [{ ...league, id: '../x' }],
-    Array.from({ length: 1001 }, (_, index) => ({ ...league, id: `league-${index}` }))]) {
+    Array.from({ length: maximumCompetitionScope + 1 }, (_, index) => ({ ...league, id: `league-${index}` }))]) {
     assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), leagues }).success, false);
   }
 });

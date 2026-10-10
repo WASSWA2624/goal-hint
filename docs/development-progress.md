@@ -3646,3 +3646,45 @@ OP-26/30 telemetry retention and independently supervised approved alerts;
 OP-12/14/32 infrastructure budget/hosting; existing legal/contact/source/model/
 quality/release approval gates. There is no live backup schedule, hosted log
 transport, source-data deletion, production restore or claimed DR completion.
+
+## Live API-Football operation (10 October 2026)
+
+Status: implemented and verified against owned MySQL with synthetic provider responses.
+The owner's free-plan key verifies (`/status`), current-season fixtures are served, and 1,241
+current competitions are configured. No tracker row changes; 011/012/046–049 remain open.
+
+### Changes
+
+- `src/server/live/` composes the existing services into a fallback-only live runtime:
+  owner-approval register and verifier, `/status`-seeded provider-day quota router,
+  plan-sized workload and policies, trusted authorities, runtime composition and the runner
+  loop. `src/workers/live.ts` (`npm run live`), `scripts/live-status.mjs` and
+  `scripts/live-competitions.mjs` are the operator entry points.
+- Runtime policy: publication without AI when AI is disabled; a zero payable amount for free
+  plans; production scope in development mode for loopback databases only.
+- Refresh plans may omit AI (`ai: null`, null pin); migration
+  `20261010170000_fallback_only_refresh_intent` admits that shape. Single-dispatch phases may
+  retry limiter pacing.
+- Quota: the essential reserve keeps a one-sixth share below the 120,000 ceiling instead of
+  making small plans essential-only.
+- Optional `refreshCapacity` (daily selection) and `cadence` (result sync); both keep existing
+  policy hashes when omitted. `dailySelectionEnvelope` is shared by the HTTP trigger and the runner.
+- Docs: [live operations runbook](live-operations.md), README, decision register and the
+  quota/results/selection/refresh/local-database runbooks.
+
+### Local database
+
+`npm run db:deploy`, `db:status` and `db:verify` passed on the local MySQL 8.4.11 target;
+`PredictionRefreshIntent_shape_v2` is in place. The isolated end-to-end test mirrors the local
+application role's exact grants. It showed the catalog importer updating insert-only
+`FootballImport`/`FootballFixtureAudit` rows; the importer now inserts both once with final
+values, so no grant change is needed.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| `npm run check` | Passed: lint, type-check, **980 tests (979 passed, 1 existing Windows POSIX-mode skip)** and production build. |
+| Owned-MySQL suites | refresh 34, selection 19, results 26, cutoff 26, publication 25, lifecycle 27, settlement 28, monitoring 16, jobs 23, feed 47, catalog 28, quota 28, recovery 19: all passed, none skipped. |
+| `tests/live-runtime.integration.mjs` | 5/5 with the local role's exact grants: seven-date import, two published fallback forecasts, public feed, leased result polling and provider-free settlement/cache maintenance. |
+| `npm run live:status` | Configuration and owner approvals ready apart from the competition list; the account check reports `credential-failure` for the current key. |

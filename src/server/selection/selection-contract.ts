@@ -19,6 +19,10 @@ export type SelectionPolicy = Readonly<{
   version: 1; evidenceRef: string; competitionIds: readonly number[]; eligibleStatuses: readonly ["scheduled"];
   degradationPolicyRef: string | null; retentionEvidenceRef: string; leaseMs: number;
   attemptsPerInvocation: number; maxFixtures: number;
+  /** Nearest-kickoff refresh budget; later eligible fixtures are recorded as deferred exclusions. */
+  refreshCapacity?: number;
+  /** Dates the provider plan can serve, from the run date; omitted imports all seven. */
+  importDays?: number;
   importBounds: Omit<ApiFootballBounds, "deadlineAt"> & Readonly<{ deadlineMs: number }>;
   refresh: Omit<JobEnvelope, "version" | "idempotencyKey" | "refresh" | "notBefore" | "expiresAt" | "priority">;
 }>;

@@ -18,9 +18,11 @@ import { EVIDENCE_NOW, evidenceAuthority, evidenceContext, evidenceHash, evidenc
 const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
 const databaseScript = fileURLToPath(new URL("../scripts/database.mjs", import.meta.url));
+// Import receipts and audits are append-only, matching the application role.
+const catalogAppendOnly = ['FootballFixtureAudit', 'FootballImport'];
 const catalogTables = ["FootballCatalogLock", "FootballTeam", "FootballTeamProvider", "FootballTeamAlias",
   "FootballCompetition", "FootballCompetitionProvider", "FootballCompetitionAlias", "FootballSeason",
-  "FootballFixture", "FootballFixtureAudit", "FootballImport", "FootballIdentityReview"];
+  "FootballFixture", "FootballIdentityReview", ...catalogAppendOnly];
 const evidenceTables = ["EvidenceSourceVersion", "FixtureEvidenceSnapshot", "FixtureEvidenceSnapshotSource"];
 
 function isolatedEnvironment(applicationUrl, migrationUrl) {
@@ -62,7 +64,7 @@ test("immutable fixture evidence on isolated genuine MySQL", { timeout: 300000 }
     await execFileAsync(process.execPath, ["--conditions=react-server", databaseScript, "deploy"],
       { cwd: workspace, env, windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
     await instance.executeAdmin(catalogTables.map((table) =>
-      `GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.${table} TO 'evidence_application'@'127.0.0.1';`).join("\n"));
+      `GRANT ${catalogAppendOnly.includes(table) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE, DELETE'} ON goal_hint_test.${table} TO 'evidence_application'@'127.0.0.1';`).join("\n"));
     await instance.executeAdmin(evidenceTables.map((table) =>
       `GRANT SELECT, INSERT ON goal_hint_test.${table} TO 'evidence_application'@'127.0.0.1';`).join("\n"));
     const firstDatabase = replica(), secondDatabase = replica();

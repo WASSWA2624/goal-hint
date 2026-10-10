@@ -22,6 +22,8 @@ export type FeedQuery = Readonly<{
   page: number;
   pageSize: number;
 }>;
+/** Configured provider competitions; API-Football currently lists about 1,250 current leagues. */
+export const maximumCompetitionScope = 2000;
 export type FeedParameters = URLSearchParams | Readonly<Record<string, string | string[] | undefined>>;
 export const feedQueryRules = Object.freeze({ maximumDays: 7, maximumSearchLength: 120, pageSize: 30, maximumPageSize: 100, maximumPage: 10_000 });
 export const feedDefaults = Object.freeze({

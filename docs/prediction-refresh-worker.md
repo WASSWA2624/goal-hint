@@ -31,8 +31,15 @@ receipts. Synthetic test approvals are not production bindings.
 The approved plan allocates evidence and AI time ahead of the durable job's
 fallback reserve. That reserve must cover fallback, the bounded final status call
 and publication time. Football history, fallback and status request maxima must
-fit an explicit total football request limit; one HTTP attempt per adapter call
-prevents hidden retry spend. The existing shared football limiter remains the
+fit an explicit total football request limit; one HTTP dispatch per adapter call
+prevents hidden retry spend. Fallback and status bounds may retry only when
+`maxRequests` is 1, so retries can wait out undispatched limiter pacing but never
+send a second request.
+
+A plan with `ai: null` and `modelVersionId: null` is provider-fallback-only: it
+resolves no model, stores a null pin, records the AI phase as `unconfigured` with
+zero dispatches and passes that explicit denial to the existing fallback resolver.
+Migration `20261010170000_fallback_only_refresh_intent` admits exactly that shape. The existing shared football limiter remains the
 account-wide quota authority, including essential reserves.
 
 AI/research requests use stable job/phase identities and fixture kickoff priority.

@@ -121,11 +121,51 @@ test('one manifest-owned prediction refresh through real MySQL services', { time
         (plan) => { plan.ai.job.costCapUsdPicos = -1n; },
         (plan) => { plan.ai.request.attemptId = evidenceHash('another-paid-attempt'); },
         (plan) => { plan.ai.request.maximum.inputTokens = plan.ai.job.inputTokenLimit + 1; },
-        (plan) => { plan.observation.bounds.retry.maxAttempts = 2; },
+        // Pacing retries are allowed only while a single dispatch remains the whole allowance.
+        (plan) => { plan.observation.bounds.retry.maxAttempts = 2; plan.observation.bounds.maxRequests = 2; },
+        (plan) => { plan.fallback.bounds.retry.maxAttempts = 2; plan.fallback.bounds.maxRequests = 2; },
       ]) {
         const changed = structuredClone(intent.plan); alter(changed);
         assert.throws(() => parseRefreshPlan(changed, intent.member), (error) => error.reason === 'policy-required');
       }
+    });
+  });
+});
+
+test('provider-fallback-only plans publish without a model pin or AI dispatch', { timeout: 300000 }, async (t) => {
+  await withPredictionPipeline(t, async (db) => {
+    const scenarios = [{ aiPlan: 'none' }, { aiPlan: 'none', fallback: 'none' }, { aiPlan: 'none' }];
+    const h = await refreshHarness(db, scenarios);
+    async function execute(index) {
+      h.source.clock.value = db.now(); assert.equal(await h.worker.runOnce(), true);
+      const outcome = await h.outcome(index);
+      if (!outcome) t.diagnostic(JSON.stringify({ index, job: await h.job(index), events: h.events.slice(-4) }));
+      assert.ok(outcome); return outcome;
+    }
+    await t.test('fallback publishes match result and double chance with no pin', async () => {
+      const outcome = await execute(0);
+      assert.equal(outcome.outcome, 'published'); assert.equal(outcome.phases.ai, 'unconfigured');
+      assert.equal(h.calls.ai.length, 0); assert.equal(h.calls.fallback.length, 1);
+      const intent = await h.store.intent(outcome.jobId); assert.equal(intent.pin, null); assert.equal(intent.plan.ai, null);
+      const revision = (await db.publisher.displayForFixture(outcome.fixtureId)).revision;
+      assert.equal(revision.candidate.context.pin, null);
+      assert.equal(revision.candidate.markets['match-result'].market.source, 'api-football');
+      assert.equal(revision.candidate.markets['double-chance'].market.source, 'api-football');
+      assert.equal(revision.candidate.markets['total-goals'].available, false);
+      assert.equal((await db.queue.usage(outcome.jobId)).filter((usage) => usage.provider === 'ai').length, 0);
+    });
+    await t.test('no provider forecast records unavailable without AI', async () => {
+      assert.equal((await execute(1)).outcome, 'unavailable'); assert.equal(h.calls.ai.length, 0);
+    });
+    await t.test('a model without an AI allocation, or the reverse, is refused', async () => {
+      const { parseRefreshPlan } = await import('../src/server/refresh/refresh-input.ts');
+      const intent = await h.store.intent(await h.jobIdAt(0));
+      const withModel = structuredClone(intent.plan); withModel.modelVersionId = h.model.id;
+      assert.throws(() => parseRefreshPlan(withModel, intent.member), (error) => error.reason === 'policy-required');
+      delete scenarios[0].aiPlan; const full = h.configure(intent.member); scenarios[0].aiPlan = 'none';
+      assert.ok(full.ai);
+      const withAi = { ...structuredClone(intent.plan), ai: full.ai };
+      assert.throws(() => parseRefreshPlan(withAi, intent.member), (error) => error.reason === 'policy-required');
     });
   });
 });

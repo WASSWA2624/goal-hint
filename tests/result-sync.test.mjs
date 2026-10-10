@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { failureDelay, parseResultSyncPolicy, pollingInterval, shouldPollLive } from '../src/server/results/result-sync-policy.ts';
+import { failureDelay, parseResultSyncPolicy, pollingInterval, resultCadence, shouldPollLive } from '../src/server/results/result-sync-policy.ts';
 import { ResultSyncError } from '../src/server/results/result-sync-contract.ts';
 import { runResultSyncCommand } from '../src/server/results/result-sync-command.ts';
 import { resultPolicy } from './helpers/result-sync-fixtures.mjs';
@@ -19,6 +19,20 @@ test('live pause/approach boundary and active window use the controlled clock', 
   assert.equal(shouldPollLive([fixture], policy, 940_000), true);
   assert.equal(shouldPollLive([{ ...fixture, status: 'finished-regulation', firstFinalAt: 1_000_000 }], policy, 1_000_001), false);
   assert.equal(shouldPollLive([{ ...fixture, status: 'live' }], policy, 1_000_000 + policy.activeWindowMs), false);
+});
+test('spec cadence is the default; budget cadences slow active checks and can disable the live feed', () => {
+  assert.equal(policy.cadence, undefined, 'omitted cadence keeps the original policy hash');
+  assert.deepEqual(resultCadence(policy), { liveMs: 15_000, dateMs: 60_000, activeMs: 60_000 });
+  const slow = parseResultSyncPolicy(resultPolicy({ cadence: { liveMs: null, dateMs: 3_600_000, activeMs: 1_800_000 } }));
+  assert.equal(pollingInterval(fixture, slow, 1_000_000), 1_800_000);
+  assert.equal(shouldPollLive([{ ...fixture, status: 'live' }], slow, 1_000_000), false);
+  const live = parseResultSyncPolicy(resultPolicy({ cadence: { liveMs: 30_000, dateMs: 120_000, activeMs: 120_000 } }));
+  assert.equal(shouldPollLive([fixture], live, 940_000), true);
+  assert.equal(shouldPollLive([fixture], live, 939_999), false);
+  for (const cadence of [{ liveMs: 1000, dateMs: 60_000, activeMs: 60_000 }, { liveMs: null, dateMs: 59_999, activeMs: 60_000 },
+    { liveMs: null, dateMs: 60_000 }]) {
+    assert.throws(() => parseResultSyncPolicy(resultPolicy({ cadence })), (error) => error instanceof ResultSyncError);
+  }
 });
 test('unresolved and corrections slow at exact tier boundaries and stop without deleting records', () => {
   const start = fixture.kickoffAt + policy.activeWindowMs;

@@ -49,7 +49,8 @@ export function createDailySelectionService(options: Readonly<{
       try {
         const previous = await options.store.inspect(lease.runId);
         if (!previous?.manifest) {
-          for (let offset = 0; offset < 7; offset++) {
+          // Dates beyond a plan's horizon are never requested and remain explicit missing coverage.
+          for (let offset = 0; offset < (policy.importDays ?? 7); offset++) {
             const date = addReportingDays(window.runDate, offset);
             for (let attempt = 0; attempt < policy.attemptsPerInvocation; attempt++) {
               await checkpoint();

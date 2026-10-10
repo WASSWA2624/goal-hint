@@ -20,17 +20,18 @@ export type RefreshMember = Readonly<{
   jobId: string; manifest: SelectionManifest; entry: SelectionEntry; cycle: StoredCycle;
   context: EvidenceCollectionRequest["context"]; now: number;
 }>;
-/** Explicit reviewed allocations. No live provider/model/budget/freshness defaults. */
+/** Explicit reviewed allocations. No live provider/model/budget/freshness defaults.
+ * A null model and AI allocation together select provider fallback only. */
 export type RefreshPlan = Readonly<{
-  version: 1; evidenceRef: string; modelVersionId: string;
+  version: 1; evidenceRef: string; modelVersionId: string | null;
   evidence: EvidenceCollectionRequest;
-  ai: Readonly<{ job: CostJobPolicy; request: CostRequest; maxElapsedMs: number }>;
+  ai: Readonly<{ job: CostJobPolicy; request: CostRequest; maxElapsedMs: number }> | null;
   fallback: Readonly<{ bounds: ApiFootballBounds | null; maxElapsedMs: number }>;
   observation: Readonly<{ bounds: ApiFootballBounds; maxAgeMs: number }>;
   publicationReserveMs: number;
   footballRequestLimit: number;
 }>;
-export type RefreshIntent = Readonly<{ member: RefreshMember; plan: RefreshPlan; pin: ModelPin }>;
+export type RefreshIntent = Readonly<{ member: RefreshMember; plan: RefreshPlan; pin: ModelPin | null }>;
 export type RefreshPhase = "evidence" | "ai" | "fallback" | "observation";
 export type RefreshOutcome = Readonly<{
   jobId: string; runId: string; fixtureId: string; cycleId: string; at: number;

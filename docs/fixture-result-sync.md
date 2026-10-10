@@ -37,6 +37,12 @@ hosting/worker identity and existing lifecycle policies remain live gates.
 | Long unresolved | Approved progressively slower tiers after the active window | Finite horizon; retain visible records after checks stop. |
 | Final/correction | Approved progressively slower tiers after first observed final | Fixed anchor survives restart and corrections; existing catalog final observations retain their original anchor. |
 
+The policy's optional `cadence` (`liveMs`, `dateMs`, `activeMs`) defaults to the
+15/60/60-second spec cadence and its original policy hash. Budget-limited plans
+may poll more slowly; `liveMs: null` disables the shared live feed so date sync
+observes live status. The [live runner](live-operations.md) sizes it from the
+verified account limit.
+
 Tier `untilAgeMs` boundaries are exclusive; intervals strictly increase and are
 at least 60 seconds. Unresolved tier age starts after `activeWindowMs`, measured
 from kickoff or first tracking when kickoff is unknown. Final age starts at

@@ -27,8 +27,10 @@ const childScript = fileURLToPath(new URL('./helpers/job-worker-child.mjs', impo
 const denied = (reason) => (error) => error instanceof JobQueueError && error.reason === reason;
 const owner = jobTestHash('worker-a'), other = jobTestHash('worker-b');
 const types = (type) => [{ type, handlerVersion: 1 }];
+// Import receipts and audits are append-only, matching the application role.
+const catalogAppendOnly = ['FootballFixtureAudit', 'FootballImport'];
 const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvider','FootballTeamAlias','FootballCompetition',
-  'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballFixtureAudit','FootballImport','FootballIdentityReview'];
+  'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballIdentityReview', ...catalogAppendOnly];
 function waitMessage(child, kind) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => finish(new Error(`Owned child did not report ${kind}`)), 20_000);
@@ -215,7 +217,7 @@ test('durable job execution on isolated genuine MySQL', { timeout: 300000 }, asy
       assert.equal(effects.length, 1); assert.equal(effects[0].value, 1);
     });
     await t.test('refresh uniqueness and composite fixture-cycle bindings survive changed job/model keys', async () => {
-      await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.${name} TO 'jobs_application'@'127.0.0.1';`).join('\n') +
+      await instance.executeAdmin(catalogTables.map((name) => `GRANT ${catalogAppendOnly.includes(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE, DELETE'} ON goal_hint_test.${name} TO 'jobs_application'@'127.0.0.1';`).join('\n') +
         `GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'jobs_application'@'127.0.0.1';
          GRANT SELECT, INSERT ON goal_hint_test.DailyRun TO 'jobs_application'@'127.0.0.1';
          GRANT SELECT, INSERT ON goal_hint_test.PredictionSchedule TO 'jobs_application'@'127.0.0.1';

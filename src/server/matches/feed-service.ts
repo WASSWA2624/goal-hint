@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { addReportingDays, createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds, type Clock, type ReportingDate } from "../../domain/calendar.ts";
-import { feedQueryKey, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
+import { feedQueryKey, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
 import { matchFeedRules, matchFeedResponseSchema, type MatchFeedResponse } from "../../domain/match-feed.ts";
 import { createMessages, type TextKey } from "../../i18n/messages.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -32,7 +32,7 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
 }
 
 export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache }>) {
-  const parsedIds = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(1000).safeParse(options.competitionIds);
+  const parsedIds = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
   if (!parsedIds.success || new Set(parsedIds.data).size !== parsedIds.data.length) throw new MatchFeedError("unavailable");
   const { database } = options, competitionIds = Object.freeze(parsedIds.data), limiter = createMysqlPublicSearchLimiter(database);
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };

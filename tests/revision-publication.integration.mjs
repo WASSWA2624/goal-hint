@@ -32,8 +32,10 @@ import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql
 const execute = promisify(execFile), workspace = fileURLToPath(new URL('../', import.meta.url));
 const script = fileURLToPath(new URL('../scripts/database.mjs', import.meta.url));
 const denied = (reason) => (error) => error instanceof RevisionPublicationError && error.reason === reason;
+// Import receipts and audits are append-only, matching the application role.
+const catalogAppendOnly = ['FootballFixtureAudit', 'FootballImport'];
 const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvider','FootballTeamAlias','FootballCompetition',
-  'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballFixtureAudit','FootballImport','FootballIdentityReview'];
+  'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballIdentityReview', ...catalogAppendOnly];
 const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEvidenceSnapshotSource','ModelVersion',
   'PredictionSet','MarketPrediction','PredictionSchedule','PredictionAudit','DailyRunManifest',
   'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent'];
@@ -62,7 +64,7 @@ test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000
       GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'publication_migration'@'127.0.0.1';`);
     try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 90_000 }); }
     catch (error) { t.diagnostic((await instance.executeAdmin('SELECT migration_name, LEFT(logs, 1800) FROM _prisma_migrations WHERE finished_at IS NULL')).stdout); throw error; }
-    await instance.executeAdmin(catalogTables.map((name) => `GRANT SELECT, INSERT, UPDATE ON goal_hint_test.${name} TO 'publication_app'@'127.0.0.1';`).join('\n') +
+    await instance.executeAdmin(catalogTables.map((name) => `GRANT ${catalogAppendOnly.includes(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE'} ON goal_hint_test.${name} TO 'publication_app'@'127.0.0.1';`).join('\n') +
       appendOnly.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'publication_app'@'127.0.0.1';`).join('\n') + `
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'publication_app'@'127.0.0.1';
       GRANT SELECT ON goal_hint_test.FixtureLifecycleState TO 'publication_app'@'127.0.0.1';

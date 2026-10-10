@@ -272,10 +272,6 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
     return transaction.footballSeason.update({ where: { id: current.id }, data: { current: metadata?.current ?? current.current,
       ...(metadata ? { coverage: json(coverage) } : {}), retrievedAt: new Date(source.retrievedAt), providerUpdatedAt: timestamp(source.providerUpdatedAt) ?? current.providerUpdatedAt } });
   }
-  async function audit(transaction: Prisma.TransactionClient, row: StoredFixture, importId: string, observedAt: UtcInstant, changes: Record<string, unknown>) {
-    await transaction.footballFixtureAudit.create({ data: { id: randomUUID(), fixtureId: row.id, importId,
-      dataVersion: row.dataVersion, observedAt: new Date(observedAt), changes: json(changes) } });
-  }
   async function importBatch(batch: CatalogPreparedBatch, authority: CatalogAuthority): Promise<CatalogImportSummary> {
     assertCatalogPreparedBatch(batch, authority);
     authorize(batch, authority);
@@ -287,13 +283,12 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         return catalogImportSummary(existing);
       }
       const receivedCount = batch.rows.fixtures.length + batch.rows.teams.length + batch.rows.competitions.length + batch.invalidRows;
-      await transaction.footballImport.create({ data: { id: batch.request.id, fingerprint: batch.fingerprint, requestFingerprint: batch.requestFingerprint,
-        selection: json(batch.selection), scopeKey: batch.scopeKey, provider: PROVIDER, kind: batch.selection.kind, status: batch.status,
-        observedAt: new Date(batch.observedAt), recordedAt: new Date(clock.now()), receivedCount, importedCount: receivedCount - batch.invalidRows,
-        rejectedCount: batch.invalidRows, requestsDispatched: batch.requestsDispatched, reasons: json(batch.reasons),
-        missingIds: json(batch.missingIds), missingCoverage: json(batch.missingCoverage), provenance: json(batch.provenance),
-        retentionEvidenceRef: batch.request.retentionEvidenceRef, subsetEvidenceRef: batch.request.knownSubset?.evidenceRef ?? null,
-        fixtureIds: [], changedFixtureIds: [] } });
+      const recordedAt = new Date(clock.now());
+      // Import receipts and audits are append-only: both are inserted once, with final values, at the end.
+      const audits: { id: string; fixtureId: string; dataVersion: bigint; observedAt: UtcInstant; changes: Record<string, unknown> }[] = [];
+      const audit = (row: StoredFixture, observedAt: UtcInstant, changes: Record<string, unknown>) => {
+        audits.push({ id: randomUUID(), fixtureId: row.id, dataVersion: row.dataVersion, observedAt, changes });
+      };
       const changedTeams = new Set<string>(), changedCompetitions = new Set<string>(), changedFixtures = new Set<string>(), insertedFixtures = new Set<string>(), fixtureIds: string[] = [];
       const teamHistory: SharedHistory<FootballTeam> = new Map(), competitionHistory: SharedHistory<FootballCompetition> = new Map();
       const priorSnapshot = (row: StoredFixture): StoredFixture => ({ ...row,
@@ -336,7 +331,7 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
             : transaction.footballFixture.create({ data: { id: randomUUID(), provider: PROVIDER, externalId: BigInt(input.id), ...proposed, ...metadata }, include: fixtureRelations }),
             input, `catalog-import:${batch.request.id}`);
           if (!previous) { fixtureIds.push(row.id); insertedFixtures.add(row.id); }
-          if (applied && material) { changedFixtures.add(row.id); await audit(transaction, row, batch.request.id, input.source.retrievedAt, changes); }
+          if (applied && material) { changedFixtures.add(row.id); audit(row, input.source.retrievedAt, changes); }
         } else await transaction.footballFixture.update({ where: { id: previous.id }, data: { ...metadata,
           regulationEvidenceRef: proposed.regulationEvidenceRef, regulationVerifiedAt: proposed.regulationVerifiedAt } });
       }
@@ -351,25 +346,31 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
           if (previous.dataVersion >= MAX_VERSION) fail("invalid-state");
           const { row } = await applyMutation(transaction, priorSnapshot(previous), fields(previous), () => transaction.footballFixture.update({
             where: { id: previous.id }, data: { dataVersion: { increment: 1n } }, include: fixtureRelations }));
-          changedFixtures.add(row.id); await audit(transaction, row, batch.request.id, batch.observedAt,
+          changedFixtures.add(row.id); audit(row, batch.observedAt,
             { sharedIdentity: { teamIds: [...changedTeams], competitionIds: [...changedCompetitions] } });
         }
         // Include shared changes in the same version audit, even for directly changed fixtures.
-        const audits = await transaction.footballFixtureAudit.findMany({ where: { importId: batch.request.id },
-          include: { fixture: { include: fixtureRelations } } });
+        const audited = new Map((await transaction.footballFixture.findMany({ where: { id: { in: [...new Set(audits.map((entry) => entry.fixtureId))] } },
+          include: fixtureRelations })).map((row) => [row.id, row]));
         for (const entry of audits) {
-          const sharedIdentity = { teams: [entry.fixture.homeTeam, entry.fixture.awayTeam]
+          const fixture = audited.get(entry.fixtureId)!;
+          const sharedIdentity = { teams: [fixture.homeTeam, fixture.awayTeam]
             .map((row) => sharedChanges(teamHistory, row)).filter((value) => value !== null),
-          competitions: [sharedChanges(competitionHistory, entry.fixture.season.competition)].filter((value) => value !== null) };
-          if (sharedIdentity.teams.length || sharedIdentity.competitions.length) {
-            const original = entry.changes !== null && typeof entry.changes === "object" && !Array.isArray(entry.changes) ? entry.changes : {};
-            await transaction.footballFixtureAudit.update({ where: { id: entry.id }, data: { changes: json({ ...original, sharedIdentity }) } });
-          }
+          competitions: [sharedChanges(competitionHistory, fixture.season.competition)].filter((value) => value !== null) };
+          if (sharedIdentity.teams.length || sharedIdentity.competitions.length) entry.changes = { ...entry.changes, sharedIdentity };
         }
       }
       authorize(batch, authority);
-      return catalogImportSummary(await transaction.footballImport.update({ where: { id: batch.request.id },
-        data: { fixtureIds: json(fixtureIds), changedFixtureIds: json([...changedFixtures]) } }));
+      const receipt = await transaction.footballImport.create({ data: { id: batch.request.id, fingerprint: batch.fingerprint,
+        requestFingerprint: batch.requestFingerprint, selection: json(batch.selection), scopeKey: batch.scopeKey, provider: PROVIDER,
+        kind: batch.selection.kind, status: batch.status, observedAt: new Date(batch.observedAt), recordedAt, receivedCount,
+        importedCount: receivedCount - batch.invalidRows, rejectedCount: batch.invalidRows, requestsDispatched: batch.requestsDispatched,
+        reasons: json(batch.reasons), missingIds: json(batch.missingIds), missingCoverage: json(batch.missingCoverage),
+        provenance: json(batch.provenance), retentionEvidenceRef: batch.request.retentionEvidenceRef,
+        subsetEvidenceRef: batch.request.knownSubset?.evidenceRef ?? null, fixtureIds: json(fixtureIds), changedFixtureIds: json([...changedFixtures]) } });
+      for (const entry of audits) await transaction.footballFixtureAudit.create({ data: { id: entry.id, fixtureId: entry.fixtureId,
+        importId: batch.request.id, dataVersion: entry.dataVersion, observedAt: new Date(entry.observedAt), changes: json(entry.changes) } });
+      return catalogImportSummary(receipt);
     });
   }
   async function registerTeamMapping(input: CatalogTeamMapping, authority: CatalogAuthority, retentionEvidenceRef: string) {

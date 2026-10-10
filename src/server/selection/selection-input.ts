@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { jobHash, jobInstant, jobVersion, parseJobEnvelope } from "../jobs/job-input.ts";
@@ -27,10 +28,14 @@ export function parseCycleSelectionEligibility(input: unknown): CycleSelectionEl
     kickoffAt: jobInstant, state: z.enum(["postponed", "void"]), actor, evidenceRef: ref }), input);
 }
 const policy = z.strictObject({ version: z.literal(1), evidenceRef: ref,
-  competitionIds: z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(1000)
+  competitionIds: z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope)
     .refine((ids) => new Set(ids).size === ids.length), eligibleStatuses: z.tuple([z.literal("scheduled")]),
   degradationPolicyRef: ref.nullable(), retentionEvidenceRef: ref, leaseMs: z.number().int().min(1000).max(120_000),
   attemptsPerInvocation: z.number().int().min(1).max(4), maxFixtures: z.number().int().min(1).max(10_000),
+  // Optional nearest-kickoff budget priority; omitted keeps every eligible fixture.
+  refreshCapacity: z.number().int().min(0).max(10_000).optional(),
+  // Optional provider date horizon; later dates stay explicit missing coverage without a request.
+  importDays: z.number().int().min(1).max(7).optional(),
   importBounds: z.strictObject({ priority: z.literal("daily-inputs"), deadlineMs: z.number().int().min(100).max(3_600_000),
     timeoutMs: z.number().int().positive(), maxRequests: z.number().int().positive(), maxPages: z.number().int().positive(),
     maxRows: z.number().int().positive(), maxResponseBytes: z.number().int().positive(),

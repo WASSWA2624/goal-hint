@@ -109,10 +109,11 @@ export async function refreshHarness(db, scenarios, changes = {}) {
     const researchPlan = scenario.research ? { job: researchJob, request: costRequest(researchJob, member.jobId, {
       attemptId: refreshReference(member.jobId, 'research'), provider: 'synthetic-research', model: null, priority }), maxSources: 2,
       targetIndependentSources: 1, maxResponseBytes: 10000, maxExtractCharacters: 1000, evidenceRef: 'synthetic-research-plan' } : null;
-    return { version: 1, evidenceRef: 'synthetic-refresh-policy', modelVersionId: model.id,
+    const fallbackOnly = scenario.aiPlan === 'none';
+    return { version: 1, evidenceRef: 'synthetic-refresh-policy', modelVersionId: fallbackOnly ? null : model.id,
       evidence: { requestId: refreshReference(member.jobId, 'evidence'), context: member.context, policy, footballPlan: null,
         researchPlan, cachedSources: [evidenceSource(member.context)], maxElapsedMs: 3000 },
-      ai: { job: aiJob, request: aiRequest, maxElapsedMs: scenario.ai === 'timeout' ? 2000 : 5000 },
+      ai: fallbackOnly ? null : { job: aiJob, request: aiRequest, maxElapsedMs: scenario.ai === 'timeout' ? 2000 : 5000 },
       fallback: { bounds: catalogBounds(member.now, { priority: 'near-kickoff-fallback', cacheScope: member.jobId, deadlineAt, maxRequests: 1, timeoutMs: 1000, retry: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1 } }),
         maxElapsedMs: scenario.fallback === 'timeout' ? 20 : 5000 },
       observation: { bounds: catalogBounds(member.now, { deadlineAt, maxRequests: 1, timeoutMs: 1000, retry: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1 } }), maxAgeMs: 10000 },

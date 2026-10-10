@@ -171,7 +171,15 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         const ids = [...new Set(dates.flatMap((date) => date.fixtureIds))].sort();
         if (ids.length > policy.maxFixtures) return selectionFail("capacity-exceeded");
         const entries: Omit<SelectionEntry, "rank" | "envelope">[] = [], exclusions: { fixtureId: string; reason: string }[] = [];
-        for (const fixtureId of ids) {
+        const capacity = policy.refreshCapacity;
+        let ordered = ids;
+        if (capacity !== undefined) {
+          // Budgeted runs visit nearest kickoffs first so deferral never displaces an earlier match.
+          const kickoffs = new Map((await tx.footballFixture.findMany({ where: { id: { in: ids } }, select: { id: true, kickoff: true } }))
+            .map((row) => [row.id, row.kickoff?.getTime() ?? Number.MAX_SAFE_INTEGER]));
+          ordered = [...ids].sort((a, b) => (kickoffs.get(a) ?? Number.MAX_SAFE_INTEGER) - (kickoffs.get(b) ?? Number.MAX_SAFE_INTEGER) || a.localeCompare(b));
+        }
+        for (const fixtureId of ordered) {
           await history.withFixtureTransaction(fixtureId, async (writer, nested) => {
             const fixture = await nested.footballFixture.findUniqueOrThrow({ where: { id: fixtureId }, include: {
               season: { include: { competition: { include: { providers: true } } } }, activeCycle: true,
@@ -184,6 +192,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
             if (fixture.kickoff === null || !isInWindow(utcInstantFromEpochMilliseconds(fixture.kickoff.getTime()), window)) return exclude("outside-window");
             const kickoffAt = utcInstantFromEpochMilliseconds(fixture.kickoff.getTime());
             if (getPublicationDeadline(kickoffAt) <= now) return exclude("cutoff-passed");
+            if (capacity !== undefined && entries.length >= capacity) return exclude("refresh-capacity");
             let cycle = fixture.activeCycle;
             if (!cycle && fixture._count.predictionCycles > 0) return exclude("no-active-cycle");
             if (cycle?.state !== "open" && cycle) {
@@ -205,6 +214,8 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
           }, tx);
         }
         entries.sort((a, b) => a.kickoffAt - b.kickoffAt || a.fixtureId.localeCompare(b.fixtureId));
+        // Kickoff-ordered visits restore the original identifier order for the manifest.
+        if (capacity !== undefined) exclusions.sort((a, b) => a.fixtureId < b.fixtureId ? -1 : a.fixtureId > b.fixtureId ? 1 : 0);
         const selected = entries.map((entry, rank): SelectionEntry => {
           const refresh = { runId: row.id, fixtureId: entry.fixtureId, cycleId: entry.cycleId };
           const envelope = parseJobEnvelope({ ...policy.refresh, version: 1, idempotencyKey: evidenceFingerprint(refresh), refresh,

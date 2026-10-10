@@ -322,7 +322,8 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
     const football = () => {
       need("GOAL_HINT_FOOTBALL_ENABLED", policy.capabilities.football);
       need("API_FOOTBALL_KEY", policy.secrets.footballKey);
-      need("API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS", policy.choices.football.payableMonthlyUsdCents);
+      // A free plan truthfully pays zero; the amount must still be recorded and stays within the ceiling.
+      if (policy.choices.football.payableMonthlyUsdCents === null) need("API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS", null);
       need("GOAL_HINT_BUDGET_APPROVAL_REF", policy.choices.budgets.approvalRef);
       need("GOAL_HINT_FOOTBALL_PRIVATE_USE_REF", policy.choices.football.privateUseRef);
       if (policy.scope === "trial") need("GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT", policy.choices.football.trialRequestLimit);
@@ -357,9 +358,10 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
     if (operation === "ai") ai();
     if (operation === "research") research();
     if (operation === "private-shadow" || operation === "publication") {
-      football(); ai();
+      // AI stays primary when enabled; a disabled AI capability runs validated provider fallback only.
+      football();
+      if (policy.capabilities.ai) { ai(); need("GOAL_HINT_CALIBRATION_REF", policy.choices.ai.calibrationRef); } else job();
       if (policy.capabilities.research) research();
-      need("GOAL_HINT_CALIBRATION_REF", policy.choices.ai.calibrationRef);
       need("GOAL_HINT_EVIDENCE_POLICY_REF", policy.choices.evidencePolicyRef);
       need("GOAL_HINT_FRESHNESS_POLICY_REF", policy.choices.freshnessPolicyRef);
       need("GOAL_HINT_PROBABILITY_SUM_TOLERANCE", policy.choices.probabilitySumTolerance);
@@ -393,8 +395,12 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
   if (policy.choices.database.acquireTimeoutMs <= policy.choices.database.connectTimeoutMs) {
     issues.push({ field: "GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS", reason: "Pool acquisition timeout must exceed the connection timeout." });
   }
-  if (policy.scope === "production" && policy.mode !== "production") {
-    issues.push({ field: "NODE_ENV", reason: "Public production publication requires production mode." });
+  // A loopback development database cannot reach visitors outside this machine, so a local
+  // live runner may publish there; every remote or hosted target still requires production mode.
+  const localDevelopment = policy.mode === "development" && policy.secrets.databaseUrl !== null &&
+    isLoopbackDatabaseHost(new URL(policy.secrets.databaseUrl.read()).hostname);
+  if (policy.scope === "production" && policy.mode !== "production" && !localDevelopment) {
+    issues.push({ field: "NODE_ENV", reason: "Public production publication requires production mode (or a loopback development database)." });
   }
   if (policy.secrets.databaseUrl !== null && policy.secrets.testDatabaseUrl !== null
     && new URL(policy.secrets.databaseUrl.read()).href === new URL(policy.secrets.testDatabaseUrl.read()).href) {
@@ -447,8 +453,8 @@ export function assertOperationAllowed(policy: RuntimePolicy, operation: Operati
     requirements.push(["GOAL_HINT_RESEARCH_LICENSE_REF", choices.research.licenseRef, "research-license"]);
   }
   if (operation === "private-shadow" || operation === "publication") {
+    if (policy.capabilities.ai) requirements.push(["GOAL_HINT_CALIBRATION_REF", choices.ai.calibrationRef, "calibration-configuration"]);
     requirements.push(
-      ["GOAL_HINT_CALIBRATION_REF", choices.ai.calibrationRef, "calibration-configuration"],
       ["GOAL_HINT_EVIDENCE_POLICY_REF", choices.evidencePolicyRef, "evidence-policy"],
       ["GOAL_HINT_FRESHNESS_POLICY_REF", choices.freshnessPolicyRef, "freshness-policy"],
       ["GOAL_HINT_PIPELINE_INTEGRITY_REF", choices.pipelineIntegrityRef, "pipeline-integrity"],

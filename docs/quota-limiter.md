@@ -42,7 +42,9 @@ The rolling windows are `(now - duration, now]`. Default dispatch spacing is
 day ceiling includes a protected 20,000 essential allowance, leaving ordinary
 work at most 100,000 requests under the default ceiling and preserving the stated
 30,000 Mega headroom. Imported prior usage and uncertain attempts consume the
-same ceiling. Under a daily limit at or below 20,000, all capacity is essential.
+same ceiling. Smaller verified plans keep the same one-sixth essential share
+(`essentialReserveFor`): 16 of a 100-request free day, 1,250 of a 7,500-request
+day, so ordinary daily inputs still run on every plan.
 
 | Priority | Order | May consume essential reserve |
 | --- | --- | --- |

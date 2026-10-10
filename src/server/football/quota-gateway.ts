@@ -22,6 +22,7 @@ export interface GatewayQuotaLimiter {
   reserveResetProbe?(evidence: QuotaPeriodEvidence, request: QuotaRequest): Promise<QuotaDecision>;
   claimLaunch(permit: QuotaPermit): Promise<Readonly<{ status: "claimed"; timeoutMs: number }> | Denied>;
   complete(permit: QuotaPermit, feedback: QuotaFeedback): Promise<Readonly<{ status: "recorded" }> | Denied>;
+  abandon?(requestId: string): Promise<Readonly<{ status: "abandoned" | "unchanged" }> | Denied>;
 }
 
 export type QuotaTransport<Value> = (
@@ -169,6 +170,10 @@ export function createQuotaGateway({ limiter, authorize }: {
   return Object.freeze({
     execute<Value>(request: QuotaRequest, transport: QuotaTransport<Value>) {
       return dispatch(request, transport, () => limiter.reserve(request));
+    },
+    /** Best effort: releases a queued, undispatched request whose caller stopped waiting. */
+    async abandon(requestId: string): Promise<void> {
+      try { await limiter.abandon?.(requestId); } catch { /* Its own deadline still expires the waiter. */ }
     },
     executeResetProbe<Value>(evidence: QuotaPeriodEvidence, request: QuotaRequest, transport: QuotaTransport<Value>) {
       return dispatch(request, transport, () => limiter.reserveResetProbe
