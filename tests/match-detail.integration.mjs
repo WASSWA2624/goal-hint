@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { matchDetailResponseSchema } from '../src/domain/match-detail.ts';
+import { getReportingDate, validateReportingDateRange } from '../src/domain/calendar.ts';
+import { storedFeedRun } from '../src/server/matches/feed-read.ts';
 import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
 import { createMatchDetailHandler } from '../src/server/matches/detail-http.ts';
 import { createMysqlEvidenceStore } from '../src/server/evidence/evidence-mysql-store.ts';
@@ -60,6 +62,9 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
     await t.test('open snapshot preserves complete probabilities, alternatives, identity, source and original clocks', async () => {
       const state = states.get(3000), response = matchDetailResponseSchema.parse(await read(state)), snapshot = response.snapshot;
       assert.equal(snapshot.applicability, 'current'); assert.equal(snapshot.historical, false); assert.equal(snapshot.markets.length, 4);
+      const date = getReportingDate(response.fixture.kickoffAt);
+      const sharedRun = await p.a.query(tx => storedFeedRun(tx, getReportingDate(readAt), validateReportingDateRange(date, date, 1)));
+      assert.deepEqual(response.run, sharedRun); assert.ok(response.run.total > 1);
       assert.equal(snapshot.analysis.state, 'available'); assert.ok(snapshot.analysis.reasons.length >= 2); assert.ok(snapshot.analysis.uncertainty.text);
       assert.equal(response.route.fixtureId, state.fixture.id); assert.ok(response.route.path.endsWith(`/${response.route.slug}`));
       for (const item of snapshot.markets) {
@@ -248,6 +253,12 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
         assert.equal(response.status, 200); assert.equal(response.headers.get('set-cookie'), null);
         capture('history-locked-selection', await response.json(), `revision=${state.revision.id}`);
         capture('history-locked-current', await reader.query(state.fixture.id));
+        // Independent visitors/ticks reuse stored state; no new jobs, poller or locks.
+        for (let visitor = 0; visitor < 12; visitor++) {
+          const tick = await handler(new Request(`http://localhost/api/matches/${state.fixture.id}`), { params: Promise.resolve({ id: state.fixture.id }) });
+          assert.equal(tick.status, 200); assert.equal(tick.headers.get('set-cookie'), null);
+          assert.equal((await tick.json()).snapshot.revisionId, captured['history-locked-current'].data.snapshot.revisionId);
+        }
         await reader.query(states.get(3007).fixture.id, new URLSearchParams({ cycle: states.get(3007).cycle.id }));
         await reader.query(states.get(3010).fixture.id, new URLSearchParams({ revision: states.get(3010).revision.id, limit: '1' }));
       } finally { globalThis.fetch = fetch; }

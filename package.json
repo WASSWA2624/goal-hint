@@ -61,7 +61,9 @@
     "test:detail-page": "node --conditions=react-server --test tests/match-detail-page.test.mjs",
     "test:detail-page:rendering": "node scripts/verify-match-feed-rendering.mjs --detail",
     "test:history-page": "node --conditions=react-server --test tests/match-detail-page.test.mjs tests/revision-history-page.test.mjs",
-    "test:history-page:rendering": "node scripts/verify-match-feed-rendering.mjs --history"
+    "test:history-page:rendering": "node scripts/verify-match-feed-rendering.mjs --history",
+    "test:live-client": "node --conditions=react-server --test tests/live-client-refresh.test.mjs tests/feed-pagination.test.mjs tests/client-state.test.mjs",
+    "test:live-client:rendering": "node scripts/verify-match-feed-rendering.mjs --live"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.13.0",

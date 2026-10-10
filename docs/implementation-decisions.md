@@ -2409,3 +2409,56 @@ initial publication list visible, with inline same-query retry. History does not
 alter current/locked references, settlement, results, cohorts, jobs or feed cards.
 No live polling or later feature is activated. See
 [revision-history contracts](revision-history-page.md).
+
+
+## 037 - Live client refresh
+
+- Initial SSR is the single handoff into the feed's loaded-prefix state or the
+  detail's applicable snapshot. The request-owned Redux store adds a concrete
+  RTK Query API for existing feed/detail GETs. No Server Component reads Redux.
+  Endpoint keys normalize pinned dates/query/page; overlapping subscribers share
+  a request, and one consumer's cancellation does not abort other subscribers.
+- Active visible views use a serial 20-second loop, quiet historical/final views
+  60 seconds. Hidden/offline views pause; visibility, reconnect and persisted
+  browser-cache restoration resume safely. Initial pageshow does not duplicate
+  hydration. Each endpoint has a 30-second transport deadline; loaded feed batches
+  also have a bounded deadline. Failed or obsolete consumers cannot commit.
+- Background feeds re-read the full bounded loaded prefix and commit membership,
+  coverage and progress atomically after existing cohort/overlap checks. Changed
+  cohorts rebase only when the whole prefix is consistent. Background batches
+  preserve focus/scroll and never emit pagination loading/success announcements.
+- Fixture versions fence complete records; cycle ordinals, same-cycle lock/void
+  state, persisted decimal run sequences, publication times and revision IDs add
+  consistency checks. Opaque IDs are never ordered. Feed cache projection 4 and
+  detail projection 3 include the additive provenance/progress contract.
+- Equal fixture versions retain forecast content but can advance the separately
+  read observation/job envelope (sync time, coverage and delay/window labels).
+  These fields legitimately change without a material fixture-version bump.
+  Read-envelope asOf cannot move backwards; publication/generation/source times
+  are never replaced by request completion or cache-hit times. Expired analysis
+  may be withdrawn while probabilities stay unchanged.
+- Detail reads reuse storedFeedRun in the fixture's RepeatableRead transaction.
+  Manifest/job counts remain shared across filters and independent visitors.
+  Complete available/unavailable snapshots replace each other without inheriting
+  older families. Locked references, jobs, provider polls and settlements remain
+  server-owned and untouched by browser reads.
+- Historical selections remain a separate server-rendered subtree. Current
+  polling always omits history parameters. History labels include their original
+  read time and latest-history navigation explicitly obtains a newer anchored
+  view; old snapshots never become the live current state.
+- The loop wakes at EAT midnight, before any obsolete relative-range fetch.
+  Server refresh recomputes dates, navigation and rolling windows. Relative page
+  URLs reset to page one while preserving filters; explicit historical dates,
+  ranges and loaded position remain. The provider dispatches the existing
+  forward-only calendarChanged event for the new server reporting day.
+- Failure UI retains loaded data and reports its last successful stored read,
+  independently of actual provider/source sync clocks. Partial imports remain
+  distinct from confirmed empty dates. Stable repeated failures do not change
+  their polite live-region message; ordinary successful ticks/run counts are
+  silent. Retry uses the same serialized request boundary.
+- Shared offline URL/presentation helpers were extracted for client rendering;
+  evidence network authorization, DNS, transport and credentials stay server-only.
+  No migration, paid call, scheduled worker, deployment or later prompt is added.
+  RTK Query usage follows the official custom queryFn and endpoint initiate APIs:
+  https://redux-toolkit.js.org/rtk-query/usage/customizing-queries
+  and https://redux-toolkit.js.org/rtk-query/api/created-api/endpoints.

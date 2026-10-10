@@ -3,6 +3,9 @@
 import { useCallback, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { FeedAppliedSummary, FeedControls } from "@/components/match/feed-controls";
+import { RefreshStatus } from "@/components/match/refresh-status";
+import { useLiveRefresh } from "@/components/match/use-live-refresh";
+import { liveRefreshRules } from "@/domain/live-refresh";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { MatchCard } from "@/components/match/match-card";
@@ -34,10 +37,20 @@ function FeedResults({ data: initial, query, today, enabled, onStatus }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean; onStatus: (href: string, message: string) => void;
 }) {
   const messages = createMessages(query.locale);
-  const { view, phase, error, root, loadMore, retry } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
+  const router = useRouter();
+  const { view, phase, error, refreshError, root, loadMore, retry, refresh } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
   const { data, records } = view;
+  const active = ["today", "tomorrow", "next-7-days"].includes(query.dates.kind) || data.run?.phase === "updating" ||
+    records.some((record) => record.status === "live" || record.status === "scheduled");
+  useLiveRefresh({ today, enabled, interval: active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs, refresh,
+    rollover: (day) => {
+      if (["today", "tomorrow", "next-7-days"].includes(query.dates.kind) && query.page !== 1) {
+        router.replace(feedQueryHref({ ...query, page: 1 }, day), { scroll: false });
+      } else router.refresh();
+    } });
   return <Stack $gap="lg" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
+    <RefreshStatus error={refreshError} asOf={data.asOf} locale={query.locale} retry={() => { void refresh(); }} />
     {data.run && <FeedRunStatus run={data.run} asOf={data.asOf} locale={query.locale} />}
     {data.coverage.partial && <EmptyState title={messages.text("feed.partialCoverageTitle")} description={<Stack $gap="sm">
       <BodyText>{messages.text("feed.partialCoverageDescription")}</BodyText>
@@ -63,7 +76,7 @@ function FeedResults({ data: initial, query, today, enabled, onStatus }: {
 }
 
 /** Successful server projections remain visible if a later navigation fails. */
-export function FeedSurface({ query, today, result, controls, pagination }: {
+function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
@@ -94,10 +107,8 @@ export function FeedSurface({ query, today, result, controls, pagination }: {
       <MutedText>{messages.text(`feed.status.${query.status}`)}</MutedText>
     </Stack>
     <FeedDateLinks query={query} today={today} />
-    <FeedStateProvider key={`${today}:${query.locale}`} initial={{ query, today, data: result.data }}>
-      <FeedControls query={query} today={today} leagues={leagues} onApply={apply} />
-      {controls}
-    </FeedStateProvider>
+    <FeedControls query={query} today={today} leagues={leagues} onApply={apply} />
+    {controls}
     {range.endDate > createPredictionWindow(today).lastDate && <BodyText>{messages.text("feed.sevenDayAvailability")}</BodyText>}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     {pending && <MutedText>{messages.text("feed.filters.loading")}</MutedText>}
@@ -113,9 +124,15 @@ export function FeedSurface({ query, today, result, controls, pagination }: {
         <FeedRange query={visible.query} today={visible.today} />
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />
       </Stack>}
-      {visible && <FeedResults key={`${feedQueryHref(visible.query, visible.today)}:${visible.data.paginationVersion}:${visible.data.asOf}`}
+      {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate}
         data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} />}
       {!result.error && pagination}
     </Stack>
   </Stack>;
+}
+
+export function FeedSurface(props: Parameters<typeof FeedSurfaceContent>[0]) {
+  return <FeedStateProvider key={props.query.locale} initial={{ query: props.query, today: props.today, data: props.result.data }}>
+    <FeedSurfaceContent {...props} />
+  </FeedStateProvider>;
 }

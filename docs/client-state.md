@@ -146,7 +146,9 @@ idempotent and backwards/invalid dates fail. Relative applied selections retain
 their mode, resolve against the new date, reset page to 1 and invalidate the old
 list/request. Absolute historical dates/ranges and their requests stay intact.
 Historical filter drafts also stay intact; relative drafts roll and reset their
-position. Prompt 037 supplies the EAT clock trigger and coordinates URL changes.
+position. Prompt 037 supplies the EAT clock trigger and coordinates URL changes
+through [live client refresh](live-client-refresh.md), with RTK Query limited to
+implemented stored-data feed/detail endpoints and a request-owned API cache.
 
 ## Anonymous preferences and verification
 

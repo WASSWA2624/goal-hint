@@ -142,3 +142,13 @@ introduced. No new table, migration, runtime write grant, cache, worker or
 scheduler is required. Existing database and upstream provider/model/rights gates
 remain effective. Local synthetic acceptance does not establish live rights,
 forecast quality, production capacity or deployment readiness.
+
+## Browser refresh and shared progress
+
+`run` uses the feed's shared daily-run DTO and `storedFeedRun` in the detail read
+transaction for fixtures in the forward window; historical fixtures outside it
+return null. Counts are manifest/job totals, independent of this fixture or
+filters. Applicable snapshots must agree with their card forecast's run, revision,
+publication and complete market groups. Detail cache projection 3 includes the
+run/provenance contract. Current browser refresh omits history query parameters;
+selected historical snapshots remain separate. See [live client refresh](live-client-refresh.md).

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { publicForecastSchema, publicVoidReasonSchema } from "./fixture-snapshot.ts";
-import { matchFeedRecordSchema } from "./match-feed.ts";
+import { dailyRunProgressSchema, matchFeedRecordSchema } from "./match-feed.ts";
 
 export const matchDetailRules = Object.freeze({ defaultLimit: 10, maximumLimit: 20, maximumSequence: 4_294_967_295 });
 const id = z.uuid(), at = publicForecastSchema.shape.publishedAt, sequence = z.number().int().positive().max(matchDetailRules.maximumSequence);
@@ -47,13 +47,20 @@ export const detailSnapshotSchema = publicForecastSchema.safeExtend({
     v.markets.length + v.unavailableMarkets.length !== 4) ctx.addIssue({ code: "custom", message: "Incoherent revision identity or market group." });
 });
 const historyLink = z.string().max(4096).startsWith("/api/matches/").nullable();
-export const matchDetailResponseSchema = z.strictObject({ fixture: matchFeedRecordSchema, asOf: at,
+export const matchDetailResponseSchema = z.strictObject({ fixture: matchFeedRecordSchema, asOf: at, run: dailyRunProgressSchema.default(null),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: detailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
     revisions: z.strictObject({ anchor: sequence.or(z.literal(0)), entries: z.array(detailPublicationSchema).max(matchDetailRules.maximumLimit), next: historyLink }),
     cycles: z.strictObject({ anchor: sequence.or(z.literal(0)), entries: z.array(detailCycleSchema).max(matchDetailRules.maximumLimit), next: historyLink }) }),
 }).superRefine((v, ctx) => {
+  const current = v.selection === "applicable" ? v.fixture.forecast : null;
+  if (current && v.snapshot && (current.runId !== v.snapshot.runId || current.runSequence !== undefined && current.runSequence !== v.snapshot.runSequence ||
+    current.publishedAt !== v.snapshot.publishedAt || current.markets.length !== v.snapshot.markets.length || current.markets.some(({ market }) => {
+      const counterpart = v.snapshot!.markets.find((item) => item.market.family === market.family)?.market;
+      return !counterpart || counterpart.source !== market.source || counterpart.selection !== market.selection ||
+        Object.entries(market.probabilities).some(([key, probability]) => (counterpart.probabilities as Readonly<Record<string, number>>)[key] !== probability);
+    }))) ctx.addIssue({ code: "custom", message: "Applicable forecast and detail must use one complete revision." });
   if (v.route.fixtureId !== v.fixture.fixtureId || v.currentRevisionId !== (v.fixture.forecast?.revisionId ?? null) ||
     v.selection === "applicable" && v.snapshot?.revisionId !== (v.currentRevisionId ?? undefined) ||
     v.snapshot && (v.snapshot.historical !== (v.snapshot.revisionId !== v.currentRevisionId) || v.snapshot.cycleId !== v.selectedCycle?.id)) ctx.addIssue({ code: "custom", message: "Incoherent detail response." });

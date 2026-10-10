@@ -56,3 +56,8 @@ HTML and browser acceptance. `MYSQL_TEST_SERVER_BINARY` may point at an existing
 local genuine MySQL binary; tests create an owned loopback datadir and never use
 an installed service. UI-only `--reuse=.tmp/match-feed-ID` requires a successful
 owned SQL capture. Test scenarios and injected failures never enter production.
+
+Prompt 037 refreshes the applicable main forecast through a client boundary while
+retaining this server-rendered history subtree. History read times label its
+current/locked/cycle statuses; latest-history navigation refreshes the anchored
+view explicitly. Historical selections never enter the live current-data merger.

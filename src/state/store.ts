@@ -2,10 +2,12 @@ import { configureStore } from "@reduxjs/toolkit";
 import type { FeedBootstrap } from "./contracts.ts";
 import { createFeedReducer, requestStarted } from "./feed.ts";
 import { preferencesSlice } from "./preferences.ts";
+import { refreshApi } from "./refresh-api.ts";
 
 /** This factory is the only store constructor; no module owns a store instance. */
 export function makeStore(bootstrap: FeedBootstrap) {
-  return configureStore({ reducer: { feed: createFeedReducer(bootstrap), preferences: preferencesSlice.reducer } });
+  return configureStore({ reducer: { feed: createFeedReducer(bootstrap), preferences: preferencesSlice.reducer,
+    [refreshApi.reducerPath]: refreshApi.reducer }, middleware: (getDefault) => getDefault().concat(refreshApi.middleware) });
 }
 export type AppStore = ReturnType<typeof makeStore>;
 export type RootState = ReturnType<AppStore["getState"]>;

@@ -1,6 +1,6 @@
 import type { ReportingDate } from "./calendar.ts";
 import { feedQueryHref, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
-import { compareFixtureVersions } from "./fixture-snapshot.ts";
+import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
 import { matchFeedResponseSchema, type MatchFeedRecord, type MatchFeedResponse } from "./match-feed.ts";
 
 export const feedPaginationRules = Object.freeze({ maximumLoadedPages: 10 });
@@ -48,6 +48,7 @@ export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse): Loade
   return { ...view, data: page, records: [...view.records, ...page.records], lastPage: page.page, pages: view.pages + 1 };
 }
 export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeedResponse[]): LoadedFeed {
+  if (pages.some((page) => page.asOf < previous.data.asOf)) throw new FeedPaginationError("stale-data");
   const first = pages[0];
   if (!first || first.page !== previous.firstPage) throw new FeedPaginationError("invalid-response");
   let next = initialLoadedFeed(first);
@@ -56,9 +57,9 @@ export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeed
   const records = next.records.map((record) => {
     const old = known.get(record.fixtureId);
     if (!old) return record;
-    const order = compareFixtureVersions(record.dataVersion, old.dataVersion);
+    const order = fixtureAdvance(old, record);
     if (order < 0) throw new FeedPaginationError("stale-data");
-    return order === 0 ? old : record;
+    return order === 0 ? mergeFixtureObservation(old, record) : record;
   });
   return { ...next, records };
 }

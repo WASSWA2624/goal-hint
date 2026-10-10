@@ -37,6 +37,8 @@ export function RevisionHistory({ current, result, query, locale = "en" }: {
     <summary>{messages.text("history.title")}</summary>
     <Stack $gap="lg">
       <BodyText>{messages.text("history.readOnly")}</BodyText>
+      <MutedText>{messages.text("history.readClock")}</MutedText>
+      <DetailTime label="detail.observed" at={data.asOf} locale={locale} />
       <TextLink href="#current-match-summary" prefetch={false}>{messages.text("history.backToSummary")}</TextLink>
       {result.error && <Surface role="status" data-history-error>
         <Stack $gap="sm">

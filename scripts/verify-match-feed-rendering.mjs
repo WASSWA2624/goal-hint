@@ -10,10 +10,10 @@ import { promisify } from 'node:util';
 const root = fileURLToPath(new URL('../', import.meta.url)), execute = promisify(execFile);
 const nextCli = createRequire(import.meta.url).resolve('next/dist/bin/next');
 const args = process.argv.slice(2);
-assert.ok(args.every((argument) => ['--serve', '--detail', '--history'].includes(argument) || argument.startsWith('--reuse=')),
-  'Usage: node scripts/verify-match-feed-rendering.mjs [--serve] [--detail|--history] [--reuse=.tmp/match-feed-ID]');
+assert.ok(args.every((argument) => ['--serve', '--detail', '--history', '--live'].includes(argument) || argument.startsWith('--reuse=')),
+  'Usage: node scripts/verify-match-feed-rendering.mjs [--serve] [--detail|--history|--live] [--reuse=.tmp/match-feed-ID]');
 assert.ok(args.filter(argument => argument.startsWith('--reuse=')).length <= 1);
-const includeHistory = args.includes('--history'), includeDetail = includeHistory || args.includes('--detail');
+const includeLive = args.includes('--live'), includeHistory = includeLive || args.includes('--history'), includeDetail = includeHistory || args.includes('--detail');
 const environment = { ...process.env, NEXT_TELEMETRY_DISABLED: '1', FORCE_COLOR: '0' };
 let child, log = '';
 
@@ -26,6 +26,7 @@ async function fixture() {
     const databaseLog = await readFile(path.join(directory, 'database.log'), 'utf8');
     assert.match(databaseLog, /\bfail 0\b/); assert.doesNotMatch(databaseLog, /\bfail [1-9]/);
   }
+  if (includeLive) await writeFile(path.join(directory, 'live-clock.json'), JSON.stringify({ now: Date.parse('2026-10-09T09:00:00Z') }));
   const capture = path.join(directory, 'scenarios.json');
   const detailCapture = path.join(directory, 'detail-scenarios.json');
   if (!reuse) try {
@@ -178,6 +179,48 @@ export default async function Page({ params }: { params: Promise<{ scenario: str
   return <MatchDetailPage result={selected} today={parseReportingDate('2026-10-09')} retryHref={selected.data?.route.path ?? '/detail-cases/open'} />;
 }`;
   }
+  if (includeLive) {
+    // Test-only clock and rollover projections. This generated app is outside src/app.
+    const clockImport = `import { readFile } from 'node:fs/promises';
+import { getReportingDate, utcInstantFromEpochMilliseconds, addReportingDays } from '@/domain/calendar';
+const readClock = async () => JSON.parse(await readFile(${JSON.stringify(path.join(directory, 'live-clock.json'))}, 'utf8')).now as number;
+`;
+    files['app/fixture-page.tsx'] = clockImport + files['app/fixture-page.tsx']
+      .replace("const today = parseReportingDate('2026-10-09');", "const instant = await readClock(), today = getReportingDate(utcInstantFromEpochMilliseconds(instant)); const originalToday = parseReportingDate('2026-10-09');")
+      .replace('item.today === today && item.query.page', 'item.today === originalToday && item.query.page')
+      .replace('feedQueryKey(item.query, today) === feedQueryKey(query, today)', 'feedQueryKey(item.query, originalToday) === feedQueryKey(query, originalToday)')
+      .replace('result={selected.result}', `result={{ data: rollover(selected.result.data!, query, today, instant), error: null }}`)
+      .replace("import { parseFeedQuery, feedQueryKey }", "import { parseFeedQuery, feedQueryKey, resolveFeedDates }");
+    const rollover = `
+function rollover(original: import('@/domain/match-feed').MatchFeedResponse, query: ReturnType<typeof parseFeedQuery>, today: ReturnType<typeof parseReportingDate>, instant: number) {
+  const data = structuredClone(original), relative = ['today','tomorrow','next-7-days'].includes(query.dates.kind);
+  const range = resolveFeedDates(query, today), shift = relative ? Date.parse(today) - Date.parse('2026-10-09') : 0;
+  data.today = today; data.asOf = Math.max(data.asOf, instant);
+  data.range = { from: range.startDate, to: range.endDate, ...range.window };
+  if (shift) {
+    data.records = data.records.map(record => ({ ...record, dataVersion: String(BigInt(record.dataVersion) + BigInt(shift / 86400000)), kickoffAt: record.kickoffAt === null ? null : (record.kickoffAt + shift) as typeof record.kickoffAt }));
+    data.coverage.dates = data.coverage.dates.map(entry => ({ ...entry, date: addReportingDays(parseReportingDate(entry.date), shift / 86400000) }));
+    if (data.run) data.run = { ...data.run, date: today, sequence: today.replaceAll('-', '') };
+  }
+  return data;
+}
+`;
+    files['app/fixture-page.tsx'] += rollover;
+    files['app/api/matches/route.ts'] = clockImport + files['app/api/matches/route.ts']
+      .replace("const today = parseReportingDate('2026-10-09');", "const instant = await readClock(), today = getReportingDate(utcInstantFromEpochMilliseconds(instant)); const originalToday = parseReportingDate('2026-10-09');")
+      .replace('item.today === today && item.query.page', 'item.today === originalToday && item.query.page')
+      .replace('feedQueryKey(item.query, today) === feedQueryKey(query, today)', 'feedQueryKey(item.query, originalToday) === feedQueryKey(query, originalToday)')
+      .replace('Response.json(selected[1].result.data,', 'Response.json(rollover(selected[1].result.data!, query, today, instant),')
+      .replace("import { parseFeedQuery, feedQueryKey }", "import { parseFeedQuery, feedQueryKey, resolveFeedDates }") + rollover;
+    files['app/api/matches/[id]/route.ts'] = `import cases from '../../../detail-scenarios.json';
+import type { DetailPageResult } from '@/server/matches/detail-page';
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params, values = cases as unknown as Record<string, DetailPageResult>;
+  const selected = ['history-current','history-cycle-current','history-locked-current'].map(key => values[key]).find(item => item?.data?.fixture.fixtureId === id)
+    ?? Object.values(values).find(item => item.data?.fixture.fixtureId === id && item.data.selection === 'applicable');
+  return selected?.data ? Response.json(selected.data, { headers: { 'cache-control': 'no-store' } }) : Response.json({error:'not-found'}, {status:404});
+}`;
+  }
   for (const [name, contents] of Object.entries(files)) {
     const target = path.join(directory, name); await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, `${contents}\n`);
   }
@@ -319,7 +362,7 @@ try {
   if (details) await verifyDetail(origin, directory, details);
   if (includeHistory) await verifyHistory(origin, directory, details);
   console.log(`Fixture artifacts: ${directory}`); console.log(`Fixture browser URL: ${origin}`);
-  await writeFile(path.join(root, `.tmp/${includeHistory ? '036' : includeDetail ? '035' : '032'}-rendering-target.json`), JSON.stringify({ directory, origin }));
+  await writeFile(path.join(root, `.tmp/${includeLive ? '037' : includeHistory ? '036' : includeDetail ? '035' : '032'}-rendering-target.json`), JSON.stringify({ directory, origin }));
   if (args.includes('--serve')) await new Promise((resolve) => { process.once('SIGINT', resolve); process.once('SIGTERM', resolve); child.once('exit', resolve); });
 } catch (error) { console.error(error instanceof Error ? error.message : 'Match feed rendering verification failed.'); process.exitCode = 1; }
 finally {

@@ -13,6 +13,11 @@ const pageLink = z.string().max(4096).startsWith("/api/matches?").nullable();
 export const matchFeedRecordSchema = fixtureSnapshotSchema.safeExtend({ cycle: fixtureCycleSchema.nullable(),
   unavailableMarkets: z.array(unavailableMarketSchema).max(4), update: fixtureUpdateSchema,
   availabilityMessage: z.string().max(256).nullable(), scorePeriod: z.enum(["regulation", "live"]).nullable() });
+export const dailyRunProgressSchema = z.strictObject({ id: z.uuid().nullable(), sequence: z.string().regex(/^[1-9]\d*$/u).nullable(), date,
+    phase: z.enum(["not-started", "selecting", "updating", "complete", "partial"]), total: count.nullable(),
+    completed: count, terminal: count, failed: count, published: count, partialCoverage: z.boolean(), message: z.string().max(256).nullable() })
+  .refine((run) => run.completed + run.failed === run.terminal && (run.total === null || run.terminal <= run.total && run.published <= run.total),
+    { message: "Incoherent daily-run counts." }).nullable();
 export const matchFeedResponseSchema = z.strictObject({
   paginationVersion: z.string().regex(/^[a-f0-9]{64}$/u).nullable().default(null),
   leagues: z.array(z.strictObject({ id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u),
@@ -26,9 +31,7 @@ export const matchFeedResponseSchema = z.strictObject({
   coverage: z.strictObject({ partial: z.boolean(), knownFixtures: count, matchingWithMarket: count,
     dates: z.array(z.strictObject({ date, status: z.enum(["complete", "partial", "degraded", "failed", "unknown", "pending"]),
       observedAt: at.nullable(), authoritative: z.boolean() })).min(1).max(7) }),
-  run: z.strictObject({ id: z.uuid().nullable(), sequence: z.string().regex(/^[1-9]\d*$/u).nullable(), date,
-    phase: z.enum(["not-started", "selecting", "updating", "complete", "partial"]), total: count.nullable(),
-    completed: count, terminal: count, failed: count, published: count, partialCoverage: z.boolean(), message: z.string().max(256).nullable() }).nullable(),
+  run: dailyRunProgressSchema,
 }).superRefine((value, ctx) => {
   if (value.records.length !== Math.min(value.pageSize, Math.max(0, value.total - (value.page - 1) * value.pageSize)) ||
     new Set(value.leagues.map((league) => league.id)).size !== value.leagues.length ||
@@ -38,9 +41,7 @@ export const matchFeedResponseSchema = z.strictObject({
     (value.links.next === null) !== (value.nextPage === null) || (value.links.previous === null) !== (value.previousPage === null) ||
     value.coverage.partial !== value.coverage.dates.some((entry) => !entry.authoritative) ||
     value.coverage.dates.some((entry) => entry.authoritative !== (entry.status === "complete")) ||
-    value.coverage.matchingWithMarket > value.total || value.total > value.coverage.knownFixtures ||
-    value.run && (value.run.completed + value.run.failed !== value.run.terminal || value.run.total !== null &&
-      (value.run.terminal > value.run.total || value.run.published > value.run.total))) {
+    value.coverage.matchingWithMarket > value.total || value.total > value.coverage.knownFixtures) {
     ctx.addIssue({ code: "custom", message: "Incoherent match feed page." });
   }
 });

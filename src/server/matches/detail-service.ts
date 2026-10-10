@@ -10,7 +10,7 @@ import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { runFromRow, storedCycle, storedCycleDisplay, storedRevision } from "../predictions/history-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
-import { storedFeedCoverage } from "./feed-read.ts";
+import { storedFeedCoverage, storedFeedRun } from "./feed-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { detailHistoryLink, parseMatchDetailQuery } from "./detail-query.ts";
 import { publicDetailCycle, publicDetailRevision, publicDetailSnapshot } from "./detail-read.ts";
@@ -76,7 +76,8 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
             cycle: publicDetailCycle(await cycleFor(entry.cycleId)) });
           for (const row of cycles.slice(0, query.limit)) cycleHistory.push(publicDetailCycle(await cycleFor(row.id)));
           const slug = canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name);
-          const response = matchDetailResponseSchema.parse({ fixture, asOf, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
+          const run = await storedFeedRun(tx, today, validateReportingDateRange(date, date, 1));
+          const response = matchDetailResponseSchema.parse({ fixture, asOf, run, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
             currentRevisionId, selection: query.revision ? "revision" : query.cycle ? "cycle" : "applicable", selectedCycle: display ? publicDetailCycle(display.cycle) : null, snapshot,
             history: { limit: query.limit, revisions: { anchor: anchors.revision, entries: revisions,
               next: detailHistoryLink(id, parameters, anchors, "revision", rows.length > query.limit ? revisions.at(-1)!.fixtureRevision : null) },
@@ -87,7 +88,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
+        query: { id, projection: 3, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
       return options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
     } catch (error) {
       if (refused) throw refused;

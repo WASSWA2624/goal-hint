@@ -63,7 +63,9 @@ lists naturally clamp scroll. Failed restoration retains the initial stored
 page and allows retry of the complete saved extent, without replacing the
 checkpoint with that incomplete result. A changed cohort is reported as a
 refreshed current list. Query changes reset appended pages and cancel pending
-requests. There is no polling or prediction/provider work.
+requests. Prompt 037 adds serial background refresh of the loaded prefix while
+preserving extent, focus and scroll. Prediction/provider work remains outside
+visitor reads; see [live refresh](live-client-refresh.md).
 
 The isolated production acceptance app supplies real MySQL-captured pages.
 Prompt 035 repeats desktop/mobile navigation through the actual stored-detail

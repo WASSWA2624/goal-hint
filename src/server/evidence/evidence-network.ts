@@ -1,4 +1,7 @@
 import "server-only";
+import { evidenceQueryName as queryName, sensitiveEvidenceQuery as sensitiveQuery, isPublicEvidenceHostname as publicHostname,
+  safeEvidenceLinkUrl as safeLinkUrl } from "../../domain/evidence-url.ts";
+export { isSafeEvidenceUrl } from "../../domain/evidence-url.ts";
 
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
@@ -41,21 +44,12 @@ export type EvidenceSourceFetchResult = Readonly<{
 const policyKeys = ["sourceId", "hosts", "queryNames", "contentTypes", "maxRequests", "maxRedirects", "maxBytes",
   "maxTextCharacters", "timeoutMs", "evidenceRef"];
 const textTypes = ["text/plain", "text/html", "application/xhtml+xml"];
-const sensitiveQuery = /token|secret|password|api.?key|authorization|credential|signature|^(?:key|auth|sig)$/i;
 const identifier = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
-const queryName = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
 const denied = (reason: EvidenceNetworkReason, requests = 0): Denied => Object.freeze({ status: "denied", reason, requests });
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const positive = (value: unknown, ceiling: number): value is number => Number.isSafeInteger(value) && Number(value) > 0 && Number(value) <= ceiling;
 const nonnegative = (value: unknown, ceiling: number): value is number => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= ceiling;
 function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
-function publicHostname(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > 253 || value !== value.toLowerCase() || isIP(value) !== 0 ||
-    /\.(?:localhost|local|internal|home|lan|test|invalid|onion)$/.test(value)) return false;
-  const labels = value.split(".");
-  return labels.length >= 2 && labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) &&
-    /^[a-z][a-z0-9-]*$/.test(labels.at(-1) ?? "");
-}
 
 /** No limits, permissions, source names or query parameters are inferred. */
 export function parseEvidenceSourceNetworkPolicy(value: unknown): EvidenceSourceNetworkPolicy {
@@ -76,21 +70,6 @@ export function parseEvidenceSourceNetworkPolicy(value: unknown): EvidenceSource
     queryNames: Object.freeze([...value.queryNames]), contentTypes: Object.freeze([...value.contentTypes]) });
 }
 
-function safeLinkUrl(value: unknown): URL | null {
-  if (typeof value !== "string" || value.length > 4096 || value !== value.trim() || /[\s\\\u0000-\u001f\u007f]/.test(value) ||
-    !/^https:\/\//i.test(value) || /%(?:0[0-9a-f]|1[0-9a-f]|7f|25)/i.test(value)) return null;
-  let url: URL;
-  try { url = new URL(value); decodeURIComponent(url.pathname); decodeURIComponent(url.search); } catch { return null; }
-  const authority = value.slice(value.indexOf("//") + 2).split(/[/?#]/, 1)[0] ?? "";
-  if (url.protocol !== "https:" || url.username || url.password || authority.includes("@") || authority.includes("%") ||
-    url.port && url.port !== "443" || url.hash || value.includes("#") || !publicHostname(url.hostname)) return null;
-  const names = [...url.searchParams.keys()];
-  if (new Set(names).size !== names.length || names.some((name) => !queryName.test(name) || sensitiveQuery.test(name)) ||
-    [...url.searchParams.values()].some((part) => /[\u0000-\u001f\u007f]/.test(part))) return null;
-  return url;
-}
-/** Structural link rules do not authorize a source, extraction rights, or server I/O. */
-export function isSafeEvidenceUrl(value: unknown): boolean { return safeLinkUrl(value) !== null; }
 
 /** Link validation is offline. Fetching additionally requires verified rights and public DNS answers. */
 export function validateEvidenceSourceUrl(value: unknown, policyInput: unknown): Readonly<{ status: "valid"; url: string }> | Denied {

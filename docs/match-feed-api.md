@@ -179,3 +179,10 @@ The integration harness verifies this minimal counter access and fresh schema
 deployment. Existing production database/provider/model/rights/hosting gates
 still apply. Rollback disables the route and retains additive schema/history;
 no worker or schedule is activated by this feature.
+
+## Browser refresh
+
+Prompt 037 adds `forecast.runSequence` from the persisted run ordering (decimal
+text, never UUID order). Feed cache projection 4 includes it. Existing fixture
+versions, cycle/revision references and stored sync/publication clocks remain
+authoritative. See [live client refresh](live-client-refresh.md).

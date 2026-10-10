@@ -1,5 +1,3 @@
-import "server-only";
-
 import type { ReactNode } from "react";
 import { BodyText, Inline, MutedText, PageHeading, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { TextLink } from "@/components/ui/controls";
@@ -8,7 +6,7 @@ import type { DetailSnapshot, MatchDetailResponse } from "@/domain/match-detail"
 import type { MarketFamily, MarketSelection } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages, type TextKey } from "@/i18n/messages";
-import { detailAnalysis, detailMarket } from "@/server/matches/detail-presentation";
+import { detailAnalysis, detailMarket } from "@/domain/detail-presentation";
 import { DetailArticle, DetailMarket, DetailMarketGrid } from "@/components/match/detail-styles";
 import { Disclosure } from "@/components/ui/disclosure";
 import { TeamRow } from "@/components/match/team-row";

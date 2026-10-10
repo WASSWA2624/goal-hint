@@ -2995,3 +2995,64 @@ paid provider/AI/research call, scheduled prediction, migration to an existing
 database, deployment or later feature was activated. Owned acceptance servers and
 browser were stopped; the user's development server and installed MySQL service
 remain untouched.
+
+
+## 037 - Live client refresh
+
+Complete. The implementation and required acceptance checks pass; tracker row
+037 is ticked. Work on 038 has not started.
+
+### Changed behavior and files
+
+- Added `state/refresh-api.ts` and extended the per-provider store with RTK Query
+  reducer/middleware. Pagination and current-detail reads share typed anonymous
+  stored-data endpoints, validation, deadlines, normalized request deduplication
+  and cancellation that preserves other subscribers.
+- Added `domain/live-refresh.ts`, `fixture-reconciliation.ts`, shared browser
+  lifecycle hook, refresh-status feedback and `live-match-detail.tsx`.
+  Integrated the feed's loaded-prefix hook and detail SSR boundary. Current data
+  remains visible on transient, malformed, stale or unstable-cohort failures.
+- Added run sequences to stored feed forecasts and shared daily-run counts to
+  detail responses; tightened current card/detail snapshot coherence. Extended
+  equal-version observation/job handling without changing forecast content or
+  timestamps. Updated feed/detail cache projection versions.
+- Extracted reusable offline evidence URL/presentation helpers so current detail
+  can hydrate without importing server networking. Historical content remains
+  server rendered, isolated and labeled with its original read clock.
+- Added deterministic live-refresh tests and real SQL assertions for shared
+  progress/repeated visitor reads. Extended isolated rendering with stored detail
+  GETs and a generated test-only EAT clock; added package verification commands.
+- Added `docs/live-client-refresh.md`; updated state, API, pagination and history
+  documentation and implementation decisions. No schema migration is required.
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Focused live/feed/detail contracts | 64 passed, zero failures; `.tmp/037-contracts-final.log`. Covers reversed publication/lock/result correction, earlier cycles/runs, partial replacement, equal-version observation updates, deduplication, cancellation, serial cadence, visibility/reconnect and exact EAT midnight. |
+| Genuine MySQL read/cache acceptance | 26 passed, zero failures/skips on owned MySQL 8.4.11; `.tmp/037-db-real.log`. |
+| Final SQL detail/provenance acceptance | 10 passed, zero failures/skips; `.tmp/037-detail-qualified.log`. Confirms shared run counts and twelve additional independent visitor ticks with writes/network blocked, unchanged jobs/revisions/locks/results/settlement/version state and no cookies. Captured projections remain under `.tmp/live-refresh-037/`. |
+| Production rendering | 47 feed and 22 detail scenarios plus dedicated history isolation/404/canonical/retry checks pass; `.tmp/037-rendering-final.log`. |
+| Production build/typecheck/lint | Pass; `.tmp/037-build-final.log`, `.tmp/037-types-final.log`, `.tmp/037-lint-final.log`. |
+| Full repository units | **942 cases: 941 passed, zero failures, one existing Windows POSIX-mode skip**, on pinned Node 24.18.1; `.tmp/037-units-node24.log`. Final expanded live-client assertions also pass (25 cases); `.tmp/037-live-accepted.log`. |
+| Browser acceptance | **54 assertions pass** in installed Chrome using Playwright CLI: 25 feed, 14 rollover and 15 detail checks. Covers the 20-second cadence, hidden pause/reconnect, shared counts, retained/partial/error snapshots, quiet repeated failures, stale rejection, three-page refresh, focus/scroll, obsolete requests, seven-day rollover, relative page reset and explicit historical position, current/history isolation, retry, 320–1280 widths, anonymous GET-only reads and zero page/hydration errors. Logs `.tmp/037-browser-feed.log`, `.tmp/037-browser-rollover-accepted.log`, `.tmp/037-browser-detail.log`; source/screenshots `output/playwright/037-*`. Mobile/current/history screenshots visually reviewed. |
+
+The first SQL command lacked MYSQL_TEST_SERVER_BINARY and skipped; it was rerun
+with the existing genuine test binary and passed. A capture-only rerun initially
+used the temporary root rather than a nested owned output directory; corrected
+capture and final SQL qualification pass. Browser checks found initial pageshow
+could duplicate the first read; it now resumes only persisted restoration.
+An existing cost-gateway timing assertion failed during a competing build; its
+targeted rerun and the final serial full-suite rerun both passed. Final lint and
+changed-file whitespace checks pass; `.tmp/037-lint-accepted.log`.
+Browser clock setup was adjusted to use a fixed date and real elapsed timers for
+rollover/detail acceptance after Playwright's paused-clock setup stalled. Detail
+response variants retain their captured daily-run identity; the earlier run was
+correctly rejected before this test input was corrected. No application defect
+remains from those harness retries.
+
+External production provider/model/rights/budget/hosting and release gates remain
+unchanged. Synthetic response/clock variants are acceptance inputs only. No
+production forecasts, external paid calls or deployment were activated.
+Owned acceptance server/browser processes were stopped; existing services and
+the user's development server were left untouched.

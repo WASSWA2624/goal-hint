@@ -69,7 +69,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     scorePeriod: isPlayedFinalStatus(status) && regulation ? "regulation" : live ? "live" : null,
     partialCoverage, cycleId: cycle?.id ?? null, cycle: cycle ? { state: cycle.state, mode: display!.mode, ordinal: cycle.ordinal,
       lockedAt: cycle.lockedAt, voidReason } : null,
-    forecast: revision ? { runId: revision.runId, revisionId: revision.id, publishedAt: revision.publishedAt, markets,
+    forecast: revision ? { runId: revision.runId, runSequence: String(revision.runSequence), revisionId: revision.id, publishedAt: revision.publishedAt, markets,
       updateDelayed: delayed === true, provisional: available.some((item) => item.provenance.kind !== "ai" || item.provenance.provisional) } : null,
     unavailableMarkets, update: { prediction, result: fixture.resultState?.delayReason ? "delayed" : fixture.resultState ? "current" : "untracked" },
     availabilityMessage: outside && !revision ? messages.text("feed.sevenDayAvailability") : null };

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Provider } from "react-redux";
 import type { FeedBootstrap } from "./contracts";
 import { makeStore } from "./store";
+import { calendarChanged } from "./feed";
 import { preferencesChanged, preferencesStorageKey, readPreferences, serializePreferences } from "./preferences";
 
 /** A fresh lazy store for each rendered provider, with the same snapshot for hydration. */
@@ -12,6 +13,9 @@ export function FeedStateProvider({ initial, children }: { initial: FeedBootstra
     const store = makeStore(initial);
     return { store, serverState: store.getState() };
   });
+  useEffect(() => {
+    if (initial.today > store.getState().feed.today) store.dispatch(calendarChanged(initial.today));
+  }, [initial.today, store]);
   useEffect(() => {
     try {
       const preferences = readPreferences(window.localStorage.getItem(preferencesStorageKey));

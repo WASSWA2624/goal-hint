@@ -77,6 +77,7 @@ function acceptedMarket(value: unknown): value is AcceptedMarket {
 
 export const publicForecastSchema = z.strictObject({
   runId: identity, revisionId: identity, publishedAt: instant,
+  runSequence: z.string().regex(/^[1-9]\d*$/u).max(20).optional(),
   updateDelayed: z.boolean().optional(), provisional: z.boolean().optional(),
   markets: z.array(z.strictObject({
     market: z.custom<AcceptedMarket>(acceptedMarket).transform((market) =>
