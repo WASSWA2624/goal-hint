@@ -3,6 +3,7 @@ import "server-only";
 import { TextLink } from "@/components/ui/controls";
 import { BodyText, Inline, SectionHeading, Stack } from "@/components/ui/layout";
 import { restorationRules } from "@/domain/feed-navigation";
+import { informationHref } from "@/domain/navigation";
 import { privacyNotice } from "@/domain/privacy-notice";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { publicCacheRules } from "@/server/cache/public-cache";
@@ -31,6 +32,7 @@ export function PrivacyContent({ locale }: { locale: string }) {
         <BodyText>{messages.text("privacy.storage.navigation.retention", values)}</BodyText><BodyText>{messages.text("privacy.storage.memory")}</BodyText>
       </>}
       {id === "release" && <ul>{privacyNotice.blockers.map((blocker) => <li key={blocker}><BodyText>{messages.text(`privacy.blocker.${blocker}`)}</BodyText></li>)}</ul>}
+      {id === "choices" && <TextLink href={informationHref("contact", locale)} prefetch={false}>{messages.text("contact.link")}</TextLink>}
     </Stack>)}
     <TextLink href="/en/how-it-works" prefetch={false}>{messages.text("privacy.methodology")}</TextLink>
   </Stack>;

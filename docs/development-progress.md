@@ -3244,3 +3244,67 @@ No account, paywall, betting/payment, acceptance tracking, contact backend,
 analytics, paid provider/model call, worker activation, migration, deployment or
 later feature was introduced. Owned acceptance server and browser were stopped;
 existing services and the user's development server remain untouched.
+
+## 041 - Contact availability and correction guidance
+
+Complete within the prompt's explicit missing-contact fallback: the reusable
+page, supported guidance and executable local acceptance checks pass. Tracker
+row 041 is ticked. A real public reporting route and launch remain blocked by
+the deferred owner/contact/correction decisions; destination verification is
+not claimed. Prompt 042 has not been started.
+
+### Changed behavior and files
+
+- Replaced the interim `/en/contact` surface with short externalized English
+  content, semantic headings and shared square components. Added meaningful
+  metadata, the absolute canonical contact URL and the existing prelaunch
+  noindex/footer/current-page behavior in `src/app/[locale]/contact/page.tsx`.
+- Added `src/app/_components/contact-content.tsx`, `src/i18n/messages/contact.ts`
+  and `src/domain/contact-notice.ts`. The notice records a prelaunch unavailable
+  state, `releaseReady: false`, null destination and technical review date
+  10 October 2026. Extended `InformationNotice` to reuse the privacy/terms header.
+  The page explicitly says it collects/sends no reports and promises no response
+  time. No operator, address, phone or inbox is invented.
+- Added future report guidance for fixture/team identity, source and result/
+  outcome concerns: public match/revision URL, observed issue/proposed correction
+  and supporting public source if available. Explained audited result correction
+  against the same immutable locked pick without selecting a favorable revision.
+- Added ordinary privacy, terms, methodology and settlement links. Added the
+  shared contact-availability link beside the privacy choices, terms outcomes
+  and methodology corrections disclosures. Those pages retain their unresolved
+  process statements and publication gates.
+- Added `scripts/verify-contact-rendering.mjs` and `test:contact:html`. All page
+  navigation links use fixed internal paths via `informationHref`; query input
+  never supplies contact destinations, operators, markup or mail headers.
+  Added `docs/contact-page.md`, updated the OP-28 decision row and recorded the
+  owner-dependent destination/ownership checks in the decision log.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Correction guidance/evidence | Checked the specification, published methodology, immutable forecast/history contracts, stored result synchronization and settlement/audit readers. Reports do not themselves mutate results; audited verified result correction preserves the locked pick. No new review/response policy is inferred. Details: `docs/contact-page.md`. |
+| Relevant behavior contracts | **20 passed, zero failures/skips**: `node --conditions=react-server --test --test-concurrency=1 tests/navigation.test.mjs tests/market-settlement.test.mjs`; `.tmp/041-contracts.log`. No settlement, database or worker behavior changed. |
+| Actual production contact HTML | Four ordinary/hostile-query requests pass initial content/CSS, semantic anchors, review date, canonical/noindex, unavailable/release state, anonymous access, fixed same-origin link schemes and absence of forms/fake contact. CRLF mail-header, script/body, executable-destination and operator query fields do not enter visible copy or link attributes. Actual contextual links in all three policy sections and the settlement target pass; `.tmp/041-html.log`. |
+| Shared policy/navigation HTML | Existing privacy and terms production verifiers pass after adding contextual links and extending the notice component; `.tmp/041-privacy.log`, `.tmp/041-terms.log`. All ten anonymous navigation pages, root/English fallbacks and invalid/unknown-route 404s pass; `.tmp/041-navigation.log`. |
+| Browser and visual review | **67 assertions pass** in installed Chrome through the Playwright skill/CLI; `.tmp/041-browser.log`, source/screenshots `output/playwright/041-*`. Covers skip/visible focus, logical Tab order, keyboard policy/settlement links, contextual return links, history Back, footer/current page, 320/360/390/430/1280 widths, 200% text, bounded desktop lines, square status surface, no-JavaScript and blocked-storage access. The English review day stays fixed with a French browser locale/Los Angeles timezone. Desktop/mobile/report/no-JavaScript screenshots visually reviewed. The checked flow has no page/hydration errors, visitor cookies, storage writes, browser API polling, non-GET requests or third-party requests. |
+| Static/build checks | Typecheck, lint, production build and changed-file whitespace checks pass; `.tmp/041-types.log`, `.tmp/041-lint.log`, `.tmp/041-build.log`. |
+| Real public destination and ownership verification | **Blocked, not passed.** No owner-supplied lawful contact destination, approved public operator facts or responsible correction owner exists. No test inbox, message or fictitious evidence substitutes for OP-25/27/28. When supplied, the exact approved mailto/HTTPS destination and encoding/control/header boundaries need structural verification without sending a message. |
+
+The browser harness initially treated a fragment link's resolved absolute URL as
+a literal contact target; browsers retain the current page query when resolving
+`#main-content`. It now checks literal link attributes separately from same-origin
+resolution. Final browser checks pass; no product change was needed for that
+test assumption and no local implementation defect remains.
+
+**Launch blockers remain:** OP-25 correction/dispute owner, intake, evidence/
+review rules and real response capacity; OP-27 publication-approved operator/
+legal facts; OP-28 verified public contact. The owner's explicit 038/039 deferrals
+persist without repeated clarification. Incident/alert ownership (OP-29/30) and
+the prior privacy/terms/source-rights gates also remain unresolved. Visible
+unavailability and noindex document the gate; release review must enforce it.
+
+No mailbox, form backend, messaging service, test message, account, upload,
+comments system, analytics, paid provider call, worker activation, migration,
+deployment or later feature was introduced. Owned acceptance server/browser
+were stopped; existing services and the user's development server are untouched.

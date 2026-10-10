@@ -3,6 +3,7 @@ import "server-only";
 import { TextLink } from "@/components/ui/controls";
 import { BodyText, Inline, SectionHeading, Stack } from "@/components/ui/layout";
 import { termsNotice } from "@/domain/terms-notice";
+import { informationHref } from "@/domain/navigation";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { InformationNotice } from "./information-notice";
 
@@ -30,6 +31,7 @@ export function TermsContent({ locale }: { locale: string }) {
       <SectionHeading id={`terms-${id}-heading`}>{messages.text(`terms.${id}.title`)}</SectionHeading>
       {paragraphs[id].map((part) => <BodyText key={part}>{messages.text(`terms.${id}.${part}` as TextKey)}</BodyText>)}
       {links[id] && <Inline>{links[id].map(({ href, key }) => <TextLink key={key} href={href} prefetch={false}>{messages.text(key)}</TextLink>)}</Inline>}
+      {id === "outcomes" && <TextLink href={informationHref("contact", locale)} prefetch={false}>{messages.text("contact.link")}</TextLink>}
       {id === "release" && <ul>{termsNotice.blockers.map((blocker) => <li key={blocker}><BodyText>{messages.text(`terms.blocker.${blocker}`)}</BodyText></li>)}</ul>}
     </Stack>)}
   </Stack>;

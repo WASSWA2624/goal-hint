@@ -265,7 +265,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-25 Correction/dispute ownership and public process | **Unresolved release blocker** | The audited correction mechanics are settled; assign the actual correction/dispute owner, intake/review process, supporting-evidence rules and factual public statements. Do not promise an unapproved response time or operational policy. The user explicitly deferred these facts during 038; terms retain that gate. §§8, 12–15; prompts 038/040. | Unassigned; user decision/evidence required | Deferred: correction/dispute owner and public process policy | **038**; intake/legal consumers **040–041** |
 | OP-26 Analytics and visitor/log retention | **Current implementation retained; unresolved facts block release** | Inventory actual log/search/browser-preference/remote-image data flows; choose whether analytics is used, its providers/purposes/recipients/retention and applicable consent/data-handling requirements before enabling tracking. Ads stay disabled. Retention must match actual configuration and permissions. §§12–13, 15; prompts 039/044. | Unassigned; user decision/evidence required | Deferred: analytics enablement/provider, visitor/telemetry/log retention and privacy data-flow policy | **039** notice facts; telemetry activation **044** |
 | OP-27 Operator identity, jurisdiction and legal facts | **Unresolved release blocker** | Obtain actual operator identity, audience/jurisdiction, lawful contact and owner-approved privacy/terms/dispute facts. “Prepared for” attribution supplies no legal identity, address, liability policy or signoff. Do not publish placeholders or invented legal assertions. §§13, 15; prompts 039–040. | Unassigned; user decision/evidence required | Deferred: approved operator/legal/privacy/terms content and factual evidence | **039**; terms **040** |
-| OP-28 Verified public contact route | **Unresolved release blocker** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
+| OP-28 Verified public contact route | **Unresolved release blocker; unavailable page implemented** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. Existing owner deferrals persist; 041 displays unavailable status and report guidance, not an operational intake. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
 | OP-29 Recovery watchdog ownership and thresholds | **Unresolved** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15; prompt 043. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization and recovery/incident owner | **043** |
 | OP-30 Alerts, destinations and monitoring service | **Unresolved** | Choose the authorized monitoring service, actionable outage/staleness/latency/quota/cost/expiry thresholds, severity/deduplication, recipients and notification approval. No recipient or unapproved test message is inferred. Telemetry must reconcile with privacy/retention decisions. §§11, 13–15; prompt 044. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget | **044** |
 | OP-31 Recovery objectives, backups and history retention | **Unresolved / evidence required** | Approve RPO/RTO, backup/PITR capabilities, encryption/access/retention and ownership for predictions, results, evidence, audits and structured source data within rights. Prove isolated restoration and safe limiter/job restart. No arbitrary deletion period or completed restore is inferred. §§13, 15; prompt 045. | Unassigned; user decision/evidence required | Deferred: RPO/RTO, backup/PITR and prediction/result/evidence/audit/backup retention policy | **045**; source retention prerequisites **009/011**, visitor notice **039** |
@@ -2603,3 +2603,47 @@ No live polling or later feature is activated. See
   guarantee is selected. Actual operator/audience facts, permissions, owner
   approval and applicable legal review must precede a genuine effective date.
   See [terms-page.md](terms-page.md) for evidence and the remaining decisions.
+
+## 041 - Contact availability and correction guidance
+
+- Replace the interim Contact page with a short, server-rendered English page in
+  the shared information/public shell. Reuse `InformationNotice`, square tokens,
+  semantic sections and externalized strings; add the absolute canonical contact
+  URL while preserving prelaunch noindex and footer/current-page navigation.
+- **OP-25/27/28 remain unresolved launch blockers.** No verified public route,
+  approved operator information, correction/dispute owner, evidence/review process
+  or response commitment has been supplied. Carry forward the owner's explicit
+  038/039 deferrals without asking again or treating deferral as approval. Do not
+  infer a name or inbox from attribution, GitHub, branding or timezone. OP-29/30
+  incident/alert ownership also remains unresolved; no public incident service
+  is established by this page.
+- `contactNotice` records a prelaunch unavailable state, `releaseReady: false`,
+  null destination and the actual technical review date, 10 October 2026. The
+  visible status says that reports are not collected/sent and public release is
+  blocked. There is no final active-contact branch, environment bypass, fake
+  destination, disabled form or operational support claim. Release review must
+  enforce this documented gate; noindex/copy is not a deployment lock.
+- Give future report guidance for fixture/team identity, source mistakes and
+  result/outcome concerns. Request only the public match/revision URL, observed
+  issue/proposed correction and a supporting public source if available. Personal
+  or sensitive details are unnecessary. The page itself collects nothing.
+- Explain the existing verified-result correction behavior: audited settlement
+  uses the same locked pick, can be pending while correction settlement is due,
+  and never substitutes a more favorable historical forecast. A public report
+  does not itself mutate a record. No intake-review or turnaround policy is
+  fabricated from these stored-data mechanics.
+- Add ordinary links to privacy, terms, methodology and settlement, plus
+  contextual contact-availability links in the privacy choices, terms outcomes
+  and methodology corrections sections. Existing unavailable-process statements
+  remain accurate and visible on all policy pages.
+- All contact-page links use fixed internal paths via `informationHref`; the
+  page never reads request query text for markup, destinations or mail headers.
+  No arbitrary contact URL builder is added while no route is approved.
+  Destination/evidence matching remains blocked. Once the owner supplies an
+  approved email/HTTPS destination, validate that exact route and its scheme,
+  encoding and control/header boundaries without sending a message. Never create
+  a mailbox, messaging service or form backend as part of this feature.
+- No accounts, uploads, public comments, tracking, paid provider calls, worker
+  changes, incident-monitoring activation or later feature is introduced. See
+  [contact-page.md](contact-page.md) for the evidence boundary and remaining
+  owner-dependent checks. Prior privacy/terms/source-rights release gates remain.

@@ -6,7 +6,7 @@ import { createMessages } from "@/i18n/messages";
 
 /** Shared factual-review header; publication status is supplied by each document. */
 export function InformationNotice({ locale, kind, reviewedOn }: {
-  locale: string; kind: "privacy" | "terms"; reviewedOn: string;
+  locale: string; kind: "privacy" | "terms" | "contact"; reviewedOn: string;
 }) {
   const messages = createMessages(locale);
   const statusId = `${kind}-status-heading`;

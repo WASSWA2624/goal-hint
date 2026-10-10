@@ -2,6 +2,7 @@ import "server-only";
 
 import { TextLink } from "@/components/ui/controls";
 import { BodyText, Inline, SectionHeading, Stack } from "@/components/ui/layout";
+import { informationHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 
 export function MethodologyContent({ locale }: { locale: string }) {
@@ -25,7 +26,8 @@ export function MethodologyContent({ locale }: { locale: string }) {
         {(["correct", "incorrect", "pending", "void", "unavailable"] as const).map((outcome) =>
           <div key={outcome}><dt><strong>{messages.text(`outcome.${outcome}`)}</strong></dt><BodyText as="dd">{messages.text(`methodology.outcome.${outcome}`)}</BodyText></div>)}
       </Stack><BodyText>{messages.text("methodology.settlement.history")}</BodyText></>}
-      {id === "corrections" && <BodyText data-correction-policy="unresolved">{messages.text("methodology.corrections.pending")}</BodyText>}
+      {id === "corrections" && <><BodyText data-correction-policy="unresolved">{messages.text("methodology.corrections.pending")}</BodyText>
+        <TextLink href={informationHref("contact", locale)} prefetch={false}>{messages.text("contact.link")}</TextLink></>}
     </Stack>)}
   </>;
 }
