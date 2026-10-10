@@ -1,5 +1,13 @@
 # Durable workers
 
+Prompt 043 adds `npm run recovery` for private inspection, read-only planning,
+reviewed repair enqueue, audit inspection and a dedicated durable recovery worker.
+Use the [recovery watchdog runbook](../../docs/recovery-watchdog.md) and a trusted
+`createRecoveryBinding` module. OP-29 ownership/threshold/approval and independent
+invocation decisions remain unresolved; no live binding or permissive authority
+is shipped. Register `watchdog.definition` with the existing authenticated worker
+when combining consumers. Recovery never replaces publication or quota services.
+
 Reserve this boundary for process entry points, queue consumers and orchestration
 introduced by prompt 020 and later. Reuse `@/server` services and `@/domain`
 contracts. Every executable module must include `import "server-only";`.

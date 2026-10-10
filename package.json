@@ -47,6 +47,8 @@
     "test:refresh": "node --conditions=react-server --test tests/prediction-refresh.test.mjs tests/prediction-refresh.integration.mjs",
     "worker:jobs": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/jobs.ts",
     "worker:results": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/results.ts",
+    "recovery": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/recovery.ts",
+    "test:recovery": "node --conditions=react-server --test tests/recovery-watchdog.test.mjs tests/recovery-watchdog.integration.mjs",
     "test:results": "node --conditions=react-server --test tests/result-sync.test.mjs tests/result-sync.integration.mjs",
     "test:settlement": "node --conditions=react-server --test tests/market-settlement.test.mjs tests/market-settlement.integration.mjs",
     "test:feed": "node --conditions=react-server --test tests/match-feed.test.mjs tests/match-feed.integration.mjs",

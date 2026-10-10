@@ -126,8 +126,14 @@ export async function startIsolatedMysql() {
     if (!child || child.exitCode !== null || child.signalCode !== null) {
       throw new Error("The owned MySQL child is no longer running; no target operation was attempted.");
     }
-    const { stdout } = await run(client, [...connection, "--batch", "--skip-column-names",
-      "--execute=SELECT @@datadir, @@server_uuid, @@port"]);
+    let stdout = "";
+    // A Windows CLI can return an empty capture under process load. Retry only
+    // the read-only probe; no mutation is authorized until full identity matches.
+    for (let attempt = 0; attempt < 3 && !stdout.trim(); attempt++) {
+      ({ stdout } = await run(client, [...connection, "--batch", "--skip-column-names",
+        "--execute=SELECT @@datadir, @@server_uuid, @@port"]));
+    }
+    if (!stdout.trim()) throw new Error("The owned MySQL identity probe returned no evidence; no target operation was attempted.");
     const [actualDatadir, actualUuid, actualPort] = stdout.trim().split("\t");
     if ((await realpath(actualDatadir)) !== (await realpath(datadir)) || Number(actualPort) !== port
       || (serverUuid !== undefined && actualUuid !== serverUuid)) {

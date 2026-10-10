@@ -8,6 +8,10 @@ infrastructure budgets remain owner-supplied decisions. See the current
 [decision register](implementation-decisions.md) and actual
 [verification results](development-progress.md).
 
+The separately authorized local MySQL 8.4 development instance and its private
+start/stop/configuration procedures are documented in
+[local-database.md](local-database.md). Hosted and production approvals remain open.
+
 ## Dependencies and generated client
 
 Pin `prisma`, `@prisma/client` and `@prisma/adapter-mariadb` to `7.10.0`.

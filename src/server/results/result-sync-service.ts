@@ -36,15 +36,19 @@ export function createResultSyncService(options: Readonly<{
     // Even a frozen/regressed wall clock cannot extend a local dispatch lease.
     monotonicUntil = start + policy.leaseMs;
   }
-  async function recover() {
-    while (true) {
+  async function recover(signal?: AbortSignal) {
+    let remaining = policy.maxBatchesPerTick;
+    while (remaining > 0 && !signal?.aborted) {
       const batches = await store.pending(lease!);
-      if (batches.length === 0) return;
-      for (const batch of batches) {
+      if (batches.length === 0) return true;
+      for (const batch of batches.slice(0, remaining)) {
+        if (signal?.aborted) return false;
         if (batch.policyHash !== policyHash) return resultSyncFail("policy-required");
         await renew(); await store.apply(lease!, batch);
+        remaining--;
       }
     }
+    return false;
   }
   async function poll(channel: PollChannel, tracked: readonly TrackedResultFixture[], ids: readonly number[], signal?: AbortSignal) {
     await renew();
@@ -116,7 +120,8 @@ export function createResultSyncService(options: Readonly<{
       if (lease && lease.until <= clock.now()) lease = null;
       if (!lease) lease = await store.acquire(ownerId, policy.leaseMs);
       if (!lease) { emit("standby"); return false; }
-      await renew(); await recover();
+      await renew();
+      if (!await recover(signal)) { emit("delayed"); return true; }
       let fixtures = await store.tracked(policy, clock.now());
       let remainingBatches = policy.maxBatchesPerTick;
       // Historical finals cannot be found in today's response. Give their

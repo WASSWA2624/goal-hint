@@ -51,7 +51,7 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
       return refreshFail("unavailable");
     }
   }
-  async function member(tx: Transaction, lease: JobLease): Promise<RefreshMember> {
+  async function member(tx: Transaction, lease: Pick<JobLease, "job" | "jobId">): Promise<RefreshMember> {
     const identity = lease.job.envelope.refresh;
     if (!identity) return refreshFail("invalid-request");
     const row = await tx.runFixture.findUnique({ where: { runId_fixtureId_cycleId: identity }, include: { run: { include: { manifest: true } } } });
@@ -87,6 +87,8 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
     return freezeEvidence({ jobId: lease.jobId, manifest, entry, cycle, context, now });
   }
   return Object.freeze({
+    /** Reuse publication eligibility for reviewed queue recovery, without dispatching I/O. */
+    recoveryMember: (tx: Transaction, job: JobLease["job"]) => member(tx, { job, jobId: job.id }),
     loadMember: (lease: JobLease) => transact((tx) => member(tx, lease)),
     intent: (jobId: string) => transact(async (tx) => {
       const intent = await read<RefreshIntent>(tx, "PredictionRefreshIntent", jobId);

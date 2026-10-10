@@ -266,7 +266,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-26 Analytics and visitor/log retention | **Current implementation retained; unresolved facts block release** | Inventory actual log/search/browser-preference/remote-image data flows; choose whether analytics is used, its providers/purposes/recipients/retention and applicable consent/data-handling requirements before enabling tracking. Ads stay disabled. Retention must match actual configuration and permissions. §§12–13, 15; prompts 039/044. | Unassigned; user decision/evidence required | Deferred: analytics enablement/provider, visitor/telemetry/log retention and privacy data-flow policy | **039** notice facts; telemetry activation **044** |
 | OP-27 Operator identity, jurisdiction and legal facts | **Unresolved release blocker** | Obtain actual operator identity, audience/jurisdiction, lawful contact and owner-approved privacy/terms/dispute facts. “Prepared for” attribution supplies no legal identity, address, liability policy or signoff. Do not publish placeholders or invented legal assertions. §§13, 15; prompts 039–040. | Unassigned; user decision/evidence required | Deferred: approved operator/legal/privacy/terms content and factual evidence | **039**; terms **040** |
 | OP-28 Verified public contact route | **Unresolved release blocker; unavailable page implemented** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. Existing owner deferrals persist; 041 displays unavailable status and report guidance, not an operational intake. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
-| OP-29 Recovery watchdog ownership and thresholds | **Unresolved** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15; prompt 043. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization and recovery/incident owner | **043** |
+| OP-29 Recovery watchdog ownership and thresholds | **Unresolved / live activation blocked** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Prompt 043 implements private CLI inspection, reviewed durable recovery and an operator runbook; synthetic settings do not approve live thresholds. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization, independent invocation frequency and recovery/incident owner | **043** |
 | OP-30 Alerts, destinations and monitoring service | **Unresolved** | Choose the authorized monitoring service, actionable outage/staleness/latency/quota/cost/expiry thresholds, severity/deduplication, recipients and notification approval. No recipient or unapproved test message is inferred. Telemetry must reconcile with privacy/retention decisions. §§11, 13–15; prompt 044. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget | **044** |
 | OP-31 Recovery objectives, backups and history retention | **Unresolved / evidence required** | Approve RPO/RTO, backup/PITR capabilities, encryption/access/retention and ownership for predictions, results, evidence, audits and structured source data within rights. Prove isolated restoration and safe limiter/job restart. No arbitrary deletion period or completed restore is inferred. §§13, 15; prompt 045. | Unassigned; user decision/evidence required | Deferred: RPO/RTO, backup/PITR and prediction/result/evidence/audit/backup retention policy | **045**; source retention prerequisites **009/011**, visitor notice **039** |
 | OP-32 Hosted deployment and account isolation | **Unresolved / evidence required** | Confirm actual web/database/queue/long-lived worker/poller infrastructure, scheduler/workload identity and authorized access. Choose account sharing vs genuinely separate provider accounts, durable cross-environment limits and poller observation/ownership transfer. Separate databases cannot create extra provider capacity. §§9, 11, 14–15; prompt 046. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE`, infrastructure/provider/budget references; Deferred: environment isolation, hosted runtime and poller ownership plan | **046**; database/queue choices earlier **003/020** |
@@ -2683,3 +2683,59 @@ No live polling or later feature is activated. See
   artifact is checked under staging and production runtime classifications.
   This proves local behavior, not live rights, provider coverage, domain hosting
   or release approval. See [seo-discovery.md](seo-discovery.md).
+
+## 043 — Private recovery watchdog
+
+**Decision date:** 10 October 2026. **Status:** local implementation; OP-29 live
+activation remains blocked pending owner evidence.
+
+- Use read-only, bounded inspection and exact reviewed plans, executed as
+  `operations.recovery` jobs in the existing queue. The same worker provides
+  leases, fencing, monotonic deadlines, finite attempts and exponential equal
+  jitter. Persist append-only, sealed `RecoveryAudit` intents, completion receipts
+  and sanitized failures; retry the original idempotent action after a crash.
+- Detect missed midnight EAT runs within an explicitly approved 1–7 day lookback,
+  expired database-clock leases, stalled pending jobs, missing due/observed-play
+  locks and overdue/unresolved result work. Thresholds, plan TTL and resource
+  bounds have no production defaults. The [operator runbook](recovery-watchdog.md)
+  defines every field and private inspection/plan/apply/worker/audit command.
+- Resume selection with its stored approved policy and original requests and
+  envelopes. Keep committed and degraded manifests immutable; later discoveries
+  cannot expand a cohort. Use the canonical locker and settlement service rather
+  than another publication or outcome path. Queued/stalled jobs require their
+  ordinary registered worker; recovery does not duplicate them or renew budgets.
+- Compare queue versions, preserve attempt caps and reclaim only expired
+  ownership through existing transactional transitions/backoff. Reuse the
+  refresh store's full member eligibility checks. Published receipts return the
+  existing revision. Immutable retained-previous/failed/unavailable/skipped
+  receipts remain final: do not delete receipt/stage history to buy another
+  attempt. Eligible operational failures without final receipts may resume the
+  original job; locked cycles, cutoff and chronological ordering remain binding.
+- Bound result backlog recovery to its existing `maxBatchesPerTick` and abort
+  signal, before new dispatch. Preserve the original account lease, cadence,
+  polling/correction horizons, quota reserves and spending gateways; missing
+  responses do not establish emptiness, FT or a settled market.
+- Bind every repair to validated current service/workload/hosting identity and
+  exact plan approval; actor text and references are not credentials. Use coded
+  incident reasons, affected IDs and redacted state in audits. No payloads,
+  secrets, lease-owner tokens or raw errors are copied. Require SELECT/INSERT
+  audit privileges and fail closed on corruption or missing approval.
+- Mapping actions require confirmed numeric provider IDs and source/retention
+  proof through the existing canonical catalog service. Resolve missing aliases;
+  hold conflicting existing canonical bindings for a separately reviewed history
+  preserving migration. Never infer identity from names, force a merge or rewrite
+  historical fixture/prediction bindings.
+- The private CLI supplies an independent detection and repair route when a
+  hosted enqueue-only cron fails. OP-29 still needs primary/backup incident
+  owners, approved thresholds, allowed automatic actions, reviewers and independent
+  invocation frequency. OP-30/31/32 monitoring, restoration/retention and hosting
+  gates and earlier source/budget/model/quality and public-policy blockers remain
+  open. No live watchdog binding, external message, provider call, production
+  migration, worker activation or deployment is approved by synthetic tests.
+
+The owner separately approved a local MySQL 8.4 instance on port 3307 after
+identifying the existing port 3306 service as MariaDB 10.4.32. Local development
+now uses `goal_hint_db`, separate application/migration accounts and private
+generated administration credentials. All committed migrations are applied;
+this establishes no hosted or production qualification and does not resolve
+OP-29/30/31/32. See [local-database.md](local-database.md) for operating commands.

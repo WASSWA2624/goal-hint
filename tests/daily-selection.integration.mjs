@@ -106,12 +106,13 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       let release, started; const gate = new Promise((resolve) => { release = resolve; }), began = new Promise((resolve) => { started = resolve; });
       const rows = [catalogFixture(1001, { kickoff: kickoff(1) }), catalogFixture(1002, { kickoff: kickoff(2) }),
         catalogFixture(1003, { kickoff: kickoff(2), competitionId: 40 }), catalogFixture(1004, { kickoff: kickoff(2), status: 'FT' })];
-      const state = setup({ rows, respond: async (url, _init, count) => {
+      const policy = policyFor(rows); policy.refresh.type = 'test.selection-progress';
+      const state = setup({ rows, policy, respond: async (url, _init, count) => {
         if (count === 1) { started(); await gate; }
         return catalogResponse(url, rows.filter((row) => getReportingDate(Date.parse(row.fixture.date)) === url.searchParams.get('date')));
       } });
       const first = state.service.run(occurrence(0)); await began;
-      const second = await setup({ rows }).service.run(occurrence(0)); assert.equal(second.status, 'busy'); release();
+      const second = await setup({ rows, policy }).service.run(occurrence(0)); assert.equal(second.status, 'busy'); release();
       const result = await first; assert.equal(result.total, 2); assert.equal(state.provider.network.length, 7);
       const manifest = (await store.inspect(result.runId)).manifest;
       assert.equal(manifest.partial, false); assert.equal(manifest.sequence, '20261009'); assert.equal(manifest.coverage.length, 7);
@@ -119,7 +120,7 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
       assert.ok(manifest.entries[0].kickoffAt < manifest.entries[1].kickoffAt);
       assert.equal(manifest.entries[0].envelope.priority, 255); assert.equal(manifest.entries[1].envelope.priority, 254);
       for (const entry of manifest.entries) assert.equal(entry.envelope.refresh.runId, result.runId);
-      const noFetch = setup({ respond() { assert.fail('committed run must never import again'); } });
+      const noFetch = setup({ policy, respond() { assert.fail('committed run must never import again'); } });
       assert.equal((await noFetch.service.run(occurrence(0))).total, 2);
       assert.deepEqual((await store.inspect(result.runId)).manifest, manifest);
       assert.equal(await database.query((tx) => tx.durableJob.count({ where: { refreshRunId: result.runId } })), 2);
@@ -256,7 +257,8 @@ test('daily selection manifests and recovery on isolated genuine MySQL', { timeo
     });
     await t.test('terminal and successful job outcomes persist without changing manifest membership', async () => {
       const id = await runId(occurrence(0)), manifest = (await store.inspect(id)).manifest;
-      const types = [{ type: 'test.selected-refresh', handlerVersion: 1 }];
+      // Other test cohorts can become available as the real calendar advances.
+      const types = [{ type: 'test.selection-progress', handlerVersion: 1 }];
       const one = await queue.claim(selectionHash('progress-worker'), types); assert.ok(one);
       assert.equal(one.job.envelope.refresh.runId, id); await queue.acknowledge(one);
       const two = await queue.claim(selectionHash('progress-worker'), types); await queue.retry(two, 'invalid-output', false);

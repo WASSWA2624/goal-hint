@@ -48,6 +48,9 @@ export type JobQueue = Readonly<{
   recordUsageInTransaction(transaction: JobTransaction, lease: JobLease, usage: JobUsage): Promise<void>;
   assertOwned(transaction: JobTransaction, lease: JobLease): Promise<number>;
   completeInTransaction(transaction: JobTransaction, lease: JobLease): Promise<StoredJob>;
+  /** Private recovery only; caller authenticates, fences and audits the operation. */
+  recoverInTransaction(transaction: JobTransaction, id: string, expectedVersion: number,
+    eligibility: (transaction: JobTransaction, job: StoredJob) => Promise<"retry" | "succeeded" | "failed" | "expired">): Promise<StoredJob | null>;
   inspect(id: string): Promise<StoredJob | null>;
   history(id: string, afterVersion?: number, limit?: number): Promise<readonly Readonly<Record<string, unknown>>[]>;
   attempts(id: string): Promise<readonly Readonly<Record<string, unknown>>[]>;

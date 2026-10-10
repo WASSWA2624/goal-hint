@@ -751,6 +751,21 @@ model DurableJobEnqueueLock {
   id Int @id @db.UnsignedTinyInt
 }
 
+// Append-only recovery intent/outcome. The durable job supplies fencing and resumption.
+model RecoveryAudit {
+  id        String   @id @db.Char(64)
+  jobId     String   @db.Char(64)
+  actionId  String   @db.Char(64)
+  phase     String   @db.VarChar(16)
+  at        DateTime @db.DateTime(3)
+  integrity String   @db.Char(64)
+  body      Json
+  job       DurableJob @relation(fields: [jobId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([jobId, actionId, phase])
+  @@index([jobId, at])
+}
+
 model DurableJob {
   id                 String                    @id @db.Char(64)
   type               String                    @db.VarChar(64)
@@ -786,12 +801,15 @@ model DurableJob {
   refreshIntent      PredictionRefreshIntent?
   refreshStages      PredictionRefreshStage[]
   refreshOutcome     PredictionRefreshOutcome?
+  recoveryAudits     RecoveryAudit[]
 
   @@unique([type, handlerVersion, idempotencyKey])
   @@unique([id, refreshRunId, refreshFixtureId, refreshCycleId], map: "DurableJob_selection_key")
   @@unique([refreshRunId, refreshFixtureId, refreshCycleId], map: "DurableJob_refresh_key")
   @@index([type, handlerVersion, state, availableAt, priority])
   @@index([type, handlerVersion, state, leaseExpiresAt])
+  @@index([state, leaseExpiresAt, id])
+  @@index([state, availableAt, id])
 }
 
 // Append-only refresh decisions, separate from immutable accepted forecasts.

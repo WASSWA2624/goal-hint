@@ -3371,3 +3371,128 @@ deployment, analytics, mailbox, external message or search-engine submission was
 introduced. Owned MySQL instances, acceptance servers and browser contexts were
 stopped after verification; existing services and the user's development server
 remain untouched. Details and reproduction: [seo-discovery.md](seo-discovery.md).
+
+## 043 - Private recovery watchdog
+
+Complete for local implementation and acceptance; tracker row 043 is ticked.
+Live activation remains blocked by OP-29 and the existing domain/hosting gates.
+Prompt 044 has not been started.
+
+### Changed behavior and files
+
+- Added `src/server/recovery/{recovery-input,recovery-scan,recovery-service,
+  recovery-command}.ts`, `src/workers/recovery.ts`, `recovery` and
+  `test:recovery` commands. Private inspection/dry-run planning uses bounded,
+  database-clock scans for missed EAT runs, stale/stalled jobs, missing locks,
+  result backlog and unsettled stored changes. Inspection performs no repair
+  writes, lease acquisition or provider calls. Jobs/locks/audits support keyset
+  pagination; reviewed plans expire and contain at most 50 actions.
+  Canonical settlement discovery runs before acquiring the scan transaction,
+  so inspection also works with a single-connection application pool.
+- Required trusted operator bindings validate current credentials/permissions,
+  exact threshold approval and exact reviewed plans. No permissive credentials,
+  production thresholds, HTTP administration route or automatic scheduler are
+  shipped. Every action rechecks authority and durable ownership; only the
+  current owner can record completion. Audits retain coded actor/reason/proof,
+  affected IDs, redacted previous state and fixed outcomes without job/provider
+  payloads, credentials, owner tokens or raw error messages.
+- Reused existing daily selection, refresh eligibility, queue transitions,
+  publication receipts, cutoff closure, fenced result polling, settlement and
+  canonical mapping services. Interrupted imports retain their original
+  receipts/policy; committed/degraded manifests retain their sealed membership.
+  Published refreshes return their existing revision. Immutable terminal refresh
+  receipts remain final. Eligible interrupted work retains its original job,
+  attempt cap, envelope, model/cost references, window and equal-jitter backoff.
+  Recovery cannot reopen cutoff/locked cycles or replace locked forecasts.
+- Extended `job-contract.ts`, `job-mysql-store.ts` and
+  `refresh-mysql-store.ts` with transactional, expected-version recovery of an
+  original job and reuse of its complete member eligibility checks. Preserved
+  classified lost-lease errors across the database's sanitized error boundary.
+  `result-sync-service.ts` now drains at most the existing configured batch cap
+  per invocation, resumes committed batches before fresh dispatch and honors
+  cancellation without bypassing account fencing, quotas or polling horizons.
+- Added append-only `RecoveryAudit` and stale/pending-job indexes in both Prisma
+  schema files and migration
+  `20261010123000_recovery_watchdog/migration.sql`. Audits have deterministic
+  intent/outcome/failure keys, restrictive job references and checked JSON hashes
+  on reads. The application/recovery role needs SELECT/INSERT only on this table;
+  migration credentials remain separate.
+- Added `tests/recovery-watchdog.{test,integration}.mjs` and
+  `tests/helpers/recovery-fixtures.mjs`. Scoped the existing daily-selection
+  progress test to its own job type so calendar-dependent higher-priority jobs
+  from other cohorts cannot consume its two intended claims. Production queue
+  priority and scheduling behavior are unchanged.
+  Hardened the shared owned-MySQL test helper against intermittent empty Windows
+  CLI captures: at most three read-only identity probes are attempted before
+  refusing access. Every mutation still requires the full owned directory,
+  live child, server UUID and port checks; missing or mismatched proof never
+  authorizes a write or cleanup.
+- Added [the operator runbook](recovery-watchdog.md), updated the worker README
+  and recorded OP-29 thresholds, identity, review and independent invocation
+  requirements in `implementation-decisions.md`. The CLI provides an independent
+  detection/repair route when an enqueue-only hosted cron fails; its supervision,
+  frequency, owners and escalation still require approval before live operation.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Whole unit suite | **957 passed, zero failures, one existing Windows/POSIX-mode skip**: `node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`; `.tmp/043-unit-final.log`. Includes four new policy/authentication/CLI/bounded-backlog tests. |
+| Genuine watchdog and selection acceptance | **32 passed, zero failures/skips**: four focused unit checks, 15 watchdog SQL checks and 13 existing daily-selection SQL checks; `.tmp/043-recovery-selection-final.log`. Used owned isolated MySQL Community Server **8.4.11**, synthetic clocks/policies/provider responses and separate application/migration accounts. |
+| Final inspection/pool acceptance | **19 passed, zero failures/skips** after the final scan/pool and owned-probe changes; `.tmp/043-recovery-owned-probe-final.log`. The genuine SQL dry-run test additionally proves canonical settlement inspection succeeds with a single-connection application pool and changes no rows. Earlier empty-capture identity refusals remain failed attempts, not acceptance. |
+| Recovery invariants | Real SQL checks cover worker crashes, duplicate/concurrent delivery, stale original and watchdog owners, crash after canonical commit, original attempt/jitter/cap preservation, expired plans and unauthorized/dry-run behavior. They also prove late lock reconstruction, existing revision reuse, missed EAT cron recovery, original interrupted-import receipt reuse, immutable degraded membership, no false emptiness, confirmed provider-ID alias review/conflict holds, unresolved settlement and quota-gated result polling without fabricated FT. |
+| Related SQL regression | **99 other checks passed, no skips** across durable jobs, cutoff locking, prediction refresh, refresh retention, result synchronization and settlement; `.tmp/043-sql-final.log`. That initial seven-file run reported 123/127 passes: the two failing subtests and their parents exposed the selection test's shared-type/calendar assumption and loss of the classified stale-owner error. Both were corrected and their complete suites subsequently passed in the 32-check acceptance run above. |
+| Migration/schema | Client generation and schema validation pass; `.tmp/043-generate.log`, `.tmp/043-validate.log`. Genuine SQL acceptance deploys committed migrations under the dedicated DDL account and explicitly verifies applied migration state and zero schema drift. The separately authorized local application installation is described below; no production database was migrated. |
+| Static/build checks | Whole-repository lint, final focused lint, typecheck, production build and whitespace checks pass; `.tmp/043-lint-final.log`, `.tmp/043-lint-changes.log`, `.tmp/043-typecheck-final.log`, `.tmp/043-build-final.log`. Final single-pool lint/types/build also pass in `.tmp/043-pool-{lint,types,build}.log`. No UI was changed. |
+
+Early owned-server startup/identity-check failures did not count as acceptance.
+Subsequent clean isolated SQL runs passed. The interrupted owned test processes
+and their temporary MySQL server were stopped after verifying the exact process,
+port and data-directory identity; the installed XAMPP service and the user's
+development server were left running.
+
+**Live blockers remain:** OP-29 owner/backup owner, exact thresholds, allowed
+automatic actions, repair reviewers, authenticated workload controls and an
+independently supervised detection schedule; OP-30 alert destinations, OP-31
+backup/restoration/retention and OP-32 hosting/capacity. Existing source rights,
+provider/account/model/quality/budget approvals and OP-25/27/28 publication
+decisions remain unresolved. No production binding, provider call, scheduler,
+external message, deployment or operational response commitment was introduced.
+
+### Separately authorized local database setup
+
+The owner created an empty `goal_hint_db` on XAMPP's MariaDB 10.4.32 at
+`localhost:3306`, then explicitly approved a separate compatible MySQL 8.4
+installation on port 3307. Installed the already verified MySQL Community Server
+8.4.11 binaries in the current user's private `%LOCALAPPDATA%\GoalHint` directory
+and created `goal_hint_db` there. The existing MariaDB server/database remain
+unchanged. All committed migrations, including RecoveryAudit, were deployed
+through a separate database-scoped migration account; actual schema verification
+and application readiness pass (`.tmp/043-local-db-{verify,health}.log`).
+
+The ignored, ACL-protected `.env.local` selects `127.0.0.1:3307` and enables only
+the database capability. The application account uses the owner-supplied password;
+root and migration administration use separate generated private secrets. The
+application reads all 61 models and has constrained domain writes, no DDL or
+migration-history reads, and DELETE only on disposable response cache. Actual
+application probes verify committed/rolled-back writes and refusal of audit
+updates, prediction deletion and migration reads
+(`.tmp/043-local-db-application.log`). No fixture or prediction data was seeded.
+An initial local grant-column typo and a numeric conversion in the private
+verification probe were corrected; the complete application checks then passed.
+Controlled shutdown/restart preserved the server UUID and exact data directory.
+Repeat deployment, drift verification, application read/write/rollback/privilege
+checks and readiness all passed again after restart.
+The production build also passes with the wired local environment
+(`.tmp/043-wired-build.log`). Actual development HTTP checks return 200 for
+`/en` and the existing 503 unavailable response for the match API because its
+required competition list remains unselected before feed SQL is executed
+(`.tmp/043-local-web.log`). The database contains 18 applied migrations and zero
+football fixtures; no provider or forecast data was fabricated for verification.
+
+Registered an idempotent hidden launcher in the current user's Windows login
+startup. This is a persistent local development instance, independent of both
+XAMPP and the disposable test servers. See [local-database.md](local-database.md)
+for private paths, account roles, start/stop commands and future migrations.
+No credentials are recorded in the repository. Live recovery, providers and
+publication retain their existing approval gates.

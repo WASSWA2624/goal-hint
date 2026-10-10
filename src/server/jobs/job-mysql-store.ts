@@ -152,6 +152,21 @@ export function createMysqlJobQueue(database: DatabaseRuntime): JobQueue {
     await event(transaction, job, "usage-recorded", null, at, lease.attemptId);
   }
   return Object.freeze({
+    async recoverInTransaction(transaction: JobTransaction, id: string, expectedVersion: number,
+      eligibility: (transaction: JobTransaction, job: StoredJob) => Promise<"retry" | "succeeded" | "failed" | "expired">) {
+      parseJob(jobHash, id); parseJob(jobVersion, expectedVersion);
+      const job = await load(transaction, id, true), at = await serverNow(transaction);
+      if (!job || job.version !== expectedVersion || job.state === "succeeded" || job.state === "expired" ||
+        job.state === "running" && job.leaseExpiresAt !== null && job.leaseExpiresAt > at &&
+        job.attemptDeadlineAt !== null && job.attemptDeadlineAt > at) return job;
+      const mode = await eligibility(transaction, job);
+      if (job.state === "pending" && mode === "retry" || job.state === "failed" && mode !== "retry") return job;
+      const attempt = job.state === "running" ? await transaction.durableJobAttempt.findUniqueOrThrow({
+        where: { jobId_number: { jobId: job.id, number: job.attemptCount } } }) : null;
+      return finish(transaction, job, attempt?.id ?? null, at,
+        mode === "succeeded" ? "completed" : mode === "expired" ? "eligibility-expired" :
+          mode === "failed" ? "non-retryable" : "lease-expired", mode === "retry", mode === "succeeded");
+    },
     withTransaction, enqueueInTransaction: enqueue, enqueue: (input) => withTransaction((write) => write(input)),
     async claim(ownerId, types) {
       parseJob(jobHash, ownerId);
