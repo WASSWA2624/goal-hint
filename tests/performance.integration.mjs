@@ -21,6 +21,8 @@ import { resultHash } from './helpers/result-sync-fixtures.mjs';
 import { PUBLICATION_NOW, emptyCandidate } from './helpers/publication-fixtures.mjs';
 import { performanceProtocol } from './helpers/performance-fixtures.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
+import { savePageScenarios } from './helpers/page-capture.mjs';
+import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
 
 const cell = (report, family = 'match-result', source = 'combined') => report.cells.find((c) => c.family === family && c.source === source && c.horizon === null);
 const period = 'from=2026-10-09&to=2026-10-12';
@@ -28,7 +30,8 @@ const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-12, `${a} != ${b}`);
 
 test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
-    const states = new Map(); let readAt = PUBLICATION_NOW, binding = null;
+    const states = new Map(), captured = {}; let readAt = PUBLICATION_NOW, binding = null;
+    const capture = (name, data) => { captured[name] = {data,error:null}; };
     const reader = (options = {}) => createPerformanceService({ database: p.a, competitionIds: [39], clock: { now: () => readAt }, policy: binding, ...options });
     const read = (parameters = period, options = {}) => reader(options).query(new URLSearchParams(parameters));
     async function publish(id, options = {}) {
@@ -79,6 +82,7 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
     }
     await t.test('open previews are unavailable; failed and delayed refreshes are separate measures', async () => {
       const data = await read(); assert.equal(data.cohort.fixtureCount, 30); assert.equal(cell(data).coverage.available, 0);
+      capture('open', data);
       assert.equal(cell(data).coverage.unavailable, 30); assert.equal(cell(data).metrics.hitRate, null);
       assert.equal(data.operations.failed, 1); assert.equal(data.operations.failedFixtures, 1);
       assert.equal(data.operations.delayedRefreshes, 1); assert.equal(data.operations.delayedFixtures, 1);
@@ -113,6 +117,15 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
       assert.equal(locked.lockedSetId, superseded.revision.id); assert.equal(locked.currentSetId, latest.id);
       for (const [id, home, away] of [[3000, 2, 1], [3001, 0, 1], [3003, 2, 0], [3010, 2, 1]]) await result(states.get(id), home, away);
       const data = performanceResponseSchema.parse(await read());
+      capture('mixed', data);
+      capture('default', await read('',{policy:null}));
+      capture('small', await read(period, {policy:{protocol:performanceProtocol({competitionIds:[competitionId],providerContractVersion:'synthetic-provider-v1',gate:{minimumCoverage:0,minimumSamples:100}}),verifyProtocol:()=>true}}));
+      capture('quality-failed', await read(period, {policy:{protocol:performanceProtocol({competitionIds:[competitionId],providerContractVersion:'synthetic-provider-v1',gate:{minimumCoverage:0,maximumBrier:0}}),verifyProtocol:()=>true}}));
+      for (const link of cell(data).evidence.links) {
+        const detail = await createMatchDetailService({database:p.a,clock:{now:()=>readAt}}).query(link.fixtureId,new URLSearchParams({revision:link.revisionId}));
+        assert.equal(link.pageHref,`${detail.route.path}?revision=${link.revisionId}#revision-history`);
+        captured[`detail:${link.fixtureId}`] = await createMatchDetailService({database:p.a,clock:{now:()=>readAt}}).query(link.fixtureId);
+      }
       assert.deepEqual(cell(data).coverage, { total: 30, available: 5, unavailable: 24, void: 1, filteredOut: 0, pending: 1, settled: 4, sources: { ai: 3, 'api-football': 2 } });
       assert.equal(data.historicalCycles.void, 1); assert.equal(data.historicalCycles.postponed, 1);
       for (const family of ['total-goals', 'both-teams-to-score']) {
@@ -129,6 +142,7 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
     });
     await t.test('source, model, version and EAT boundaries filter immutable selections', async () => {
       const ai = await read(`${period}&source=ai&market=match-result`); assert.equal(ai.cells.length, 6);
+      capture('ai', ai);
       assert.equal(cell(ai).coverage.available, 3); assert.equal(cell(ai).coverage.filteredOut, 2); assert.equal(cell(ai).metrics.denominator, 3);
       const model = await read(`${period}&model=${modelVersion().id}`); assert.equal(cell(model).coverage.available, 3);
       const providerVersion = states.get(3002).revision.candidate.markets['match-result'].provenance.source.contractVersion;
@@ -137,11 +151,13 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
       assert.equal((await read('from=2026-10-09&to=2026-10-09')).cohort.fixtureCount, 4);
       assert.equal((await read('from=2026-10-10&to=2026-10-10')).cohort.fixtureCount, 1);
       const empty = await read('from=2026-09-01&to=2026-09-02'); assert.equal(empty.cohort.fixtureCount, 0); assert.equal(cell(empty).metrics.hitRate, null);
+      capture('empty',empty);
     });
     await t.test('absent, forged, asynchronous and revoked policies cannot expose numeric metrics or authorize claims', async () => {
       for (const policy of [null, { protocol, verifyProtocol: () => false }, { protocol, verifyProtocol: async () => true },
         { protocol: { ...protocol, confidenceZ: 2 }, verifyProtocol: () => true }]) {
         const data = await read(period, { policy }); assert.equal(data.policy.state, 'unapproved'); assert.equal(cell(data).metrics.hitRate, null);
+        if (policy===null) capture('unapproved',data);
         assert.equal(cell(data).metrics.denominator, 4); assert.deepEqual(cell(data).metrics.calibration, []);
       }
       let calls = 0;
@@ -153,9 +169,11 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
       const before = await read(), original = cell(before).evidence.links;
       await result(states.get(3000), 0, 1, false);
       const pending = await read(); assert.equal(cell(pending).coverage.settled, 3); assert.equal(cell(pending).coverage.pending, 2);
+      capture('correction-pending',pending);
       assert.notEqual(pending.freshness.snapshotKey, before.freshness.snapshotKey);
       await settlement.settleFixture(states.get(3000).fixture.id);
       const corrected = await read(); assert.equal(cell(corrected).coverage.settled, 4); assert.equal(cell(corrected).metrics.correct, 1);
+      capture('corrected',corrected);
       assert.equal(cell(corrected).metrics.hitRate, .25); near(cell(corrected).metrics.brier, .83);
       assert.equal(corrected.asOf, p.now()); assert.equal(corrected.freshness.lastCorrectedAt, p.now());
       assert.notEqual(corrected.freshness.snapshotKey, pending.freshness.snapshotKey); assert.deepEqual(cell(corrected).evidence.links, original);
@@ -215,5 +233,6 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
       } finally { globalThis.fetch = fetch; }
       assert.equal(writes, 0); assert.equal(outbound, 0); assert.deepEqual(await counts(), before);
     });
+    await savePageScenarios(t, 'PERFORMANCE_PAGE_CAPTURE', captured);
   });
 });

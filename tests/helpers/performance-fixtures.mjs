@@ -22,7 +22,7 @@ export function performanceRecord({ source = 'ai', score = [2, 1], state = 'clos
     kickoffAt: candidate.context.context.kickoffAt, voidReason: state === 'void' ? 'formal-postponement' : null };
   const revision = cycle.lockedSetId ? { id: revisionId, cycleId, fixtureId: id, modelVersionId: source === 'ai' ? modelVersion().id : null,
     evidenceCutoffAt: candidate.context.context.cutoffAt, publishedAt: candidate.context.context.analysisAt + 3000, candidate } : null;
-  return { fixture: { id, dataVersion: 1n, season: { competitionId: EVALUATION_COMPETITION_ID } }, cycle, revision, result,
+  return { fixture: { id, dataVersion: 1n, homeTeam: {name: 'Synthetic Home'}, awayTeam: {name: 'Synthetic Away'}, season: { competitionId: EVALUATION_COMPETITION_ID } }, cycle, revision, result,
     projection: { markets: performanceFamilies.map((family) => {
       const item = candidate.markets[family];
       const status = result && item.available ? settleMarketSelection(family, item.market.selection, {

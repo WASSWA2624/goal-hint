@@ -182,7 +182,7 @@ export function MatchDetail({ data, locale = "en", history }: { data: MatchDetai
         <BodyText>{messages.text("detail.regulationRules")}</BodyText>
         <BodyText>{messages.text("detail.scoreOutcomeDisclosure")}</BodyText>
         {fixture.update.result === "delayed" && <BodyText>{messages.text("match.resultDelayed")}</BodyText>}
-        <TextLink href="/en/how-it-works" prefetch={false}>{messages.text("detail.probabilityHelp")}</TextLink>
+        <TextLink href="/en/how-it-works#probabilities" prefetch={false}>{messages.text("detail.probabilityHelp")}</TextLink>
       </Stack>
     </Surface>
     {history}

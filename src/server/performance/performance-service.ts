@@ -5,6 +5,8 @@ import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from ".
 import { matchFeedRules } from "../../domain/match-feed.ts";
 import { performanceFamilies, performanceResponseSchema, performanceRules, type PerformanceCell, type PerformanceCoverage, type PerformanceResponse, type PerformanceSource } from "../../domain/performance.ts";
 import type { MarketFamily } from "../../domain/markets.ts";
+import { canonicalMatchSlug } from "../../domain/match-slug.ts";
+import { matchHref } from "../../domain/navigation.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { EvaluationProtocol, HorizonBand, MetricObservation } from "../evaluation/evaluation-contract.ts";
@@ -68,7 +70,9 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
       version.source === "api-football" && version.version !== protocol?.providerContractVersion) outOfPolicy = true;
     if (links.length < performanceRules.maximumEvidenceLinks) links.push({ fixtureId: record.fixture.id, cycleId: cycle!.id,
       revisionId: revision!.id, source: item.market.source, evidenceCutoffAt: revision!.evidenceCutoffAt, forecastAt: revision!.publishedAt, forecastHorizonMs: horizonMs!,
-      href: `/api/matches/${record.fixture.id}?revision=${revision!.id}` });
+      href: `/api/matches/${record.fixture.id}?revision=${revision!.id}`,
+      matchLabel: `${record.fixture.homeTeam.name ?? "Home"} v ${record.fixture.awayTeam.name ?? "Away"}`,
+      pageHref: `${matchHref(record.fixture.id, canonicalMatchSlug(record.fixture.homeTeam.name, record.fixture.awayTeam.name))}?revision=${revision!.id}#revision-history` });
     if (coherent && result?.regulation.verified && (previous.status === "correct" || previous.status === "incorrect")) {
       coverage.settled++; if (previous.status === "correct") correct++; else incorrect++;
       observations.push({ market: item.market, result: { status: result.status, cycleEligibility: { eligible: true },
@@ -143,7 +147,7 @@ export function createPerformanceService(options: Readonly<{ database: DatabaseR
         return aggregatePerformance(snapshot, query, asOf, current?.id === protocol?.id ? current : null);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       let response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "performance", locale: "en", now: asOf,
-        query, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
+        query: { projection: 2, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
         parse: (value) => performanceResponseSchema.parse(value) }), read) : await read();
       // Preserve the reader's unapproved/counts-only response when permission is
       // revoked during a cache probe; never reuse previously approved metrics.

@@ -22,7 +22,8 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
   if (selected.length > performanceRules.maximumFixtures) throw new MatchFeedError("unavailable");
   const ids = selected.map((v) => v.id);
   const fixtures = await tx.footballFixture.findMany({ where: { id: { in: ids } },
-    include: { season: { select: { competitionId: true } }, lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } },
+    include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } },
+      season: { select: { competitionId: true } }, lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } },
     orderBy: [{ kickoff: "asc" }, { id: "asc" }] });
   if (fixtures.length !== ids.length) throw new MatchFeedError("unavailable");
   const cycleIds = fixtures.flatMap((f) => f.activeCycleId ? [f.activeCycleId] : []);

@@ -2462,3 +2462,45 @@ No live polling or later feature is activated. See
   RTK Query usage follows the official custom queryFn and endpoint initiate APIs:
   https://redux-toolkit.js.org/rtk-query/usage/customizing-queries
   and https://redux-toolkit.js.org/rtk-query/api/created-api/endpoints.
+
+## 038 - Methodology and measured performance
+
+- Replace the interim methodology surface with readable server-rendered content,
+  native GET cohort filters and the existing stored performance service. Share
+  `readPublicPerformance` with HTTP; do not fetch loopback endpoints, aggregate
+  outcomes in client components or trigger evaluation/provider/prediction work.
+- Keep OP-16/OP-17 unapproved. Production binds no policy and exposes counts with
+  withheld rates/scores/calibration. No public minimum or quality number is
+  selected. Verified-policy acceptance inputs are synthetic test evidence only;
+  even passing descriptive metrics retain provisional status and no public claim
+  authorization. Failed/absent/small gates never render zero substitutes.
+- Preserve exact period/source/model/version identity and all service counts.
+  Combined/source/family/horizon rows overlap; denominators are never added
+  together. Old void cycles and repeated failed/delayed refresh attempts remain
+  separately labeled measures. Unknown-lock horizons do not become coverage.
+- Retain complete probability-score semantics, overlapping binary double-chance
+  events and the service's actual uncertainty parameter. Use accessible data
+  tables, fixed-band/event-count labels and named horizontal scroll regions on
+  small screens. Model/provider/calibration artifact names are provenance, not
+  validation or calibration claims.
+- Add canonical exact-revision page links and match labels to bounded stored
+  evidence references, using shared slug rules and batch-selected team names.
+  The evidence remains in deterministic service order, not selected by success.
+  Bump performance cache projection to 2; keep existing API evidence URLs.
+- Explain the implemented daily EAT schedule, five-minute strict publication
+  boundary, earlier-play closure, complete replacement/retention, source clocks,
+  independent score polling, regulation-only settlement and audited corrections.
+  Do not promise last-minute lineups, guaranteed results or faster actual sync.
+- **OP-25 remains unresolved and blocks release.** When asked during 038, the
+  user selected "Keep unresolved and record the release blocker." No actual
+  correction/dispute owner, intake channel, review/evidence process or response
+  commitment is approved. Public copy says submissions are not yet available;
+  implemented correction audit mechanics are separate. No owner/contact/policy
+  is inferred from specification attribution. Future terms/contact work needs
+  the owner's approved facts.
+- Credit API-Football by API-Sports and retain per-match original-source links.
+  The official provider page was checked for attribution; no expanded coverage,
+  source reuse rights, operational subscription or qualification is inferred.
+  Retain prelaunch noindex and add the canonical methodology URL; broad SEO and
+  the remaining legal/contact pages are outside 038. See
+  [methodology-performance.md](methodology-performance.md).

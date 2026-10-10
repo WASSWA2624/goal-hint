@@ -126,6 +126,13 @@ forecast contributes an evidence reference through the existing detail contract:
 Raw payloads, evidence bodies, prompts, model pins and private proof references
 are never serialized.
 
+Prompt 038 adds `matchLabel` and `pageHref` to each evidence reference. The latter
+uses the canonical English match slug and the exact locked `revision` selection
+with `#revision-history`, allowing accessible navigation from the methodology
+report. Names are escaped by React; canonical slugs share the detail contract.
+The stored performance cache projection is version 2. Pages and HTTP use
+`readPublicPerformance`, including the same unapproved/counts-only policy.
+
 A selected pick is settled only when its sealed latest settlement still matches
 the current result, canonical fixture and locked selection through the shared
 settlement input hash. A newly ingested correction makes the old score pending

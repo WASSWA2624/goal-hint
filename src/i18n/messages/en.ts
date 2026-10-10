@@ -1,4 +1,7 @@
+import { methodologyMessages } from "./methodology.ts";
+
 export const en = {
+  ...methodologyMessages,
   "metadata.homeTitle": "Goal Hint | Daily Football Predictions",
   "metadata.description": "Goal Hint is in development. Predictions are not yet available.",
   "navigation.home": "Goal Hint home",

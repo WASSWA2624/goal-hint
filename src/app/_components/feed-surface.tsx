@@ -10,7 +10,7 @@ import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
-import { ButtonLink } from "@/components/ui/controls";
+import { ButtonLink, TextLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { BodyText, MutedText, PageHeading, Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -106,6 +106,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
       <FeedRange query={query} today={today} />
       <MutedText>{messages.text(`feed.status.${query.status}`)}</MutedText>
     </Stack>
+    {query.status === "finished" && <TextLink href="/en/how-it-works#performance" prefetch={false}>{messages.text("performance.resultsLink")}</TextLink>}
     <FeedDateLinks query={query} today={today} />
     <FeedControls query={query} today={today} leagues={leagues} onApply={apply} />
     {controls}

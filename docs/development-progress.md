@@ -3056,3 +3056,70 @@ unchanged. Synthetic response/clock variants are acceptance inputs only. No
 production forecasts, external paid calls or deployment were activated.
 Owned acceptance server/browser processes were stopped; existing services and
 the user's development server were left untouched.
+
+## 038 - Methodology and measured performance
+
+Complete. The implementation and required local acceptance checks pass; tracker
+row 038 is ticked. Work on 039 has not started. Public release remains blocked by
+the explicitly deferred correction/dispute policy and existing operating gates.
+
+### Changed behavior and files
+
+- Replaced the interim `/en/how-it-works` page with accessible server-rendered
+  methodology content and a stored performance report. Added externalized
+  English messages, section navigation, concise source attribution and truthful
+  explanations of probabilities, evidence, daily EAT cadence, cutoff, regulation
+  settlement, locked revisions and audited corrections.
+- Added `public-performance.ts`, `performance-page.ts` and the injectable server
+  route. The page and API share the same scope, cache and counts-only production
+  policy. Native GET controls select bounded EAT dates, market, source and exact
+  model/provider version. Invalid queries fail before storage; unavailable reads
+  retain valid controls and the same-query retry instead of showing empty counts.
+- Added reusable definition-list/table primitives and `performance-report.tsx`.
+  Reports preserve service coverage, denominators, source/version provenance,
+  horizons, original clocks and separate operational measures. Numeric rates,
+  scores and calibration require the service's sample and quality gates. Narrow
+  calibration tables retain readable widths inside named keyboard scroll regions.
+- Added canonical exact-locked-revision match links and labels to performance
+  evidence using batch-selected team names and shared slug rules. Retained API
+  evidence links and bumped the performance cache projection to 2. Results and
+  probability help now link to the relevant methodology sections; the existing
+  footer link remains. Metadata retains prelaunch noindex and the canonical URL.
+- Added six page contract tests, expanded genuine SQL captures/link checks and
+  an isolated production rendering harness. Added `test:methodology` and
+  `test:methodology:rendering`; documented the contract and release blockers in
+  `docs/methodology-performance.md`, the API and implementation decisions.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Focused page/performance/evaluation contracts | **50 passed, zero failures**; `.tmp/038-contracts-final.log`. Covers bounded filters, native-form normalization, EAT rollover, exact stored identity, metric gates, sanitized failures and canonical locked links. |
+| Genuine MySQL performance acceptance | **9 passed, zero failures/skips**, owned MySQL 8.4.11; `.tmp/methodology-038/database.log`. Captures 15 projections, reconciles locked page links to detail, covers mixed sources, empty/small/gated reports and corrections, and rejects visitor writes/outbound calls while preserving jobs, locks, settlements and fixture versions. |
+| Genuine MySQL cache regression | **16 passed, zero failures/skips**; `.tmp/038-cache-db.log`. Covers policy revocation, source expiry, result corrections, projection reuse, invalidation races and outage recovery. |
+| Production HTML | **13 scenarios and 1,554 coverage counts pass** against SQL captures; `.tmp/038-rendering-final.log`, artifacts `.tmp/methodology-038/`. Checks initial CSS, metric gates, clocks, immutable links, escaped long labels, empty/error states and canonical/noindex metadata. |
+| Browser | **360 assertions pass**, installed Chrome through the Playwright skill/CLI; `.tmp/038-browser-final.log`, source/screenshots `output/playwright/038-*`. Covers native GET and no-JavaScript filters, service counts/gates, correction states, exact locked history, Enter/Space/Tab disclosures, calibration column/row labels, empty bands and uncertainty, keyboard horizontal scrolling, 320–1280 widths and 200% text. No visitor cookies, browser API reads or hydration/page errors. Mobile screenshots visually reviewed. |
+| Full repository units | **948 cases: 947 passed, zero failures, one existing Windows POSIX-mode skip**, pinned Node 24.18.1; `.tmp/038-units-final.log`. |
+| Static/build checks | Final production build, typecheck, lint and changed-file whitespace checks pass; `.tmp/038-build-final.log`, `.tmp/038-types-accepted.log`, `.tmp/038-lint-accepted.log`. |
+| Actual production routes | Six anonymous responses pass initial HTML, truthful disabled-storage state, preserved filter/retry, duplicate-query rejection, Results navigation, canonical/noindex and API 400/503 checks; `.tmp/038-production.log`. |
+
+Acceptance setup initially lacked its nested capture directory and strict
+generated-route null assertions; both were corrected before successful runs.
+Rendering found the canonical needed an absolute origin. Browser checks found
+the calibration table compressed its columns on phones; readable minimum widths
+and keyboard scrolling now pass. A production assertion was adjusted to remove
+script blocks rather than truncate HTML at the first head script. No unresolved
+implementation or acceptance failure remains.
+
+**OP-25 remains a release blocker.** The user explicitly chose "Keep unresolved
+and record the release blocker." A responsible owner, intake channel,
+review/evidence process and response commitment remain unapproved. Public copy
+states that submissions are not yet available; no operational policy or contact
+details are invented. OP-16/OP-17 also remain unapproved: production shows counts
+and withholds numeric performance metrics. Synthetic acceptance policies do not
+qualify live predictions or authorize public accuracy/calibration claims.
+
+No production forecast, paid provider/model call, worker activation, migration
+to an existing database, deployment or later feature was activated. Owned
+acceptance servers and browser were stopped; existing services and the user's
+development server remain untouched.

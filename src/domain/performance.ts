@@ -35,7 +35,10 @@ export const performanceCellSchema = z.strictObject({ family, source: performanc
   coverage: performanceCoverageSchema, metrics, versions: z.array(version).max(performanceRules.maximumFixtures),
   evidence: z.strictObject({ total: count, truncated: z.boolean(), links: z.array(z.strictObject({ fixtureId: z.uuid(), cycleId: z.uuid(),
     revisionId: z.uuid(), source: z.enum(["ai", "api-football"]), evidenceCutoffAt: instant, forecastAt: instant, forecastHorizonMs: count,
-    href: z.string().max(160).regex(/^\/api\/matches\/[a-f0-9-]{36}\?revision=[a-f0-9-]{36}$/u) })).max(performanceRules.maximumEvidenceLinks) }),
+    href: z.string().max(160).regex(/^\/api\/matches\/[a-f0-9-]{36}\?revision=[a-f0-9-]{36}$/u),
+    matchLabel: z.string().min(1).max(1050),
+    pageHref: z.string().max(512).regex(/^\/en\/matches\/[a-f0-9-]{36}\/[a-z0-9]+(?:-[a-z0-9]+)*\?revision=[a-f0-9-]{36}#revision-history$/u),
+  })).max(performanceRules.maximumEvidenceLinks) }),
 }).refine((v) => v.coverage.settled === v.metrics.denominator && v.evidence.total === v.coverage.available &&
   v.evidence.links.length === Math.min(v.evidence.total, performanceRules.maximumEvidenceLinks) &&
   v.evidence.truncated === (v.evidence.total > v.evidence.links.length));
