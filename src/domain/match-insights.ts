@@ -127,3 +127,69 @@ export function pageOf<T>(items: readonly T[], page: number, size: number) {
   const pages = Math.max(1, Math.ceil(items.length / size)), current = Math.min(Math.max(1, page), pages);
   return { items: items.slice((current - 1) * size, current * size), page: current, pages, total: items.length };
 }
+
+/** First rows shown on overview cards; the full collections load when a section opens. */
+export const previewRules = Object.freeze({ form: 10, meetings: 5, players: 6, injuries: 6, news: 3, stats: 6 });
+const totalsSchema = z.strictObject({ formHome: count, formAway: count, meetings: count, players: count, injuries: count, news: count, stats: count });
+export const insightsPreviewSchema = z.strictObject({ fixtureId: id, asOf: at, home: insightTeamSchema, away: insightTeamSchema,
+  sections: insightSectionsSchema, totals: totalsSchema });
+export type InsightsPreview = z.infer<typeof insightsPreviewSchema>;
+
+/** Truncates each collection for the overview and records the complete totals for "View all" labels. */
+export function insightsPreview(insights: MatchInsights): InsightsPreview {
+  const s = insights.sections;
+  return { fixtureId: insights.fixtureId, asOf: insights.asOf, home: insights.home, away: insights.away,
+    sections: { ...s,
+      form: { home: s.form.home.slice(0, previewRules.form), away: s.form.away.slice(0, previewRules.form) },
+      h2h: { meetings: s.h2h.meetings.slice(0, previewRules.meetings) },
+      stats: { ...s.stats, evidence: s.stats.evidence.slice(0, previewRules.stats) },
+      players: { players: s.players.players.slice(0, previewRules.players) },
+      injuries: { injuries: s.injuries.injuries.slice(0, previewRules.injuries) },
+      news: { ...s.news, items: s.news.items.slice(0, previewRules.news) } },
+    totals: { formHome: s.form.home.length, formAway: s.form.away.length, meetings: s.h2h.meetings.length, players: s.players.players.length,
+      injuries: s.injuries.injuries.length, news: s.news.items.length, stats: s.stats.evidence.length } };
+}
+
+export const comparisonMetrics = ["pointsPerGame", "goalsFor", "goalsAgainst", "winRate", "cleanSheetRate", "bttsRate", "over25Rate", "failedToScoreRate"] as const;
+export type ComparisonMetric = (typeof comparisonMetrics)[number];
+export type ComparisonRow = Readonly<{ metric: ComparisonMetric; kind: "average" | "rate"; home: number | null; away: number | null }>;
+
+/** One metric's value for one team over the supplied records; null without a sample. */
+export function metricValue(summary: TeamSummary, metric: ComparisonMetric): number | null {
+  const n = summary.matches;
+  if (n === 0) return null;
+  switch (metric) {
+    case "pointsPerGame": return (summary.wins * 3 + summary.draws) / n;
+    case "goalsFor": return summary.goalsFor / n;
+    case "goalsAgainst": return summary.goalsAgainst / n;
+    case "winRate": return summary.wins / n;
+    case "cleanSheetRate": return summary.cleanSheetRate;
+    case "bttsRate": return summary.bttsRate;
+    case "over25Rate": return summary.over25Rate;
+    case "failedToScoreRate": return summary.failedToScoreRate;
+  }
+}
+
+/** Side-by-side averages and rates from each team's own stored verified results. */
+export function teamComparison(home: readonly InsightResult[], away: readonly InsightResult[], homeId: string, awayId: string) {
+  const homeSummary = summarize(home, homeId), awaySummary = summarize(away, awayId);
+  const rows: ComparisonRow[] = comparisonMetrics.map((metric) => ({ metric, kind: ["pointsPerGame", "goalsFor", "goalsAgainst"].includes(metric) ? "average" : "rate",
+    home: metricValue(homeSummary, metric), away: metricValue(awaySummary, metric) }));
+  return { home: homeSummary, away: awaySummary, rows };
+}
+
+/** Per-match value of a comparison metric for its match-by-match breakdown. */
+export function perMatchValue(record: InsightResult, teamId: string, metric: ComparisonMetric): number {
+  const home = record.home.id === teamId;
+  const scored = home ? record.homeGoals : record.awayGoals, conceded = home ? record.awayGoals : record.homeGoals;
+  switch (metric) {
+    case "pointsPerGame": return scored > conceded ? 3 : scored === conceded ? 1 : 0;
+    case "goalsFor": return scored;
+    case "goalsAgainst": return conceded;
+    case "winRate": return scored > conceded ? 1 : 0;
+    case "cleanSheetRate": return conceded === 0 ? 1 : 0;
+    case "bttsRate": return scored > 0 && conceded > 0 ? 1 : 0;
+    case "over25Rate": return scored + conceded >= 3 ? 1 : 0;
+    case "failedToScoreRate": return scored === 0 ? 1 : 0;
+  }
+}

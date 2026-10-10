@@ -26,14 +26,16 @@ function CycleSummary({ cycle, locale }: { cycle: Cycle; locale: string }) {
   </Stack>;
 }
 
-export function RevisionHistory({ current, result, query, locale = "en" }: {
+export function RevisionHistory({ current, result, query, locale = "en", open = false }: {
   current: MatchDetailResponse; result: DetailPageResult; query: string; locale?: string;
+  /** Rendered inside an already opened section, so the list starts expanded. */
+  open?: boolean;
 }) {
   const messages = createMessages(locale), parameters = new URLSearchParams(query);
   const data = result.data ?? current, { revisions, cycles } = data.history;
   const selected = result.data && (parameters.has("revision") || parameters.has("cycle")) ? result.data : null;
   const nextRevisions = historyNextHref(data, revisions.next), nextCycles = historyNextHref(data, cycles.next);
-  return <Disclosure id="revision-history" open={query ? true : undefined} data-revision-history>
+  return <Disclosure id="revision-history" open={open || query ? true : undefined} data-revision-history>
     <summary>{messages.text("history.title")}</summary>
     <Stack $gap="lg">
       <BodyText>{messages.text("history.readOnly")}</BodyText>

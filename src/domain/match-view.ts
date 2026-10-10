@@ -101,6 +101,11 @@ export function openSection(view: MatchView, section: MatchSection | null): Matc
   return { ...view, ...reset, section };
 }
 
+/** Opens one item, opening its section first (with fresh section filters) when needed. */
+export function openItem(view: MatchView, section: MatchSection, item: string): MatchView {
+  return { ...(view.section === section ? view : openSection(view, section)), item };
+}
+
 /** Splits page parameters into view state and the remaining (history) parameters. */
 export function splitMatchViewParameters(input: Readonly<Record<string, string | string[] | undefined>>) {
   const view: Record<string, string> = {}, rest: Record<string, string | string[] | undefined> = {};

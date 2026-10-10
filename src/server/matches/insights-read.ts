@@ -126,9 +126,9 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
   if (revision && evidence) {
     const analysis = publicRevisionAnalysis(revision, evidence, asOf);
     if (analysis.state === "available") {
-      analysis.reasons.forEach((reason, index) => news.push({ id: `analysis-${index + 1}`, kind: "analysis", publisher: "Goal Hint AI analysis",
+      analysis.reasons.forEach((reason, index) => news.push({ id: `analysis-${index + 1}`, kind: "analysis", publisher: "Goal Hint analysis",
         title: reason.text.slice(0, 2048), url: null, publishedAt: revision.publishedAt, retrievedAt: null, details: [] }));
-      if (analysis.uncertainty) news.push({ id: "analysis-uncertainty", kind: "analysis", publisher: "Goal Hint AI analysis",
+      if (analysis.uncertainty) news.push({ id: "analysis-uncertainty", kind: "analysis", publisher: "Goal Hint analysis",
         title: analysis.uncertainty.text.slice(0, 2048), url: null, publishedAt: revision.publishedAt, retrievedAt: null, details: [] });
     }
   }

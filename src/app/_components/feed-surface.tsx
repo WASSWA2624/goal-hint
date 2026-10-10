@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { FeedAppliedSummary } from "@/components/match/feed-controls";
 import { FeedFilters } from "@/components/match/feed-filters";
@@ -21,7 +21,7 @@ import { feedQueryHref, isFeedDatePreset, panelFilterCount, resolveFeedDates, ty
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
-import { performanceHref } from "@/domain/navigation";
+import { feedReturnStorageKey, performanceHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import type { FeedPageResult } from "@/server/matches/feed-page";
 import { FeedStateProvider } from "@/state/provider";
@@ -74,6 +74,10 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   const visible = result.data ? { query, today, data: result.data } : previous;
   const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
   const href = feedQueryHref(query, today), leagues = result.data?.leagues ?? previous?.data.leagues ?? [];
+  useEffect(() => {
+    // Match pages link back to this exact list, filters included.
+    try { window.sessionStorage.setItem(feedReturnStorageKey, href); } catch { /* Storage can be blocked. */ }
+  }, [href]);
   function apply(next: FeedQuery) {
     const nextHref = feedQueryHref(next, today);
     // App Router discards superseded navigations. No per-keystroke requests.

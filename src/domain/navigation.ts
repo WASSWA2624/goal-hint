@@ -46,3 +46,6 @@ export function matchHref(fixtureId: string, slug: string, locale?: string): str
   }
   return `${homeHref(locale)}/matches/${fixtureId}/${slug}`;
 }
+
+/** The feed stores its current URL here so the match page can return to the same filters. */
+export const feedReturnStorageKey = "goalhint:feed-href";

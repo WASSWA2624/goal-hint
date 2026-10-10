@@ -60,7 +60,8 @@ export const HeaderContent = styled(Container)`
   align-items: center;
   gap: ${({ theme }) => theme.space.lg};
   min-block-size: 3.5rem;
-  ${desktop} { gap: ${({ theme }) => theme.space.xl}; min-block-size: 4rem; }
+  ${desktop} { gap: ${({ theme }) => theme.space.lg}; min-block-size: 4rem; }
+  @media (min-width: ${({ theme }) => theme.breakpoint.xl}) { gap: ${({ theme }) => theme.space.xl}; }
 `;
 
 export const HomeLink = styled(TextLink)`
@@ -69,10 +70,11 @@ export const HomeLink = styled(TextLink)`
   text-decoration: none;
 `;
 
+/** The section links keep their natural width; the search box absorbs narrower desktops. */
 export const DesktopNav = styled.nav`
   display: none;
+  flex: none;
   align-self: stretch;
-  min-inline-size: 0;
   ${desktop} { display: flex; }
 `;
 
@@ -146,7 +148,9 @@ export const HeaderSearch = styled.form`
   display: none;
   ${desktop} {
     display: flex;
-    flex: 0 1 26rem;
+    flex: 1 1 26rem;
+    max-inline-size: 26rem;
+    min-inline-size: 9rem;
     align-items: center;
     gap: ${({ theme }) => theme.space.sm};
     margin-inline-start: auto;

@@ -2,9 +2,6 @@
 
 import styled from "styled-components";
 import { Stack } from "@/components/ui/layout";
-export const DetailArticle = styled(Stack).attrs({ as: "article" })`
-  overflow-wrap: anywhere;
-`;
 export const DetailMarket = styled(Stack)`
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   padding-block-start: ${({ theme }) => theme.space.md};

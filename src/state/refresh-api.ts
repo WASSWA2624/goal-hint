@@ -4,6 +4,8 @@ import { checkedFeedPage, feedPageApiHref, FeedPaginationError } from "../domain
 import type { FeedQuery } from "../domain/feed-query.ts";
 import { liveRefreshRules } from "../domain/live-refresh.ts";
 import { matchDetailResponseSchema, type MatchDetailResponse } from "../domain/match-detail.ts";
+import { insightSectionResponseSchema, insightSectionSchemas, type InsightSections } from "../domain/match-insights.ts";
+import { matchSections, type MatchSection } from "../domain/match-view.ts";
 import { matchFeedRules, type MatchFeedResponse } from "../domain/match-feed.ts";
 
 export type RefreshError = { code: FeedPaginationError["code"] };
@@ -29,6 +31,21 @@ export const refreshApi = createApi({ reducerPath: "publicRefresh", baseQuery: f
       async queryFn({ query, today, page }, api) {
         try { return { data: checkedFeedPage(await readJson(feedPageApiHref(query, today, page), api.signal), query, today, page) }; }
         catch (cause) { return failure(cause); }
+      },
+    }),
+    /** One complete match-insights section, loaded on first expansion and reused for ten minutes. */
+    insights: build.query<{ asOf: number; section: MatchSection; data: InsightSections[MatchSection] }, { id: string; section: MatchSection }>({
+      serializeQueryArgs: ({ queryArgs: { id, section } }) => `${id}:${section}`,
+      keepUnusedDataFor: 600,
+      async queryFn({ id, section }, api) {
+        try {
+          if (!/^[a-f0-9-]{36}$/u.test(id) || !(matchSections as readonly string[]).includes(section)) throw new FeedPaginationError("invalid-response");
+          const parsed = insightSectionResponseSchema.safeParse(await readJson(`/api/matches/${id}/insights?section=${section}`, api.signal));
+          if (!parsed.success || parsed.data.fixtureId !== id || parsed.data.section !== section) throw new FeedPaginationError("invalid-response");
+          const data = insightSectionSchemas[section].safeParse(parsed.data.data);
+          if (!data.success) throw new FeedPaginationError("invalid-response");
+          return { data: { asOf: parsed.data.asOf, section, data: data.data } };
+        } catch (cause) { return failure(cause); }
       },
     }),
     detail: build.query<MatchDetailResponse, string>({
