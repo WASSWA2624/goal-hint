@@ -66,7 +66,8 @@
     "test:live-client:rendering": "node scripts/verify-match-feed-rendering.mjs --live",
     "test:methodology": "node --conditions=react-server --test tests/performance-page.test.mjs tests/performance.test.mjs",
     "test:methodology:rendering": "node scripts/verify-methodology-rendering.mjs",
-    "test:privacy:html": "node scripts/verify-privacy-rendering.mjs"
+    "test:privacy:html": "node scripts/verify-privacy-rendering.mjs",
+    "test:terms:html": "node scripts/verify-terms-rendering.mjs"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.13.0",

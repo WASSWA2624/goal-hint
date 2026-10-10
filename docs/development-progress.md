@@ -3185,3 +3185,62 @@ No tracking, authentication, consent platform, advertising, contact backend,
 hosting, paid provider/model call, new retention service, deployment or later
 feature was activated. Owned acceptance server and browser were stopped;
 existing services and the user's development server remain untouched.
+
+## 040 - Terms page
+
+Complete. The supported factual draft, reusable layout and required local
+acceptance checks pass; tracker row 040 is ticked. Final terms publication and
+public release remain blocked by the deferred owner/legal/permission facts.
+Prompt 041 has not been started.
+
+### Changed behavior and files
+
+- Replaced the interim `/en/terms` document with externalized English content in
+  the existing public/information shell. Added semantic topic links and concise
+  service, forecast, availability, correction, use, source and privacy sections,
+  with the existing square typography/layout components and footer access.
+  Metadata has the absolute canonical terms URL and retains prelaunch noindex.
+- Added `src/domain/terms-notice.ts`, `src/i18n/messages/terms.ts` and
+  `src/app/_components/terms-content.tsx`. The notice is explicitly a prelaunch
+  draft, with `releaseReady: false`, no effective date and the actual technical
+  review date, 10 October 2026. No identity, jurisdiction, mailbox, licence,
+  liability waiver, eligibility restriction or service guarantee is invented.
+- Extracted `src/app/_components/information-notice.tsx` for the common terms/
+  privacy introduction, technical-review date and publication-status surface.
+  Privacy continues to show its existing factual summary and unresolved gate.
+- Linked the real methodology's probability, evidence, performance, schedule,
+  settlement and correction sections and the current privacy summary. Described
+  the free account-free service, four regulation markets, AI-first/fallback
+  sources, daily EAT window, strict cutoff, original timestamps and pending/void/
+  audited correction limits without duplicating detailed operational documents.
+- Added `docs/terms-page.md` with the factual evidence matrix, inherited owner
+  decisions, conditional authoritative references and final-publication checklist.
+  Updated `docs/implementation-decisions.md`, including OP-25's central release-
+  blocker status. Added the production verifier `scripts/verify-terms-rendering.mjs`
+  and the `test:terms:html` package script.
+
+### Verification
+
+| Check | Actual outcome |
+| --- | --- |
+| Factual/legal evidence | Compared public statements with the specification, published methodology, public policy, calendar/selection/refresh, publication/cutoff, settlement/correction, performance and source-permission code. Actual operator/jurisdiction/contact and public-use rights are not established; the draft and documentation preserve those release gates. WIPO and current CMA guidance were reviewed as limited/conditional references, not legal signoff or a jurisdiction decision. Evidence and links: `docs/terms-page.md`. |
+| Relevant behavior contracts | **26 passed, zero failures/skips**: public navigation, regulation-market settlement and performance-page qualification/evidence behavior. Command: `node --conditions=react-server --test --test-concurrency=1 tests/navigation.test.mjs tests/market-settlement.test.mjs tests/performance-page.test.mjs`; `.tmp/040-contracts.log`. |
+| Actual production terms HTML | Ordinary and untrusted-query requests pass initial content/CSS, semantic/unique anchors, canonical/noindex, review date, honest publication gate, anonymous access and absence of fabricated contact/forms/query reflection. Every linked methodology/performance/settlement/correction anchor and privacy destination exists in the actual server HTML; `.tmp/040-html.log`. |
+| Shared privacy/navigation HTML | Privacy's two production requests pass unchanged disclosures, review date and release gate after the shared-header extraction; `.tmp/040-privacy.log`. All ten anonymous navigation pages, root/English redirects and invalid/unknown-route 404s pass; `.tmp/040-navigation.log`. |
+| Browser and visual review | **71 assertions pass** in installed Chrome via the Playwright skill/CLI; `.tmp/040-browser.log`, source/screenshots `output/playwright/040-*`. Covers skip/visible focus, eight topic links in Tab order, native anchor/history Back, keyboard navigation to every linked policy section, footer/current page, 320/360/390/430/1280 widths, 200% text, bounded line lengths, square status surface, no-JavaScript and blocked-storage access. English review day remains fixed with a French browser locale/Los Angeles timezone. Shared privacy header is checked with and without JavaScript. Desktop/mobile/release/no-JavaScript screenshots visually reviewed. No page/hydration errors, visitor cookies, browser storage writes, client API polling, non-GET requests or third-party requests occurred in the checked flow. |
+| Static/build checks | Production build, lint, final typecheck and changed-file whitespace checks pass; `.tmp/040-build.log`, `.tmp/040-lint.log`, `.tmp/040-types-final.log`. No database schema or data-service behavior changed. |
+
+No implementation defect or required local acceptance check remains unresolved.
+**External release blockers remain:** OP-25/27/28 owner, operator, audience/
+jurisdiction and verified contact/dispute decisions; OP-06/08/13 source/logo/
+reporting rights and an approved original-material ownership/reuse statement;
+the privacy page's OP-26 and related hosting/logging/analytics/retention gates;
+and applicable legal review, approved final wording and a genuine effective date.
+The owner's prior explicit deferrals were retained without requesting the same
+facts again. A visible draft status and noindex document the gate; they do not
+automatically prevent a deployment, and release review must enforce it.
+
+No account, paywall, betting/payment, acceptance tracking, contact backend,
+analytics, paid provider/model call, worker activation, migration, deployment or
+later feature was introduced. Owned acceptance server and browser were stopped;
+existing services and the user's development server remain untouched.

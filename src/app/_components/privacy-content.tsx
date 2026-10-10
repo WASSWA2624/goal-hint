@@ -1,12 +1,12 @@
 import "server-only";
 
 import { TextLink } from "@/components/ui/controls";
-import { BodyText, Inline, MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
-import { parseReportingDate } from "@/domain/calendar";
+import { BodyText, Inline, SectionHeading, Stack } from "@/components/ui/layout";
 import { restorationRules } from "@/domain/feed-navigation";
 import { privacyNotice } from "@/domain/privacy-notice";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { publicCacheRules } from "@/server/cache/public-cache";
+import { InformationNotice } from "./information-notice";
 
 const sections = ["access", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"] as const;
 
@@ -18,16 +18,7 @@ export function PrivacyContent({ locale }: { locale: string }) {
     tracking: ["body", "scope"], images: ["body", "recipients"], football: ["body", "permissions"], retention: ["body", "expiry"],
     choices: ["body", "contact"], release: ["body"] } as const;
   return <Stack $gap="xl" data-privacy-status={privacyNotice.publication} data-privacy-release-ready={privacyNotice.releaseReady}>
-    <Stack $gap="sm">
-      <BodyText>{messages.text("privacy.intro")}</BodyText>
-      <MutedText><time dateTime={privacyNotice.reviewedOn}>{messages.text("privacy.reviewed", {
-        date: messages.reportingDate(parseReportingDate(privacyNotice.reviewedOn)) })}</time></MutedText>
-      <MutedText>{messages.text("privacy.reviewScope")}</MutedText>
-    </Stack>
-    <Surface aria-labelledby="privacy-status-heading"><Stack $gap="md">
-      <SectionHeading id="privacy-status-heading">{messages.text("privacy.status.title")}</SectionHeading>
-      <BodyText>{messages.text("privacy.status.body")}</BodyText>
-    </Stack></Surface>
+    <InformationNotice locale={locale} kind="privacy" reviewedOn={privacyNotice.reviewedOn} />
     <nav aria-label={messages.text("privacy.contents")}><Inline>
       {sections.map((id) => <TextLink key={id} href={`#privacy-${id}`} prefetch={false}>{messages.text(`privacy.${id}.title`)}</TextLink>)}
     </Inline></nav>

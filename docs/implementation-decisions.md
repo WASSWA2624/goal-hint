@@ -262,7 +262,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-22 Polling horizons and approach threshold | **Unresolved** | Choose approaching-kickoff lead time, active/result window, unresolved-result horizon and progressively slower correction checks with bounded stopping/review rules. Preserve visible unresolved fixtures after midnight/outside the prediction window. §§5, 11, 15; prompt 026. | Unassigned; user decision/evidence required | `GOAL_HINT_FRESHNESS_POLICY_REF`; Deferred: poller approach thresholds, unresolved/correction horizons/cadences | **026** |
 | OP-23 Public query/search limits | **Initial implementation settled** | 028 reuses the URL validator: 30 default/100 maximum cards, seven-day ranges, page cap 10,000, 2 KiB query/1 MiB JSON bounds. Nonempty searches share an atomic MySQL UTC budget of 120/minute across replicas, retaining no visitor identity or search text. Genuine MySQL burst acceptance verifies the bound; tune against production workload evidence without treating synthetic tests as capacity approval. | Implemented in 028; operator owns later tuning | [Match feed contract](match-feed-api.md) | **028** |
 | OP-24 Shared cache strategy and lifetimes | **Local implementation complete; hosted qualification pending** | 031 reuses MySQL: five-second mutable envelopes, six-hour immutable revision payloads capped by source permissions, EAT rollover, transactional tag generations and durable receipt recovery. Hits preserve source clocks/versions; failures use bounded stored reads. See [cache policy](public-response-cache.md). Actual trigger/binlog capabilities, maintenance and capacity/cost evidence remain OP-01/12/19/32 gates. §§11, 13. | Implementation settled; operator owns hosted qualification | No new subscription; existing database authorization and per-table grants; private cache maintenance | **031 local implementation**; hosted measurement **046/047** |
-| OP-25 Correction/dispute ownership and public process | **Unresolved** | The audited correction mechanics are settled; assign the actual correction/dispute owner, intake/review process, supporting-evidence rules and factual public statements. Do not promise an unapproved response time or operational policy. §§8, 12–15; prompt 038. | Unassigned; user decision/evidence required | Deferred: correction/dispute owner and public process policy | **038**; intake/legal consumers **040–041** |
+| OP-25 Correction/dispute ownership and public process | **Unresolved release blocker** | The audited correction mechanics are settled; assign the actual correction/dispute owner, intake/review process, supporting-evidence rules and factual public statements. Do not promise an unapproved response time or operational policy. The user explicitly deferred these facts during 038; terms retain that gate. §§8, 12–15; prompts 038/040. | Unassigned; user decision/evidence required | Deferred: correction/dispute owner and public process policy | **038**; intake/legal consumers **040–041** |
 | OP-26 Analytics and visitor/log retention | **Current implementation retained; unresolved facts block release** | Inventory actual log/search/browser-preference/remote-image data flows; choose whether analytics is used, its providers/purposes/recipients/retention and applicable consent/data-handling requirements before enabling tracking. Ads stay disabled. Retention must match actual configuration and permissions. §§12–13, 15; prompts 039/044. | Unassigned; user decision/evidence required | Deferred: analytics enablement/provider, visitor/telemetry/log retention and privacy data-flow policy | **039** notice facts; telemetry activation **044** |
 | OP-27 Operator identity, jurisdiction and legal facts | **Unresolved release blocker** | Obtain actual operator identity, audience/jurisdiction, lawful contact and owner-approved privacy/terms/dispute facts. “Prepared for” attribution supplies no legal identity, address, liability policy or signoff. Do not publish placeholders or invented legal assertions. §§13, 15; prompts 039–040. | Unassigned; user decision/evidence required | Deferred: approved operator/legal/privacy/terms content and factual evidence | **039**; terms **040** |
 | OP-28 Verified public contact route | **Unresolved release blocker** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
@@ -2553,3 +2553,53 @@ No live polling or later feature is activated. See
   compliance is inferred while operator/audience facts are absent. See the
   factual inventory, references and explicit release requirements in
   [privacy-page.md](privacy-page.md). Terms/contact work remains with 040–041.
+
+## 040 - Terms page and factual service limits
+
+- Implement the English terms document in the existing public/information shell,
+  with externalized copy, semantic topic links, bounded mobile typography and
+  existing square tokens. Privacy and terms reuse `InformationNotice` for their
+  review-date and publication-status header. Keep the existing footer entry and
+  prelaunch noindex; add the absolute canonical terms URL.
+- `termsNotice` records a prelaunch draft, `releaseReady: false`, no effective
+  date and the actual technical review date, 10 October 2026. Initial server HTML
+  prominently identifies the draft and the final-publication/public-release
+  block. There is no final-document branch or runtime setting that establishes
+  approval. This is a documented release gate, not an automated deployment lock.
+- Carry forward the user's explicit 038 and 039 deferrals. **OP-25/27/28 remain
+  unresolved release blockers**: no correction/dispute owner, verified contact,
+  intake/evidence/review process, legal operator, audience or jurisdiction has
+  been approved. Do not ask again or infer these facts from GitHub authorship,
+  specification attribution, the product name or the user's timezone. The interim
+  Contact page is not an operational intake channel. No response SLA is invented.
+- Describe the actual free, account-free information service and four regulation
+  markets. Probabilities are estimates; neither wins nor accuracy are guaranteed.
+  AI-valid groups take priority over supported validated API-Football fallback.
+  The daily midnight EAT run covers today plus six days; partial/delayed/missing
+  information, original clocks, strict cutoff and separate score checks remain
+  visible. This is implemented behavior, not an assertion of live source/model
+  activation, subscriptions, qualification or uptime.
+- Link the actual methodology's probabilities, sources, measured performance,
+  schedule, settlement and correction anchors and the current privacy summary.
+  Keep detailed operational documentation there. The public dispute process
+  remains unavailable even though stored provider corrections can resettle the
+  same immutable locked pick.
+- State supported public browsing/search/filter access without inventing a
+  content licence or ownership assignment. Credit API-Football by API-Sports and
+  original reporting; claim no ownership of team/provider/reporting assets,
+  endorsement or affiliation. **OP-06/08/13 evidence remains required** for public
+  display, redistribution and retention; private API access, attribution and
+  original bundled branding do not resolve downstream rights.
+- Final publication also needs the privacy page's unresolved hosting, logging,
+  analytics and source/evidence/audit/backup retention decisions. OP-26 and
+  related OP-31/32 gates remain open. The current implementation is retained;
+  no acceptance tracking, account, paywall, betting/payment, analytics, contact
+  backend or deployment is introduced.
+- Reviewed the current [WIPO copyright FAQ](https://www.wipo.int/en/web/copyright/faq-copyright)
+  and [CMA fair-contract guidance](https://www.gov.uk/guidance/writing-a-fair-contract-for-customers)
+  (updated 22 July 2026). These inform rights/clarity review only; the CMA source
+  is conditional on actual UK applicability. No jurisdiction, liability waiver,
+  indemnity, age restriction, forum/arbitration requirement or enforceability
+  guarantee is selected. Actual operator/audience facts, permissions, owner
+  approval and applicable legal review must precede a genuine effective date.
+  See [terms-page.md](terms-page.md) for evidence and the remaining decisions.
