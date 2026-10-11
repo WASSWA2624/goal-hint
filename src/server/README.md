@@ -96,3 +96,26 @@ refresh jobs. Reuse the canonical importer, queue and history writer in the shar
 transaction. Its [runbook](../../docs/daily-selection.md) describes the protected
 midnight trigger, recorded degradation/cycle inputs, progress and recovery.
 Unchosen competition/status or degradation policy blocks the affected live path.
+
+`odds/` imports API-Football pre-match odds for one documented bookmaker (prompt
+052). Use `createOddsImportService` with the adapter's separate `odds` namespace,
+`createMysqlOddsStore` and an `OddsAuthority`. Keep provider I/O before any
+transaction and never create fixtures from odds rows. Snapshots are append-only
+and content-chained, and each one links to a receipt that recorded its exact
+observation. The public price projection is written only while the authority
+verifies `football-odds-rights`; without it, `expire()` stales every fresh price.
+Job gates use `oddsQuotaAllows`, which gives odds only the day's spare (their own
+enrichment dispatches) and never the reserve. Feed and detail read prices through
+`odds-read.ts` with the effective `publicPolicy.features.providerOdds` flag, which
+stays off until OP-36 display rights are recorded. Odds never reach AI, evidence or
+fallback inputs. Read the [provider odds runbook](../../docs/provider-odds.md).
+
+`teams/` fills `FootballTeam.code` for tight phone cards from spare quota. Use
+`createTeamCodeService` with `createMysqlTeamCodeStore` and the ordinary catalog
+importer: it imports `/teams?league&season` for the nearest competition-seasons
+with codeless teams and never writes codes itself. The catalog's own teams
+receipts are the checked-at markers (30 days, or 1 day after a failed receipt),
+so no table of its own exists. `createTeamCodeJobDefinitions` gates each hourly
+sweep with `oddsQuotaAllows`; team codes and odds share one spare at
+`enrichment` priority. Read the
+[football catalog](../../docs/football-catalog.md#team-codes-spare-quota-import).

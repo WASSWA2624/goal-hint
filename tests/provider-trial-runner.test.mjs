@@ -6,6 +6,7 @@ import { createApiFootballAdapter } from "../src/server/football/api-football-ad
 import { createQuotaGateway } from "../src/server/football/quota-gateway.ts";
 import { parseTrialPlan } from "../src/server/football/provider-trial-input.ts";
 import { chargedTrialRequests, runProviderTrial } from "../src/server/football/provider-trial-runner.ts";
+import { buildTrialReport } from "../src/server/football/provider-trial-evaluation.ts";
 
 // Isolated synthetic journals and transports; no provider suitability or account qualification evidence.
 const NOW = parseUtcInstant("2026-10-08T12:00:00Z");
@@ -49,7 +50,9 @@ function runtime({ run = () => result(), source = "synthetic", authorize = () =>
       teams: (...args) => perform("teams", args), competitions: (...args) => perform("competitions", args),
       playerStatistics: (...args) => perform("player-statistics", args), statistics: (...args) => perform("statistics", args),
       availability: (...args) => perform(args[1], args),
-    }, fallback: { predictions: (...args) => perform("predictions", args) } },
+    }, fallback: { predictions: (...args) => perform("predictions", args) },
+    odds: { prices: (...args) => perform("odds", args), bets: (...args) => perform("odds-bets", args),
+      bookmakers: (...args) => perform("odds-bookmakers", args) } },
   };
 }
 const clock = () => ({ now: () => NOW });
@@ -349,4 +352,89 @@ test("actual adapter pagination and retries consume cumulative capacity through 
   assert.equal(session.read().tasks[1].observation.result.requestsDispatched, 2);
   assert.equal(new Set(reservations.map(({ requestId }) => requestId)).size, 4);
   assert.equal(session.read().tasks.some(({ id }) => id === "later"), false);
+});
+
+test("odds trial tasks dispatch only through the separate adapter odds namespace with the task reservation", async () => {
+  const trialPlan = plan([task("bets", { kind: "odds-bets" }, 1), task("bookmakers", { kind: "odds-bookmakers" }, 1),
+    task("odds-date", { kind: "odds", query: { date: "2026-10-08", bookmakerId: 6 } }, 2),
+    task("odds-fixture", { kind: "odds", query: { fixtureId: 301, bookmakerId: 6 } }, 1)], { maxRequests: 5 });
+  const session = memorySession(trialPlan);
+  const transport = runtime();
+  assert.deepEqual(await runProviderTrial(session, transport, { clock: clock() }), { reason: "completed" });
+  assert.deepEqual(transport.calls.map(({ kind }) => kind), ["odds-bets", "odds-bookmakers", "odds", "odds"]);
+  assert.deepEqual(transport.calls[2].arguments[0], { date: "2026-10-08", bookmakerId: 6 });
+  assert.deepEqual(transport.calls[3].arguments[0], { fixtureId: 301, bookmakerId: 6 });
+  assert.equal(transport.calls[2].arguments[1].maxRequests, 2);
+  assert.equal(transport.calls[2].arguments[1].priority, "enrichment");
+  assert.equal(transport.calls[2].arguments[1].cacheMaxAgeMs, 0);
+  assert.equal(transport.calls[0].arguments[0].maxRequests, 1);
+});
+
+test("odds trial plans reject unsupported selectors before any journal or provider work", () => {
+  for (const operation of [{ kind: "odds", query: { date: "2026-10-08" } }, { kind: "odds", query: { bookmakerId: 6 } },
+    { kind: "odds", query: { date: "2026-10-08", fixtureId: 1, bookmakerId: 6 } }, { kind: "odds", query: { date: "2026-02-30", bookmakerId: 6 } },
+    { kind: "odds", query: { fixtureId: 1, bookmakerId: 0 } }, { kind: "odds", query: { date: "2026-10-08", bookmakerId: 6, bet: 1 } },
+    { kind: "odds-bets", search: "under" }, { kind: "odds-bookmakers", query: {} }]) {
+    assert.throws(() => plan([task("odds", operation, 1)]), /Private input values are withheld/u);
+  }
+});
+
+test("a bounded odds trial through the real adapter records pages, catalogs and coverage for the odds findings", async () => {
+  const reservations = [], network = [];
+  const limiter = {
+    async reserve(request) { reservations.push(request); return { status: "reserved", permit: {
+      requestId: request.requestId, periodId: hash("synthetic-odds-period"), ownerToken: hash(request.requestId),
+      dispatchedAt: NOW, launchBefore: NOW + 1000 } }; },
+    async claimLaunch() { return { status: "claimed", timeoutMs: 1000 }; },
+    async complete() { return { status: "recorded" }; },
+  };
+  const bets = [
+    { id: 1, name: "Match Winner", values: [{ value: "Home", odd: "2.10" }, { value: "Draw", odd: "3.30" }, { value: "Away", odd: "3.60" }] },
+    { id: 5, name: "Goals Over/Under", values: [{ value: "Over 2.5", odd: "1.90" }, { value: "Under 2.5", odd: "1.95" }] },
+    { id: 8, name: "Both Teams Score", values: [{ value: "Yes", odd: "1.80" }, { value: "No", odd: "2.00" }] },
+    { id: 12, name: "Double Chance", values: [{ value: "Home/Draw", odd: "1.30" }, { value: "Draw/Away", odd: "1.70" }, { value: "Home/Away", odd: "1.35" }] },
+  ];
+  const oddsRow = (fixtureId) => ({ league: { id: 39, name: "Synthetic league", season: 2026 }, update: "2026-10-08T09:00:00+00:00",
+    fixture: { id: fixtureId, timezone: "Africa/Kampala", date: "2026-10-08T18:00:00+03:00", timestamp: Date.parse("2026-10-08T15:00:00Z") / 1000 },
+    bookmakers: [{ id: 6, name: "Synthetic bookmaker", bets }] });
+  const adapter = createApiFootballAdapter({ accountId: hash("synthetic-trial-account"), credential: { read: () => "synthetic-trial-private-key" },
+    authorize() {}, gateway: createQuotaGateway({ limiter, authorize() {} }), clock: { now: () => NOW }, random: () => 0.5, sleep: async () => {},
+    async fetcher(input) {
+      const url = new URL(input); network.push(url);
+      const page = Number(url.searchParams.get("page") ?? "1");
+      const rows = url.pathname === "/odds/bets" ? [{ id: 1, name: "Match Winner" }, { id: 5, name: "Goals Over/Under" },
+        { id: 8, name: "Both Teams Score" }, { id: 12, name: "Double Chance" }]
+        : url.pathname === "/odds/bookmakers" ? [{ id: 6, name: "Synthetic bookmaker" }]
+          : url.searchParams.has("fixture") ? [oddsRow(301)] : Array.from({ length: 10 }, (_, index) => oddsRow(page * 100 + index));
+      const total = url.pathname === "/odds" && url.searchParams.has("date") ? 3 : 1;
+      return new Response(JSON.stringify({ get: url.pathname.slice(1), parameters: Object.fromEntries(url.searchParams), errors: [],
+        results: rows.length, paging: { current: page, total }, response: rows }), { headers: { "content-type": "application/json" } });
+    },
+  });
+  const trialPlan = plan([task("bets", { kind: "odds-bets" }, 1), task("bookmakers", { kind: "odds-bookmakers" }, 1),
+    task("odds-date", { kind: "odds", query: { date: "2026-10-08", bookmakerId: 6 } }, 2),
+    task("odds-fixture", { kind: "odds", query: { fixtureId: 301, bookmakerId: 6 } }, 1)], { maxRequests: 5 });
+  const session = memorySession(trialPlan);
+  const transport = { adapter, source: "live-provider", authorize() {}, verifyObservation: () => true, verifyFreshness: () => true };
+  // The date sample stops at its own two-request allowance, so the run is incomplete by design.
+  assert.deepEqual(await runProviderTrial(session, transport, { clock: clock() }), { reason: "incomplete" });
+  assert.deepEqual(network.map((url) => url.pathname), ["/odds/bets", "/odds/bookmakers", "/odds", "/odds", "/odds"]);
+  assert.deepEqual(network.slice(2, 4).map((url) => url.searchParams.get("page")), ["1", "2"]);
+  assert.equal(reservations.length, 5);
+  assert.ok(reservations.every((reservation) => reservation.priority === "enrichment"));
+  assert.equal(chargedTrialRequests(session.read()), 5);
+  const date = session.read().tasks.find(({ id }) => id === "odds-date").observation.result;
+  assert.equal(date.status, "partial");
+  assert.equal(date.error.reason, "request-budget-exhausted");
+  assert.equal(date.data.length, 20);
+  const report = buildTrialReport(session.read(), { clock: clock(), verifyObservation: () => true, verifyEvidence: () => true, verifyFreshness: () => true });
+  for (const requirement of ["odds-pagination", "odds-update-times", "odds-bet-catalog", "odds-coverage"]) {
+    assert.equal(report.findings.find((item) => item.requirement === requirement).status, "confirmed", requirement);
+  }
+  assert.equal(report.oddsSuitability, "qualified");
+  // The synthetic transport sends no quota headers: a core failure that leaves the odds verdict untouched.
+  assert.equal(report.findings.find((item) => item.requirement === "quota-headers").status, "failed");
+  assert.equal(report.liveSuitability, "failed");
+  assert.equal(report.liveOperations, "blocked");
+  assert.match(report.findings.find((item) => item.requirement === "odds-coverage").result, /bookmaker 6: 21 of 21/u);
 });

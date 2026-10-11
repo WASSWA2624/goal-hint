@@ -11,7 +11,7 @@ try {
     options[field] = value;
   }
   const outcome = await executeTrialCommand({ action, directory: ".tmp/provider-trial", ...options });
-  console.log(`Provider trial: ${outcome.reason}. Suitability: ${outcome.report.liveSuitability}.`);
+  console.log(`Provider trial: ${outcome.reason}. Suitability: ${outcome.report.liveSuitability}. Odds import suitability: ${outcome.report.oddsSuitability}.`);
   console.log(`Report: ${outcome.reportFile}`);
   console.log(`JSON: ${outcome.jsonFile}`);
   if (action === "run" && outcome.reason !== "completed") process.exitCode = 2;

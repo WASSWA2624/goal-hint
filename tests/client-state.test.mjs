@@ -215,6 +215,29 @@ test("calendar rollover resets relative pagination and keeps a historical filter
   assert.equal(state(store).view.firstPage, null);
 });
 
+test("equal versions refresh observation prices (052) without replacing forecast content", () => {
+  const store = makeStore(bootstrap());
+  const price = { family: "match-result", selection: "home-win", price: "1.85", basis: "bookmaker", retrievedAt: now - 60_000, providerUpdatedAt: null };
+  receive(store, [fixture({ prices: [price] })]);
+  assert.deepEqual(state(store).records["fixture-a"].prices, [price]);
+  // Price writes never bump the fixture version, so an equal-version page must still carry the new price.
+  const moved = { ...price, price: "1.90", retrievedAt: now };
+  const sameVersion = fixture({ prices: [moved] });
+  sameVersion.forecast.markets[0].reasons = ["Equal-version forecast text is not adopted"];
+  receive(store, [sameVersion]);
+  assert.deepEqual(state(store).records["fixture-a"].prices, [moved]);
+  assert.deepEqual(state(store).records["fixture-a"].forecast.markets[0].reasons, ["Synthetic explanation"]);
+  receive(store, [fixture({ prices: [] })]);
+  assert.deepEqual(state(store).records["fixture-a"].prices, [], "a withdrawn or stale price disappears");
+  // An incoherent equal-version record (another cycle) keeps the accepted snapshot, prices included.
+  const accepted = state(store).records["fixture-a"];
+  receive(store, [fixture({ cycleId: "cycle-other", prices: [price] })]);
+  assert.strictEqual(state(store).records["fixture-a"], accepted);
+  // A price for another family's selection, or with three places, is not a valid snapshot.
+  assert.throws(() => fixture({ prices: [{ ...price, selection: "away-win" }] }));
+  assert.throws(() => fixture({ prices: [{ ...price, price: "1.855" }] }));
+});
+
 test("local storage permits only bounded anonymous view preferences", () => {
   assert.match(preferencesStorageKey, /preferences/);
   assert.deepEqual(readPreferences(serializePreferences({ density: "compact" })), { density: "compact" });

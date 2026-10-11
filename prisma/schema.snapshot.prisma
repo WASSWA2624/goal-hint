@@ -33,6 +33,7 @@ model ApiQuotaAccount {
   attempts      ApiQuotaAttempt[]
   resultPoller  ResultPollerLease?
   resultBatches ResultSyncBatch[]
+  oddsBatches   OddsImportBatch[]
 }
 
 model ApiQuotaPeriod {
@@ -218,6 +219,9 @@ model FootballFixture {
   predictionSets        PredictionSet[]
   lifecycleState        FixtureLifecycleState?
   lifecycleObservations FixtureLifecycleObservation[]
+  oddsSnapshots         ProviderOddsSnapshot[]
+  oddsState             FixtureOddsState?
+  oddsPrices            FixtureOddsPrice[]
 
   @@unique([provider, externalId])
   @@index([eatDate, kickoff])
@@ -1170,4 +1174,114 @@ model DurableJobUsage {
   attempt          DurableJobAttempt @relation(fields: [attemptId, jobId], references: [id, jobId], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([jobId, version])
+}
+
+// Prompt 052 provider odds. Raw provider payloads are never stored; prices live only in
+// normalized snapshots. The application role never deletes odds rows.
+// Append-only import receipt: INSERT/SELECT only. Page provenance without quota feedback; no prices.
+model OddsImportBatch {
+  id                 String                 @id @db.Char(64)
+  accountId          String                 @db.Char(64)
+  kind               String                 @db.VarChar(16)
+  scopeKey           String                 @db.VarChar(96)
+  policyHash         String                 @db.Char(64)
+  status             String                 @db.VarChar(16)
+  requestsDispatched Int                    @db.UnsignedInt
+  receivedAt         DateTime               @db.DateTime(3)
+  integrity          String                 @db.Char(64)
+  body               Json
+  account            ApiQuotaAccount        @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  betObservations    OddsBetObservation[]
+  snapshots          ProviderOddsSnapshot[]
+  fixtureStates      FixtureOddsState[]
+
+  @@index([accountId, receivedAt])
+  @@index([scopeKey, receivedAt])
+}
+
+// Every /odds/bets name ever observed (053/054 mapping input): INSERT/SELECT only, insert-if-absent.
+model OddsBetObservation {
+  id            String          @id @db.Char(64)
+  provider      String          @db.VarChar(32)
+  betExternalId Int             @db.UnsignedInt
+  name          String          @db.VarChar(256)
+  batchId       String          @db.Char(64)
+  firstSeenAt   DateTime        @db.DateTime(3)
+  batch         OddsImportBatch @relation(fields: [batchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([provider, betExternalId, name])
+  @@index([batchId])
+}
+
+// Append-only, content-chained prices per fixture x bookmaker x bet: INSERT/SELECT only.
+// A row is written only when the canonical values differ from the latest row for that key.
+model ProviderOddsSnapshot {
+  id                  String                @id @db.Char(64)
+  fixtureId           String                @db.Char(36)
+  batchId             String                @db.Char(64)
+  previousId          String?               @unique @db.Char(64)
+  bookmakerExternalId Int                   @db.UnsignedInt
+  bookmakerName       String?               @db.VarChar(128)
+  betExternalId       Int                   @db.UnsignedInt
+  betName             String?               @db.VarChar(256)
+  valuesHash          String                @db.Char(64)
+  selectionCount      Int                   @db.UnsignedSmallInt
+  retrievedAt         DateTime              @db.DateTime(3)
+  providerUpdatedAt   DateTime?             @db.DateTime(3)
+  retainUntil         DateTime              @db.DateTime(3)
+  integrity           String                @db.Char(64)
+  body                Json
+  fixture             FootballFixture       @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  batch               OddsImportBatch       @relation(fields: [batchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  previous            ProviderOddsSnapshot? @relation("ProviderOddsSnapshotChain", fields: [previousId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  next                ProviderOddsSnapshot? @relation("ProviderOddsSnapshotChain")
+  prices              FixtureOddsPrice[]
+
+  @@unique([id, fixtureId])
+  @@index([fixtureId, bookmakerExternalId, betExternalId, retrievedAt])
+  @@index([batchId])
+  @@index([retainUntil])
+}
+
+// Mutable per-fixture odds state and mutex: INSERT/SELECT plus
+// UPDATE(latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion).
+model FixtureOddsState {
+  fixtureId             String          @id @db.Char(36)
+  latestBatchId         String          @db.Char(64)
+  policyHash            String          @db.Char(64)
+  lastRetrievedAt       DateTime        @db.DateTime(3)
+  lastProviderUpdatedAt DateTime?       @db.DateTime(3)
+  withdrawnAt           DateTime?       @db.DateTime(3)
+  publicVersion         Int             @default(0) @db.UnsignedInt
+  fixture               FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  latestBatch           OddsImportBatch @relation(fields: [latestBatchId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([latestBatchId])
+}
+
+// Mutable public projection read by feed and detail; one row per (fixture, market, selection), so the
+// feed join is 1:1. Written only under verified odds display rights. INSERT/SELECT plus non-key UPDATE.
+model FixtureOddsPrice {
+  fixtureId           String                @db.Char(36)
+  marketKey           String                @db.VarChar(96)
+  selection           String                @db.VarChar(64)
+  basis               String                @db.VarChar(16)
+  bookmakerExternalId Int?                  @db.UnsignedInt
+  line                Decimal?              @db.Decimal(6, 2)
+  priceDecimal        Decimal               @db.Decimal(10, 4)
+  displayHundredths   Int                   @db.UnsignedInt
+  impliedProbability  Decimal               @db.Decimal(13, 12)
+  overround           Decimal               @db.Decimal(13, 12)
+  method              String                @db.VarChar(32)
+  mappingVersion      String                @db.VarChar(32)
+  snapshotId          String?               @db.Char(64)
+  basisJson           Json?
+  retrievedAt         DateTime              @db.DateTime(3)
+  providerUpdatedAt   DateTime?             @db.DateTime(3)
+  stale               Boolean
+  fixture             FootballFixture       @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  snapshot            ProviderOddsSnapshot? @relation(fields: [snapshotId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict, map: "FixtureOddsPrice_snapshot_fkey")
+
+  @@id([fixtureId, marketKey, selection])
+  @@index([snapshotId, fixtureId])
 }

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatistics,
-  normalizePlayerStatistics, normalizeAvailability, normalizeFallbackPrediction } from "../src/server/football/api-football-normalize.ts";
+  normalizePlayerStatistics, normalizeAvailability, normalizeFallbackPrediction, normalizeOdds, normalizeOddsCatalogEntry,
+  parseOffsetInstant } from "../src/server/football/api-football-normalize.ts";
 import { parseUtcInstant } from "../src/domain/calendar.ts";
 
 // Synthetic direct-v3 fixtures. These are contract examples, never live/account evidence.
@@ -323,4 +324,123 @@ test("prediction percentages reject malformed values but do not fabricate missin
   }
   raw.predictions = { winner: { id: 999 } };
   assert.deepEqual(normalizeFallbackPrediction(raw, context("/predictions")), invalid);
+});
+
+// Synthetic /odds rows (prompt 052): labelled contract examples, never recorded provider payloads.
+function oddsRow(overrides = {}) {
+  return {
+    league: { id: 10, name: "Synthetic league", country: "Synthetic", season: 2026 },
+    fixture: { id: 101, timezone: "Africa/Kampala", date: "2026-10-08T21:30:00+03:00", timestamp: 1791484200 },
+    update: "2026-10-08T09:00:00+00:00",
+    bookmakers: [{ id: 8, name: "Synthetic bookmaker", bets: [
+      { id: 1, name: "Match Winner", values: [{ value: "Home", odd: "1.850" }, { value: "Draw", odd: "3.40" }, { value: "Away", odd: "4.00" }] },
+      { id: 5, name: "Goals Over/Under", values: [{ value: "Over 2.5", odd: "1.9" }, { value: "Under 2.5", odd: "1.95" }] },
+    ] }],
+    ...overrides,
+  };
+}
+
+test("odds rows keep verbatim labels, canonical decimal text, provider update time and a deep freeze", () => {
+  const odds = data(normalizeOdds(oddsRow(), context("/odds")));
+  assert.equal(odds.fixtureId, 101);
+  assert.deepEqual(odds.competition, { id: 10, season: 2026 });
+  assert.equal(odds.kickoff, parseUtcInstant("2026-10-08T18:30:00Z"));
+  assert.equal(odds.source.endpoint, "/odds");
+  assert.equal(odds.source.retrievedAt, retrievedAt);
+  assert.equal(odds.source.providerUpdatedAt, parseUtcInstant("2026-10-08T09:00:00Z"));
+  assert.deepEqual(odds.bookmakers[0].bets[0].values, [{ label: "Home", odd: "1.85" }, { label: "Draw", odd: "3.4" }, { label: "Away", odd: "4" }]);
+  assert.deepEqual(odds.bookmakers[0].rejectedBets, []);
+  assert.ok(Object.isFrozen(odds.bookmakers[0].bets[0].values[0]));
+  assert.equal(normalizeOdds(oddsRow(), context("/odds")).missingCoverage.includes("provider-update-time"), false);
+});
+
+test("odds update times use strict offsets, stay unknown when absent and never follow retrieval", () => {
+  const offset = data(normalizeOdds(oddsRow({ update: "2026-10-08T12:00:00+03:00" }), context("/odds")));
+  assert.equal(offset.source.providerUpdatedAt, parseUtcInstant("2026-10-08T09:00:00Z"));
+  const missing = normalizeOdds(oddsRow({ update: null }), context("/odds"));
+  assert.equal(data(missing).source.providerUpdatedAt, null);
+  assert.ok(missing.missingCoverage.includes("provider-update-time"));
+  assert.deepEqual(normalizeOdds(oddsRow({ update: "2026-10-08T10:00:01+00:00" }), context("/odds")), invalid);
+  assert.deepEqual(normalizeOdds(oddsRow({ update: "2026-10-08 09:00:00" }), context("/odds")), invalid);
+  assert.deepEqual(normalizeOdds(oddsRow({ update: "2026-02-30T09:00:00+00:00" }), context("/odds")), invalid);
+  assert.equal(parseOffsetInstant("2026-10-08T09:00:00+15:00"), false);
+});
+
+test("duplicate bookmakers or bets and malformed fixture identity invalidate the whole odds row", () => {
+  const bookmaker = oddsRow().bookmakers[0];
+  assert.deepEqual(normalizeOdds(oddsRow({ bookmakers: [bookmaker, bookmaker] }), context("/odds")), invalid);
+  assert.deepEqual(normalizeOdds(oddsRow({ bookmakers: [{ ...bookmaker, bets: [bookmaker.bets[0], bookmaker.bets[0]] }] }), context("/odds")), invalid);
+  assert.deepEqual(normalizeOdds(oddsRow({ fixture: { id: -1, date: null } }), context("/odds")), invalid);
+  assert.deepEqual(normalizeOdds(oddsRow({ fixture: { ...oddsRow().fixture, timestamp: 1 } }), context("/odds")), invalid);
+  assert.deepEqual(normalizeOdds(oddsRow(), context("/odds/live/bets")), invalid);
+});
+
+test("bet-level quarantine drops malformed prices, numeric values and duplicate labels without failing the fixture", () => {
+  const bets = [
+    { id: 1, name: "Match Winner", values: [{ value: "Home", odd: "1.85" }, { value: "Draw", odd: "3.40" }, { value: "Away", odd: "4.00" }] },
+    { id: 2, name: "Numeric odd", values: [{ value: "Home", odd: 1.85 }] },
+    { id: 3, name: "One is not a price", values: [{ value: "Yes", odd: "1.00" }] },
+    { id: 4, name: "Duplicate label", values: [{ value: "Yes", odd: "1.50" }, { value: "Yes", odd: "2.50" }] },
+    { id: 6, name: "Numeric label", values: [{ value: 1, odd: "4.50" }] },
+    { id: 7, name: "Too many places", values: [{ value: "Yes", odd: "1.23456" }] },
+    { id: 9, name: "Padded label", values: [{ value: " Yes", odd: "1.50" }] },
+    { id: 10, name: "Empty", values: [] },
+    // Snapshots key bets by an unsigned 32-bit id; a larger id cannot be stored, so only that bet is dropped.
+    { id: 4_294_967_296, name: "Beyond storage", values: [{ value: "Yes", odd: "1.50" }] },
+  ];
+  const result = normalizeOdds(oddsRow({ bookmakers: [{ id: 8, name: "Synthetic bookmaker", bets }] }), context("/odds"));
+  const odds = data(result);
+  assert.deepEqual(odds.bookmakers[0].bets.map((bet) => bet.id), [1]);
+  assert.deepEqual(odds.bookmakers[0].rejectedBets, [2, 3, 4, 6, 7, 9, 10, 4_294_967_296]);
+  for (const id of [2, 3, 4, 6, 7, 9, 10, 4_294_967_296]) assert.ok(result.missingCoverage.includes(`odds-bet-rejected:8:${id}`));
+});
+
+test("odds names beyond the stored limits stay unknown and over-long labels or value lists quarantine only their bet", () => {
+  const values = [{ value: "Yes", odd: "1.80" }, { value: "No", odd: "2.05" }];
+  const bets = [
+    { id: 8, name: "Both Teams Score", values },
+    { id: 20, name: "b".repeat(257), values },
+    { id: 21, name: "Bell\u0007", values },
+    { id: 22, name: "Long label", values: [{ value: "\u{1F600}".repeat(33), odd: "1.50" }] },
+    { id: 23, name: "Too many values", values: Array.from({ length: 1_001 }, (_, index) => ({ value: `Label ${index}`, odd: "2.00" })) },
+  ];
+  const result = normalizeOdds(oddsRow({ bookmakers: [{ id: 8, name: "n".repeat(129), bets }] }), context("/odds"));
+  const bookmaker = data(result).bookmakers[0];
+  assert.equal(bookmaker.name, null);
+  assert.ok(result.missingCoverage.includes("odds-bookmaker-name:8"));
+  assert.deepEqual(bookmaker.bets.map((bet) => [bet.id, bet.name]), [[8, "Both Teams Score"], [20, null], [21, null]]);
+  for (const id of [20, 21]) assert.ok(result.missingCoverage.includes(`odds-bet-name:8:${id}`));
+  assert.deepEqual(bookmaker.rejectedBets, [22, 23]);
+  // Names at the stored limits are kept verbatim.
+  const limits = data(normalizeOdds(oddsRow({ bookmakers: [{ id: 8, name: "n".repeat(128), bets: [{ id: 8, name: "b".repeat(256), values }] }] }), context("/odds")));
+  assert.equal(limits.bookmakers[0].name.length, 128);
+  assert.equal(limits.bookmakers[0].bets[0].name.length, 256);
+  // Absurd names are a malformed row rather than a quarantined bet.
+  assert.deepEqual(normalizeOdds(oddsRow({ bookmakers: [{ id: 8, name: "n".repeat(4_097), bets: [] }] }), context("/odds")), invalid);
+});
+
+test("odds rows without bookmakers or bets stay valid with explicit missing coverage", () => {
+  const empty = normalizeOdds(oddsRow({ bookmakers: [] }), context("/odds"));
+  assert.deepEqual(data(empty).bookmakers, []);
+  assert.ok(empty.missingCoverage.includes("odds-bookmakers"));
+  const noBets = normalizeOdds(oddsRow({ bookmakers: [{ id: 8, name: "Synthetic bookmaker", bets: [] }] }), context("/odds"));
+  assert.ok(noBets.missingCoverage.includes("odds-bookmaker-bets:8"));
+  const noSeason = normalizeOdds(oddsRow({ league: { id: 10 } }), context("/odds"));
+  assert.equal(data(noSeason).competition.season, null);
+  assert.ok(noSeason.missingCoverage.includes("competition-season"));
+  // Canonical text strips only trailing fractional zeros.
+  const prices = data(normalizeOdds(oddsRow({ bookmakers: [{ id: 8, name: "Synthetic bookmaker", bets: [{ id: 1, name: "Match Winner",
+    values: [{ value: "Home", odd: "10.50" }, { value: "Draw", odd: "100" }, { value: "Away", odd: "1.0001" }] }] }] }), context("/odds")));
+  assert.deepEqual(prices.bookmakers[0].bets[0].values.map((value) => value.odd), ["10.5", "100", "1.0001"]);
+});
+
+test("odds catalog rows require a positive id and a clean name; unknown provider keys are stripped", () => {
+  const entry = data(normalizeOddsCatalogEntry({ id: 1, name: "Match Winner", extra: "ignored" }, context("/odds/bets")));
+  assert.deepEqual({ id: entry.id, name: entry.name, endpoint: entry.source.endpoint }, { id: 1, name: "Match Winner", endpoint: "/odds/bets" });
+  assert.equal(entry.source.providerUpdatedAt, null);
+  assert.equal(data(normalizeOddsCatalogEntry({ id: 8, name: "Synthetic bookmaker" }, context("/odds/bookmakers"))).id, 8);
+  for (const raw of [{ id: 0, name: "x" }, { id: 1, name: "" }, { id: 1, name: " padded" }, { id: 1 }, { id: "1", name: "x" },
+    { id: 1, name: "x".repeat(257) }, { id: 1, name: "Bell\u0007" }, { id: 1, name: null }]) {
+    assert.deepEqual(normalizeOddsCatalogEntry(raw, context("/odds/bets")), invalid);
+  }
 });

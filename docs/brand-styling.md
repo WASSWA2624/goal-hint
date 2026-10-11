@@ -89,13 +89,23 @@ polite status region for a meaningful changing message; leave it off for static
 outcome lists. `EmptyState` defaults to a level-two heading and accepts
 `headingLevel` to fit the page hierarchy. It does not invent a data-state claim.
 
+The logo pairs a heavy open G (a thick filled ring with a square crossbar) and
+a solid football inside it with a Manrope ExtraBold (800) wordmark; see the
+[brand kit](../assets/brand/README.md) for the artwork and its regeneration.
 `BrandLogo` displays the 553:128 SVG at 176px wide with 12px clear space on all
-sides; below 64rem the header shows it at the 160px brand minimum with 9px clear
-space, so the phone bar stays 56px tall. `BrandMark` displays a 32px mark with
+sides. Below 64rem the content-page header and the feed's brand bar show it at
+the 160px brand minimum with no extra padding, on the 16px page gutter; the
+3.25rem (52px) `theme.header.phoneHeight` bar leaves about 7.5px above and
+below, and the artwork adds about 3.5px of its own margin, which together
+exceed a quarter of the displayed mark. `BrandMark` displays a 32px mark with
 8px clear space and loads lazily, so the footer mark is not preloaded; the
 header logo stays eager. Use `alt=""` when
 nearby text already names the brand, and an accessible “Goal Hint home” name
-for a logo-only home link. Inverse assets require a compatible navy surface.
+for a logo-only home link. Inverse assets require a compatible dark surface:
+navy, or the navy-to-teal `theme.header.background` that every header bar uses.
+Its worst case is the #0C4F5E teal stop, where the white wordmark keeps 9.15:1
+and the inverse teal G 5.03:1; `gradient.tableHeader` is for table headers,
+not the logo.
 The primitives load first-party branding only. Later football images must
 remain direct approved remote URLs.
 
@@ -105,10 +115,30 @@ White text on brand teal has a 4.86:1 contrast ratio. Navy text on white is
 16.69:1; muted text on white is 5.98:1. Outcome text on its own background is
 at least 6.10:1. Input and secondary-button boundaries use the stronger
 `controlBorder` token (3.54:1 on white and 3.32:1 on paper); the lighter brand
-border is reserved for decorative divisions. Focus uses a 3px navy outline
-with a 3px offset. Windows display scaling may return fractional computed
-outline widths. Reduced-motion preference removes meaningful animation and
-transition duration. No motion is needed to understand the interface.
+border is reserved for decorative divisions. On light surfaces focus uses a
+3px navy outline with a 3px offset. On the dark header bars it is a 3px
+inverse-teal (#39D5CA, `theme.header.accent`) ring instead: drawn 4px inside
+the desktop nav links and 6px inside the desktop logo link so the sticky bar
+never clips it, and 2px outside the phone bars' logo, back and round buttons.
+The skip link keeps a navy ring inside its white box and adds a 3px
+inverse-teal halo, so it reads over the bar and the light page alike. Windows
+display scaling may return fractional computed outline widths. Reduced-motion
+preference removes meaningful animation and transition duration. No motion is
+needed to understand the interface.
+
+`theme.header` holds the tokens shared by the desktop shell header and every
+phone top bar (content pages, the feed's brand bar and match details). They
+are the navy-to-teal `background` (#0B1F33, #12294F, #0C4F5E), white `text`,
+82% white `mutedText` for resting links, a 78% white search `placeholder`, the
+inverse-teal `accent` with navy `onAccent`, translucent white control and
+field fills, light section-icon `tone` tints, a 3.25rem `phoneHeight` and a
+soft `shadow`. Ratios are measured on every stop, with each translucent fill
+composited over the bar in 8-bit colour; the #0C4F5E end is always the worst
+case. White text keeps 9.15:1, resting links 6.72:1, the placeholder 4.55:1
+on the focused field and white icons 5.08:1 on `controlHover`. The `accent`
+indicator and focus ring keep 5.03:1, navy on an `accent` fill 9.18:1, and
+the section-icon tints at least 4.82:1. New small text on the bar must keep
+4.5:1 on that teal stop.
 
 ## Development and acceptance
 

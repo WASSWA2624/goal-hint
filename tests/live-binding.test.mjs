@@ -4,7 +4,10 @@ import { createAccountStatusReader, createQuotaRouter, LiveAccountError, parseAc
   PROVIDER_DAY_SETTLE_MS } from '../src/server/live/live-account.ts';
 import { missingOwnerApprovals, OwnerApprovalError, ownerEvidenceVerifier, parseOwnerApprovals } from '../src/server/live/live-approvals.ts';
 import { liveWorkload, REFRESH_REQUESTS_PER_JOB, resultSyncPolicy, selectionPolicy, liveReferences, publicationPolicy,
-  providerFallbackPolicy, cutoffPolicy, lifecyclePolicy, fallbackRefreshPlan, refreshEnvelopeFor } from '../src/server/live/live-plan.ts';
+  providerFallbackPolicy, cutoffPolicy, lifecyclePolicy, fallbackRefreshPlan, refreshEnvelopeFor, oddsPolicy, oddsImportBounds, oddsCatalogBounds,
+  oddsMaxRequests, ODDS_MINIMUM_SPARE } from '../src/server/live/live-plan.ts';
+import { parseOddsPolicy } from '../src/server/odds/odds-input.ts';
+import { ODDS_SWEEP_MS, oddsQuotaAllows } from '../src/server/odds/odds-jobs.ts';
 import { parseRefreshPlan } from '../src/server/refresh/refresh-input.ts';
 import { refreshReference } from '../src/server/refresh/refresh-input.ts';
 import { latestSelectionOccurrence } from '../src/server/live/live-runner.ts';
@@ -121,6 +124,79 @@ test('workload scales from verified limits without code changes', () => {
     assert.ok(workload.refreshCapacity >= 0 && workload.refreshFloor <= Math.min(limit, 120_000));
     parseResultSyncPolicy(resultSyncPolicy(liveReferences(parseRuntimePolicy(refsEnv)), workload, [{ competitionId: 39, season: 2026 }]));
   }
+});
+
+test('odds spend only quota above every ordinary need of the day and stay off on free and slow plans', () => {
+  // [daily limit, plan, minute limit] -> [floor, spare, eligible]; Mega keeps the internal 120,000 ceiling.
+  const plans = [[100, 'Free', 10, 99, 1, false], [100, 'Free', Number.POSITIVE_INFINITY, 99, 1, false], [7500, 'Pro', 300, 6639, 861, true],
+    [75_000, 'Ultra', 450, 30_264, 44_736, true], [150_000, 'Mega', 900, 46_014, 73_986, true]];
+  for (const [limit, plan, minuteLimit, floor, spare, eligible] of plans) {
+    const workload = liveWorkload(limit, 12, plan, minuteLimit), usable = Math.min(limit, 120_000);
+    const resultsShare = Math.max(4, Math.floor(usable * 0.25)), reserve = Math.max(14, Math.floor(usable * 0.1));
+    const ordinary = 14 + workload.refreshCapacity * REFRESH_REQUESTS_PER_JOB + resultsShare + reserve;
+    assert.deepEqual([workload.odds.floor, workload.odds.spare, workload.odds.eligible], [floor, spare, eligible], `${plan} ${limit}`);
+    assert.equal(workload.odds.reserve, Math.min(workload.odds.floor, reserve), 'odds never take the ordinary reserve');
+    assert.ok(ordinary <= workload.odds.floor && workload.odds.floor <= usable, 'the floor protects selection, every refresh, results and the reserve');
+    assert.equal(workload.odds.floor + workload.odds.spare, usable);
+    assert.ok(workload.odds.floor >= workload.refreshFloor, 'odds stop before refresh jobs would');
+    assert.equal(workload.odds.eligible, workload.odds.spare >= ODDS_MINIMUM_SPARE && workload.pacing === 'standard');
+    assert.deepEqual([workload.odds.sweepMs, workload.odds.dates, workload.odds.maxPages], [ODDS_SWEEP_MS, Math.min(7, workload.importDays), 150]);
+  }
+  assert.equal(liveWorkload(75_000, 12, 'Ultra', 30).odds.eligible, false, 'slow pacing keeps odds off whatever the spare');
+  const mega = liveWorkload(150_000, 12, 'Mega', 900);
+  assert.equal(mega.refreshCapacity, 2000); assert.equal(mega.workers, 6, 'odds add no refresh worker');
+
+  const policy = parseRuntimePolicy({ ...refsEnv, GOAL_HINT_ODDS_IMPORT_ENABLED: 'true', GOAL_HINT_ODDS_BOOKMAKER_ID: '8' }), refs = liveReferences(policy);
+  assert.equal(oddsPolicy(parseRuntimePolicy(refsEnv), liveReferences(parseRuntimePolicy(refsEnv)), mega), null, 'no bookmaker is ever assumed');
+  const free = parseOddsPolicy(oddsPolicy(policy, refs, liveWorkload(100, 1, 'Free', 10)));
+  assert.equal(free.horizonDays, 2); assert.equal(free.bookmakerId, 8);
+  const pro = parseOddsPolicy(oddsPolicy(policy, refs, liveWorkload(7500, 5, 'Pro', 300)));
+  assert.deepEqual([pro.horizonDays, pro.sweepMs, pro.freshnessMs, pro.retainAfterKickoffMs], [7, ODDS_SWEEP_MS, 12 * 3_600_000, 30 * DAY]);
+  assert.equal(pro.retentionEvidenceRef, refs.retention); assert.equal(pro.evidenceRef, refs.odds);
+  assert.equal(refs.oddsRights, null, 'without a rights reference odds stay private');
+  // Sweeps run at enrichment priority, uncached, and the gate reserves exactly each operation's dispatch ceiling.
+  const deadline = NOW + 270_000, prices = oddsImportBounds(deadline, 150), catalog = oddsCatalogBounds(deadline);
+  assert.deepEqual([prices.priority, prices.cacheMaxAgeMs, prices.maxRequests, prices.maxPages, prices.maxRows], ['enrichment', 0, 154, 150, 1500]);
+  assert.deepEqual([catalog.priority, catalog.cacheMaxAgeMs, catalog.maxRequests, catalog.maxPages], ['enrichment', 0, 3, 1]);
+  assert.deepEqual([oddsMaxRequests('prices', 150), oddsMaxRequests('bets', 150), oddsMaxRequests('bookmakers', 1)], [154, 3, 3]);
+  assert.ok(Object.isFrozen(prices) && Object.isFrozen(catalog));
+});
+
+test('partly spent ordinary quota leaves the odds spare intact: on Pro the gate counts ordinary use once', async () => {
+  const pro = liveWorkload(7500, 5, 'Pro', 300), allowance = { floor: pro.odds.floor, spare: pro.odds.spare, reserve: pro.odds.reserve };
+  assert.deepEqual(allowance, { floor: 6639, spare: 861, reserve: 750 });
+  const need = oddsMaxRequests('prices', pro.odds.maxPages), pollsPerHour = 3_600_000 / pro.cadence.dateMs;
+  assert.equal(pollsPerHour, 60, 'Pro polls the date feed every minute');
+  // One request per date poll; every 3-hour slot sweeps all seven dates at ten pages each.
+  let oddsUsed = 0;
+  const slots = [];
+  for (let hour = 0; hour < 24; hour += 3) {
+    const ordinary = hour * pollsPerHour;
+    let dates = 0;
+    for (let date = 0; date < pro.odds.dates; date++) {
+      if (!oddsQuotaAllows({ remaining: 7500 - ordinary - oddsUsed, used: ordinary + oddsUsed, oddsUsed }, allowance, need)) continue;
+      oddsUsed += 10; dates++;
+    }
+    slots.push(dates);
+    // The previous gate (remaining >= floor + ceiling) reserved the spent poll requests a second time.
+    if (hour >= 12) assert.ok(7500 - ordinary - oddsUsed < allowance.floor + need, `the double-counting gate was closed by ${hour}:00 UTC`);
+  }
+  assert.deepEqual(slots, Array(8).fill(7), 'the 18:00 and 21:00 UTC slots still reconfirm prices for late kickoffs');
+  assert.ok(oddsUsed <= allowance.spare);
+  // Odds stop once their own spend leaves less than one ceiling of the spare, whatever ordinary work has used.
+  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - 707, used: 1500 + 707, oddsUsed: 707 }, allowance, need), true);
+  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - 708, used: 1500 + 708, oddsUsed: 708 }, allowance, need), false);
+
+  // The router reads the gate's counters from the open provider day's durable limiter.
+  const clock = { now: Date.parse('2026-10-10T12:00:00.000Z') }, store = memoryQuotaStore(clock);
+  const router = createQuotaRouter({ store, clock: { now: () => clock.now }, readStatus: async () => parseAccountStatus(status({
+    subscription: { plan: 'Pro', end: '2027-01-01T00:00:00+00:00', active: true }, requests: { current: 720, limit_day: 7500 } }), clock.now) });
+  assert.equal(await router.counters(), null, 'no provider day is open before the first account check');
+  const opened = await router.refresh(), counters = await router.counters();
+  assert.deepEqual([counters.day.accountId, counters.day.periodId, counters.remaining, counters.used], [opened.accountId, opened.periodId, 6780, 720]);
+  assert.equal(oddsQuotaAllows({ remaining: counters.remaining, used: counters.used, oddsUsed: 0 }, allowance, need), true);
+  clock.now = opened.endsAt;
+  assert.equal(await router.counters(), null, 'a closed provider day has no counters');
 });
 
 test('every generated policy passes its owning service parser', () => {

@@ -6,6 +6,7 @@ import { publicPolicy } from "../../domain/public-policy.ts";
 import type { MatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { catalogScopeKey, normalizeCatalogSearch, parseCatalogImportRequest } from "../football/catalog-input.ts";
+import { oddsPriceJoin } from "../odds/odds-read.ts";
 import { storedSelectionManifest } from "../selection/selection-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 
@@ -25,7 +26,10 @@ const displayedSet = Prisma.sql`CASE
       WHEN c.state='void' THEN COALESCE(c.lockedSetId,c.currentSetId,
         (SELECT p.id FROM PredictionSet p WHERE p.cycleId=c.id ORDER BY p.cycleRevision DESC LIMIT 1)) END`;
 
-export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[]) {
+/** `providerOdds` is the caller's effective odds flag (publicPolicy.features.providerOdds unless an isolated test
+ * overrides it), so the SQL join and filter always follow the same rule as the record prices. */
+export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
+  providerOdds: boolean = publicPolicy.features.providerOdds) {
   const markets = Prisma.join(query.markets);
   // One shown pick per fixture: the highest selected probability among the chosen families,
   // ties broken by policy order. Browser presentation applies the same rule to the same doubles.
@@ -34,7 +38,8 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id
     LEFT JOIN MarketPrediction m ON m.setId=${displayedSet} AND m.family=(SELECT b.family FROM MarketPrediction b
       WHERE b.setId=${displayedSet} AND b.family IN (${markets}) AND b.available=TRUE
-      ORDER BY b.selectedProbability DESC, FIELD(b.family, ${Prisma.join(publicPolicy.markets)}) ASC LIMIT 1)`;
+      ORDER BY b.selectedProbability DESC, FIELD(b.family, ${Prisma.join(publicPolicy.markets)}) ASC LIMIT 1)
+    ${providerOdds ? oddsPriceJoin : Prisma.empty}`;
   const scope = publicFixtureCohortScope(range, competitionIds);
   const filters: Prisma.Sql[] = [scope];
   if (query.leagues.length > 0) filters.push(Prisma.sql`l.id IN (${Prisma.join(query.leagues)})`);
@@ -47,6 +52,11 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     filters.push(Prisma.sql`m.available=TRUE AND m.selectedProbability>=${(query.probability.min - 0.5) / 100}
       AND m.selectedProbability<${(query.probability.max + 0.5) / 100}`);
   }
+  // Inclusive bounds on the shown pick's own stored two-place price. A fixture without a fresh price for exactly
+  // that family and selection drops out through NULL semantics; another family's price never qualifies it.
+  // Odds stay unread while provider odds are not public, so the feed never depends on the odds tables then
+  // (parseFeedQuery already rejects `odds` in that case; this guard keeps a hand-built query from joining).
+  if (query.odds && providerOdds) filters.push(Prisma.sql`m.available=TRUE AND op.displayHundredths BETWEEN ${query.odds.min} AND ${query.odds.max}`);
   if (query.search) {
     // Match %, _ and the escape character literally. Values never become SQL.
     const pattern = `%${normalizeCatalogSearch(query.search).replace(/[!%_]/gu, "!$&")}%`;

@@ -24,7 +24,7 @@ const Row = styled.div`
   gap: ${({ theme }) => theme.space.sm};
   min-inline-size: 0;
 `;
-/** Containers may set --gh-logo-size; 32px remains the reserved default. */
+/** Containers may set --gh-logo-size; 32px remains the reserved default. --gh-logo-ring outlines the initials only. */
 const LogoBox = styled.span<{ $loaded: boolean }>`
   display: grid;
   flex-shrink: 0;
@@ -35,6 +35,7 @@ const LogoBox = styled.span<{ $loaded: boolean }>`
   border-radius: var(--gh-logo-radius, 0);
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme, $loaded }) => $loaded ? "transparent" : theme.color.surfaceMuted};
+  box-shadow: ${({ $loaded }) => $loaded ? "none" : "var(--gh-logo-ring, none)"};
   font-size: var(--gh-logo-font, ${({ theme }) => theme.typography.size.small});
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: 1;

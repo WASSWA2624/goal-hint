@@ -40,5 +40,15 @@ test('Reset preserves dates, status entry and page size with consistent defaults
     assert.equal(reset.status, 'live', 'Live and Results are navigation sections, not filters');
     assert.deepEqual(reset.markets, ['match-result']); assert.deepEqual(reset.probability, { min: 0, max: 100 }); assert.equal(reset.picks, 'all');
     assert.deepEqual(reset.sort, { by: 'kickoff', direction: 'asc' });
+    assert.equal(reset.odds, null);
   }
+});
+test('Reset clears odds bounds (052); Apply never carries them while provider odds are off', () => {
+  const query = parseFeedQuery({ odds: '1.50-3.00', prob: '60-100' }, { today, providerOdds: true });
+  assert.deepEqual(query.odds, { min: 150, max: 300 });
+  const reset = resetFeedFilters(query);
+  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en');
+  // The odds controls stay disabled while publicPolicy.features.providerOdds is false; a forged draft fails closed.
+  assert.throws(() => applyFeedDraft(query, today));
+  assert.equal(applyFeedDraft(reset, today).odds, null);
 });

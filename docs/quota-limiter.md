@@ -54,6 +54,27 @@ day, so ordinary daily inputs still run on every plan.
 | Daily inputs | 2 | No |
 | Optional enrichment | 3 | No |
 
+Provider odds imports (prompt 052) and the team-code import (`/teams?league&season`, through the catalog importer)
+are the only live callers at `enrichment` priority. They share one spare under the same gate, which counts
+both. No new priority was added, so these three enums stay unchanged: `quota-mysql-store`, `catalog-input` and
+`provider-trial-input`.
+The limiter's essential reserve still binds odds, but odds stop much earlier. The floor is every ordinary need
+of the provider day: the results share, the reserve, refresh capacity × 2 and 14 selection requests. Odds get
+the spare above it: 861 requests on a 7,500-request day and 73,986 under the 120,000 ceiling. Before any
+dispatch, the odds job checks two things against the open provider day's durable counters:
+
+- `oddsUsed + ceiling <= spare`, where `oddsUsed` is the count of dispatched `enrichment` attempts in the
+  period and the ceiling is 154 for a sweep or 3 for a catalog;
+- `remaining - ceiling >= max(reserve, floor - ordinaryUsed)`, where `ordinaryUsed = used - oddsUsed`.
+
+Ordinary requests already spent are therefore counted once: they lower `remaining` and the ordinary need still
+to come by the same amount. The second check binds only when the provider reports fewer requests left than the
+limiter counted, or when ordinary work has run past its plan; odds then still leave the reserve (750 on Pro).
+A sweep starts only while its whole ceiling fits, so odds spend at most the spare per day; the last sweep
+starts once odds have spent 707 or fewer on Pro. The Free plan has 1 spare request, so odds are never eligible
+on it. A gated or reserve-denied odds job expires for the slot instead of retrying, because the gate's slack
+never grows within a provider day. See [live-operations.md](live-operations.md#odds-imports-052).
+
 `QuotaRequest` requires a unique attempt ID, canonical work hash, trusted priority,
 absolute UTC deadline and bounded timeout in milliseconds. Job owners supply
 these bounds; this feature does not invent the unresolved OP-11 job budgets.

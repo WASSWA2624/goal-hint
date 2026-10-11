@@ -5,12 +5,13 @@ import { createMatchDetailHandler } from '../src/server/matches/detail-http.ts';
 import { createMatchDetailService, canonicalMatchSlug } from '../src/server/matches/detail-service.ts';
 import { parseMatchDetailQuery, detailHistoryLink } from '../src/server/matches/detail-query.ts';
 import { publicRevisionAnalysis } from '../src/server/matches/detail-read.ts';
-import { detailRevisionSchema } from '../src/domain/match-detail.ts';
+import { detailOddsGroupSchema, detailRevisionSchema, matchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 import { predictorSnapshot } from './helpers/predictor-output-fixtures.mjs';
 import { evidenceContext, evidenceSource } from './helpers/evidence-fixtures.mjs';
 import { modelVersion } from './helpers/predictor-fixtures.mjs';
+import { liveDetail, marketImpliedGroup } from './helpers/live-refresh-fixtures.mjs';
 
 const id = randomUUID();
 for (const query of ['limit=0', 'limit=21', 'limit=01', 'limit=1&limit=2', 'revision=bad', 'cycle=bad',
@@ -74,4 +75,27 @@ test('analysis permits original summaries and attribution, preserves unknown clo
 test('database errors become a structured unavailable failure', async () => {
   const service = createMatchDetailService({ database: { transaction: async () => { throw new Error('private database'); } } });
   await assert.rejects(service.query(id), (error) => error.code === 'unavailable' && !error.message.includes('private database'));
+});
+test('market-implied odds groups (052) are labelled, complete, one per family and empty by default', () => {
+  const detail = liveDetail();
+  assert.deepEqual(detail.odds, [], 'no odds envelope without recorded display rights');
+  const legacy = { ...detail }; delete legacy.odds;
+  assert.deepEqual(matchDetailResponseSchema.parse(legacy).odds, [], 'older cached envelopes parse with an explicit empty default');
+  const groups = [marketImpliedGroup(), marketImpliedGroup('double-chance', { 'home-or-draw': '1.25', 'away-or-draw': '1.80', 'home-or-away': '1.30' }),
+    marketImpliedGroup('total-goals', { 'over-2.5': '1.90', 'under-2.5': '1.95' }), marketImpliedGroup('both-teams-to-score', { yes: '1.80', no: '2.00' })];
+  assert.equal(matchDetailResponseSchema.parse({ ...detail, odds: groups }).odds.length, 4);
+  assert.equal(detailOddsGroupSchema.parse(groups[0]).label, 'market-implied');
+  const sum = (group) => group.selections.reduce((total, item) => total + Number(item.impliedProbability), 0);
+  assert.ok(Math.abs(sum(groups[0]) - 1) < 1e-9); assert.ok(Math.abs(sum(groups[1]) - 2) < 1e-9);
+  for (const odds of [[groups[0], groups[0]], [...groups, marketImpliedGroup('match-result')]]) {
+    assert.equal(matchDetailResponseSchema.safeParse({ ...detail, odds }).success, false);
+  }
+  const [home, draw, away] = groups[0].selections;
+  for (const group of [{ ...groups[0], label: 'estimated-probability' }, { ...groups[0], family: 'exact-score' }, { ...groups[0], basis: 'exchange' },
+    { ...groups[0], bookmakerName: 'Synthetic bookmaker' }, { ...groups[0], bookmakerUrl: 'https://example.test/bet' },
+    { ...groups[0], selections: [home] }, { ...groups[0], selections: [home, draw, away, home] }, { ...groups[0], selections: [home, home, away] },
+    { ...groups[0], selections: [{ ...home, price: '1.855' }, draw, away] }, { ...groups[0], selections: [{ ...home, impliedProbability: '1.000000000000' }, draw, away] },
+    { ...groups[0], selections: [{ ...home, impliedProbability: 0.5 }, draw, away] }, { ...groups[0], overround: '1.05' }, { ...groups[0], method: 'Proportional' }]) {
+    assert.equal(detailOddsGroupSchema.safeParse(group).success, false, JSON.stringify(group).slice(0, 120));
+  }
 });

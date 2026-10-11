@@ -52,6 +52,13 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
           COALESCE(SUM(GREATEST(0, TIMESTAMPDIFF(MICROSECOND, startedAt, finishedAt) DIV 1000)), 0) AS total,
           COUNT(*) AS count FROM DurableJobAttempt WHERE finishedAt >= ${since}`)[0]!;
         metrics["job-duration-ms"] = Number(duration.total); metrics["job-duration-count"] = Number(duration.count);
+        // Football requests attributed to odds receipts (052). Informational: odds spend only quota above the ordinary floor.
+        metrics["odds-requests"] = (await tx.oddsImportBatch.aggregate({ where: { receivedAt: { gte: since } },
+          _sum: { requestsDispatched: true } }))._sum.requestsDispatched ?? 0;
+        // Football requests attributed to teams receipts: the spare-quota team-code import, the only /teams caller.
+        // Informational: it shares the odds spare and gate.
+        metrics["team-code-requests"] = (await tx.footballImport.aggregate({ where: { kind: "teams", recordedAt: { gte: since } },
+          _sum: { requestsDispatched: true } }))._sum.requestsDispatched ?? 0;
         metrics["missing-locks"] = await tx.predictionCycle.count({ where: { state: "open", activeForFixtures: { some: {} }, OR: [
           { cutoffAt: { lte: new Date(at - t.lockGraceMs) } }, { publicationBarrier: { isNot: null } },
           { fixture: { status: { in: ["live", "finished-regulation", "finished-extra-time", "finished-penalties"] } } },

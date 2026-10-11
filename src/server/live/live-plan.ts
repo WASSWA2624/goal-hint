@@ -5,7 +5,12 @@ import { marketRules } from "../../domain/markets.ts";
 import { operatingRules, type RuntimePolicy } from "../config/runtime-policy.ts";
 import type { EvidencePolicy } from "../evidence/evidence-contract.ts";
 import type { ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import type { ApiFootballBounds } from "../football/api-football-contract.ts";
+import { ODDS_CONTRACT_VERSION, type ApiFootballBounds } from "../football/api-football-contract.ts";
+import { DE_MARGIN_METHOD } from "../../domain/odds.ts";
+import { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
+import type { OddsImportKind, OddsPolicy } from "../odds/odds-contract.ts";
+import { ODDS_SWEEP_MS } from "../odds/odds-jobs.ts";
+import { TEAM_CODES_REQUESTS_PER_SEASON } from "../teams/team-code-jobs.ts";
 import type { JobEnvelope } from "../jobs/job-contract.ts";
 import type { CutoffPolicy } from "../predictions/cutoff-contract.ts";
 import type { LifecyclePolicy } from "../predictions/lifecycle-contract.ts";
@@ -20,13 +25,25 @@ export const LIVE_REFRESH_TYPE = "prediction.daily-refresh";
 /** Each fallback-only refresh dispatches one prediction and one fresh status request. */
 export const REFRESH_REQUESTS_PER_JOB = 2;
 const SELECTION_REQUESTS = 14; // Seven dates with one retry each.
+/** Odds stay off below this many spare ordinary requests per provider day. */
+export const ODDS_MINIMUM_SPARE = 200;
+/** Pages per odds date sweep (10 fixtures per page, per the documented contract). */
+export const ODDS_MAX_PAGES = 150;
+/** OP-07 default for odds: a price must be reconfirmed within 12 hours before kickoff. */
+export const ODDS_FRESHNESS_MS = 12 * 60 * 60_000;
+/** OP-08/OP-31 default: normalized snapshots are retained until kickoff plus 30 days (no purge job exists). */
+export const ODDS_RETAIN_AFTER_KICKOFF_MS = 30 * 24 * 60 * 60_000;
 const clamp = (value: number, minimum: number, maximum: number) => Math.min(maximum, Math.max(minimum, value));
 
 /** "slow" plans allow under one request per second, so a provider call may wait most of a rolling minute for a slot. */
 export type RefreshPacing = "standard" | "slow";
+/** Odds share of the provider day (052). `floor` is every ordinary need of the day and `spare` the odds budget above
+ * it; `reserve` is the ordinary slack odds never take, even when ordinary work runs past its plan. The team-code import
+ * spends from the same spare under the same gate and eligibility, so together they never exceed it. */
+export type OddsWorkload = Readonly<{ floor: number; spare: number; reserve: number; eligible: boolean; sweepMs: number; dates: number; maxPages: number }>;
 export type LiveWorkload = Readonly<{
   dailyLimit: number; refreshCapacity: number; refreshFloor: number; workers: number; importDays: number;
-  pacing: RefreshPacing; refreshLeadMs: number;
+  pacing: RefreshPacing; refreshLeadMs: number; odds: OddsWorkload;
   cadence: NonNullable<ResultSyncPolicy["cadence"]>; unresolved: ResultSyncPolicy["unresolved"]; corrections: ResultSyncPolicy["corrections"];
   maxBatchesPerTick: number;
 }>;
@@ -43,10 +60,18 @@ export function liveWorkload(dailyLimit: number, secondLimit: number, plan = "",
   const pacing: RefreshPacing = minuteLimit < 60 ? "slow" : "standard", workers = clamp(Math.floor(secondLimit / 2), 1, 6);
   // Selected fixtures must still be refreshable once the queue reaches them: skip cutoffs closer than the queue's drain time.
   const refreshLeadMs = clamp(Math.ceil(refreshCapacity / workers) * refreshEnvelopeFor(pacing).timeoutMs, 10 * MINUTE, 2 * HOUR);
+  const importDays = plan.trim().toLowerCase() === "free" ? 2 : 7;
+  // Daily refresh jobs run 21:00-24:00 UTC, at the END of the UTC provider day, so the odds floor protects all of
+  // them plus selection, results and the reserve, not just the refresh floor. Odds spend at most the spare above it
+  // per provider day (the job gate counts odds' own dispatches). Free and slow plans stay ineligible.
+  const oddsFloor = Math.min(usable, resultsShare + reserve + refreshCapacity * REFRESH_REQUESTS_PER_JOB + SELECTION_REQUESTS);
+  const odds = Object.freeze({ floor: oddsFloor, spare: usable - oddsFloor, reserve: Math.min(oddsFloor, reserve),
+    eligible: usable - oddsFloor >= ODDS_MINIMUM_SPARE && pacing === "standard",
+    sweepMs: ODDS_SWEEP_MS, dates: Math.min(7, importDays), maxPages: ODDS_MAX_PAGES });
   return Object.freeze({
     dailyLimit, refreshCapacity, refreshFloor: Math.min(usable, resultsShare + reserve), workers, pacing, refreshLeadMs,
     // API-Football's free plan serves date queries only around today (observed coverage-error beyond tomorrow).
-    importDays: plan.trim().toLowerCase() === "free" ? 2 : 7,
+    importDays, odds,
     // The 15-second shared live feed costs ~5,760 requests on a busy day; smaller plans observe live status through date sync.
     cadence: Object.freeze({ liveMs: usable >= 20_000 ? operatingRules.refresh.livePollSeconds * SECOND : null, dateMs, activeMs }),
     unresolved: Object.freeze([{ untilAgeMs: DAY, intervalMs: Math.max(5 * MINUTE, 2 * activeMs) },
@@ -60,6 +85,8 @@ export function liveWorkload(dailyLimit: number, secondLimit: number, plan = "",
 export type LiveReferences = Readonly<{
   selection: string; retention: string; degradation: string; evidence: string; freshness: string;
   publicRights: string; lifecycle: string; cutoff: string; results: string; refresh: string;
+  /** Owner policy reference for odds imports, and the optional odds display-rights reference (OP-36). */
+  odds: string; oddsRights: string | null;
 }>;
 /** Policy evidence references come from owner-approved runtime configuration. */
 export function liveReferences(policy: RuntimePolicy): LiveReferences {
@@ -71,7 +98,41 @@ export function liveReferences(policy: RuntimePolicy): LiveReferences {
   return Object.freeze({ selection: integrity, retention: required(choices.football.privateUseRef, "GOAL_HINT_FOOTBALL_PRIVATE_USE_REF"),
     degradation: `${integrity}#degraded-imports`, evidence, freshness,
     publicRights: required(choices.football.publicRightsRef, "GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF"),
-    lifecycle: `${freshness}#lifecycle`, cutoff: `${integrity}#cutoff`, results: `${freshness}#results`, refresh: `${integrity}#refresh` });
+    lifecycle: `${freshness}#lifecycle`, cutoff: `${integrity}#cutoff`, results: `${freshness}#results`, refresh: `${integrity}#refresh`,
+    odds: `${freshness}#odds`, oddsRights: choices.odds.rightsRef });
+}
+/** The exact odds policy for this plan, or null when no documented bookmaker is configured. */
+export function oddsPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload): OddsPolicy | null {
+  const bookmakerId = policy.choices.odds.bookmakerId;
+  if (bookmakerId === null) return null;
+  return Object.freeze({ version: 1, evidenceRef: refs.odds, retentionEvidenceRef: refs.retention, basis: "bookmaker", bookmakerId,
+    method: DE_MARGIN_METHOD, mappingVersion: ODDS_MAPPING_VERSION, contractVersion: ODDS_CONTRACT_VERSION, freshnessMs: ODDS_FRESHNESS_MS,
+    retainAfterKickoffMs: ODDS_RETAIN_AFTER_KICKOFF_MS, horizonDays: workload.odds.dates, sweepMs: workload.odds.sweepMs });
+}
+/** Dispatch ceiling of one odds operation (pages plus retries). The job's quota gate requires exactly this much of the
+ * day's unspent odds spare before any provider call, so a sweep can never reach the ordinary work of the day. */
+export function oddsMaxRequests(kind: OddsImportKind, maxPages: number): number { return kind === "prices" ? maxPages + 4 : 3; }
+/** One date sweep at enrichment priority: never the essential reserve, never cached, bounded by the slot. */
+export function oddsImportBounds(deadlineAt: UtcInstant, maxPages: number): ApiFootballBounds {
+  return Object.freeze({ priority: "enrichment", deadlineAt, timeoutMs: 30 * SECOND, maxRequests: oddsMaxRequests("prices", maxPages), maxPages, maxRows: maxPages * 10,
+    // Re-size from the counted odds trial's bytes-per-page evidence.
+    maxResponseBytes: 8_000_000, retry: { maxAttempts: 3, baseDelayMs: SECOND, maxDelayMs: 10 * SECOND }, cacheMaxAgeMs: 0 });
+}
+export function oddsCatalogBounds(deadlineAt: UtcInstant): ApiFootballBounds {
+  return Object.freeze({ priority: "enrichment", deadlineAt, timeoutMs: 30 * SECOND, maxRequests: oddsMaxRequests("bets", 1), maxPages: 1, maxRows: 2000,
+    maxResponseBytes: 2_000_000, retry: { maxAttempts: 3, baseDelayMs: SECOND, maxDelayMs: 10 * SECOND }, cacheMaxAgeMs: 0 });
+}
+/** Team-code imports run when the owner has not turned them off AND the verified plan has the odds spare: the same
+ * eligibility as odds, so never on Free or slow plans, whatever the switch says. */
+export function teamCodeImportsEnabled(policy: RuntimePolicy, workload: LiveWorkload): boolean {
+  return policy.choices.teamCodes.enabled && workload.odds.eligible;
+}
+/** One /teams?league&season import at enrichment priority (the team-code import shares the odds spare). /teams is not
+ * paginated; the row and byte bounds leave room for large cup draws. Never cached, at most one retry. */
+export function teamCodeBounds(deadlineAt: UtcInstant): ApiFootballBounds {
+  return Object.freeze({ priority: "enrichment", deadlineAt, timeoutMs: 25 * SECOND, maxRequests: TEAM_CODES_REQUESTS_PER_SEASON, maxPages: 1,
+    maxRows: 1000, maxResponseBytes: 4_000_000, retry: { maxAttempts: TEAM_CODES_REQUESTS_PER_SEASON, baseDelayMs: SECOND, maxDelayMs: 5 * SECOND },
+    cacheMaxAgeMs: 0 });
 }
 
 export const refreshEnvelope = Object.freeze({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, maxAttempts: 16, timeoutMs: 120_000,

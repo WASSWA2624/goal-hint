@@ -8,8 +8,9 @@ import type { EvidenceRequirement, EvidenceVerifier, RuntimePolicy } from "../co
 /** Ignored local register of owner decisions. A configuration reference verifies
  * only when the owner recorded that exact reference for that exact requirement. */
 export const OWNER_APPROVALS_FILE = ".goal-hint/owner-approvals.json";
+// "football-odds-rights" is never required to run: it only gates public odds projection writes (052).
 const requirements = ["budget-approval", "database-access", "football-private-use", "football-account", "football-public-rights",
-  "research-license", "calibration-configuration", "evidence-policy", "freshness-policy", "shadow-protocol", "pipeline-integrity",
+  "football-odds-rights", "research-license", "calibration-configuration", "evidence-policy", "freshness-policy", "shadow-protocol", "pipeline-integrity",
   "quality-qualification", "release-approval"] as const satisfies readonly EvidenceRequirement[];
 const text = z.string().trim().min(1).max(512).regex(/^[^\p{Cc}]+$/u);
 const register = z.strictObject({ version: z.literal(1), owner: text, approvals: z.array(z.strictObject({

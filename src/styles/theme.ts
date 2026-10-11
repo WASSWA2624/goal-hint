@@ -17,6 +17,20 @@ export type AccentColors = Readonly<{
   /** Large-text fills (bold 18.66px+): both stops keep white text at 3:1 or better. */
   gradient: string;
 }>;
+/**
+ * Market family hues, stricter than AccentColors so every field can carry small text (12px labels and pills).
+ * tests/market-colors.test.mjs checks each pairing at 4.5:1.
+ */
+export type MarketColors = Readonly<{
+  /** White text keeps 4.5:1 or better. */
+  solid: string;
+  /** Clean tint behind `text`; the pick box washes it into white. */
+  soft: string;
+  /** Keeps 4.5:1 or better on `soft` and on white. */
+  text: string;
+  /** Small-text fills: white text keeps 4.5:1 or better at both stops, so 12px pick pills may sit on it. */
+  gradient: string;
+}>;
 export type AccentName = "teal" | "blue" | "violet" | "orange" | "pink" | "amber" | "emerald" | "red";
 
 /** Semantic fields can support another theme without changing component contracts. */
@@ -38,7 +52,7 @@ export interface GoalHintTheme {
     readonly disabledText: string;
     readonly disabledSurface: string;
     readonly outcome: Readonly<Record<OutcomeTone, OutcomeColors>>;
-    readonly market: Readonly<Record<MarketFamily, AccentColors>>;
+    readonly market: Readonly<Record<MarketFamily, MarketColors>>;
     readonly live: AccentColors;
     /** Decorative and selection hues; every soft/text pair passes 4.5:1. */
     readonly accent: Readonly<Record<AccentName, AccentColors>>;
@@ -52,6 +66,36 @@ export interface GoalHintTheme {
     /** Thin decorative edge on feature panels. */
     readonly edge: string;
     readonly page: string;
+  };
+  /**
+   * The branded top bar: the desktop shell header and every phone top bar (shell, feed, match details)
+   * share one deep navy-to-teal fill behind the inverse logo. Light text passes 4.5:1 on every stop,
+   * including on the translucent control fills; `accent` (inverse teal) passes 3:1 for indicators and focus.
+   */
+  readonly header: {
+    readonly background: string;
+    /** Primary text and icons on the bar. */
+    readonly text: string;
+    /** Resting navigation links: 6.7:1 or better on every stop. */
+    readonly mutedText: string;
+    /** Search placeholder: 4.5:1 on the field fill at rest and when focused. */
+    readonly placeholder: string;
+    /** Current-page indicator, focus ring and open-state fills on the bar. */
+    readonly accent: string;
+    /** Text and icons on an `accent` fill. */
+    readonly onAccent: string;
+    /** Round icon buttons; `controlHover` keeps white icons at 4.5:1. */
+    readonly controlFill: string;
+    readonly controlHover: string;
+    /** The search pill; `fieldFillActive` on hover and focus. */
+    readonly fieldFill: string;
+    readonly fieldFillActive: string;
+    readonly controlBorder: string;
+    /** Light section-icon tints on the bar: 3:1 or better on every stop. */
+    readonly tone: Readonly<Record<AccentName, string>>;
+    /** Phone top bars: feed brand bar, content-page header and match-details bar. */
+    readonly phoneHeight: string;
+    readonly shadow: string;
   };
   readonly typography: {
     readonly family: string;
@@ -157,12 +201,17 @@ export const lightTheme: GoalHintTheme = {
       void: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
       unavailable: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
     },
-    // Each market family keeps one hue on every card, row and filter state.
+    // Each market family keeps one hue on every card, row and filter state: match result emerald, double chance
+    // violet, total goals blue, both teams to score orange. Clean tints sit at one lightness (OKLCH L ≈ 0.95). See
+    // MarketColors: `text` keeps 4.5:1 on `soft` and on white, and white keeps 4.5:1 on `solid` and on BOTH gradient
+    // stops, so market gradients may sit behind small text. Match result is the lightest, most vivid emerald that
+    // still holds white text (#00824A: OKLCH L 0.533, C 0.131; white 4.89:1, 4.61:1 under the tile press tint), and its
+    // gradient turns toward fresh green (#07802F, C 0.152; white 5.08:1) instead of fading into the brand teal.
     market: {
-      "match-result": { solid: "#15803D", soft: "#E3F6E9", text: "#14532D", gradient: "linear-gradient(135deg, #15803D 0%, #0D9488 100%)" },
-      "double-chance": { solid: "#7C3AED", soft: "#EFE7FF", text: "#5B21B6", gradient: "linear-gradient(135deg, #7C3AED 0%, #C026D3 100%)" },
-      "total-goals": { solid: "#2563EB", soft: "#E3ECFF", text: "#1E40AF", gradient: "linear-gradient(135deg, #2563EB 0%, #0891B2 100%)" },
-      "both-teams-to-score": { solid: "#C2410C", soft: "#FFEDD5", text: "#9A3412", gradient: "linear-gradient(135deg, #EA580C 0%, #DB2777 100%)" },
+      "match-result": { solid: "#00824A", soft: "#DBF9E7", text: "#00603B", gradient: "linear-gradient(135deg, #00824A 0%, #07802F 100%)" },
+      "double-chance": { solid: "#7C3AED", soft: "#EFE9FF", text: "#5B21B6", gradient: "linear-gradient(135deg, #7C3AED 0%, #A21CAF 100%)" },
+      "total-goals": { solid: "#2563EB", soft: "#E3EDFF", text: "#1E40AF", gradient: "linear-gradient(135deg, #2563EB 0%, #0369A1 100%)" },
+      "both-teams-to-score": { solid: "#C2410C", soft: "#FFEADB", text: "#9A3412", gradient: "linear-gradient(135deg, #C2410C 0%, #BE185D 100%)" },
     },
     live: { solid: "#DC2626", soft: "#FEE2E2", text: "#991B1B", gradient: "linear-gradient(135deg, #DC2626 0%, #DB2777 100%)" },
     accent: {
@@ -216,6 +265,27 @@ export const lightTheme: GoalHintTheme = {
     tableHeader: "linear-gradient(90deg, #0B1F33 0%, #172F63 55%, #0F5E6E 100%)",
     edge: "linear-gradient(90deg, #0F766E 0%, #2563EB 30%, #7C3AED 55%, #DB2777 78%, #F59E0B 100%)",
     page: "radial-gradient(70rem 26rem at 0% -6rem, #DDF3FF 0%, rgb(221 243 255 / 0%) 70%), radial-gradient(60rem 24rem at 100% -4rem, #F1E7FF 0%, rgb(241 231 255 / 0%) 70%), #F4F7FA",
+  },
+  // Worst case is the teal stop: white 9.15:1, links 6.72:1, placeholder 4.55:1 on the focused field,
+  // white icons 5.08:1 on controlHover, accent 5.03:1; navy on accent 9.18:1.
+  header: {
+    background: `linear-gradient(90deg, ${brandTokens.colors.navy} 0%, #12294F 55%, #0C4F5E 100%)`,
+    text: brandTokens.colors.white,
+    mutedText: "rgb(255 255 255 / 82%)",
+    placeholder: "rgb(255 255 255 / 78%)",
+    accent: brandTokens.colors.tealOnDark,
+    onAccent: brandTokens.colors.navy,
+    controlFill: "rgb(255 255 255 / 14%)",
+    controlHover: "rgb(255 255 255 / 22%)",
+    fieldFill: "rgb(255 255 255 / 10%)",
+    fieldFillActive: "rgb(255 255 255 / 14%)",
+    controlBorder: "rgb(255 255 255 / 22%)",
+    tone: {
+      teal: "#5EEAD4", blue: "#93C5FD", violet: "#C4B5FD", orange: "#FDBA74",
+      pink: "#F9A8D4", amber: "#FCD34D", emerald: "#6EE7B7", red: "#FCA5A5",
+    },
+    phoneHeight: "3.25rem",
+    shadow: "0 4px 18px rgb(11 31 51 / 16%)",
   },
   shadow: {
     card: "0 1px 2px rgb(11 31 51 / 6%), 0 6px 20px rgb(11 31 51 / 6%)",

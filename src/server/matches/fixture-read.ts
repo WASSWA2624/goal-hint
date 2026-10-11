@@ -7,11 +7,13 @@ import type { InstantWindow } from "../../domain/calendar.ts";
 import type { MatchFeedRecord } from "../../domain/match-feed.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
+import { validTeamCode } from "../../domain/team-name.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { historyTime, storedCycleDisplay } from "../predictions/history-read.ts";
 import { storedRefreshResult } from "../predictions/publication-read.ts";
 import { storedSettlementProjection } from "../settlement/settlement-read.ts";
 import { fixtureResultMatchesCanonical, resultStatus, storedFixtureResult } from "../results/result-read.ts";
+import { storedFixturePrices } from "../odds/odds-read.ts";
 
 const families = Object.keys(marketSelections) as MarketFamily[];
 const text = (value: string | null) => value?.normalize("NFC").replace(/\p{Cc}/gu, " ").trim() || null;
@@ -24,7 +26,9 @@ export function publicVoidReason(reason: string | null, locale = "en") {
   return { code, explanation: createMessages(locale).text(voidKeys[code]) };
 }
 
-export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string, partialCoverage: boolean, window: InstantWindow, locale: string): Promise<MatchFeedRecord> {
+/** `prices` defaults to publicPolicy.features.providerOdds; prices come from the same snapshot as the feed SQL. */
+export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string, partialCoverage: boolean, window: InstantWindow, locale: string,
+  options: Readonly<{ prices?: boolean }> = {}): Promise<MatchFeedRecord> {
   const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id }, include: { homeTeam: true, awayTeam: true,
     season: { include: { competition: true } }, resultState: true, lifecycleState: true } });
   const messages = createMessages(locale), display = fixture.activeCycleId ? await storedCycleDisplay(tx, fixture.activeCycleId) : null;
@@ -57,6 +61,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
       : item && !item.available && ["unsupported-family", "unsupported-markets"].includes(item.reason) ? "unsupported" : "insufficient-data";
     return { family, reason } as MatchFeedRecord["unavailableMarkets"][number];
   });
+  const prices = await storedFixturePrices(tx, id, markets.map((item) => ({ family: item.market.family, selection: item.market.selection })), options.prices);
   const status = resultStatus.parse(fixture.status);
   const issue = fixture.lifecycleState?.issue ?? null;
   const coherentResult = fixtureResultMatchesCanonical(fixture, result, issue);
@@ -68,7 +73,10 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
   const regulationScore = sealedRegulation ? { home: result!.regulation.home!, away: result!.regulation.away! }
     : catalogRegulation ? { home: fixture.regulationHome!, away: fixture.regulationAway! } : null;
   const live = coherentResult && fixture.status === "live" && result!.reportedGoals.home !== null && result!.reportedGoals.away !== null;
-  const team = (value: typeof fixture.homeTeam) => ({ id: value.id, name: text(value.name), logoUrl: isSafeRemoteImageUrl(value.logoUrl) ? value.logoUrl : null });
+  // A stored code is published only in its validated form (2–5 letters or digits, uppercase); anything else reads as none.
+  // Team fields change only with the fixture's dataVersion: a catalog change to a shared team bumps every fixture that renders it.
+  const team = (value: typeof fixture.homeTeam) => ({ id: value.id, name: text(value.name), code: validTeamCode(value.code),
+    logoUrl: isSafeRemoteImageUrl(value.logoUrl) ? value.logoUrl : null });
   return { fixtureId: id, dataVersion: String(fixture.dataVersion), homeTeam: team(fixture.homeTeam), awayTeam: team(fixture.awayTeam),
     competition: { id: fixture.season.competition.id, name: text(fixture.season.competition.name), country: text(fixture.season.competition.country),
       logoUrl: isSafeRemoteImageUrl(fixture.season.competition.logoUrl) ? fixture.season.competition.logoUrl : null },
@@ -82,5 +90,5 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     forecast: revision ? { runId: revision.runId, runSequence: String(revision.runSequence), revisionId: revision.id, publishedAt: revision.publishedAt, markets,
       updateDelayed: delayed === true, provisional: available.some((item) => item.provenance.kind !== "ai" || item.provenance.provisional) } : null,
     unavailableMarkets, update: { prediction, result: fixture.resultState?.delayReason ? "delayed" : fixture.resultState ? "current" : "untracked" },
-    availabilityMessage: outside && !revision ? messages.text("feed.sevenDayAvailability") : null };
+    availabilityMessage: outside && !revision ? messages.text("feed.sevenDayAvailability") : null, prices };
 }

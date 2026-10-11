@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { CloseIcon, SearchIcon } from "@/components/ui/icons";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
@@ -27,38 +27,58 @@ const Page = styled.article`
   overflow-wrap: anywhere;
   ${desktop} { gap: 12px; }
 `;
+/**
+ * The phone top bar matches the feed's branded bar: the navy to teal fill and brand edge, full bleed
+ * past the page gutter and up through the app page's 10px top padding, with white text and icons.
+ * After a failed live refresh its notice sits above, so the bar keeps its own place there.
+ */
 const PhoneBar = styled.div`
   display: grid;
   grid-template-columns: 2rem minmax(0, 1fr) 2rem;
   align-items: center;
   gap: 8px;
+  min-block-size: ${({ theme }) => theme.header.phoneHeight};
+  margin-block-start: -10px;
+  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
+  padding-inline: ${({ theme }) => theme.layout.gutter};
+  color: ${({ theme }) => theme.header.text};
+  background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.header.background};
+  background-color: ${({ theme }) => theme.color.text};
+  [data-refresh-status] ~ * & { margin-block-start: 0; }
   ${desktop} { display: none; }
   > p { margin: 0; font-size: ${size("title")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
+`;
+/** Inverse-teal focus rings read on every stop of the bar. */
+const barFocus = css`
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
 `;
 const RoundLink = styled(Link)`
   display: grid;
   place-items: center;
   inline-size: 2rem;
   block-size: 2rem;
-  color: ${({ theme }) => theme.color.text};
+  color: ${({ theme }) => theme.header.text};
   border-radius: 50%;
   font-size: 1.125rem;
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; } }
-  ${focusRing}
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlFill}; } }
+  ${barFocus}
 `;
+/** Translucent white round, like the feed bar's; open search fills it with inverse teal. */
 const RoundButton = styled.button`
   display: grid;
   place-items: center;
   inline-size: 2rem;
   block-size: 2rem;
   padding: 0;
-  color: ${({ theme }) => theme.color.accent.blue.text};
-  background: ${({ theme }) => theme.color.accent.blue.soft};
+  color: ${({ theme }) => theme.header.text};
+  background: ${({ theme }) => theme.header.controlFill};
   border: 0;
   border-radius: 50%;
   font-size: 1rem;
   cursor: pointer;
-  ${focusRing}
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
+  &[aria-expanded="true"] { color: ${({ theme }) => theme.header.onAccent}; background: ${({ theme }) => theme.header.accent}; }
+  ${barFocus}
 `;
 const SearchForm = styled.form`
   display: flex;

@@ -273,6 +273,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-33 Quality qualification and measured commitments | **Evidence required** | Accumulate real prospective samples under the frozen protocol; prove market/source/horizon quality and coverage, calibrated-claim eligibility, full-slate cost/capacity and cadence/latency targets. Simulated load is not elapsed shadow observation or unapproved paid-call authority. §§8, 14–15; prompt 047. | Unassigned; user evidence/commitment decision required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: qualification report and approved measurement-supported commitments | **047**, with protocol choices fixed **014** |
 | OP-34 Release decision and signoff | **Unresolved / evidence required** | Assign production release authority and record actual go/no-go evidence tied to build/configuration. All required rights/account/budget/quality/recovery/monitoring/legal gates must pass; an environment reference cannot substitute for missing evidence or owner approval. §§14–15; prompt 048. | Unassigned; user decision/evidence required | `GOAL_HINT_RELEASE_APPROVAL_REF`, `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_OPERATION_SCOPE=production`; Deferred: release owner and readiness report | **048** |
 | OP-35 Domain and production operation | **Evidence required** | Verify authorized domain registration/DNS/HTTPS/canonical redirects, current payable/account/budget state, deployment access and approved release/rollback/observation ownership. No purchase, deployment, production URL or successful scheduler run is established by the specification. §§12, 14–15; prompt 049. | Unassigned; user decision/evidence required | Public canonical origin remains fixed; server production scope/release references; Deferred: authorized domain/DNS/deployment and rollback evidence | **049** |
+| OP-36 Odds display rights and odds operation | **Owner decisions recorded 10 October 2026; display rights and trial evidence required** | Public bookmaker prices, the `odds=` filter and market-implied probabilities need recorded evidence that the API-Football/API-Sports terms permit public display of odds (and, separately, bookmaker names or logos), plus the operator jurisdiction's gambling-advertising rules (OP-27). Until then odds are imported and kept privately, `publicPolicy.features.providerOdds` stays false, the public projection stays empty and `odds=` is an unknown key. The owner accepted the technical defaults: one documented bookmaker, `proportional-v1` de-margin per complete group, `DECIMAL(10,4)` with half-up hundredths, a 1.01–1000.00 range with a "20.00+" top stop, 12-hour freshness with write-time staleness and a frozen closing price, and normalized-only retention to kickoff + 30 days. Still open: the counted odds trial (needs the plan upgrade), the bookmaker id it selects, confirmation that the private-use reference covers odds history, and the rights evidence. No betting, bet slips, affiliate or bookmaker links are ever in scope. §§1, 6, 11, 14–15; prompt 052. | Owner (decisions recorded); evidence required | `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` (`football-odds-rights`), `GOAL_HINT_ODDS_IMPORT_ENABLED`, `GOAL_HINT_ODDS_BOOKMAKER_ID`, `publicPolicy.features.providerOdds` | **052** |
 
 ## 002 — Separate private-shadow and production gates
 
@@ -2886,3 +2887,339 @@ See the [live operations runbook](live-operations.md).
   shared-identity changes. The local role grants both tables insert-only (their intended
   semantics), so the importer now inserts the receipt and its audits once, at the end of the same
   transaction, with final values. Integration tests grant both tables insert-only.
+
+## 050 — Feed query extensions (10 October 2026; verified 11 October 2026)
+
+The code landed in commit `3d827f4` with the 051 screens. The choices below are
+recorded from that code; the MySQL acceptance run is in the progress log.
+
+- **One canonical URL per selection.** `league`, `country` and `market` are comma
+  lists. Repeated list keys from plain checkbox forms join exactly like commas;
+  every other key must stay unique, and an empty value cannot be combined with
+  another value. League and country lists are deduplicated and sorted (at most
+  50 each). Markets are put in policy order, and a repeated market is rejected
+  rather than silently collapsed. Equivalent URLs therefore share one cache key,
+  pagination marker and page link.
+- **Countries come from stored competitions.** `country` matches
+  `FootballCompetition.country`. It accepts letters, marks, digits, spaces and
+  `.'()&-`, up to 128 characters. Country options are derived in the browser
+  from the league options (distinct countries, summed fixture counts), so the
+  response keeps a single bounded option list.
+- **`sortMarket` is removed, not reinterpreted.** It is now an unknown key and
+  returns 400. Sort direction is the separate `dir=asc|desc`. Defaults are
+  kickoff ascending and probability descending, and a default direction is
+  omitted from canonical URLs.
+- **Shown pick.** Each fixture is ranked and filtered by one pick: in the
+  displayed revision, the available family among the selected families with the
+  highest stored unrounded `selectedProbability`, ties in policy order. The SQL
+  uses one correlated `ORDER BY … LIMIT 1` subquery in the `MarketPrediction`
+  join, so a fixture never appears twice. `bestCardFamily` applies the same rule
+  to the same doubles, so the card shows the pick that ordering used.
+- **Probability window matches the displayed percent.** `prob=MIN-MAX` uses
+  whole percents and keeps stored values in `[MIN−0.5, MAX+0.5)` points, so a pick
+  that displays as a boundary percent is included. Fixtures without a shown pick
+  are excluded whenever `prob` or `picks=only` is set. `0-100` is omitted.
+- **Ordering ties.** Missing shown picks sort last in both probability
+  directions. Ties fall back to kickoff ascending, then fixture ID ascending, in
+  both directions; `sort=kickoff&dir=desc` reverses kickoff and fixture ID
+  together.
+- **Longer ranges, same forecast window.** Presets add Next 3 days and Next 30
+  days, and explicit ranges allow 31 days (coverage dates are bounded to 31).
+  Forecasts are still created only for today plus six days; later fixtures keep
+  the existing seven-day `availabilityMessage`.
+- **League options for suggestions.** Options gain `logoUrl` (approved remote
+  image or null) and `fixtures`, the count in the unfiltered date cohort. The API
+  keeps its name/country/ID order; the browser orders suggestions by fixture
+  count, then name. Older DTOs parse with `logoUrl: null` and `fixtures: 0`.
+  Fixture snapshots gain an optional, nullable `competition.logoUrl` so older
+  snapshots still parse. Feed cache projection goes from 4 to 5.
+- **Browser helpers.** `paginationItems` returns at most seven slots
+  (`1 2 3 4 … N`, `1 … N-3 … N`, `1 … p-1 p p+1 … N`). `feedRowNumber` continues
+  numbering across pages.
+- **Reset keeps the status entry.** Reset clears search, leagues, countries, the
+  probability range and the picks-only filter, and selects match result and
+  kickoff ascending. It keeps dates, page size and the status entry, so the
+  Results route keeps its `finished` status. This replaces the 033 rule that
+  selected all statuses.
+- **Picks-only filter.** `picks=only` keeps fixtures that have a shown pick. It
+  backs the "With predictions" toggle, shortened to "Picks only" on phones.
+
+## 051 — Feed screen layout (10 October 2026; acceptance pending)
+
+The screens landed in commit `3d827f4` and were refined in later commits. A
+concurrent workflow is still revising `src/components/**`, so only the
+structural choices are recorded here:
+
+- Cards below 64rem, an aligned table above it. Between 64 and 80rem the table
+  uses the compact column set from `match-columns.ts`.
+- League, country and market chips are ordinary links to canonical URLs, so
+  filters work without JavaScript. Desktop edits stay drafts until Apply. The
+  Apply label shows the draft's live count from `/api/matches` with
+  `pageSize=1&leagues=0`, requested on desktops only. Phones apply choices
+  directly.
+- Numbered pagination replaces Load more and uses the 050 helpers.
+- Odds controls render disabled, with the `feed.filters.oddsPending`
+  explanation. They stay disabled until odds display rights are recorded and
+  `publicPolicy.features.providerOdds` is enabled (prompt 052).
+
+The 051 visual and keyboard acceptance (renders at eight widths, focus,
+screen-reader names, reduced motion) has not been run; see the progress log.
+
+## 052 — Provider odds import (10–11 October 2026; tracker blocked)
+
+Implementation is complete for the rights-off state; the tracker row stays
+unchecked (see the progress log). Runbook: [provider odds](provider-odds.md).
+
+### Owner decisions (chat, 10 October 2026)
+
+1. **Order.** Prompts run 052 → 053 → 054. This run implemented 052 only.
+2. **Build now, run later.** The import is fully built but off:
+   `GOAL_HINT_ODDS_IMPORT_ENABLED` defaults to `false`. The runner also needs a
+   plan with spare ordinary quota, so the current Free plan (and every slow-paced
+   plan) is never eligible. Live calls stay within existing budgets. The counted
+   odds trial is **not** run now: it needs the upgraded plan. Its command,
+   findings and ~20-request allowance are built so the owner can run it later.
+3. **Display rights unconfirmed (OP-36).** Odds are imported and stored
+   privately only. `publicPolicy.features.providerOdds` stays `false`. A new
+   evidence requirement `football-odds-rights`
+   (`GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF`) gates public projection writes; it is
+   never required to start the runner. The public projection stays empty, the
+   odds UI controls stay disabled, and while the flag is off `odds=` is an
+   unknown feed key (400 on the API, not-found on pages). Ignoring the key
+   silently was rejected: it would create cache keys for no-op filters.
+4. **Technical defaults accepted** as recommended:
+   - **One documented bookmaker**, fetched with `bookmaker=` and set by
+     `GOAL_HINT_ODDS_BOOKMAKER_ID` (required when imports are enabled; chosen
+     from the trial's coverage). Every bet that bookmaker publishes is stored.
+     `basis = 'median'` is reserved in the schema as a later additive change.
+   - **De-margin `proportional-v1`** per complete group of one bookmaker and one
+     bet: implied_i = coverage × (1/o_i) / Σ(1/o_j), exact BigInt arithmetic,
+     12 places, half-up. Double chance is normalized within its own bet (sums to
+     2). A missing selection gives no group. An overround below 1 is still
+     normalized and recorded; one of 10 or more is not a usable book.
+   - **Precision.** `priceDecimal DECIMAL(10,4)` keeps the provider decimal;
+     `displayHundredths` is rounded half-up once at write time, and a `CHECK`
+     ties the two. Display and the filter use that value with inclusive bounds,
+     never the probability filter's half-point widening.
+   - **Range.** `odds=MIN-MAX` takes exactly two places, 1.01 ≤ MIN ≤ MAX ≤
+     1000.00. The slider runs 1.01–20.00; a top thumb at 20.00 reads "20.00+"
+     and serializes 1000.00. Both extremes mean no filter.
+   - **Freshness.** A price must be reconfirmed within 12 hours before kickoff.
+     Staleness is decided at write time (each runner tick, and on a complete
+     sweep that omits the fixture), never at read time. After kickoff the last
+     valid pre-kickoff price is frozen as the closing price.
+   - **Retention.** Normalized fields only (`structured-odds-history`,
+     `rawPayloadsStored: false`); snapshots carry `retainUntil` = kickoff + 30
+     days; unchanged prices add no rows (`valuesHash` dedupe). No purge job. The
+     owner still has to confirm that the private-use reference covers odds.
+   - **Quota.** The existing `enrichment` priority (no new priority), 3-hourly
+     UTC slots nearest EAT date first, a dedicated worker, and a gate that
+     gives odds the spare above the day's ordinary floor (floor/spare: Free
+     99/1 ineligible, Pro 6,639/861, Ultra 30,264/44,736, Mega 46,014/73,986).
+     The gate counts odds' own dispatches against the spare; see "Review
+     fixes" below for why `remaining ≥ floor + maxRequests` was replaced.
+   - **Contract version.** `ODDS_CONTRACT_VERSION = "direct-v3-odds-2026-10-10"`;
+     `API_FOOTBALL_CONTRACT_VERSION` is unchanged, so fallback and evaluation
+     cohorts are not split.
+   - **Bet-level quarantine** for malformed odds (see below).
+   - **Gates first.** 050/051 were closed or recorded before 052.
+5. **Tracker.** Row 052 stays unchecked. Blockers: the counted odds trial
+   (pending the plan upgrade) and OP-36 odds display rights. 050 was checked
+   after its MySQL acceptance passed; 051 stays unchecked.
+
+### Provider contract and trial
+
+- **Separate `odds` adapter namespace** outside `evidence` and `fallback`, so
+  prices can never reach AI or fallback inputs. Odds callers never cache
+  (`cacheMaxAgeMs: 0`). Pages hold 10 fixtures (`pageSizeOf`).
+- **Bet-level quarantine** (deliberate deviation from row-level `invalid()`). A
+  bet with a malformed, numeric or ≤ 1 price, a non-string or duplicate label, a
+  label longer than 64 UTF-16 units, 0 or more than 1,000 values, or an id that
+  does not fit an unsigned 32-bit column is dropped. It is listed in
+  `rejectedBets` and `odds-bet-rejected:<bookmaker>:<bet>`. Without this, one bad
+  bet would make the whole multi-page import a schema error. A bad fixture id, a
+  bad or future `update`, or a duplicate bookmaker or bet id still invalidates
+  the row.
+- **Over-long names become null.** A bookmaker name over 128 characters, a bet
+  name over 256, or one with control characters is stored as `null` with
+  missing coverage (`odds-bookmaker-name:*`, `odds-bet-name:*`), matching
+  `odds-input` and the column widths. A null name never matches a mapping.
+  Before, such a name passed the normalizer and then rejected the whole fixture.
+- **Provisional launch bet ids.** `launch-odds-v1` pins Match Winner (1),
+  Double Chance (12), Goals Over/Under (5) and Both Teams Score (8) from the
+  documented examples, before any trial evidence (the plan said "after"). This
+  is safe because a price needs the id **and** exact name to match both the
+  latest stored `/odds/bets` catalog and the `/odds` row; a mismatch only
+  withholds the price. The trial's `odds-bet-catalog` finding confirms or
+  replaces them.
+- **`oddsSuitability` is separate.** The trial report gains `oddsSuitability`,
+  built only from `odds-pagination`, `odds-update-times`, `odds-bet-catalog` and
+  `odds-coverage`. Odds findings no longer affect `liveSuitability` or
+  `liveOperations`; bounded odds samples are left out of the core pagination and
+  update-time findings. `odds-display-rights` (rights scope `odds-display`)
+  gates only public prices. `PROVIDER_TRIAL_VERSION` stays 1 (additive).
+- **Trial allowance.** About 20 owner-authorized requests: account, bets,
+  bookmakers, D with two pages, D+1..D+6 with one each and one `fixture=` query
+  (at most 13), leaving 7 for a second bookmaker. A sample is bounded by the
+  task's `maxRequests`, because a `maxPages` stop reads as pagination-incomplete.
+  The report does not measure response bytes per page; read them from the
+  journal.
+
+### Storage
+
+- **Five tables** (migration `20261010200505_provider_odds_import`): append-only
+  `OddsImportBatch`, `OddsBetObservation` and `ProviderOddsSnapshot`; mutable
+  `FixtureOddsState` and `FixtureOddsPrice` with column-scoped updates and no
+  `DELETE`. Odds never bump `FootballFixture.dataVersion`, never write
+  `PredictionChangeEvent` and never touch `FootballImport`, so in-flight fallback
+  work and global caches are not disturbed.
+- **Snapshot change detection** compares the canonical values **and** the
+  recorded bookmaker and bet names; the snapshot id fingerprints both names. A
+  rename with identical prices therefore appends a chained snapshot. Chains are
+  walked by `previousId` from a single head; forks, gaps and cross-fixture links
+  are refused.
+- **Price times are first-observation times.** A `FixtureOddsPrice` row's
+  `retrievedAt` and `providerUpdatedAt` come from its source snapshot, so they
+  say when that exact price was first seen. Reconfirmations move
+  `FixtureOddsState.lastRetrievedAt`, which staleness uses. This keeps an
+  unchanged price from invalidating caches every slot.
+- **A later observation wins over a sweep's absence**: withdrawal skips a
+  fixture whose `lastRetrievedAt` is after the sweep's receipt.
+- **Write retries.** The store retries a genuine deadlock or write conflict
+  twice; its callbacks hold no provider I/O. Candidate reads for withdrawal and
+  expiry run in transactions so they share the database clock with the
+  per-fixture re-check.
+- **Cache triggers** fire only when `publicVersion` changes (no `DELIMITER`).
+- `test:odds` runs `odds.test.mjs`, `odds-import.test.mjs` and
+  `odds.integration.mjs`.
+
+### Jobs and runner
+
+- **Disabled jobs expire** through the job definition's `eligible()` hook
+  (`eligibility-expired`) and write no receipt. This supersedes the plan's
+  "return succeeded with a disabled receipt".
+- **A refused slot expires** instead of retrying as rate-limited. The gate's
+  slack never grows within a provider day and 3-hour UTC slots never span two
+  days, so a retry cannot succeed; retrying would exhaust 8 attempts and fire
+  the failed-jobs alert daily on Pro once the spare is spent. While no provider
+  day is open (UTC rollover settling) the job retries instead.
+- **`oddsJobOutcome`** decides each receipt: a non-retryable quota denial
+  (essential reserve, daily limit) expires; transport, 429, deadline,
+  shared-work and pacing waits retry within the slot; credential, subscription,
+  authorization and invalid-request failures fail without retry (so the alert
+  fires); schema, coverage, pagination and size faults and every partial sweep
+  end `succeeded` and keep their receipt. The adapter's `retryable` flag is
+  honoured.
+- **Catalog first.** `odds.catalog` has priority 8, above every price sweep
+  (7 down to 1), and is enqueued before each slot's imports (one row per UTC
+  day).
+- **Shared ceilings.** `oddsMaxRequests` (154 per sweep, 3 per catalog) feeds
+  both the adapter bounds and the job gate.
+- **Monitoring.** An informational `odds-requests` metric (sum of
+  `OddsImportBatch.requestsDispatched` in the window) with no alert rule. The
+  dedicated odds worker polls every 10 s when idle.
+- **Costs.** Odds stay out of the AI/research ledger. Football money remains the
+  flat `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS` (≤ US$45). Each odds request is
+  attributed three ways: `OddsImportBatch.requestsDispatched`, `DurableJobUsage`
+  (provider `football`, no cost reference) and `ApiQuotaAttempt` at enrichment
+  priority.
+- **Deferred budget note.** `/odds?date=…&bookmaker=` returns every league the
+  bookmaker prices, while only imported fixtures are applied. On Pro the 861
+  spare requests fund about five full 150-page sweeps a day; smaller dates cost
+  far less (seven ten-page dates per slot cover all eight slots). If dates are
+  large, the spare runs out in the morning and evening kickoffs go stale before
+  kickoff. Once the trial shows fixtures and bytes per page, consider
+  league-scoped queries (league + season + date); that would need adapter,
+  trial and validation changes. The gate already prevents overspending.
+
+### Read path
+
+- **The effective flag drives SQL and prices together.** `feedSql`,
+  `storedFeedFixture`, the detail service and query parsing all take the same
+  effective `providerOdds` value (the global flag unless an isolated test
+  overrides it), so the SQL join and filter can never disagree with record
+  prices. While it is off, the feed SQL never references the odds tables.
+- **Extremes are omitted.** `odds=1.01-1000.00` parses to no filter and is
+  omitted, like `prob=0-100`, so one cohort has one canonical URL and cache key.
+  Hand-built invalid bounds fail serialization rather than being normalized.
+  `serializeFeedQuery` re-checks a query that already holds bounds with odds
+  enabled (bounds can only come from a parse that accepted them), while
+  `applyFeedDraft` keeps the global flag, so a forged draft fails closed.
+- **Shown pick only, exact match.** The filter joins the shown pick's family and
+  selection, `stale = FALSE`, 1:1 by the primary key. Fixtures without a pick or
+  a fresh price drop out, and another family's price never qualifies a fixture.
+  Record `prices` carry one entry per published family's pick by the same rule;
+  `selectedCardPrice` never falls back across families.
+- **Observation fields.** Prices and the detail `odds` envelope change without a
+  fixture-version bump. `mergeFixtureObservation` adopts `prices` at an equal
+  version (feed reducer, pagination merge and live detail), and `sameCardFixture`
+  compares them so cards re-render.
+- **Detail groups** require every selection of the family to be fresh, from one
+  snapshot, with one overround, basis and retrieval time. They are labelled
+  `market-implied` and never enter `snapshot` or forecasts.
+- **No bookmaker identity in public responses**: no name, id, snapshot id or
+  link; `basis` and the method are the only provenance.
+- **Cache.** Feed projection 5 → 6 and detail 3 → 4. The odds bounds enter the
+  feed key through the canonical query. The flag itself is not part of the key:
+  flipping it is a code change, and mutable entries live five seconds.
+- **One runbook.** [provider-odds.md](provider-odds.md) holds storage, import
+  and read-path rules; there is no separate import document.
+
+### Review fixes (11 October 2026)
+
+- **The odds gate counts ordinary use once.** The first gate was
+  `remaining ≥ floor + maxRequests`. `remaining` already excludes the ordinary
+  requests spent today, but the floor is the whole day's ordinary need, so each
+  spent ordinary request also stayed reserved. On Pro the gate closed after 707
+  requests of any kind; the one-minute date poll alone reaches that near 11:47
+  UTC, after which every slot expired and evening kickoffs went stale without a
+  closing price. The gate now gives odds their own budget:
+  `oddsUsed + maxRequests ≤ spare` and
+  `remaining − maxRequests ≥ max(reserve, floor − (used − oddsUsed))`.
+  `oddsUsed` is the count of dispatched `enrichment` attempts in the open
+  period, the limiter's own ledger. It includes uncertain dispatches that never
+  got a receipt, so it is more complete than summing
+  `OddsImportBatch.requestsDispatched`. Odds are the only live caller at that
+  priority. The second check binds only when the provider reports fewer requests
+  left than the limiter counted, or when ordinary work runs past its plan; odds
+  then still leave the reserve (`liveWorkload(...).odds.reserve`, 750 on Pro).
+  The stricter gate was rejected because it made Pro odds nearly useless after
+  midday.
+- **The write phase has its own time budget.** The provider walk now ends 180
+  seconds after the attempt starts (it was 270 of the 300-second job), leaving
+  at least two minutes for writes. Two changes make the writes cheaper. The
+  store verifies each receipt once and keeps up to 16 verified bodies, which is
+  safe because receipts are append-only and sealed; before, each fixture
+  re-read and re-parsed the whole receipt. Each fixture's changed bets go in
+  multi-row `INSERT IGNORE` statements (up to 100 rows each) with one sealed
+  `SELECT … WHERE id IN` re-read, instead of two round trips per bet. Resuming a
+  timed-out import from its stored receipt was not built: receipts hold
+  observation hashes, not prices. A retry walks the pages again and is charged
+  to the odds spare. Re-size `maxPages` and the timeouts from the counted
+  trial's fixtures- and bets-per-page evidence.
+- **Withdrawn display rights hide existing prices.** `expire()` runs on every
+  runner tick, even with imports off. When `football-odds-rights` does not
+  verify, it first stales every fresh `FixtureOddsPrice` row, including frozen
+  closing prices after kickoff and fixtures no sweep reaches. The sweep is
+  bounded per call, makes no provider call and raises each changed fixture's
+  `publicVersion` once. Before, prices written under the rights stayed fresh,
+  hidden only by the code flag.
+- **Each snapshot links to the receipt that observed it.** `applyFixture`
+  requires the receipt's entry for the fixture to carry outcome `apply` and the
+  row's own observation hash, and one of the receipt's pages to carry the row's
+  retrieval time. Otherwise it refuses with `invalid-request`.
+- **Grant order.** The odds grants can only be applied after
+  `npm run db:deploy`: MySQL refuses table and column grants on tables that do
+  not exist yet (ERROR 1146). The runner's `expire()` and the monitoring
+  collector both need SELECT on the odds tables as soon as the migration is
+  deployed.
+
+### Flagged, not changed
+
+- Pre-existing: `live-authorities.ts` refresh `verifyPlan` calls
+  `fallbackRefreshPlan` without `workload.pacing`, so refreshes on slow plans
+  (the current Free plan) are refused. The odds authority shares the runtime's
+  own `oddsPolicy` object and does not repeat it. Raised as a separate task.
+- The odds subtests in `tests/live-runtime.integration.mjs` skip themselves when
+  fewer than three minutes remain in the current 3-hour slot (about a 1–2%
+  chance per run); slot boundaries are covered by unit tests.

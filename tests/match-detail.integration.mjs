@@ -3,6 +3,8 @@ import test from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { matchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { getReportingDate, validateReportingDateRange } from '../src/domain/calendar.ts';
+import { marketSelections } from '../src/domain/markets.ts';
+import { deMargin, parseDecimalOdds } from '../src/domain/odds.ts';
 import { storedFeedRun } from '../src/server/matches/feed-read.ts';
 import { createMatchDetailService } from '../src/server/matches/detail-service.ts';
 import { createMatchDetailHandler } from '../src/server/matches/detail-http.ts';
@@ -14,6 +16,8 @@ import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.t
 import { createMysqlResultSyncStore } from '../src/server/results/result-sync-mysql-store.ts';
 import { createMarketSettlementService } from '../src/server/settlement/settlement-service.ts';
 import { resolveFallbackCandidate } from '../src/server/fallback/fallback-resolution.ts';
+import { createMysqlOddsStore } from '../src/server/odds/odds-mysql-store.ts';
+import { createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { fallbackFixture, fallbackProvider } from './helpers/fallback-fixtures.mjs';
 import { historyCandidate, cycleCreation, cycleChange, revisionInput } from './helpers/prediction-history-fixtures.mjs';
 import { evidenceContext, evidenceSource, evidenceAuthority, evidencePolicy, evidenceHash } from './helpers/evidence-fixtures.mjs';
@@ -21,6 +25,8 @@ import { modelVersion } from './helpers/predictor-fixtures.mjs';
 import { lifecycleAuthority, lifecyclePolicy, lifecycleInput } from './helpers/lifecycle-fixtures.mjs';
 import { resultHash } from './helpers/result-sync-fixtures.mjs';
 import { PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
+import { createSyntheticOddsAdapter, launchBetCatalog, oddsAuthority, oddsBounds, oddsHash, oddsPolicy, oddsRequest, offsetTime,
+  rawOddsRow } from './helpers/odds-fixtures.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
 import { savePageScenarios } from './helpers/page-capture.mjs';
 
@@ -77,6 +83,45 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       assert.equal(matchDetailResponseSchema.safeParse({ ...response, privatePrompt: 'secret' }).success, false);
       assert.doesNotMatch(JSON.stringify(response), /candidateJson|evidenceRef|transportEvidence|requestHash|observationHash|invocationId|promptVersion|rawJson|claims/u);
       capture('open', response);
+    });
+    await t.test('market-implied odds (052) are a separate rights-gated envelope; the revision and AI probabilities are untouched', async () => {
+      // Synthetic bookmaker prices through the real odds adapter, service and store; display rights are a test override.
+      const state = states.get(3000), accountId = oddsHash('match-detail-odds-account'), policy = oddsPolicy(), clock = { now: () => p.now() };
+      await p.a.query((tx) => tx.apiQuotaAccount.create({ data: { id: accountId } }));
+      const odds = createSyntheticOddsAdapter(clock, { setTime: (value) => p.setTime(value) });
+      const importer = createOddsImportService({ adapter: odds.adapter.odds, store: createMysqlOddsStore(p.a),
+        authority: oddsAuthority({ publicDisplay: true }, policy), accountId: () => accountId, bounds: () => oddsBounds(p.now()), clock });
+      const slot = Math.floor(p.now() / 10_800_000) * 10_800_000;
+      odds.state.bets = launchBetCatalog();
+      assert.equal((await importer.importCatalog(oddsRequest('bets', slot, { policy, id: oddsHash('match-detail-odds:bets') }))).status, 'complete');
+      const fixture = await p.catalog.fixtureByProviderId(3000);
+      odds.state.rows = [rawOddsRow(3000, fixture.kickoff, { update: offsetTime(p.now() - 60_000) })];
+      const summary = await importer.importDate(oddsRequest('prices', slot, { date: getReportingDate(fixture.kickoff), policy,
+        id: oddsHash('match-detail-odds:prices') }));
+      assert.equal(summary.status, 'complete'); assert.equal(summary.outcomes.changed, 1);
+      const rightsOff = matchDetailResponseSchema.parse(await read(state));
+      assert.deepEqual(rightsOff.odds, []); assert.deepEqual(rightsOff.fixture.prices, []);
+      const priced = matchDetailResponseSchema.parse(await createMatchDetailService({ database: p.a, clock: { now: () => readAt }, providerOdds: true })
+        .query(state.fixture.id));
+      assert.deepEqual(priced.snapshot, rightsOff.snapshot, 'odds never enter the immutable revision');
+      assert.deepEqual(priced.fixture.forecast, rightsOff.fixture.forecast, 'AI probabilities are not replaced by market-implied ones');
+      assert.deepEqual(priced.odds.map((group) => group.family), ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score']);
+      const prices = { 'match-result': ['1.85', '3.40', '4.20'], 'double-chance': ['1.25', '1.80', '1.30'], 'total-goals': ['1.90', '1.95'],
+        'both-teams-to-score': ['1.80', '2.00'] };
+      for (const group of priced.odds) {
+        assert.equal(group.label, 'market-implied'); assert.equal(group.basis, 'bookmaker'); assert.equal(group.method, policy.method);
+        assert.deepEqual(group.selections.map((item) => item.selection), [...marketSelections[group.family]]);
+        assert.deepEqual(group.selections.map((item) => item.price), prices[group.family]);
+        const exact = deMargin(prices[group.family].map(parseDecimalOdds), group.family === 'double-chance' ? 2 : 1);
+        assert.deepEqual(group.selections.map((item) => item.impliedProbability), exact.probabilities);
+        assert.equal(group.overround, exact.overround);
+        // The shown card price is the same stored price as the detail group for that pick's selection.
+        const pick = priced.fixture.forecast.markets.find((item) => item.market.family === group.family);
+        const price = priced.fixture.prices.find((item) => item.family === group.family);
+        assert.equal(price.selection, pick.market.selection);
+        assert.equal(price.price, group.selections.find((item) => item.selection === pick.market.selection).price);
+      }
+      assert.doesNotMatch(JSON.stringify(priced), /Synthetic bookmaker|bookmakerExternalId|snapshotId|basisJson/u);
     });
     await t.test('provider fallback and mixed-family provenance stay in one coherent revision', async () => {
       const fallback = await publish(3002, { source: 'api-football' });

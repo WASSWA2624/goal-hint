@@ -3,7 +3,7 @@ import test from "node:test";
 import { fixtureSnapshotSchema, parseFixtureSnapshot } from "../src/domain/fixture-snapshot.ts";
 import { hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, sameCardFixture, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
 import { mergeFixtureObservation } from "../src/domain/fixture-reconciliation.ts";
-import { marketRules, validateMarketGroup } from "../src/domain/markets.ts";
+import { marketRules, marketSelections, validateMarketGroup } from "../src/domain/markets.ts";
 import { isSafeRemoteImageUrl } from "../src/domain/remote-image.ts";
 import { createMessages } from "../src/i18n/messages.ts";
 import { makeStore, beginFeedRequest } from "../src/state/store.ts";
@@ -156,4 +156,33 @@ test("compact kickoff parts use the EAT reporting zone regardless of the visitor
   assert.equal(messages.reportingDay(kickoff), "Fri, Oct 16");
   assert.equal(messages.reportingTime(Date.UTC(2026, 9, 16, 21, 30)), "00:30");
   assert.equal(messages.reportingDay(Date.UTC(2026, 9, 16, 21, 30)), "Sat, Oct 17");
+});
+
+test("phone chips have a short market code and pick for every family and selection", () => {
+  // The tile's two-row chip block (5.625rem) is budgeted for the widest pair, "O/U 2.5" + "Under" (docs/match-card.md).
+  const messages = createMessages();
+  for (const [family, selections] of Object.entries(marketSelections)) {
+    const code = messages.text(`market.code.${family}`);
+    assert.ok(code !== `market.code.${family}` && code.length <= 7, `${family}: ${code}`);
+    for (const selection of selections) {
+      const pick = messages.text(`market.pick.${selection}`);
+      assert.ok(pick !== `market.pick.${selection}` && pick.length <= 5, `${selection}: ${pick}`);
+    }
+  }
+});
+
+test("every no-pick reason wraps to at most two lines of the phone chip block", () => {
+  // The 62px tile holds two 13px reason lines in the 5.625rem block; the widest line today, "Predictions start" (17
+  // characters), measures 80.4px at 10px semibold (docs/match-card.md). A third line would be clamped away.
+  const messages = createMessages();
+  for (const reason of ["market", "outside", "updating", "unselected", "closed", "failed", "awaiting"]) {
+    const text = messages.text(`match.noPickReason.${reason}`);
+    assert.notEqual(text, `match.noPickReason.${reason}`);
+    const lines = [];
+    for (const word of text.split(" ")) {
+      if (lines.length > 0 && `${lines.at(-1)} ${word}`.length <= 17) lines[lines.length - 1] += ` ${word}`;
+      else lines.push(word);
+    }
+    assert.ok(lines.length <= 2 && lines.every((line) => line.length <= 17), `${reason}: ${lines.join(" / ")}`);
+  }
 });

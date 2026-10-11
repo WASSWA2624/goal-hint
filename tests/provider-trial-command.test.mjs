@@ -26,7 +26,8 @@ test("offline command generates reproducible JSON and Markdown with all live req
   assert.equal(first.report.liveSuitability, "incomplete");
   assert.equal(first.report.budget.allowance, null);
   assert.equal(first.report.budget.chargedRequests, 0);
-  assert.equal(first.report.findings.length, 34);
+  assert.equal(first.report.findings.length, 39);
+  assert.equal(first.report.oddsSuitability, "incomplete");
   assert.ok(first.report.findings.every((finding) => finding.status === "untested"));
   assert.deepEqual(JSON.parse(await readFile(first.jsonFile, "utf8")), first.report);
   const markdown = await readFile(first.reportFile, "utf8");

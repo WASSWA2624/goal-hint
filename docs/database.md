@@ -339,3 +339,12 @@ The [durable-jobs runbook](durable-jobs.md) defines the additive queue migration
 64 control lock rows, column-scoped application updates and recovery that
 preserves pending work and forecast history. Hosted queue capacity and actual
 database/worker grants remain deployment qualifications.
+
+The [provider-odds runbook](provider-odds.md) covers the five odds tables from
+prompt 052:
+
+- append-only receipts, bet names and content-chained snapshots;
+- a per-fixture state row that acts as the mutex;
+- the public price projection, with column-scoped application updates and no
+  DELETE;
+- the NULL-safe CHECKs and the cache triggers keyed on `publicVersion`.

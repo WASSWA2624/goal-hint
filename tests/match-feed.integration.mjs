@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import test from 'node:test';
 import { matchFeedResponseSchema, matchFeedRules } from '../src/domain/match-feed.ts';
 import { parseFixtureSnapshot } from '../src/domain/fixture-snapshot.ts';
+import { selectedCardPrice } from '../src/domain/match-card.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
 import { createMysqlPublicSearchLimiter } from '../src/server/matches/search-limit.ts';
@@ -12,6 +13,8 @@ import { createScheduleLifecycleService } from '../src/server/predictions/lifecy
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
 import { createMysqlResultSyncStore } from '../src/server/results/result-sync-mysql-store.ts';
 import { createMarketSettlementService } from '../src/server/settlement/settlement-service.ts';
+import { createMysqlOddsStore } from '../src/server/odds/odds-mysql-store.ts';
+import { createOddsImportService } from '../src/server/odds/odds-service.ts';
 import { catalogFixture, catalogRequest, catalogResponse, createSyntheticCatalogAdapter, CATALOG_NOW } from './helpers/catalog-fixtures.mjs';
 import { catalogSelectionAuthority } from './helpers/selection-fixtures.mjs';
 import { historyCandidate, cycleCreation } from './helpers/prediction-history-fixtures.mjs';
@@ -19,6 +22,8 @@ import { modelVersion } from './helpers/predictor-fixtures.mjs';
 import { lifecycleAuthority, lifecyclePolicy, lifecycleInput } from './helpers/lifecycle-fixtures.mjs';
 import { resultHash } from './helpers/result-sync-fixtures.mjs';
 import { PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
+import { createSyntheticOddsAdapter, launchBetCatalog, launchBets, oddsAuthority, oddsBounds, oddsHash, oddsPolicy, oddsRequest, offsetTime,
+  rawOddsRow } from './helpers/odds-fixtures.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
 
 const execute = promisify(execFile), period = 'regulation-including-stoppage-time';
@@ -115,6 +120,12 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       assert.equal((await query({ league: 'unknown-league' })).state, 'no-filter-matches');
       const competitionId = result.records[0].competition.id;
       assert.equal((await query({ league: competitionId, status: 'scheduled' })).total, 72);
+      // Multi-value lists (050): countries come from stored competitions and options count the whole date cohort;
+      // an unknown list member never widens or narrows the matched cohort.
+      assert.deepEqual((await query()).leagues.map((item) => [item.id, item.country, item.fixtures]), [[competitionId, 'Synthetic country', 72]]);
+      assert.equal((await query({ country: 'Synthetic country' })).total, 72);
+      assert.equal((await query({ country: 'Elsewhere,Synthetic country', league: `unknown-league,${competitionId}` })).total, 72);
+      assert.equal((await query({ country: 'Elsewhere' })).state, 'no-filter-matches');
       assert.equal((await query({ status: 'finished' })).total, 0);
     });
     await t.test('selected-family unrounded probability ordering, missing values and stable ties', async () => {
@@ -162,6 +173,89 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       const fallback = await card(3008);
       assert.equal(fallback.forecast.provisional, true);
       assert.ok(fallback.forecast.markets.every((item) => item.market.source === 'api-football'));
+    });
+    await t.test('odds (052): inclusive bounds on the shown pick\'s own fresh price; record prices follow the SQL rule', async () => {
+      // Synthetic bookmaker prices through the real odds adapter, service and store; display rights are a test override.
+      const accountId = oddsHash('match-feed-odds-account'), policy = oddsPolicy(), clock = { now: () => p.now() }, HOUR = 3_600_000;
+      await p.a.query((tx) => tx.apiQuotaAccount.create({ data: { id: accountId } }));
+      const odds = createSyntheticOddsAdapter(clock, { setTime: (value) => p.setTime(value) });
+      const importer = createOddsImportService({ adapter: odds.adapter.odds, store: createMysqlOddsStore(p.a),
+        authority: oddsAuthority({ publicDisplay: true }, policy), accountId: () => accountId, bounds: () => oddsBounds(p.now()), clock });
+      const slot = () => Math.floor(p.now() / (3 * HOUR)) * 3 * HOUR;
+      let sequence = 0;
+      odds.state.bets = launchBetCatalog();
+      assert.equal((await importer.importCatalog(oddsRequest('bets', slot(), { policy, id: oddsHash('match-feed-odds:bets') }))).status, 'complete');
+      const kickoff = (id) => Date.parse('2026-10-09T10:00:00Z') + (id - 3000) * 60_000;
+      const book = { 3000: { home: '1.50' }, 3001: { home: '1.85' }, 3002: { home: '3.00' }, 3004: { home: '5.00' },
+        // A renamed match-result bet withholds that family's price; the total-goals price stays.
+        3005: { matchWinnerName: 'Match Winner (synthetic rename)', over: '2.00' }, 3010: { home: '2.00' } };
+      async function sweep(ids = Object.keys(book).map(Number)) {
+        p.setTime(p.now() + 1000);
+        odds.state.rows = ids.map((id) => rawOddsRow(id, kickoff(id), { update: offsetTime(p.now() - 60_000), bets: launchBets(book[id]) }));
+        const summary = await importer.importDate(oddsRequest('prices', slot(), { date: '2026-10-09', policy, id: oddsHash(`match-feed-odds:${++sequence}`) }));
+        assert.equal(summary.status, 'complete'); assert.equal(summary.outcomes.apply, ids.length); return summary;
+      }
+      await sweep();
+      const oddsFeed = createMatchFeedService({ database: p.a, competitionIds: [39], clock: { now: () => readAt }, providerOdds: true });
+      const read = (parameters) => oddsFeed.query({ date: '2026-10-09', pageSize: '100', ...parameters });
+      const providerId = (record) => [...published.entries()].find(([, state]) => state.fixture.id === record.fixtureId)?.[0] ?? record.fixtureId;
+      const ids = (page) => new Set(page.records.map(providerId));
+      const assertPrices = (page, family, min, max) => {
+        for (const record of page.records) {
+          const shown = selectedCardPrice(record, family);
+          assert.ok(shown, `${record.fixtureId} must have its shown pick's price`);
+          const hundredths = Math.round(Number(shown.price) * 100);
+          assert.ok(hundredths >= min && hundredths <= max, `${shown.price} within ${min}-${max}`);
+        }
+      };
+      const mr = await read({ market: 'match-result', odds: '1.50-3.00' });
+      assert.deepEqual(ids(mr), new Set([3000, 3001, 3002]), 'inclusive at 1.50 and 3.00; no price, no pick or another family excluded');
+      assert.equal(mr.total, 3); assert.equal(mr.coverage.knownFixtures, 72, 'the 1:1 price join never fans out counts');
+      assert.equal(mr.leagues[0].fixtures, 72); assertPrices(mr, 'match-result', 150, 300);
+      assert.deepEqual(ids(await read({ market: 'match-result', odds: '1.51-2.99' })), new Set([3001]));
+      assert.deepEqual(ids(await read({ market: 'match-result', odds: '4.00-6.00' })), new Set([3004]));
+      assert.deepEqual(ids(await read({ market: 'match-result', prob: '65-100', odds: '1.50-3.00' })), new Set([3002]));
+      const goals = await read({ market: 'total-goals', odds: '1.95-2.05' });
+      assert.deepEqual(ids(goals), new Set([3005])); assertPrices(goals, 'total-goals', 195, 205);
+      // 3005 shows its match-result pick (0.600049 > 0.6), which has no price; its in-range goals price never qualifies it.
+      const mixed = await read({ market: 'match-result,total-goals', odds: '1.95-2.05' });
+      assert.equal(mixed.total, 0); assert.equal(mixed.state, 'no-filter-matches');
+      // Record prices: one per published family's pick, by the same rule as the SQL; nothing borrowed across families.
+      const all = await read({ market: 'match-result' });
+      const record = (id, page = all) => page.records.find((item) => item.fixtureId === published.get(id).fixture.id);
+      assert.equal(all.total, 72);
+      const launch = { 'home-win': '1.50', draw: '3.40', 'away-win': '4.20', 'home-or-draw': '1.25', 'home-or-away': '1.30', 'away-or-draw': '1.80',
+        'over-2.5': '1.90', 'under-2.5': '1.95', yes: '1.80', no: '2.00' };
+      assert.equal(record(3000).prices.length, record(3000).forecast.markets.length);
+      assert.deepEqual(record(3000).prices.map((item) => [item.family, item.selection, item.price, item.basis]),
+        record(3000).forecast.markets.map(({ market }) => [market.family, market.selection, launch[market.selection], 'bookmaker']));
+      assert.deepEqual(record(3005).prices.map((item) => item.family), record(3005).forecast.markets.map(({ market }) => market.family)
+        .filter((family) => family !== 'match-result'), 'only the renamed match-result bet is withheld');
+      assert.equal(record(3005).prices.find((item) => item.family === 'total-goals').price, '2.00');
+      assert.equal(selectedCardPrice(record(3005), 'match-result'), null);
+      assert.deepEqual(record(3003).prices, []);
+      assert.ok(all.records.filter((item) => item.forecast === null).every((item) => item.prices.length === 0), 'a price never appears without a pick');
+      assert.doesNotMatch(JSON.stringify(all), /Synthetic bookmaker|bookmakerExternalId|snapshotId|impliedProbability/u);
+      // Rights off (the public default): no prices and odds= rejected, even though private prices exist.
+      assert.ok((await query({ pageSize: '100' })).records.every((item) => item.prices.length === 0));
+      await assert.rejects(query({ odds: '1.50-3.00' }), (error) => error.code === 'invalid-query');
+      const http = await createMatchFeedHandler((parameters) => oddsFeed.query(parameters))(
+        new Request('http://localhost/api/matches?date=2026-10-09&odds=1.50-3.00'));
+      assert.equal(http.status, 400, 'the public route parses with the global flag');
+      // Pagination identity: a reconfirmation keeps it; a public price change or a withdrawal moves it.
+      const version = async () => (await read({ market: 'match-result', odds: '1.50-3.00' })).paginationVersion;
+      const before = await version();
+      await sweep(); assert.equal(await version(), before, 'unchanged prices do not invalidate');
+      book[3001] = { home: '2.10' }; await sweep();
+      const moved = await version(); assert.notEqual(moved, before);
+      assert.equal(selectedCardPrice(record(3001), 'match-result').price, '1.85', 'an earlier response keeps its own snapshot');
+      const changed = await read({ market: 'match-result', odds: '2.10-2.10' });
+      assert.deepEqual(ids(changed), new Set([3001])); assert.equal(selectedCardPrice(record(3001, changed), 'match-result').price, '2.10');
+      // A complete sweep without 3002 withdraws it: its prices turn stale, drop out of the filter and leave the record.
+      await sweep([3000, 3001, 3004, 3005, 3010]);
+      assert.notEqual(await version(), moved);
+      assert.deepEqual(ids(await read({ market: 'match-result', odds: '1.50-3.00' })), new Set([3000, 3001]));
+      assert.deepEqual(record(3002, await read({ market: 'match-result' })).prices, []);
     });
     await t.test('run progress reflects durable job states instead of stale projected counters', async () => {
       const page = await query();

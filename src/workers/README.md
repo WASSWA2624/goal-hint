@@ -80,6 +80,9 @@ quota gateways under the approved shadow/pipeline bounds. See the
 
 `npm run live` (`live.ts`) is the composed fallback-only runner for real API-Football data:
 daily selection scheduling, refresh/cutoff workers, the leased result poller, settlement and
-public-cache maintenance in one private process. It loads `.env.local` then `.env.operations`
+public-cache maintenance in one private process. It also runs one dedicated enrichment worker on its own
+registry, for odds (052) and team codes. Odds imports are scheduled only when `GOAL_HINT_ODDS_IMPORT_ENABLED=true`, a bookmaker is set and
+the plan has spare quota above the ordinary floor. Team-code sweeps (one per UTC hour) need the same spare and
+run unless `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED=false`. It loads `.env.local` then `.env.operations`
 and the owner register in `.goal-hint/owner-approvals.json`. Read the
 [live operations runbook](../../docs/live-operations.md).

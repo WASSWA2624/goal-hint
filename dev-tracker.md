@@ -54,10 +54,15 @@
 | ☐         | [047-shadow-qualification.md](dev-plan/047-shadow-qualification.md)             |
 | ☐         | [048-release-readiness.md](dev-plan/048-release-readiness.md)                   |
 | ☐         | [049-production-deployment.md](dev-plan/049-production-deployment.md)           |
-| ☐         | [050-feed-query-extensions.md](dev-plan/050-feed-query-extensions.md)           |
+| ☑         | [050-feed-query-extensions.md](dev-plan/050-feed-query-extensions.md)           |
 | ☐         | [051-feed-screen-layout.md](dev-plan/051-feed-screen-layout.md)                 |
 | ☐         | [052-provider-odds-import.md](dev-plan/052-provider-odds-import.md)             |
 | ☐         | [053-score-distribution-markets.md](dev-plan/053-score-distribution-markets.md) |
 | ☐         | [054-market-implied-markets.md](dev-plan/054-market-implied-markets.md)         |
 | ☐         | [055-on-device-picks.md](dev-plan/055-on-device-picks.md)                       |
 | ☐         | [056-leagues-and-tips-pages.md](dev-plan/056-leagues-and-tips-pages.md)         |
+
+## Blocked rows
+
+- **052** stays unchecked although its implementation is complete for the rights-off state. Blockers: the counted odds trial has not run (it needs the planned API plan upgrade; owner decision 10 October 2026), and odds display rights are unconfirmed (OP-36), so `publicPolicy.features.providerOdds` stays off. See [development progress](docs/development-progress.md) and [provider odds](docs/provider-odds.md).
+- **051** stays unchecked: its browser acceptance has not run, and `test:detail-page:rendering` failed at its last run (10 October 2026) on the UI-owned detail page.

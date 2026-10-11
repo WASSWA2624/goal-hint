@@ -24,12 +24,17 @@ const operation = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("competitions"), query: z.object({ competitionId: positive.optional(), season: season.optional() }).strict() }).strict(),
   z.object({ kind: z.literal("player-statistics"), query: pair }).strict(),
   ...(["statistics", "lineups", "injuries", "predictions"] as const).map((kind) => z.object({ kind: z.literal(kind), fixtureId: positive }).strict()),
+  z.object({ kind: z.literal("odds"), query: z.union([z.object({ date, bookmakerId: positive }).strict(),
+    z.object({ fixtureId: positive, bookmakerId: positive }).strict()]) }).strict(),
+  z.object({ kind: z.literal("odds-bets") }).strict(),
+  z.object({ kind: z.literal("odds-bookmakers") }).strict(),
 ]);
 export const trialRequirements = ["candidate-competitions", "trial-allowance", "pagination", "canonical-identities", "aliases",
   "league-sample", "cup-sample", "low-coverage-sample", "postponed-sample", "cross-midnight-sample", "extra-time-sample", "shootout-sample", "status-transitions",
   "field-coverage", "provider-update-times", "regulation-scores", "fallback-match-result", "fallback-double-chance", "fallback-total-goals", "fallback-btts",
   "fallback-prematch", "fallback-freshness", "account-plan", "account-limits", "quota-headers", "provider-reset", "subscription-expiry", "payable-total",
-  "private-use-rights", "data-redistribution", "prediction-redistribution", "remote-logo-rights", "media-host-restrictions", "credential-free-logo-urls"] as const;
+  "private-use-rights", "data-redistribution", "prediction-redistribution", "remote-logo-rights", "media-host-restrictions", "credential-free-logo-urls",
+  "odds-pagination", "odds-update-times", "odds-bet-catalog", "odds-coverage", "odds-display-rights"] as const;
 const evidence = z.object({ id: slug, requirement: z.enum(trialRequirements),
   kind: z.enum(["official-source", "account-record", "rights-record", "operator-record", "synthetic"]),
   source: z.string().min(1).max(2000).refine((value) => {

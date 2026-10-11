@@ -9,6 +9,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
+import { publicPolicy } from "../../domain/public-policy.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 import { feedSql, storedFeedCoverage, storedFeedRun } from "./feed-read.ts";
@@ -16,7 +17,8 @@ import { storedFeedFixture } from "./fixture-read.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 
-export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate, context: Readonly<{ locale?: string; routeDate?: string }> = {}) {
+export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate,
+  context: Readonly<{ locale?: string; routeDate?: string; providerOdds?: boolean }> = {}) {
   try {
     if (input instanceof URLSearchParams && Buffer.byteLength(input.toString(), "utf8") > matchFeedRules.maximumQueryBytes) throw new Error();
     const query = parseFeedQuery(input, { ...context, today }), range = resolveFeedDates(query, today);
@@ -32,13 +34,17 @@ function pageLink(query: FeedQuery, today: ReportingDate, number: number | null)
     ? { kind: "date", date: dates.startDate } : { kind: "range", from: dates.startDate, to: dates.endDate } }, today)}`;
 }
 
-export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache }>) {
+/** `providerOdds` defaults to publicPolicy.features.providerOdds (off until odds display rights are recorded);
+ * isolated tests may enable it to exercise the odds filter and prices. */
+export function createMatchFeedService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[]; clock?: Clock; cache?: PublicResponseCache;
+  providerOdds?: boolean }>) {
   const parsedIds = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
   if (!parsedIds.success || new Set(parsedIds.data).size !== parsedIds.data.length) throw new MatchFeedError("unavailable");
   const { database } = options, competitionIds = Object.freeze(parsedIds.data), limiter = createMysqlPublicSearchLimiter(database);
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
+  const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   return Object.freeze({ async query(input: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}): Promise<MatchFeedResponse> {
-    const asOf = clock.now(), today = getReportingDate(asOf), query = parseMatchFeedQuery(input, today, context);
+    const asOf = clock.now(), today = getReportingDate(asOf), query = parseMatchFeedQuery(input, today, { ...context, providerOdds });
     const range = resolveFeedDates(query, today), window = createPredictionWindow(today), messages = createMessages(query.locale);
     try {
       if (query.search) await limiter.consume();
@@ -48,7 +54,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const tags = ["global:catalog", ...Array.from({ length: range.dayCount }, (_, day) => `date:${addReportingDays(range.startDate, day)}`)];
         const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v1", query: feedQueryKey(query, today),
           scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
-        const sql = feedSql(query, range, competitionIds);
+        const sql = feedSql(query, range, competitionIds, providerOdds);
         const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.joins} WHERE ${sql.scope}`);
         // Options cover the entire date cohort, independently of applied filters/page.
         const leagueRows = await tx.$queryRaw<{ id: string; name: string | null; country: string | null; logoUrl: string | null; fixtures: bigint }[]>(Prisma.sql`
@@ -67,7 +73,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
         const records = [];
         for (const { id } of rows) {
-          const record = await storedFeedFixture(tx, id, false, window, query.locale);
+          const record = await storedFeedFixture(tx, id, false, window, query.locale, { prices: providerOdds });
           const date = record.kickoffAt === null ? null : getReportingDate(record.kickoffAt);
           record.partialCoverage = dates.find((entry) => entry.date === date)?.authoritative !== true;
           records.push(record);
@@ -87,7 +93,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range,
-        query: { ...query, projection: 5, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 7, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

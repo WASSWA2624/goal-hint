@@ -139,6 +139,13 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
       if (!day || clock.now() >= day.endsAt) return 0;
       return options.store.transaction(day.accountId, async (tx) => (await tx.period(day.periodId))?.dayRemaining ?? 0);
     },
+    /** Durable remaining allowance and total use of the active provider day, or null when no day is open. */
+    async counters(): Promise<Readonly<{ day: QuotaDay; remaining: number; used: number }> | null> {
+      const day = active;
+      if (!day || clock.now() >= day.endsAt) return null;
+      const period = await options.store.transaction(day.accountId, (tx) => tx.period(day.periodId));
+      return period ? Object.freeze({ day: day as QuotaDay, remaining: period.dayRemaining, used: period.used }) : null;
+    },
     limiter: routed,
   });
 }

@@ -7,6 +7,8 @@ import type { RuntimePolicy } from "../config/runtime-policy.ts";
 import { createJobWorker } from "../jobs/job-worker.ts";
 import { resultCadence } from "../results/result-sync-policy.ts";
 import { dailySelectionEnvelope } from "../selection/selection-trigger.ts";
+import { latestOddsSlot, oddsScheduleEnvelopes } from "../odds/odds-jobs.ts";
+import { latestTeamCodesSlot, teamCodesEnvelope } from "../teams/team-code-jobs.ts";
 import { LiveAccountError } from "./live-account.ts";
 import { selectionTriggerBounds } from "./live-plan.ts";
 import { createLiveRuntime, LiveConfigurationError, type LiveRuntime } from "./live-runtime.ts";
@@ -26,7 +28,7 @@ async function pause(ms: number, signal: AbortSignal) { await sleep(ms, undefine
 /** Maintenance cadence: provider-day rollover, the daily selection schedule, result
  * polling ownership, settlement and cache recovery. Visitor requests trigger none of it. */
 async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () => void, log: (event: LiveEvent) => void) {
-  let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0;
+  let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
   type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
   const owned: { poller: Poller | null } = { poller: null };
   const plan = runtime.day.status.plan, dailyLimit = runtime.day.status.dailyLimit;
@@ -51,6 +53,35 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
           scheduled = occurrence; log({ event: "selection-scheduled", scheduledFor: new Date(occurrence).toISOString(), state: job.state });
         } catch (error) { log({ event: "selection-schedule-failed", reason: reason(error) }); }
       }
+      // Odds: the UTC day's catalog, then one import per EAT date for each 3-hour slot (nearest date first).
+      // Durable idempotency keys make restarts, plan rebuilds and a retried tick re-enqueue the same rows.
+      if (runtime.odds.enabled) {
+        const slot = latestOddsSlot(now);
+        if (slot !== oddsScheduled) {
+          try {
+            const envelopes = oddsScheduleEnvelopes(now, runtime.odds.horizonDays);
+            for (const envelope of envelopes) await runtime.queue.enqueue(envelope);
+            oddsScheduled = slot; log({ event: "odds-scheduled", slot: new Date(slot).toISOString(), dates: envelopes.length - 1 });
+          } catch (error) { log({ event: "odds-schedule-failed", reason: reason(error) }); }
+        }
+      }
+      // Team codes: one sweep per hourly slot, below every odds job on the shared enrichment worker. The durable
+      // idempotency key makes restarts and plan rebuilds re-enqueue the same row.
+      if (runtime.teamCodes.enabled) {
+        const slot = latestTeamCodesSlot(now);
+        if (slot !== teamCodesScheduled) {
+          try {
+            const job = await runtime.queue.enqueue(teamCodesEnvelope(slot));
+            teamCodesScheduled = slot; log({ event: "team-codes-scheduled", slot: new Date(slot).toISOString(), state: job.state });
+          } catch (error) { log({ event: "team-codes-schedule-failed", reason: reason(error) }); }
+        }
+      }
+      // Write-time staleness (and, without verified display rights, hiding every fresh price) makes no provider
+      // calls, so it runs even while imports are off.
+      try {
+        const expired = await runtime.odds.expire(500);
+        if (expired > 0) log({ event: "odds-expired", fixtures: expired });
+      } catch (error) { log({ event: "odds-expire-failed", reason: reason(error) }); }
       if (now - pollerCheckedAt >= 5 * MINUTE) {
         pollerCheckedAt = now;
         try {
@@ -96,13 +127,24 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
     }
     const epoch = new AbortController(), stop = AbortSignal.any([signal, epoch.signal]), { workload } = runtime;
     log({ event: "ready", plan: runtime.day.status.plan, dailyLimit: workload.dailyLimit, usedToday: runtime.day.status.usedToday,
-      refreshCapacity: workload.refreshCapacity, workers: workload.workers, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs });
+      refreshCapacity: workload.refreshCapacity, workers: workload.workers, liveMs: workload.cadence.liveMs, dateMs: workload.cadence.dateMs,
+      // `oddsSwitch` true with `odds` false means the owner enabled imports but this plan is not eligible; the same
+      // holds for `teamCodesSwitch` and `teamCodes`, which share the odds spare.
+      odds: runtime.odds.enabled, oddsSwitch: policy.choices.odds.enabled, oddsSpare: workload.odds.spare,
+      teamCodes: runtime.teamCodes.enabled, teamCodesSwitch: policy.choices.teamCodes.enabled });
     const workers = Array.from({ length: workload.workers }, () => createJobWorker({ queue: runtime.queue, registry: runtime.registry,
       ownerId: randomBytes(32).toString("hex"), onEvent: (event) => {
         if (event.kind !== "claimed") log({ event: `job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
       } }).run(stop));
+    // One dedicated enrichment worker for odds and team codes. It runs even while imports are off so queued jobs drain
+    // or expire, one at a time, so the shared spare-quota gate is never checked by two jobs at once. Sweeps are hourly
+    // at most, so it polls every 10 seconds when idle instead of every second.
+    const enrichmentWorker = createJobWorker({ queue: runtime.queue, registry: runtime.enrichment.registry, ownerId: randomBytes(32).toString("hex"),
+      pollMs: 10_000, onEvent: (event) => {
+        if (event.kind !== "claimed") log({ event: `enrichment-job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });
+      } }).run(stop);
     try {
-      await Promise.all([...workers, maintain(runtime, stop, () => epoch.abort(), log).finally(() => epoch.abort())]);
+      await Promise.all([...workers, enrichmentWorker, maintain(runtime, stop, () => epoch.abort(), log).finally(() => epoch.abort())]);
     } finally { await runtime.close().catch(() => {}); }
   }
 }

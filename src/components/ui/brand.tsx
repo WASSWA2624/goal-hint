@@ -33,6 +33,7 @@ const MarkImage = styled.img`
 export interface BrandImageProps {
   /** Use an empty alt when surrounding text or a link already names the brand. */
   alt?: string;
+  /** `primary` on white or paper; `inverse` on the navy header bars (theme.header). */
   variant?: BrandVariant;
 }
 

@@ -170,6 +170,65 @@ durable acknowledgement and runs no handler/provider work in the request.
 No visitor authentication was added. Later schedulers must reconcile delivery
 independently; failed Vercel Cron invocations are not assumed to retry.
 
+### Odds jobs (052)
+
+The live runner (`npm run live`) registers two odds types on a **separate**
+registry served by one dedicated enrichment worker (shared with team codes,
+below):
+
+- `odds.import` v1 has the payload `{ slot, date }`.
+- `odds.catalog` v1 has the payload `{ utcDay }`.
+
+Because a worker claims only its registry's type and version pairs, refresh and
+cutoff workers never claim odds jobs, and the enrichment worker never claims theirs.
+
+The envelopes hold only constants, the slot and the date, never values derived
+from the workload. A plan rebuild therefore re-enqueues identical rows instead of
+causing `conflicting-request`.
+
+| Field | `odds.import` | `odds.catalog` |
+| --- | --- | --- |
+| Idempotency key | `{ type, slot, date }` | `{ type, utcDay }` |
+| Refresh identity | `null` | `null` |
+| `notBefore` | Slot start | UTC day start |
+| `expiresAt` | Slot end (+3 hours) | UTC day end |
+| Priority | 7 − date offset (nearest EAT date first) | 8 (claimed before that day's sweeps) |
+
+Both types share these bounds: 8 attempts, a 300-second timeout, a 30-second
+lease, no fallback reserve, and backoff from 60 seconds to 15 minutes.
+
+When a job cannot do useful work, it ends `expired` (`eligibility-expired`), not
+`failed`, so the failed-jobs alert stays for real faults. This happens in three
+cases:
+
+- The `eligible()` hook is false because imports are off.
+- The odds quota gate refuses: the day's odds spend plus the operation's
+  dispatch ceiling would exceed the spare, or the remaining quota would no
+  longer cover the ordinary need left today or the reserve.
+- The quota limiter denies with the essential reserve or the daily limit.
+
+Transient provider failures retry within the slot. Credential, subscription,
+authorization and malformed-request failures fail the job (`non-retryable`).
+Each attempt records `DurableJobUsage` with provider `football`, the dispatched
+request count and no cost reference. If storage fails after the provider call,
+the attempt is recorded as an `uncertain` usage row. See
+[live-operations.md](live-operations.md#odds-imports-052).
+
+### Team-code jobs
+
+`teams.codes` v1 (payload `{ slot }`) runs on the same enrichment worker as
+odds. The runner enqueues one per UTC hour. Its idempotency key is
+`{ type, slot }`, `notBefore` and `expiresAt` are the slot's start and end, and
+its priority is 0, so every odds job claims first. Bounds: 4 attempts, a
+600-second timeout, a 30-second lease, no fallback reserve, and backoff from 60
+seconds to 10 minutes. It expires (`eligibility-expired`) when imports are off
+(the switch, or a Free or slow plan), when the slot has ended, or when the
+shared odds gate refuses its ceiling of 8 requests. Storage unavailability
+retries within the slot. A refused import fails the job (`non-retryable`).
+Usage is recorded once per attempt that tried a league (provider `football`,
+`uncertain` after a storage failure). See
+[live-operations.md](live-operations.md#team-codes).
+
 ## Migration, grants and recovery
 
 Migration `20261009123830_durable_jobs` is additive, InnoDB and binary-collated.

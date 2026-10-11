@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { CalendarIcon } from "./match-icons";
@@ -35,8 +35,30 @@ const field = css`
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.teal.solid}; } }
   ${focusRing}
 `;
+/**
+ * The middle of the phone date control: the stepper around it draws the box, so the date drops its
+ * own and keeps the whole middle at 12px. Up to an 18rem filter panel (phones under ~340px) the
+ * calendar icon steps aside, so even "Nov 20 – Dec 20" fits at 320px without an ellipsis.
+ */
+const flush = css`
+  flex: 1;
+  justify-content: center;
+  gap: 4px;
+  min-inline-size: 0;
+  min-block-size: 1.75rem;
+  padding-inline: 4px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+  @container phone-filters (max-width: 18rem) { > svg:first-child { display: none; } }
+`;
 const FieldButton = styled.button`${field} min-inline-size: 0; > span { overflow: hidden; text-overflow: ellipsis; }`;
-const FieldLabel = styled.label`${field} &:focus-within { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }`;
+const FlushButton = styled.button`${field} ${flush}`;
+const FieldLabel = styled.label`${field} ${flush} &:focus-within { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }`;
 /** The native picker covers the visible label, so taps and keyboards open the platform calendar. */
 const OverlayInput = styled.input`
   position: absolute;
@@ -157,14 +179,16 @@ export function DateRangePicker({ query, today, onApply, compact = false }: {
   }
   // The accessible name repeats the visible text; the compact label keeps the full dates as a title.
   const label = rangeLabel(query, today), shown = compact ? shortRangeLabel(query, today) : label;
+  // Compact pickers sit inside the phone date stepper, which draws their box.
+  const Trigger = compact ? FlushButton : FieldButton;
   return <Anchor ref={root} $compact={compact} onKeyDown={(event) => {
     if (event.key === "Escape" && open) { event.stopPropagation(); setOpen(false); button.current?.focus(); }
   }}>
-    <FieldButton ref={button} type="button" aria-expanded={open} aria-controls={id} onClick={() => {
+    <Trigger ref={button} type="button" aria-expanded={open} aria-controls={id} onClick={() => {
       setFrom(range.startDate); setTo(range.endDate); setError(false); setOpen(!open);
     }} aria-label={`${messages.text("feed.date.choose")}: ${shown}`} title={compact ? label : undefined}>
       <CalendarIcon /><span>{shown}</span>{!compact && <ChevronDownIcon />}
-    </FieldButton>
+    </Trigger>
     {open && <Popover id={id} $compact={compact} role="group" aria-label={messages.text("feed.date.choose")}>
       <label>{messages.text("feed.date.from")}<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
       <label>{messages.text("feed.date.to")}<input type="date" value={to} min={from}
@@ -176,7 +200,7 @@ export function DateRangePicker({ query, today, onApply, compact = false }: {
   </Anchor>;
 }
 
-/** One day, picked with the platform calendar; works as a plain label without changes. */
+/** One day, picked with the platform calendar; works as a plain label without changes. Phones place it inside `DateStepper`. */
 export function SingleDatePicker({ query, today, onApply }: { query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void }) {
   const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
   return <FieldLabel>
@@ -188,29 +212,35 @@ export function SingleDatePicker({ query, today, onApply }: { query: FeedQuery; 
   </FieldLabel>;
 }
 
+/**
+ * One 30px "‹ date ›" control: 28px steps at the ends, the date in the middle. It stays unpositioned
+ * and unclipped, so the range popover still anchors to the date row and focus rings show in full.
+ */
 const Stepper = styled.div`
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  flex: none;
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr) 1.75rem;
+  min-inline-size: 0;
+  background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 6px;
   > a, > span {
     display: grid;
     place-items: center;
-    inline-size: 2rem;
     min-block-size: 1.75rem;
-    color: ${({ theme }) => theme.color.accent.blue.text};
-    font-size: 0.875rem;
+    color: ${({ theme }) => theme.color.brand};
+    font-size: 1rem;
     ${focusRing}
   }
-  ${media.hover} { > a:hover { background: ${({ theme }) => theme.color.accent.blue.soft}; } }
-  overflow: hidden;
-  > :first-child { border-inline-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  > :first-child { border-start-start-radius: 5px; border-end-start-radius: 5px; }
+  > :last-child { border-start-end-radius: 5px; border-end-end-radius: 5px; }
+  ${media.hover} { > a:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   > span { color: ${({ theme }) => theme.color.disabledText}; }
 `;
 
-/** Previous/next day, or the adjacent block of equal length for a range. */
-export function DateStepper({ query, today, onApply }: { query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void }) {
+/** Previous/next day, or the adjacent block of equal length for a range, around the date picker. */
+export function DateStepper({ query, today, onApply, children }: {
+  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void; children: ReactNode;
+}) {
   const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
   const shifted = (offset: number): FeedQuery | null => {
     try {
@@ -221,15 +251,14 @@ export function DateStepper({ query, today, onApply }: { query: FeedQuery; today
       return { ...query, dates, page: 1 };
     } catch { return null; }
   };
-  return <Stepper>
-    {([-1, 1] as const).map((offset) => {
-      const next = shifted(offset), label = messages.text(offset < 0 ? "feed.date.previous" : "feed.date.next");
-      const Icon = offset < 0 ? ChevronLeftIcon : ChevronRightIcon;
-      return next ? <Link key={offset} href={feedQueryHref(next, today)} prefetch={false} aria-label={label} title={label}
-        onClick={(event) => plainClick(event, () => onApply(next))}><Icon /></Link>
-        : <span key={offset} aria-hidden="true"><Icon /></span>;
-    })}
-  </Stepper>;
+  const [previous, following] = ([-1, 1] as const).map((offset) => {
+    const next = shifted(offset), label = messages.text(offset < 0 ? "feed.date.previous" : "feed.date.next");
+    const Icon = offset < 0 ? ChevronLeftIcon : ChevronRightIcon;
+    return next ? <Link href={feedQueryHref(next, today)} prefetch={false} aria-label={label} title={label}
+      onClick={(event) => plainClick(event, () => onApply(next))}><Icon /></Link>
+      : <span aria-hidden="true"><Icon /></span>;
+  });
+  return <Stepper>{previous}{children}{following}</Stepper>;
 }
 
 const PresetList = styled.div`

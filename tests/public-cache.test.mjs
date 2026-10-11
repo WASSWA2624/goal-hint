@@ -45,6 +45,20 @@ test('canonical keys resolve relative dates and isolate all allowed query and po
   assert.equal(descriptor({ range }).tags.length, 33);
   assert.equal(descriptor({ fixtureId: 'ABCD' }).tags.includes('fixture:abcd'), true);
 });
+test('odds bounds (052) isolate feed keys only where provider odds parse them; extremes share the unfiltered key', () => {
+  const today = '2026-10-09', range = validateReportingDateRange(today, today, 1);
+  const key = (input, providerOdds) => descriptor({ query: { ...parseMatchFeedQuery(new URLSearchParams(input), today, { providerOdds }),
+    projection: 7, dates: { from: today, to: today } }, range }).key;
+  assert.equal(key('', true), key('', false));
+  assert.equal(key('odds=1.01-1000.00', true), key('', false));
+  assert.notEqual(key('odds=1.50-3.00', true), key('', true));
+  assert.notEqual(key('odds=1.50-3.00', true), key('odds=1.50-3.01', true));
+  assert.notEqual(key('odds=1.50-3.00', true), key('prob=50-100', true));
+  assert.notEqual(key('market=total-goals&odds=1.50-3.00', true), key('odds=1.50-3.00', true));
+  assert.throws(() => key('odds=1.50-3.00', false));
+  // Odds writes reuse the existing fixture/date tag families; no new tag type is introduced.
+  assert.deepEqual(descriptor({ query: {}, range }).tags, ['date:2026-10-09', 'global:catalog', 'global:progress']);
+});
 test('hits preserve response/source time and never extend expiry', async () => {
   const m = memory(), d = descriptor();
   const first = await m.cache.read(d, m.load); m.advance(1000);

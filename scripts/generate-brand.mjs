@@ -21,19 +21,110 @@ const escapeXml = value => value.replace(/[&<>"']/g, ch => ({'&':'&amp;', '<':'&
 const svg = (width, height, title, body, description = '') => `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(title)}"><title>${escapeXml(title)}</title>${description ? `<desc>${escapeXml(description)}</desc>` : ''}${body}</svg>\n`;
 const rawSvg = source => source.replace(/^<\?xml[^>]*>\s*/, '');
 const point = (cx, cy, r, angle) => [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
-const polygon = points => points.map(p => p.map(n => n.toFixed(3)).join(',')).join(' ');
+const fmt = n => +n.toFixed(3);
 
-// The open G ring and its square terminal are drawn from one path. The football
-// uses one central pentagon and five seams; tiny favicons omit the fine seams.
-function mark(accent = c.teal, ink = c.navy, micro = false) {
-  const cx = 75, cy = 80, radius = 29;
-  const angles = Array.from({length: 5}, (_, i) => -Math.PI / 2 + i * 2 * Math.PI / 5);
-  const pentagon = angles.map(angle => point(cx, cy, micro ? 15 : 12, angle));
-  const seams = angles.map((angle, i) => {
-    const edge = point(cx, cy, radius, angle);
-    return `<path d="M${pentagon[i].join(' ')} L${edge.join(' ')}"/>`;
+// The open G is one filled path: a heavy ring with a radial top terminal and a
+// square crossbar whose top edge sits on the horizontal centre line (slightly
+// thinner than the ring, so it reads optically equal).
+const G = { cx: 80, cy: 80, outer: 74, ring: 22, terminal: -42, bar: 21, tip: 106, gap: 6 };
+// The football is concentric with the G, one gap inside the ring, and is knocked
+// out around the crossbar with the same gap. Rotating it -36deg (centre pentagon
+// pointing down) hides exactly one outer panel behind the bar, so no slivers.
+const BALL = { radius: G.outer - G.ring - G.gap, outline: 4.6, seam: 3, rim: 4.6, rotate: -36 };
+// Favicon: a shorter crossbar and tighter knockout; no seams and no rim.
+const MICRO = { tip: 110, gap: 5.5 };
+let maskCount = 0;
+
+function gPath(tip) {
+  const { cx, cy, outer, ring, bar } = G;
+  const inner = outer - ring, angle = G.terminal * Math.PI / 180;
+  const [ox, oy] = point(cx, cy, outer, angle).map(fmt);
+  const [ix, iy] = point(cx, cy, inner, angle).map(fmt);
+  const barInner = fmt(cx + Math.sqrt(inner ** 2 - bar ** 2));
+  return `M${ox} ${oy}A${outer} ${outer} 0 1 0 ${cx + outer} ${cy}H${tip}V${cy + bar}H${barInner}A${inner} ${inner} 0 1 1 ${ix} ${iy}Z`;
+}
+
+// A real truncated icosahedron seen face-on: pentagons sit on icosahedron
+// vertices and the seams between two hexagons are the middle thirds of its
+// edges. Only the five seams leaving the facing pentagon are drawn; the seams
+// running round the rim read as a second, busy outline at small sizes.
+const ball = (() => {
+  const phi = (1 + Math.sqrt(5)) / 2;
+  const raw = [[-1, phi, 0], [1, phi, 0], [-1, -phi, 0], [1, -phi, 0], [0, -1, phi], [0, 1, phi], [0, -1, -phi], [0, 1, -phi], [phi, 0, -1], [phi, 0, 1], [-phi, 0, -1], [-phi, 0, 1]];
+  const norm = v => { const l = Math.hypot(...v); return v.map(n => n / l); };
+  const sub = (a, b) => a.map((n, i) => n - b[i]);
+  const dot = (a, b) => a.reduce((s, n, i) => s + n * b[i], 0);
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const lerp = (a, b, t) => a.map((n, i) => n + (b[i] - n) * t);
+  const ico = raw.map(norm);
+  const edge = Math.min(...ico.slice(1).map(v => Math.hypot(...sub(v, ico[0]))));
+  const neighbours = ico.map(v => ico.filter(w => w !== v && Math.abs(Math.hypot(...sub(v, w)) - edge) < 1e-6));
+  // View frame: vertex 0 faces the viewer and one neighbour points up.
+  const z = ico[0];
+  const y = norm(sub(z.map(n => n * dot(neighbours[0][0], z)), neighbours[0][0])), x = cross(y, z);
+  const view = v => [dot(v, x), dot(v, y), dot(v, z)];
+  const angleAround = (p, axis) => {
+    const k = norm(axis), u = norm(cross(Math.abs(k[2]) < .9 ? [0, 0, 1] : [0, 1, 0], k)), w = cross(k, u), d = sub(p, axis);
+    return Math.atan2(dot(d, w), dot(d, u));
+  };
+  const pentagons = ico.map((v, i) => {
+    const centre = view(v);
+    return neighbours[i].map(w => view(lerp(v, w, 1 / 3))).sort((a, b) => angleAround(a, centre) - angleAround(b, centre));
+  });
+  const seams = neighbours[0].map(w => [view(lerp(z, w, 1 / 3)), view(lerp(z, w, 2 / 3))]);
+  return { pentagons, seams };
+})();
+
+// Straight polyhedron edges are mapped onto the sphere, so the ball fills its
+// disc exactly; anything behind the horizon (z < 0) is clipped away.
+function sphereLine(a, b, steps = 8) {
+  return Array.from({length: steps + 1}, (_, i) => {
+    const p = a.map((n, k) => n + (b[k] - n) * i / steps);
+    const l = Math.hypot(...p);
+    return p.map(n => n / l);
+  });
+}
+function frontPolygon(points) {
+  const out = [];
+  points.forEach((p, i) => {
+    const q = points[(i + 1) % points.length];
+    if (p[2] >= 0) out.push(p);
+    if ((p[2] >= 0) !== (q[2] >= 0)) out.push(p.map((n, k) => n + (q[k] - n) * p[2] / (p[2] - q[2])));
+  });
+  return out;
+}
+function ballGeometry(cx, cy, r, inset, hidden) {
+  const scale = r - inset, angle = BALL.rotate * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+  const place = p => [cx + (p[0] * cos - p[1] * sin) * scale, cy + (p[0] * sin + p[1] * cos) * scale];
+  const project = p => place(p).map(n => +n.toFixed(2)).join(' ');
+  const panels = ball.pentagons.map(ring => {
+    const pts = frontPolygon(ring.flatMap((p, i) => sphereLine(p, ring[(i + 1) % ring.length]).slice(0, -1)));
+    return pts.length > 2 ? `M${pts.map(project).join('L')}Z` : '';
   }).join('');
-  return `<path d="M124.548 35.452 A63 63 0 1 0 143 80 H112" fill="none" stroke="${accent}" stroke-width="16" stroke-linecap="butt" stroke-linejoin="miter"/><g fill="${ink}" stroke="${ink}">${micro ? '' : `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke-width="2.6"/><g fill="none" stroke-width="2.6">${seams}</g>`}<polygon points="${polygon(pentagon)}" stroke="none"/></g>`;
+  // A seam running into the panel hidden behind the crossbar is dropped too.
+  const seams = ball.seams.filter(([, b]) => !hidden(...place(sphereLine(b, b, 1)[0]))).map(([a, b]) => `M${sphereLine(a, b).map(project).join('L')}`).join('');
+  return { panels, seams };
+}
+
+// Light surfaces: a clear ball with a navy outline, panels and seams.
+// Dark surfaces: a solid light ball with a rim, the panels and seams cut through.
+// The ball is masked so the surface shows through every gap in any context.
+function mark(accent = c.teal, ink = c.navy, micro = false, onDark = ink === c.white) {
+  const id = `goal-hint-ball-${++maskCount}`;
+  const { cx, cy, bar } = G, r = BALL.radius;
+  const { tip, gap } = micro ? MICRO : G;
+  const hidden = (x, y) => x >= tip - gap && y >= cy - gap && y <= cy + bar + gap;
+  const knockout = `<rect x="${fmt(tip - gap)}" y="${fmt(cy - gap)}" width="${fmt(160 - tip + gap)}" height="${fmt(bar + gap * 2)}" fill="black"/>`;
+  let body;
+  if (onDark) {
+    const rim = micro ? 0 : BALL.rim;
+    const { panels, seams } = ballGeometry(cx, cy, r, rim, hidden);
+    body = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white"/><path d="${panels}" fill="black"/>${micro ? '' : `<path d="${seams}" fill="none" stroke="black" stroke-width="${BALL.seam}"/><circle cx="${cx}" cy="${cy}" r="${fmt(r - rim / 2)}" fill="none" stroke="white" stroke-width="${rim}"/>`}`;
+  } else {
+    const { panels, seams } = ballGeometry(cx, cy, r, BALL.outline / 2, hidden);
+    body = `<circle cx="${cx}" cy="${cy}" r="${fmt(r - BALL.outline / 2)}" fill="none" stroke="white" stroke-width="${BALL.outline}"/><path d="${panels}" fill="white"/>${micro ? '' : `<path d="${seams}" fill="none" stroke="white" stroke-width="${BALL.seam}"/>`}`;
+  }
+  return `<path d="${gPath(tip)}" fill="${accent}"/><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="160" height="160">${body}${knockout}</mask><rect x="${fmt(cx - r)}" y="${fmt(cy - r)}" width="${fmt(r * 2)}" height="${fmt(r * 2)}" fill="${ink}" mask="url(#${id})"/>`;
 }
 
 function textPath(key, x, baseline, size, color) {
@@ -43,8 +134,8 @@ function textPath(key, x, baseline, size, color) {
 }
 
 const logoHeight = 128;
-const wordmarkSize = 90;
-const wordmarkX = 138;
+const wordmarkSize = 93;
+const wordmarkX = 133.4;
 const logoWidth = Math.ceil(wordmarkX + type.wordmark.advance * wordmarkSize / type.wordmark.unitsPerEm + 8);
 const wordmarkBaseline = 64 + (type.wordmark.bounds[3] + type.wordmark.bounds[1]) * wordmarkSize / type.wordmark.unitsPerEm / 2;
 function logoBody(accent, ink) {
@@ -127,7 +218,7 @@ function logoSvg(name) {
   return svg(logoWidth, logoHeight, `Goal Hint ${name} logo`, logoBody(accent, ink));
 }
 const palette = Object.entries(c).map(([name, color]) => `<li><span style="background:${color}"></span><strong>${colorLabels[name]}</strong><code>${color}</code></li>`).join('');
-const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Goal Hint — Brand assets</title><style>*{box-sizing:border-box}body{margin:0;background:${c.paper};color:${c.navy};font:16px/1.6 Arial,sans-serif}main{max-width:1240px;margin:auto;padding:40px 24px}h1{font-size:40px;line-height:1.15;margin:8px 0 16px}h2{margin-top:40px;font-size:22px}p{max-width:780px}a{color:${c.teal}}.eyebrow{color:${c.teal};font-weight:700;letter-spacing:.12em}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}figure{margin:0;background:white;border:1px solid ${c.border}}.art{padding:32px;min-height:180px;display:flex;align-items:center}.art svg{width:100%;height:auto}.dark .art{background:${c.navy}}figcaption{padding:12px 20px;border-top:1px solid ${c.border};font-size:14px}.symbols{display:flex;gap:40px;align-items:center;flex-wrap:wrap;padding:24px;background:white;border:1px solid ${c.border}}.symbols svg{width:120px;height:120px}.symbols .favicon{width:32px;height:32px}ul.palette{list-style:none;padding:0;display:grid;grid-template-columns:repeat(7,1fr);gap:12px}.palette span{display:block;height:64px;border:1px solid ${c.border}}.palette strong,.palette code{display:block;font-size:13px;overflow-wrap:anywhere}.social svg{width:100%;height:auto}.notes{padding:24px;background:white;border-left:4px solid ${c.teal}}code{font-family:Consolas,monospace}@media(max-width:650px){.grid{grid-template-columns:1fr}.art{padding:20px;min-height:120px}.palette{grid-template-columns:repeat(3,1fr)!important}h1{font-size:32px}}</style></head><body><main><p class="eyebrow">GOAL HINT / BRAND SYSTEM</p><h1>Football predictions.<br>Clearly explained.</h1><p>A minimal football mark, an open geometric G and a readable wordmark. Deep navy establishes the reading surface; teal is the navigation and identity accent.</p><h2>Horizontal logos</h2><div class="grid">${previewItems}</div><h2>Full symbol and small-size favicon</h2><div class="symbols">${rawSvg(svg(160,160,'Primary mark',mark()))}${rawSvg(svg(160,160,'Monochrome mark',mark(c.navy,c.navy)))}${rawSvg(favicon).replace('<svg ', '<svg class="favicon" ')}</div><h2>Shared palette</h2><ul class="palette">${palette}</ul><h2>Social preview</h2><div class="social">${rawSvg(svg(1200,630,'Goal Hint social preview',ogBody))}</div><h2>Use consistently</h2><div class="notes"><p>Use primary artwork on white or paper; inverse artwork on navy. Keep clear space equal to one quarter of the mark width. Use the micro favicon at 16–32 pixels. Do not stretch, recolor, add shadows or apply rounded containers.</p><p>The wordmark is Manrope, converted to paths. The source font and its SIL Open Font License are preserved. Use the brand mark beside the name where possible; label icon-only links accessibly.</p><p>See <a href="README.md">the asset guide</a> for exact files, metadata integration and regeneration. The existing raster logo is preserved unchanged under <code>reference/</code>.</p></div></main></body></html>\n`;
+const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Goal Hint — Brand assets</title><style>*{box-sizing:border-box}body{margin:0;background:${c.paper};color:${c.navy};font:16px/1.6 Arial,sans-serif}main{max-width:1240px;margin:auto;padding:40px 24px}h1{font-size:40px;line-height:1.15;margin:8px 0 16px}h2{margin-top:40px;font-size:22px}p{max-width:780px}a{color:${c.teal}}.eyebrow{color:${c.teal};font-weight:700;letter-spacing:.12em}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}figure{margin:0;background:white;border:1px solid ${c.border}}.art{padding:32px;min-height:180px;display:flex;align-items:center}.art svg{width:100%;height:auto}.dark .art{background:${c.navy}}figcaption{padding:12px 20px;border-top:1px solid ${c.border};font-size:14px}.symbols{display:flex;gap:40px;align-items:center;flex-wrap:wrap;padding:24px;background:white;border:1px solid ${c.border}}.symbols svg{width:120px;height:120px}.symbols .favicon{width:32px;height:32px}ul.palette{list-style:none;padding:0;display:grid;grid-template-columns:repeat(7,1fr);gap:12px}.palette span{display:block;height:64px;border:1px solid ${c.border}}.palette strong,.palette code{display:block;font-size:13px;overflow-wrap:anywhere}.social svg{width:100%;height:auto}.notes{padding:24px;background:white;border-left:4px solid ${c.teal}}code{font-family:Consolas,monospace}@media(max-width:650px){.grid{grid-template-columns:1fr}.art{padding:20px;min-height:120px}.palette{grid-template-columns:repeat(3,1fr)!important}h1{font-size:32px}}</style></head><body><main><p class="eyebrow">GOAL HINT / BRAND SYSTEM</p><h1>Football predictions.<br>Clearly explained.</h1><p>A solid football inside a heavy open geometric G, beside a bold Manrope wordmark. Deep navy establishes the reading surface; teal is the navigation and identity accent.</p><h2>Horizontal logos</h2><div class="grid">${previewItems}</div><h2>Full symbol and small-size favicon</h2><div class="symbols">${rawSvg(svg(160,160,'Primary mark',mark()))}${rawSvg(svg(160,160,'Monochrome mark',mark(c.navy,c.navy)))}${rawSvg(favicon).replace('<svg ', '<svg class="favicon" ')}</div><h2>Shared palette</h2><ul class="palette">${palette}</ul><h2>Social preview</h2><div class="social">${rawSvg(svg(1200,630,'Goal Hint social preview',ogBody))}</div><h2>Use consistently</h2><div class="notes"><p>Use primary artwork on white or paper; inverse artwork on navy. Keep clear space equal to one quarter of the mark width. Use the micro favicon at 16–32 pixels. Do not stretch, recolor, add shadows or apply rounded containers.</p><p>The wordmark is Manrope, converted to paths. The source font and its SIL Open Font License are preserved. Use the brand mark beside the name where possible; label icon-only links accessibly.</p><p>See <a href="README.md">the asset guide</a> for exact files, metadata integration and regeneration. The existing raster logo is preserved unchanged under <code>reference/</code>.</p></div></main></body></html>\n`;
 await writeFile(join(brandDir, 'goal-hint-brand-preview.html'), html);
 
 await writeFile(join(brandDir, 'asset-manifest.json'), JSON.stringify({name: tokens.name, publicPath: '/brand/', files: exports.sort()}, null, 2) + '\n');

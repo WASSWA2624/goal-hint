@@ -22,6 +22,9 @@ import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { createMysqlJobQueue } from '../src/server/jobs/job-mysql-store.ts';
 import { createMarketSettlementService } from '../src/server/settlement/settlement-service.ts';
 import { jobEnvelope } from './helpers/job-fixtures.mjs';
+import { getReportingDate } from '../src/domain/calendar.ts';
+import { latestOddsSlot, ODDS_SWEEP_MS, oddsImportEnvelope } from '../src/server/odds/odds-jobs.ts';
+import { latestTeamCodesSlot, TEAM_CODES_SLOT_MS, teamCodesEnvelope } from '../src/server/teams/team-code-jobs.ts';
 import { selectionPolicy, selectionAuthority, catalogSelectionAuthority, degradedAction, SELECTION_FOR } from './helpers/selection-fixtures.mjs';
 import { catalogFixture, catalogRequest, createSyntheticCatalogAdapter } from './helpers/catalog-fixtures.mjs';
 import { lifecyclePolicy, lifecycleAuthority } from './helpers/lifecycle-fixtures.mjs';
@@ -264,6 +267,37 @@ test('private watchdog recovery invariants on isolated genuine MySQL', { timeout
         assert.ok(source.reservations.every((entry) => entry.priority === 'results-cutoff' || entry.priority === 'live-date-sync'));
         assert.equal((await p.catalog.fixtureByProviderId(99500)).status, 'scheduled');
       } finally { await poller.stop(); }
+    });
+    await t.test('stalled odds jobs keep their slot: repair leaves them pending inside it and expires them after it', async () => {
+      p.setTime(originalNow);
+      const slot = latestOddsSlot(p.now()), queued = await p.queue.enqueue(oddsImportEnvelope(slot, getReportingDate(slot), 0));
+      try {
+        p.setTime(slot + 60_000);
+        await h.repair([{ kind: 'job', jobId: queued.id, expectedVersion: queued.version }]);
+        const pending = await p.queue.inspect(queued.id);
+        assert.deepEqual([pending.state, pending.attemptCount, pending.version], ['pending', 0, queued.version], 'a sweep inside its slot is left for the odds worker');
+        // A runner that stayed down past the slot end: the next slot sweeps again, so the old sweep expires, never failing.
+        p.setTime(slot + ODDS_SWEEP_MS + 60_000);
+        await h.repair([{ kind: 'job', jobId: queued.id, expectedVersion: pending.version }]);
+        const expired = await p.queue.inspect(queued.id);
+        assert.deepEqual([expired.state, expired.terminalReason, expired.attemptCount], ['expired', 'eligibility-expired', 0]);
+        assert.equal(expired.envelope.payload.date, getReportingDate(slot));
+      } finally { p.setTime(originalNow); }
+    });
+    await t.test('stalled team-code jobs keep their hourly slot the same way', async () => {
+      p.setTime(originalNow);
+      const slot = latestTeamCodesSlot(p.now()), queued = await p.queue.enqueue(teamCodesEnvelope(slot));
+      try {
+        p.setTime(slot + 60_000);
+        await h.repair([{ kind: 'job', jobId: queued.id, expectedVersion: queued.version }]);
+        const pending = await p.queue.inspect(queued.id);
+        assert.deepEqual([pending.state, pending.attemptCount, pending.version], ['pending', 0, queued.version], 'left for the enrichment worker');
+        p.setTime(slot + TEAM_CODES_SLOT_MS + 60_000);
+        await h.repair([{ kind: 'job', jobId: queued.id, expectedVersion: pending.version }]);
+        const expired = await p.queue.inspect(queued.id);
+        assert.deepEqual([expired.state, expired.terminalReason, expired.attemptCount], ['expired', 'eligibility-expired', 0],
+          'the next slot sweeps again, so the old one expires, never failing');
+      } finally { p.setTime(originalNow); }
     });
   });
 });

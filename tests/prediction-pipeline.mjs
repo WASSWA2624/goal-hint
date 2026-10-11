@@ -39,7 +39,13 @@ const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEv
   'PredictionSet','MarketPrediction','PredictionSchedule','PredictionAudit','DailyRunManifest',
   'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent','PredictionCycleOperation','FixtureLifecycleObservation',
   'PredictionRefreshIntent','PredictionRefreshStage','PredictionRefreshOutcome','DurableJobUsage',
-  'FixtureResult','ResultProviderObservation','SettlementBatch','MarketSettlementRevision','SettlementEventReceipt'];
+  'FixtureResult','ResultProviderObservation','SettlementBatch','MarketSettlementRevision','SettlementEventReceipt',
+  'OddsImportBatch','OddsBetObservation','ProviderOddsSnapshot'];
+// Odds (052): the per-fixture state and public projection take column-scoped updates; no odds row is ever deleted.
+const oddsColumns = {
+  FixtureOddsState: 'latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion',
+  FixtureOddsPrice: 'basis, bookmakerExternalId, line, priceDecimal, displayHundredths, impliedProbability, overround, method, mappingVersion, snapshotId, basisJson, retrievedAt, providerUpdatedAt, stale',
+};
 const target = (state) => ({ fixtureId: state.fixture.id, cycleId: state.cycle.id });
 
 export async function withPredictionPipeline(t, operation, instanceOptions) {
@@ -68,7 +74,8 @@ export async function withPredictionPipeline(t, operation, instanceOptions) {
     try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 90_000 }); }
     catch (error) { t.diagnostic((await instance.executeAdmin('SELECT migration_name, LEFT(logs, 1500) FROM _prisma_migrations WHERE finished_at IS NULL')).stdout); throw error; }
     await instance.executeAdmin(catalogTables.map((name) => `GRANT ${catalogAppendOnly.includes(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE'} ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') +
-      appendOnly.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') + `
+      appendOnly.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') +
+      Object.entries(oddsColumns).map(([name, list]) => `GRANT SELECT, INSERT, UPDATE (${list}) ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') + `
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.PredictionCycle TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureLifecycleState TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ResultPollerLease TO 'cutoff_app'@'127.0.0.1';

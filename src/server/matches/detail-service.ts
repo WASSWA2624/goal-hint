@@ -10,6 +10,8 @@ import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { runFromRow, storedCycle, storedCycleDisplay, storedRevision } from "../predictions/history-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
+import { publicPolicy } from "../../domain/public-policy.ts";
+import { storedFixtureOddsGroups } from "../odds/odds-read.ts";
 import { storedFeedCoverage, storedFeedRun } from "./feed-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { detailHistoryLink, parseMatchDetailQuery } from "./detail-query.ts";
@@ -18,8 +20,10 @@ import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public
 
 export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
-export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache }>) {
+/** `providerOdds` defaults to publicPolicy.features.providerOdds; isolated tests may enable it. */
+export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache; providerOdds?: boolean }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
+  const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   const evidenceStore = createMysqlEvidenceStore(options.database);
   return Object.freeze({ async query(id: string, parameters = new URLSearchParams()): Promise<MatchDetailResponse> {
     const query = parseMatchDetailQuery(id, parameters), asOf = clock.now(), today = getReportingDate(asOf);
@@ -32,7 +36,9 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           if (!known) throw new MatchFeedError("not-found");
           const date = known.kickoff ? getReportingDate(utcInstantFromEpochMilliseconds(known.kickoff.getTime())) : today;
           const coverage = await storedFeedCoverage(tx, validateReportingDateRange(date, date, 1));
-          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, createPredictionWindow(today), "en");
+          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, createPredictionWindow(today), "en", { prices: providerOdds });
+          // Market-implied odds groups are mutable observation data, read outside the immutable revision cache.
+          const odds = await storedFixtureOddsGroups(tx, id, providerOdds);
           const currentRevisionId = fixture.forecast?.revisionId ?? null;
           let display = fixture.cycleId ? await storedCycleDisplay(tx, fixture.cycleId) : null;
           if (query.cycle) {
@@ -77,7 +83,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           for (const row of cycles.slice(0, query.limit)) cycleHistory.push(publicDetailCycle(await cycleFor(row.id)));
           const slug = canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name);
           const run = await storedFeedRun(tx, today, validateReportingDateRange(date, date, 1));
-          const response = matchDetailResponseSchema.parse({ fixture, asOf, run, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
+          const response = matchDetailResponseSchema.parse({ fixture, asOf, run, odds, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
             currentRevisionId, selection: query.revision ? "revision" : query.cycle ? "cycle" : "applicable", selectedCycle: display ? publicDetailCycle(display.cycle) : null, snapshot,
             history: { limit: query.limit, revisions: { anchor: anchors.revision, entries: revisions,
               next: detailHistoryLink(id, parameters, anchors, "revision", rows.length > query.limit ? revisions.at(-1)!.fixtureRevision : null) },
@@ -88,7 +94,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 3, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
+        query: { id, projection: 5, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
       return options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
     } catch (error) {
       if (refused) throw refused;

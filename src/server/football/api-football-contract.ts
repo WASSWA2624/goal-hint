@@ -12,11 +12,24 @@ export const apiFootballEndpoints = Object.freeze({
   statistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
   lineups: Object.freeze({ path: "/fixtures/lineups", paginated: false }),
   injuries: Object.freeze({ path: "/injuries", paginated: false }),
-  playerStatistics: Object.freeze({ path: "/players", paginated: true }),
+  playerStatistics: Object.freeze({ path: "/players", paginated: true, pageSize: 20 }),
   predictions: Object.freeze({ path: "/predictions", paginated: false }),
   accountStatus: Object.freeze({ path: "/status", paginated: false }),
+  // Pre-match odds (prompt 052). The page size follows the official v3 documentation; the counted trial must confirm it.
+  odds: Object.freeze({ path: "/odds", paginated: true, pageSize: 10 }),
+  oddsBets: Object.freeze({ path: "/odds/bets", paginated: false }),
+  oddsBookmakers: Object.freeze({ path: "/odds/bookmakers", paginated: false }),
 } as const);
 export type ApiFootballEndpoint = keyof typeof apiFootballEndpoints;
+/** Fixed rows per non-final page for paginated endpoints; null when no size is documented. */
+export function pageSizeOf(endpoint: ApiFootballEndpoint): number | null {
+  const entry = apiFootballEndpoints[endpoint];
+  return "pageSize" in entry ? entry.pageSize : null;
+}
+/** Odds-specific semantics (bet catalog, labels, update times), stored in odds receipts and policy.
+ * It is separate from API_FOOTBALL_CONTRACT_VERSION so fallback and evaluation cohorts are not split.
+ * The date names the documented contract; the counted odds trial must confirm it before scheduling. */
+export const ODDS_CONTRACT_VERSION = "direct-v3-odds-2026-10-10";
 
 /** Explicit caller budgets; no default job allowance, retry budget or freshness policy. */
 export type ApiFootballBounds = Readonly<{

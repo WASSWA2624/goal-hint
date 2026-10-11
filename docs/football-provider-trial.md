@@ -92,7 +92,10 @@ operator decisions and actual evidence:
 
 Supported operations are `account-status`, `fixtures`, `live`, `fixture-ids`,
 `teams`, `competitions`, `player-statistics`, `statistics`, `lineups`, `injuries`
-and `predictions`. Query shapes use the [adapter contract](api-football-adapter.md).
+and `predictions`, plus the prompt 052 odds operations `odds` (query
+`{ "date", "bookmakerId" }` or `{ "fixtureId", "bookmakerId" }`), `odds-bets` and
+`odds-bookmakers` described under [odds qualification](#odds-qualification-prompt-052).
+Query shapes use the [adapter contract](api-football-adapter.md).
 Use supported date/range/round filters for fixtures; only documented paginated
 operations use page loops. Task IDs must precede any task that references them.
 Competition/season query pairs must belong to the selected competition list.
@@ -190,6 +193,8 @@ include `accountId` matching the plan. Each record needs its real source and UTC
 | `media-host-restrictions` | `rights-record` or verified `official-source`: the exact `host`, `permitted: true` and `restrictionsReviewed: true`. Independently verify audience and throttling restrictions. |
 | `regulation-scores` | Verified source record: `sourceField: "score.fulltime"`, `period: "regulation-including-stoppage-time"`, applicable `providerStatus` (`FT`, `AET` or `PEN`) and `independentlyVerified: true`. |
 | `fallback-match-result` | Verified source record: `sourceField: "predictions.percent"`, `probabilityUnits: "percent"`, `period: "regulation-including-stoppage-time"` and `completeProbabilities: true`. Actual observations must also pass shared validation. |
+| `odds-display-rights` | `rights-record` or verified `official-source`: `permitted: true`, `restrictionsReviewed: true` and `scope: "odds-display"`. Private import and retention rights stay under `private-use-rights`. |
+| `odds-coverage` | Optional verified `official-source` records (for example, the plan's endpoint inclusion) are cited as sources; the status comes only from recorded `/odds` observations. |
 
 ## Requests, resume and fallback rules
 
@@ -237,7 +242,10 @@ Retrieval, observation, provider update and report-generation times remain
 separate UTC values. `providerUpdatedAt: null` stays unknown. `unknownUpdateTime:
 "reject"` disallows those inputs; `retrieval-only` requires explicit verified
 policy and still reports the missing source time. Date selections use
-Africa/Kampala reporting days; kickoff timestamps are not update times.
+Africa/Kampala reporting days; kickoff timestamps are not update times. Only
+`/odds` rows publish their own `update`, which is kept per row and evaluated by
+`odds-update-times`; the core `provider-update-times` finding excludes odds
+observations.
 
 Fallback assessment reuses the shared [market validators](markets.md): complete
 home/draw/away percentages require a verified regulation-period mapping for
@@ -249,6 +257,96 @@ unsupported by the current normalized payload. Enabling them requires separately
 verified complete inputs or a documented derivation validated by the shared
 contract. Extra-time/shootout totals cannot replace independently
 verified regulation scores; settlement uses the existing shared adjudicator.
+
+## Odds qualification (prompt 052)
+
+Prompt [052](../dev-plan/052-provider-odds-import.md) adds a counted odds sample
+to the same command, journal and shared limiter. It qualifies the real `/odds`,
+`/odds/bets` and `/odds/bookmakers` envelopes before any odds schedule runs. The
+trial has **not** been run: it needs a plan that includes `/odds` and enough
+spare daily capacity, so it waits for the owner's plan upgrade. Scheduled
+imports stay off (`GOAL_HINT_ODDS_IMPORT_ENABLED=false`) until it passes, and a
+passing report never switches them on by itself.
+
+### Allowance and plan
+
+The owner-authorized allowance is **20 counted requests**. Set
+`GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT` to at least 20, keep the trial scope
+and runtime gates described above, and record a matching `trial-allowance`
+operator record (`allowance: 20`). Use a separate plan and directory, such as
+`.tmp/provider-trial-odds`, rather than an initialized core trial. `D` is the
+first Kampala reporting date of the sample and `B` is the candidate bookmaker.
+
+| Task | Operation | `maxRequests` | What it establishes |
+| --- | --- | --- | --- |
+| `account` | `account-status` | 1 | Plan, limits and quota headers on the same account. |
+| `bets` | `odds-bets` | 1 | The full bet catalog, including the ids and exact names of the four launch bets. |
+| `bookmakers` | `odds-bookmakers` | 1 | The bookmaker catalog that `B` must belong to. |
+| `odds-d0` | `odds` `{ "date": D, "bookmakerId": B }` | 2 | Page 1 and page 2: echoes, page size and page traversal. |
+| `odds-d1` … `odds-d6` | `odds` `{ "date": D+1…D+6, "bookmakerId": B }` | 1 each | Page 1 per day of the seven-day horizon: coverage and update times. |
+| `odds-fixture` | `odds` `{ "fixtureId": F, "bookmakerId": B }` | 1 | The `fixture=` selector for a catalog fixture `F` kicking off inside the window. |
+
+That is at most 13 requests. The remaining 7 allow one more candidate
+bookmaker's page-1 sweep for comparison (one `odds` task per date, 1 request
+each). Use plan `bounds` such as:
+
+```json
+{
+  "priority": "enrichment",
+  "timeoutMs": 30000,
+  "maxPages": 150,
+  "maxRows": 1500,
+  "maxResponseBytes": 8000000,
+  "retry": { "maxAttempts": 1, "baseDelayMs": 1000, "maxDelayMs": 10000 },
+  "cacheMaxAgeMs": 0
+}
+```
+
+Bound each odds sample with its task `maxRequests`, not with `bounds.maxPages`.
+A sample stopped by its own request allowance (`request-budget-exhausted`) is a
+valid truncated sample. A `maxPages` or `maxRows` stop is reported as
+`pagination-incomplete`, the same reason as a genuine page-size violation. With
+`maxAttempts: 1` a failed attempt is not retried inside the allowance. Truncated
+samples are partial by design, so `run` ends `incomplete` (exit code 2); read
+the odds findings, not the exit code.
+
+```sh
+npm run trial:football -- init --plan .tmp/approved-odds-plan.json --directory .tmp/provider-trial-odds
+npm run trial:football -- run --directory .tmp/provider-trial-odds --authority .tmp/trusted-provider-authority.mjs
+npm run trial:football -- report --directory .tmp/provider-trial-odds --authority .tmp/trusted-provider-authority.mjs
+```
+
+### Findings
+
+The journal keeps normalized rows only, under `.tmp/`; never copy its payloads
+into tests or documentation. Odds observations are evaluated only by these
+findings:
+
+| Requirement | Confirmed when | Failed when |
+| --- | --- | --- |
+| `odds-pagination` | Every odds sample passed the adapter's echo checks (`bookmaker`, `date` or `fixture` and `page` echoed exactly; `timezone` equal when echoed), recorded exactly the planned selectors, has ordered pages with a stable total, no rejected rows, rows inside the requested bookmaker and Kampala date or fixture, exactly 10 rows on every non-final page, and at least one sample spans two pages. | Any sample is incomplete for a reason other than its own request allowance, has rejected rows, or breaks the page, echo or scope rules. |
+| `odds-update-times` | Every accepted `/odds` row published a strict offset `update` no later than its retrieval. | Any accepted row omits `update`. Malformed or future updates are rejected rows and fail `odds-pagination`. |
+| `odds-bet-catalog` | The complete `/odds/bets` catalog and every sampled row name bets 1, 12, 5 and 8 exactly as `launch-odds-v1` pins them (Match Winner, Double Chance, Goals Over/Under, Both Teams Score). | The catalog is incomplete or empty, or a pinned id is missing or named differently. Revise the versioned mapping from the recorded catalog. |
+| `odds-coverage` | At least one sampled fixture in a selected competition carries all four complete launch groups for a sampled bookmaker. The result lists `bookmaker B: complete of sampled` counts used to choose `GOAL_HINT_ODDS_BOOKMAKER_ID`. | The provider refused an odds endpoint with a coverage error (the plan lacks `/odds`), or a sampled bookmaker is missing from a recorded `/odds/bookmakers` catalog. |
+| `odds-display-rights` | A verified `odds-display` rights record (table above). | The record does not permit that scope. |
+
+Rejected rows are not kept in the journal, so a failed `odds-pagination` points
+to a difference to investigate in the envelope, the Kampala date scope, row
+identity, the `update` format or the price format. A common cause would be a
+provider that ignores `timezone` on `/odds?date=`: kickoffs between 21:00 and
+24:00 UTC then fall outside the requested Kampala date and are rejected. The
+report does not measure response bytes per page; `maxResponseBytes` bounds them
+and a `response-too-large` failure means the bound is too small.
+
+`oddsSuitability` (also printed by the command) is `qualified` only when the four
+import findings are confirmed and no odds task is running, uncertain or
+deferred. It is `failed` when any of them failed and `incomplete` otherwise.
+Odds findings never decide the core `liveSuitability` or `liveOperations`, because
+odds are optional and separately gated. `odds-display-rights` gates only public
+prices (`GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` and `publicPolicy.features.providerOdds`),
+not private import. The four launch bet ids come from the documented examples
+and stay provisional until `odds-bet-catalog` is confirmed; a mismatch with the
+stored catalog only withholds prices.
 
 ## Published terms and actual qualification
 

@@ -97,6 +97,17 @@ computed selections cannot be forged, incomplete groups cannot be spliced in,
 and unknown fields are rejected. Later public DTO fields must extend this shared
 projection explicitly and participate in the same fixture version.
 
+Prompt 052 adds optional `prices`: at most one entry per published family,
+bound to that family's pick (`family`, `selection`, two-place `price`, `basis`,
+`retrievedAt`, `providerUpdatedAt`). A price for an unpublished family, another
+selection, a duplicate family or any extra field (such as a bookmaker name) is
+rejected. Prices are the one public field that is observation data rather than
+part of the version: they arrive through the equal-version merge below.
+`selectedCardPrice(fixture, family)` in `src/domain/match-card.ts` returns only the
+shown pick's own price, never another family's, and `sameCardFixture` compares
+prices so a card re-renders when its price moves. While
+`publicPolicy.features.providerOdds` is off, `prices` is always empty.
+
 `dataVersion` is the catalog's positive MySQL unsigned BIGINT serialized as
 canonical decimal **text**, up to `18446744073709551615`. Comparison uses exact
 `BigInt` arithmetic locally; no BigInt enters Redux, actions, JSON or storage.
@@ -112,9 +123,14 @@ Cycle, run and revision IDs are opaque equality references, never clocks.
    record is older than an accepted fixture version, reject the batch and its
    membership atomically with `stale-data`; retry through a current public read.
 4. Replace each accepted fixture **whole** only at a strictly greater version.
-   Equal versions leave the existing snapshot untouched, even with conflicting
-   content. A newer cycle or unavailable forecast replaces the previous cycle
-   and forecast together; absent fields cannot retain an older explanation.
+   At an equal version the forecast content stays untouched, even when it
+   conflicts. Only the observation fields that `mergeFixtureObservation` refreshes
+   are adopted (sync time, partial coverage, update states, availability message,
+   `updateDelayed` and, since prompt 052, `prices`), and only when the cycle,
+   revision and run match. Prices change without a version bump, so this is how
+   a refresh shows a moved, withdrawn or stale price. A newer cycle or unavailable
+   forecast replaces the previous cycle and forecast together; absent fields
+   cannot retain an older explanation.
 5. `replace` sets membership; `append` accepts only the advertised next page and
    deduplicates IDs in response order. `refresh` targets the first loaded page
    and updates entities only, retaining loaded membership and pagination. The

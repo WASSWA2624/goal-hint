@@ -13,6 +13,13 @@ const focusRing = css`
     outline-offset: ${({ theme }) => theme.border.focusOffset};
   }
 `;
+/** On the dark bar the ring is inverse teal (5:1 on every stop), drawn inside so the bar never clips it. */
+const headerFocus = css`
+  &:focus-visible {
+    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent};
+    outline-offset: -4px;
+  }
+`;
 
 export const ShellFrame = styled.div`
   display: flex;
@@ -35,6 +42,13 @@ export const SkipLink = styled.a`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
 
+  /* A navy ring inside the white box reads on the dark bar and on the light page alike. */
+  &:focus-visible {
+    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
+    outline-offset: -6px;
+    box-shadow: 0 0 0 3px ${({ theme }) => theme.header.accent};
+  }
+
   &:not(:focus) {
     clip-path: inset(50%);
     inline-size: 1px;
@@ -45,13 +59,20 @@ export const SkipLink = styled.a`
   }
 `;
 
-/** App pages own their phone heading, so the bar is desktop-only there. */
+/**
+ * The branded bar: deep navy to teal behind the inverse logo, with the multicolour brand edge along
+ * the bottom. App pages own their phone bar (same fill), so this one is desktop-only there.
+ */
 export const Header = styled.header<{ $app?: boolean }>`
   position: sticky;
   inset-block-start: 0;
   z-index: 20;
   display: ${({ $app }) => $app ? "none" : "block"};
-  background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.color.surface};
+  color: ${({ theme }) => theme.header.text};
+  background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.header.background};
+  /* Solid navy where gradients are dropped (forced colours, print). */
+  background-color: ${({ theme }) => theme.color.text};
+  box-shadow: ${({ theme }) => theme.header.shadow};
   ${desktop} { display: block; }
 `;
 
@@ -59,22 +80,29 @@ export const HeaderContent = styled(Container)`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.space.lg};
-  min-block-size: 3.5rem;
+  min-block-size: ${({ theme }) => theme.header.phoneHeight};
   ${desktop} { gap: ${({ theme }) => theme.space.lg}; min-block-size: 4rem; }
   ${media.wide} { gap: ${({ theme }) => theme.space.xl}; }
 `;
 
 /**
- * Below desktop the logo sits at the brand-kit minimum (160px) with 9px clear space, above a
- * quarter of the displayed mark, so the phone bar stays at its 3.5rem minimum.
+ * Desktop keeps the logo's 12px clear space, and the focus ring sits inside it. Below desktop the
+ * logo sits at the brand-kit minimum (160px) on the page gutter, like the feed's phone bar: the
+ * artwork's own margin plus the bar's 7.5px above and below exceed a quarter of the displayed mark.
  */
 export const HomeLink = styled(TextLink)`
   flex: none;
   display: inline-flex;
   text-decoration: none;
+  /* Doubled to win over the shared link's navy ring. */
+  &&:focus-visible {
+    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent};
+    outline-offset: -6px;
+  }
   ${media.belowDesktop} {
-    > span { padding: 9px; }
+    > span { padding: 0; }
     > span > img { inline-size: 160px; }
+    &&:focus-visible { outline-offset: 2px; }
   }
 `;
 
@@ -96,33 +124,51 @@ export const TopNavList = styled.ul`
   > li { display: flex; position: relative; }
 `;
 
-/** Each section's icon carries its own accent, matching the phone tab bar. */
+/**
+ * Light links on the dark bar; each section's icon keeps its own hue as a light tint, matching the
+ * phone tab bar. The current page turns white and bold over a 3px inverse-teal indicator that rests
+ * on the brand edge; hover previews a faint one.
+ */
 const topLink = css<{ $tone?: AccentName }>`
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding-inline: 12px;
-  color: ${({ theme }) => theme.color.text};
+  color: ${({ theme }) => theme.header.mutedText};
   border-block-end: 3px solid transparent;
   white-space: nowrap;
   font-size: 0.9375rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
   cursor: pointer;
-  > svg:first-child { flex: none; font-size: 1.125rem; color: ${({ theme, $tone = "teal" }) => theme.color.accent[$tone].solid}; }
-  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; } }
-  &[aria-current="page"] {
-    color: ${({ theme }) => theme.color.brand};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    background: ${({ theme }) => theme.gradient.action} bottom / 100% 3px no-repeat;
+  > svg:first-child { flex: none; font-size: 1.125rem; color: ${({ theme, $tone = "teal" }) => theme.header.tone[$tone]}; }
+  &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 12px;
+    inset-block-end: -1px;
+    block-size: 3px;
+    border-radius: 3px 3px 0 0;
   }
-  ${focusRing}
+  ${media.hover} {
+    &:hover { color: ${({ theme }) => theme.header.text}; }
+    &:hover::after { background: ${({ theme }) => theme.header.controlBorder}; }
+  }
+  &[aria-current="page"] {
+    color: ${({ theme }) => theme.header.text};
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
+    &::after { background: ${({ theme }) => theme.header.accent}; }
+  }
+  ${headerFocus}
 `;
 export const TopNavLink = styled(Link)<{ $tone?: AccentName }>`${topLink}`;
 
+/** The summary sits on the bar; its popup stays a light surface with dark links. */
 export const MoreMenu = styled.details<{ $tone?: AccentName }>`
   display: flex;
   > summary { ${topLink} list-style: none; &::-webkit-details-marker { display: none; } > svg:last-child { font-size: 1rem; } }
+  &[open] > summary { color: ${({ theme }) => theme.header.text}; }
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
 `;
 export const MoreList = styled.ul`
@@ -152,6 +198,11 @@ export const MoreList = styled.ul`
   }
 `;
 
+/**
+ * A translucent pill on the bar. White text and the placeholder keep 4.5:1 over the teal stop at
+ * rest and when focused; focus draws a 2px inverse-teal ring. Dark color-scheme lightens the native
+ * clear button.
+ */
 export const HeaderSearch = styled.form`
   display: none;
   ${desktop} {
@@ -164,23 +215,33 @@ export const HeaderSearch = styled.form`
     margin-inline-start: auto;
     padding-inline: ${({ theme }) => theme.space.md};
     min-block-size: 2.5rem;
-    color: ${({ theme }) => theme.color.mutedText};
-    background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 10px;
-    &:focus-within { border-color: ${({ theme }) => theme.color.brand}; }
+    color: ${({ theme }) => theme.header.mutedText};
+    background: ${({ theme }) => theme.header.fieldFill};
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
+    border-radius: ${({ theme }) => theme.border.pillRadius};
+    transition: background-color 120ms ease, border-color 120ms ease;
+    &:focus-within {
+      color: ${({ theme }) => theme.header.text};
+      background: ${({ theme }) => theme.header.fieldFillActive};
+      border-color: ${({ theme }) => theme.header.accent};
+      box-shadow: 0 0 0 1px ${({ theme }) => theme.header.accent};
+    }
     > svg { flex: none; font-size: 1.125rem; }
     > input {
       flex: 1;
       min-inline-size: 0;
       border: 0;
       background: none;
-      color: ${({ theme }) => theme.color.text};
+      color: ${({ theme }) => theme.header.text};
+      caret-color: ${({ theme }) => theme.header.accent};
+      color-scheme: dark;
       font: inherit;
       font-size: 0.9375rem;
       outline: none;
+      &::placeholder { color: ${({ theme }) => theme.header.placeholder}; opacity: 1; }
     }
   }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.fieldFillActive}; } }
 `;
 
 /** Phone app sections, fixed to the bottom edge. */

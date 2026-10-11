@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parseReportingDate } from "./calendar.ts";
 import { feedQueryRules, maximumCompetitionScope } from "./feed-query.ts";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
-import { fixtureSnapshotSchema, fixtureCycleSchema, fixtureUpdateSchema, unavailableMarketSchema } from "./fixture-snapshot.ts";
+import { fixtureSnapshotSchema, fixtureCycleSchema, fixturePriceSchema, fixtureUpdateSchema, unavailableMarketSchema } from "./fixture-snapshot.ts";
 
 export const matchFeedRules = Object.freeze({ maximumQueryBytes: 2048, maximumResponseBytes: 1_048_576,
   searchWindowMs: 60_000, searchRequestsPerWindow: 120 });
@@ -13,7 +13,9 @@ const page = count.min(1).max(feedQueryRules.maximumPage);
 const pageLink = z.string().max(4096).startsWith("/api/matches?").nullable();
 export const matchFeedRecordSchema = fixtureSnapshotSchema.safeExtend({ cycle: fixtureCycleSchema.nullable(),
   unavailableMarkets: z.array(unavailableMarketSchema).max(4), update: fixtureUpdateSchema,
-  availabilityMessage: z.string().max(256).nullable(), scorePeriod: z.enum(["regulation", "live"]).nullable() });
+  availabilityMessage: z.string().max(256).nullable(), scorePeriod: z.enum(["regulation", "live"]).nullable(),
+  /** Prices for the published picks (052); empty while odds display rights are not recorded. */
+  prices: z.array(fixturePriceSchema).max(4).default([]) });
 export const dailyRunProgressSchema = z.strictObject({ id: z.uuid().nullable(), sequence: z.string().regex(/^[1-9]\d*$/u).nullable(), date,
     phase: z.enum(["not-started", "selecting", "updating", "complete", "partial"]), total: count.nullable(),
     completed: count, terminal: count, failed: count, published: count, partialCoverage: z.boolean(), message: z.string().max(256).nullable() })

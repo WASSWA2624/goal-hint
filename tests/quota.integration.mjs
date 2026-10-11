@@ -272,6 +272,29 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal((await f.state()).period.dayLimit, 100);
     });
 
+    await t.test("odds-priority enrichment stops at the essential reserve while results-cutoff work still dispatches (052)", async () => {
+      // A Pro-sized day: 7,500 requests keep a 1,250-request essential reserve, so ordinary work stops at 6,250.
+      const f = fixture(firstDatabase, "odds-reserve", { providerDailyLimit: 7500, dailyRemaining: 1251, secondLimit: 5, minuteLimit: 300 });
+      await f.initialize();
+      assert.equal((await f.state()).period.used, 6249);
+      const lastOrdinary = await dispatch(f.limiter, f.request("enrichment"));
+      await f.limiter.complete(lastOrdinary, { kind: "success" });
+      f.clock.now += 1000;
+      denied(await f.limiter.reserve(f.request("enrichment")), "essential-reserve");
+      const essential = await dispatch(f.limiter, f.request("results-cutoff"));
+      await f.limiter.complete(essential, { kind: "success", dailyRemaining: 1 });
+      f.clock.now += 1000;
+      denied(await f.limiter.reserve(f.request("enrichment")), "essential-reserve");
+      const final = await dispatch(f.limiter, f.request("results-cutoff"));
+      await f.limiter.complete(final, { kind: "success", dailyRemaining: 0 });
+      f.clock.now += 1000;
+      denied(await f.limiter.reserve(f.request("results-cutoff")), "daily-limit");
+      const state = await f.state();
+      assert.equal(state.period.dayLimit, 7500);
+      assert.equal(state.period.used, 7500, "the day total never exceeds min(limit, 120000)");
+      assert.equal(state.period.dayRemaining, 0);
+    });
+
     await t.test("uncertain attempts, crashes and replacement replicas never refund durable reservations", async () => {
       const f = fixture(firstDatabase, "restart");
       await f.initialize();

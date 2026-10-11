@@ -133,6 +133,8 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS", "GOAL_HINT_DATABASE_IDLE_TIMEOUT_SECONDS", "GOAL_HINT_DATABASE_TLS_MODE", "GOAL_HINT_DATABASE_TLS_CA_FILE",
     "GOAL_HINT_DATABASE_ACCESS_REF",
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES", "GOAL_HINT_DEPLOYMENT_ENVIRONMENT",
+    "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
+    "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED",
   ]);
   documentedKeys.delete("NODE_ENV");
   assert.deepEqual(Object.keys(env).sort(), [...documentedKeys].sort());
@@ -147,8 +149,12 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  const { database, probabilitySumTolerance, consistencyTolerance, ...unresolvedChoices } = policy.choices;
+  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, ...unresolvedChoices } = policy.choices;
   assertUnresolved(unresolvedChoices);
+  // Odds imports default off, with no bookmaker or display-rights reference assumed (052).
+  assert.deepEqual(odds, { enabled: false, bookmakerId: null, rightsRef: null });
+  // Team codes are on by default; the live runner's spare-quota gate still keeps them off on Free and slow plans.
+  assert.deepEqual(teamCodes, { enabled: true });
   assert.equal(probabilitySumTolerance, marketRules.probabilitySumTolerance);
   assert.equal(consistencyTolerance, marketRules.consistencyTolerance);
   assert.deepEqual(database, {
@@ -283,6 +289,28 @@ test("feature flags cannot silently extend the approved launch", () => {
     assert.equal(parseRuntimePolicy({ [field]: "false" }).public.features.exactScores, false);
   }
   policyError(() => parseRuntimePolicy({ GOAL_HINT_LOCALES: "en,fr" }), ["GOAL_HINT_LOCALES"]);
+  // Provider odds stay unpublished until the owner records display rights (OP-36).
+  assert.equal(publicPolicy.features.providerOdds, false);
+});
+
+test("odds imports default off, need one documented bookmaker and never assume display rights", () => {
+  assert.equal(parseRuntimePolicy({}).choices.odds.enabled, false);
+  policyError(() => parseRuntimePolicy({ GOAL_HINT_ODDS_IMPORT_ENABLED: "true" }), ["GOAL_HINT_ODDS_BOOKMAKER_ID"]);
+  for (const value of ["0", "-1", "1.5", "eight"]) policyError(() => parseRuntimePolicy({ GOAL_HINT_ODDS_BOOKMAKER_ID: value }), ["GOAL_HINT_ODDS_BOOKMAKER_ID"]);
+  policyError(() => parseRuntimePolicy({ GOAL_HINT_ODDS_IMPORT_ENABLED: "yes" }), ["GOAL_HINT_ODDS_IMPORT_ENABLED"]);
+  const enabled = parseRuntimePolicy({ GOAL_HINT_ODDS_IMPORT_ENABLED: "true", GOAL_HINT_ODDS_BOOKMAKER_ID: "8",
+    GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF: "synthetic-odds-rights" });
+  assert.deepEqual(enabled.choices.odds, { enabled: true, bookmakerId: 8, rightsRef: "synthetic-odds-rights" });
+  assert.equal(enabled.public.features.providerOdds, false);
+});
+
+test("team-code imports default on, turn off only with false and accept nothing else", () => {
+  assert.deepEqual(parseRuntimePolicy({}).choices.teamCodes, { enabled: true });
+  assert.deepEqual(parseRuntimePolicy({ GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: "true" }).choices.teamCodes, { enabled: true });
+  assert.deepEqual(parseRuntimePolicy({ GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: "false" }).choices.teamCodes, { enabled: false });
+  for (const value of ["yes", "0", "TRUE", ""]) {
+    policyError(() => parseRuntimePolicy({ GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: value }), ["GOAL_HINT_TEAM_CODES_IMPORT_ENABLED"]);
+  }
 });
 
 test("unknown policy keys and public environment overrides fail without exposing their values", () => {

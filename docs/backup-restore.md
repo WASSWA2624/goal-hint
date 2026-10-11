@@ -128,6 +128,13 @@ RPO/RTO comparison is **unapproved**, because the owner supplied no objectives.
 These timings are one local drill, not a capacity benchmark or hosted recovery
 qualification. Private execution record: `.tmp/045-restore-final.log`.
 
+Prompt 052 adds five odds tables, so the inventory is now **68 tables** (67
+application models plus Prisma migration history). On 11 October 2026,
+`npm run test:backup` re-ran all **9 checks** on MySQL 8.4.11 with no skips,
+asserting 68 tables. The two restores took 16,116 ms and 20,459 ms. Both matched
+complete-row hashes, schema, foreign keys and triggers, including the two
+`FixtureOddsState` cache triggers. Private record: `.tmp/052-stage2-backup.log`.
+
 ## PITR and hosted infrastructure qualification
 
 The owned drill explicitly uses ROW binlogs, `sync_binlog=1`,

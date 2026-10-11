@@ -13,6 +13,7 @@ import { createFallbackService } from "../fallback/fallback-service.ts";
 import { createApiFootballAdapter } from "../football/api-football-adapter.ts";
 import { createFootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { createFootballCatalogImporter } from "../football/catalog-service.ts";
+import { quotaPriorities } from "../football/quota-contract.ts";
 import { createPolicyQuotaGateway } from "../football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../football/quota-mysql-store.ts";
 import { createMysqlJobQueue } from "../jobs/job-mysql-store.ts";
@@ -36,7 +37,15 @@ import { loadOwnerApprovals, missingOwnerApprovals, ownerEvidenceVerifier, type 
 import { createAccountStatusReader, createQuotaRouter, type QuotaDay } from "./live-account.ts";
 import { createLiveAuthorities, LIVE_ACTOR } from "./live-authorities.ts";
 import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveReferences, liveWorkload, REFRESH_REQUESTS_PER_JOB,
-  resultSyncPolicy, selectionPolicy, cutoffPolicy, lifecyclePolicy, providerFallbackPolicy, publicationPolicy } from "./live-plan.ts";
+  resultSyncPolicy, selectionPolicy, cutoffPolicy, lifecyclePolicy, providerFallbackPolicy, publicationPolicy,
+  oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled } from "./live-plan.ts";
+import { oddsFail } from "../odds/odds-contract.ts";
+import { createOddsJobDefinitions, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS, type OddsQuotaUsage } from "../odds/odds-jobs.ts";
+import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
+import { createOddsImportService } from "../odds/odds-service.ts";
+import { createTeamCodeJobDefinitions } from "../teams/team-code-jobs.ts";
+import { createMysqlTeamCodeStore } from "../teams/team-code-mysql-store.ts";
+import { createTeamCodeService } from "../teams/team-code-service.ts";
 
 const DAY_MS = 86_400_000;
 export class LiveConfigurationError extends Error {
@@ -78,7 +87,9 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit);
     const selection = selectionPolicy(policy, refs, workload), statusEvidenceRef = `${refs.freshness}#status`;
     let results: ResultSyncPolicy | null = null;
-    const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results });
+    // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
+    const odds = oddsPolicy(policy, refs, workload);
+    const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results, oddsPolicy: odds });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
@@ -133,6 +144,46 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
       } });
     const registry = createJobRegistry([selectionDefinition, refreshDefinition, createCutoffJob(cutoff)]);
 
+    // Odds (052): imported only when the owner enables them AND the verified plan leaves spare ordinary quota.
+    // A separate registry runs on its own worker, so odds never occupy refresh or cutoff workers.
+    const oddsEnabled = policy.choices.odds.enabled && workload.odds.eligible && odds !== null;
+    const oddsService = createOddsImportService({ adapter: adapter.odds, store: createMysqlOddsStore(database), authority: authorities.odds,
+      accountId: () => quota.current()?.accountId ?? oddsFail("unavailable"),
+      bounds: (request) => {
+        const end = request.kind === "prices" ? request.slot + ODDS_SWEEP_MS : request.slot + DAY_MS;
+        // The provider walk ends early enough that the receipt and per-fixture writes keep their own part of the job timeout.
+        const deadline = utcInstantFromEpochMilliseconds(Math.min(Date.now() + ODDS_PROVIDER_WINDOW_MS, end));
+        return request.kind === "prices" ? oddsImportBounds(deadline, workload.odds.maxPages) : oddsCatalogBounds(deadline);
+      } });
+    /** The enrichment gate's counters. Null until the new UTC provider day has settled and opened its limiter. Odds and
+     * team codes are the only live callers at enrichment priority, so the limiter's own dispatched enrichment attempts
+     * on the open provider day are exactly what both have spent together, uncertain dispatches included: they share one
+     * spare, and neither can push the other past it. */
+    async function oddsUsage(): Promise<OddsQuotaUsage | null> {
+      const counters = await quota.counters();
+      if (counters === null) return null;
+      const { accountId, periodId } = counters.day;
+      const [row] = await database.query((tx) => tx.$queryRaw<{ spent: bigint | number }[]>`SELECT COUNT(*) AS spent FROM ApiQuotaAttempt
+        WHERE accountId = ${accountId} AND periodId = ${periodId} AND priority = ${quotaPriorities.enrichment.rank} AND dispatchedAt IS NOT NULL`);
+      return Object.freeze({ remaining: counters.remaining, used: counters.used, oddsUsed: Number(row?.spent ?? 0) });
+    }
+    const enrichmentAllowance = Object.freeze({ floor: workload.odds.floor, spare: workload.odds.spare, reserve: workload.odds.reserve });
+    const oddsDefinitions = createOddsJobDefinitions({ service: oddsService, policy: () => odds ?? oddsFail("unverified-policy"),
+      enabled: () => oddsEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
+      maxRequests: (kind) => oddsMaxRequests(kind, workload.odds.maxPages) });
+    const oddsRegistry = createJobRegistry(oddsDefinitions);
+
+    // Team codes: on unless the owner turns them off, but only on plans with the odds spare (never Free or slow). Each
+    // hourly slot imports /teams for a few nearest-kickoff competition-seasons with codeless teams through the ordinary
+    // catalog importer; its receipts are the per-league "checked" markers, so codeless leagues are not re-requested.
+    const teamCodesEnabled = teamCodeImportsEnabled(policy, workload);
+    const teamCodeDefinitions = createTeamCodeJobDefinitions({ enabled: () => teamCodesEnabled, usage: oddsUsage, allowance: enrichmentAllowance,
+      service: createTeamCodeService({ store: createMysqlTeamCodeStore(database), importer, retentionEvidenceRef: refs.retention,
+        bounds: teamCodeBounds }) });
+    const teamCodesRegistry = createJobRegistry(teamCodeDefinitions);
+    // One enrichment worker runs both, so their quota gates are checked one job at a time; odds jobs claim first.
+    const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions]);
+
     /** Result coverage follows the competitions this runner predicts in the current window. */
     async function resultCoverage(): Promise<ResultSyncPolicy["coverage"]> {
       const now = Date.now();
@@ -160,6 +211,11 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
       return poller;
     }
     return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, resultPoller, day,
+      odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates,
+        // Write-time staleness needs no provider call, so it runs even while imports are off.
+        expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),
+      teamCodes: Object.freeze({ enabled: teamCodesEnabled, registry: teamCodesRegistry }),
+      enrichment: Object.freeze({ registry: enrichmentRegistry }),
       now: () => utcInstantFromEpochMilliseconds(Date.now()), close: () => database.disconnect() });
   } catch (error) { await database.disconnect().catch(() => {}); throw error; }
 }

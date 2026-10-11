@@ -1,6 +1,6 @@
 # Goal Hint brand kit
 
-The selected identity combines a minimal football with an open geometric **G**, deep navy and teal. The Manrope wordmark is converted to vector outlines, so exported artwork renders without an installed font.
+The selected identity combines a solid football with a heavy open geometric **G**, deep navy and teal. The G is one thick filled ring with a square crossbar. The football fills its counter and is cut away around the bar; on dark surfaces it stays a white ball with navy panels. The wordmark is Manrope ExtraBold (800) with slightly tightened tracking, converted to vector outlines so exported artwork renders without an installed font.
 
 **Tagline:** Football predictions. Clearly explained.
 
@@ -83,7 +83,7 @@ $env:BRAND_NODE_MODULES = Join-Path $brandTools 'node_modules'
 node scripts/generate-brand.mjs
 ```
 
-Optional type-outline rebuild: install Python's `fontTools` package, run `python scripts/build-brand-type.py`, then rerun the asset generator. Normal regeneration does not require Python.
+Optional type-outline rebuild: install Python's `fontTools` package, run `python scripts/build-brand-type.py`, then rerun the asset generator. The script sets the wordmark at weight 800 with −28 units of tracking (−40 more at the word space) and applies the font's own pair kerning to every string. Normal regeneration does not require Python.
 
 The unmodified [Manrope source font](source/fonts/Manrope-wght.ttf) came from [Google Fonts](https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf). Its [SIL Open Font License](source/fonts/OFL.txt) is preserved alongside it; retain that license when redistributing the font.
 

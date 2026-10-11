@@ -94,6 +94,8 @@ const tolerance = optional(
   z.string().regex(/^(0|1)(\.\d+)?$/).transform(Number).pipe(z.number().gt(0).lt(1)),
 );
 const enabled = z.enum(["true", "false"]).transform((value) => value === "true").default(false);
+/** A switch that is on unless set to "false"; for work another gate already bounds (the team-code spare-quota gate). */
+const enabledByDefault = z.enum(["true", "false"]).transform((value) => value === "true").default(true);
 const disabledFeature = z.literal("false").optional();
 const databaseUrl = optional(z.string().refine((value) => {
   try {
@@ -147,6 +149,10 @@ const environmentSchema = z.object({
   GOAL_HINT_FOOTBALL_ACCOUNT_EVIDENCE_REF: text.describe("Record verified active limits, reset, expiry and coverage (008)."),
   GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF: text.describe("Record verified prediction/data/logo public display and reuse rights (008)."),
   GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT: count.describe("Use a positive counted trial request allowance within the shared ceiling (008)."),
+  GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF: text.describe("Record verified rights to display bookmaker odds publicly; without it odds stay private (052)."),
+  GOAL_HINT_ODDS_IMPORT_ENABLED: enabled.describe("Use true or false; the live runner imports odds only when its plan has spare quota (052)."),
+  GOAL_HINT_ODDS_BOOKMAKER_ID: count.describe("Use the positive API-Football id of the one documented odds bookmaker; required when odds imports are enabled (052)."),
+  GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: enabledByDefault.describe("Use true or false (default true); the live runner imports team codes only from spare quota, so they stay off on Free and slow plans."),
   GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate AI cap in integer US cents (010)."),
   GOAL_HINT_RESEARCH_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate research cap in integer US cents (010)."),
   GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS: money.describe("Record an approved infrastructure cap in integer US cents (003/020/046)."),
@@ -228,6 +234,12 @@ function assemble(settings: z.output<typeof environmentSchema>) {
         publicRightsRef: settings.GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF,
         trialRequestLimit: settings.GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT,
       },
+      odds: {
+        enabled: settings.GOAL_HINT_ODDS_IMPORT_ENABLED,
+        bookmakerId: settings.GOAL_HINT_ODDS_BOOKMAKER_ID,
+        rightsRef: settings.GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF,
+      },
+      teamCodes: { enabled: settings.GOAL_HINT_TEAM_CODES_IMPORT_ENABLED },
       budgets: {
         aiMonthlyUsdCents: settings.GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS,
         researchMonthlyUsdCents: settings.GOAL_HINT_RESEARCH_MONTHLY_BUDGET_USD_CENTS,
@@ -406,6 +418,9 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
     && new URL(policy.secrets.databaseUrl.read()).href === new URL(policy.secrets.testDatabaseUrl.read()).href) {
     issues.push({ field: "TEST_DATABASE_URL", reason: "The isolated test target must differ from DATABASE_URL; prompt 003 must also verify actual database isolation." });
   }
+  if (policy.choices.odds.enabled && policy.choices.odds.bookmakerId === null) {
+    issues.push({ field: "GOAL_HINT_ODDS_BOOKMAKER_ID", reason: "Odds imports need one documented bookmaker id; no bookmaker is assumed." });
+  }
   if (policy.choices.football.trialRequestLimit !== null
     && policy.choices.football.trialRequestLimit > operatingRules.football.requestsPerProviderDay - operatingRules.football.essentialReserveRequests) {
     issues.push({ field: "GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT", reason: "Trial allowance must fit inside the nonessential shared daily ceiling; the limiter still counts every dispatch." });
@@ -422,7 +437,7 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
 
 export type EvidenceRequirement =
   | "budget-approval" | "database-access" | "football-private-use" | "football-account" | "football-public-rights"
-  | "research-license" | "calibration-configuration" | "evidence-policy" | "freshness-policy"
+  | "football-odds-rights" | "research-license" | "calibration-configuration" | "evidence-policy" | "freshness-policy"
   | "shadow-protocol" | "pipeline-integrity" | "quality-qualification" | "release-approval";
 export type EvidenceVerifier = (reference: string, requirement: EvidenceRequirement) => boolean;
 

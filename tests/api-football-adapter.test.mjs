@@ -119,11 +119,14 @@ test("all evidence and fallback outbound operations use the same protected origi
     () => state.adapter.evidence.availability(1, "injuries", bounds()),
     () => state.adapter.evidence.playerStatistics({ competitionId: 39, season: 2026 }, bounds()),
     () => state.adapter.fallback.predictions(1, bounds({ cacheScope: "synthetic-fallback-job" })),
+    () => state.adapter.odds.prices({ fixtureId: 1, bookmakerId: 8 }, bounds({ priority: "enrichment" })),
+    () => state.adapter.odds.bets(bounds({ priority: "enrichment" })),
+    () => state.adapter.odds.bookmakers(bounds({ priority: "enrichment" })),
   ];
   for (const operation of calls) assert.equal((await operation()).status, "complete");
   assert.deepEqual(state.network.map(({ url }) => url.pathname), [
     "/fixtures", "/fixtures", "/teams", "/leagues", "/fixtures/statistics", "/fixtures/lineups",
-    "/injuries", "/players", "/predictions",
+    "/injuries", "/players", "/predictions", "/odds", "/odds/bets", "/odds/bookmakers",
   ]);
   assert.equal(state.network[1].url.searchParams.get("live"), "all");
   assert.equal(state.reservations.length, calls.length);
@@ -131,6 +134,7 @@ test("all evidence and fallback outbound operations use the same protected origi
   assert.equal(new Set(state.reservations.map(({ requestId }) => requestId)).size, calls.length);
   for (const { url } of state.network) assert.equal(url.origin, API_FOOTBALL_ORIGIN);
   assert.equal(Object.hasOwn(state.adapter.evidence, "predictions"), false);
+  assert.equal(Object.hasOwn(state.adapter.evidence, "odds"), false);
 });
 
 test("invalid queries, incomplete date/season pairs and missing explicit budgets fail before reservation", async () => {
@@ -939,4 +943,157 @@ test("a caller that stops waiting releases its queued request, bounded by its wo
   assert.equal(result.error.reason, "quota-denied");
   assert.equal(reservations[0].deadlineAt, NOW + 500, "the queue reservation never outlives the caller");
   assert.deepEqual(abandoned, [reservations[0].requestId]);
+});
+
+// Prompt 052: synthetic /odds, /odds/bets and /odds/bookmakers envelopes. Labelled fixtures, never recorded payloads.
+function oddsRow(fixtureId = 1, { bookmakerId = 8, date = "2026-10-08T18:00:00+03:00", update = "2026-10-08T09:00:00+00:00" } = {}) {
+  return {
+    league: { id: 39, name: "Synthetic league", season: 2026 },
+    fixture: { id: fixtureId, timezone: "Africa/Kampala", date, timestamp: Date.parse(date) / 1000 },
+    update,
+    bookmakers: [{ id: bookmakerId, name: "Synthetic bookmaker", bets: [
+      { id: 1, name: "Match Winner", values: [{ value: "Home", odd: "1.85" }, { value: "Draw", odd: "3.40" }, { value: "Away", odd: "4.00" }] },
+    ] }],
+  };
+}
+const oddsPage = (start, length) => Array.from({ length }, (_, index) => oddsRow(start + index));
+
+test("odds operations use their own namespace, one documented bookmaker, Kampala dates and counted pages", async () => {
+  const state = setup({ respond: (url) => jsonResponse(url, url.pathname === "/odds" ? [oddsRow(url.searchParams.has("fixture") ? 7 : 1)]
+    : [{ id: 1, name: url.pathname === "/odds/bets" ? "Match Winner" : "Synthetic bookmaker" }]) });
+  const calls = [
+    () => state.adapter.odds.prices({ date: "2026-10-08", bookmakerId: 8 }, bounds({ priority: "enrichment" })),
+    () => state.adapter.odds.prices({ fixtureId: 7, bookmakerId: 8 }, bounds({ priority: "enrichment" })),
+    () => state.adapter.odds.bets(bounds({ priority: "enrichment" })),
+    () => state.adapter.odds.bookmakers(bounds({ priority: "enrichment" })),
+  ];
+  const results = [];
+  for (const operation of calls) results.push(await operation());
+  assert.deepEqual(results.map((result) => result.status), ["complete", "complete", "complete", "complete"]);
+  assert.deepEqual(state.network.map(({ url }) => url.pathname), ["/odds", "/odds", "/odds/bets", "/odds/bookmakers"]);
+  assert.deepEqual(Object.fromEntries(state.network[0].url.searchParams), { bookmaker: "8", date: "2026-10-08", page: "1", timezone: "Africa/Kampala" });
+  assert.deepEqual(Object.fromEntries(state.network[1].url.searchParams), { bookmaker: "8", fixture: "7", page: "1", timezone: "Africa/Kampala" });
+  assert.equal(state.network[2].url.search, "");
+  assert.equal(state.reservations.length, calls.length);
+  assert.ok(state.reservations.every((reservation) => reservation.priority === "enrichment"));
+  // Odds rows carry their own update time; catalog rows do not.
+  assert.equal(results[0].completeness.missingCoverage.includes("provider-update-time"), false);
+  assert.equal(results[0].data[0].source.providerUpdatedAt, Date.parse("2026-10-08T09:00:00Z"));
+  assert.ok(results[2].completeness.missingCoverage.includes("provider-update-time"));
+  assert.equal(results[0].provenance[0].providerUpdatedAt, null);
+  assert.equal(Object.hasOwn(state.adapter.evidence, "odds"), false);
+  assert.equal(Object.hasOwn(state.adapter.fallback, "odds"), false);
+});
+
+test("invalid odds queries and missing bookmakers fail before any reservation", async () => {
+  const state = setup();
+  for (const query of [{}, { date: "2026-10-08" }, { date: "2026-10-08", bookmakerId: 0 }, { date: "08/10/2026", bookmakerId: 8 },
+    { fixtureId: -1, bookmakerId: 8 }, { fixtureId: 7, date: "2026-10-08", bookmakerId: 8 }, { date: "2026-10-08", bookmakerId: 8, bet: 1 }, null]) {
+    const result = await state.adapter.odds.prices(query, bounds());
+    assert.equal(result.status, "failed");
+    assert.equal(result.error.reason, "invalid-request");
+  }
+  assert.equal(state.reservations.length, 0);
+  assert.equal(state.network.length, 0);
+});
+
+test("odds pagination follows the documented 10-row page, reserving every page", async () => {
+  const state = setup({ respond: (url) => {
+    const current = Number(url.searchParams.get("page"));
+    return jsonResponse(url, current === 1 ? oddsPage(1, 10) : oddsPage(11, 3), { paging: { current, total: 2 } });
+  } });
+  const result = await state.adapter.odds.prices({ date: "2026-10-08", bookmakerId: 8 }, bounds());
+  assert.equal(result.status, "complete");
+  assert.equal(result.data.length, 13);
+  assert.deepEqual(state.network.map(({ url }) => url.searchParams.get("page")), ["1", "2"]);
+  assert.equal(state.reservations.length, 2);
+  assert.equal(result.requestsDispatched, 2);
+});
+
+test("odds pagination drift, short non-final pages and fixtures repeated across pages stay incomplete", async () => {
+  for (const [problem, reason] of [["total-drift", "pagination-incomplete"], ["short-page", "pagination-incomplete"],
+    ["duplicate-fixture", "schema-error"], ["overlong-page", "pagination-incomplete"]]) {
+    const state = setup({ respond: (url) => {
+      const current = Number(url.searchParams.get("page"));
+      const rows = current === 1 ? oddsPage(1, problem === "short-page" ? 9 : problem === "overlong-page" ? 11 : 10)
+        : problem === "duplicate-fixture" ? [oddsRow(10)] : [oddsRow(12)];
+      return jsonResponse(url, rows, { paging: { current, total: current === 2 && problem === "total-drift" ? 3 : 2 } });
+    } });
+    const result = await state.adapter.odds.prices({ date: "2026-10-08", bookmakerId: 8 }, bounds({ maxRows: 100 }));
+    assert.notEqual(result.status, "complete", problem);
+    assert.equal(result.error.reason, reason, problem);
+    assert.equal(new Set(result.data.map((row) => row.fixtureId)).size, result.data.length);
+  }
+});
+
+const without = (parameters, key) => Object.fromEntries(Object.entries(parameters).filter(([name]) => name !== key));
+
+test("odds selector echoes (bookmaker, date, page) must be present and equal", async () => {
+  for (const [mutate, reason] of [
+    [(parameters) => without(parameters, "bookmaker"), "coverage-error"],
+    [(parameters) => without(parameters, "page"), "coverage-error"],
+    [(parameters) => without(parameters, "date"), "coverage-error"],
+    [(parameters) => ({ ...parameters, bookmaker: "6" }), "schema-error"],
+    [(parameters) => ({ ...parameters, date: "2026-10-09" }), "schema-error"],
+    [(parameters) => ({ ...parameters, page: "2" }), "schema-error"],
+    [(parameters) => ({ ...parameters, timezone: "UTC" }), "schema-error"],
+  ]) {
+    const state = setup({ respond: (url) => new Response(JSON.stringify({ ...envelope(url, [oddsRow()]), parameters: mutate(Object.fromEntries(url.searchParams)) }),
+      { headers: { "content-type": "application/json" } }) });
+    const result = await state.adapter.odds.prices({ date: "2026-10-08", bookmakerId: 8 }, bounds());
+    assert.equal(result.status, "failed");
+    assert.equal(result.error.reason, reason);
+  }
+});
+
+test("odds rows for another bookmaker, Kampala date or fixture never enter the requested scope", async () => {
+  for (const [query, row] of [
+    [{ date: "2026-10-08", bookmakerId: 8 }, oddsRow(1, { bookmakerId: 6 })],
+    // 00:30 Kampala on 9 October belongs to the next reporting date even though it is 21:30 UTC on 8 October.
+    [{ date: "2026-10-08", bookmakerId: 8 }, oddsRow(1, { date: "2026-10-09T00:30:00+03:00" })],
+    [{ fixtureId: 7, bookmakerId: 8 }, oddsRow(8)],
+  ]) {
+    const state = setup({ respond: (url) => jsonResponse(url, [row]) });
+    const result = await state.adapter.odds.prices(query, bounds());
+    assert.notEqual(result.status, "complete");
+    assert.equal(result.error.reason, "schema-error");
+    assert.deepEqual(result.data, []);
+  }
+  const late = setup({ respond: (url) => jsonResponse(url, [oddsRow(1, { date: "2026-10-08T23:30:00+03:00" })]) });
+  assert.equal((await late.adapter.odds.prices({ date: "2026-10-08", bookmakerId: 8 }, bounds())).status, "complete");
+});
+
+test("odds catalogs are single unpaginated pages of unique, named entries", async () => {
+  for (const [rows, paging, reason] of [
+    [[{ id: 1, name: "Match Winner" }, { id: 1, name: "Match Winner" }], undefined, "schema-error"],
+    [[{ id: 1, name: "Match Winner" }, { id: 5 }], undefined, "schema-error"],
+    [[{ id: 1, name: "Match Winner" }], { current: 1, total: 2 }, "pagination-incomplete"],
+  ]) {
+    const state = setup({ respond: (url) => jsonResponse(url, rows, paging ? { paging } : {}) });
+    const result = await state.adapter.odds.bets(bounds({ priority: "enrichment" }));
+    assert.notEqual(result.status, "complete");
+    assert.equal(result.error.reason, reason);
+    assert.equal(state.network[0].url.searchParams.has("page"), false);
+  }
+  const wrongEndpoint = setup({ respond: (url) => new Response(JSON.stringify({ ...envelope(url, [{ id: 8, name: "Synthetic bookmaker" }]), get: "odds/bets" }),
+    { headers: { "content-type": "application/json" } }) });
+  assert.equal((await wrongEndpoint.adapter.odds.bookmakers(bounds())).error.reason, "schema-error");
+});
+
+test("odds are never served from the structured cache, even when a verifier would allow it", async () => {
+  const state = setup({ respond: (url) => jsonResponse(url, [oddsRow(7)]) });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await state.adapter.odds.prices({ fixtureId: 7, bookmakerId: 8 }, bounds({ cacheMaxAgeMs: 0 }));
+    assert.equal(result.status, "complete");
+    assert.equal(result.provenance[0].fromCache, false);
+  }
+  assert.equal(state.network.length, 2);
+});
+
+test("an empty odds page means no price coverage, never zero or inherited prices", async () => {
+  const state = setup({ respond: (url) => jsonResponse(url, []) });
+  const result = await state.adapter.odds.prices({ fixtureId: 7, bookmakerId: 8 }, bounds());
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.data, []);
+  assert.ok(result.completeness.missingCoverage.includes("odds-coverage-not-established"));
 });

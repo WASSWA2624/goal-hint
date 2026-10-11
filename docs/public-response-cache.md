@@ -53,6 +53,17 @@ updates invalidate both old and new kickoff dates and the fixture, including
 unchanged-score sync timestamps. Cycle, lifecycle, import and job triggers cover
 changes that do not emit prediction events. Source rollback rolls back invalidation.
 
+Prompt 052 adds `PublicCache_FixtureOddsState_insert` and
+`PublicCache_FixtureOddsState_update`. They bump `fixture:<id>` and the fixture's
+EAT kickoff `date:` tag only when `FixtureOddsState.publicVersion` changes, which
+happens once per fixture apply that changed a public price (written, stale or
+withdrawn). A reconfirmation that only moves `lastRetrievedAt` never invalidates.
+No new tag type is introduced. Odds never bump `FootballFixture.dataVersion` or
+write `PredictionChangeEvent`. The feed key includes the `odds` bounds through the
+canonical query. Feed projection 6 (record `prices`) and detail projection 4 (the
+`odds` envelope) keep pre-052 entries from being reused. See
+[provider-odds.md](provider-odds.md#public-read-path).
+
 A probe reads its entry and generations in one repeatable-read snapshot. A fill
 retains the generations captured **before** loading its response and checks them
 again. Every hit also compares the stored stamp against current generations.

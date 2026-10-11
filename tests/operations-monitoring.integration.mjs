@@ -16,8 +16,14 @@ import { lifecyclePolicy, lifecycleAuthority } from './helpers/lifecycle-fixture
 import { createMysqlResultSyncStore } from '../src/server/results/result-sync-mysql-store.ts';
 import { createResultSyncService } from '../src/server/results/result-sync-service.ts';
 import { resultPolicy, resultAuthority, resultProvider } from './helpers/result-sync-fixtures.mjs';
-import { catalogFixture } from './helpers/catalog-fixtures.mjs';
+import { catalogBounds, catalogFixture, catalogRequest, catalogResponse, catalogTeam, createSyntheticCatalogAdapter } from './helpers/catalog-fixtures.mjs';
+import { catalogSelectionAuthority } from './helpers/selection-fixtures.mjs';
+import { createFootballCatalogStore } from '../src/server/football/catalog-mysql-store.ts';
+import { createFootballCatalogImporter } from '../src/server/football/catalog-service.ts';
 import { createMarketSettlementService } from '../src/server/settlement/settlement-service.ts';
+import { createMysqlOddsStore } from '../src/server/odds/odds-mysql-store.ts';
+import { createOddsImportService } from '../src/server/odds/odds-service.ts';
+import { createSyntheticOddsAdapter, launchBetCatalog, oddsAuthority, oddsBounds, oddsRequest } from './helpers/odds-fixtures.mjs';
 
 test('private monitoring collection and durable alert delivery on isolated genuine MySQL', { timeout: 300_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
@@ -48,6 +54,8 @@ test('private monitoring collection and durable alert delivery on isolated genui
       assert.equal(snapshot.metrics.available, 1, 'collector query/contracts must succeed');
       assert.equal(snapshot.metrics['failed-jobs'], 1); assert.ok(snapshot.metrics['job-duration-count'] >= 1);
       assert.ok(snapshot.metrics['job-duration-ms'] >= 100); assert.equal(snapshot.metrics['poller-missing'], 1);
+      assert.equal(snapshot.metrics['odds-requests'], 0, 'non-odds football work is never counted as odds');
+      assert.equal(snapshot.metrics['team-code-requests'], 0, 'fixture imports are never counted as team codes');
       assert.equal(snapshot.quota.launched, 1); assert.equal(snapshot.quota.rateLimited, 1); assert.equal(snapshot.quota.remaining, 0);
       assert.equal(snapshot.quota.reserved, 145_000); assert.equal(snapshot.quota.essentialUsed, 1);
       const launchTypes = await p.a.query((tx) => tx.$queryRaw`SELECT
@@ -96,6 +104,34 @@ test('private monitoring collection and durable alert delivery on isolated genui
       const denied = createOperationsMonitor({ policy, authority: monitoringAuthority({ authorize: () => false }), sink, store: createMysqlMonitoringStore(p.a) });
       await assert.rejects(denied.deliver(), MonitoringError);
       assert.deepEqual(await p.a.query((tx) => tx.operationsMonitorState.findUniqueOrThrow({ where: { id: 1 } })), before);
+    });
+
+    await t.test('odds requests are summed from odds receipts in the lookback window under the application grants (052)', async () => {
+      const clock = { now: p.now }, odds = createSyntheticOddsAdapter(clock);
+      odds.state.bets = launchBetCatalog();
+      const service = createOddsImportService({ adapter: odds.adapter.odds, store: createMysqlOddsStore(p.a), authority: oddsAuthority(),
+        accountId: () => accountId, bounds: () => oddsBounds(p.now()), clock });
+      const before = await inspector.inspect(), summary = await service.importCatalog(oddsRequest('bets', p.now()));
+      assert.deepEqual([summary.status, summary.requestsDispatched], ['complete', 1]);
+      const after = await inspector.inspect();
+      assert.equal(after.metrics.available, 1);
+      assert.equal(after.metrics['odds-requests'], before.metrics['odds-requests'] + 1);
+    });
+
+    await t.test('team-code requests are summed from teams receipts only, under the application grants', async () => {
+      const provider = createSyntheticCatalogAdapter({ respond: (url) => catalogResponse(url, url.pathname === '/teams'
+        ? [{ team: catalogTeam(9101) }, { team: catalogTeam(9102, { code: null }) }] : []) });
+      provider.clock.value = p.now();
+      const importer = createFootballCatalogImporter({ adapter: provider.adapter, authority: catalogSelectionAuthority, clock: provider.clock,
+        store: createFootballCatalogStore(p.a, { clock: { now: () => p.now() } }) });
+      const before = await inspector.inspect();
+      const receipt = await importer.import(catalogRequest({ kind: 'teams', query: { competitionId: 39, season: 2026 } }, p.now(),
+        { bounds: catalogBounds(p.now(), { priority: 'enrichment' }) }));
+      assert.equal(receipt.requestsDispatched, 1);
+      const after = await inspector.inspect();
+      assert.equal(after.metrics.available, 1);
+      assert.equal(after.metrics['team-code-requests'], before.metrics['team-code-requests'] + 1);
+      assert.equal(after.metrics['odds-requests'], before.metrics['odds-requests'], 'teams receipts are never counted as odds');
     });
 
     await t.test('reliable final-badge delay clears only after canonical settlement, with no fabricated final result', async () => {

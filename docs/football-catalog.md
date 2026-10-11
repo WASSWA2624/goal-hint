@@ -97,6 +97,48 @@ Fixture `dataVersion` is an unsigned monotonic integer, initially 1. Material re
 
 `store.withFixtureTransaction(fixtureId, callback)` exposes the same provider-then-fixture lock order to subsequent cycle/schedule services. Once those services are implemented, configure the shared coordinator in every importer and route schedule/status changes through that path. Direct Prisma fixture writes would bypass version/audit/coordinator invariants and must not become an alternative mutation entry point. This feature adds the boundary without implementing cycle lifecycle, schedule polling, forecasts, daily manifests or settlement jobs.
 
+## Team codes (spare-quota import)
+
+Phone match cards show a team's provider code (for example `MUN`) when its full
+name does not fit ([match card](match-card.md#team-names-in-tight-spots)). The
+live pipeline imports teams through `/fixtures`, which carries no code, so
+`FootballTeam.code` stays null until a `teams` import by competition/season
+(`/teams?league&season`) observes the league. That endpoint returns every team of
+the league-season with a 3-letter code, often null for small clubs, youth and
+women's sides.
+
+[`src/server/teams/`](../src/server/teams/) adds a low-priority enrichment job
+that runs those imports from spare quota only:
+
+- **Selection** (`team-code-mysql-store.ts`, `team-code-service.ts`). Each sweep
+  reads the competition-seasons with a fixture kicking off from 3 hours ago to
+  8 days ahead whose home or away team has `code IS NULL`. It orders them by that
+  earliest kickoff and skips every competition-season checked recently. Up to
+  four are imported per sweep, one at a time, through the ordinary
+  `createFootballCatalogImporter` with a new UUID each.
+- **Writes.** The job writes no codes itself. The catalog store keeps an existing
+  code when the provider sends null, creates league teams that have no fixture
+  yet, and bumps `dataVersion` (with a shared-identity audit) on every fixture
+  that renders a changed team. The feed, the detail read and the public cache
+  therefore pick up a new code like any other catalog change.
+- **Checked-at markers.** No migration was needed. The import's own append-only
+  `FootballImport` receipt (kind `teams`, scope key
+  `teamCodeScopeKey({ competitionId, season })`, indexed with `observedAt`) is
+  the per-competition-season marker. A complete, partial or degraded receipt
+  settles the league for 30 days whether or not codes arrived, so a codeless
+  league is not requested again for a month. A failed receipt (provider or quota
+  trouble) backs it off for one day. A failed receipt also ends the sweep, and
+  the next slot continues.
+- **Bounds.** `teamCodeBounds` (in `live-plan.ts`): `enrichment` priority, one
+  page plus one retry (2 requests), at most 1,000 rows and 4 MB, never cached. Each
+  league's provider window ends 60 seconds after it starts. A league starts only
+  while 3 minutes of the attempt and slot remain.
+
+The job, its quota gate and the runner wiring are in
+[live operations](live-operations.md#team-codes). Synthetic coverage:
+`npm run test:team-codes` (unit tests plus `tests/team-codes.integration.mjs` on an
+owned MySQL under the application role's catalog grants).
+
 ## Migration and local checks
 
 The incremental migration is [`20261008214325_canonical_football_catalog`](../prisma/migrations/20261008214325_canonical_football_catalog/migration.sql). It adds only catalog tables; existing quota state remains unchanged. The reviewed SQL includes InnoDB, binary collations, restrictive foreign keys, uniqueness/search indexes and checks for distinct home/away teams, valid paired score/date fields, positive versions and nonnegative counts. Prisma cannot represent these CHECK constraints in its schema snapshot, so review the SQL as well as the generated Prisma diff.

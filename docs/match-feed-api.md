@@ -23,16 +23,34 @@ access. All SQL values, limits and offsets are bound parameters.
 | Parameter | Contract |
 | --- | --- |
 | `date` | Exact EAT Gregorian `YYYY-MM-DD`, including historical dates whose UTC bounds fit MySQL DATETIME (earliest EAT date 1000-01-02). |
-| `from`, `to` | Both required; inclusive named EAT dates spanning at most seven days. |
-| `when` | `today` (default), `tomorrow`, `next-7-days`. Mutually exclusive with `date` or `from`/`to`. |
+| `from`, `to` | Both required; inclusive named EAT dates spanning at most 31 days. |
+| `when` | `today` (default), `tomorrow`, `next-3-days`, `next-7-days`, `next-30-days`. Mutually exclusive with `date` or `from`/`to`. |
 | `q` | At most 120 characters under the shared URL validator; normalized, trimmed case-insensitive substring matching. Controls are rejected. `%`, `_` and `!` match literally. |
-| `league` | One canonical competition ID, matching `competition.id`; absent or empty selects all leagues. |
-| `market` | `match-result` (default), `double-chance`, `total-goals`, `both-teams-to-score`. |
+| `league` | Comma list of canonical competition IDs (matching `competition.id`), at most 50. Absent or empty selects all leagues. |
+| `country` | Comma list of stored competition country names (`competition.country`), at most 50. Absent or empty selects all countries. |
+| `market` | Comma list of one or more of `match-result` (default), `double-chance`, `total-goals`, `both-teams-to-score`. Duplicates are rejected. |
+| `prob` | `MIN-MAX` whole percents, 0–100, MIN ≤ MAX, no leading zeros. It applies to each fixture's shown pick (below). `0-100` applies no filter and is omitted from canonical URLs. |
+| `odds` | Prompt 052, **currently rejected**. `MIN-MAX` decimal prices with exactly two places, 1.01 ≤ MIN ≤ MAX ≤ 1000.00, no leading zeros, applied inclusively to the shown pick's own stored price (below). `1.01-1000.00` (both slider extremes; the top stop reads "20.00+") applies no filter and is omitted from canonical URLs. Accepted only while `publicPolicy.features.providerOdds` is on; it is off until the owner records odds display rights (OP-36), so today any `odds` value is an unknown key (400). |
+| `picks` | `all` (default) or `only`, which keeps fixtures that have a shown pick. |
 | `status` | `all` (default), `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. `finished` includes regulation, extra-time and penalty finals. |
-| `sort` | `kickoff` (default), or `probability` with an explicit `market`. Optional `sortMarket` must equal that family. |
+| `sort` | `kickoff` (default) or `probability`. |
+| `dir` | `asc` or `desc`. The default is `asc` for kickoff and `desc` for probability; a default direction is omitted from canonical URLs. |
 | `page` | Integer 1–10,000, default 1. |
 | `pageSize` | Integer 1–100, default 30. |
-| `leagues` | Optional response option, only `0`: the response carries `leagues: []`. Live polls, Load more and the desktop draft count use it because they never read filter options. It is removed before query parsing and not charged to the 2 KiB query limit, so it never enters the canonical query, cache key or page links. |
+| `leagues` | Optional response option, only `0`: the response carries `leagues: []`. Browser page refreshes, live polls and the desktop draft count use it because they never read filter options. It is removed before query parsing and not charged to the 2 KiB query limit, so it never enters the canonical query, cache key or page links. |
+
+Prompt 050 makes `league`, `country` and `market` lists. Plain checkbox forms that
+repeat a list key join exactly like a comma list; every other key must stay
+unique, and an empty value cannot be combined with another value. League and
+country lists are deduplicated and sorted, and markets are put in policy order
+(match result, double chance, total goals, both teams to score). Equivalent
+selections therefore share one canonical URL, cache key and pagination marker.
+Single-market URLs such as `market=double-chance` keep working. `sortMarket` is no
+longer a parameter: old `sortMarket` URLs are rejected with 400 instead of being
+reinterpreted. `odds` is also an unknown parameter (400) while provider odds
+display is off (`publicPolicy.features.providerOdds`, prompt 052). Ranges and
+presets may cover up to 31 days, but forecasts still exist only inside the
+seven-day prediction window; later fixtures carry `availabilityMessage`.
 
 The range resolves to UTC `[startInclusive, endExclusive)` using the shared EAT
 calendar. Enabled competitions are included, together with stored historical
@@ -42,11 +60,32 @@ the entire range before pagination. Search uses the canonical normalized columns
 and alias tables with their existing indexes, bounded by indexed kickoff dates;
 leading-wildcard substring search does not promise a prefix-index plan.
 
-Default order is kickoff ascending, then canonical fixture ID ascending.
-Probability order uses the selected family's stored unrounded DOUBLE value,
-descending, with missing/unavailable values last, then the same kickoff/ID ties.
-Changing the selected market never substitutes another family's probability.
-Every fixture appears once, using its applicable cycle.
+Each fixture has at most one **shown pick**: in its displayed revision, the
+available family among the selected `market` families with the highest stored
+unrounded DOUBLE `selectedProbability`, ties broken in policy order. The SQL joins
+this pick once per fixture; `bestCardFamily` in `src/domain/feed-presentation.ts`
+applies the same rule to the same values, so cards show the pick that ordering and
+filters used. A family outside the selection never supplies a probability.
+
+Default order is kickoff ascending, then canonical fixture ID ascending;
+`dir=desc` reverses both. Probability order uses the shown pick's unrounded
+value, descending by default or ascending with `dir=asc`. Fixtures without a shown
+pick come last in both directions, and ties fall back to kickoff ascending, then
+fixture ID ascending. `prob` keeps fixtures whose shown pick displays inside the
+whole-percent bounds: stored values from MIN − 0.5 points (inclusive) up to MAX +
+0.5 points (exclusive). Fixtures without a shown pick are excluded whenever `prob`
+or `picks=only` is set. `league` and `country` match the stored competition ID and
+country. Every fixture appears once, using its applicable cycle.
+
+Once provider odds are public (prompt 052; not yet), `odds` keeps fixtures whose
+shown pick has a fresh stored price for exactly that family and selection with
+`displayHundredths` between MIN and MAX inclusive. The SQL left-joins
+`FixtureOddsPrice` on the fixture, the shown pick's family and selection, and
+`stale = FALSE`. The table's primary key makes that join 1:1, so counts and league
+options never fan out. Fixtures without a shown pick, without a price, or with
+only a stale price drop out. A price on a family that is not shown never
+qualifies a fixture. Price never changes which pick is shown or the order. While
+the flag is off, the SQL never references the odds tables.
 
 Responses include `page`, `pageSize`, `total`, `totalPages`, `nextPage`,
 `previousPage`, and relative `links.next`/`links.previous`; HTTP `Link` carries the
@@ -61,6 +100,33 @@ back to the last reachable populated page (or page 1 when no rows exist).
 Prompt 033 adds `leagues`: up to 1,000 unique id/name/country entries for the full
 selected date cohort, independent of filters/page. Options share the records'
 database snapshot; overflow fails with 503. Omitted legacy options parse to `[]`.
+Prompt 050 adds `logoUrl` (an approved HTTPS logo or null) and `fixtures` (the
+league's fixture count in the unfiltered date cohort) to each option, and
+`competition.logoUrl` to fixture snapshots. The API orders options by name,
+country and ID; the browser orders suggestions by fixture count, then name, and
+derives country options from the same entries. Older cached pages without these
+fields parse with `logoUrl: null` and `fixtures: 0`. Feed cache projection 5
+keeps those older responses from being reused.
+Prompt 052 adds `prices` to each record (at most 4, default `[]`). It holds one
+entry per published family whose pick has a fresh price:
+`{ family, selection, price, basis, retrievedAt, providerUpdatedAt }`. `price` is
+the stored two-place decimal (`"1.85"`, rounded half-up once when written).
+`retrievedAt` is when that exact price was first observed. The schema refuses a
+price whose family has no published pick, whose selection is not that pick, a
+duplicate family, or any other field (no bookmaker name, id or link). It is read
+by the same rule as the `odds` SQL filter, inside the same `REPEATABLE READ`
+snapshot. While `publicPolicy.features.providerOdds` is off, `prices` is always
+`[]`, even when private odds exist. Prices are observation data: they change
+without a fixture-version bump, and the odds cache trigger bumps the fixture and
+date generations when they do. Feed cache projection 6 keeps pre-052 responses
+from being reused. See [provider-odds.md](provider-odds.md#public-read-path).
+Team codes add an optional `code` to `homeTeam` and `awayTeam`: 2–5 capital
+letters or digits, or null when the team has none or its stored value is not a
+valid code. The read normalizes the stored provider code (trim, ASCII only,
+uppercase); the schema refuses any other string. A new code arrives with a
+fixture-version bump, like any shared team change. Older responses without the
+field still parse, and feed cache projection 7 keeps them from being reused. See
+[match card](match-card.md#team-names-in-tight-spots).
 Prompt 034 adds opaque `paginationVersion`, computed from the effective query,
 competition scope and committed date/catalog generations in the records' snapshot.
 Feed cache projection version 3 avoids reusing earlier responses without this
@@ -111,7 +177,8 @@ forecasts remain accessible without a lookback cutoff.
 ## Coverage, run progress and empty states
 
 `coverage` includes the known fixture count before user filters, the count of
-matching fixtures with the selected family, and one entry per selected date.
+matching fixtures with a shown pick among the selected families
+(`matchingWithMarket`), and one entry per selected date (up to 31).
 Each date reports the latest exact-date global import's status and observation
 time. A newer unfinished/failed daily-selection import is considered even when
 it has no catalog receipt. Only `complete` is authoritative; partial, degraded,
@@ -121,10 +188,10 @@ receipt cannot override a newer failure or partial receipt.
 
 | `state` | Meaning |
 | --- | --- |
-| `ready` | Matching fixtures and at least one matching selected-family forecast exist. |
+| `ready` | Matching fixtures exist and at least one has a shown pick among the selected families. |
 | `no-fixtures` | No known fixture and every requested date has complete coverage. |
 | `no-filter-matches` | Known fixtures exist but none match the filters in available data. Check coverage before treating the range as exhaustive. |
-| `insufficient-data` | Matching fixtures exist; none has the selected family available. |
+| `insufficient-data` | Matching fixtures exist; none has any selected family available. |
 | `data-unavailable` | No known fixture and at least one date lacks authoritative coverage. |
 | `page-out-of-range` | Matches exist but the requested page is empty. |
 

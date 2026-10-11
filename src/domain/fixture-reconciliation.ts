@@ -26,5 +26,7 @@ export function mergeFixtureObservation<T extends FixtureSnapshot>(previous: T, 
   return { ...previous, syncedAt: next.syncedAt !== null && (previous.syncedAt === null || next.syncedAt >= previous.syncedAt)
     ? next.syncedAt : previous.syncedAt, partialCoverage: next.partialCoverage, update: next.update,
     availabilityMessage: next.availabilityMessage,
+    // Prices (052) are observation fields: they change without a fixture version bump.
+    ...(next.prices === undefined ? {} : { prices: next.prices }),
     forecast: previous.forecast && { ...previous.forecast, updateDelayed: next.forecast?.updateDelayed } };
 }

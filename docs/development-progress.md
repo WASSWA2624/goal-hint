@@ -3688,3 +3688,268 @@ values, so no grant change is needed.
 | Owned-MySQL suites | refresh 34, selection 19, results 26, cutoff 26, publication 25, lifecycle 27, settlement 28, monitoring 16, jobs 23, feed 47, catalog 28, quota 28, recovery 19: all passed, none skipped. |
 | `tests/live-runtime.integration.mjs` | 5/5 with the local role's exact grants: seven-date import, two published fallback forecasts, public feed, leased result polling and provider-free settlement/cache maintenance. |
 | `npm run live:status` | Configuration and owner approvals ready apart from the competition list; the account check reports `credential-failure` for the current key. |
+
+## 046–049 — Staging, shadow qualification, release readiness and production deployment (back-filled 11 October 2026)
+
+**Status:** not started; tracker rows 046–049 unchecked. No staging or production
+deployment configuration, qualification run, release-readiness command or
+production deployment exists in the repository. The local live operation above
+is a loopback fallback-only runtime, not a 046 staging environment or a 049
+production release.
+
+**Blockers (owner decisions or evidence):** OP-32 hosted deployment and account
+isolation (046); OP-33 quality qualification and measured commitments (047, which
+also needs 011/012/014); OP-34 release decision and signoff (048); OP-35 domain
+and production operation (049). Earlier operating gates (OP-12/14/26/29–31)
+also remain open.
+
+## 050 — Feed query extensions (verified 11 October 2026)
+
+**Status:** implementation and acceptance complete; tracker 050 checked. The code
+landed in commit `3d827f4` ("Redesign the feed screens…"), and commit `68605aa`
+added the `picks` filter. The `3d827f4` message records that the MySQL checks
+had not been run; they were run and passed on 11 October 2026.
+
+**Changed behavior and files:**
+
+- `src/domain/feed-query.ts`: `league`/`country`/`market` comma lists (repeated
+  form keys join identically; deduplicated, sorted or policy-ordered; at most 50
+  leagues and 50 countries), `prob=MIN-MAX`, `picks=all|only`, `sort` with
+  `dir=asc|desc` (defaults omitted), presets Today/Tomorrow/Next 3/7/30 days and
+  explicit ranges up to 31 days. `sortMarket` is removed and rejected.
+- `src/server/matches/feed-read.ts` and `feed-service.ts`: one shown-pick join per
+  fixture (highest selected probability among the selected families, ties in
+  policy order), league/country/probability/picks filters, ordering in both
+  directions with missing picks last and kickoff/ID ties, and league options with
+  approved logos and cohort fixture counts. Feed cache projection 4 → 5.
+- `src/domain/fixture-snapshot.ts`, `fixture-read.ts` and `match-feed.ts`:
+  `competition.logoUrl`, option `logoUrl`/`fixtures`, and coverage dates up to 31.
+- `src/domain/feed-presentation.ts` (new): `bestCardFamily` mirrors the SQL shown
+  pick. Also `paginationItems` (at most seven slots), `feedRowNumber`, and league
+  and country option ordering.
+- `src/domain/feed-controls.ts`, `feed-date-navigation.ts` and `src/state/feed.ts`:
+  Reset semantics and preset handling.
+- Tests: `tests/feed-query`, `feed-controls`, `feed-presentation` (new) and
+  `match-feed.test.mjs`; `tests/match-feed.integration.mjs` covers best-pick order
+  in both directions, ties and the probability window. On 11 October 2026 it also
+  gained MySQL assertions for the `country` filter, mixed known/unknown list
+  members and league option fixture counts.
+- Docs (11 October 2026): [stored match feed](match-feed-api.md) and
+  [search and filters](search-filter-controls.md) now describe 050 behavior;
+  decisions are in [implementation decisions](implementation-decisions.md).
+
+**Executed evidence (11 October 2026, pinned Node 24.18.1 from fnm, owned
+isolated MySQL Community Server 8.4.11 under `.tmp/mysql-tools`):**
+
+| Check | Actual result |
+| --- | --- |
+| Feed API and MySQL (`test:feed`) | **55 passed, zero failures/skips**: `node --conditions=react-server --test tests/match-feed.test.mjs tests/match-feed.integration.mjs`; `.tmp/052-stage0-feed-final.log`. The run includes the new country/list assertions. An earlier run without them also passed 55/55 (`.tmp/052-stage0-feed.log`). |
+| Feed page and MySQL (`test:feed-page`) | **13 passed, zero failures/skips**: `.tmp/052-stage0-feed-page.log`. |
+| Query, controls, pagination, presentation and card units | **46 passed, zero failures**: feed-query, feed-controls, feed-pagination, client-state, feed-presentation, match-card and feed-page units; `.tmp/052-stage0-state.log`. |
+| Lint | ESLint passed with no warnings on the feed query, read, service and presentation sources and on the edited integration test. |
+| Types | `tsc --noEmit` reports 4 errors, all in `src/server/football/provider-trial-evaluation.ts` (unfinished 052 trial evaluation); none in 050 code; `.tmp/052-stage0-tsc.log`. |
+
+These runs used the working tree, which also contains uncommitted, partial 052
+edits to `feed-read.ts`, `feed-service.ts` and `fixture-read.ts`. While
+`publicPolicy.features.providerOdds` is false those paths omit the odds join and
+prices, and `odds=` is rejected as an unknown key.
+
+## 051 — Feed screen layout (status recorded 11 October 2026)
+
+**Status:** implemented, acceptance not complete; tracker 051 unchecked. The
+screens landed in commit `3d827f4` and were refined in `64c8b9e`, `52ce20f`,
+`68605aa`, `7a82bb1` and `4239ba1`: phone filter card, chip rows and compact
+cards; desktop top bar, filter panel, Apply with live count, table and numbered
+pagination; disabled odds controls. A separate workflow is still changing
+`src/components/**`, `src/app/_components/**` and the theme.
+
+**Checks:**
+
+- `npm run test:feed-page:rendering` passed 47 server-rendered scenarios on
+  10 October 2026 (`.tmp/051-feed-page-rendering.log`). That run predates later
+  UI edits and did not record its Node version.
+- `npm run test:detail-page:rendering` failed: the redesigned match details page
+  no longer renders the `detail.result` text "Match result and settlement" that
+  `scripts/verify-match-feed-rendering.mjs` asserts
+  (`.tmp/051-detail-page-rendering-rerun.log`). That page belongs to 035 and the
+  UI workflow.
+- Not re-run on 11 October 2026: both rendering checks run an isolated
+  `next build`, which this run excluded. The default local Node is 26.4.0, not the
+  pinned 24.18.1.
+- Row numbering and page sequences are unit-tested (`feedRowNumber`,
+  `paginationItems`).
+
+**Blockers:** the 051 acceptance needs a browser. It has not been run: template
+comparisons at 320/375/400/430/768/1024/1280/1440 px, keyboard paths, focus
+rings, screen-reader names, reduced motion and no-JavaScript chip links. The
+detail rendering regression above must be fixed or the check updated by the UI
+workflow. The concurrent UI work must land first.
+
+## 052 — Provider odds import (10–11 October 2026)
+
+**Status:** implementation complete for the rights-off state; tracker 052
+**unchecked**. Named blockers:
+
+1. **Counted odds trial pending the plan upgrade.** The real `/odds` envelope
+   (parameter echo, 10-row paging, whether `date` honours the timezone, the
+   `update` format, string prices, label shapes, bytes per page, the launch bet
+   ids and names, per-bookmaker coverage and plan inclusion) is unconfirmed. The
+   owner decided on 10 October 2026 not to run it on the current Free plan. The
+   command, findings and ~20-request allowance are ready in
+   [football-provider-trial.md](football-provider-trial.md#odds-qualification-prompt-052).
+2. **OP-36 odds display rights.** They are unconfirmed, so odds are stored
+   privately, `publicPolicy.features.providerOdds` stays `false`, the public
+   projection and responses carry no prices, and `odds=` is rejected as an
+   unknown key. The odds UI controls stay disabled; the UI step (price beside
+   each pick, live odds slider, market-implied labels and copy) follows a
+   recorded rights decision, after the concurrent UI workflow lands.
+
+Owner decisions and every technical choice are recorded in
+[implementation decisions](implementation-decisions.md) (052 section and OP-36).
+The runbook is [provider odds](provider-odds.md).
+
+### Changed behavior and files
+
+- **Adapter contract** (`src/server/football/api-football-contract.ts`,
+  `api-football-normalize.ts`, `api-football-adapter.ts`): `/odds` (10-row
+  pages), `/odds/bets` and `/odds/bookmakers` in a separate `adapter.odds`
+  namespace outside evidence and fallback; `ODDS_CONTRACT_VERSION`; strict
+  normalization with string prices, per-row `update` times and bet-level
+  quarantine; `pageSizeOf`.
+- **Counted trial** (`provider-trial-contract.ts`, `-input.ts`, `-runner.ts`,
+  `-evaluation.ts`, `scripts/football-provider-trial.mjs`): odds, odds-bets and
+  odds-bookmakers tasks; findings `odds-pagination`, `odds-update-times`,
+  `odds-bet-catalog`, `odds-coverage` and `odds-display-rights`; a separate
+  `oddsSuitability` verdict.
+- **Pure domain** (new `src/domain/odds.ts`, `src/domain/odds-markets.ts`):
+  exact decimal parsing, half-up hundredths, `odds=` range parsing,
+  `proportional-v1` de-margin and the versioned `launch-odds-v1` mapping.
+- **Schema** (`prisma/schema.prisma`, snapshot, reviewed migration
+  `20261010200505_provider_odds_import`): five odds tables, NULL-safe CHECKs, a
+  composite snapshot foreign key and two `publicVersion`-keyed cache triggers.
+  67 models; backup inventory 68 tables.
+- **Import modules** (new `src/server/odds/`): contract, input validation,
+  MySQL store, import service, read helpers and durable jobs (`odds.import`,
+  `odds.catalog`).
+- **Configuration** (`runtime-policy.ts`, `live-approvals.ts`,
+  `public-policy.ts`, `.env.example`): `GOAL_HINT_ODDS_IMPORT_ENABLED` (default
+  `false`), `GOAL_HINT_ODDS_BOOKMAKER_ID`, `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF`,
+  the `football-odds-rights` evidence requirement (never required to start the
+  runner) and `features.providerOdds: false`.
+- **Live runtime** (`live-plan.ts`, `live-account.ts`, `live-authorities.ts`,
+  `live-runtime.ts`, `live-runner.ts`, `scripts/live-status.mjs`,
+  `recovery-service.ts`, `monitoring-contract.ts`, `monitoring-scan.ts`): the
+  odds workload (floor, spare, reserve, eligibility), a quota gate fed by the
+  open provider day's counters (`counters()`) and the enrichment attempts, a
+  separate odds registry and dedicated worker, slot
+  scheduling with the catalog first, write-time expiry each tick, expiry of
+  odds jobs past their slot, the informational `odds-requests` metric and status
+  output.
+- **Read path** (`src/domain/feed-query.ts`, `feed-controls.ts`,
+  `fixture-snapshot.ts`, `match-feed.ts`, `match-detail.ts`,
+  `fixture-reconciliation.ts`, `match-card.ts`, `live-refresh.ts`,
+  `src/state/feed.ts`, `src/server/matches/feed-read.ts`, `feed-service.ts`,
+  `fixture-read.ts`, `detail-service.ts`): the `odds=MIN-MAX` key (accepted only
+  with the effective flag on; extremes omitted), the shown-pick price join and
+  filter driven by the same effective flag as record prices, record `prices`,
+  the detail `odds` envelope, equal-version merges, `selectedCardPrice`, feed
+  cache projection 6 and detail projection 4.
+- **Tests:** new `tests/odds.test.mjs`, `tests/odds-import.test.mjs`,
+  `tests/odds.integration.mjs`, `tests/fixture-prices.test.mjs` and
+  `tests/helpers/odds-fixtures.mjs`; odds cases in the adapter, normalizer,
+  provider-trial, runtime-policy, live-binding, feed-query, feed-controls,
+  match-feed, public-cache, client-state, match-detail and live-client-refresh
+  unit tests; and in the match-feed, match-detail, quota, live-runtime,
+  recovery-watchdog and operations-monitoring integration tests. Integration
+  helpers grant the odds tables, and the backup count is 68. `package.json`
+  gains `test:odds`.
+- **Docs:** new [provider-odds.md](provider-odds.md); updated
+  [api-football-adapter.md](api-football-adapter.md),
+  [football-provider-trial.md](football-provider-trial.md),
+  [quota-limiter.md](quota-limiter.md), [live-operations.md](live-operations.md),
+  [durable-jobs.md](durable-jobs.md), [recovery-watchdog.md](recovery-watchdog.md),
+  [operations-monitoring.md](operations-monitoring.md), [database.md](database.md),
+  [local-database.md](local-database.md), [backup-restore.md](backup-restore.md),
+  [match-feed-api.md](match-feed-api.md),
+  [public-response-cache.md](public-response-cache.md),
+  [client-state.md](client-state.md), [match-details.md](match-details.md),
+  [match-detail-api.md](match-detail-api.md), `README.md`, `src/server/README.md`
+  and `src/workers/README.md`.
+
+No UI component, theme or brand file was changed: `src/components/**`,
+`src/app/_components/**` and the brand files belong to the concurrent UI
+workflow, and 052 needs no UI change while `providerOdds` is false.
+
+### Acceptance checks
+
+- **Quota budgets and the essential reserve hold with odds polling enabled.**
+  Odds use the existing `enrichment` priority above a floor that protects
+  selection, refreshes, results and the reserve. `tests/live-binding.test.mjs`
+  checks limits 100/7,500/75,000/150,000: Free and slow plans are ineligible, the
+  floor covers every ordinary need and stays within the usable limit, and Mega
+  keeps 2,000 refreshes on 6 workers. `tests/quota.integration.mjs` shows
+  enrichment refused at the essential reserve while results-cutoff work still
+  dispatches, with the day total exactly 7,500. The job gate gives odds only the
+  spare (861 on Pro), counting odds' own enrichment dispatches, and never lets
+  them take the reserve; `tests/odds-import.test.mjs` and
+  `tests/live-binding.test.mjs` cover the arithmetic, including a Pro day with
+  the one-minute date poll partly spent. `tests/live-runtime.integration.mjs`
+  shows zero `/odds` requests and zero reservations while odds are off or past
+  the reserve, and a sweep still running after 800 ordinary requests.
+- **Costs are recorded against the US$45 ceiling.** Football money remains the
+  flat `API_FOOTBALL_PAYABLE_MONTHLY_USD_CENTS` (≤ 4,500); odds stay out of the
+  AI/research ledger. With odds on (Pro-sized synthetic plan), every odds request
+  is counted three ways and the counts agree: `OddsImportBatch.requestsDispatched`,
+  `DurableJobUsage` (provider `football`) and `ApiQuotaAttempt` at priority 3.
+  The real per-day and per-month odds share, and evidence that `/odds` is
+  included in the plan at US$0 marginal cost, need the counted trial
+  (blocker 1).
+- **Stale or missing odds never fill another market's price; filters exclude
+  fixtures without a price.** Price rows exist only for complete groups; the
+  feed join is exact on family, selection and `stale = FALSE`. On MySQL,
+  `tests/match-feed.integration.mjs` shows inclusive bounds, exclusion of
+  fixtures with no pick, no price or only another family's price, record prices
+  equal to the SQL rule, a withdrawn fixture's stale prices leaving both the
+  filter and the record, and `paginationVersion` moving on a price change or
+  withdrawal but not on a reconfirmation. `tests/odds.integration.mjs` covers
+  12-hour expiry, the frozen closing price and withdrawal only after a complete
+  sweep. `tests/match-detail.integration.mjs` shows market-implied groups kept
+  apart from the revision and the AI probabilities.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm); owned isolated MySQL Community Server 8.4.11 under
+`.tmp/mysql-tools` (`MYSQL_TEST_SERVER_BINARY`). The developer database on
+:3306/:3307 was never touched. Logs are in `.tmp/052-*.log`.
+
+| Check | Actual result |
+| --- | --- |
+| Review fixes (11 October): odds gate counts ordinary use once, write-phase budget, rights withdrawal sweep, receipt provenance, grant order | `npx eslint . --max-warnings=0` exit 0; `npx tsc --noEmit` exit 0; `npm test` 1,082 tests, 1,081 pass, 0 fail, 1 skipped (the same skip; a first run under concurrent MySQL load failed once in the 25 ms timing test of `fallback-service.test.mjs`, which passed unloaded); `test:odds` 32/32, including the rights withdrawal and receipt-provenance cases; `tests/live-runtime.integration.mjs` 9/9, including a sweep after 800 ordinary requests and an expiry past the reserve; `test:feed` 61/61; `test:quota` 30/30; `test:detail` 36/36; `test:monitoring` 17/17; `test:recovery` 20/20 (`.tmp/052-review3-*.log`). See [implementation decisions](implementation-decisions.md) "Review fixes". |
+| Stage 4 (11 October): read path and docs | `npx tsc --noEmit` exit 0; `npx eslint . --max-warnings=0` exit 0; unit suite (`node --conditions=react-server --test --test-concurrency=4 tests/*.test.mjs`) 1,080 tests, 1,079 pass, 0 fail, 1 skipped (the same skip as before); `test:feed` 61/61, including the odds filter subtest and five `odds=` rejections; `test:detail` 36/36, including the market-implied envelope; `test:cache` 25/25; `test:feed-page` 13/13; `test:odds` 30/30 (`.tmp/052-stage4-*.log`). |
+| Stage 3 (11 October): live, quota, recovery, monitoring | `test:live` 9/9; `tests/live-runtime.integration.mjs` 8/8 in two runs; `test:quota` 30/30; `test:recovery` 20/20; `test:monitoring` 17/17; `test:odds` 30/30; unit suite 1,056 tests, 1,055 pass, 1 skipped (`.tmp/052-stage3-*.log`). |
+| Stage 2 (11 October): persistence | Migration deploys twice and verifies; `test:odds` 26/26; `test:backup` 9/9 asserting 68 tables; `test:feed` 55/55; `test:detail` 34/34; `test:cache` 24/24; `db:validate` passed (`.tmp/052-stage2-*.log`). |
+| Stage 1 (11 October): provider contract | Adapter 62/62, normalizer 25/25, provider-trial suites 83 tests (82 pass, 1 skipped as before); `test:quota` 29/29 (`.tmp/052-stage1-*.log`). |
+
+**Not run:** the counted odds trial (owner decision; needs the plan upgrade),
+`next build`, the rendering checks and browser checks (excluded in this run),
+`npm run live:status` (it reads the real account) and any command against the
+developer database.
+
+**Owner commands (not run):** against 127.0.0.1:3307, in this order:
+(1) `npm run db:deploy`, which creates the five odds tables; (2) add the grants
+from [provider-odds.md](provider-odds.md#application-grants) to
+`%LOCALAPPDATA%\GoalHint\application-grants.sql` and apply them as the
+administrative account (MySQL refuses grants on tables that do not exist yet,
+so they cannot go first); (3) `npm run db:status`, `npm run db:verify` and
+`npm run db:health`. Do not start `npm run live` between (1) and (2): the
+runner's every-tick `expire()` and the monitoring collector read the odds
+tables as soon as the migration is deployed. After the plan upgrade, run the odds trial from
+[football-provider-trial.md](football-provider-trial.md#odds-qualification-prompt-052),
+then set `GOAL_HINT_ODDS_BOOKMAKER_ID` and `GOAL_HINT_ODDS_IMPORT_ENABLED=true`
+in `.env.operations` ([live operations](live-operations.md#odds-imports-052)).
+
+**Flagged, not fixed:** the pre-existing refresh `verifyPlan` pacing omission in
+`live-authorities.ts` (refreshes on slow plans are refused) was raised as a
+separate task.
+
+Prompt 053 has not been started.

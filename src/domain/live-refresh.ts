@@ -38,7 +38,8 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
     const snapshot = previous.snapshot && next.snapshot?.revisionId === previous.snapshot.revisionId &&
       previous.snapshot.analysis.state === "available" && next.snapshot.analysis.state === "withheld"
       ? { ...previous.snapshot, analysis: next.snapshot.analysis } : previous.snapshot;
-    return { ...previous, fixture: mergeFixtureObservation(previous.fixture, next.fixture), snapshot, asOf: next.asOf, run: next.run };
+    // Odds groups (052) are observation data outside the revision: take the newer envelope's groups.
+    return { ...previous, fixture: mergeFixtureObservation(previous.fixture, next.fixture), snapshot, asOf: next.asOf, run: next.run, odds: next.odds };
   }
   return next;
 }

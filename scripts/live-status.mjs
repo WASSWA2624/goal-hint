@@ -3,7 +3,8 @@
 import { getRuntimePolicy, parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { createAccountStatusReader } from '../src/server/live/live-account.ts';
 import { loadOwnerApprovals, ownerEvidenceVerifier } from '../src/server/live/live-approvals.ts';
-import { liveWorkload } from '../src/server/live/live-plan.ts';
+import { liveWorkload, teamCodeImportsEnabled } from '../src/server/live/live-plan.ts';
+import { TEAM_CODES_MAX_REQUESTS, TEAM_CODES_SEASONS_PER_SLOT, TEAM_CODES_SLOT_MS } from '../src/server/teams/team-code-jobs.ts';
 import { liveReadiness } from '../src/server/live/live-runtime.ts';
 
 const gaps = [];
@@ -25,7 +26,18 @@ try {
     competitions: policy.choices.competitionIds?.length ?? 0,
     workload: { importDays: workload.importDays, refreshCapacityPerDay: workload.refreshCapacity, workers: workload.workers,
       livePollSeconds: workload.cadence.liveMs === null ? null : workload.cadence.liveMs / 1000,
-      datePollMinutes: workload.cadence.dateMs / 60_000 } }, null, 2));
+      datePollMinutes: workload.cadence.dateMs / 60_000,
+      // Odds (052) run only when enabled, eligible on this plan and given a documented bookmaker.
+      odds: { enabled: policy.choices.odds.enabled, eligible: workload.odds.eligible, bookmakerConfigured: policy.choices.odds.bookmakerId !== null,
+        imports: policy.choices.odds.enabled && workload.odds.eligible && policy.choices.odds.bookmakerId !== null,
+        // Without recorded display rights (OP-36), imported odds stay private.
+        displayRightsRecorded: policy.choices.odds.rightsRef !== null && verify(policy.choices.odds.rightsRef, 'football-odds-rights'),
+        // Odds spend at most the spare per provider day and never the reserve.
+        floorPerDay: workload.odds.floor, sparePerDay: workload.odds.spare, reservePerDay: workload.odds.reserve, sweepHours: workload.odds.sweepMs / 3_600_000,
+        dates: workload.odds.dates, maxPagesPerDate: workload.odds.maxPages },
+      // Team codes share the odds spare and eligibility: on by default, never on Free or slow plans.
+      teamCodes: { enabled: policy.choices.teamCodes.enabled, eligible: workload.odds.eligible, imports: teamCodeImportsEnabled(policy, workload),
+        sweepHours: TEAM_CODES_SLOT_MS / 3_600_000, leaguesPerSweep: TEAM_CODES_SEASONS_PER_SLOT, maxRequestsPerSweep: TEAM_CODES_MAX_REQUESTS } } }, null, 2));
   if (gaps.length > 0) process.exitCode = 1;
 } catch (error) {
   // Field names, owner-decision gaps and account outcomes only; credentials and provider bodies stay private.

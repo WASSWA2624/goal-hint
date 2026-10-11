@@ -47,7 +47,23 @@ export const detailSnapshotSchema = publicForecastSchema.safeExtend({
     v.markets.length + v.unavailableMarkets.length !== 4) ctx.addIssue({ code: "custom", message: "Incoherent revision identity or market group." });
 });
 const historyLink = z.string().max(4096).startsWith("/api/matches/").nullable();
+const probabilityText = z.string().regex(/^0\.\d{12}$/u);
+/** One complete bookmaker price group with de-margined implied probabilities (052). Labelled
+ * "market-implied": never an AI or fallback estimate, never mixed into forecast groups, no bookmaker link. */
+export const detailOddsGroupSchema = z.strictObject({
+  label: z.literal("market-implied"),
+  family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
+  basis: z.enum(["bookmaker", "median"]),
+  method: z.string().regex(/^[a-z0-9-]+-v\d+$/u),
+  overround: z.string().regex(/^\d\.\d{12}$/u),
+  retrievedAt: at, providerUpdatedAt: at.nullable(),
+  selections: z.array(z.strictObject({ selection: z.string().min(1).max(64), price: z.string().regex(/^[1-9]\d{0,3}\.\d{2}$/u),
+    impliedProbability: probabilityText })).min(2).max(3),
+}).refine((group) => new Set(group.selections.map((item) => item.selection)).size === group.selections.length, "Duplicate odds selection.");
+export type DetailOddsGroup = z.infer<typeof detailOddsGroupSchema>;
 export const matchDetailResponseSchema = z.strictObject({ fixture: matchFeedRecordSchema, asOf: at, run: dailyRunProgressSchema.default(null),
+  /** Mutable odds envelope, read outside the immutable revision cache; empty without recorded display rights. */
+  odds: z.array(detailOddsGroupSchema).max(4).default([]),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: detailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
@@ -64,6 +80,7 @@ export const matchDetailResponseSchema = z.strictObject({ fixture: matchFeedReco
   if (v.route.fixtureId !== v.fixture.fixtureId || v.currentRevisionId !== (v.fixture.forecast?.revisionId ?? null) ||
     v.selection === "applicable" && v.snapshot?.revisionId !== (v.currentRevisionId ?? undefined) ||
     v.snapshot && (v.snapshot.historical !== (v.snapshot.revisionId !== v.currentRevisionId) || v.snapshot.cycleId !== v.selectedCycle?.id)) ctx.addIssue({ code: "custom", message: "Incoherent detail response." });
+  if (new Set(v.odds.map((group) => group.family)).size !== v.odds.length) ctx.addIssue({ code: "custom", message: "One odds group per family." });
 });
 export type MatchDetailResponse = z.infer<typeof matchDetailResponseSchema>;
 export type DetailSnapshot = z.infer<typeof detailSnapshotSchema>;

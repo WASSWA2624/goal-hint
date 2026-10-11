@@ -55,7 +55,12 @@ and anchors), so a match URL with view state never becomes a 404.
 
 ## Known data gaps (shown as "Not available")
 
-- Bookmaker odds are not imported: odds show as `—`, with no comparison, movement or value.
+- Bookmaker odds are not shown: odds show as `—`, with no comparison, movement or value. Prompt 052
+  imports them privately, but display rights are unconfirmed (OP-36), so
+  `publicPolicy.features.providerOdds` is off and the detail response's `odds` envelope and
+  `fixture.prices` stay empty. Turning display on needs a recorded owner decision and a UI prompt
+  that labels market-implied probabilities separately from estimated probabilities
+  ([match-detail-api.md](match-detail-api.md), [provider-odds.md](provider-odds.md)).
 - Only the four published families exist; other categories (draw no bet, handicaps, corners, cards,
   halves, correct score, clean sheets, specials) say no markets are published.
 - Venue, weather, standings, referee and officiating statistics are not collected.

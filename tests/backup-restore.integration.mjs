@@ -64,7 +64,8 @@ test('encrypted snapshot and multi-log PITR preserve representative durable hist
     const options = { source, directory: artifacts, key, policy: backupPolicy(), authority: backupAuthority(), emit: (event) => events.push(event) };
     try {
       const snapshot = await captureMysqlSnapshot(options);
-      assert.equal(snapshot.metadata.inventory.tables.length, 63); assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionset').count >= 2);
+      // 67 application models (five odds tables since prompt 052) plus Prisma's migration history.
+      assert.equal(snapshot.metadata.inventory.tables.length, 68); assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionset').count >= 2);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionaudit').count > 0);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'dailyrunmanifest').count > 0);
       // Commit a correction, rotate, then another correction and a counted launch.

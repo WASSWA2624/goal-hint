@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
+import { BrandLogo } from "@/components/ui/brand";
 import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon, SortIcon } from "@/components/ui/icons";
 import { PageHeading } from "@/components/ui/layout";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
+import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets, DateRangePicker } from "./feed-dates";
@@ -13,37 +16,82 @@ import { CompactSelect, focusRing, IconButton } from "./filter-parts";
 
 const desktop = media.desktop;
 
+/**
+ * Phones and tablets stack the brand bar and the titles 10px apart; desktop keeps one wrapping row
+ * of titles and date controls under the shell header's own logo.
+ */
 const Row = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px 24px;
+  ${media.belowDesktop} { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 `;
+/**
+ * App pages hide the shell header below desktop, so the feed carries the branded bar: the same navy
+ * to teal fill and brand edge as the desktop header, full bleed past the page gutter and up through
+ * the app page's 10px top padding to the screen edge. The inverse logo sits at the brand-kit minimum
+ * 160px wide beside the filter and search buttons.
+ */
+const BrandBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-inline-size: 0;
+  min-block-size: ${({ theme }) => theme.header.phoneHeight};
+  margin-block-start: -10px;
+  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
+  padding-inline: ${({ theme }) => theme.layout.gutter};
+  color: ${({ theme }) => theme.header.text};
+  background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.header.background};
+  background-color: ${({ theme }) => theme.color.text};
+  ${desktop} { display: none; }
+`;
+/** Inverse-teal focus rings read on every stop of the bar. */
+const barFocus = css`
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
+`;
+/** The gutter and the bar's 7.5px above and below the artwork give the logo its clear space. */
+const HomeLink = styled(Link)`
+  display: inline-flex;
+  flex: none;
+  text-decoration: none;
+  > span { padding: 0; }
+  img { inline-size: 160px; block-size: auto; }
+  ${barFocus}
+`;
+/** Below the brand bar, phones set the title and subtitle a little tighter; desktop is unchanged. */
 const Titles = styled.div`
   display: grid;
   gap: 0;
   min-inline-size: 0;
   > h1 { font-size: 1.125rem; line-height: 1.2; ${desktop} { font-size: 1.5rem; } }
   > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.6875rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.medium}; ${desktop} { font-size: 0.8125rem; } }
+  ${media.belowDesktop} { > h1 { line-height: 1.15; } > p { line-height: 1.25; } }
 `;
 const PhoneActions = styled.div`
   display: flex;
+  flex: none;
   gap: 8px;
-  ${desktop} { display: none; }
 `;
+/** Translucent white rounds on the bar; an open panel or search fills its button with inverse teal. */
 const RoundButton = styled(IconButton)`
   inline-size: 2rem;
   block-size: 2rem;
-  color: ${({ theme }) => theme.color.accent.blue.text};
-  background: ${({ theme }) => theme.color.accent.blue.soft};
+  color: ${({ theme }) => theme.header.text};
+  background: ${({ theme }) => theme.header.controlFill};
   border-radius: 50%;
   font-size: 1rem;
+  transition: background-color 120ms ease, color 120ms ease;
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
+  &[aria-expanded="true"] { color: ${({ theme }) => theme.header.onAccent}; background: ${({ theme }) => theme.header.accent}; }
+  ${barFocus}
 `;
 /** Phone filter toggle; the badge counts the choices hidden in the collapsed panel. */
 const FilterToggle = styled(RoundButton)`
   position: relative;
-  &[aria-expanded="true"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.gradient.action}; }
   > b {
     position: absolute;
     inset-block-start: -3px;
@@ -55,7 +103,7 @@ const FilterToggle = styled(RoundButton)`
     padding-inline: 3px;
     color: ${({ theme }) => theme.color.onBrand};
     background: ${({ theme }) => theme.color.accent.pink.solid};
-    border: 1.5px solid ${({ theme }) => theme.color.surface};
+    border: 1.5px solid ${({ theme }) => theme.header.onAccent};
     border-radius: 999px;
     font-size: 0.625rem;
     line-height: 1;
@@ -91,7 +139,7 @@ export function feedHeading(query: FeedQuery, today: ReportingDate, messages: Re
   return messages.text("feed.heading.other");
 }
 
-/** Title and subtitle; phones add a search toggle, desktops a date range and quick presets. */
+/** Title and subtitle; phones add the brand bar with filter and search toggles, desktops a date range and quick presets. */
 export type FilterToggleState = Readonly<{ open: boolean; count: number; controls: string; onToggle: () => void }>;
 
 export function FeedHeader({ query, today, onApply, filters }: {
@@ -103,21 +151,26 @@ export function FeedHeader({ query, today, onApply, filters }: {
   const [action, search = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
   return <>
     <Row>
+      <BrandBar>
+        <HomeLink href={homeHref(query.locale)} prefetch={false} aria-label={messages.text("navigation.home")}>
+          <BrandLogo alt="" variant="inverse" />
+        </HomeLink>
+        <PhoneActions>
+          {filters && <FilterToggle type="button" aria-expanded={filters.open} aria-controls={filters.controls} title={messages.text("feed.filters.toggle")}
+            aria-label={filters.count > 0 ? messages.plural("feed.filters.toggleCount", filters.count) : messages.text("feed.filters.toggle")}
+            onClick={filters.onToggle}>
+            <FilterIcon />{filters.count > 0 && <b aria-hidden="true">{messages.number(filters.count)}</b>}
+          </FilterToggle>}
+          <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
+            onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => input.current?.focus()); }}>
+            {searching ? <CloseIcon /> : <SearchIcon />}
+          </RoundButton>
+        </PhoneActions>
+      </BrandBar>
       <Titles>
         <PageHeading>{feedHeading(query, today, messages)}</PageHeading>
         <p>{messages.text("feed.subtitle")}</p>
       </Titles>
-      <PhoneActions>
-        {filters && <FilterToggle type="button" aria-expanded={filters.open} aria-controls={filters.controls} title={messages.text("feed.filters.toggle")}
-          aria-label={filters.count > 0 ? messages.plural("feed.filters.toggleCount", filters.count) : messages.text("feed.filters.toggle")}
-          onClick={filters.onToggle}>
-          <FilterIcon />{filters.count > 0 && <b aria-hidden="true">{messages.number(filters.count)}</b>}
-        </FilterToggle>}
-        <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
-          onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => input.current?.focus()); }}>
-          {searching ? <CloseIcon /> : <SearchIcon />}
-        </RoundButton>
-      </PhoneActions>
       <DesktopActions>
         <DateRangePicker query={query} today={today} onApply={onApply} />
         <DatePresets query={query} today={today} onApply={onApply} />
@@ -136,7 +189,11 @@ export function FeedHeader({ query, today, onApply, filters }: {
   </>;
 }
 
-/** Count and ordering share one line; on the narrowest phones the controls drop below the count. */
+/**
+ * Count and ordering share one line on phones from 320px (two-digit counts); a longer count moves the
+ * controls below it, still right-aligned with the date panel above. Phone controls are 28px, white
+ * and outlined like the date stepper, 8px apart.
+ */
 const Toolbar = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -159,6 +216,7 @@ const SortGroup = styled.div`
   align-items: center;
   gap: 4px;
   > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
+  ${media.belowDesktop} { gap: 8px; margin-inline-start: auto; }
 `;
 const SelectWrap = styled.span`
   position: relative;
@@ -179,18 +237,28 @@ const SelectWrap = styled.span`
   }
   > svg { position: absolute; inset-inline-end: 7px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
 `;
+/** Phone order: the sort field and its reverse button joined as one control. */
+const PhoneOrder = styled.div`
+  display: inline-flex;
+  ${desktop} { display: none; }
+`;
 const PhoneSort = styled(CompactSelect)`
   min-block-size: 1.75rem;
   padding-inline: 7px 22px;
-  background: ${({ theme }) => theme.color.cardHeader};
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
   > svg { inset-inline-end: 7px; }
-  ${desktop} { display: none; }
 `;
 const ReverseButton = styled(IconButton)`
   inline-size: 1.75rem;
   block-size: 1.75rem;
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-inline-start: 0;
+  border-radius: 0;
+  border-start-end-radius: 6px;
+  border-end-end-radius: 6px;
   font-size: 0.875rem;
-  ${desktop} { display: none; }
 `;
 /** Toggle chip: keeps only matches that have a prediction. */
 const PicksToggle = styled.button`
@@ -216,6 +284,7 @@ const PicksToggle = styled.button`
     &::before { background: currentColor; }
   }
   ${focusRing}
+  ${media.belowDesktop} { &:not([aria-pressed="true"]) { background: ${({ theme }) => theme.color.surface}; border-color: ${({ theme }) => theme.color.border}; } }
   ${desktop} { min-block-size: 2.375rem; padding-inline: 12px; font-size: 0.875rem; }
 `;
 
@@ -240,16 +309,18 @@ export function ResultsToolbar({ query, total, first, last, onApply }: {
     <SortGroup>
       <PicksToggle type="button" aria-pressed={query.picks === "only"} title={messages.text("feed.picks.onlyHelp")}
         onClick={() => onApply({ ...query, picks: query.picks === "only" ? "all" : "only", page: 1 })}>
-        {messages.text("feed.picks.only")}
+        <PhoneText>{messages.text("feed.picks.onlyShort")}</PhoneText><DesktopText>{messages.text("feed.picks.only")}</DesktopText>
       </PicksToggle>
-      <PhoneSort aria-label={messages.text("feed.sort.label")} value={query.sort.by} onChange={(event) => {
-        const by = event.target.value as FeedSort["by"];
-        choose({ by, direction: by === "probability" ? "desc" : "asc" });
-      }} options={[{ value: "kickoff", label: messages.text("feed.sort.short.kickoff") },
-        { value: "probability", label: messages.text("feed.sort.short.probability") }]} />
-      <ReverseButton type="button" aria-label={`${messages.text("feed.sort.reverse")}: ${messages.text(`feed.sort.${query.sort.by}-${query.sort.direction}`)}`}
-        title={messages.text("feed.sort.reverse")}
-        onClick={() => choose({ by: query.sort.by, direction: query.sort.direction === "asc" ? "desc" : "asc" })}><SortIcon /></ReverseButton>
+      <PhoneOrder>
+        <PhoneSort aria-label={messages.text("feed.sort.label")} value={query.sort.by} onChange={(event) => {
+          const by = event.target.value as FeedSort["by"];
+          choose({ by, direction: by === "probability" ? "desc" : "asc" });
+        }} options={[{ value: "kickoff", label: messages.text("feed.sort.short.kickoff") },
+          { value: "probability", label: messages.text("feed.sort.short.probability") }]} />
+        <ReverseButton type="button" aria-label={`${messages.text("feed.sort.reverse")}: ${messages.text(`feed.sort.${query.sort.by}-${query.sort.direction}`)}`}
+          title={messages.text("feed.sort.reverse")}
+          onClick={() => choose({ by: query.sort.by, direction: query.sort.direction === "asc" ? "desc" : "asc" })}><SortIcon /></ReverseButton>
+      </PhoneOrder>
       <label htmlFor="feed-sort-desktop"><DesktopText>{messages.text("feed.sort.label")}</DesktopText></label>
       <SelectWrap>
         <select id="feed-sort-desktop" value={sortKey} onChange={(event) => {

@@ -78,7 +78,7 @@ const Panel = styled.section`
   display: grid;
   gap: 6px;
   min-inline-size: 0;
-  padding: 8px 10px;
+  padding: 8px;
   background: ${({ theme }) => theme.gradient.edge} top / 100% 3px no-repeat, ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.cardRadius};
@@ -106,15 +106,16 @@ const PhoneMore = styled.div`
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 
-/** The range popover spans this whole row, so it never runs past the screen's left edge. */
+/**
+ * Day/Range, then one "‹ date ›" stepper that takes the rest of the row, so the date never truncates
+ * from 320px phones up. The range popover spans this whole row, so it never runs past the screen's left edge.
+ */
 const DateRow = styled.div`
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 6px;
-  > div:nth-child(2), > label { min-inline-size: 0; }
-  > label > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+  gap: 8px;
 `;
 const ChipRow = styled.div`
   display: grid;
@@ -422,16 +423,17 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
       <DateRow>
         <Segmented role="group" aria-label={messages.text("feed.date.mode")}>
           <Link href={href({ ...query, dates: singleDates })} prefetch={false} aria-current={single ? "true" : undefined}
-            aria-label={messages.text("feed.date.single")} onClick={(event) => plainClick(event, () => apply({ ...phone, dates: singleDates }))}>
+            onClick={(event) => plainClick(event, () => apply({ ...phone, dates: singleDates }))}>
             {messages.text("feed.date.dayToggle")}
           </Link>
           <Link href={href({ ...query, dates: single ? rangeDates : query.dates })} prefetch={false} aria-current={single ? undefined : "true"}
-            aria-label={messages.text("feed.date.range")} onClick={(event) => plainClick(event, () => apply({ ...phone, dates: single ? rangeDates : query.dates }))}>
+            onClick={(event) => plainClick(event, () => apply({ ...phone, dates: single ? rangeDates : query.dates }))}>
             {messages.text("feed.date.rangeToggle")}
           </Link>
         </Segmented>
-        {single ? <SingleDatePicker query={phone} today={today} onApply={apply} /> : <DateRangePicker query={phone} today={today} onApply={apply} compact />}
-        <DateStepper query={phone} today={today} onApply={apply} />
+        <DateStepper query={phone} today={today} onApply={apply}>
+          {single ? <SingleDatePicker query={phone} today={today} onApply={apply} /> : <DateRangePicker query={phone} today={today} onApply={apply} compact />}
+        </DateStepper>
       </DateRow>
       <PhoneMore id={phoneId} hidden={!phoneOpen}>
         <ChipRow>
@@ -482,11 +484,11 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
         </ApplyLink>
         <Field data-span="3" $accent="amber" $disabled role="group" aria-labelledby="filters-odds" title={messages.text("feed.filters.oddsPending")}>
           <FieldName id="filters-odds" $accent="amber">{oddsLabel}</FieldName>
-          <RangeSlider min={120} max={500} step={5} low={120} high={500} disabled accent="amber" format={odds} onCommit={() => {}}
+          <RangeSlider min={101} max={2000} step={1} low={101} high={2000} disabled accent="amber" format={odds} onCommit={() => {}}
             lowLabel={messages.text("feed.filters.minimum", { label: oddsLabel })} highLabel={messages.text("feed.filters.maximum", { label: oddsLabel })} />
           <NumberPair $disabled>
-            <input disabled value="1.20" readOnly aria-label={messages.text("feed.filters.minimum", { label: oddsLabel })} />–
-            <input disabled value="5.00" readOnly aria-label={messages.text("feed.filters.maximum", { label: oddsLabel })} />
+            <input disabled value="1.01" readOnly aria-label={messages.text("feed.filters.minimum", { label: oddsLabel })} />–
+            <input disabled value="20.00" readOnly aria-label={messages.text("feed.filters.maximum", { label: oddsLabel })} />
           </NumberPair>
           <VisuallyHidden>{messages.text("feed.filters.oddsPending")}</VisuallyHidden>
         </Field>

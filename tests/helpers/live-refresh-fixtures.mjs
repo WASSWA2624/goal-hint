@@ -3,6 +3,7 @@ import { fixture, query, today, now } from './client-state-fixtures.mjs';
 import { resolveFeedDates } from '../../src/domain/feed-query.ts';
 import { matchFeedRecordSchema, matchFeedResponseSchema } from '../../src/domain/match-feed.ts';
 import { matchDetailResponseSchema } from '../../src/domain/match-detail.ts';
+import { deMargin, DE_MARGIN_METHOD, parseDecimalOdds } from '../../src/domain/odds.ts';
 
 export { query, today, now };
 export const ids = { fixture: randomUUID(), cycle: randomUUID(), revision: randomUUID(), run: randomUUID() };
@@ -43,4 +44,13 @@ export function liveDetail(record = liveRecord(), overrides = {}) {
     slug: 'synthetic-a-v-synthetic-b', path: `/en/matches/${ids.fixture}/synthetic-a-v-synthetic-b` }, currentRevisionId: record.forecast?.revisionId ?? null,
     selection: 'applicable', selectedCycle: cycle, snapshot,
     history: { limit: 10, revisions: { anchor: 1, entries: [], next: null }, cycles: { anchor: 1, entries: [], next: null } }, ...overrides });
+}
+
+/** A synthetic, complete market-implied group (052) with exact proportional-v1 probabilities. */
+export function marketImpliedGroup(family = 'match-result', prices = { 'home-win': '1.85', draw: '3.40', 'away-win': '4.20' }, overrides = {}) {
+  const entries = Object.entries(prices), implied = deMargin(entries.map(([, price]) => parseDecimalOdds(price)), family === 'double-chance' ? 2 : 1);
+  return { label: 'market-implied', family, basis: 'bookmaker', method: DE_MARGIN_METHOD, overround: implied.overround,
+    retrievedAt: now - 60_000, providerUpdatedAt: now - 120_000,
+    selections: entries.map(([selection, price], index) => ({ selection, price: Number(price).toFixed(2), impliedProbability: implied.probabilities[index] })),
+    ...overrides };
 }

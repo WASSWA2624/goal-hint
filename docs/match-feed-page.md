@@ -57,6 +57,26 @@ sync use their original UTC instants formatted in EAT. Stored delays remain
 visible. The page never substitutes a sample forecast or selects a current preview
 for an empty lock.
 
+### Phone header
+
+Below 64rem, app pages hide the shell header, so `FeedHeader` opens with the
+branded bar. It uses the same navy-to-teal `theme.header.background` and brand
+edge as the desktop header, is 3.25rem (52px) tall, runs past the 16px gutter and
+is pulled up through the app page's 10px top padding to the screen edge. The
+inverse logo, at the brand-kit minimum of 160px, links home as "Goal Hint home".
+The 32px translucent filter and search buttons sit at the end of the row and fill
+with inverse teal while open. The title (18px) and subtitle (11px) follow 10px
+below on the light page, then the date panel, then the count and order toolbar,
+8px apart. The panel holds a
+30px Day/Range toggle and one "‹ date ›" stepper. The stepper's 28px previous and
+next steps flank a 12px date (or the short range label). At 320px the calendar
+icon steps aside, so the longest labels ("Wed, May 20", "Nov 20 – Dec 20") never
+truncate. The 28px toolbar controls (Picks only, sort field joined to its reverse
+button) fit one line from 320px for counts under 100. At 360×780 the first card
+starts about 196px from the top: 52 brand bar, 10, 34.5 titles, 8, 48 panel, 8,
+28 toolbar and 8. Desktop keeps its layout; the shell header
+carries the logo there.
+
 ## Coverage, progress and errors
 
 | Stored/read condition | Page behavior |

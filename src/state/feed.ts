@@ -2,6 +2,7 @@ import { createAction, createReducer } from "@reduxjs/toolkit";
 import { parseReportingDate, utcInstantFromEpochMilliseconds, type UtcInstant } from "../domain/calendar.ts";
 import { feedQueryKey, feedQueryRules, isFeedDatePreset, parseFeedQuery, serializeFeedQuery, type FeedQuery } from "../domain/feed-query.ts";
 import { compareFixtureVersions, parseFixtureSnapshot } from "../domain/fixture-snapshot.ts";
+import { mergeFixtureObservation } from "../domain/fixture-reconciliation.ts";
 import type { FeedBootstrap, FeedFailure, FeedPage, FeedRequest, FeedState, LoadedView } from "./contracts.ts";
 import { restorationRules } from "../domain/feed-navigation.ts";
 
@@ -105,6 +106,10 @@ export function createFeedReducer(bootstrap: FeedBootstrap) {
       for (const record of data.records) {
         const existing = Object.hasOwn(state.records, record.fixtureId) ? state.records[record.fixtureId] : undefined;
         if (!existing || compareFixtureVersions(record.dataVersion, existing.dataVersion) > 0) state.records[record.fixtureId] = record;
+        // Equal versions still refresh observation fields such as prices, which change without a version bump.
+        else if (compareFixtureVersions(record.dataVersion, existing.dataVersion) === 0) {
+          state.records[record.fixtureId] = mergeFixtureObservation(existing, record);
+        }
       }
       const ids = data.records.map((record) => record.fixtureId);
       if (payload.request.mode !== "refresh") {

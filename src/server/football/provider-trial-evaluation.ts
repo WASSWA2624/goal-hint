@@ -5,11 +5,13 @@ import { getReportingDate, isBeforePublicationCutoff, toUtcIsoString, utcInstant
 import type { Clock, UtcInstant } from "../../domain/calendar.ts";
 import { settleMarketSelection } from "../../domain/market-settlement.ts";
 import { validateMarketGroup, marketRules } from "../../domain/markets.ts";
-import type { NormalizedFixture, NormalizedFallbackPrediction, NormalizedCompetition, ProviderLogo } from "./api-football-normalize.ts";
+import { launchOddsGroup, launchOddsMapping, ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
+import type { NormalizedFixture, NormalizedFallbackPrediction, NormalizedCompetition, NormalizedFixtureOdds,
+  NormalizedOddsCatalogEntry, ProviderLogo } from "./api-football-normalize.ts";
 import type { TrialEvidence, TrialFinding, TrialFreshness, TrialJournal, TrialObservation, TrialReport, TrialRequirement, TrialTask } from "./provider-trial-contract.ts";
 import { PROVIDER_TRIAL_VERSION } from "./provider-trial-contract.ts";
 import { trialRequirements } from "./provider-trial-input.ts";
-import type { ApiFootballPageProvenance } from "./api-football-contract.ts";
+import { pageSizeOf, type ApiFootballPageProvenance } from "./api-football-contract.ts";
 import { chargedTrialRequests } from "./provider-trial-runner.ts";
 export { trialRequirements } from "./provider-trial-input.ts";
 
@@ -23,6 +25,13 @@ type Observed = Readonly<{ task: TrialTask; observation: TrialObservation }>;
 type FixtureObservation = Observed & Readonly<{ fixture: NormalizedFixture }>;
 type IdentityObservation = Observed & Readonly<{ kind: "team" | "competition"; id: number; name: string | null;
   country: string | null; season: number | null; competitionId: number }>;
+type OddsObservation = Observed & Readonly<{ odds: NormalizedFixtureOdds }>;
+/** Prompt 052: optional odds qualification. These findings never decide core live suitability; the four import
+ * findings decide `oddsSuitability`, and display rights gate only the public projection. */
+const oddsKinds: ReadonlySet<string> = new Set(["odds", "odds-bets", "odds-bookmakers"]);
+const oddsImportRequirements = ["odds-pagination", "odds-update-times", "odds-bet-catalog", "odds-coverage"] as const;
+const isOddsTask = (task: TrialTask) => oddsKinds.has(task.operation.kind);
+const isOddsRequirement = (requirement: TrialRequirement) => requirement.startsWith("odds-");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const positiveInteger = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0;
@@ -61,7 +70,9 @@ function observationSources(rows: readonly Observed[]): string[] {
   return [...new Set(rows.flatMap(({ task, observation }) => [
     `task:${safeId(task.id)}`,
     ...observation.result.data.filter(fixture).map((item) => `fixture:${item.id}`),
+    ...observation.result.data.filter(oddsRow).map((item) => `fixture:${item.fixtureId}`),
     ...("fixtureId" in task.operation ? [`fixture:${task.operation.fixtureId}`] : []),
+    ...(task.operation.kind === "odds" && "fixtureId" in task.operation.query ? [`fixture:${task.operation.query.fixtureId}`] : []),
   ]))];
 }
 function fixture(value: unknown): value is NormalizedFixture {
@@ -75,6 +86,16 @@ function prediction(value: unknown): value is NormalizedFallbackPrediction {
     isRecord(value.homeTeam) && positiveInteger(value.homeTeam.id) && isRecord(value.awayTeam) &&
     positiveInteger(value.awayTeam.id) && value.homeTeam.id !== value.awayTeam.id && isRecord(value.source) &&
     value.source.provider === "api-football" && value.source.endpoint === "/predictions" && instant(value.source.retrievedAt);
+}
+function oddsRow(value: unknown): value is NormalizedFixtureOdds {
+  return isRecord(value) && positiveInteger(value.fixtureId) && isRecord(value.competition) && positiveInteger(value.competition.id) &&
+    Array.isArray(value.bookmakers) && value.bookmakers.every((bookmaker) => isRecord(bookmaker) && positiveInteger(bookmaker.id) &&
+      Array.isArray(bookmaker.bets) && bookmaker.bets.every((bet) => isRecord(bet) && positiveInteger(bet.id) && Array.isArray(bet.values))) &&
+    isRecord(value.source) && value.source.provider === "api-football" && value.source.endpoint === "/odds" && instant(value.source.retrievedAt);
+}
+function catalogEntry(endpoint: "/odds/bets" | "/odds/bookmakers") {
+  return (value: unknown): value is NormalizedOddsCatalogEntry => isRecord(value) && positiveInteger(value.id) &&
+    typeof value.name === "string" && isRecord(value.source) && value.source.provider === "api-football" && value.source.endpoint === endpoint;
 }
 function competition(value: unknown): value is NormalizedCompetition {
   return isRecord(value) && positiveInteger(value.id) && Array.isArray(value.seasons) &&
@@ -92,6 +113,11 @@ function logoReferences(data: unknown): unknown[] {
   if (Array.isArray(data.statistics)) references.push(...data.statistics.flatMap((entry) => isRecord(entry) ?
     [entry.team, entry.competition].filter(isRecord).map((identity) => identity.logo).filter((logo) => isRecord(logo) && logo.url !== null) : []));
   return references;
+}
+/** A paginated request names its page explicitly and, once a valid envelope arrived, that page was returned. */
+function requestedPage(parameters: Readonly<Record<string, string>>, page: ApiFootballPageProvenance): boolean {
+  return typeof parameters.page === "string" && /^[1-9]\d*$/.test(parameters.page) && positiveInteger(Number(parameters.page)) &&
+    (page.currentPage === null || Number(parameters.page) === page.currentPage);
 }
 function parametersMatch(task: TrialTask, page: ApiFootballPageProvenance): boolean {
   const operation = task.operation;
@@ -115,10 +141,16 @@ function parametersMatch(task: TrialTask, page: ApiFootballPageProvenance): bool
       if (operation.query.season !== undefined) expected.season = String(operation.query.season);
       break;
     case "player-statistics":
-      if (!parameters.page || !/^[1-9]\d*$/.test(parameters.page) || !positiveInteger(Number(parameters.page)) ||
-          (page.currentPage !== null && Number(parameters.page) !== page.currentPage)) return false;
-      expected = { league: String(operation.query.competitionId), season: String(operation.query.season), page: parameters.page };
+      if (!requestedPage(parameters, page)) return false;
+      expected = { league: String(operation.query.competitionId), season: String(operation.query.season), page: parameters.page! };
       break;
+    case "odds":
+      // One documented bookmaker, by Kampala date or by fixture, always with an explicit page.
+      if (!requestedPage(parameters, page)) return false;
+      expected = { bookmaker: String(operation.query.bookmakerId), timezone: "Africa/Kampala", page: parameters.page!,
+        ...("fixtureId" in operation.query ? { fixture: String(operation.query.fixtureId) } : { date: operation.query.date }) };
+      break;
+    case "odds-bets": case "odds-bookmakers": expected = {}; break;
     case "fixture-ids": {
       const raw = parameters.id ?? parameters.ids;
       if (!raw || !/^[1-9]\d*(?:-[1-9]\d*)*$/.test(raw) || (parameters.id !== undefined && parameters.ids !== undefined)) return false;
@@ -164,7 +196,8 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
   });
   const expectedEndpoint = (task: TrialTask) => ({ fixtures: "fixtures", live: "fixtures", "fixture-ids": "fixtures",
     teams: "teams", competitions: "competitions", "player-statistics": "playerStatistics", "account-status": "accountStatus",
-    statistics: "statistics", lineups: "lineups", injuries: "injuries", predictions: "predictions" } as const)[task.operation.kind];
+    statistics: "statistics", lineups: "lineups", injuries: "injuries", predictions: "predictions",
+    odds: "odds", "odds-bets": "oddsBets", "odds-bookmakers": "oddsBookmakers" } as const)[task.operation.kind];
   const validProvenance = (row: Observed) => row.observation.result.provenance.length > 0 &&
     row.observation.result.provenance.every((page) => isRecord(page) && isRecord(page.quota) && isRecord(page.requestParameters) &&
       page.provider === "api-football" && page.endpoint === expectedEndpoint(row.task) &&
@@ -214,7 +247,8 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
     item.value.totalUsdCents <= 4_500 &&
     item.value.taxesIncluded === true && item.value.paymentChargesIncluded === true, ["account-record"]);
   for (const [requirement, scope] of [["private-use-rights", "private-use"], ["data-redistribution", "data-redistribution"],
-    ["prediction-redistribution", "prediction-redistribution"], ["remote-logo-rights", "remote-logo-display"]] as const) {
+    ["prediction-redistribution", "prediction-redistribution"], ["remote-logo-rights", "remote-logo-display"],
+    ["odds-display-rights", "odds-display"]] as const) {
     record(requirement, (item) => item.value.permitted === true && item.value.scope === scope &&
       item.value.restrictionsReviewed === true, ["rights-record", "official-source"]);
   }
@@ -247,23 +281,26 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
         "The shared limiter applies its own stricter ceiling. Account limits do not independently establish the reset boundary.");
       citeEvidence("account-limits");
     }
-    const incomplete = observed.filter((row) => !validProvenance(row) || !requestedIdsCovered(row) || row.observation.result.status !== "complete" ||
+    // Odds observations have their own findings below; bounded odds samples never decide core pagination.
+    const core = observed.filter((row) => !isOddsTask(row.task));
+    const incomplete = core.filter((row) => !validProvenance(row) || !requestedIdsCovered(row) || row.observation.result.status !== "complete" ||
       row.observation.result.error !== null ||
       row.observation.result.completeness.missingIds.length > 0 || row.observation.result.completeness.reasons.length > 0 ||
       !row.observation.result.completeness.complete || row.observation.result.completeness.invalidRows > 0 ||
       successfulPages(row.observation).length === 0);
-    const playerRows = observed.filter(({ task }) => task.operation.kind === "player-statistics");
+    const playerRows = core.filter(({ task }) => task.operation.kind === "player-statistics");
     const pagesComplete = playerRows.length > 0 && playerRows.every(({ observation }) => {
       const pages = successfulPages(observation).filter((page) => page.endpoint === "playerStatistics");
       const total = pages[0]?.totalPages;
       return positiveInteger(total) && pages.length === total && pages.every((page, index) =>
         page.currentPage === index + 1 && page.totalPages === total);
     });
-    if (incomplete.length || (playerRows.length && !pagesComplete)) set("pagination", "failed", observed,
+    // An odds-only trial leaves core pagination untested.
+    if (core.length && (incomplete.length || (playerRows.length && !pagesComplete))) set("pagination", "failed", core,
       "A recorded import is incomplete or its pages do not establish every page exactly once.",
       "Partial results do not establish complete coverage.", "Repeat the bounded import and resolve every missing page or invalid row.");
-    else if (pagesComplete) set("pagination", "confirmed", observed, "Recorded paginated player imports and unpaginated responses are complete.");
-    else set("pagination", "untested", observed, "Recorded responses are complete; actual player pagination has not been sampled.",
+    else if (pagesComplete) set("pagination", "confirmed", core, "Recorded paginated player imports and unpaginated responses are complete.");
+    else if (core.length) set("pagination", "untested", core, "Recorded responses are complete; actual player pagination has not been sampled.",
       "Unpaginated fixture responses do not prove the player pagination contract.", "Run a bounded /players import spanning its reported pages.");
     const pages = observed.flatMap(({ observation }) => observation.result.provenance);
     if (pages.length) set("quota-headers", pages.every((page) => isRecord(page) && isRecord(page.quota) && nonnegativeInteger(page.quota.dailyRemaining) &&
@@ -272,9 +309,10 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
       page.quota.minuteRemaining <= page.quota.minuteLimit) ? "confirmed" : "failed", observed,
       "Daily and minute quota headers were checked for presence and consistent numeric limits.",
       "Header observations do not independently prove billing entitlement or the reset boundary.");
-    const sourceTimes = observed.flatMap(({ observation }) => observation.result.provenance);
+    // Odds rows publish their own update time (odds-update-times); page-level times stay null for every endpoint.
+    const sourceTimes = core.flatMap(({ observation }) => observation.result.provenance);
     if (sourceTimes.length) set("provider-update-times", sourceTimes.every((page) => isRecord(page) && instant(page.providerUpdatedAt) &&
-      page.providerUpdatedAt <= page.retrievedAt) ? "confirmed" : "failed", observed,
+      page.providerUpdatedAt <= page.retrievedAt) ? "confirmed" : "failed", core,
       "Provider update timestamps were checked independently of retrieval timestamps.",
       "Missing update time remains unknown; kickoff and HTTP Date are not provider update times.",
       "Verify source update semantics or explicitly approve a retrieval-only freshness policy.");
@@ -481,6 +519,112 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
     observation.result.data.flatMap(logoReferences).every(validLogo)) ? "confirmed" : "failed", logoRows,
     "Every retained logo reference was checked for approved credential-free HTTPS without query strings or fragments.",
     "URL safety does not establish logo display rights or permission to download media.");
+
+  // Prompt 052 odds qualification: envelope and pagination, row update times, the pinned bet catalog and launch coverage.
+  const oddsTasks = observed.filter((row) => row.task.operation.kind === "odds");
+  const oddsPageSize = pageSizeOf("odds")!;
+  // Accepted rows stay inside the requested bookmaker and fixture or Kampala reporting date.
+  const oddsInScope = (task: TrialTask, odds: NormalizedFixtureOdds): boolean => {
+    if (task.operation.kind !== "odds") return false;
+    const query = task.operation.query;
+    return odds.bookmakers.every((bookmaker) => bookmaker.id === query.bookmakerId) && ("fixtureId" in query
+      ? odds.fixtureId === query.fixtureId : instant(odds.kickoff) && getReportingDate(odds.kickoff) === query.date);
+  };
+  const oddsEnvelopeValid = (row: Observed): boolean => {
+    const result = row.observation.result;
+    if (!validProvenance(row) || result.completeness.invalidRows > 0 || result.completeness.missingIds.length > 0 ||
+        !result.data.every((data) => oddsRow(data) && oddsInScope(row.task, data))) return false;
+    // Only the task's own request allowance may truncate a sample; every other stop is a contract failure.
+    const truncated = result.error?.reason === "request-budget-exhausted";
+    if (truncated ? result.status !== "partial" : result.status !== "complete" || !result.completeness.complete || result.error !== null) return false;
+    const pages = successfulPages(row.observation);
+    const total = pages[0]?.totalPages;
+    if (!positiveInteger(total) || pages.some((page, index) => page.currentPage !== index + 1 || page.totalPages !== total) ||
+        (truncated ? pages.length >= total : pages.length !== total)) return false;
+    // Every non-final page carries exactly the documented page size; a final page carries at most that many.
+    const rows = result.data.length;
+    return truncated ? rows === pages.length * oddsPageSize : rows >= (pages.length - 1) * oddsPageSize && rows <= pages.length * oddsPageSize;
+  };
+  if (oddsTasks.length) {
+    const valid = oddsTasks.filter(oddsEnvelopeValid);
+    if (valid.length !== oddsTasks.length) set("odds-pagination", "failed", oddsTasks,
+      "A recorded /odds import is incomplete or has rejected rows, or its pages, selector echoes or page sizes break the documented contract.",
+      "The journal keeps only accepted rows; rejections can reflect envelope, Kampala date scope, identity, update-format or price-format differences.",
+      "Compare the provider response with the adapter contract, then repeat a bounded sample before scheduling odds imports.");
+    else if (valid.some((row) => successfulPages(row.observation).length >= 2)) set("odds-pagination", "confirmed", oddsTasks,
+      `Recorded /odds pages echo the bookmaker, selector and page, arrive in order with a stable total and carry ${oddsPageSize} rows on every non-final page.`,
+      "A sample truncated by its own request allowance establishes only the pages it retrieved.");
+    else set("odds-pagination", "untested", oddsTasks, "Recorded /odds responses are valid, but none spans two pages.",
+      "A single page does not prove the page size or page traversal.", "Sample a busy Kampala date whose /odds response reports at least two pages.");
+  }
+  const pricedTasks = oddsTasks.filter(validProvenance);
+  const priced: OddsObservation[] = pricedTasks.flatMap((row) => row.observation.result.data.filter(oddsRow).map((odds) => ({ ...row, odds })));
+  if (priced.length) {
+    const published = priced.every(({ odds }) => instant(odds.source.providerUpdatedAt) && odds.source.providerUpdatedAt <= odds.source.retrievedAt);
+    set("odds-update-times", published ? "confirmed" : "failed", pricedTasks,
+      published ? "Every accepted /odds row published a strict offset update time no later than its retrieval."
+        : "At least one accepted /odds row omits its provider update time.",
+      "Update times describe the provider's price row; retrieval stays a separate time and staleness is decided at write time.",
+      published ? "Recheck when the provider contract or the documented bookmaker changes."
+        : "Approve retrieval-time freshness for rows without update times, or choose another bookmaker.");
+  }
+  const catalogs = observed.filter((row) => row.task.operation.kind === "odds-bets");
+  if (catalogs.length) {
+    const isBet = catalogEntry("/odds/bets");
+    const complete = catalogs.every((row) => validProvenance(row) && row.observation.result.status === "complete" &&
+      row.observation.result.completeness.complete && row.observation.result.completeness.invalidRows === 0 &&
+      row.observation.result.data.length > 0 && row.observation.result.data.every(isBet));
+    const entries = catalogs.flatMap((row) => row.observation.result.data.filter(isBet));
+    const sampledBets = priced.flatMap(({ odds }) => odds.bookmakers.flatMap((bookmaker) => bookmaker.bets));
+    // Each pinned launch bet exists under its exact name, and neither the catalog nor a sampled row names that id differently.
+    const pinned = launchOddsMapping.every((mapping) => entries.some((entry) => entry.id === mapping.betId) &&
+      [...entries, ...sampledBets].every((entry) => entry.id !== mapping.betId || entry.name === mapping.betName));
+    const confirmed = complete && pinned;
+    set("odds-bet-catalog", confirmed ? "confirmed" : "failed", [...catalogs, ...pricedTasks],
+      confirmed ? `The complete /odds/bets catalog and every sampled /odds row name the pinned launch bets exactly (${ODDS_MAPPING_VERSION}).`
+        : !complete ? "The recorded /odds/bets catalog is incomplete, empty or has rejected rows."
+          : "A pinned launch bet id is missing or named differently in the catalog or a sampled /odds row.",
+      "Only the four launch bets are checked; every other bet is retained for later versioned mappings.",
+      confirmed ? "Recheck the catalog whenever the provider contract or mapping version changes."
+        : "Revise the versioned launch mapping from the recorded catalog before any public price is written.");
+  }
+  const refused = observed.filter((row) => isOddsTask(row.task) && row.observation.result.error?.reason === "coverage-error");
+  if (refused.length) set("odds-coverage", "failed", refused,
+    "The provider refused an odds endpoint as outside the account's coverage or plan.",
+    "A refusal does not distinguish a missing add-on from an unsupported competition.",
+    "Confirm whether /odds is included in the plan without an add-on before scheduling odds imports.");
+  else if (pricedTasks.length) {
+    const bookmakerCatalog = observed.filter((row) => row.task.operation.kind === "odds-bookmakers" && validProvenance(row) &&
+      row.observation.result.status === "complete").flatMap((row) => row.observation.result.data.filter(catalogEntry("/odds/bookmakers")));
+    const tallies = new Map<number, { sampled: Set<number>; complete: Set<number> }>();
+    for (const row of pricedTasks) {
+      if (row.task.operation.kind !== "odds") continue;
+      const bookmakerId = row.task.operation.query.bookmakerId;
+      const tally = tallies.get(bookmakerId) ?? { sampled: new Set<number>(), complete: new Set<number>() };
+      tallies.set(bookmakerId, tally);
+      for (const odds of row.observation.result.data.filter(oddsRow)) {
+        if (!selectedCompetition(odds.competition.id, odds.competition.season)) continue;
+        tally.sampled.add(odds.fixtureId);
+        const bets = odds.bookmakers.find((bookmaker) => bookmaker.id === bookmakerId)?.bets ?? [];
+        // The catalog itself is the odds-bet-catalog finding; coverage asks whether each row yields every launch group.
+        if (launchOddsMapping.every((mapping) => {
+          const bet = bets.find((candidate) => candidate.id === mapping.betId);
+          return launchOddsGroup(mapping, bet && { betId: bet.id, betName: bet.name, values: bet.values }, mapping.betName) !== null;
+        })) tally.complete.add(odds.fixtureId);
+      }
+    }
+    const ordered = [...tallies.entries()].sort(([left], [right]) => left - right);
+    const counts = ordered.map(([id, tally]) => `bookmaker ${id}: ${tally.complete.size} of ${tally.sampled.size}`).join("; ");
+    const uncatalogued = bookmakerCatalog.length > 0 && ordered.some(([id]) => !bookmakerCatalog.some((entry) => entry.id === id));
+    const covered = ordered.some(([, tally]) => tally.complete.size > 0);
+    set("odds-coverage", uncatalogued ? "failed" : covered ? "confirmed" : "untested", pricedTasks,
+      uncatalogued ? "A sampled bookmaker is absent from the recorded /odds/bookmakers catalog."
+        : `Sampled fixtures in selected competitions carrying all four complete launch groups (${counts}).`,
+      "Coverage applies to the sampled Kampala dates, selected competitions and bookmaker; other bookmakers and dates are not implied.",
+      covered && !uncatalogued ? "Choose GOAL_HINT_ODDS_BOOKMAKER_ID from these counts and recheck coverage when the bookmaker changes."
+        : "Sample more dates or another candidate bookmaker before scheduling odds imports.");
+    citeEvidence("odds-coverage");
+  }
   const chargedRequests = chargedTrialRequests(journal);
   const knownDispatchedRequests = journal.tasks.reduce((total, task) => total + (task.dispatchedRequests ?? 0), 0);
   const uncertainTasks = journal.tasks.filter((task) => task.status === "running" || task.status === "uncertain" || task.dispatchedRequests === null).length;
@@ -492,9 +636,19 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
       followUp: "Audit the journal and quota records before making another provider request." });
   }
   const rows = [...findings.values()];
-  const liveSuitability = rows.some((row) => row.status === "failed") ? "failed" :
-    uncertainTasks === 0 && !hasDeferredTasks && rows.every((row) => row.status === "confirmed") ? "qualified" : "incomplete";
-  return freeze({ version: PROVIDER_TRIAL_VERSION, trialId: safeId(journal.plan.id), generatedAt, liveSuitability,
+  // Odds are optional and separately gated (GOAL_HINT_ODDS_IMPORT_ENABLED, quota floor, display rights), so their
+  // findings never block core live suitability; the four import findings decide odds suitability on their own.
+  const coreRows = rows.filter((row) => !isOddsRequirement(row.requirement));
+  const liveSuitability = coreRows.some((row) => row.status === "failed") ? "failed" :
+    uncertainTasks === 0 && !hasDeferredTasks && coreRows.every((row) => row.status === "confirmed") ? "qualified" : "incomplete";
+  const oddsRows = oddsImportRequirements.map((requirement) => findings.get(requirement)!);
+  const oddsUnsettled = journal.tasks.some((state) => {
+    const task = tasks.get(state.id);
+    return task !== undefined && isOddsTask(task) && (state.status !== "completed" || state.dispatchedRequests === null);
+  });
+  const oddsSuitability = oddsRows.some((row) => row.status === "failed") ? "failed" :
+    !oddsUnsettled && oddsRows.every((row) => row.status === "confirmed") ? "qualified" : "incomplete";
+  return freeze({ version: PROVIDER_TRIAL_VERSION, trialId: safeId(journal.plan.id), generatedAt, liveSuitability, oddsSuitability,
     budget: { allowance: journal.plan.maxRequests, chargedRequests, knownDispatchedRequests, uncertainTasks }, findings: rows,
     catalogImplementation: "permitted-with-pending-live-evidence", liveOperations: liveSuitability === "qualified" ? "qualified" : "blocked", launch: "blocked" });
 }
@@ -509,6 +663,9 @@ export function renderTrialReport(report: TrialReport): string {
     "",
     `Generated ${toUtcIsoString(report.generatedAt)}. Live provider suitability: **${report.liveSuitability}**. ` +
       `Catalog implementation: ${report.catalogImplementation}. Live operations: ${report.liveOperations}. Launch: ${report.launch}.`,
+    "",
+    `Odds import suitability: **${report.oddsSuitability}**. It covers odds pagination, update times, the bet catalog and launch coverage; ` +
+      "odds display rights gate only public prices, and neither verdict enables odds imports.",
     "",
     `Trial allowance: ${report.budget.allowance ?? "unresolved"}; charged reservations: ${report.budget.chargedRequests}; ` +
       `known dispatched requests: ${report.budget.knownDispatchedRequests}; uncertain tasks: ${report.budget.uncertainTasks}. ` +

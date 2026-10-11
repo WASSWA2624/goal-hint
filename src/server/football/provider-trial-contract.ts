@@ -2,7 +2,7 @@ import "server-only";
 
 import type { UtcInstant } from "../../domain/calendar.ts";
 import type { ApiFootballBounds, ApiFootballResult } from "./api-football-contract.ts";
-import type { FixtureQuery, TeamQuery, CompetitionQuery, PlayerStatisticsQuery } from "./api-football-adapter.ts";
+import type { FixtureQuery, TeamQuery, CompetitionQuery, PlayerStatisticsQuery, OddsQuery } from "./api-football-adapter.ts";
 
 export const PROVIDER_TRIAL_VERSION = 1;
 export const trialCases = ["league", "cup", "low-coverage", "postponed", "cross-midnight", "extra-time", "shootout", "prematch", "status-transition", "identity"] as const;
@@ -15,7 +15,11 @@ export type TrialOperation =
   | Readonly<{ kind: "teams"; query: TeamQuery }>
   | Readonly<{ kind: "competitions"; query: CompetitionQuery }>
   | Readonly<{ kind: "player-statistics"; query: PlayerStatisticsQuery }>
-  | Readonly<{ kind: "statistics" | "lineups" | "injuries" | "predictions"; fixtureId: number }>;
+  | Readonly<{ kind: "statistics" | "lineups" | "injuries" | "predictions"; fixtureId: number }>
+  // Prompt 052: counted /odds qualification for one candidate bookmaker, plus both catalogs.
+  | Readonly<{ kind: "odds"; query: OddsQuery }>
+  | Readonly<{ kind: "odds-bets" }>
+  | Readonly<{ kind: "odds-bookmakers" }>;
 export type TrialTask = Readonly<{
   id: string;
   case: TrialCase;
@@ -36,7 +40,8 @@ export type TrialRequirement =
   | "fallback-prematch" | "fallback-freshness" | "account-plan" | "account-limits"
   | "quota-headers" | "provider-reset" | "subscription-expiry" | "payable-total"
   | "private-use-rights" | "data-redistribution" | "prediction-redistribution"
-  | "remote-logo-rights" | "media-host-restrictions" | "credential-free-logo-urls";
+  | "remote-logo-rights" | "media-host-restrictions" | "credential-free-logo-urls"
+  | "odds-pagination" | "odds-update-times" | "odds-bet-catalog" | "odds-coverage" | "odds-display-rights";
 export type TrialEvidence = Readonly<{
   id: string;
   requirement: TrialRequirement;
@@ -102,7 +107,11 @@ export type TrialReport = Readonly<{
   version: typeof PROVIDER_TRIAL_VERSION;
   trialId: string;
   generatedAt: UtcInstant;
+  /** Core provider suitability; the optional odds-* findings never decide it. */
   liveSuitability: "incomplete" | "failed" | "qualified";
+  /** Prompt 052: odds-pagination, odds-update-times, odds-bet-catalog and odds-coverage only. Display rights gate
+   * public prices separately, and neither verdict enables odds imports (GOAL_HINT_ODDS_IMPORT_ENABLED stays an owner choice). */
+  oddsSuitability: "incomplete" | "failed" | "qualified";
   budget: Readonly<{ allowance: number | null; chargedRequests: number; knownDispatchedRequests: number; uncertainTasks: number }>;
   findings: readonly TrialFinding[];
   catalogImplementation: "permitted-with-pending-live-evidence";

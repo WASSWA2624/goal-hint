@@ -36,13 +36,30 @@ export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketF
 /**
  * Whether a card renders a refreshed record exactly as before. A version bump replaces the whole
  * record; at an equal version only the fields `mergeFixtureObservation` refreshes can differ.
- * Keep this list in step with it. `syncedAt` is not shown on cards.
+ * Keep this list in step with it. `syncedAt` is not shown on cards. Team names, codes and logos are
+ * not compared: a catalog change to a shared team bumps the version of every fixture that renders it.
  */
 export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot): boolean {
   return previous === next || previous.fixtureId === next.fixtureId && previous.dataVersion === next.dataVersion &&
     previous.partialCoverage === next.partialCoverage && previous.availabilityMessage === next.availabilityMessage &&
     previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
-    previous.forecast?.updateDelayed === next.forecast?.updateDelayed;
+    previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices);
+}
+function samePrices(previous: FixtureSnapshot["prices"], next: FixtureSnapshot["prices"]): boolean {
+  const left = previous ?? [], right = next ?? [];
+  return left.length === right.length && left.every((item, index) => {
+    const other = right[index]!;
+    return item.family === other.family && item.selection === other.selection && item.price === other.price &&
+      item.basis === other.basis && item.retrievedAt === other.retrievedAt && item.providerUpdatedAt === other.providerUpdatedAt;
+  });
+}
+
+/** The market price for exactly the shown pick's family and selection (052). Never falls back to another
+ * family, line or selection: no price means none is shown. */
+export function selectedCardPrice(fixture: FixtureSnapshot, family: MarketFamily) {
+  const pick = fixture.forecast?.markets.find((entry) => entry.market.family === family);
+  const price = fixture.prices?.find((entry) => entry.family === family);
+  return pick && price && price.selection === pick.market.selection ? price : null;
 }
 
 export type LiveClock = { phase: (typeof liveClockPhases)[number]; minute: number | null };

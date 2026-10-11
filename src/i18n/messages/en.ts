@@ -91,6 +91,7 @@ export const en = {
   "feed.sort.short.probability": "Probability",
   "feed.sort.reverse": "Reverse order",
   "feed.picks.only": "With predictions",
+  "feed.picks.onlyShort": "Picks only",
   "feed.picks.onlyHelp": "Show only matches that have a prediction for the selected markets",
   "feed.date.previous": "Previous day",
   "feed.date.next": "Next day",

@@ -3,14 +3,14 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
-import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoints,
+import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoints, pageSizeOf,
   type ApiFootballBounds, type ApiFootballEndpoint, type ApiFootballFailure,
   type ApiFootballPageProvenance, type ApiFootballResult, type ApiFootballCachePermission,
   type ApiFootballBatchEvidence, type ApiFootballFallbackWorkflow } from "./api-football-contract.ts";
 import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatistics,
   normalizeAvailability, normalizePlayerStatistics, normalizeFallbackPrediction,
-  normalizeAccountStatus,
-  type NormalizationContext, type NormalizationResult, type NormalizedFixture } from "./api-football-normalize.ts";
+  normalizeAccountStatus, normalizeOdds, normalizeOddsCatalogEntry,
+  type NormalizationContext, type NormalizationResult, type NormalizedFixture, type NormalizedFixtureOdds } from "./api-football-normalize.ts";
 import { createPolicyQuotaGateway, type createQuotaGateway, type GatewayQuotaLimiter } from "./quota-gateway.ts";
 import { quotaPriorities, type QuotaFeedback } from "./quota-contract.ts";
 
@@ -19,6 +19,8 @@ export type FixtureQuery = Readonly<{ date?: string; competitionId?: number; sea
 export type TeamQuery = Readonly<{ teamId: number }> | Readonly<{ competitionId: number; season: number }>;
 export type CompetitionQuery = Readonly<{ competitionId?: number; season?: number }>;
 export type PlayerStatisticsQuery = Readonly<{ competitionId: number; season: number }>;
+/** One documented bookmaker, by Kampala reporting date or by fixture. */
+export type OddsQuery = Readonly<{ date: string; bookmakerId: number }> | Readonly<{ fixtureId: number; bookmakerId: number }>;
 export type ApiFootballAdapterOptions = Readonly<{
   accountId: string;
   credential: Readonly<{ read(): string }>;
@@ -80,6 +82,19 @@ function queryParams(query: FixtureQuery): Params | null {
   }
   return Object.keys(params).length > 1 ? params : null;
 }
+/** Odds are always requested for one documented bookmaker; a null result fails before any reservation. */
+function oddsParams(query: OddsQuery): Params | null {
+  if (!record(query) || !positive(query.bookmakerId)) return null;
+  const params: Record<string, string> = { bookmaker: String(query.bookmakerId), timezone: "Africa/Kampala" };
+  if (keysAllowed(query, ["fixtureId", "bookmakerId"]) && "fixtureId" in query) {
+    if (!positive(query.fixtureId)) return null;
+    params.fixture = String(query.fixtureId);
+    return params;
+  }
+  if (!keysAllowed(query, ["date", "bookmakerId"]) || !("date" in query) || typeof query.date !== "string") return null;
+  try { params.date = parseReportingDate(query.date); } catch { return null; }
+  return params;
+}
 class BodyFailure extends Error {
   readonly reason: "response-body-error" | "response-too-large";
   constructor(reason: "response-body-error" | "response-too-large") { super(reason); this.reason = reason; }
@@ -107,6 +122,13 @@ function matchesScope(endpoint: ApiFootballEndpoint, params: Params, row: unknow
     && !row.statistics.some((statistic) => record(statistic) && record(statistic.competition)
       && statistic.competition.id === Number(params.league) && statistic.competition.season === Number(params.season))) return false;
   if (endpoint === "injuries" && row.fixtureId !== null && row.fixtureId !== Number(params.fixture)) return false;
+  if (endpoint === "odds") {
+    const odds = row as unknown as NormalizedFixtureOdds;
+    if (params.fixture && odds.fixtureId !== Number(params.fixture)) return false;
+    // A null kickoff cannot be placed on the requested Kampala date.
+    if (params.date && (odds.kickoff === null || getReportingDate(odds.kickoff) !== params.date)) return false;
+    if (!odds.bookmakers.every((bookmaker) => bookmaker.id === Number(params.bookmaker))) return false;
+  }
   return true;
 }
 async function readBody(response: Response, limit: number, signal: AbortSignal): Promise<unknown> {
@@ -325,7 +347,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
             captured = failure("schema-error");
             return { value: null, feedback: { ...observation, kind: "provider-error" } };
           }
-          const data: T[] = [], missingCoverage = new Set<string>(["provider-update-time"]);
+          // Odds rows carry their own `update` time; every other endpoint lacks one.
+          const data: T[] = [], missingCoverage = new Set<string>(endpoint === "odds" ? [] : ["provider-update-time"]);
           if (rows.length === 0) missingCoverage.add(`${endpoint}-coverage-not-established`);
           if (Object.keys(params).some((key) => key !== "timezone" && (!record(body.parameters) || !Object.hasOwn(body.parameters, key)))) {
             captured = failure("coverage-error");
@@ -341,8 +364,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
             else invalidRows++;
           }
           let pageError: ApiFootballFailure | null = invalidRows > 0 ? failure("schema-error") : null;
-          if (rows.length > bounds.maxRows || endpoint === "playerStatistics" && paging !== null
-            && (rows.length > 20 || Number(paging.current) < Number(paging.total) && rows.length !== 20)) pageError = failure("pagination-incomplete");
+          const pageSize = pageSizeOf(endpoint);
+          if (rows.length > bounds.maxRows || pageSize !== null && paging !== null
+            && (rows.length > pageSize || Number(paging.current) < Number(paging.total) && rows.length !== pageSize)) pageError = failure("pagination-incomplete");
           if (paging !== null && (paging.current !== expectedPage || (!apiFootballEndpoints[endpoint].paginated && paging.total !== 1))) pageError = failure("pagination-incomplete");
           const page: Page<T> = Object.freeze({ cacheKey: workKey, data: Object.freeze(data), invalidRows, missingCoverage: Object.freeze([...missingCoverage]), error: pageError,
             provenance: Object.freeze({ provider: "api-football", endpoint, requestParameters: Object.freeze({ ...params }), contractVersion: API_FOOTBALL_CONTRACT_VERSION,
@@ -410,7 +434,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           const id = record(row) && positive(row.id) ? row.id : record(row) && record(row.player) && positive(row.player.id) ? row.player.id : null;
           const teamId = record(row) && record(row.team) && positive(row.team.id) ? row.team.id : null;
           const injuryPlayer = record(row) && record(row.reportedInjury) && positive(row.reportedInjury.playerId) ? row.reportedInjury.playerId : null;
-          const identity = id !== null ? `id:${id}` : endpoint === "injuries" && teamId !== null && injuryPlayer !== null
+          // Normalized odds rows have no `id`; a fixture repeated across pages is a schema error.
+          const identity = endpoint === "odds" && record(row) && positive(row.fixtureId) ? `odds:${row.fixtureId}`
+            : id !== null ? `id:${id}` : endpoint === "injuries" && teamId !== null && injuryPlayer !== null
             ? `injury:${teamId}:${injuryPlayer}:${query.fixture}` : teamId !== null && endpoint !== "injuries" ? `team:${teamId}` : endpoint === "predictions" ? `prediction:${query.fixture}` : null;
           if ((identity !== null && rowIdentities.has(identity)) || (endpoint === "fixtures" && expectedIds && (id === null || !expectedIds.includes(id)))) {
             invalidRows++; error = failure("schema-error"); continue;
@@ -494,6 +520,12 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     }),
     fallback: Object.freeze({ predictions: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("predictions",
       positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeFallbackPrediction, undefined, workflow) }),
+    // Kept outside evidence and fallback so bookmaker prices never reach AI or fallback forecasts.
+    odds: Object.freeze({
+      prices: (query: OddsQuery, bounds: ApiFootballBounds) => { const params = oddsParams(query); return run("odds", params ? [params] : null, bounds, normalizeOdds); },
+      bets: (bounds: ApiFootballBounds) => run("oddsBets", [{}], bounds, normalizeOddsCatalogEntry),
+      bookmakers: (bounds: ApiFootballBounds) => run("oddsBookmakers", [{}], bounds, normalizeOddsCatalogEntry),
+    }),
   });
 }
 

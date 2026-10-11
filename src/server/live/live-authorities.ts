@@ -10,6 +10,8 @@ import type { FallbackRefreshRequest } from "../fallback/fallback-service.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballEndpoint, type ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixture, RegulationScoreCandidate } from "../football/api-football-normalize.ts";
 import type { CatalogAuthority } from "../football/catalog-contract.ts";
+import type { OddsAuthority, OddsPolicy } from "../odds/odds-contract.ts";
+import { oddsRequestParameters } from "../odds/odds-input.ts";
 import type { CutoffAuthority, CutoffPolicy } from "../predictions/cutoff-contract.ts";
 import type { LifecycleAuthority, LifecyclePolicy } from "../predictions/lifecycle-contract.ts";
 import type { PublicationAuthority, PublicationPolicy } from "../predictions/publication-contract.ts";
@@ -37,6 +39,8 @@ function pages(result: Pick<ApiFootballResult<unknown>, "provenance">, endpoint:
 export function createLiveAuthorities(options: Readonly<{
   policy: RuntimePolicy; verify: EvidenceVerifier; refs: LiveReferences; selection: SelectionPolicy;
   resultPolicy: () => ResultSyncPolicy | null; statusEvidenceRef: string; clock?: Clock;
+  /** The exact odds policy configured from the same workload as the runtime, or null without a bookmaker. */
+  oddsPolicy?: OddsPolicy | null;
 }>) {
   const { policy, verify, refs } = options;
   const now = () => options.clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
@@ -141,7 +145,24 @@ export function createLiveAuthorities(options: Readonly<{
   });
   const verifyStatusResponse = (result: ApiFootballResult<NormalizedFixture>, member: RefreshMember) => pages(result, "fixtures", now()) &&
     result.data.length <= 1 && result.data.every((row) => row.id === member.context.externalFixtureId);
+  // Odds (052): private structured retention under the private-use reference; public projection only under
+  // owner-recorded odds display rights, which the runner never requires to start.
+  const oddsEndpoints = { prices: "odds", bets: "oddsBets", bookmakers: "oddsBookmakers" } as const;
+  const odds: OddsAuthority = Object.freeze({
+    authorize(request) {
+      football();
+      if (!options.oddsPolicy || request.policy.retentionEvidenceRef !== refs.retention) throw new Error("Unapproved odds import.");
+    },
+    verifyPolicy: (value) => options.oddsPolicy !== undefined && options.oddsPolicy !== null && same(value, options.oddsPolicy),
+    verifyRetention: (permission) => permission.evidenceRef === refs.retention && permission.purpose === "structured-odds-history" &&
+      permission.rawPayloadsStored === false,
+    verifyObservation: (request, result) => pages(result, oddsEndpoints[request.kind], now()) && result.provenance.every((page) => {
+      const { page: _page, ...selectors } = page.requestParameters;
+      void _page; return same(selectors, oddsRequestParameters(request));
+    }),
+    verifyPublicDisplay: () => refs.oddsRights !== null && verify(refs.oddsRights, "football-odds-rights"),
+  });
   return Object.freeze({ catalog, selection, cutoff, lifecycle, publication, evidence, providerFallback, fallback, verifyFallbackRequest,
-    refresh, results, verifyStatusResponse });
+    refresh, results, verifyStatusResponse, odds });
 }
 export type LiveAuthorities = ReturnType<typeof createLiveAuthorities>;

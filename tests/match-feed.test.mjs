@@ -23,7 +23,9 @@ for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'f
   'sort=probability&dir=up', 'market=match-result&sort=probability&sortMarket=total-goals', 'sort=score', 'prob=90-10', 'country=x%3Cscript%3E',
   'page=0', 'page=10001', 'page=01', 'pageSize=101', 'pageSize=0', 'pageSize=1.5',
   'league=x%27+OR+1=1', 'q=%00', `q=${'x'.repeat(121)}`, `q=${'%F0%9F%98%80'.repeat(240)}`, 'token=anonymous',
-  'leagues=1', 'leagues=', 'leagues=0&leagues=0', 'leagues=0&token=anonymous']) {
+  'leagues=1', 'leagues=', 'leagues=0&leagues=0', 'leagues=0&token=anonymous',
+  // Odds (052): unknown while provider odds are not public, whatever the value.
+  'odds=1.50-3.00', 'odds=', 'odds=1.01-1000.00', 'prob=50-100&odds=1.50-3.00', 'leagues=0&odds=2.00-5.00']) {
   test(`public query rejects ${query.slice(0, 70)}`, async () => {
     let reads = 0;
     const response = await createMatchFeedHandler(async () => { reads++; return emptyPage(); })(request(query));
@@ -41,6 +43,11 @@ test('public parsing preserves shared URL defaults, historical dates and SSR rou
   assert.equal(parseMatchFeedQuery(new URLSearchParams('date=1000-01-02'), today).dates.date, '1000-01-02');
   assert.equal(parseMatchFeedQuery({ to: '2026-10-15', pageSize: '100' }, today, { routeDate: today }).dates.kind, 'range');
   assert.throws(() => parseMatchFeedQuery({ page: ['1', '2'] }, today), MatchFeedError);
+  // Odds bounds (052) parse only where the effective provider-odds flag is on (isolated tests); public parsing rejects them.
+  assert.equal(defaults.odds, null);
+  assert.deepEqual(parseMatchFeedQuery(new URLSearchParams('odds=1.50-3.00'), today, { providerOdds: true }).odds, { min: 150, max: 300 });
+  assert.throws(() => parseMatchFeedQuery(new URLSearchParams('odds=1.50-3.00'), today), (error) => error instanceof MatchFeedError && error.code === 'invalid-query');
+  assert.throws(() => parseMatchFeedQuery(new URLSearchParams('odds=3.00-1.50'), today, { providerOdds: true }), MatchFeedError);
 });
 test('anonymous GET uses no account, authentication cookie, token or cache', async () => {
   const response = await createMatchFeedHandler(async () => emptyPage())(request('date=2026-10-09'));

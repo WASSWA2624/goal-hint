@@ -200,6 +200,12 @@ The [provider trial runbook](docs/football-provider-trial.md) covers offline
 Reports distinguish real evidence from synthetic contracts; missing account,
 competition, allowance and rights inputs keep live qualification incomplete.
 
+Pre-match odds (prompt 052) are imported privately for one documented bookmaker
+and stay off by default (`GOAL_HINT_ODDS_IMPORT_ENABLED=false`); display rights
+are unconfirmed, so no price is public. Read the
+[provider odds runbook](docs/provider-odds.md) and the odds section of the
+[live operations runbook](docs/live-operations.md#odds-imports-052).
+
 ## Canonical football catalog
 
 Private server workers import validated fixtures, teams and competitions through

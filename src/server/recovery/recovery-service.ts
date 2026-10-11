@@ -8,6 +8,8 @@ import type { FootballCatalogStore } from "../football/catalog-mysql-store.ts";
 import { JobQueueError, type JobLease, type JobQueue, type JobTransaction } from "../jobs/job-contract.ts";
 import { durableJobId, parseJobEnvelope } from "../jobs/job-input.ts";
 import { defineJob } from "../jobs/job-registry.ts";
+import { ODDS_CATALOG_TYPE, ODDS_IMPORT_TYPE } from "../odds/odds-jobs.ts";
+import { TEAM_CODES_TYPE } from "../teams/team-code-jobs.ts";
 import type { createCutoffLockingService } from "../predictions/cutoff-service.ts";
 import { storedRefreshResult } from "../predictions/publication-read.ts";
 import { createMysqlRefreshStore } from "../refresh/refresh-mysql-store.ts";
@@ -144,6 +146,11 @@ export function createRecoveryWatchdog(options: Readonly<{ database: DatabaseRun
             catch (error) { if (error instanceof PredictionRefreshError && error.reason === "ineligible") return "expired"; throw error; }
           }
           if (["invalid-payload", "unknown-handler", "non-retryable"].includes(job.terminalReason ?? "")) return "failed";
+          // Odds and team-code jobs belong to one sweep slot (or UTC day); once it has ended they expire instead of re-running.
+          if (job.envelope.type === ODDS_IMPORT_TYPE || job.envelope.type === ODDS_CATALOG_TYPE || job.envelope.type === TEAM_CODES_TYPE) {
+            const at = (await client.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime();
+            return at >= job.envelope.expiresAt ? "expired" : "retry";
+          }
           return "retry";
         });
         const receipt = result?.envelope.refresh ? await tx.predictionRefreshResult.findFirst({

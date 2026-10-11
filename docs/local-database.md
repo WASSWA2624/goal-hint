@@ -28,6 +28,23 @@ in the private installation's `application-grants.sql`. Revisit grants whenever
 a future migration adds a table or mutable column. Production role verification
 remains a separate deployment requirement.
 
+Prompt 052 adds five odds tables, bringing the schema to 67 models. The local
+`application-grants.sql` does not cover them yet. Add the grants listed in
+[provider-odds.md](provider-odds.md#application-grants) to that file:
+
+- INSERT and SELECT on the three append-only tables;
+- column-scoped UPDATE on `FixtureOddsState` and `FixtureOddsPrice`;
+- no DELETE.
+
+Apply them **after** `npm run db:deploy` has run migration
+`20261010200505_provider_odds_import`, because MySQL refuses grants on tables that
+do not exist yet (ERROR 1146). Then run `npm run db:status`, `npm run db:verify`
+and `npm run db:health`. Apply the grants before starting `npm run live`: from
+the moment the migration is deployed, the runner's every-tick `expire()` and the
+monitoring collector both read the odds tables, even with imports off.
+
+Odds imports remain off (`GOAL_HINT_ODDS_IMPORT_ENABLED=false`).
+
 `FootballImport` and `FootballFixtureAudit` stay insert-only: the catalog importer
 writes each receipt and audit once, with final values, so the live runner needs no
 additional grant.

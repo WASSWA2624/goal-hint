@@ -3,6 +3,7 @@ import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import { isMarketFamily, validateMarketSnapshot, MARKET_RULE_VERSION, type AcceptedMarket } from "./markets.ts";
 import { isPlayedFinalStatus, type SettlementOutcomeStatus, type SettlementStatus } from "./market-settlement.ts";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
+import { teamCodePattern } from "./team-name.ts";
 
 /** MySQL UNSIGNED BIGINT travels as canonical decimal text, never a JS number. */
 export const maximumFixtureVersion = "18446744073709551615";
@@ -31,6 +32,9 @@ const version = z.string().transform((value, context) => {
 const score = z.strictObject({ home: z.number().int().min(0).max(1000), away: z.number().int().min(0).max(1000) });
 const team = z.strictObject({
   id: identity, name: z.string().max(512).nullable(),
+  /** Provider team code (2–5 capital letters or digits), already normalized by the server read; null when the team has
+   * none or it is not a valid code. Optional, so payloads cached before codes were published still parse. */
+  code: z.string().regex(teamCodePattern, "Invalid team code.").nullable().optional(),
   /** Only server-approved, credential-free catalog URLs may populate this field. */
   logoUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe logo URL.").nullable().optional(),
 });
@@ -55,6 +59,18 @@ export const unavailableMarketSchema = z.strictObject({
   family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
   reason: z.enum(["not-published", "no-locked-selection", "unsupported", "insufficient-data"]),
 });
+/** Market price for exactly one published pick (prompt 052). Information only, never a betting prompt.
+ * An observation field: it changes without a fixture version bump and never fills another family's price. */
+export const fixturePriceSchema = z.strictObject({
+  family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
+  selection: z.string().min(1).max(64),
+  /** Decimal price, two places, rounded half-up once when stored. */
+  price: z.string().regex(/^[1-9]\d{0,3}\.\d{2}$/u),
+  basis: z.enum(["bookmaker", "median"]),
+  retrievedAt: instant,
+  providerUpdatedAt: instant.nullable(),
+});
+export type FixturePrice = z.infer<typeof fixturePriceSchema>;
 /** In-play phase and provider-reported minute, present only while the fixture is live. */
 export const liveClockPhases = ["first-half", "half-time", "second-half", "extra-time", "break", "penalties", "interrupted", "suspended", "in-play"] as const;
 export const liveClockSchema = z.strictObject({
@@ -138,7 +154,15 @@ export const fixtureSnapshotSchema = z.strictObject({
   availabilityMessage: z.string().max(256).nullable().optional(),
   scorePeriod: z.enum(["regulation", "live"]).nullable().optional(),
   liveClock: liveClockSchema.nullable().optional(),
+  prices: z.array(fixturePriceSchema).max(4).optional(),
 }).superRefine((value, context) => {
+  if (value.prices) {
+    const picks = new Map(value.forecast?.markets.map((item) => [item.market.family, item.market.selection]) ?? []);
+    if (new Set(value.prices.map((item) => item.family)).size !== value.prices.length ||
+      value.prices.some((item) => picks.get(item.family) !== item.selection)) {
+      context.addIssue({ code: "custom", message: "A price must belong to exactly one published pick of its own family." });
+    }
+  }
   if (value.liveClock && value.status !== "live") context.addIssue({ code: "custom", message: "A live clock requires a live fixture." });
   if (value.forecast !== null && value.cycleId === null) context.addIssue({ code: "custom", message: "A revision must belong to a cycle." });
   if (value.forecast?.markets.some((item) => item.outcome && item.outcome.cycleId !== value.cycleId)) {

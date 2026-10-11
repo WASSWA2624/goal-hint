@@ -145,6 +145,13 @@ This deliberately leaves retained output in place until the next ordinary
 eligible daily run. Closed cycles, old runs, expired windows and cutoff cannot be
 made eligible by a reviewed recovery plan.
 
+Odds jobs (`odds.import` and `odds.catalog`, prompt 052) belong to one 3-hour sweep slot or one UTC day.
+Inside that window, a stalled odds job is resumed like any other job, and a pending one is left for the
+dedicated enrichment worker. Once the window has ended, repair expires the job (`eligibility-expired`), even when
+it is still pending because the runner was down. The next slot sweeps again, so an old sweep is never
+re-run and never counted as failed. Team-code jobs (`teams.codes`) are treated the same way within their
+hourly slot.
+
 Cutoff recovery calls the existing locker directly, including after downtime;
 it reconstructs the eligible accepted revision from stored schedule/publication
 history and never considers results. Existing close receipts are returned.

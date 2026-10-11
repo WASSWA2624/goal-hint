@@ -33,6 +33,9 @@ async function execute(adapter: TrialRuntime["adapter"], task: TrialTask, bounds
     case "statistics": return adapter.evidence.statistics(operation.fixtureId, bounds);
     case "lineups": case "injuries": return adapter.evidence.availability(operation.fixtureId, operation.kind, bounds);
     case "predictions": return adapter.fallback.predictions(operation.fixtureId, bounds);
+    case "odds": return adapter.odds.prices(operation.query, bounds);
+    case "odds-bets": return adapter.odds.bets(bounds);
+    case "odds-bookmakers": return adapter.odds.bookmakers(bounds);
   }
 }
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);

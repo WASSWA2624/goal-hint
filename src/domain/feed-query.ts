@@ -2,6 +2,7 @@ import {
   addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate,
 } from "./calendar.ts";
 import { isMarketFamily, type MarketFamily } from "./markets.ts";
+import { formatOddsRange, oddsRules, parseOddsRange, type OddsRange } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
 import { resolveLocale, type Locale } from "../i18n/locales.ts";
 
@@ -36,6 +37,9 @@ export type FeedQuery = Readonly<{
   markets: MarketFamily[];
   /** Whole-percent bounds applied to the shown pick; 0–100 applies no filter. */
   probability: ProbabilityRange;
+  /** Inclusive two-place price bounds (hundredths) on the shown pick's own market price; null applies no
+   * filter. Accepted only while publicPolicy.features.providerOdds is on (052). */
+  odds: OddsRange | null;
   picks: PicksFilter;
   sort: FeedSort;
   page: number;
@@ -58,7 +62,7 @@ export class FeedQueryError extends RangeError {
   constructor() { super("Invalid or incompatible feed parameters."); this.name = "FeedQueryError"; }
 }
 function fail(): never { throw new FeedQueryError(); }
-const keys = new Set(["date", "from", "to", "when", "q", "league", "country", "status", "market", "prob", "picks", "sort", "dir", "page", "pageSize"]);
+const keys = new Set(["date", "from", "to", "when", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
 const leaguePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 const countryPattern = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .'()&-]{0,127}$/u;
 
@@ -131,8 +135,22 @@ export function resolveFeedDates(query: Pick<FeedQuery, "dates">, today: Reporti
   return validateReportingDateRange(from, addReportingDays(from, preset.days - 1), feedQueryRules.maximumDays);
 }
 
-/** Shared by pages, future public endpoints and browser URL controls. No clock reads. */
-export function parseFeedQuery(input: FeedParameters, context: { today: ReportingDate; locale?: string; routeDate?: string }): FeedQuery {
+/** True for the slider's two extremes (1.01 and 1000.00): no bound at all, so the canonical form is null. */
+export function isAnyOdds(range: OddsRange | null): boolean {
+  return range === null || range.min === oddsRules.minimumHundredths && range.max === oddsRules.maximumHundredths;
+}
+/** Strict odds bounds; while provider odds are off, `odds` is an unknown key (any value, even empty, fails).
+ * Both extremes mean no filter and are omitted, like `prob=0-100`. */
+function oddsRange(value: string | undefined, enabled: boolean): OddsRange | null {
+  if (value === undefined) return null;
+  if (!enabled) fail();
+  const range = parseOddsRange(value) ?? fail();
+  return isAnyOdds(range) ? null : range;
+}
+
+/** Shared by pages, future public endpoints and browser URL controls. No clock reads.
+ * `providerOdds` defaults to publicPolicy.features.providerOdds; only isolated tests override it. */
+export function parseFeedQuery(input: FeedParameters, context: { today: ReportingDate; locale?: string; routeDate?: string; providerOdds?: boolean }): FeedQuery {
   const values = parameters(input);
   const get = (key: string) => values.get(key);
   const date = get("date");
@@ -170,7 +188,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   if (by !== "kickoff" && by !== "probability" || direction !== undefined && direction !== "asc" && direction !== "desc") fail();
   return {
     locale: resolveLocale(context.locale), dates, search, leagues, countries, status: parseFeedStatus(get("status")), markets,
-    probability: probabilityRange(get("prob")), picks,
+    probability: probabilityRange(get("prob")), odds: oddsRange(get("odds"), context.providerOdds ?? publicPolicy.features.providerOdds), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
     page: integer(get("page"), 1, feedQueryRules.maximumPage),
     pageSize: integer(get("pageSize"), feedQueryRules.pageSize, feedQueryRules.maximumPageSize),
@@ -197,6 +215,11 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   const markets = canonicalMarkets(query.markets);
   if (!sameList(markets, defaultMarkets)) result.set("market", markets.join(","));
   if (!isAnyProbability(query.probability)) result.set("prob", `${query.probability.min}-${query.probability.max}`);
+  const requested = query.odds ?? null;
+  if (requested !== null && (![requested.min, requested.max].every((value) => Number.isSafeInteger(value) &&
+    value >= oddsRules.minimumHundredths && value <= oddsRules.maximumHundredths) || requested.min > requested.max)) fail();
+  const odds = isAnyOdds(requested) ? null : requested;
+  if (odds !== null) result.set("odds", formatOddsRange(odds));
   if (query.picks === "only") result.set("picks", "only");
   else if (query.picks !== "all") fail();
   if (query.sort.by !== "kickoff") result.set("sort", query.sort.by);
@@ -204,11 +227,13 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   if (query.page !== 1) result.set("page", String(query.page));
   if (query.pageSize !== feedQueryRules.pageSize) result.set("pageSize", String(query.pageSize));
   // Validate callers as well as URL inputs; never silently normalize an invalid query.
-  const checked = parseFeedQuery(result, { today, locale: query.locale });
+  // An odds range can only exist in a query that parsed it, so the re-check accepts the key it serialized.
+  const checked = parseFeedQuery(result, { today, locale: query.locale, ...(odds === null ? {} : { providerOdds: true }) });
   if (checked.search !== query.search || checked.page !== query.page || checked.pageSize !== query.pageSize ||
       checked.locale !== query.locale || !sameList(checked.leagues, leagues) || !sameList(checked.countries, countries) ||
       checked.status !== query.status || !sameList(checked.markets, markets) ||
-      checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max || checked.picks !== query.picks) fail();
+      checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max ||
+      checked.odds?.min !== odds?.min || checked.odds?.max !== odds?.max || checked.picks !== query.picks) fail();
   return result;
 }
 
@@ -233,10 +258,11 @@ export function feedQueryKey(query: FeedQuery, today: ReportingDate): string {
 }
 
 /** Filters that narrow the cohort (dates and order excluded). */
-/** Choices made inside the filter panel itself: leagues, countries, markets and probability. */
-export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability">): number {
+/** Choices made inside the filter panel itself: leagues, countries, markets, probability and odds. */
+export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability"> & Partial<Pick<FeedQuery, "odds">>): number {
   return query.leagues.length + query.countries.length +
-    Number(!sameList(canonicalMarkets(query.markets), defaultMarkets)) + Number(!isAnyProbability(query.probability));
+    Number(!sameList(canonicalMarkets(query.markets), defaultMarkets)) + Number(!isAnyProbability(query.probability)) +
+    Number(!isAnyOdds(query.odds ?? null));
 }
 
 export function activeFeedFilterCount(query: FeedQuery): number {

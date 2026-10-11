@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parseUtcInstant } from "../src/domain/calendar.ts";
-import { normalizeFixture, normalizeFallbackPrediction, normalizeCompetition } from "../src/server/football/api-football-normalize.ts";
+import { normalizeFixture, normalizeFallbackPrediction, normalizeCompetition, normalizeOdds,
+  normalizeOddsCatalogEntry } from "../src/server/football/api-football-normalize.ts";
 import { buildTrialReport, renderTrialReport, trialRequirements } from "../src/server/football/provider-trial-evaluation.ts";
 
 // Synthetic witnesses for the evaluator's trust boundary, never actual provider/account qualification.
@@ -35,10 +36,13 @@ function result(data, overrides = {}) {
       quota: { kind: "success", dailyLimit: 120_000, dailyRemaining: 119_999, minuteLimit: 720, minuteRemaining: 719 } }],
     requestsDispatched: 1, error: null, ...overrides };
 }
+const oddsParameters = (query, page) => ({ bookmaker: String(query.bookmakerId), timezone: "Africa/Kampala", page: String(page),
+  ...("fixtureId" in query ? { fixture: String(query.fixtureId) } : { date: query.date }) });
 function row(id, operation, data, overrides = {}) {
   const task = { id, case: "league", operation, maxRequests: 3, ...overrides.task };
   const endpoint = ({ fixtures: "fixtures", live: "fixtures", "fixture-ids": "fixtures", predictions: "predictions",
-    "player-statistics": "playerStatistics", "account-status": "accountStatus" })[operation.kind] ?? operation.kind;
+    "player-statistics": "playerStatistics", "account-status": "accountStatus", "odds-bets": "oddsBets",
+    "odds-bookmakers": "oddsBookmakers" })[operation.kind] ?? operation.kind;
   let requestParameters;
   switch (operation.kind) {
     case "fixtures": requestParameters = { timezone: "Africa/Kampala", ...Object.fromEntries(Object.entries(operation.query).map(([key, value]) =>
@@ -51,6 +55,8 @@ function row(id, operation, data, overrides = {}) {
       ...("season" in operation.query ? { season: String(operation.query.season) } : {}) }; break;
     case "player-statistics": requestParameters = { league: String(operation.query.competitionId), season: String(operation.query.season), page: "1" }; break;
     case "fixture-ids": requestParameters = { ids: operation.ids.join("-"), timezone: "Africa/Kampala" }; break;
+    case "odds": requestParameters = oddsParameters(operation.query, 1); break;
+    case "odds-bets": case "odds-bookmakers": requestParameters = {}; break;
     default: requestParameters = { fixture: String(operation.fixtureId) };
   }
   const observation = { taskId: id, source: "live-provider", observedAt: timestamp + 1_000,
@@ -81,7 +87,7 @@ function predictionRows(fixtureOverrides = {}, fallbackOverrides = {}, rowOverri
 
 test("offline baseline keeps every requirement separately untested and live operations blocked", () => {
   const report = buildTrialReport(journal(), { clock });
-  assert.equal(report.findings.length, 34);
+  assert.equal(report.findings.length, 39);
   assert.deepEqual(report.findings.map((item) => item.requirement), [...trialRequirements]);
   assert.ok(report.findings.every((item) => item.status === "untested" && item.testedAt === null));
   assert.equal(report.liveSuitability, "incomplete");
@@ -435,7 +441,146 @@ test("Markdown reports are reproducible, escape table cells and omit raw account
   assert.ok(!markdown.includes("PRIVATE-CREDENTIAL"));
   assert.ok(!markdown.includes("PRIVATE-KEY"));
   assert.ok(!markdown.includes(accountId));
-  assert.equal(markdown.split("\n").filter((line) => line.startsWith("| ")).length, 36);
+  assert.equal(markdown.split("\n").filter((line) => line.startsWith("| ")).length, 41);
   const malicious = { ...report, trialId: "row | <script>\n", findings: [{ ...report.findings[0], result: "row | <script>\nnext" }] };
   assert.ok(renderTrialReport(malicious).includes("row &#124; &lt;script&gt; next"));
+});
+
+// Prompt 052: synthetic /odds, /odds/bets and /odds/bookmakers witnesses for the odds findings, never real qualification.
+const without = (values, key) => Object.fromEntries(Object.entries(values).filter(([name]) => name !== key));
+const launchBets = () => [
+  { id: 1, name: "Match Winner", values: [{ value: "Home", odd: "2.10" }, { value: "Draw", odd: "3.30" }, { value: "Away", odd: "3.60" }] },
+  { id: 5, name: "Goals Over/Under", values: [{ value: "Over 1.5", odd: "1.30" }, { value: "Under 1.5", odd: "3.40" },
+    { value: "Over 2.5", odd: "1.90" }, { value: "Under 2.5", odd: "1.95" }] },
+  { id: 8, name: "Both Teams Score", values: [{ value: "Yes", odd: "1.80" }, { value: "No", odd: "2.00" }] },
+  { id: 12, name: "Double Chance", values: [{ value: "Home/Draw", odd: "1.30" }, { value: "Draw/Away", odd: "1.70" }, { value: "Home/Away", odd: "1.35" }] },
+];
+function oddsData(fixtureId, { bets = launchBets(), bookmakerId = 6, league = { id: 10, season: 2026 }, update = "2026-10-08T09:00:00+00:00" } = {}) {
+  const normalized = normalizeOdds({ league, update, fixture: { id: fixtureId, date: "2026-10-08T15:00:00+03:00", timezone: "Africa/Kampala" },
+    bookmakers: [{ id: bookmakerId, name: "Contract bookmaker", bets }] }, { retrievedAt: timestamp, endpoint: "/odds" });
+  assert.equal(normalized.valid, true);
+  return normalized.data;
+}
+function catalog(endpoint, entries) {
+  return entries.map(([id, name]) => {
+    const normalized = normalizeOddsCatalogEntry({ id, name }, { retrievedAt: timestamp, endpoint });
+    assert.equal(normalized.valid, true);
+    return normalized.data;
+  });
+}
+const betCatalog = (overrides = {}) => catalog("/odds/bets", Object.entries({ 1: "Match Winner", 2: "Home/Away", 5: "Goals Over/Under",
+  8: "Both Teams Score", 12: "Double Chance", ...overrides }).filter(([, name]) => name !== null).map(([id, name]) => [Number(id), name]));
+const dateQuery = { date: "2026-10-08", bookmakerId: 6 };
+const oddsPageProvenance = (page, totalPages, query = dateQuery, extra = {}) => ({ ...result([]).provenance[0], endpoint: "odds",
+  currentPage: page, totalPages, requestParameters: oddsParameters(query, page ?? 1), ...extra });
+/** A date sample stopped by its own request allowance after `pages` of `totalPages` documented 10-row pages. */
+function truncatedOdds(id, { pages = 2, totalPages = 3, rows = pages * 10, query = dateQuery, ...options } = {}) {
+  return row(id, { kind: "odds", query }, Array.from({ length: rows }, (_, index) => oddsData(101 + index, { bookmakerId: query.bookmakerId, ...options })), {
+    result: { status: "partial", requestsDispatched: pages, error: { reason: "request-budget-exhausted", retryable: false },
+      completeness: { ...result([]).completeness, complete: false, reasons: ["request-budget-exhausted"] },
+      provenance: Array.from({ length: pages }, (_, index) => oddsPageProvenance(index + 1, totalPages, query)) } });
+}
+const oddsCatalogRows = () => [row("bets", { kind: "odds-bets" }, betCatalog()),
+  row("bookmakers", { kind: "odds-bookmakers" }, catalog("/odds/bookmakers", [[6, "Contract bookmaker"], [8, "Other bookmaker"]]))];
+const oddsRequirements = ["odds-pagination", "odds-update-times", "odds-bet-catalog", "odds-coverage"];
+
+test("a bounded odds sample confirms the odds findings separately from core live suitability", () => {
+  const report = buildTrialReport(journal([...oddsCatalogRows(), truncatedOdds("odds-date")]), trust);
+  for (const requirement of oddsRequirements) assert.equal(status(report, requirement), "confirmed", requirement);
+  assert.match(finding(report, "odds-coverage").result, /bookmaker 6: 20 of 20/u);
+  assert.match(finding(report, "odds-pagination").result, /10 rows on every non-final page/u);
+  assert.ok(finding(report, "odds-coverage").sources.includes("fixture:101"));
+  assert.equal(report.oddsSuitability, "qualified");
+  // Odds-only observations leave core pagination and record update times untested and never qualify live operations.
+  for (const requirement of ["pagination", "provider-update-times", "odds-display-rights"]) assert.equal(status(report, requirement), "untested", requirement);
+  assert.equal(status(report, "quota-headers"), "confirmed");
+  assert.equal(report.liveSuitability, "incomplete");
+  assert.equal(report.liveOperations, "blocked");
+  assert.match(renderTrialReport(report), /Odds import suitability: \*\*qualified\*\*/u);
+});
+
+test("odds pagination needs ordered documented pages, exact selector echoes and only budget truncation", () => {
+  const verdict = (...rows) => status(buildTrialReport(journal(rows), trust), "odds-pagination");
+  const complete = (rows, pages, extra = {}) => row("odds-complete", { kind: "odds", query: dateQuery },
+    Array.from({ length: rows }, (_, index) => oddsData(201 + index)), { result: { requestsDispatched: pages,
+      provenance: Array.from({ length: pages }, (_, index) => oddsPageProvenance(index + 1, pages)), ...extra } });
+  assert.equal(verdict(complete(15, 2)), "confirmed");
+  assert.equal(verdict(complete(10, 1)), "untested");
+  assert.equal(verdict(complete(0, 1)), "untested");
+  for (const invalid of [complete(21, 2), complete(9, 2), truncatedOdds("short", { rows: 19 }), truncatedOdds("all-pages", { totalPages: 2 }),
+    complete(15, 2, { completeness: { ...result([]).completeness, invalidRows: 1 } }),
+    complete(15, 2, { status: "partial", error: { reason: "pagination-incomplete", retryable: false },
+      completeness: { ...result([]).completeness, complete: false, reasons: ["pagination-incomplete"] } }),
+    complete(15, 2, { provenance: [oddsPageProvenance(1, 2), oddsPageProvenance(1, 2)] }),
+    complete(15, 2, { provenance: [oddsPageProvenance(1, 2), oddsPageProvenance(2, 3)] }),
+    complete(15, 2, { provenance: [oddsPageProvenance(1, 2), oddsPageProvenance(2, 2, { date: "2026-10-08", bookmakerId: 7 })] }),
+    complete(15, 2, { provenance: [oddsPageProvenance(1, 2), oddsPageProvenance(2, 2, dateQuery, { requestParameters: { ...oddsParameters(dateQuery, 2), page: "3" } })] }),
+    complete(15, 2, { provenance: [oddsPageProvenance(1, 2), oddsPageProvenance(2, 2, dateQuery, { requestParameters: without(oddsParameters(dateQuery, 2), "timezone") })] })]) {
+    assert.equal(verdict(invalid), "failed");
+  }
+  // Rows outside the requested bookmaker or Kampala date cannot establish the envelope.
+  assert.equal(verdict(truncatedOdds("other-bookmaker", { bookmakerId: 8 })), "failed");
+  assert.equal(verdict(truncatedOdds("other-date", { query: { date: "2026-10-09", bookmakerId: 6 } })), "failed");
+  // A failed attempt's observation (no page metadata) precedes the retried successful page.
+  const retried = complete(15, 2, { provenance: [oddsPageProvenance(null, null, dateQuery, { quota: { kind: "rate-limited" } }),
+    oddsPageProvenance(1, 2), oddsPageProvenance(2, 2)] });
+  assert.equal(verdict(retried), "confirmed");
+  const byFixture = { fixtureId: 301, bookmakerId: 6 };
+  assert.equal(verdict(complete(15, 2), row("odds-fixture", { kind: "odds", query: byFixture }, [oddsData(301)])), "confirmed");
+  const unpaged = row("odds-fixture", { kind: "odds", query: byFixture }, [oddsData(301)], { result: { provenance: [
+    oddsPageProvenance(1, 1, byFixture, { requestParameters: without(oddsParameters(byFixture, 1), "page") })] } });
+  assert.equal(verdict(complete(15, 2), unpaged), "failed");
+});
+
+test("odds update times, the pinned bet catalog and launch coverage fail closed", () => {
+  const report = (rows) => buildTrialReport(journal(rows), trust);
+  const missingUpdate = report([...oddsCatalogRows(), truncatedOdds("odds-date", { update: null })]);
+  assert.equal(status(missingUpdate, "odds-update-times"), "failed");
+  assert.equal(missingUpdate.oddsSuitability, "failed");
+  assert.equal(status(report([row("bets", { kind: "odds-bets" }, betCatalog({ 5: "Goals Over / Under" })), truncatedOdds("odds-date")]),
+    "odds-bet-catalog"), "failed");
+  assert.equal(status(report([row("bets", { kind: "odds-bets" }, betCatalog({ 12: null })), truncatedOdds("odds-date")]), "odds-bet-catalog"), "failed");
+  const renamedRow = launchBets().map((bet) => bet.id === 1 ? { ...bet, name: "1X2" } : bet);
+  assert.equal(status(report([row("bets", { kind: "odds-bets" }, betCatalog()), truncatedOdds("odds-date", { bets: renamedRow })]),
+    "odds-bet-catalog"), "failed");
+  const incompleteCatalog = row("bets", { kind: "odds-bets" }, betCatalog(), { result: { completeness: { ...result([]).completeness, invalidRows: 1 } } });
+  assert.equal(status(report([incompleteCatalog]), "odds-bet-catalog"), "failed");
+  // A missing complementary selection or an unselected competition never counts as coverage.
+  const withoutUnder = launchBets().map((bet) => bet.id === 5 ? { ...bet, values: bet.values.filter((value) => value.value !== "Under 2.5") } : bet);
+  const partial = report([truncatedOdds("odds-date", { bets: withoutUnder })]);
+  assert.equal(status(partial, "odds-coverage"), "untested");
+  assert.match(finding(partial, "odds-coverage").result, /bookmaker 6: 0 of 20/u);
+  assert.match(finding(report([truncatedOdds("odds-date", { league: { id: 99, season: 2026 } })]), "odds-coverage").result, /bookmaker 6: 0 of 0/u);
+  const uncatalogued = report([row("bookmakers", { kind: "odds-bookmakers" }, catalog("/odds/bookmakers", [[8, "Other bookmaker"]])), truncatedOdds("odds-date")]);
+  assert.equal(status(uncatalogued, "odds-coverage"), "failed");
+  const refused = row("odds-refused", { kind: "odds", query: dateQuery }, [], { result: { status: "failed", data: [], provenance: [],
+    error: { reason: "coverage-error", retryable: false }, completeness: { ...result([]).completeness, complete: false, reasons: ["coverage-error"] } } });
+  const refusal = report([refused, truncatedOdds("odds-date")]);
+  assert.equal(status(refusal, "odds-coverage"), "failed");
+  assert.equal(status(refusal, "odds-pagination"), "failed");
+});
+
+test("odds and core verdicts never decide each other, and odds display rights need their own scope", () => {
+  const oddsFailure = buildTrialReport(journal([...oddsCatalogRows(), truncatedOdds("odds-date", { rows: 19 })]), trust);
+  assert.equal(status(oddsFailure, "odds-pagination"), "failed");
+  assert.equal(oddsFailure.oddsSuitability, "failed");
+  assert.equal(oddsFailure.liveSuitability, "incomplete");
+  const coreFailure = buildTrialReport(journal([row("fixture", { kind: "fixtures", query: { fixtureId: 101 } }, [fixture()]),
+    ...oddsCatalogRows(), truncatedOdds("odds-date")]), trust);
+  assert.equal(status(coreFailure, "provider-update-times"), "failed");
+  assert.equal(coreFailure.liveSuitability, "failed");
+  assert.equal(coreFailure.oddsSuitability, "qualified");
+  const uncertain = row("odds-uncertain", { kind: "odds", query: { date: "2026-10-09", bookmakerId: 6 } }, [],
+    { state: { status: "uncertain", dispatchedRequests: null, observation: null } });
+  assert.equal(buildTrialReport(journal([...oddsCatalogRows(), truncatedOdds("odds-date"), uncertain]), trust).oddsSuitability, "incomplete");
+  const display = evidence("odds-display-rights", { permitted: true, scope: "odds-display", restrictionsReviewed: true }, { kind: "rights-record" });
+  const rights = buildTrialReport(journal([...oddsCatalogRows(), truncatedOdds("odds-date")], { evidence: [display] }), trust);
+  assert.equal(status(rights, "odds-display-rights"), "confirmed");
+  assert.equal(rights.oddsSuitability, "qualified");
+  const wrongScope = evidence("odds-display-rights", { permitted: true, scope: "data-redistribution", restrictionsReviewed: true }, { kind: "rights-record" });
+  const refusedRights = buildTrialReport(journal([...oddsCatalogRows(), truncatedOdds("odds-date")], { evidence: [wrongScope] }), trust);
+  assert.equal(status(refusedRights, "odds-display-rights"), "failed");
+  // Display rights gate only public prices: the import verdict and core verdict ignore them.
+  assert.equal(refusedRights.oddsSuitability, "qualified");
+  assert.equal(refusedRights.liveSuitability, "incomplete");
 });

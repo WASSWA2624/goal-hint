@@ -9,7 +9,7 @@ import { matchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { makeStore } from '../src/state/store.ts';
 import { consumeRefresh, refreshApi } from '../src/state/refresh-api.ts';
 import { detailApi } from '../src/state/detail-api.ts';
-import { liveDetail, liveFeed, liveRecord, liveRun, ids, query, today, now } from './helpers/live-refresh-fixtures.mjs';
+import { liveDetail, liveFeed, liveRecord, liveRun, ids, marketImpliedGroup, query, today, now } from './helpers/live-refresh-fixtures.mjs';
 
 test('reversed publication, locking, score/status and correction responses cannot undo accepted snapshots', () => {
   const first = liveDetail(), publication = liveDetail(liveRecord({ dataVersion: '10', forecast: {
@@ -163,4 +163,23 @@ test('EAT midnight rolls relative dates and seven-day URLs without changing expl
   const historical = query('date=2026-10-01&page=3&q=Club');
   assert.equal(feedQueryHref(historical, today), feedQueryHref(historical, rolled[0]));
   await c.fire(); assert.equal(reads, 1); stop();
+});
+
+test('equal-version detail refreshes adopt the newer market-implied odds (052) and never touch the revision', () => {
+  const first = liveDetail(), group = marketImpliedGroup();
+  const priced = structuredClone(first); priced.asOf++; priced.odds = [group];
+  priced.fixture.prices = [{ family: 'match-result', selection: 'home-win', price: '1.85', basis: 'bookmaker', retrievedAt: group.retrievedAt,
+    providerUpdatedAt: group.providerUpdatedAt }];
+  let current = mergeLiveDetail(first, matchDetailResponseSchema.parse(priced));
+  assert.deepEqual(current.odds, [group]); assert.deepEqual(current.fixture.prices, priced.fixture.prices);
+  assert.strictEqual(current.snapshot, first.snapshot, 'odds are observation data outside the immutable revision');
+  const moved = structuredClone(current); moved.asOf++;
+  moved.odds = [marketImpliedGroup('match-result', { 'home-win': '1.90', draw: '3.40', 'away-win': '4.00' })];
+  current = mergeLiveDetail(current, moved);
+  assert.equal(current.odds[0].selections[0].price, '1.90');
+  const withdrawn = structuredClone(current); withdrawn.asOf++; withdrawn.odds = []; withdrawn.fixture.prices = [];
+  current = mergeLiveDetail(current, withdrawn);
+  assert.deepEqual(current.odds, []); assert.deepEqual(current.fixture.prices, []);
+  const late = structuredClone(priced); late.asOf = current.asOf - 1;
+  assert.throws(() => mergeLiveDetail(current, late), (error) => error.code === 'stale-data', 'an older envelope never restores old prices');
 });

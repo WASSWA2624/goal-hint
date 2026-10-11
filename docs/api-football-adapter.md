@@ -57,17 +57,23 @@ in-flight work, while every process shares the durable account limiter.
 | `evidence.fixturesByDate(date, bounds)` | `/fixtures?date=...&timezone=Africa/Kampala`, checked against normalized Kampala reporting dates. |
 | `evidence.liveFixtures(bounds)` | Shared `/fixtures?live=all&timezone=Africa/Kampala`; disappearing fixtures do not acquire final statuses. |
 | `evidence.unresolvedFixtures(ids, bounds)` | Deduplicated fixture IDs, grouped only within a trusted verified batch limit. |
-| `evidence.teams(query, bounds)` | `/teams` by team ID or competition/season. |
+| `evidence.teams(query, bounds)` | `/teams` by team ID or competition/season. The live runner's spare-quota team-code import calls it by competition/season through the catalog importer ([football catalog](football-catalog.md#team-codes-spare-quota-import)). |
 | `evidence.competitions(query, bounds)` | `/leagues`, retaining coverage independently for each reported season. |
 | `evidence.statistics(fixtureId, bounds)` | `/fixtures/statistics`, typed supported counts/percentages and explicitly unsupported measurements. |
 | `evidence.availability(fixtureId, kind, bounds)` | `/fixtures/lineups` or `/injuries`; absence never proves fitness. |
 | `evidence.playerStatistics(query, bounds)` | `/players` by competition/season, using its documented `page` parameter and 20-item pages. |
 | `fallback.predictions(fixtureId, bounds)` | `/predictions`, exposing only `purpose: "fallback-only"` data. |
+| `odds.prices(query, bounds)` | `/odds` for one documented bookmaker, by Kampala `date` or by `fixture`, with `timezone=Africa/Kampala` and the documented `page` parameter and 10-row pages (prompt 052). |
+| `odds.bets(bounds)` | `/odds/bets`: the full bet catalog as one unpaginated page of unique, named entries. |
+| `odds.bookmakers(bounds)` | `/odds/bookmakers`: the bookmaker catalog, under the same rules. |
 
-Fixtures have no invented page loop or `page` parameter. Only the player
-statistics operation follows its actual paginated contract. Page mismatches,
-changing total-page counts, duplicate identities and premature empty pages
-prevent a complete result. Explicit page, request and row limits stop traversal.
+Fixtures have no invented page loop or `page` parameter. Only player statistics
+(20 items per page) and odds prices (10 fixtures per page) follow paginated
+contracts; `pageSizeOf` in the contract supplies each documented size. A
+non-final page must carry exactly that size and no page may exceed it. Page
+mismatches, changing total-page counts, duplicate identities and premature empty
+pages prevent a complete result. Explicit page, request and row limits stop
+traversal.
 
 The official fixture-ID contract permits at most 20 IDs per batch. A trusted
 `verifyBatchEvidence` callback must approve the supplied limit and evidence;
@@ -84,7 +90,44 @@ fixture-bound statistics, lineups and fallback payloads remain associated with
 their request even when the provider row omits a fixture ID. Aggregate player
 statistics must include the requested competition/season. Additional reported
 entries preserve their own team/competition/season identities rather than
-combining unrelated competitions.
+combining unrelated competitions. Odds rows must belong to the requested
+fixture or Kampala reporting date (a row without a kickoff cannot), and every
+bookmaker in a row must be the requested one. Normalized odds rows have no `id`;
+their identity is the fixture, so a fixture repeated across pages is a schema
+error.
+
+### Odds normalization (prompt 052)
+
+The `odds` namespace sits outside `evidence` and `fallback`, so bookmaker prices
+never reach AI or fallback forecasts. `ODDS_CONTRACT_VERSION`
+(`direct-v3-odds-2026-10-10`) names the odds semantics separately from
+`API_FOOTBALL_CONTRACT_VERSION`, which stays unchanged so fallback and evaluation
+cohorts are not split. Odds callers pass `cacheMaxAgeMs: 0`; prices are never
+served from the structured cache.
+
+- Each row keeps the fixture id, the competition id and season, the kickoff
+  (validated like fixtures), and every bet of every returned bookmaker. Labels
+  stay verbatim; lines are parsed only by the versioned domain mapping.
+- `update` is parsed with the strict offset parser. A missing update stays null
+  and reports `provider-update-time`. A malformed update, or one later than the
+  retrieval, makes the row invalid. A duplicate bookmaker id, or a duplicate bet
+  id within one bookmaker, also makes the row invalid.
+- Prices must be strings matching `^[1-9]\d{0,4}(\.\d{1,4})?$` and strictly
+  greater than one. They are stored in canonical form without trailing
+  fractional zeros (`"1.850"` becomes `"1.85"`), so equal prices hash equally.
+  Numbers are rejected.
+- Bet-level quarantine: a bet with a malformed or numeric price; a non-string,
+  padded, control-character, over-long (more than 64 UTF-16 units) or duplicate
+  label; or an empty list or more than 1,000 values is dropped. It is listed in the
+  bookmaker's `rejectedBets` with `odds-bet-rejected:<bookmakerId>:<betId>`. The
+  fixture and the page survive, because one invalid row would otherwise fail the
+  whole multi-page import.
+- Blank, control-character or over-long names (bookmaker over 128, bet over 256
+  UTF-16 units, the stored column limits) become null with
+  `odds-bookmaker-name:<id>` or `odds-bet-name:<bookmakerId>:<betId>`. Mappings
+  require an exact name, so a null name never yields a price.
+- Catalog rows (`/odds/bets`, `/odds/bookmakers`) need a positive id and a clean,
+  trimmed name of at most 256 units; anything else is an invalid row.
 
 ## Dispatch, observations and results
 
@@ -144,7 +187,10 @@ verified AI evidence.
 
 Provider kickoff timestamps are kickoff data, not update times. Retrieval time
 is retained separately; `providerUpdatedAt` stays null because the reviewed
-contracts do not establish a per-record update field. Explicit statuses cover
+contracts do not establish a per-record update field. The exception is `/odds`:
+each row's own `update` becomes its `source.providerUpdatedAt`, and odds pages do
+not add `provider-update-time` unless a row lacks it. Page-level
+`providerUpdatedAt` stays null for every endpoint. Explicit statuses cover
 scheduled, live, extra-time, shootout, postponed, canceled, abandoned and awarded
 fixtures, with unknown codes remaining unknown. Only final `FT`/`AET`/`PEN`
 records with a separate valid `score.fulltime` can expose a regulation candidate.
@@ -173,6 +219,13 @@ Official references reviewed for 007:
 - [Fixture-ID batch tutorial](https://www.api-football.com/news/post/how-to-get-all-fixtures-data-from-one-league): the 20-ID maximum and coverage caveat.
 - [Rate-limit contract](https://www.api-football.com/news/post/how-ratelimit-works): daily/minute headers and rate-limit behavior.
 - [Provider terms](https://www.api-football.com/terms): data and third-party media rights require review.
+
+The prompt 052 odds contract (the `/odds`, `/odds/bets` and `/odds/bookmakers`
+paths, the 10-row page, the `update` field, string prices and the launch bet
+ids) follows the official v3 documentation examples. Those examples were not
+re-read in the 052 session, so the counted odds trial in the
+[provider trial runbook](football-provider-trial.md#odds-qualification-prompt-052)
+must confirm the real envelope before any odds schedule runs.
 
 Prompt [008](../dev-plan/008-football-provider-trial.md) must qualify the actual
 account, subscription/reset behavior, endpoint and field coverage, live-status

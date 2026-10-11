@@ -137,6 +137,27 @@ export type NormalizedFallbackPrediction = Readonly<{
   reportedPercentages: Readonly<{ home: number | null; draw: number | null; away: number | null }>;
   source: SourceTimestamps;
 }>;
+/** One provider selection label and its decimal price, canonicalized without trailing zeros. */
+export type NormalizedOddsValue = Readonly<{ label: string; odd: string }>;
+export type NormalizedOddsBet = Readonly<{ id: number; name: string | null; values: readonly NormalizedOddsValue[] }>;
+export type NormalizedOddsBookmaker = Readonly<{
+  id: number;
+  name: string | null;
+  bets: readonly NormalizedOddsBet[];
+  /** Bets quarantined for a malformed or numeric price, a non-string, padded, over-long or duplicate label,
+   * or an empty or over-long value list. A blank, over-long or control-character name is null instead. */
+  rejectedBets: readonly number[];
+}>;
+/** Pre-match prices for one fixture. Labels stay verbatim; lines are parsed only by versioned domain mappings. */
+export type NormalizedFixtureOdds = Readonly<{
+  fixtureId: number;
+  competition: Readonly<{ id: number; season: number | null }>;
+  kickoff: UtcInstant | null;
+  bookmakers: readonly NormalizedOddsBookmaker[];
+  source: SourceTimestamps;
+}>;
+/** One /odds/bets or /odds/bookmakers catalog row. */
+export type NormalizedOddsCatalogEntry = Readonly<{ id: number; name: string; source: SourceTimestamps }>;
 /** Internal diagnostics only; account holder names, email and credentials are discarded. */
 export type NormalizedAccountStatus = Readonly<{
   subscription: Readonly<{ plan: string | null; expiresAt: UtcInstant | null; active: boolean | null }>;
@@ -225,6 +246,25 @@ const predictionsSchema = z.object({
     percent: z.object({ home: text, draw: text, away: text }).nullable().optional(),
   }),
 });
+// Object schemas strip unknown provider keys; values stay strict. Bet values, names and value counts are
+// checked per bet so one malformed bet quarantines only itself instead of failing the whole multi-page import.
+const oddsNameText = z.string().max(4_096).nullable().optional();
+const oddsBetSchema = z.object({ id: identity, name: oddsNameText, values: z.array(z.unknown()).max(10_000) });
+const oddsSchema = z.object({
+  league: z.object({ id: identity, season: seasonYear.nullable().optional() }),
+  fixture: z.object({
+    id: identity, date: text, timestamp: z.number().int().nonnegative().max(253_402_300_799).nullable().optional(), timezone: text,
+  }),
+  update: z.string().max(64).nullable().optional(),
+  bookmakers: z.array(z.object({ id: identity, name: oddsNameText, bets: z.array(oddsBetSchema).max(1_000) })).max(200),
+});
+const oddsValueSchema = z.object({ value: z.string(), odd: z.string() });
+const oddsCatalogSchema = z.object({ id: identity, name: z.string().min(1).max(256) });
+/** Up to 99,999.9999 with at most four places; the domain rejects 1.00 and below. */
+const oddsDecimal = /^[1-9]\d{0,4}(?:\.\d{1,4})?$/u;
+const oddsLabel = /^[^\p{Cc}]{1,64}$/u;
+/** Stored name limits (ProviderOddsSnapshot columns and odds-input), in UTF-16 units like zod `max`. */
+const oddsNameLimits = Object.freeze({ bookmaker: 128, bet: 256 });
 const statusMap: Readonly<Record<string, SettlementStatus>> = Object.freeze({
   TBD: "scheduled", NS: "scheduled", "1H": "live", HT: "live", "2H": "live", ET: "live",
   BT: "live", P: "live", INT: "live", SUSP: "live", LIVE: "live", FT: "finished-regulation",
@@ -264,6 +304,11 @@ function source(context: NormalizationContext, missing: string[]): SourceTimesta
   missing.push("provider-update-time");
   return { provider: "api-football", endpoint: context.endpoint, retrievedAt: context.retrievedAt, providerUpdatedAt: null };
 }
+/** Rows that publish their own update time (/odds `update`); an absent time stays unknown. */
+function sourceWithUpdate(context: NormalizationContext, update: UtcInstant | null, missing: string[]): SourceTimestamps {
+  if (update === null) missing.push("provider-update-time");
+  return { provider: "api-football", endpoint: context.endpoint, retrievedAt: context.retrievedAt, providerUpdatedAt: update };
+}
 function nullableText(value: string | null | undefined, field: string, missing: string[]): string | null {
   if (value === null || value === undefined || value.trim() === "") { missing.push(field); return null; }
   return value;
@@ -299,7 +344,7 @@ function pair(raw: z.infer<typeof pairSchema> | null | undefined): ScorePair {
 }
 
 /** Strict offset timestamps use the shared calendar parser without Date.parse normalization. */
-function subscriptionExpiry(value: string): UtcInstant | false {
+export function parseOffsetInstant(value: string): UtcInstant | false {
   const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
   if (!match) return false;
   const hours = Number(match[4] ?? 0), minutes = Number(match[5] ?? 0);
@@ -317,7 +362,7 @@ export function normalizeAccountStatus(raw: unknown, context: NormalizationConte
   if (!parsed.success) return invalid();
   const input = parsed.data, missing: string[] = [];
   const expiry = input.subscription?.end;
-  const expiresAt = expiry == null || expiry.trim() === "" ? null : subscriptionExpiry(expiry);
+  const expiresAt = expiry == null || expiry.trim() === "" ? null : parseOffsetInstant(expiry);
   if (expiresAt === false) return invalid();
   if (expiresAt === null) missing.push("subscription-expiry");
   if (input.subscription?.active == null) missing.push("subscription-active");
@@ -330,7 +375,7 @@ export function normalizeAccountStatus(raw: unknown, context: NormalizationConte
 }
 
 /** Validates both the ISO calendar and its reported IANA timezone wall time. */
-function kickoff(raw: z.infer<typeof fixtureSchema>["fixture"], missing: string[]): UtcInstant | null | false {
+function kickoff(raw: Pick<z.infer<typeof fixtureSchema>["fixture"], "date" | "timestamp" | "timezone">, missing: string[]): UtcInstant | null | false {
   if (!raw.date) { missing.push("kickoff-date"); return null; }
   const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(raw.date);
   if (!parts) return false;
@@ -545,4 +590,82 @@ export function normalizeFallbackPrediction(raw: unknown, context: Normalization
     winOrDraw: prediction.win_or_draw ?? null, underOver: prediction.under_over ?? null,
     goals: { home: prediction.goals?.home ?? null, away: prediction.goals?.away ?? null }, advice: prediction.advice ?? null,
     reportedPercentages: { home, draw, away }, source: source(context, missing) }, missing);
+}
+
+/** Canonical decimal text without trailing zeros, so equal prices hash equally. */
+function canonicalOdd(value: string): string | null {
+  if (!oddsDecimal.test(value)) return null;
+  const canonical = value.includes(".") ? value.replace(/0+$/u, "").replace(/\.$/u, "") : value;
+  // Strictly greater than 1: "1", "1.0" and "1.0000" are not prices.
+  return canonical === "1" ? null : canonical;
+}
+/** A usable stored name, or null: blank, over-long or control-character names stay unknown rather than
+ * rejecting the whole fixture row downstream. Mappings require an exact name, so null never yields a price. */
+function oddsName(value: string | null | undefined, limit: number): string | null {
+  return value == null || value.trim() === "" || value.length > limit || /\p{Cc}/u.test(value) ? null : value;
+}
+/** Bet-level quarantine: one malformed value drops its bet, never the fixture or the page. */
+function oddsBet(raw: z.infer<typeof oddsBetSchema>): NormalizedOddsBet | null {
+  const labels = new Set<string>(), values: NormalizedOddsValue[] = [];
+  // Stored snapshots hold 1..1,000 selections per bet, keyed by an unsigned 32-bit bet id.
+  if (raw.id > 4_294_967_295 || raw.values.length === 0 || raw.values.length > 1_000) return null;
+  for (const entry of raw.values) {
+    const parsed = oddsValueSchema.safeParse(entry);
+    if (!parsed.success) return null;
+    const label = parsed.data.value, odd = canonicalOdd(parsed.data.odd);
+    // Labels are verbatim: untrimmed, control-character or over-long (64 UTF-16 units) labels quarantine the bet.
+    if (odd === null || label !== label.trim() || label.length > 64 || !oddsLabel.test(label) || labels.has(label)) return null;
+    labels.add(label); values.push({ label, odd });
+  }
+  return { id: raw.id, name: oddsName(raw.name, oddsNameLimits.bet), values };
+}
+
+/** One /odds row: one fixture, the requested bookmaker(s) and every bet they publish. */
+export function normalizeOdds(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedFixtureOdds> {
+  if (!contextValid(context)) return invalid();
+  const parsed = oddsSchema.safeParse(raw);
+  if (!parsed.success) return invalid();
+  const input = parsed.data, missing: string[] = [];
+  const instant = kickoff(input.fixture, missing);
+  if (instant === false) return invalid();
+  let update: UtcInstant | null = null;
+  if (input.update != null && input.update.trim() !== "") {
+    const parsedUpdate = parseOffsetInstant(input.update);
+    // A provider update after our own retrieval cannot be a genuine observation.
+    if (parsedUpdate === false || parsedUpdate > context.retrievedAt) return invalid();
+    update = parsedUpdate;
+  }
+  if (input.league.season == null) missing.push("competition-season");
+  const bookmakerIds = new Set<number>(), bookmakers: NormalizedOddsBookmaker[] = [];
+  for (const bookmaker of input.bookmakers) {
+    if (bookmakerIds.has(bookmaker.id)) return invalid();
+    bookmakerIds.add(bookmaker.id);
+    const betIds = new Set<number>(), bets: NormalizedOddsBet[] = [], rejectedBets: number[] = [];
+    for (const rawBet of bookmaker.bets) {
+      if (betIds.has(rawBet.id)) return invalid();
+      betIds.add(rawBet.id);
+      const bet = oddsBet(rawBet);
+      if (bet === null) { rejectedBets.push(rawBet.id); missing.push(`odds-bet-rejected:${bookmaker.id}:${rawBet.id}`); continue; }
+      if (bet.name === null) missing.push(`odds-bet-name:${bookmaker.id}:${bet.id}`);
+      bets.push(bet);
+    }
+    const name = oddsName(bookmaker.name, oddsNameLimits.bookmaker);
+    if (name === null) missing.push(`odds-bookmaker-name:${bookmaker.id}`);
+    if (bets.length === 0) missing.push(`odds-bookmaker-bets:${bookmaker.id}`);
+    bets.sort((left, right) => left.id - right.id);
+    bookmakers.push({ id: bookmaker.id, name, bets, rejectedBets: rejectedBets.sort((left, right) => left - right) });
+  }
+  if (bookmakers.length === 0) missing.push("odds-bookmakers");
+  bookmakers.sort((left, right) => left.id - right.id);
+  return valid({ fixtureId: input.fixture.id, competition: { id: input.league.id, season: input.league.season ?? null },
+    kickoff: instant, bookmakers, source: sourceWithUpdate(context, update, missing) }, missing);
+}
+
+/** One /odds/bets or /odds/bookmakers row; a catalog entry without a usable name is invalid. */
+export function normalizeOddsCatalogEntry(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedOddsCatalogEntry> {
+  if (!contextValid(context)) return invalid();
+  const parsed = oddsCatalogSchema.safeParse(raw);
+  if (!parsed.success || parsed.data.name !== parsed.data.name.trim() || /\p{Cc}/u.test(parsed.data.name)) return invalid();
+  const missing: string[] = [];
+  return valid({ id: parsed.data.id, name: parsed.data.name, source: source(context, missing) }, missing);
 }

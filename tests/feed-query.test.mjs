@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activeFeedFilterCount, feedQueryHref, feedQueryKey, parseFeedQuery, resolveFeedDates, serializeFeedQuery } from "../src/domain/feed-query.ts";
+import { activeFeedFilterCount, feedQueryHref, feedQueryKey, FeedQueryError, isAnyOdds, panelFilterCount, parseFeedQuery, resolveFeedDates,
+  serializeFeedQuery } from "../src/domain/feed-query.ts";
+import { publicPolicy } from "../src/domain/public-policy.ts";
 import { query, today } from "./helpers/client-state-fixtures.mjs";
 
 test("URL queries round trip with one canonical order and explicit EAT context", () => {
@@ -75,4 +77,53 @@ test("sorting defaults direction per field and serializes only non-default direc
   assert.throws(() => serializeFeedQuery({ ...sorted, sort: { by: "probability", direction: "sideways" } }, today));
   assert.throws(() => serializeFeedQuery({ ...sorted, markets: [] }, today));
   assert.throws(() => serializeFeedQuery({ ...sorted, search: " unnormalized " }, today));
+});
+
+test("odds= (052) is an unknown key while provider odds are not public, whatever its value", () => {
+  // Owner decision 3: display rights are unconfirmed, so the public feed never accepts an odds filter.
+  assert.equal(publicPolicy.features.providerOdds, false);
+  assert.equal(query().odds, null);
+  for (const input of ["odds=1.50-3.00", "odds=1.01-1000.00", "odds=", "odds=abc", "prob=50-100&odds=1.50-3.00", "odds=1.50-3.00&odds=1.50-3.00"]) {
+    assert.throws(() => query(input), FeedQueryError, input);
+  }
+});
+
+test("odds= (052) round trips with two places, inclusive bounds and omitted extremes once provider odds are on", () => {
+  const on = (parameters, context = {}) => query(parameters, { providerOdds: true, ...context });
+  for (const parameters of ["odds=1.50-3.00", "prob=55-90&odds=1.50-3.00", "odds=1.01-1.50", "odds=1.50-1000.00", "odds=20.00-1000.00",
+    "odds=2.00-2.00", "odds=999.99-1000.00", "date=2020-02-29&market=total-goals&odds=1.85-1.85&sort=probability"]) {
+    const parsed = on(parameters);
+    assert.deepEqual(on(serializeFeedQuery(parsed, today).toString()), parsed, parameters);
+    const url = new URL(feedQueryHref(parsed, today), "https://example.test"), date = url.pathname.split("/")[3];
+    assert.deepEqual(on(url.searchParams.toString(), date ? { routeDate: date } : {}), parsed, parameters);
+  }
+  assert.deepEqual(on("odds=1.50-3.00").odds, { min: 150, max: 300 });
+  assert.ok(Object.isFrozen(on("odds=1.50-3.00").odds));
+  // Canonical order puts odds right after prob.
+  assert.equal(serializeFeedQuery(on("sort=probability&odds=1.50-3.00&prob=55-90&market=total-goals"), today).toString(),
+    "market=total-goals&prob=55-90&odds=1.50-3.00&sort=probability");
+  // Both slider extremes (1.01 and the 20.00+ stop's 1000.00) mean no bound, so they are omitted like prob=0-100.
+  assert.equal(on("odds=1.01-1000.00").odds, null);
+  assert.equal(serializeFeedQuery(on("odds=1.01-1000.00"), today).toString(), "");
+  assert.equal(serializeFeedQuery({ ...query(), odds: { min: 101, max: 100_000 } }, today).toString(), "");
+  assert.equal(isAnyOdds(null), true); assert.equal(isAnyOdds({ min: 101, max: 2_000 }), false);
+  // Identity and filter counts include the bounds.
+  assert.notEqual(feedQueryKey(on("odds=1.50-3.00"), today), feedQueryKey(query(), today));
+  assert.notEqual(feedQueryKey(on("odds=1.50-3.00"), today), feedQueryKey(on("odds=1.50-3.01"), today));
+  assert.equal(feedQueryKey(on("odds=1.50-3.00&page=2"), today), feedQueryKey(on("odds=1.50-3.00"), today));
+  assert.equal(feedQueryKey(on("odds=1.01-1000.00"), today), feedQueryKey(query(), today));
+  assert.equal(activeFeedFilterCount(on("odds=1.50-3.00")), 1);
+  assert.equal(activeFeedFilterCount(on("odds=1.01-1000.00")), 0);
+  assert.equal(panelFilterCount(on("prob=50-100&odds=1.50-3.00")), 2);
+  assert.equal(panelFilterCount({ leagues: [], countries: [], markets: ["match-result"], probability: { min: 0, max: 100 } }), 0);
+  for (const input of ["odds=1.5-3.00", "odds=01.50-3.00", "odds=3.00-1.50", "odds=1.00-2.00", "odds=1.50", "odds=", "odds=1,50-3,00",
+    "odds=1.50-3.00&odds=1.50-3.00", "odds=1.50-1000.01", "odds=1.505-3.00", "odds=+1.50-3.00", "odds=1.50 - 3.00", "odds=0.50-3.00",
+    "odds=10000.00-10000.00", "odds=9999.99-9999.99", "odds=1.50-3.00-4.00", "odds=1.50-3", "odds=1e2-3.00", "odds=%EF%BC%91.50-3.00"]) {
+    assert.throws(() => on(input), FeedQueryError, input);
+  }
+  // Hand-built queries are validated, never silently normalized.
+  const base = on("");
+  for (const odds of [{ min: 300, max: 150 }, { min: 100, max: 200 }, { min: 150, max: 100_001 }, { min: 1.5, max: 3 }, { min: "150", max: 300 }, {}]) {
+    assert.throws(() => serializeFeedQuery({ ...base, odds }, today), FeedQueryError, JSON.stringify(odds));
+  }
 });

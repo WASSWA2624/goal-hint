@@ -150,5 +150,22 @@ transaction for fixtures in the forward window; historical fixtures outside it
 return null. Counts are manifest/job totals, independent of this fixture or
 filters. Applicable snapshots must agree with their card forecast's run, revision,
 publication and complete market groups. Detail cache projection 3 includes the
-run/provenance contract. Current browser refresh omits history query parameters;
+run/provenance contract. The fixture's teams carry the same optional `code` as
+feed records ([match feed API](match-feed-api.md)); detail cache projection 5
+keeps responses cached without it from being reused. Prompt 052 adds a top-level `odds` array (at most 4,
+default `[]`) and moves the detail cache to projection 4. Each entry is one
+complete market-implied group for one family:
+`{ label: "market-implied", family, basis, method, overround, retrievedAt,
+providerUpdatedAt, selections: [{ selection, price, impliedProbability }] }`.
+`impliedProbability` is the exact `proportional-v1` value as 12-place decimal
+text (double chance sums to 2), never an AI or fallback estimate and never mixed
+into `snapshot` or the forecast markets. A group appears only when every
+selection of its family is fresh and comes from one snapshot. Names, ids and
+links of bookmakers are never exposed. The envelope is mutable observation data:
+it is read in the detail transaction, outside the immutable revision cache, and
+the odds cache trigger invalidates the fixture tag when it changes. Live refresh
+adopts the newer `odds` at an equal fixture version. The record's
+`fixture.prices` follows the feed rule. While `publicPolicy.features.providerOdds`
+is off (until OP-36 display rights), `odds` and `fixture.prices` are always
+empty. Current browser refresh omits history query parameters;
 selected historical snapshots remain separate. See [live client refresh](live-client-refresh.md).
