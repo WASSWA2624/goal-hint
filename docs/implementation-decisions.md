@@ -3223,3 +3223,88 @@ unchecked (see the progress log). Runbook: [provider odds](provider-odds.md).
 - The odds subtests in `tests/live-runtime.integration.mjs` skip themselves when
   fewer than three minutes remain in the current 3-hour slot (about a 1–2%
   chance per run); slot boundaries are covered by unit tests.
+
+## Team codes for tight phone cards (11 October 2026)
+
+Owner request (chat): the code should stand in for long names in tight spots
+such as phone cards, and the full name shows when there is no code. Owner
+decision: "Import codes + safe shortening". A low-priority team-code import
+uses spare quota only (slow on Free, quick after the plan upgrade). Until a team
+has a code, the card uses the safe shortening rules, then an ellipsis.
+
+### Read path
+
+- **Shape.** Fixture snapshot teams gain an optional, nullable `code` with the
+  strict pattern `^[A-Z0-9]{2,5}$`. The feed and detail read publish
+  `validTeamCode(FootballTeam.code)`, which takes trimmed ASCII letters and
+  digits only and uppercases them; anything else is null. `validTeamCode` now
+  checks ASCII before uppercasing, so "ß" (which uppercases to "SS") can never
+  become a code. The field is optional, so payloads cached before codes still
+  parse.
+- **Cache.** Feed projection 6 → 7 and detail 4 → 5, following the
+  per-endpoint projection convention for additive fields. The global
+  `public-response-v1` key contract is unchanged: revision and performance
+  payloads carry no fixture teams.
+- **Card.** `MatchCard` passes `team.code ?? null` to `ShortTeamName` for both
+  teams. The memo comparator is unchanged. Team fields change only with
+  `dataVersion`: the catalog's shared-identity path bumps every fixture that
+  renders a changed team, and equal-version merges keep the previous teams.
+
+### Import and markers
+
+- **No migration.** The team-code job writes no codes. It runs the ordinary
+  catalog teams import (`/teams?league&season`), whose append-only
+  `FootballImport` receipt (kind `teams`, scope key and `observedAt`, already
+  indexed) is the per-competition-season "checked at" marker. A complete,
+  partial or degraded receipt settles the league for 30 days. A failed receipt
+  backs it off for one day. Rejected alternatives:
+  - A marker column on `FootballSeason`: its cache trigger invalidates
+    `global:catalog`, so every marker write would flush the public cache.
+  - A new marker table: it needs a reviewed migration, owner grants and a new
+    backup table, and records nothing the receipt does not already hold.
+
+  Limitation: an import that throws before writing its receipt (authorization,
+  retention, an invalid result) leaves no marker. The job then fails without
+  retry, so the alert fires, and the next slot asks again. Those faults affect
+  every import, not one league.
+- **Selection.** Each sweep reads competition-seasons with a fixture kicking off
+  from 3 hours ago to 8 days ahead whose home or away team has `code IS NULL`
+  (at most 200, nearest kickoff first). It skips leagues checked recently and
+  imports at most 4, one at a time. A failed receipt ends the sweep.
+- **Shared spare.** Team codes use the odds gate (`oddsQuotaAllows`) with the
+  slot's whole ceiling of 8 requests (4 leagues × one page plus one retry).
+  `oddsUsed` counts every dispatched `enrichment` attempt, so odds and team codes
+  share one spare and together never exceed it or take the reserve. Team codes
+  get no reserved share: the job has priority 0, below every odds job, on the
+  same single enrichment worker, so the two gates are never checked
+  concurrently. Eligibility is `workload.odds.eligible` (at least 200 spare,
+  standard pacing), so imports are off on Free and slow plans. This supersedes
+  the 052 note that odds are the only live enrichment caller.
+- **Switch.** `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED` defaults to true (an
+  `enabledByDefault` schema). It is still gated by spare quota, and `false`
+  turns imports off on any plan.
+- **Schedule and outcomes.** `teams.codes` v1 runs once per UTC hour (payload
+  `{ slot }`, expiring at the slot end, 4 attempts, 600-second timeout). A
+  refused gate, a disabled switch or an ended slot expires the job
+  (`eligibility-expired`). Storage unavailability retries within the slot. A
+  refused import fails without retry. Failed receipts, time-outs and aborts
+  succeed and keep what was stored. A league starts only while 3 minutes remain
+  in the attempt and the slot. Its provider window ends after 60 seconds.
+- **Wiring and monitoring.** The live runner's dedicated odds worker becomes the
+  enrichment worker (`runtime.enrichment.registry`; log events
+  `enrichment-job-*`, which replace `odds-job-*`). The maintenance loop enqueues
+  each slot's job (`team-codes-scheduled`). The `ready` line and
+  `npm run live:status` report the switch and eligibility. Recovery repair
+  expires a stalled `teams.codes` job after its slot ends. The informational
+  metric `team-code-requests` sums `requestsDispatched` of `teams` receipts in
+  the lookback window. It reads `FootballImport` without an index on
+  `kind`/`recordedAt`, which is acceptable at tens of receipts a day.
+
+### Flagged, not changed
+
+- A shared team change bumps every fixture of that team, history included,
+  inside one catalog transaction (live timeout 120 s). The database holds days
+  to weeks of fixtures, so a league is a few hundred fixtures at most. Revisit if
+  history grows large.
+- Match insights (head-to-head and form lists) and the detail banner do not use
+  codes; they are not tight spots.
