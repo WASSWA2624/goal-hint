@@ -30,13 +30,15 @@ export const getShellDate = cache(async () => getReportingDate(await getShellIns
 /** A GET search that keeps the visitor's other feed parameters. */
 export type ShellSearch = Readonly<{ action: string; hidden: readonly (readonly [string, string])[]; value: string }>;
 
-export async function PublicShell({ children, locale, current, today: reportingDate, app = false, search }: {
+export async function PublicShell({ children, locale, current, today: reportingDate, app = false, compact = false, search }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
   today?: Awaited<ReturnType<typeof getShellDate>>;
   /** Feed screens: their own phone heading, a wider desktop table and the phone tab bar. */
   app?: boolean;
+  /** Dense mobile feeds use 8px gutters; other app screens retain their existing spacing. */
+  compact?: boolean;
   search?: ShellSearch;
 }) {
   const language = resolveLocale(locale);
@@ -88,7 +90,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
           </HeaderSearch>
         </HeaderContent>
       </Header>
-      <PageMain id="main-content" tabIndex={-1} $app={app}>
+      <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact}>
         <Container $wide={app}>{children}</Container>
       </PageMain>
       <Footer>

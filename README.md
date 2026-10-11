@@ -18,7 +18,7 @@ Production-ready artwork is in `public/brand/`; editable sources, tokens and the
 
 ## Local development
 
-Use **Node.js 24.18.1 LTS** and **npm 11.16.0**. The versions are pinned in
+Use **Python 3.11 or later**, **Node.js 24.18.1 LTS** and **npm 11.16.0**. The Node and npm versions are pinned in
 `package.json`, `.node-version` and `.nvmrc`; `.npmrc` rejects incompatible
 engines and saves exact dependency versions. With fnm, run `fnm install` then
 `fnm use` in this directory. With nvm, use `nvm install` and `nvm use` (nvm-windows
@@ -34,6 +34,18 @@ Open [localhost:3000](http://localhost:3000). No database, account, token, cooki
 or provider credentials are needed for the foundation. Install from
 `package-lock.json` with `npm ci`; use `npm install` only for intentional,
 reviewed dependency updates and commit the resulting lockfile.
+
+All developer and operator entry points in `scripts/` use Python. They share
+native filesystem, process, HTTP, rendering and backup helpers in `scripts/lib/`.
+A private pipe adapter reuses the existing TypeScript application services and
+policy checks; Node.js remains required. Install Python dependencies with
+`python -m pip install -r scripts/requirements.txt` before native backup operations,
+the Python regression suite, or rebuilding font outlines. Other commands use the
+Python standard library. Run `npm run test:scripts` for the Python regression suite.
+Existing trusted JavaScript backup bindings use
+the compatibility API in `src/server/backup/`.
+`npm run test:scripts:integration` additionally verifies a native Python backup
+round trip on a new owned MySQL server when `MYSQL_TEST_SERVER_BINARY` is configured.
 
 The development command uses nodemon to restart Next.js after saved source,
 public asset, TypeScript/Next configuration or environment file changes,

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile } from "./helpers/command-runtime.mjs";
 import { randomBytes, randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,7 @@ import { CATALOG_NOW, catalogFixture, catalogTeam, catalogCompetition, catalogRe
 
 const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
-const databaseScript = fileURLToPath(new URL("../scripts/database.mjs", import.meta.url));
+const databaseScript = fileURLToPath(new URL("../scripts/database.py", import.meta.url));
 // Import receipts and audits are append-only, matching the application role.
 const catalogAppendOnly = ['FootballFixtureAudit', 'FootballImport'];
 const catalogTables = ["FootballCatalogLock", "FootballTeam", "FootballTeamProvider", "FootballTeamAlias",

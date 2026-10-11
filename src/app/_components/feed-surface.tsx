@@ -29,8 +29,10 @@ import { FeedStateProvider } from "@/state/provider";
 import { media } from "@/styles/theme";
 
 const noLeagues: MatchFeedResponse["leagues"] = [];
+/** Keep the mobile feed's stacked controls close while retaining desktop spacing tokens. */
+const FeedStack = styled(Stack)`${media.belowDesktop} { gap: 6px; }`;
 /** Pending navigations dim the list in place instead of inserting a line that shifts it. */
-const Results = styled(Stack)`
+const Results = styled(FeedStack)`
   transition: opacity 150ms ease;
   &[aria-busy="true"] { opacity: 0.6; }
   @media (prefers-reduced-motion: reduce) { transition: none; }
@@ -55,7 +57,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
       } else router.refresh();
     } });
   const first = feedRowNumber(view.firstPage, data.pageSize, 0);
-  return <Stack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
+  return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
     <RefreshStatus error={refreshError} asOf={data.asOf} locale={query.locale} retry={() => { void refresh(); }} />
     {/* Fixtures without the selected market still list; each row states why it has no pick. */}
@@ -70,7 +72,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
       </li>)}
     </MatchCardList>}
     {enabled && <FeedPagination query={query} today={today} data={data} busy={phase !== null} error={error} onRetry={retry} />}
-  </Stack>;
+  </FeedStack>;
 });
 
 /** Successful server projections remain visible if a later navigation fails. */
@@ -109,7 +111,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     : paginationStatus?.href === href ? paginationStatus.message
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? messages.plural("feed.matchCount", result.data.total)
     : messages.text(`feed.state.${result.data.state}`);
-  return <Stack $gap="sm">
+  return <FeedStack $gap="sm">
     <FeedHeader query={query} today={today} onApply={apply}
       filters={{ open: filtersOpen, count: panelFilterCount(query), controls: filtersId, onToggle: toggleFilters }} />
     <FeedFilters query={query} today={today} leagues={leagues} total={result.data?.total ?? null} onApply={apply}
@@ -133,7 +135,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
         data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} onApply={apply} />}
       {!result.error && pagination}
     </Results>
-  </Stack>;
+  </FeedStack>;
 }
 
 export function FeedSurface(props: Parameters<typeof FeedSurfaceContent>[0]) {

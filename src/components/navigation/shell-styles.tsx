@@ -253,7 +253,7 @@ export const TabBar = styled.nav`
   padding-block-end: env(safe-area-inset-bottom);
   background: ${({ theme }) => theme.color.surface};
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  box-shadow: 0 -4px 16px rgb(11 31 51 / 6%);
+  box-shadow: none;
   ${desktop} { display: none; }
 `;
 export const TabList = styled.ul`
@@ -271,9 +271,12 @@ export const TabLink = styled(Link)<{ $tone: AccentName }>`
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-block-size: 3.125rem;
+  min-block-size: 3.5rem;
+  padding: 4px;
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  text-align: center;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
   > svg { font-size: 1.25rem; }
@@ -287,7 +290,6 @@ export const TabLink = styled(Link)<{ $tone: AccentName }>`
       inset-inline: 30%;
       block-size: 3px;
       background: ${({ theme, $tone }) => theme.color.accent[$tone].gradient};
-      border-radius: 0 0 3px 3px;
     }
   }
   ${focusRing}
@@ -296,7 +298,7 @@ export const TabLink = styled(Link)<{ $tone: AccentName }>`
 
 /** Matches the header: white surface, multicolour edge, compact muted links; clears the phone tab bar. */
 export const Footer = styled.footer`
-  padding-block: 12px calc(12px + 3.25rem + env(safe-area-inset-bottom));
+  padding-block: 10px calc(10px + 3.75rem + env(safe-area-inset-bottom));
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.gradient.edge} top / 100% 2px no-repeat, ${({ theme }) => theme.color.surface};
   font-size: 0.75rem;

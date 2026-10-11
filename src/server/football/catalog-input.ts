@@ -89,6 +89,7 @@ const score = z.object({ fixtureId: identity, providerStatus: z.enum(["FT", "AET
 const fixtureSchema = z.object({ id: identity, homeTeam: teamSchema, awayTeam: teamSchema, competition: competitionSchema,
   kickoff: instant.nullable(), status: z.enum(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties",
     "postponed", "canceled", "abandoned", "awarded", "unknown"]), providerStatus: string(32).nullable(), elapsedMinutes: goal.nullable(),
+  stoppageMinutes: goal.nullable().optional(),
   regulationScore: score.nullable(), reportedGoals: pair, extraTimeScore: pair, penaltyScore: pair, source: sourceSchema,
 }).strict().refine((fixture) => fixture.homeTeam.id !== fixture.awayTeam.id && fixture.competition.season !== null);
 const failures = ["invalid-request", "invalid-credential", "operation-not-authorized", "authentication-error", "subscription-expired",

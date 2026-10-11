@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile } from "./helpers/command-runtime.mjs";
 import { createHash, randomBytes } from 'node:crypto';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,7 @@ import { launchBetCatalog, oddsResponse, offsetTime, rawOddsRow } from './helper
 // The real live runtime runs on a fresh owned MySQL with the local application role's
 // exact grants. Provider responses, account limits and owner approvals are synthetic.
 const execute = promisify(execFile), workspace = fileURLToPath(new URL('../', import.meta.url));
-const script = fileURLToPath(new URL('../scripts/database.mjs', import.meta.url));
+const script = fileURLToPath(new URL('../scripts/database.py', import.meta.url));
 const DAY = 86_400_000, hash = (value) => createHash('sha256').update(value).digest('hex');
 const appendOnly = ['DailyRunManifest','DurableJobEvent','DurableJobUsage','EvidenceSourceVersion','FixtureEvidenceSnapshot',
   'FixtureEvidenceSnapshotSource','FixtureLifecycleObservation','FixtureResult','FootballFixtureAudit','FootballImport','MarketPrediction',

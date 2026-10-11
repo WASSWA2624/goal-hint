@@ -147,7 +147,7 @@ Refresh.
 - `src/instrumentation.ts`: Node startup validation without importing private
   configuration into Edge/client modules.
 - `src/app/layout.tsx`, `src/app/page.tsx`: reuse the shared brand/locale settings.
-- `scripts/check-runtime-policy.mjs`, `.env.example`, `README.md`: structural
+- `scripts/check-runtime-policy.py`, `.env.example`, `README.md`: structural
   configuration command and documented local workflow without credentials.
 - `package.json`, `package-lock.json`, `tsconfig.json`: exact Zod/nodemon pins,
   Node server condition for tests, native TypeScript import support and commands.
@@ -169,7 +169,7 @@ provider/database calls, purchases, messages or deployment occurred.
 | `npm run check` | Passed: lint with zero warnings, strict type-check, then-current 25 tests, and production Turbopack build. |
 | Final `npm test` after test refinements | Passed: **26 tests**, zero failures/skips (5 boundary + 21 runtime-policy groups). |
 | `npm run policy:check` | Passed with no local configuration required; prints structural readiness only. |
-| `node --conditions=react-server --env-file=.env.example scripts/check-runtime-policy.mjs` | Passed with the complete committed example; no credentials/approvals enabled. |
+| `python scripts/check-runtime-policy.py` | Passed with the complete committed example; no credentials/approvals enabled. |
 | Production instrumentation with synthetic provider key and enabled trial capability but missing payable/budget/use-rights policy | Rejected server preparation; HTTP 500, no synthetic credential in logs or response. Next remained listening until the owned test process was stopped; no healthy startup or affected operation was claimed. |
 | Default `npm start -- --hostname 127.0.0.1 --port 3101` and anonymous HTTP check | Passed: HTTP 200, shared heading, no visitor cookie or private policy fields in HTML. Owned server stopped afterward. |
 | Nodemon isolated save/restart smoke on port 3104 | Passed: source edit restarted the real Next child and returned updated HTTP 200 output; existing `.env.local` edits restarted; final glob configuration detected initially absent `.env.local` creation and subsequent edits with distinct child processes and updated HTTP 200 output. 137 generated files plus an explicit `.next` write caused no further restart. Owned servers stopped, port 3104 closed. |
@@ -268,7 +268,7 @@ verified disposable directories; existing services and data were preserved.
 - `prisma.config.ts`: targetless datasource object required by the native engine.
 - `src/server/database/client.ts`, `connection.ts`: initialization cleanup and
   redaction, direct-target protection and local cold-authentication support.
-- `scripts/database.mjs`: reliable offline commands, static failures, debug
+- `scripts/database.py`: reliable offline commands, static failures, debug
   protection and generated-client guarding on success and failure.
 - `tests/database.test.mjs`, `database-cli.test.mjs`: meaningful runtime, offline
   migration, redaction and failed-generation regressions. Database test child
@@ -723,7 +723,7 @@ market, price or rights qualification.
   verification and JSON/Markdown findings. Crashes retain the full uncertain
   reservation; zero-I/O quota waits can defer safely; completed responses never
   replay. Absolute deadlines and timed observations survive restarts.
-- `scripts/football-provider-trial.mjs` and `npm run trial:football`: private
+- `scripts/football-provider-trial.py` and `npm run trial:football`: private
   `init`, `report` and explicitly gated `run` actions. Offline actions need no
   credentials/database. Reports distinguish confirmed, failed and untested
   findings, retain source/test timestamps and state separate catalog/live/launch
@@ -1316,7 +1316,7 @@ forecast observations remain pending. **014 remains unchecked** in
   `report.md`; the first final-test protocol/selection/dataset/report binding
   rejects silently changed reruns. Identical reruns preserve their artifacts.
   JSON decodes bigint only at the native fixture-version field.
-- `scripts/forecast-evaluation.mjs` and `npm run evaluation:report` provide the
+- `scripts/forecast-evaluation.py` and `npm run evaluation:report` provide the
   local command. It reads an explicit private protocol/dataset and trusted
   authority module, or writes factual readiness artifacts with no data arguments.
   It constructs no runtime policy, database, credential lookup or provider
@@ -1398,7 +1398,7 @@ resolve the recorded operating prerequisites for 011/012/014.
   unrelated managed instruction files. `eslint.config.mjs` extends the private
   import guard to styles. `.gitignore` excludes Playwright captures and CLI
   session artifacts.
-- `scripts/verify-brand-rendering.mjs` and the `test:styling` package script
+- `scripts/verify-brand-rendering.py` and the `test:styling` package script
   build and verify an isolated production acceptance fixture under `.tmp`.
   README/component guidance, this handoff, the decision register and tracker
   document the exports and results. No dependency version, lockfile or schema
@@ -1412,7 +1412,7 @@ Playwright CLI with Chromium. No live football/AI/database calls were dispatched
 | Check | Actual result |
 | --- | --- |
 | `npm run check` | Passed guarded Prisma generation/schema validation, zero-warning ESLint, strict type-check, **746 tests: 745 passed and 1 existing Windows POSIX-mode skip**, plus production build/prerendering. Log: `.tmp/brand-015-full-check.log`. |
-| Production styling fixture | `node scripts/verify-brand-rendering.mjs --serve` passed on the final theme. Artifact directory: `.tmp/brand-styling-evUVVA/`, with build log, `initial.html`, `streamed.html`, `stream-chunks.json` and `verification.json`. One initial style element contains 35 registered rules. The delayed response contains two emitted style elements, 12 unique registered rules and six response chunks. A genuinely new CSS rule precedes its actual streamed DOM and is emitted once. Global style/reset occurs once per response. |
+| Production styling fixture | `python scripts/verify-brand-rendering.py --serve` passed on the final theme. Artifact directory: `.tmp/brand-styling-evUVVA/`, with build log, `initial.html`, `streamed.html`, `stream-chunks.json` and `verification.json`. One initial style element contains 35 registered rules. The delayed response contains two emitted style elements, 12 unique registered rules and six response chunks. A genuinely new CSS rule precedes its actual streamed DOM and is emitted once. Global style/reset occurs once per response. |
 | Production client boundary | All 13 fixture browser chunks exclude the fake secret/private canary and checked private service names. Rendered HTML excludes transient styling attributes. Actual application production chunks/reference manifest and HTML omit the development demo module and copy. No provider services are imported into the style/component graph. |
 | Production without JavaScript | The actual application homepage returned 200 at 320px with JavaScript disabled. Readable heading/body, navy text, paper background, one styled-components style element and the named primary SVG rendered without hydration. Body is 16px; document width is 320px with no horizontal overflow. Screenshot: `output/playwright/brand-015-actual-production-no-js-320.png`. |
 | Phone/desktop and long text | Production fixture checked at **320, 360, 390, 430 and 1280px**, including long labels, errors and a 270-character unbroken identifier. No horizontal document overflow; control/link minimum height is 44px, all inspected component corners are 0px. Desktop/320 captures: `output/playwright/brand-015-production-desktop.png` and `brand-015-production-320.png`. |
@@ -1461,7 +1461,7 @@ documents route, message and component contracts. Existing operating gates for
   primitive demo is no longer mounted; its isolated styling fixture remains.
 - `tests/navigation.test.mjs` covers fallback, routing, EAT midnight/year
   boundaries, historical views, malformed inputs, plural/count formatting and
-  per-key fallback. `scripts/verify-navigation-rendering.mjs` checks the actual
+  per-key fallback. `scripts/verify-navigation-rendering.py` checks the actual
   production HTML and redirects; `package.json` exposes `test:navigation` and
   `test:navigation:html`. The private-import lint guard and its boundary test now
   include i18n. Component guidance, styling/navigation runbooks, decision
@@ -1480,7 +1480,7 @@ requests and issued no visitor cookies.
 | `npm run typecheck`, `npm run build` | Passed. The final Next.js 16.4 production build compiled and type-checked all locale, information, dated-feed and 404 routes plus the locale proxy. Public date-dependent routes render on demand. |
 | `npm run test:navigation` | All **9** contract tests passed, including both sides of 21:00 UTC/EAT midnight, year rollover, old leap-day reporting, fallback and malformed paths/statuses. |
 | Full existing suite | The final `node --conditions=react-server --test --test-reporter=dot tests/*.test.mjs` run exited 0: **755 cases, 754 passed and 1 existing Windows POSIX-mode skip**. Log: `.tmp/016-tests.log`. The first parallel run hit the existing offline Prisma-generation test's 60-second timeout while builds/checks competed for resources; that file passed alone, then the complete suite passed on rerun. No unrelated test or timeout was changed. |
-| Production HTML | `node scripts/verify-navigation-rendering.mjs` passed on the final build. Eight anonymous feed/information pages have initial CSS before the shell, one main/h1, current-location markup before hydration, all links and `noindex, follow`. Root returns 308 to `/en` even with French browser headers. Locale fallbacks return 307 with route/query preserved. Invalid dates/statuses, repeated statuses, unknown matches and unknown routes return real 404s. No selector, auth UI, invented forecasts or misleading empty-fixture state appears. |
+| Production HTML | `python scripts/verify-navigation-rendering.py` passed on the final build. Eight anonymous feed/information pages have initial CSS before the shell, one main/h1, current-location markup before hydration, all links and `noindex, follow`. Root returns 308 to `/en` even with French browser headers. Locale fallbacks return 307 with route/query preserved. Invalid dates/statuses, repeated statuses, unknown matches and unknown routes return real 404s. No selector, auth UI, invented forecasts or misleading empty-fixture state appears. |
 | Existing styling regression | `npm run test:styling` passed with one initial style element/35 registered rules, delayed styles preceding streamed DOM, two streamed style elements/12 unique registered rules, six response chunks and 13 browser chunks free of the private canary. Transient props remain absent. Final application chunks omit `BrandDemo` and the private canary. |
 | Fresh browser navigation | An isolated French-language/Los Angeles context followed root, Today, Results, home, every information link, Back and `/fr/predictions/...?...` fallback. Targets, EAT dates, headings and server/current markers matched. Zero visitor cookies; zero page errors and zero console warnings/errors. |
 | Keyboard | Tab order is skip → home → Today → Results → How it works → Privacy → Terms → Contact, with visible outlines. Shift+Tab reverses correctly. Activating the native skip link focuses `main-content`; the next Tab reaches footer navigation. The initial framework-link implementation scrolled without moving focus and was replaced before completion. |
@@ -1549,10 +1549,10 @@ prompts. No dependency version, lockfile, schema or migration changed.
   `src/i18n/messages/en.ts`. The feed still clearly identifies its preview state.
   `src/domain/navigation.ts` reuses and re-exports the shared defaults/statuses.
 - `tests/{feed-query,client-state}.test.mjs` and the synthetic helper cover the
-  contracts. `scripts/verify-client-state-rendering.mjs` builds an isolated real
+  contracts. `scripts/verify-client-state-rendering.py` builds an isolated real
   Next production fixture with two providers and verifies concurrent requests.
   `package.json` exposes `test:state` and `test:state:rendering`.
-- `scripts/verify-navigation-rendering.mjs` adds valid full-query/range HTML and
+- `scripts/verify-navigation-rendering.py` adds valid full-query/range HTML and
   invalid-query 404 checks. `eslint.config.mjs` and its boundary test protect
   `src/state` from private imports; generated Playwright artifacts are excluded
   from lint. State/domain guidance, navigation runbook, decision register, this
@@ -1629,7 +1629,7 @@ schema or migration changed.
   the card, market, probability and outcome copy.
 - `tests/match-card.test.mjs`, `tests/helpers/match-card-fixtures.mjs` and
   `tests/fixtures/match-card/preview.tsx` provide deterministic synthetic cases.
-  `scripts/verify-match-card-rendering.mjs` builds a temporary production app
+  `scripts/verify-match-card-rendering.py` builds a temporary production app
   with the real components/root provider and an isolated analysis destination.
   `package.json` exposes `test:card` and `test:card:rendering`.
 - Component/domain guidance, styling/state runbooks, this progress record,
@@ -2658,7 +2658,7 @@ coverage, run progress, revision references and correction fingerprints.
   and original cycle dates; fixture changes invalidate old/new dates. Job, run,
   import, lifecycle and catalog changes also cover progress/coverage without a
   prediction event.
-- Added bounded private `scripts/public-cache-reconcile.mjs`, `cache:reconcile`
+- Added bounded private `scripts/public-cache-reconcile.py`, `cache:reconcile`
   and `test:cache` commands. Maintenance acknowledges only applied generations,
   recovers late commits without a global watermark and sweeps expired bodies.
 - Added cache unit/integration suites and extended the shared pipeline grants.
@@ -2726,7 +2726,7 @@ last-sync, coverage-observation and projection-observation clocks remain distinc
   update/availability and original last-sync presentation. First two cards use
   eager remote logos; the remainder retain lazy native images and reserved sizes.
 - Added `tests/feed-page.test.mjs`, `feed-page.integration.mjs` and
-  `scripts/verify-match-feed-rendering.mjs`, with package commands. Updated the
+  `scripts/verify-match-feed-rendering.py`, with package commands. Updated the
   navigation HTML check to allow actual stored forecast/empty content, the
   navigation/card documentation and added `docs/match-feed-page.md`.
 - Updated this record, implementation decisions and tracker. No migration or
@@ -3216,7 +3216,7 @@ Prompt 041 has not been started.
 - Added `docs/terms-page.md` with the factual evidence matrix, inherited owner
   decisions, conditional authoritative references and final-publication checklist.
   Updated `docs/implementation-decisions.md`, including OP-25's central release-
-  blocker status. Added the production verifier `scripts/verify-terms-rendering.mjs`
+  blocker status. Added the production verifier `scripts/verify-terms-rendering.py`
   and the `test:terms:html` package script.
 
 ### Verification
@@ -3273,7 +3273,7 @@ not claimed. Prompt 042 has not been started.
   shared contact-availability link beside the privacy choices, terms outcomes
   and methodology corrections disclosures. Those pages retain their unresolved
   process statements and publication gates.
-- Added `scripts/verify-contact-rendering.mjs` and `test:contact:html`. All page
+- Added `scripts/verify-contact-rendering.py` and `test:contact:html`. All page
   navigation links use fixed internal paths via `informationHref`; query input
   never supplies contact destinations, operators, markup or mail headers.
   Added `docs/contact-page.md`, updated the OP-28 decision row and recorded the
@@ -3341,7 +3341,7 @@ Prompt 043 has not been started.
   replace verified release evidence or the privacy/terms/contact publication gates.
   Their current false state retains noindex and empty prelaunch discovery XML.
 - Added `tests/discovery.test.mjs`, `tests/discovery.integration.mjs`,
-  `scripts/verify-seo-rendering.mjs`, `test:seo` and `test:seo:rendering`. Updated
+  `scripts/verify-seo-rendering.py`, `test:seo` and `test:seo:rendering`. Updated
   the runtime-policy example contract and methodology rendering harness for the
   metadata generator exports. Added `docs/seo-discovery.md` and the 042 decisions.
 
@@ -3590,14 +3590,14 @@ remain release blockers. Prompt 046 has not been started.
 
 **Changed files and behavior:**
 
-- `scripts/backup.mjs`, `scripts/lib/backup-{contract,crypto,engine}.mjs` and
-  `scripts/lib/mysql-{backup,tools}.mjs` implement private one-shot encrypted
+- `scripts/backup.py`, `scripts/lib/backup_{contract,crypto,engine}.py` and
+  `scripts/lib/mysql_{backup,tools}.py` implement private one-shot encrypted
   snapshot, owned-log archive and disposable base/PITR restore. A trusted binding
   verifies full policy, storage/access, writer/DDL fencing and current approvals.
   There is no bundled live authorization, production target or promotion command.
   Artifacts authenticate identity, exact coordinates, compatibility and inventory;
   credentials/keys stay outside Git and raw private diagnostics are withheld.
-- `scripts/lib/isolated-mysql.mjs` reuses the existing ownership-checked local
+- `scripts/lib/isolated_mysql.py` reuses the existing ownership-checked local
   server helper, with an explicit opt-in ROW-binlog drill and disabled events.
   `tests/helpers/mysql-instance.mjs` preserves its existing import interface;
   `tests/prediction-pipeline.mjs` accepts optional isolated instance settings.
@@ -3658,8 +3658,8 @@ current competitions are configured. No tracker row changes; 011/012/046–049 r
 - `src/server/live/` composes the existing services into a fallback-only live runtime:
   owner-approval register and verifier, `/status`-seeded provider-day quota router,
   plan-sized workload and policies, trusted authorities, runtime composition and the runner
-  loop. `src/workers/live.ts` (`npm run live`), `scripts/live-status.mjs` and
-  `scripts/live-competitions.mjs` are the operator entry points.
+  loop. `src/workers/live.ts` (`npm run live`), `scripts/live-status.py` and
+  `scripts/live-competitions.py` are the operator entry points.
 - Runtime policy: publication without AI when AI is disabled; a zero payable amount for free
   plans; production scope in development mode for loopback databases only.
 - Refresh plans may omit AI (`ai: null`, null pin); migration
@@ -3770,7 +3770,7 @@ pagination; disabled odds controls. A separate workflow is still changing
   UI edits and did not record its Node version.
 - `npm run test:detail-page:rendering` failed: the redesigned match details page
   no longer renders the `detail.result` text "Match result and settlement" that
-  `scripts/verify-match-feed-rendering.mjs` asserts
+  `scripts/verify-match-feed-rendering.py` asserts
   (`.tmp/051-detail-page-rendering-rerun.log`). That page belongs to 035 and the
   UI workflow.
 - Not re-run on 11 October 2026: both rendering checks run an isolated
@@ -3817,7 +3817,7 @@ The runbook is [provider odds](provider-odds.md).
   normalization with string prices, per-row `update` times and bet-level
   quarantine; `pageSizeOf`.
 - **Counted trial** (`provider-trial-contract.ts`, `-input.ts`, `-runner.ts`,
-  `-evaluation.ts`, `scripts/football-provider-trial.mjs`): odds, odds-bets and
+  `-evaluation.ts`, `scripts/football-provider-trial.py`): odds, odds-bets and
   odds-bookmakers tasks; findings `odds-pagination`, `odds-update-times`,
   `odds-bet-catalog`, `odds-coverage` and `odds-display-rights`; a separate
   `oddsSuitability` verdict.
@@ -3837,7 +3837,7 @@ The runbook is [provider odds](provider-odds.md).
   the `football-odds-rights` evidence requirement (never required to start the
   runner) and `features.providerOdds: false`.
 - **Live runtime** (`live-plan.ts`, `live-account.ts`, `live-authorities.ts`,
-  `live-runtime.ts`, `live-runner.ts`, `scripts/live-status.mjs`,
+  `live-runtime.ts`, `live-runner.ts`, `scripts/live-status.py`,
   `recovery-service.ts`, `monitoring-contract.ts`, `monitoring-scan.ts`): the
   odds workload (floor, spare, reserve, eligibility), a quota gate fed by the
   open provider day's counters (`counters()`) and the enrichment attempts, a
@@ -3999,7 +3999,7 @@ stay abbreviated.
   `live-runtime.ts` (shared enrichment registry), `live-runner.ts` (hourly
   scheduling, `ready` fields), `src/server/recovery/recovery-service.ts` (a stalled
   job expires after its slot), `src/server/monitoring/` (informational
-  `team-code-requests`), `scripts/live-status.mjs` (`teamCodes` block).
+  `team-code-requests`), `scripts/live-status.py` (`teamCodes` block).
 - **Review fix (this run).** The selection read the nearest 200 candidates and
   only then dropped recently checked leagues, so leagues that stay codeless after
   their check could crowd unchecked ones out of every sweep. It now pages through

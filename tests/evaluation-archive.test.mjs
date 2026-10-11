@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile } from "./helpers/command-runtime.mjs";
 import { link, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -15,7 +15,7 @@ import { evaluationAuthority, evaluationDataset, evaluationProtocol } from "./he
 
 // All data and authority modules here are synthetic local fixtures; no provider or database is used.
 const execFileAsync = promisify(execFile);
-const command = fileURLToPath(new URL("../scripts/forecast-evaluation.mjs", import.meta.url));
+const command = fileURLToPath(new URL("../scripts/forecast-evaluation.py", import.meta.url));
 async function directory(t) {
   const value = await mkdtemp(path.join(os.tmpdir(), "goal-hint-evaluation-archive-"));
   t.after(() => rm(value, { recursive: true, force: true })); return value;

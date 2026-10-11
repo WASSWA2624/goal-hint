@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, rm, readdir } from "node:fs/promises";
-import { execFile } from "node:child_process";
+import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from "node:util";
 import os from "node:os";
 import path from "node:path";
@@ -13,7 +13,7 @@ import { createOfflineTrialPlan, parseTrialPlan } from "../src/server/football/p
 const now = Date.parse("2026-10-08T21:00:00Z");
 const clock = { now: () => now };
 const execFileAsync = promisify(execFile);
-const command = fileURLToPath(new URL("../scripts/football-provider-trial.mjs", import.meta.url));
+const command = fileURLToPath(new URL("../scripts/football-provider-trial.py", import.meta.url));
 async function fixture(t) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "goal-hint-trial-command-"));
   t.after(() => rm(directory, { recursive: true, force: true }));

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile } from "./helpers/command-runtime.mjs";
 import { randomUUID } from "node:crypto";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -11,7 +11,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
 const temporaryRoot = path.join(workspace, ".tmp");
-const script = path.join(workspace, "scripts", "database.mjs");
+const script = path.join(workspace, "scripts", "database.py");
 const syntheticModel = "\nmodel OfflineProbe {\n  id String @id @db.VarChar(64)\n  value Int\n\n  @@map(\"offline_probe\")\n}\n";
 
 function isolatedEnvironment(overrides = {}) {

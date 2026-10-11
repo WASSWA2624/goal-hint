@@ -22,7 +22,7 @@ import { jobEnvelope, jobTestEnvironment, jobTestHash, jobTestRegistry } from '.
 import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql-instance.mjs';
 
 const execute = promisify(execFile), workspace = fileURLToPath(new URL('../', import.meta.url));
-const script = fileURLToPath(new URL('../scripts/database.mjs', import.meta.url));
+const script = fileURLToPath(new URL('../scripts/database.py', import.meta.url));
 const childScript = fileURLToPath(new URL('./helpers/job-worker-child.mjs', import.meta.url));
 const denied = (reason) => (error) => error instanceof JobQueueError && error.reason === reason;
 const owner = jobTestHash('worker-a'), other = jobTestHash('worker-b');

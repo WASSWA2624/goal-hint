@@ -1,0 +1,27 @@
+"""Verify a local production privacy page without live provider calls."""
+from lib.policy_rendering import acceptance_origin, notices, policy_document
+from lib.rendering import match
+from lib.runtime import main_guard
+
+
+def main() -> None:
+    origin = acceptance_origin(__doc__)
+    notice = notices()["privacyNotice"]
+    for path in ["/en/privacy", "/en/privacy?q=%3Cscript%3Euntrusted-query%3C%2Fscript%3E"]:
+        visible = policy_document(origin, path, page="privacy", title="Privacy and data handling",
+            notice=notice, sections=["access", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"],
+            patterns=["not a completed, effective privacy notice", "not a legal approval or an effective date",
+                "cached pagination links can contain your search text", "not necessarily erased at that exact time",
+                "An owner-approved public privacy contact.*not yet available",
+                "your browser requests them directly from the remote image host",
+                "Current responses can be reused for up to 5 seconds.*up to 6 hours",
+                "At most 20 navigation records.*older than 30 minutes"],
+            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|mailto:|untrusted-query|\{(?:date|minutes|seconds|hours|entries)\}",
+            forms=r"<form|<iframe|<input")
+        match(r'href="/en/how-it-works"', visible)
+        print(f"PASS production privacy HTML: {path}")
+    print("PASS initial privacy content, honest publication gate, review date, storage/cache disclosures, navigation and anonymous metadata.")
+
+
+if __name__ == "__main__":
+    main_guard(main)

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
@@ -35,7 +35,7 @@ test('audited schedule lifecycle on isolated genuine MySQL', { timeout: 300_000 
     }));
 
     await t.test('migration, append-only permissions and event bindings are enforced', async () => {
-      await execute(process.execPath, ['--conditions=react-server', 'scripts/database.mjs', 'verify'], { env: p.env, windowsHide: true, timeout: 60_000 });
+      await execute(process.execPath, ['--conditions=react-server', 'scripts/database.py', 'verify'], { env: p.env, windowsHide: true, timeout: 60_000 });
       const tables = await a.query((tx) => tx.$queryRaw`SELECT ENGINE, TABLE_COLLATION FROM information_schema.TABLES
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('FixtureLifecycleState','FixtureLifecycleObservation')`);
       assert.equal(tables.length, 2); assert.ok(tables.every((row) => row.ENGINE === 'InnoDB' && row.TABLE_COLLATION === 'utf8mb4_bin'));

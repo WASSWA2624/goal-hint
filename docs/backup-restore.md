@@ -8,26 +8,40 @@ Local restoration evidence does not establish production disaster recovery.
 
 ## Implemented tooling
 
-`scripts/backup.mjs` provides private, one-shot `snapshot`, `archive`, `restore`
-and `restore-pitr` commands. Each requires an absolute path to a trusted operator
-module exporting `createBackupBinding(runtimePolicy)`. There is no public route
-or permissive live binding. Run from the repository root:
+`scripts/backup.py` provides private, one-shot `snapshot`, `archive`, `restore`
+and `restore-pitr` commands. Each requires an absolute path to a trusted Python
+or JavaScript operator module. There is no public route or permissive live binding.
+
+The CLI and all modules in `scripts/lib/` are Python. Existing trusted `.mjs`
+bindings reuse the compatibility API in `src/server/backup/` through a private
+JSON pipe, preserving `createBackupBinding(runtimePolicy)`, application objects
+and asynchronous callbacks.
+Native `.py` bindings export `create_backup_binding()` and use snake_case Python
+methods (`verify_policy`, `verify_storage`, `prepare_target`, `verify_restored`).
+Install native encryption support with `python -m pip install -r scripts/requirements.txt`.
+The encrypted `GHBAK001` format is interoperable with existing artifacts.
+Run from the repository root:
 
 ```powershell
 npm run backup -- snapshot --binding C:\Private\GoalHint\backup-binding.mjs
 npm run backup -- archive --binding C:\Private\GoalHint\backup-binding.mjs
 npm run backup -- restore-pitr --binding C:\Private\GoalHint\backup-binding.mjs
+# Native Python bindings accept the same operations:
+npm run backup -- snapshot --binding C:\Private\GoalHint\backup_binding.py
 ```
 
 These paths illustrate the interface; no such configured binding is shipped.
 A binding supplies `policy`, `authority`, an explicit fresh artifact `directory`,
 32-byte `key`, `source`, optional private `emit`/`close`, and, for restore,
-`prepareTarget` and `verifyRestored`. Archive additionally receives the successful
+`prepare_target` and `verify_restored` (`prepareTarget` and `verifyRestored` in
+JavaScript). Archive additionally receives the successful
 snapshot receipt. Authorization is rechecked at operation boundaries; storage
-approval and source quiescence are mandatory. `verifyPolicy` checks the entire
+approval and source quiescence are mandatory. `verify_policy` (`verifyPolicy` in
+JavaScript) checks the entire
 parsed policy against current evidence. `authorize` covers the actual source,
 operation, target isolation and runtime/database/rights/budget approvals; accepting
-an evidence-reference string alone is insufficient. `verifyStorage` must check
+an evidence-reference string alone is insufficient. `verify_storage`
+(`verifyStorage` in JavaScript) must check
 actual OS ACLs, encrypted temporary storage, approved location and permissions.
 
 The live policy requires an approved owner, RPO/RTO, key/grants/permissions/release
@@ -99,7 +113,7 @@ policies/providers and representative canonical records, encrypts a snapshot,
 then records result corrections and a counted uncertain dispatch across two
 binary logs. It separately restores the base snapshot and the later committed
 point. Nothing is imported into `goal_hint_db` or port 3306/3307. The shared
-`scripts/lib/isolated-mysql.mjs` checks child ownership, datadir, UUID and port
+`scripts/lib/isolated_mysql.py` checks child ownership, datadir, UUID and port
 before administrative operations or cleanup. Its test import remains available
 through `tests/helpers/mysql-instance.mjs`.
 

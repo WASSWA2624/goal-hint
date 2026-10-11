@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { deMargin, parseDecimalOdds } from '../src/domain/odds.ts';
@@ -96,7 +96,7 @@ test('odds import persistence on isolated genuine MySQL', { timeout: 300_000 }, 
 
       await t.test('reviewed migration deploys twice, verifies and keeps least-privilege odds grants', async () => {
         for (const command of ['deploy', 'verify']) {
-          await execute(process.execPath, ['--conditions=react-server', 'scripts/database.mjs', command], { env: p.env, windowsHide: true, timeout: 90_000 });
+          await execute(process.execPath, ['--conditions=react-server', 'scripts/database.py', command], { env: p.env, windowsHide: true, timeout: 90_000 });
         }
         const tables = await a.query((tx) => tx.$queryRaw`SELECT TABLE_NAME AS name, ENGINE AS engine, TABLE_COLLATION AS collation
           FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()

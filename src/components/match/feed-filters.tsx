@@ -83,6 +83,13 @@ const Panel = styled.section`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: ${({ theme }) => theme.border.cardRadius};
   box-shadow: ${({ theme }) => theme.shadow.card};
+  ${media.belowDesktop} {
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
   ${desktop} { padding: 12px 14px 10px; }
 `;
 /** Raised above the cards' full-row links, so the date and option popovers that overlap them stay usable. */
@@ -100,8 +107,9 @@ const PhoneMore = styled.div`
   display: grid;
   gap: 6px;
   min-inline-size: 0;
-  padding-block-start: 6px;
-  border-block-start: ${({ theme }) => theme.border.width} dashed ${({ theme }) => theme.color.border};
+  padding: 6px;
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   &[hidden] { display: none; }
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
@@ -115,7 +123,15 @@ const DateRow = styled.div`
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  > ${Segmented} {
+    border-radius: 0;
+    > a { min-block-size: 2rem; border-radius: 0; font-size: 0.75rem; }
+  }
+  @container phone-filters (max-width: 16rem) {
+    grid-template-columns: minmax(0, 1fr);
+    > ${Segmented} { justify-self: start; }
+  }
 `;
 const ChipRow = styled.div`
   display: grid;

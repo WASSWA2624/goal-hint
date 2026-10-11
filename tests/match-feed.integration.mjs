@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { matchFeedResponseSchema, matchFeedRules } from '../src/domain/match-feed.ts';
@@ -70,7 +70,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
     }
 
     await t.test('fresh migration, bounded query indexes and minimal limiter grants', async () => {
-      await execute(process.execPath, ['--conditions=react-server', 'scripts/database.mjs', 'verify'], { env: p.env, windowsHide: true, timeout: 60_000 });
+      await execute(process.execPath, ['--conditions=react-server', 'scripts/database.py', 'verify'], { env: p.env, windowsHide: true, timeout: 60_000 });
       const [table] = await p.a.query((tx) => tx.$queryRaw`SELECT ENGINE, TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='PublicSearchLimit'`);
       assert.equal(table.ENGINE, 'InnoDB'); assert.equal(table.TABLE_COLLATION, 'utf8mb4_bin');
       await assert.rejects(p.a.query((tx) => tx.publicSearchLimit.deleteMany()));

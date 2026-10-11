@@ -16,6 +16,7 @@ export const lifecycleObservationSchema = z.strictObject({
   competitionExternalId: externalId, season: z.number().int().min(1).max(9999).nullable(),
   kickoffAt: historyInstant.nullable(), status: statuses, providerStatus: label(32).nullable(),
   actualStartedAt: historyInstant.nullable(), elapsedMinutes: z.number().int().min(0).max(1000).nullable(),
+  stoppageMinutes: z.number().int().min(0).max(1000).nullable().optional(),
   retrievedAt: historyInstant, providerUpdatedAt: historyInstant.nullable(), endpoint: label(512),
   reportedGoals: pair, extraTimeScore: pair, penaltyScore: pair,
   regulationScore: z.strictObject({ fixtureId: externalId, providerStatus: z.enum(["FT", "AET", "PEN"]),
@@ -37,6 +38,7 @@ export function parseLifecycleInput(input: LifecycleInput): LifecycleObservation
       externalFixtureId: fixture.id, homeExternalId: fixture.homeTeam.id, awayExternalId: fixture.awayTeam.id,
       competitionExternalId: fixture.competition.id, season: fixture.competition.season,
       kickoffAt: fixture.kickoff, status: fixture.status, providerStatus: fixture.providerStatus, elapsedMinutes: fixture.elapsedMinutes,
+      ...(fixture.stoppageMinutes !== undefined ? { stoppageMinutes: fixture.stoppageMinutes } : {}),
       retrievedAt: fixture.source.retrievedAt, providerUpdatedAt: fixture.source.providerUpdatedAt, endpoint: fixture.source.endpoint,
       reportedGoals: fixture.reportedGoals, regulationScore: fixture.regulationScore,
       extraTimeScore: fixture.extraTimeScore, penaltyScore: fixture.penaltyScore }));

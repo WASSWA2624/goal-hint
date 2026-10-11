@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import test from 'node:test';
 import { createMarketSettlementService, createMarketSettlementJob } from '../src/server/settlement/settlement-service.ts';
@@ -66,7 +66,7 @@ test('audited settlement on genuine isolated MySQL', { timeout: 300_000 }, async
         version: (await tx.footballFixture.findUniqueOrThrow({ where: { id: state.fixture.id } })).dataVersion }));
     }
     await t.test('fresh migration, foreign keys, binary identities and append-only permissions', async () => {
-      await execute(process.execPath, ['--conditions=react-server', 'scripts/database.mjs', 'verify'], { env: p.env, windowsHide: true, timeout: 60_000 });
+      await execute(process.execPath, ['--conditions=react-server', 'scripts/database.py', 'verify'], { env: p.env, windowsHide: true, timeout: 60_000 });
       const tables = await p.a.query((tx) => tx.$queryRaw`SELECT ENGINE, TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()
         AND TABLE_NAME IN ('SettlementBatch','MarketSettlement','MarketSettlementRevision','SettlementEventReceipt')`);
       assert.equal(tables.length, 4); assert.ok(tables.every((row) => row.ENGINE === 'InnoDB' && row.TABLE_COLLATION === 'utf8mb4_bin'));

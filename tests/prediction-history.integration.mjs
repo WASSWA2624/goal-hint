@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile } from "./helpers/command-runtime.mjs";
 import { randomBytes, randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +21,7 @@ import { historyCandidate, cycleCreation, cycleChange, revisionInput } from './h
 import { MysqlServerUnavailableError, startIsolatedMysql } from './helpers/mysql-instance.mjs';
 
 const execute = promisify(execFile), workspace = fileURLToPath(new URL('../', import.meta.url));
-const script = fileURLToPath(new URL('../scripts/database.mjs', import.meta.url));
+const script = fileURLToPath(new URL('../scripts/database.py', import.meta.url));
 const denied = (reason) => (error) => error instanceof PredictionHistoryError && error.reason === reason;
 // Import receipts and audits are append-only, matching the application role.
 const catalogAppendOnly = ['FootballFixtureAudit', 'FootballImport'];

@@ -75,6 +75,8 @@ export type FixturePrice = z.infer<typeof fixturePriceSchema>;
 export const liveClockPhases = ["first-half", "half-time", "second-half", "extra-time", "break", "penalties", "interrupted", "suspended", "in-play"] as const;
 export const liveClockSchema = z.strictObject({
   phase: z.enum(liveClockPhases), minute: z.number().int().min(0).max(200).nullable(),
+  /** Additional minutes actually played, supplied separately by the provider. */
+  stoppageMinutes: z.number().int().min(0).max(1000).nullable().optional(),
 });
 export const fixtureUpdateSchema = z.strictObject({
   prediction: z.enum(["updating", "delayed", "current", "unavailable", "outside-window", "locked"]),

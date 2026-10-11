@@ -14,6 +14,7 @@ const resultSchema = z.strictObject({ id: historyHash, fixtureId: historyId, fix
   previousId: historyHash.nullable(), observationId: historyHash, observedAt: historyInstant,
   providerUpdatedAt: historyInstant.nullable(), regulationVerifiedAt: historyInstant.nullable(), status: resultStatus,
   providerStatus: z.string().max(32).nullable(), elapsedMinutes: z.number().int().nonnegative().nullable(),
+  stoppageMinutes: z.number().int().min(0).max(1000).nullable().optional(),
   reportedGoals: pair, extraTimeScore: pair, penaltyScore: pair,
   regulation: z.strictObject({ verified: z.boolean(), home: goal.nullable(), away: goal.nullable(), evidenceRef: z.string().min(1).max(512).nullable() }),
 }).refine((v) => v.regulation.verified
@@ -42,6 +43,7 @@ export function fixtureResultFromRow(row: HistoryRow): StoredFixtureResult {
   if (!parsed.success) return historyFail("invalid-state");
   const v = parsed.data;
   const content = { status: v.status, providerStatus: v.providerStatus, elapsedMinutes: v.elapsedMinutes,
+    ...(v.stoppageMinutes !== undefined ? { stoppageMinutes: v.stoppageMinutes } : {}),
     reportedGoals: v.reportedGoals, extraTimeScore: v.extraTimeScore, penaltyScore: v.penaltyScore, regulation: v.regulation };
   if (v.id !== row.id || v.fixtureId !== row.fixtureId || v.fixtureVersion !== row.fixtureVersion || v.observedAt !== historyTime(row.observedAt) ||
       v.status !== row.status || v.regulation.verified !== Boolean(row.regulationVerified) ||

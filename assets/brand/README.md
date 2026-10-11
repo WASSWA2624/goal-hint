@@ -72,18 +72,18 @@ export const metadata: Metadata = {
 
 ## Sources and regeneration
 
-Edit [brand-tokens.json](brand-tokens.json) and [`scripts/generate-brand.mjs`](../../scripts/generate-brand.mjs), then regenerate; avoid editing generated exports individually. The generator uses committed outlines from [source/type-outlines.json](source/type-outlines.json).
+Edit [brand-tokens.json](brand-tokens.json) and [`scripts/generate-brand.py`](../../scripts/generate-brand.py), then regenerate; avoid editing generated exports individually. The generator uses committed outlines from [source/type-outlines.json](source/type-outlines.json).
 
-Requires **Node.js 20.9 or later** and **Sharp 0.35.4**. From the repository root, this PowerShell setup installs build tooling in the temporary directory without creating application dependencies:
+Requires **Python 3.11 or later**, the repository's pinned **Node.js** and **Sharp 0.35.4**. Python generates the SVG geometry and documents; a small application adapter uses Sharp for raster exports. From the repository root, this PowerShell setup installs the raster codec in the temporary directory without creating application dependencies:
 
 ```powershell
 $brandTools = Join-Path $env:TEMP 'goal-hint-brand-tools'
 npm install --prefix "$brandTools" --no-save --package-lock=false sharp@0.35.4
 $env:BRAND_NODE_MODULES = Join-Path $brandTools 'node_modules'
-node scripts/generate-brand.mjs
+python scripts/generate-brand.py
 ```
 
-Optional type-outline rebuild: install Python's `fontTools` package, run `python scripts/build-brand-type.py`, then rerun the asset generator. The script sets the wordmark at weight 800 with −28 units of tracking (−40 more at the word space) and applies the font's own pair kerning to every string. Normal regeneration does not require Python.
+Optional type-outline rebuild: install Python's `fontTools` package, run `python scripts/build-brand-type.py`, then rerun the asset generator. The script sets the wordmark at weight 800 with −28 units of tracking (−40 more at the word space) and applies the font's own pair kerning to every string. Normal regeneration uses the committed outlines and does not require fontTools.
 
 The unmodified [Manrope source font](source/fonts/Manrope-wght.ttf) came from [Google Fonts](https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf). Its [SIL Open Font License](source/fonts/OFL.txt) is preserved alongside it; retain that license when redistributing the font.
 

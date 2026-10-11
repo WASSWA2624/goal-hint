@@ -2,6 +2,7 @@ node_modules/
 .next/
 out/
 dist/
+deploy/*.zip
 coverage/
 output/playwright/
 .playwright-cli/
@@ -9,6 +10,8 @@ output/playwright/
 *.ghb
 src/server/generated/
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
 next-env.d.ts
 npm-debug.log*
 .env*

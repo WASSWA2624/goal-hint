@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile } from "./helpers/command-runtime.mjs";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,7 +20,7 @@ import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql
 
 const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
-const databaseScript = fileURLToPath(new URL("../scripts/database.mjs", import.meta.url));
+const databaseScript = fileURLToPath(new URL("../scripts/database.py", import.meta.url));
 const initialNow = Date.parse("2026-10-08T12:00:00.000Z");
 const id = (value) => createHash("sha256").update(value).digest("hex");
 

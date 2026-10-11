@@ -54,11 +54,20 @@ const fifaCodes: Readonly<Record<string, string>> = {
   uruguay: "URU", usa: "USA", "united states": "USA", "united states of america": "USA", uzbekistan: "UZB",
   vanuatu: "VAN", venezuela: "VEN", vietnam: "VIE", wales: "WAL", yemen: "YEM", zambia: "ZAM", zimbabwe: "ZIM",
 };
+const knownCodes = new Set(Object.values(fifaCodes));
 
 /** Lowercase ASCII words: accents stripped; hyphens, apostrophes, "&" and other separators become single spaces. */
 function key(name: string): string {
   return name.normalize("NFKD").replace(/\p{M}+/gu, "").toLowerCase().replace(/&/gu, " and ")
     .replace(/[^a-z0-9]+/gu, " ").trim();
+}
+
+/** A recognized country only; derived abbreviations must never select another country's flag. */
+export function knownCountryCode(country: string | null | undefined): string {
+  const name = typeof country === "string" ? country.trim() : "";
+  const normalized = key(name);
+  if (Object.hasOwn(fifaCodes, normalized)) return fifaCodes[normalized]!;
+  return /^[A-Z]{3}$/u.test(name) && knownCodes.has(name) ? name : "";
 }
 
 /** The competition country's three-letter code (see the module rules); "" when there is no name. */

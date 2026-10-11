@@ -1,0 +1,4 @@
+# Only native Python backup encryption needs a third-party runtime dependency.
+cryptography>=46,<47
+# Optional: rebuilding the committed brand font outlines.
+fonttools>=4.60,<5

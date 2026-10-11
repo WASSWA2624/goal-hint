@@ -29,6 +29,7 @@ export type LifecycleObservation = Readonly<{
   competitionExternalId: number; season: number | null;
   kickoffAt: UtcInstant | null; status: SettlementStatus; providerStatus: string | null;
   actualStartedAt: UtcInstant | null; elapsedMinutes: number | null;
+  stoppageMinutes?: number | null | undefined;
   retrievedAt: UtcInstant; providerUpdatedAt: UtcInstant | null; endpoint: string;
   reportedGoals: Readonly<{ home: number | null; away: number | null }>;
   regulationScore: NormalizedFixture["regulationScore"];

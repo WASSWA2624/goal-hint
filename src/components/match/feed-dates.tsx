@@ -37,22 +37,24 @@ const field = css`
 `;
 /**
  * The middle of the phone date control: the stepper around it draws the box, so the date drops its
- * own and keeps the whole middle at 12px. Up to an 18rem filter panel (phones under ~340px) the
- * calendar icon steps aside, so even "Nov 20 – Dec 20" fits at 320px without an ellipsis.
+ * own and keeps the whole middle at 12px. Labels may wrap when text is enlarged; the date control
+ * grows with them instead of clipping the selected day or range.
  */
 const flush = css`
   flex: 1;
   justify-content: center;
   gap: 4px;
   min-inline-size: 0;
-  min-block-size: 1.75rem;
+  min-block-size: 1.875rem;
   padding-inline: 4px;
   background: none;
   border: 0;
   border-radius: 0;
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
-  > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+  line-height: 1.25;
+  white-space: normal;
+  > span { min-inline-size: 0; padding-block: 3px; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   @container phone-filters (max-width: 18rem) { > svg:first-child { display: none; } }
 `;
@@ -64,6 +66,7 @@ const OverlayInput = styled.input`
   position: absolute;
   inset: 0;
   inline-size: 100%;
+  min-inline-size: 0;
   opacity: 0;
   cursor: pointer;
   &::-webkit-calendar-picker-indicator { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; cursor: pointer; }
@@ -213,7 +216,7 @@ export function SingleDatePicker({ query, today, onApply }: { query: FeedQuery; 
 }
 
 /**
- * One 30px "‹ date ›" control: 28px steps at the ends, the date in the middle. It stays unpositioned
+ * One 32px "‹ date ›" control: 28px steps at the ends, the date in the middle. It stays unpositioned
  * and unclipped, so the range popover still anchors to the date row and focus rings show in full.
  */
 const Stepper = styled.div`
@@ -222,17 +225,15 @@ const Stepper = styled.div`
   min-inline-size: 0;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 6px;
+  border-radius: 0;
   > a, > span {
     display: grid;
     place-items: center;
-    min-block-size: 1.75rem;
+    min-block-size: 1.875rem;
     color: ${({ theme }) => theme.color.brand};
     font-size: 1rem;
     ${focusRing}
   }
-  > :first-child { border-start-start-radius: 5px; border-end-start-radius: 5px; }
-  > :last-child { border-start-end-radius: 5px; border-end-end-radius: 5px; }
   ${media.hover} { > a:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   > span { color: ${({ theme }) => theme.color.disabledText}; }
 `;

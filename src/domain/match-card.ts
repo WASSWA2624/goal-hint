@@ -62,7 +62,7 @@ export function selectedCardPrice(fixture: FixtureSnapshot, family: MarketFamily
   return pick && price && price.selection === pick.market.selection ? price : null;
 }
 
-export type LiveClock = { phase: (typeof liveClockPhases)[number]; minute: number | null };
+export type LiveClock = { phase: (typeof liveClockPhases)[number]; minute: number | null; stoppageMinutes?: number | null };
 const providerClockPhases: Readonly<Record<string, LiveClock["phase"]>> = Object.freeze({
   "1H": "first-half", HT: "half-time", "2H": "second-half", ET: "extra-time", BT: "break",
   P: "penalties", INT: "interrupted", SUSP: "suspended", LIVE: "in-play",
@@ -70,11 +70,13 @@ const providerClockPhases: Readonly<Record<string, LiveClock["phase"]>> = Object
 const runningPhases: ReadonlySet<LiveClock["phase"]> = new Set(["first-half", "second-half", "extra-time", "in-play"]);
 
 /** Paused phases never show a stale minute; an unmapped in-play code stays generic. */
-export function liveClockFromProvider(providerStatus: string | null, elapsedMinutes: number | null): LiveClock {
+export function liveClockFromProvider(providerStatus: string | null, elapsedMinutes: number | null, stoppageMinutes?: number | null): LiveClock {
   const phase = providerStatus !== null && Object.hasOwn(providerClockPhases, providerStatus) ? providerClockPhases[providerStatus]! : "in-play";
   const minute = runningPhases.has(phase) && Number.isSafeInteger(elapsedMinutes) && elapsedMinutes! >= 0 && elapsedMinutes! <= 200
     ? elapsedMinutes : null;
-  return { phase, minute };
+  const stoppage = minute !== null && Number.isSafeInteger(stoppageMinutes) && stoppageMinutes! > 0 && stoppageMinutes! <= 1000
+    ? stoppageMinutes! : null;
+  return { phase, minute, ...(stoppage !== null ? { stoppageMinutes: stoppage } : {}) };
 }
 
 export { isPlayedFinalStatus as hasFinalScoreStatus } from "./market-settlement.ts";

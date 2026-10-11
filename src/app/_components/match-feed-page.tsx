@@ -15,7 +15,7 @@ export function MatchFeedPage(props: {
   const [action, parameters = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
   const search = { action: action!, hidden: [...new URLSearchParams(parameters)] as [string, string][], value: query.search };
   const current = query.status === "finished" ? "results" : query.status === "live" ? "live" : "today";
-  return <PublicShell locale={query.locale} today={today} current={current} app search={search}>
+  return <PublicShell locale={query.locale} today={today} current={current} app compact search={search}>
     <FeedSurface {...props} />
   </PublicShell>;
 }

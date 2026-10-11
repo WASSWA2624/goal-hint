@@ -87,7 +87,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     status, score: isPlayedFinalStatus(status) && regulationScore
       ? regulationScore : live ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,
     scorePeriod: isPlayedFinalStatus(status) && regulation ? "regulation" : live ? "live" : null,
-    liveClock: coherentResult && status === "live" ? liveClockFromProvider(result!.providerStatus, result!.elapsedMinutes) : null,
+    liveClock: coherentResult && status === "live" ? liveClockFromProvider(result!.providerStatus, result!.elapsedMinutes, result!.stoppageMinutes) : null,
     partialCoverage, cycleId: cycle?.id ?? null, cycle: cycle ? { state: cycle.state, mode: display!.mode, ordinal: cycle.ordinal,
       lockedAt: cycle.lockedAt, voidReason } : null,
     forecast: revision ? { runId: revision.runId, runSequence: String(revision.runSequence), revisionId: revision.id, publishedAt: revision.publishedAt, markets,

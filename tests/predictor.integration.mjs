@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile } from "./helpers/command-runtime.mjs";
 import { randomBytes } from "node:crypto";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -13,7 +13,7 @@ import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql
 
 const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
-const databaseScript = fileURLToPath(new URL("../scripts/database.mjs", import.meta.url));
+const databaseScript = fileURLToPath(new URL("../scripts/database.py", import.meta.url));
 const denied = (reason) => (error) => error instanceof ModelStorageError && error.reason === reason && !error.message.includes("private-synthetic-key");
 function isolatedEnvironment(applicationUrl, migrationUrl) {
   const env = { ...process.env };

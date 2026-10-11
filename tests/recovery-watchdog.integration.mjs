@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { execFile } from 'node:child_process';
+import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
 import { recoveryHarness, recoveryPolicy, recoveryAuthority } from './helpers/recovery-fixtures.mjs';
@@ -35,7 +35,7 @@ test('private watchdog recovery invariants on isolated genuine MySQL', { timeout
   await withPredictionPipeline(t, async (p) => {
     const first = await p.setup(3000), failed = await p.setup(3005), crashed = await p.setup(3002), earlyFailed = await p.setup(3001);
     const h = await recoveryHarness(p), originalNow = p.now();
-    await promisify(execFile)(process.execPath, ['--conditions=react-server', 'scripts/database.mjs', 'verify'],
+    await promisify(execFile)(process.execPath, ['--conditions=react-server', 'scripts/database.py', 'verify'],
       { env: p.env, windowsHide: true, timeout: 60_000 });
     const counts = () => p.a.query(async (tx) => ({ jobs: await tx.durableJob.count(), events: await tx.durableJobEvent.count(),
       runs: await tx.dailyRun.count(), imports: await tx.footballImport.count(), audit: await tx.recoveryAudit.count(),

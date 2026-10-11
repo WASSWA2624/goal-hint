@@ -17,7 +17,7 @@ import { CompactSelect, focusRing, IconButton } from "./filter-parts";
 const desktop = media.desktop;
 
 /**
- * Phones and tablets stack the brand bar and the titles 10px apart; desktop keeps one wrapping row
+ * Phones and tablets stack the brand bar and the titles 6px apart; desktop keeps one wrapping row
  * of titles and date controls under the shell header's own logo.
  */
 const Row = styled.div`
@@ -26,12 +26,12 @@ const Row = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px 24px;
-  ${media.belowDesktop} { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  ${media.belowDesktop} { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 `;
 /**
  * App pages hide the shell header below desktop, so the feed carries the branded bar: the same navy
  * to teal fill and brand edge as the desktop header, full bleed past the page gutter and up through
- * the app page's 10px top padding to the screen edge. The inverse logo sits at the brand-kit minimum
+ * the app page's 8px top padding to the screen edge. The inverse logo sits at the brand-kit minimum
  * 160px wide beside the filter and search buttons.
  */
 const BrandBar = styled.div`
@@ -40,10 +40,10 @@ const BrandBar = styled.div`
   justify-content: space-between;
   gap: 8px;
   min-inline-size: 0;
-  min-block-size: ${({ theme }) => theme.header.phoneHeight};
-  margin-block-start: -10px;
-  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
-  padding-inline: ${({ theme }) => theme.layout.gutter};
+  min-block-size: 3rem;
+  margin-block-start: -8px;
+  margin-inline: -8px;
+  padding-inline: 8px;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.header.background};
   background-color: ${({ theme }) => theme.color.text};
@@ -56,10 +56,11 @@ const barFocus = css`
 /** The gutter and the bar's 7.5px above and below the artwork give the logo its clear space. */
 const HomeLink = styled(Link)`
   display: inline-flex;
-  flex: none;
+  flex: 0 1 160px;
+  min-inline-size: 0;
   text-decoration: none;
   > span { padding: 0; }
-  img { inline-size: 160px; block-size: auto; }
+  img { inline-size: 160px; max-inline-size: 100%; block-size: auto; }
   ${barFocus}
 `;
 /** Below the brand bar, phones set the title and subtitle a little tighter; desktop is unchanged. */
@@ -68,7 +69,7 @@ const Titles = styled.div`
   gap: 0;
   min-inline-size: 0;
   > h1 { font-size: 1.125rem; line-height: 1.2; ${desktop} { font-size: 1.5rem; } }
-  > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.6875rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.medium}; ${desktop} { font-size: 0.8125rem; } }
+  > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.75rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.medium}; ${desktop} { font-size: 0.8125rem; } }
   ${media.belowDesktop} { > h1 { line-height: 1.15; } > p { line-height: 1.25; } }
 `;
 const PhoneActions = styled.div`
@@ -76,13 +77,13 @@ const PhoneActions = styled.div`
   flex: none;
   gap: 8px;
 `;
-/** Translucent white rounds on the bar; an open panel or search fills its button with inverse teal. */
+/** Compact translucent controls; an open panel or search fills its button with inverse teal. */
 const RoundButton = styled(IconButton)`
   inline-size: 2rem;
   block-size: 2rem;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.controlFill};
-  border-radius: 50%;
+  border-radius: 0;
   font-size: 1rem;
   transition: background-color 120ms ease, color 120ms ease;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
@@ -119,13 +120,13 @@ const SearchForm = styled.form`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-inline: 10px 2px;
-  min-block-size: ${({ theme }) => theme.control.compactHeight};
+  padding-inline: 8px 2px;
+  min-block-size: 2rem;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
-  border-radius: 6px;
+  border-radius: 0;
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
-  > input { flex: 1; min-inline-size: 0; border: 0; background: none; color: ${({ theme }) => theme.color.text}; font: inherit; outline: none; }
+  > input { flex: 1; min-inline-size: 0; border: 0; background: none; color: ${({ theme }) => theme.color.text}; font: inherit; font-size: 1rem; outline: none; }
   > button { inline-size: 2rem; block-size: 2rem; font-size: 1rem; }
   ${desktop} { display: none; }
 `;
@@ -205,7 +206,7 @@ const Count = styled.div`
   display: grid;
   gap: 0;
   min-inline-size: 0;
-  > h2 { font-size: 0.8125rem; white-space: nowrap; ${desktop} { font-size: 1.25rem; } }
+  > h2 { font-size: 0.75rem; ${desktop} { font-size: 1.25rem; } }
   > p { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: block; } }
 `;
 const PhoneText = styled.span`${desktop} { display: none; }`;
@@ -216,7 +217,7 @@ const SortGroup = styled.div`
   align-items: center;
   gap: 4px;
   > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
-  ${media.belowDesktop} { gap: 8px; margin-inline-start: auto; }
+  ${media.belowDesktop} { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-inline-size: 0; margin-inline-start: auto; }
 `;
 const SelectWrap = styled.span`
   position: relative;
@@ -240,24 +241,26 @@ const SelectWrap = styled.span`
 /** Phone order: the sort field and its reverse button joined as one control. */
 const PhoneOrder = styled.div`
   display: inline-flex;
+  min-inline-size: 0;
   ${desktop} { display: none; }
 `;
 const PhoneSort = styled(CompactSelect)`
   min-block-size: 1.75rem;
   padding-inline: 7px 22px;
+  border-radius: 0;
+  font-size: 0.75rem;
   border-start-end-radius: 0;
   border-end-end-radius: 0;
   > svg { inset-inline-end: 7px; }
 `;
 const ReverseButton = styled(IconButton)`
   inline-size: 1.75rem;
-  block-size: 1.75rem;
+  min-block-size: 1.75rem;
+  block-size: auto;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-inline-start: 0;
   border-radius: 0;
-  border-start-end-radius: 6px;
-  border-end-end-radius: 6px;
   font-size: 0.875rem;
 `;
 /** Toggle chip: keeps only matches that have a prediction. */
@@ -270,9 +273,9 @@ const PicksToggle = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surfaceMuted};
   border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 6px;
+  border-radius: 0;
   font: inherit;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   white-space: nowrap;
   cursor: pointer;
@@ -285,7 +288,7 @@ const PicksToggle = styled.button`
   }
   ${focusRing}
   ${media.belowDesktop} { &:not([aria-pressed="true"]) { background: ${({ theme }) => theme.color.surface}; border-color: ${({ theme }) => theme.color.border}; } }
-  ${desktop} { min-block-size: 2.375rem; padding-inline: 12px; font-size: 0.875rem; }
+  ${desktop} { min-block-size: 2.375rem; padding-inline: 12px; border-radius: 6px; font-size: 0.875rem; }
 `;
 
 const sortOptions: readonly FeedSort[] = [

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { execFile } from 'node:child_process';
+import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { createPublicResponseCache, publicCacheDescriptor } from '../src/server/cache/public-cache.ts';
@@ -43,8 +43,8 @@ test('shared public cache, transactional invalidation and recovery on genuine My
     globalThis.fetch = async () => { network++; throw new Error('Public cache attempted network I/O'); };
     try {
       await t.test('migration repeats/verifies, triggers exist, application cannot forge generations or journals', async () => {
-        await execute(process.execPath, ['--conditions=react-server', 'scripts/database.mjs', 'deploy'], { env: p.env, windowsHide: true, timeout: 60_000 });
-        await execute(process.execPath, ['--conditions=react-server', 'scripts/database.mjs', 'verify'], { env: p.env, windowsHide: true, timeout: 60_000 });
+        await execute(process.execPath, ['--conditions=react-server', 'scripts/database.py', 'deploy'], { env: p.env, windowsHide: true, timeout: 60_000 });
+        await execute(process.execPath, ['--conditions=react-server', 'scripts/database.py', 'verify'], { env: p.env, windowsHide: true, timeout: 60_000 });
         const triggers = await p.a.query(tx => tx.$queryRaw`SELECT TRIGGER_NAME FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME LIKE 'PublicCache_%'`);
         // information_schema exposes only triggers on tables for which the role has TRIGGER rights.
         assert.equal(triggers.length, 0);
@@ -278,10 +278,10 @@ test('shared public cache, transactional invalidation and recovery on genuine My
       });
       assert.equal(network, 0);
       await t.test('private maintenance command uses approved database access and rejects unbounded batches', async () => {
-        const result = await execute(process.execPath, ['--conditions=react-server', 'scripts/public-cache-reconcile.mjs', '100'],
+        const result = await execute(process.execPath, ['--conditions=react-server', 'scripts/public-cache-reconcile.py', '100'],
           { env: p.env, windowsHide: true, timeout: 30_000 });
         const receipt = JSON.parse(result.stdout); assert.ok(receipt.acknowledged >= 0); assert.ok(receipt.removed >= 0);
-        await assert.rejects(execute(process.execPath, ['--conditions=react-server', 'scripts/public-cache-reconcile.mjs', '1001'],
+        await assert.rejects(execute(process.execPath, ['--conditions=react-server', 'scripts/public-cache-reconcile.py', '1001'],
           { env: p.env, windowsHide: true, timeout: 30_000 }), error => !error.stderr.includes(p.env.MIGRATION_DATABASE_URL));
       });
     } finally { globalThis.fetch = originalFetch; }

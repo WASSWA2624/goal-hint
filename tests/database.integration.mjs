@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile } from "./helpers/command-runtime.mjs";
 import { randomBytes } from "node:crypto";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -9,7 +9,7 @@ import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql
 
 const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
-const script = fileURLToPath(new URL("../scripts/database.mjs", import.meta.url));
+const script = fileURLToPath(new URL("../scripts/database.py", import.meta.url));
 
 function isolatedEnvironment(url) {
   const env = { ...process.env };

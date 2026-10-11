@@ -71,6 +71,8 @@ export type NormalizedFixture = Readonly<{
   status: SettlementStatus;
   providerStatus: string | null;
   elapsedMinutes: number | null;
+  /** API-Football fixture.status.extra: additional minutes played in the current half. */
+  stoppageMinutes?: number | null | undefined;
   regulationScore: (RegulationScoreCandidate & Readonly<{ verified: boolean }>) | null;
   reportedGoals: ScorePair;
   extraTimeScore: ScorePair;
@@ -203,7 +205,7 @@ const competitionEnvelopeSchema = z.object({
 const fixtureSchema = z.object({
   fixture: z.object({
     id: identity, date: text, timestamp: z.number().int().nonnegative().max(253_402_300_799).nullable().optional(),
-    timezone: text, status: z.object({ short: text, elapsed: goal }).nullable().optional(),
+    timezone: text, status: z.object({ short: text, elapsed: goal, extra: goal }).nullable().optional(),
   }),
   league: leagueSchema,
   teams: z.object({ home: teamSchema, away: teamSchema }),
@@ -442,6 +444,7 @@ export function normalizeFixture(raw: unknown, context: NormalizationContext): N
   return valid({ id: input.fixture.id, homeTeam: team(input.teams.home, context, missing, "home-team"),
     awayTeam: team(input.teams.away, context, missing, "away-team"), competition: competition(input.league, context, missing),
     kickoff: instant, status, providerStatus, elapsedMinutes: input.fixture.status?.elapsed ?? null,
+    ...(input.fixture.status?.extra !== undefined ? { stoppageMinutes: input.fixture.status.extra } : {}),
     regulationScore, reportedGoals: pair(input.goals), extraTimeScore: pair(input.score?.extratime),
     penaltyScore: pair(input.score?.penalty), source: source(context, missing) }, missing);
 }

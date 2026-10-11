@@ -1,6 +1,6 @@
 import { defineConfig } from "prisma/config";
 
-// scripts/database.mjs validates private policy and supplies the normalized URL.
+// scripts/database.py validates private policy and supplies the normalized URL.
 // Prisma's config loader must not load web-only markers through its TS resolver.
 const migrationUrl = process.env.MIGRATION_DATABASE_URL;
 

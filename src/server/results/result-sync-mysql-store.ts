@@ -142,6 +142,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
             const outcome = originallyAccepted && !accepted ? "stale" : receipt.outcome;
             const verified = fixture.regulationHome !== null && fixture.regulationAway !== null && fixture.regulationVerifiedAt !== null;
             const value = { status: fixture.status, providerStatus: fixture.providerStatus, elapsedMinutes: fixture.elapsedMinutes,
+              ...(observation.stoppageMinutes !== undefined ? { stoppageMinutes: observation.stoppageMinutes } : {}),
               reportedGoals: observation.reportedGoals, extraTimeScore: observation.extraTimeScore, penaltyScore: observation.penaltyScore,
               regulation: { verified, home: verified ? fixture.regulationHome : null, away: verified ? fixture.regulationAway : null,
                 evidenceRef: verified ? fixture.regulationEvidenceRef : null } };

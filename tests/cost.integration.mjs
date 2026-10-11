@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile } from "./helpers/command-runtime.mjs";
 import { randomBytes } from "node:crypto";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,7 @@ import { COST_NOW, USD, costId, costPeriod, costJob, costRate, costRequest, cost
 
 const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
-const databaseScript = fileURLToPath(new URL("../scripts/database.mjs", import.meta.url));
+const databaseScript = fileURLToPath(new URL("../scripts/database.py", import.meta.url));
 const costTables = ["CostBudgetAccount", "CostBudgetPeriod", "CostBudgetJob", "CostBudgetAttempt"];
 const quotaTables = ["ApiQuotaAccount", "ApiQuotaPeriod", "ApiQuotaAttempt"];
 

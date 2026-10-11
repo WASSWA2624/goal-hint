@@ -1,1 +1,1 @@
-export { MysqlServerUnavailableError, discoverMysqlServer, startIsolatedMysql } from '../../scripts/lib/isolated-mysql.mjs';
+export { MysqlServerUnavailableError, discoverMysqlServer, startIsolatedMysql } from '../../src/server/backup/isolated-mysql.mjs';

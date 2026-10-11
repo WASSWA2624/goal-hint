@@ -1,7 +1,7 @@
 """Rebuild the font-independent SVG outlines used by the Goal Hint brand kit.
 
 Requires fontTools. The bundled, unmodified Manrope font is licensed under OFL-1.1.
-Normal asset exports use the committed outlines and do not require Python.
+Normal asset exports use the committed outlines and do not require fontTools.
 """
 
 import json

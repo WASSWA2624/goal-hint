@@ -4,10 +4,10 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import path from 'node:path';
 import { Writable } from 'node:stream';
 import test from 'node:test';
-import { BackupError, backupHealth, parseBackupPolicy } from '../scripts/lib/backup-contract.mjs';
-import { backupText, decryptBackup, sealBackup, verifyBackup } from '../scripts/lib/backup-crypto.mjs';
-import { captureMysqlSnapshot, validateLogChain, withRestoredMysql } from '../scripts/lib/backup-engine.mjs';
-import { executeBackupCommand } from '../scripts/backup.mjs';
+import { BackupError, backupHealth, parseBackupPolicy } from '../src/server/backup/backup-contract.mjs';
+import { backupText, decryptBackup, sealBackup, verifyBackup } from '../src/server/backup/backup-crypto.mjs';
+import { captureMysqlSnapshot, validateLogChain, withRestoredMysql } from '../src/server/backup/backup-engine.mjs';
+import { executeBackupCommand } from '../src/server/backup/backup-command.mjs';
 import { backupPolicy, backupAuthority } from './helpers/backup-fixtures.mjs';
 import { assessBackupHealth } from '../src/server/monitoring/monitoring-backup.ts';
 import { evaluateMonitoring } from '../src/server/monitoring/monitoring-rules.ts';
