@@ -12,7 +12,7 @@ import { hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedC
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
-import { createMessages } from "@/i18n/messages";
+import type { Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
@@ -33,7 +33,6 @@ export type MatchCardProps = {
   position?: number;
 };
 
-type Messages = ReturnType<typeof createMessages>;
 type TeamResult = "win" | "loss" | null;
 type StateTone = "live" | "final" | "halted";
 const countryFlagUrl = (fixture: FixtureSnapshot) => fixture.competition.countryFlagUrl ?? null;
@@ -317,7 +316,7 @@ const Score = styled.span<{ $live: boolean }>`
     gap: 3px;
     color: ${({ theme, $live }) => $live ? theme.color.live.text : theme.color.text};
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: ${({ $live }) => $live ? 700 : 500};
     font-variant-numeric: normal;
   }
 `;
@@ -335,12 +334,7 @@ const StateChip = styled.span<{ $tone: StateTone }>`
     : $tone === "final" ? css`color: ${theme.color.mutedText}; background: ${theme.color.surfaceMuted};`
     : css`color: ${theme.color.accent.amber.text}; background: ${theme.color.accent.amber.soft};`}
   ${tile} {
-    font-size: 0.75rem;
-    font-weight: 400;
-    line-height: 1;
-    padding: 0;
-    background: none;
-    ${({ $tone }) => $tone !== "live" && visuallyHidden}
+    ${({ $tone }) => $tone === "live" ? css`display: none;` : visuallyHidden}
   }
 `;
 const LiveDot = styled.span`
@@ -606,24 +600,30 @@ function liveClockLabel(fixture: FixtureSnapshot, messages: Messages) {
   const stoppage = fixture.liveClock?.stoppageMinutes;
   const clock = minute === null ? "" : messages.number(minute) + (stoppage ? `+${messages.number(stoppage)}` : "");
   const visible = minute !== null ? messages.text("match.clock.minute", { minute: clock })
-    : phase === "in-play" ? messages.text("match.liveBadge") : messages.text(`match.clock.${phase}`);
-  return { minute, phase, visible, stoppage };
+    : phase === "in-play" ? "–" : messages.text(`match.clock.${phase}`);
+  const spoken = [messages.text("match.status.live"), phase === "half-time" ? messages.text("match.clock.halfTimeLabel")
+    : phase === "in-play" ? null : messages.text(`match.clock.${phase}`),
+    minute === null ? null : messages.text("match.clock.minuteLabel", { minute: messages.number(minute) }),
+    stoppage ? messages.text("match.clock.stoppageLabel", { minute: messages.number(stoppage) }) : null].filter(Boolean).join(", ");
+  return { minute, visible, spoken };
 }
 
 function MatchStatus({ fixture, messages }: { fixture: FixtureSnapshot; messages: Messages }) {
   const { status } = fixture;
+  const clock = status === "live" ? liveClockLabel(fixture, messages) : null;
   const phase = fixture.liveClock?.phase;
   const paused = status === "live" && (phase === "interrupted" || phase === "suspended");
   const final = hasFinalScoreStatus(status);
   const tone = paused || status === "postponed" ? "amber"
     : status === "live" || status === "canceled" || status === "abandoned" ? "red"
     : status === "scheduled" ? "blue" : final ? "teal" : "neutral";
-  const label = paused ? messages.text(`match.clock.${phase}`)
+  const label = clock ? clock.visible
     : status === "scheduled" ? messages.text("match.status.upcoming")
     : final ? messages.text("match.status.ended")
     : status === "unknown" ? "–" : messages.text(`match.status.${status}`);
   return <StatusBadge $tone={tone} data-match-status={status} title={messages.text(`match.status.${status}`)}
-    aria-label={status === "unknown" ? messages.text("match.status.unknown") : undefined}>{label}</StatusBadge>;
+    data-live-minute={clock?.minute ?? undefined}
+    aria-label={clock?.spoken ?? (status === "unknown" ? messages.text("match.status.unknown") : undefined)}>{label}</StatusBadge>;
 }
 
 function MatchState({ fixture, home, away, messages }: { fixture: FixtureSnapshot; home: string; away: string; messages: Messages }) {
@@ -631,19 +631,15 @@ function MatchState({ fixture, home, away, messages }: { fixture: FixtureSnapsho
   const final = hasFinalScoreStatus(status);
   const scoreline = score && (status === "live" || final) ? <>
     <Score aria-hidden="true" $live={status === "live"}><span>{messages.number(score.home)}</span><span>–</span><span>{messages.number(score.away)}</span></Score>
-    <ScoredVersus aria-hidden="true">{messages.text("match.versus")}</ScoredVersus>
+    {status !== "live" && <ScoredVersus aria-hidden="true">{messages.text("match.versus")}</ScoredVersus>}
     <VisuallyHidden>{messages.text("match.scoreline", { label: messages.text(final ? "match.finalScore" : "match.liveScore"),
       home, away, homeScore: messages.number(score.home), awayScore: messages.number(score.away) })}</VisuallyHidden>
   </> : <>
-    <Versus aria-hidden="true">{messages.text("match.versus")}</Versus>
+    <Versus aria-hidden="true">{status === "live" ? "–" : messages.text("match.versus")}</Versus>
     {(status === "live" || final) && <VisuallyHidden>{messages.text(final ? "match.finalScoreUnknown" : "match.scoreUnknown")}</VisuallyHidden>}
   </>;
   if (status === "live") {
-    const { minute, phase, visible, stoppage } = liveClockLabel(fixture, messages);
-    const spoken = [messages.text("match.status.live"), phase === "half-time" ? messages.text("match.clock.halfTimeLabel")
-      : phase === "in-play" ? null : messages.text(`match.clock.${phase}`),
-      minute === null ? null : messages.text("match.clock.minuteLabel", { minute: messages.number(minute) }),
-      stoppage ? messages.text("match.clock.stoppageLabel", { minute: messages.number(stoppage) }) : null].filter(Boolean).join(", ");
+    const { minute, visible, spoken } = liveClockLabel(fixture, messages);
     return <Center data-match-state="live">{scoreline}
       <StateChip $tone="live" data-live-minute={minute ?? ""}><LiveDot aria-hidden="true" /><span aria-hidden="true">{visible}</span>
         <VisuallyHidden>{spoken}</VisuallyHidden></StateChip>

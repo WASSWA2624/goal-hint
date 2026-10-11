@@ -42,6 +42,14 @@ def main() -> None:
         if information:
             expected = f"/en/{information}"
             assert_navigation(visible, primary=expected, footer=expected, mobile=expected if information == "help" else None)
+            if information == "help":
+                for section in ["dates", "filters", "browsing", "cards", "predictions", "updates", "results"]:
+                    assert f'id="{section}"' in visible
+                    assert f'href="#{section}"' in visible
+                for phrase in ["Choose a day or range", "Your device’s time zone", "Earliest first",
+                        "elapsed minutes in the top-right badge", "A live 1X2 prediction remains Pending"]:
+                    assert phrase in visible
+                no_match(r'data-stored-performance|data-performance-cell|action="[^"\s]*#performance', visible)
         else:
             status = parse_qs(target.query).get("status", ["all"])[0]
             expected = results_path if status == "finished" else today_path + "?status=live" if status == "live" else today_path

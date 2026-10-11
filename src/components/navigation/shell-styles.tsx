@@ -81,7 +81,7 @@ export const HeaderContent = styled(Container)`
   align-items: center;
   gap: ${({ theme }) => theme.space.lg};
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
-  ${desktop} { gap: ${({ theme }) => theme.space.lg}; min-block-size: 4rem; }
+  ${desktop} { flex-wrap: wrap; gap: ${({ theme }) => theme.space.lg}; min-block-size: 4rem; }
   ${media.wide} { gap: ${({ theme }) => theme.space.xl}; }
 `;
 
@@ -106,16 +106,19 @@ export const HomeLink = styled(TextLink)`
   }
 `;
 
-/** The section links keep their natural width; the search box absorbs narrower desktops. */
+/** Links retain natural widths and can flow onto another line with enlarged text. */
 export const DesktopNav = styled.nav`
   display: none;
   flex: none;
+  max-inline-size: 100%;
+  min-inline-size: 0;
   align-self: stretch;
   ${desktop} { display: flex; }
 `;
 
 export const TopNavList = styled.ul`
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   gap: ${({ theme }) => theme.space.xs};
   margin: 0;
@@ -174,7 +177,7 @@ export const MoreMenu = styled.details<{ $tone?: AccentName }>`
 export const MoreList = styled.ul`
   position: absolute;
   inset-block-start: calc(100% + 4px);
-  inset-inline-start: 0;
+  inset-inline-end: 0;
   z-index: 25;
   min-inline-size: 12rem;
   margin: 0;
@@ -207,7 +210,7 @@ export const HeaderSearch = styled.form`
   display: none;
   ${desktop} {
     display: flex;
-    flex: 1 1 26rem;
+    flex: 1 1 9rem;
     max-inline-size: 26rem;
     min-inline-size: 9rem;
     align-items: center;

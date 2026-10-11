@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "./messages";
 
-let timeZone = publicPolicy.reportingTimeZone;
+let timeZone: string = publicPolicy.reportingTimeZone;
 const listeners = new Set<() => void>();
 let stop: (() => void) | null = null;
 

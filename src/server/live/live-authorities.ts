@@ -21,7 +21,7 @@ import type { ResultSyncAuthority, ResultSyncPolicy } from "../results/result-sy
 import type { SelectionAuthority, SelectionPolicy } from "../selection/selection-contract.ts";
 import { parseSelectionPolicy } from "../selection/selection-input.ts";
 import { cutoffPolicy, evidencePolicy, fallbackRefreshPlan, lifecyclePolicy, providerFallbackPolicy, providerStatusMappings,
-  publicationPolicy, type LiveReferences } from "./live-plan.ts";
+  publicationPolicy, type LiveReferences, type RefreshPacing } from "./live-plan.ts";
 
 /** Clock skew tolerated between provider retrieval stamps and this process. */
 const SKEW_MS = 5_000;
@@ -42,6 +42,8 @@ function pages(result: Pick<ApiFootballResult<unknown>, "provenance">, endpoint:
 export function createLiveAuthorities(options: Readonly<{
   policy: RuntimePolicy; verify: EvidenceVerifier; refs: LiveReferences; selection: SelectionPolicy;
   resultPolicy: () => ResultSyncPolicy | null; statusEvidenceRef: string; clock?: Clock;
+  /** The same verified plan pacing used to configure refresh requests. */
+  refreshPacing: RefreshPacing;
   /** The exact odds policy configured from the same workload as the runtime, or null without a bookmaker. */
   oddsPolicy?: OddsPolicy | null;
 }>) {
@@ -138,7 +140,7 @@ export function createLiveAuthorities(options: Readonly<{
   const refresh: RefreshAuthority = Object.freeze({
     authorize() { publish(); },
     verifyPlan: (plan, member: RefreshMember) => {
-      try { return same(plan, parseRefreshPlan(fallbackRefreshPlan(member, refs), member)); } catch { return false; }
+      try { return same(plan, parseRefreshPlan(fallbackRefreshPlan(member, refs, options.refreshPacing), member)); } catch { return false; }
     },
   });
   const results: ResultSyncAuthority = Object.freeze({

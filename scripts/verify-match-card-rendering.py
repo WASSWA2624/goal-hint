@@ -39,6 +39,8 @@ def verify(origin, directory):
         match(r'data-result-badge="unavailable"[^>]*><span>–</span></span>', by_id[card])
     no_match(r"Final score:|Live score:|data-live-minute=", by_id["card-delayed"])
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
+    match(r'data-match-status="live"[^>]*>67′</span>', by_id["card-pending"])
+    no_match(r">(?:vs|VS)<", by_id["card-pending"])
     checks = {
         "card-correct": ["Final score: Example Home FC 2, Example Away FC 1", "Match result prediction: Home win, estimated probability 54%", ">FT<", "AI prediction"],
         "card-pending": ['data-live-minute="67"', "Live, 2nd half, 67 minutes played", "Live score: Example Home FC 2, Example Away FC 0"],

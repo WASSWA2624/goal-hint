@@ -21,8 +21,8 @@ Import directly from the owning module under `@/components/match`:
 
 Desktop presentation retains its compact table composition:
 
-1. Header: competition (and country), compact EAT kickoff day and time in one
-   `time` element whose title carries the full EAT instant.
+1. Header: competition (and country), compact local kickoff day and time in one
+   `time` element whose title carries the full instant and displayed zone.
 2. Teams: logos and names either side of a centre state. Scheduled shows `VS`;
    live shows the score and a red chip with the provider minute (`67′`) or
    phase (`HT`, `Break`, `Penalties`…); finished shows the score with `FT`,
@@ -51,16 +51,16 @@ away, market, prediction and a chevron.
 
 The mobile card has exactly four visible rows; the desktop retains its existing table columns:
 
-1. Match date and 24-hour kickoff time with visible EAT zone together on the left; a color-coded match status badge on the right.
+1. Match date and 24-hour local kickoff time with a visible zone together on the left; a color-coded match status badge on the right. For live matches this badge shows the supplied elapsed minute, including stoppage notation such as `90+4′`, instead of Live. With no minute, it shows the actual phase or a dash when the phase is unknown.
 2. Country flag and FIFA code on the left; one-line, ellipsized league name and competition logo on the right, with the logo at the outer edge.
-3. Single-line home name and crest, centered score above VS with live minutes below, away crest and single-line name.
+3. Single-line home name and crest, compact centered match state, away crest and single-line name. A live match shows its bold score in place of VS, with no minute repeated beneath it. Upcoming matches show VS; finished matches retain their score and final state.
 4. Four compact cells: market code, full selection label, estimated probability and outcome. No heading row.
 
-All screen sizes show 24-hour kickoff times with the EAT label and country flags/codes. Within the existing desktop league column, country metadata sits above the league name and logo to keep both readable without adding table columns.
+All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Within the existing desktop league column, country metadata sits above the league name and logo to keep both readable without adding table columns.
 
-Cards use 4px vertical/8px horizontal padding, 2px internal row gaps, 8px page gutters and 6px list gaps. Metadata and team names are 12px, scores 14px and prediction cells have a 24px minimum height. Cards remain about 101px, or 113px with a live clock. Long names ellipsize on one line; wrapping prediction/result labels may grow naturally. The existing variable Manrope font uses a lighter 350 weight for mobile team names and regular prediction labels. Crisp borders and 6px corners separate the white cards from the blue-gray feed background without shadows. Desktop typography remains unchanged. Text is in rem; card/cell heights are never fixed.
+Cards use 4px vertical/8px horizontal padding, 2px internal row gaps, 8px page gutters and 6px list gaps. Metadata and team names are 12px, scores 14px and prediction cells have a 24px minimum height. Cards remain about 101px at normal text size; the live clock adds no separate center row. Long names ellipsize on one line; wrapping prediction/result labels may grow naturally. The existing variable Manrope font uses a lighter 350 weight for mobile team names and regular prediction labels. Crisp borders and 6px corners separate the white cards from the blue-gray feed background without shadows. Desktop typography remains unchanged. Text is in rem; card/cell heights are never fixed.
 
-Blue prediction cells and neutral/green/red result cells follow the mobile reference. `correct` is presented as Won (✓), `incorrect` as Lost (✕), and pending as Pending (–). Void retains its label; unavailable displays a dash, with the full missing-prediction reason retained in accessible text. Only supplied, correctly bound final settlements can show Won/Lost. Scheduled matches show VS without an invented score. Running clocks include available `stoppageMinutes`; paused phases retain their phase label. Top-row badges show blue Upcoming, red Live and teal Ended; postponed, canceled, abandoned, awarded and paused live states retain their actual labels instead of being grouped into an inaccurate status.
+Blue prediction cells and neutral/green/red result cells follow the mobile reference. `correct` is presented as Won (✓), `incorrect` as Lost (✕), and pending as Pending (–). Void retains its label; unavailable displays a dash, with the full missing-prediction reason retained in accessible text. Only supplied, correctly bound final settlements can show Won/Lost. Scheduled matches show VS without an invented score. Running clocks include available `stoppageMinutes`; paused phases retain their phase label. Top-row badges show blue Upcoming, the red live clock and teal Ended; postponed, canceled, abandoned, awarded and paused live states retain their actual labels instead of being grouped into an inaccurate status. Live score changes never settle a pending prediction.
 
 Local MIT-licensed SVG flags in `public/flags` resolve recognized football countries, including England, Scotland, Wales and Northern Ireland, and work without a remote image request. A safe supplied provider flag is a secondary fallback. Unknown countries never borrow another country's flag from a derived abbreviation; international fixtures retain a globe. League/team images keep the existing URL safety and loading fallback behavior.
 
@@ -111,7 +111,7 @@ shared visible focus. Missing scores are announced as unavailable.
 | Forecast | `updateDelayed?: boolean`, an actual delayed-update flag; `provisional?: boolean`, defaulting to true in presentation. |
 | Each forecast market | `limitedNews?: boolean` and optional `outcome`. |
 | Outcome | `cycleId`, `revisionId`, `selection`, canonical `status`, and nullable public `explanation`. Void requires a nonempty explanation. |
-| Fixture | `liveClock?: { phase, minute } | null`, present only while `status` is `live`. Phases: first-half, half-time, second-half, extra-time, break, penalties, interrupted, suspended, in-play. `minute` is the provider elapsed minute for running phases and null while play is paused. |
+| Fixture | `liveClock?: { phase, minute, stoppageMinutes? } | null`, present only while `status` is `live`. Phases: first-half, half-time, second-half, extra-time, break, penalties, interrupted, suspended, in-play. `minute` is the provider elapsed minute for running phases and null while play is paused. Optional `stoppageMinutes` retains supplied additional minutes; an unknown minute is never invented. |
 
 These fields are part of the entire versioned fixture snapshot. A newer version
 replaces them together with score/status/forecast; equal or older versions
@@ -133,7 +133,7 @@ The score remains an overall display value, not a verified regulation score;
 the settlement domain/server owns regulation-time decisions.
 
 The server projection derives `liveClock` from the sealed, coherent
-`FixtureResult` version (`providerStatus` and `elapsedMinutes`) with
+`FixtureResult` version (`providerStatus`, `elapsedMinutes` and optional `stoppageMinutes`) with
 `liveClockFromProvider`. A changed minute creates a new result and fixture data
 version, so the card's minute advances with the existing live-refresh cadence;
 the browser does not extrapolate the clock between refreshes.
@@ -155,10 +155,10 @@ Pending and Unavailable add no mark; their status remains in hidden text and
 
 Source comes from the selected market (AI prediction or API-Football fallback).
 The card's pill tooltip names the source and the actual forecast `publishedAt`
-as a full Gregorian EAT date/time label; the detail page keeps the visible
+as a full Gregorian local date/time label; the detail page keeps the visible
 publication `time`. Kickoff uses the same shared calendar
-validation and explicit Kampala time zone. Browser locale/time zone and the
-current clock cannot change the supplied instant. Formatting caches contain
+validation and device time zone, with a stable EAT server fallback. Browser locale/time zone and the
+current clock cannot change the supplied instant or reporting cohort. Formatting caches contain
 only immutable `Intl` formatters, never visitor data.
 
 The pill tooltip says Provisional estimate unless trusted server data
@@ -198,6 +198,7 @@ technology; full team names provide identity throughout.
 
 ```text
 npm run test:card
+node --conditions=react-server --test tests/stoppage-time.test.mjs
 node --conditions=react-server --test tests/team-name.test.mjs tests/country-code.test.mjs
 npm run test:card:rendering
 npm run test:card:rendering -- --serve
@@ -218,6 +219,10 @@ for every stored country and the derived fallback. The rendering script builds a
 labeled synthetic examples include every outcome, both sources, missing/broken
 logos, delayed/limited/partial coverage, unknown fields and long names. An
 isolated analysis destination exists solely for keyboard acceptance.
+The live rendering example is a 2–0 score at `67′` with a Pending prediction;
+the verifier checks its elapsed-minute status badge and absence of VS.
+Stoppage-time and unknown-minute domain cases are covered separately by
+`tests/stoppage-time.test.mjs`; they are not additional rendering examples.
 
 Playwright CLI acceptance checks initial server DOM before releasing JavaScript,
 cached image hydration, market switching, every link's tab order/focus, Enter

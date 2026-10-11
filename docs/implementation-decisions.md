@@ -2504,7 +2504,7 @@ No live polling or later feature is activated. See
   source reuse rights, operational subscription or qualification is inferred.
   Retain prelaunch noindex and add the canonical methodology URL; broad SEO and
   the remaining legal/contact pages are outside 038. See
-  [methodology-performance.md](methodology-performance.md).
+  The former methodology page has since been replaced by [Help](help-page.md).
 
 ## 039 - Privacy notice and visitor data inventory
 

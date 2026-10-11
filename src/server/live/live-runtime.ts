@@ -89,7 +89,8 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     let results: ResultSyncPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
     const odds = oddsPolicy(policy, refs, workload);
-    const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results, oddsPolicy: odds });
+    const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results,
+      refreshPacing: workload.pacing, oddsPolicy: odds });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
@@ -210,7 +211,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
         store: createMysqlResultSyncStore({ database, accountId: current.accountId, lifecycle }) }) });
       return poller;
     }
-    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, resultPoller, day,
+    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, resultPoller, day,
       odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates,
         // Write-time staleness needs no provider call, so it runs even while imports are off.
         expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),

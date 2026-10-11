@@ -12,6 +12,7 @@ import { parseRefreshPlan } from '../src/server/refresh/refresh-input.ts';
 import { refreshReference } from '../src/server/refresh/refresh-input.ts';
 import { latestSelectionOccurrence } from '../src/server/live/live-runner.ts';
 import { liveReadiness, LiveConfigurationError } from '../src/server/live/live-runtime.ts';
+import { createLiveAuthorities } from '../src/server/live/live-authorities.ts';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
 import { parseResultSyncPolicy } from '../src/server/results/result-sync-policy.ts';
 import { parseSelectionPolicy, selectionWindow } from '../src/server/selection/selection-input.ts';
@@ -260,7 +261,13 @@ test('slow per-minute plans wait out the rolling minute and skip cutoffs the que
   for (const pacing of ['slow', 'standard']) {
     const candidate = member(pacing, 3_600_000), plan = fallbackRefreshPlan(candidate, refs, pacing);
     assert.equal(plan.evidence.requestId, refreshReference(jobId, 'evidence'));
-    parseRefreshPlan(plan, candidate);
+    const parsed = parseRefreshPlan(plan, candidate);
+    const authorities = createLiveAuthorities({ policy, verify: () => true, refs, selection,
+      statusEvidenceRef: `${refs.freshness}#status`, resultPolicy: () => null, refreshPacing: pacing });
+    assert.equal(authorities.refresh.verifyPlan(parsed, candidate), true, `${pacing} refresh plans retain their approved pacing`);
+    assert.equal(authorities.refresh.verifyPlan({ ...parsed, fallback: { ...parsed.fallback,
+      bounds: { ...parsed.fallback.bounds, timeoutMs: parsed.fallback.bounds.timeoutMs + 1 } } }, candidate), false,
+    `${pacing} authority rejects timing changes outside its approved plan`);
     if (pacing === 'slow') {
       assert.equal(plan.observation.bounds.timeoutMs, 75_000, 'a status read can wait for the next rolling-minute slot');
       assert.ok(plan.fallback.bounds.retry.maxAttempts * plan.fallback.bounds.retry.maxDelayMs >= 60_000);
