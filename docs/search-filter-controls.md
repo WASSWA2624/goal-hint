@@ -1,10 +1,11 @@
 # Match search and filters
 
-Prompt 033 adds `SearchInput` and `FilterControl` using shared labeled native
-fields. `FeedControls` uses a per-provider Redux draft; URLs and stored server
-projections remain authoritative. Draft text retains spaces while typing. Apply
-normalizes NFC/whitespace, validates the query, and resets page to one. Typing and
-selecting controls make no requests.
+The feed uses shared labeled native fields and a per-provider Redux draft;
+URLs and stored server projections remain authoritative. Draft text retains
+spaces while typing. Search submission and desktop Apply normalize
+NFC/whitespace, validate the query, and reset page to one. Typing makes no
+requests. Desktop filter edits wait for Apply; mobile checklist and probability
+changes share a 700ms debounce before applying the accumulated draft.
 
 Apply navigates through `feedQueryHref` using the App Router and a transition.
 The same parser and stored service handle initial rendering, Apply, reload,
@@ -25,7 +26,7 @@ They share the records' RepeatableRead transaction. Overflow fails honestly
 instead of silently losing options. Feed cache projection version 2 preserves
 existing catalog invalidation and the response-size bound. Legacy DTOs may omit
 options and parse to an empty array. Prompt 050 adds each league's approved logo
-and its fixture count in the date cohort. Suggestions list the leagues with the
+and its fixture count in the date cohort. Options list the leagues with the
 most fixtures first, then by name. Country options are the distinct competition
 countries of those leagues, with combined counts.
 
@@ -43,19 +44,29 @@ and kickoff ascending order, and resets page to one. It keeps the reporting
 date/range, the status entry and page size. See the
 [stored match feed](match-feed-api.md) for the parameter contract.
 
-Prompt 051 renders league, country and market choices as chip links. Each chip's
-`href` is the canonical URL with that value toggled and the page reset, so
-filters work without JavaScript. Each row also opens a checklist of every
-option (searchable for leagues and countries). Desktop edits stay drafts until
-Apply, whose label shows the draft's live match count. Phones apply chip and
-select changes directly. At least one market must stay selected. The odds controls are disabled with an explanation
-until provider odds display is enabled (prompt 052).
+Desktop league, country and market fields retain selected chip links. Each
+chip's `href` is the canonical URL with that value toggled and the page reset,
+so those links work without JavaScript. Each field also opens the complete
+checklist (searchable for leagues and countries). Desktop edits stay drafts
+until Apply, whose label shows the draft's live match count.
 
-The native disclosure supports keyboard activation, Escape and Close; dismissal
-focuses its summary trigger. Shared fields provide labels, descriptions, errors
-and visible focus. The applied summary remains visible when the panel is closed.
-A single polite status announces loading/counts/failures; cards are not live
-regions. Controls remain usable during navigation.
+Mobile filters use one compact labeled summary button per Markets, Leagues and
+Countries field, without scrolling suggestion chips or a duplicate menu. One
+selection shows its name; multiple selections show their count. Empty league
+and country selections show All leagues and Any. Each summary opens the same
+complete checklist, and selected values missing from a refreshed option list
+remain removable. At least one market must stay selected. The labeled
+probability preset and a quiet Reset action share a row and may stack with
+enlarged text. Mobile shows a muted Odds unavailable note with the fuller
+explanation available to assistive technology; desktop retains its disabled
+odds controls and explanation until provider odds display is enabled (prompt
+052).
+
+Checklist and date popovers use native buttons and fields, close on an outside
+pointer action or Escape, and return focus to their trigger on Escape. Shared
+fields provide labels, descriptions, errors and visible focus. A polite query
+status announces loading/counts/failures; cards are not live regions. Controls
+remain usable during navigation.
 
 `FeedSurface` retains the last successful projection across filter navigations.
 A failed read displays its failure and labels retained cards with their original
@@ -68,12 +79,24 @@ Prompt 037 owns live refresh. No browser provider/AI calls or polling are added.
 On phones the filter and search toggles sit in the feed's brand bar beside the
 logo. The filter toggle sets `aria-expanded`/`aria-controls` on the collapsed
 rows and badges the number of active choices. The search toggle opens a GET
-search form; Escape closes it and returns focus to the toggle. Dates stay visible
-in the panel: a Day/Range toggle (a "Date" group whose two links take their names
-from the visible "Day" and "Range") and one "‹ date ›" stepper. Its previous and next
-links keep their own URLs and labels. The date between them opens the native
-calendar (Day) or the range popover (Range), which still anchors to the whole date
-row. The toolbar's "Picks only" chip is the phone label of "With predictions".
+search form; Escape closes it and returns focus to the toggle. When open, the
+brand-bar search button becomes Close and the form contains one search icon,
+on its submit button. The static subtitle is hidden on mobile.
+
+Dates remain visible while the other filters are collapsed. One "‹ date ›"
+stepper opens the existing From/To picker from its central date button; there
+are no separate Day/Range buttons. Equal From and To values select a single
+day, and different values select an inclusive range of up to 31 days. Show
+dates applies the selection, preserving filters and resetting page to one.
+Previous and next links retain ordinary URLs and move by one day or by the
+selected range's length. The popover anchors to the complete date row.
+
+The mobile results toolbar contains one match count, one Picks only toggle
+(the phone label of With predictions), and one sort menu. Earliest first and
+Latest first order kickoff times; Highest chance and Lowest chance order the
+shown prediction's probability. Field and direction share one selection. There
+is no separate reverse-order button. Desktop retains its existing sort menu and With
+predictions control.
 
 Acceptance uses owned MySQL storage with synthetic inputs, an isolated production
 Next app built from captured SQL projections, and Chrome through the Playwright

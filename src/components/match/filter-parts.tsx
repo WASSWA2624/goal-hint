@@ -153,6 +153,31 @@ const PickerRoot = styled.div`
   position: relative;
   flex: none;
 `;
+/** A labelled alternative to the icon trigger, for narrow filter panels without duplicate chips. */
+const PickerSummary = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 2rem;
+  padding: 4px 8px;
+  color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-radius: 0;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  text-align: start;
+  cursor: pointer;
+  > [data-picker-label] { flex: none; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  > [data-picker-value] { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; text-align: end; }
+  > svg { flex: none; font-size: 1rem; }
+  &[aria-expanded="true"] { border-color: ${({ theme }) => theme.color.brand}; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+  ${focusRing}
+`;
 const PickerPanel = styled.div`
   position: absolute;
   inset-block-start: calc(100% + 6px);
@@ -219,9 +244,9 @@ const PickerEmpty = styled.p`
 `;
 
 /** Full option list behind a chevron: searchable checkboxes, Escape and outside clicks close it. */
-export function OptionPicker({ title, options, selected, onToggle, findLabel, emptyLabel, searchable = true, trigger }: {
+export function OptionPicker({ title, options, selected, onToggle, findLabel, emptyLabel, searchable = true, trigger, summary, className }: {
   title: string; options: readonly FilterOption[]; selected: readonly string[]; onToggle: (value: string) => void;
-  findLabel: string; emptyLabel: string; searchable?: boolean; trigger?: ReactNode;
+  findLabel: string; emptyLabel: string; searchable?: boolean; trigger?: ReactNode; summary?: ReactNode; className?: string;
 }) {
   const [open, setOpen] = useState(false), [filter, setFilter] = useState("");
   const root = useRef<HTMLDivElement>(null), button = useRef<HTMLButtonElement>(null), panelId = useId();
@@ -233,11 +258,12 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   }, [open]);
   const needle = filter.trim().toLocaleLowerCase();
   const visible = needle ? options.filter((option) => `${option.label} ${option.detail ?? ""}`.toLocaleLowerCase().includes(needle)) : options;
-  return <PickerRoot ref={root} onKeyDown={(event) => {
+  const Trigger = summary ? PickerSummary : IconButton;
+  return <PickerRoot className={className} ref={root} onKeyDown={(event) => {
     if (event.key === "Escape" && open) { event.stopPropagation(); setOpen(false); button.current?.focus(); }
   }}>
-    <IconButton ref={button} type="button" aria-expanded={open} aria-controls={panelId} aria-label={title} title={title}
-      onClick={() => setOpen(!open)}>{trigger ?? <ChevronDownIcon />}</IconButton>
+    <Trigger ref={button} type="button" aria-expanded={open} aria-controls={panelId} aria-label={title} title={title}
+      onClick={() => setOpen(!open)}>{summary ?? trigger}{(summary || !trigger) && <ChevronDownIcon />}</Trigger>
     {open && <PickerPanel id={panelId} role="group" aria-label={title}>
       {searchable && <PickerSearch type="search" value={filter} onChange={(event) => setFilter(event.target.value)}
         aria-label={findLabel} placeholder={findLabel} autoFocus />}

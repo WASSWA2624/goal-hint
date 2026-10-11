@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import styled, { css } from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
-import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon, SortIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
 import { PageHeading } from "@/components/ui/layout";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
@@ -70,7 +70,7 @@ const Titles = styled.div`
   min-inline-size: 0;
   > h1 { font-size: 1.125rem; line-height: 1.2; ${desktop} { font-size: 1.5rem; } }
   > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.75rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.medium}; ${desktop} { font-size: 0.8125rem; } }
-  ${media.belowDesktop} { > h1 { line-height: 1.15; } > p { line-height: 1.25; } }
+  ${media.belowDesktop} { > h1 { line-height: 1.15; } > p { display: none; } }
 `;
 const PhoneActions = styled.div`
   display: flex;
@@ -182,7 +182,6 @@ export function FeedHeader({ query, today, onApply, filters }: {
       onApply({ ...query, search: value.normalize("NFC").trim().replace(/\s+/gu, " "), page: 1 });
     }} onKeyDown={(event) => { if (event.key === "Escape") { setSearching(false); toggle.current?.focus(); } }}>
       {[...new URLSearchParams(search)].map(([name, hidden]) => <input key={name} type="hidden" name={name} value={hidden} />)}
-      <SearchIcon />
       <input ref={input} type="search" name="q" value={value} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
         placeholder={messages.text("navigation.search")} aria-label={messages.text("feed.filters.search")} onChange={(event) => setValue(event.target.value)} />
       <IconButton type="submit" aria-label={messages.text("feed.search.submit")}><SearchIcon /></IconButton>
@@ -190,17 +189,18 @@ export function FeedHeader({ query, today, onApply, filters }: {
   </>;
 }
 
-/**
- * Count and ordering share one line on phones from 320px (two-digit counts); a longer count moves the
- * controls below it, still right-aligned with the date panel above. Phone controls are 28px, white
- * and outlined like the date stepper, 8px apart.
- */
+/** Equal phone controls above a right-aligned count; desktop retains its wrapping toolbar. */
 const Toolbar = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 6px 8px;
+  ${media.belowDesktop} {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
 `;
 const Count = styled.div`
   display: grid;
@@ -208,6 +208,13 @@ const Count = styled.div`
   min-inline-size: 0;
   > h2 { font-size: 0.75rem; ${desktop} { font-size: 1.25rem; } }
   > p { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: block; } }
+  ${media.belowDesktop} {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    text-align: end;
+    color: ${({ theme }) => theme.color.mutedText};
+    > h2 { font-weight: 500; line-height: 1.25; }
+  }
 `;
 const PhoneText = styled.span`${desktop} { display: none; }`;
 const DesktopText = styled.span`display: none; ${desktop} { display: inline; }`;
@@ -217,7 +224,7 @@ const SortGroup = styled.div`
   align-items: center;
   gap: 4px;
   > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
-  ${media.belowDesktop} { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-inline-size: 0; margin-inline-start: auto; }
+  ${media.belowDesktop} { display: contents; }
 `;
 const SelectWrap = styled.span`
   position: relative;
@@ -238,30 +245,24 @@ const SelectWrap = styled.span`
   }
   > svg { position: absolute; inset-inline-end: 7px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
 `;
-/** Phone order: the sort field and its reverse button joined as one control. */
+/** One native sort menu includes both field and direction. */
 const PhoneOrder = styled.div`
   display: inline-flex;
   min-inline-size: 0;
+  grid-column: 2;
+  grid-row: 1;
   ${desktop} { display: none; }
 `;
 const PhoneSort = styled(CompactSelect)`
   min-block-size: 1.75rem;
+  padding-block: 3px;
   padding-inline: 7px 22px;
   border-radius: 0;
   font-size: 0.75rem;
-  border-start-end-radius: 0;
-  border-end-end-radius: 0;
+  inline-size: 100%;
+  > span { flex: 1; }
+  > span > span { overflow: visible; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
   > svg { inset-inline-end: 7px; }
-`;
-const ReverseButton = styled(IconButton)`
-  inline-size: 1.75rem;
-  min-block-size: 1.75rem;
-  block-size: auto;
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-inline-start: 0;
-  border-radius: 0;
-  font-size: 0.875rem;
 `;
 /** Toggle chip: keeps only matches that have a prediction. */
 const PicksToggle = styled.button`
@@ -287,7 +288,15 @@ const PicksToggle = styled.button`
     &::before { background: currentColor; }
   }
   ${focusRing}
-  ${media.belowDesktop} { &:not([aria-pressed="true"]) { background: ${({ theme }) => theme.color.surface}; border-color: ${({ theme }) => theme.color.border}; } }
+  ${media.belowDesktop} {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: center;
+    min-inline-size: 0;
+    white-space: normal;
+    &::before { flex: none; }
+    &:not([aria-pressed="true"]) { background: ${({ theme }) => theme.color.surface}; border-color: ${({ theme }) => theme.color.border}; }
+  }
   ${desktop} { min-block-size: 2.375rem; padding-inline: 12px; border-radius: 6px; font-size: 0.875rem; }
 `;
 
@@ -303,6 +312,10 @@ export function ResultsToolbar({ query, total, first, last, onApply }: {
   const messages = createMessages(query.locale);
   const sortKey = `${query.sort.by}-${query.sort.direction}`;
   const choose = (sort: FeedSort) => onApply({ ...query, sort, page: 1 });
+  const chooseKey = (key: string) => {
+    const selected = sortOptions.find((sort) => `${sort.by}-${sort.direction}` === key);
+    if (selected) choose(selected);
+  };
   return <Toolbar>
     <Count>
       <h2><PhoneText>{messages.plural("feed.results.count", total)}</PhoneText><DesktopText>{messages.text("feed.results.title")}</DesktopText></h2>
@@ -315,21 +328,12 @@ export function ResultsToolbar({ query, total, first, last, onApply }: {
         <PhoneText>{messages.text("feed.picks.onlyShort")}</PhoneText><DesktopText>{messages.text("feed.picks.only")}</DesktopText>
       </PicksToggle>
       <PhoneOrder>
-        <PhoneSort aria-label={messages.text("feed.sort.label")} value={query.sort.by} onChange={(event) => {
-          const by = event.target.value as FeedSort["by"];
-          choose({ by, direction: by === "probability" ? "desc" : "asc" });
-        }} options={[{ value: "kickoff", label: messages.text("feed.sort.short.kickoff") },
-          { value: "probability", label: messages.text("feed.sort.short.probability") }]} />
-        <ReverseButton type="button" aria-label={`${messages.text("feed.sort.reverse")}: ${messages.text(`feed.sort.${query.sort.by}-${query.sort.direction}`)}`}
-          title={messages.text("feed.sort.reverse")}
-          onClick={() => choose({ by: query.sort.by, direction: query.sort.direction === "asc" ? "desc" : "asc" })}><SortIcon /></ReverseButton>
+        <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => chooseKey(event.target.value)}
+          options={sortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
       </PhoneOrder>
       <label htmlFor="feed-sort-desktop"><DesktopText>{messages.text("feed.sort.label")}</DesktopText></label>
       <SelectWrap>
-        <select id="feed-sort-desktop" value={sortKey} onChange={(event) => {
-          const [by, direction] = event.target.value.split("-") as [FeedSort["by"], FeedSort["direction"]];
-          choose({ by, direction });
-        }}>
+        <select id="feed-sort-desktop" value={sortKey} onChange={(event) => chooseKey(event.target.value)}>
           {sortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
             {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
           </option>)}

@@ -60,17 +60,6 @@ const flush = css`
 `;
 const FieldButton = styled.button`${field} min-inline-size: 0; > span { overflow: hidden; text-overflow: ellipsis; }`;
 const FlushButton = styled.button`${field} ${flush}`;
-const FieldLabel = styled.label`${field} ${flush} &:focus-within { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }`;
-/** The native picker covers the visible label, so taps and keyboards open the platform calendar. */
-const OverlayInput = styled.input`
-  position: absolute;
-  inset: 0;
-  inline-size: 100%;
-  min-inline-size: 0;
-  opacity: 0;
-  cursor: pointer;
-  &::-webkit-calendar-picker-indicator { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; cursor: pointer; }
-`;
 /**
  * Compact phone sizes; desktop keeps its roomier popover. In the phone filters the popover starts
  * at the date row's edge (the nearest positioned box) and never outgrows it, so it stays on screen.
@@ -88,7 +77,13 @@ const Popover = styled.div<{ $compact: boolean }>`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 6px;
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
-  ${({ $compact }) => $compact && css`inset-inline: 0 auto; inline-size: min(19rem, 100%);`}
+  ${({ $compact }) => $compact && css`
+    inset-inline: 0 auto;
+    inline-size: min(19rem, 100%);
+    border-radius: 0;
+    box-shadow: none;
+    input, button { border-radius: 0; }
+  `}
   label { display: grid; gap: 3px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   input {
     min-block-size: 2.25rem;
@@ -181,7 +176,8 @@ export function DateRangePicker({ query, today, onApply, compact = false }: {
     } catch { setError(true); }
   }
   // The accessible name repeats the visible text; the compact label keeps the full dates as a title.
-  const label = rangeLabel(query, today), shown = compact ? shortRangeLabel(query, today) : label;
+  const label = rangeLabel(query, today), shown = !compact ? label
+    : range.dayCount === 1 ? messages.reportingDateShort(range.startDate) : shortRangeLabel(query, today);
   // Compact pickers sit inside the phone date stepper, which draws their box.
   const Trigger = compact ? FlushButton : FieldButton;
   return <Anchor ref={root} $compact={compact} onKeyDown={(event) => {
@@ -190,7 +186,7 @@ export function DateRangePicker({ query, today, onApply, compact = false }: {
     <Trigger ref={button} type="button" aria-expanded={open} aria-controls={id} onClick={() => {
       setFrom(range.startDate); setTo(range.endDate); setError(false); setOpen(!open);
     }} aria-label={`${messages.text("feed.date.choose")}: ${shown}`} title={compact ? label : undefined}>
-      <CalendarIcon /><span>{shown}</span>{!compact && <ChevronDownIcon />}
+      <CalendarIcon /><span>{shown}</span><ChevronDownIcon />
     </Trigger>
     {open && <Popover id={id} $compact={compact} role="group" aria-label={messages.text("feed.date.choose")}>
       <label>{messages.text("feed.date.from")}<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
@@ -201,18 +197,6 @@ export function DateRangePicker({ query, today, onApply, compact = false }: {
       <PopoverAction type="button" onClick={show}>{messages.text("feed.date.show")}</PopoverAction>
     </Popover>}
   </Anchor>;
-}
-
-/** One day, picked with the platform calendar; works as a plain label without changes. Phones place it inside `DateStepper`. */
-export function SingleDatePicker({ query, today, onApply }: { query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void }) {
-  const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
-  return <FieldLabel>
-    <CalendarIcon /><span>{messages.reportingDateShort(range.startDate)}</span>
-    <OverlayInput type="date" value={range.startDate} aria-label={messages.text("feed.date.choose")} onChange={(event) => {
-      try { onApply({ ...query, dates: { kind: "date", date: parseReportingDate(event.target.value) }, page: 1 }); }
-      catch { /* An incomplete native value keeps the current date. */ }
-    }} />
-  </FieldLabel>;
 }
 
 /**

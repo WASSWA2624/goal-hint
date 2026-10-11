@@ -5,13 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import { ResetIcon, FilterIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { addReportingDays, type ReportingDate } from "@/domain/calendar";
+import type { ReportingDate } from "@/domain/calendar";
 import { applyFeedDraft, resetFeedFilters } from "@/domain/feed-controls";
 import { pinnedFeedQuery } from "@/domain/feed-pagination";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
 import {
-  anyProbability, canonicalMarkets, feedQueryHref, feedQueryKey, feedQueryRules, resolveFeedDates, serializeFeedQuery,
-  type DateSelection, type FeedQuery,
+  anyProbability, canonicalMarkets, feedQueryHref, feedQueryKey, feedQueryRules, serializeFeedQuery, type FeedQuery,
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import type { MarketFamily } from "@/domain/markets";
@@ -20,15 +19,14 @@ import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
-import { DateRangePicker, DateStepper, SingleDatePicker } from "./feed-dates";
-import { ChipText, CompactSelect, FilterChip, focusRing, OptionPicker, plainClick, RangeSlider, Segmented } from "./filter-parts";
+import { DateRangePicker, DateStepper } from "./feed-dates";
+import { ChipText, CompactSelect, FilterChip, focusRing, OptionPicker, plainClick, RangeSlider } from "./filter-parts";
 
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
 /** The draft count belongs to the desktop Apply button; phones apply selections directly. */
 const desktopQuery = media.desktop.replace("@media ", "");
 const probabilityPresets = [anyProbability, { min: 50, max: 100 }, { min: 60, max: 100 }, { min: 70, max: 100 }, { min: 80, max: 100 }, { min: 90, max: 100 }];
-const suggestionCount = 6;
 /** Phone selections settle for this long before one navigation applies them all. */
 const phoneApplyDelayMs = 700;
 
@@ -114,55 +112,33 @@ const PhoneMore = styled.div`
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 
-/**
- * Day/Range, then one "‹ date ›" stepper that takes the rest of the row, so the date never truncates
- * from 320px phones up. The range popover spans this whole row, so it never runs past the screen's left edge.
- */
+/** One date control for days and ranges; its popover stays within the page gutters. */
 const DateRow = styled.div`
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 6px;
-  > ${Segmented} {
-    border-radius: 0;
-    > a { min-block-size: 2rem; border-radius: 0; font-size: 0.75rem; }
-  }
-  @container phone-filters (max-width: 16rem) {
-    grid-template-columns: minmax(0, 1fr);
-    > ${Segmented} { justify-self: start; }
-  }
 `;
-const ChipRow = styled.div`
-  display: grid;
-  grid-template-columns: 3.75rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px;
-`;
-const RowLabel = styled.span<{ $accent: AccentName }>`
-  color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
-  font-size: 0.6875rem;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-`;
-/** One scrolling line per filter, as in the phone layout; focus rings sit inside the scroller. */
-const ChipStrip = styled.div`
-  display: flex;
-  gap: 6px;
+/** One labelled trigger per filter replaces clipped suggestion chips and their duplicate menus. */
+const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
-  padding: 3px;
-  margin: -3px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
-  a:focus-visible { outline-offset: -3px; }
+  > [role="group"] {
+    grid-template-columns: minmax(0, 1fr);
+    max-inline-size: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    > input { min-inline-size: 0; border-radius: 0; }
+    label { border-radius: 0; }
+  }
 `;
-/** Odds, probability and Reset share one line from 360px phones; narrower ones move Reset below. */
+/** Probability and a quiet reset action share one row, growing naturally with larger text. */
 const BottomRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px 8px;
-  @container phone-filters (min-width: 18.5rem) { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto; }
+  @container phone-filters (max-width: 16rem) { grid-template-columns: minmax(0, 1fr); }
 `;
 const SelectGroup = styled.label<{ $accent: AccentName }>`
   display: inline-flex;
@@ -170,10 +146,10 @@ const SelectGroup = styled.label<{ $accent: AccentName }>`
   gap: 6px;
   min-inline-size: 0;
   color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;
-const SelectBox = styled(CompactSelect)`flex: 1;`;
+const SelectBox = styled(CompactSelect)`flex: 1; border-radius: 0; font-size: 0.75rem;`;
 const QuietLink = styled(Link)`
   display: inline-flex;
   align-items: center;
@@ -192,6 +168,20 @@ const QuietLink = styled(Link)`
   > svg { font-size: 1rem; }
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.red.solid}; } }
   ${focusRing}
+`;
+const PhoneReset = styled(QuietLink)`
+  justify-self: end;
+  padding-inline: 6px;
+  color: ${({ theme }) => theme.color.mutedText};
+  background: none;
+  border-radius: 0;
+  font-size: 0.75rem;
+  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.red.text}; background: ${({ theme }) => theme.color.accent.red.soft}; } }
+`;
+const OddsNote = styled.p`
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: 0.75rem;
+  line-height: 1.25;
 `;
 
 /**
@@ -332,7 +322,7 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
   }, [dispatch, query]);
   useEffect(() => () => { if (pending.current !== null) window.clearTimeout(pending.current); }, []);
   const draft = valid(storedDraft, today) ? storedDraft : query;
-  const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
+  const messages = createMessages(query.locale);
   // Hundreds of leagues are sorted once per cohort, not on every chip tap.
   const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
   const countryList = useMemo(() => countryOptions(leagues), [leagues]);
@@ -344,9 +334,11 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
   const apply = (next: FeedQuery) => {
     if (pending.current !== null) window.clearTimeout(pending.current);
     pending.current = null; latest.current = null;
-    onApply({ ...next, page: 1 });
+    const applied = { ...next, page: 1 };
+    dispatch(draftChanged(applied));
+    onApply(applied);
   };
-  /** Phone choices accumulate in the draft, so several chips can be picked before one navigation applies them. */
+  /** Phone choices accumulate in the draft, so several options can be picked before one navigation applies them. */
   const choose = (next: FeedQuery) => {
     if (!valid(next, today)) return;
     const checked = { ...next, page: 1 };
@@ -364,36 +356,21 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
   const draftTotal = useDraftTotal(draft, query, today, total);
   const reset = resetFeedFilters(query);
 
-  const single = range.dayCount === 1;
-  const singleDates: DateSelection = { kind: "date", date: range.startDate };
-  const rangeDates: DateSelection = { kind: "range", from: range.startDate, to: addReportingDays(range.startDate, 6) };
-
-  function strip(kind: "leagues" | "countries", options: FilterOption[], short: string) {
-    const accent: AccentName = kind === "leagues" ? "blue" : "orange";
-    const maximum = kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries;
-    const selected = phone[kind];
-    // Stable order: the most common options plus every selected one, so chips never jump while tapping.
-    const shown = options.filter((option, index) => index < suggestionCount || selected.includes(option.value));
+  function phonePicker(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
+    const label = messages.text(`feed.filters.${kind}`), selected: readonly string[] = phone[kind];
+    // Selections absent from a refreshed option list remain available to remove.
     const missing = selected.filter((value) => !options.some((option) => option.value === value))
       .map((value): FilterOption => ({ value, label: value, detail: null, logoUrl: null, fixtures: 0 }));
-    const hidden = options.length - shown.length;
-    const toggle = (value: string): FeedQuery => ({ ...phone, [kind]: toggled(selected, value, maximum) });
-    const linked = (value: string): FeedQuery => ({ ...query, [kind]: toggled(query[kind], value, maximum) });
-    return <ChipRow>
-      <RowLabel aria-hidden="true" $accent={accent}>{short}</RowLabel>
-      <ChipStrip role="group" aria-label={messages.text(kind === "leagues" ? "feed.filters.leagues" : "feed.filters.countries")}>
-        {[...shown, ...missing].map((option) => {
-          const on = selected.includes(option.value);
-          return <FilterChip key={option.value} label={option.label} selected={on} href={href(linked(option.value))} logoUrl={kind === "leagues" ? option.logoUrl : null} accent={accent}
-            onSelect={() => choose(toggle(option.value))} actionLabel={messages.text(on ? "feed.filters.remove" : "feed.filters.add", { label: option.label })} />;
-        })}
-        {hidden > 0 && <ChipText aria-hidden="true">{messages.text("feed.filters.moreCount", { count: messages.number(hidden) })}</ChipText>}
-      </ChipStrip>
-      <OptionPicker title={messages.text("feed.filters.showAll", { label: messages.text(kind === "leagues" ? "feed.filters.leagues" : "feed.filters.countries") })}
-        options={options} selected={selected} onToggle={(value) => choose(toggle(value))}
-        findLabel={messages.text("feed.filters.findOption", { label: messages.text(kind === "leagues" ? "feed.filters.leagues" : "feed.filters.countries") })}
-        emptyLabel={messages.text("feed.filters.noOptions")} />
-    </ChipRow>;
+    const summary = selected.length === 0 ? messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.any")
+      : selected.length === 1 ? options.find((option) => option.value === selected[0])?.label ?? selected[0]!
+      : messages.text("feed.filters.selectedCount", { count: messages.number(selected.length) });
+    return <PhonePicker title={`${label}: ${summary}`} options={[...options, ...missing]} selected={selected}
+      summary={<><span data-picker-label>{label}</span><span data-picker-value>{summary}</span></>}
+      searchable={kind !== "markets"} onToggle={(value) => {
+        const next = kind === "markets" ? toggledMarkets(phone, value as MarketFamily)
+          : { ...phone, [kind]: toggled(selected, value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) };
+        if (next) choose(next);
+      }} findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")} />;
   }
 
   function multiField(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
@@ -437,43 +414,15 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
   return <Panel aria-label={messages.text("feed.filters.form")}>
     <PhoneOnly>
       <DateRow>
-        <Segmented role="group" aria-label={messages.text("feed.date.mode")}>
-          <Link href={href({ ...query, dates: singleDates })} prefetch={false} aria-current={single ? "true" : undefined}
-            onClick={(event) => plainClick(event, () => apply({ ...phone, dates: singleDates }))}>
-            {messages.text("feed.date.dayToggle")}
-          </Link>
-          <Link href={href({ ...query, dates: single ? rangeDates : query.dates })} prefetch={false} aria-current={single ? undefined : "true"}
-            onClick={(event) => plainClick(event, () => apply({ ...phone, dates: single ? rangeDates : query.dates }))}>
-            {messages.text("feed.date.rangeToggle")}
-          </Link>
-        </Segmented>
         <DateStepper query={phone} today={today} onApply={apply}>
-          {single ? <SingleDatePicker query={phone} today={today} onApply={apply} /> : <DateRangePicker query={phone} today={today} onApply={apply} compact />}
+          <DateRangePicker query={phone} today={today} onApply={apply} compact />
         </DateStepper>
       </DateRow>
       <PhoneMore id={phoneId} hidden={!phoneOpen}>
-        <ChipRow>
-          <RowLabel aria-hidden="true" $accent="violet">{messages.text("feed.filters.markets")}</RowLabel>
-          <ChipStrip role="group" aria-label={messages.text("feed.filters.markets")}>
-            {publicPolicy.markets.map((family) => {
-              const on = phone.markets.includes(family), next = toggledMarkets(phone, family), name = messages.text(`market.family.${family}`);
-              return next ? <FilterChip key={family} label={name} selected={on} accent="violet" href={href(toggledMarkets(query, family) ?? query)} onSelect={() => choose(next)}
-                actionLabel={messages.text(on ? "feed.filters.remove" : "feed.filters.add", { label: name })} />
-                : <ChipText key={family} $selected $accent="violet" title={messages.text("feed.filters.oneMarket")}>{name}</ChipText>;
-            })}
-          </ChipStrip>
-          <OptionPicker title={messages.text("feed.filters.showAll", { label: messages.text("feed.filters.markets") })} options={marketList}
-            selected={phone.markets} searchable={false} onToggle={(value) => { const next = toggledMarkets(phone, value as MarketFamily); if (next) choose(next); }}
-            findLabel={messages.text("feed.filters.markets")} emptyLabel={messages.text("feed.filters.noOptions")} />
-        </ChipRow>
-        {strip("leagues", leagueList, messages.text("feed.filters.leagues"))}
-        {strip("countries", countryList, messages.text("feed.filters.countries"))}
+        {phonePicker("markets", marketList)}
+        {phonePicker("leagues", leagueList)}
+        {phonePicker("countries", countryList)}
         <BottomRow>
-          <SelectGroup title={messages.text("feed.filters.oddsPending")} $accent="amber">
-            {oddsLabel}
-            <SelectBox disabled aria-label={messages.text("feed.filters.odds")} value="any"
-              options={[{ value: "any", label: messages.text("feed.filters.any") }]} />
-          </SelectGroup>
           <SelectGroup $accent="pink">
             {probabilityLabel}
             <SelectBox aria-label={messages.text("feed.filters.probability")} value={`${phone.probability.min}-${phone.probability.max}`}
@@ -483,8 +432,9 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
                 choose({ ...phone, probability: { min: min!, max: max! } });
               }} />
           </SelectGroup>
-          <QuietLink href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}>{messages.text("feed.filters.reset")}</QuietLink>
+          <PhoneReset href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}><ResetIcon />{messages.text("feed.filters.reset")}</PhoneReset>
         </BottomRow>
+        <OddsNote title={messages.text("feed.filters.oddsPending")}>{messages.text("feed.filters.oddsUnavailable")}<VisuallyHidden>. {messages.text("feed.filters.oddsPending")}</VisuallyHidden></OddsNote>
       </PhoneMore>
     </PhoneOnly>
 

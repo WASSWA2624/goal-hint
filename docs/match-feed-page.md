@@ -37,9 +37,10 @@ Historical navigation stops at the MySQL-supported years 1000–9999. Direct
 invalid or incompatible dates/queries return the existing 404 shell.
 
 The page uses the shared light shell, square controls, feedback and match cards.
-Cards form one column below 64rem and two above it. Every feed logo is lazy with
-reserved dimensions and initials fallbacks; an eager logo would be hoisted as a
-third-party image preload competing with the page's own font, CSS and scripts.
+Cards form one column below 64rem and an aligned table above it. Every feed logo
+is lazy with reserved dimensions and initials fallbacks; an eager logo would be
+hoisted as a third-party image preload competing with the page's own font, CSS
+and scripts.
 `MatchCard` is memoized: a poll that changes nothing a card shows, and header or
 filter state changes, re-render no cards. A pending navigation dims the list in
 place (`aria-busy`) instead of inserting a loading line above it. Native images keep the exact approved remote URL without an optimizer
@@ -59,23 +60,42 @@ for an empty lock.
 
 ### Phone header
 
-Below 64rem, app pages hide the shell header, so `FeedHeader` opens with the
+Below 64rem, feed pages hide the shell header, so `FeedHeader` opens with the
 branded bar. It uses the same navy-to-teal `theme.header.background` and brand
-edge as the desktop header, is 3.25rem (52px) tall, runs past the 16px gutter and
-is pulled up through the app page's 10px top padding to the screen edge. The
-inverse logo, at the brand-kit minimum of 160px, links home as "Goal Hint home".
-The 32px translucent filter and search buttons sit at the end of the row and fill
-with inverse teal while open. The title (18px) and subtitle (11px) follow 10px
-below on the light page, then the date panel, then the count and order toolbar,
-8px apart. The panel holds a
-30px Day/Range toggle and one "‹ date ›" stepper. The stepper's 28px previous and
-next steps flank a 12px date (or the short range label). At 320px the calendar
-icon steps aside, so the longest labels ("Wed, May 20", "Nov 20 – Dec 20") never
-truncate. The 28px toolbar controls (Picks only, sort field joined to its reverse
-button) fit one line from 320px for counts under 100. At 360×780 the first card
-starts about 196px from the top: 52 brand bar, 10, 34.5 titles, 8, 48 panel, 8,
-28 toolbar and 8. Desktop keeps its layout; the shell header
-carries the logo there.
+edge as the desktop header, has a 3rem (48px) minimum height, and runs past the
+feed's 8px gutters and top padding to the screen edge. The inverse logo links
+home as "Goal Hint home" and can shrink on narrow screens with enlarged text.
+The 32px translucent filter and search buttons sit at the end of the row and
+fill with inverse teal while open. The 18px title follows on the light page;
+the static subtitle is hidden on mobile. Feed sections use 6px gaps. An open
+search form has one search icon on its submit button, while the brand-bar
+toggle becomes Close.
+
+One compact "‹ date ›" stepper remains visible while the filter panel is
+collapsed. Its central 12px date button opens the shared From/To picker; there
+are no Day/Range buttons. Equal start and end dates select a single day, and
+different values select a range of up to 31 days. Apply dates validates and
+applies the selection. Previous and next links preserve the other filters and
+move by the selected day or range length. The date row and labels grow
+naturally when text is enlarged.
+
+Expanded mobile filters replace scrolling suggestion chips and separate
+all-options buttons with one labeled summary dropdown each for Markets,
+Leagues and Countries. A single selection displays its name, multiple
+selections display a count, and the existing checklists retain all choices,
+with search for leagues and countries. Probability presets and a quiet Reset
+action share a row. Odds unavailable appears as a muted explanation instead of
+a disabled select.
+
+The mobile results toolbar places Picks only and the sort dropdown in one
+full-width row of two equally sized columns. Both controls fill their columns
+and retain 12px text. The match count from the current loaded projection sits
+on its own row below, aligned right. The sort menu contains both kickoff
+directions and both probability directions, with no separate reverse button.
+Controls grow naturally with enlarged text while retaining the two-column row.
+Desktop retains the shell logo and search, visible subtitle, date range and
+quick presets, draft filters with Apply, and its existing results toolbar and
+table layout.
 
 ## Coverage, progress and errors
 
