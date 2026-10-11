@@ -41,7 +41,7 @@ class _NavigationParser(HTMLParser):
             self.stack.pop()
 
 
-def assert_navigation(visible: str, *, primary: str, mobile: str, footer: str | None = None) -> None:
+def assert_navigation(visible: str, *, primary: str, mobile: str | None, footer: str | None = None) -> None:
     parser = _NavigationParser()
     parser.feed(visible)
     for label, expected in [("Main navigation", primary), ("Information", footer), ("App sections", mobile)]:
@@ -78,7 +78,8 @@ def policy_document(origin: str, path: str, *, page: str, title: str,
     match(rf'datetime="{re.escape(notice["reviewedOn"])}"', visible, flags=re.I)
     for pattern in patterns:
         match(pattern, visible)
-    assert_navigation(visible, primary=f"/en/{page}", footer=f"/en/{page}", mobile="/en/how-it-works")
+    assert_navigation(visible, primary=f"/en/{page}", footer=f"/en/{page}", mobile=None)
+    no_match(r'(?:href|action)="[^"\s]*how-it-works', visible)
     no_match(forbidden, visible, flags=re.I)
     main = match(r"<main\b[^>]*>([\s\S]*?)</main>", visible).group(1)
     no_match(forms, main, flags=re.I)

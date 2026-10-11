@@ -12,7 +12,8 @@ provider and requires no visitor credentials, tokens or cookies.
 | `/en` | The Today view of the shared feed; no decorative hero. |
 | `/en/predictions/YYYY-MM-DD` | One EAT reporting day, including historical dates. |
 | `/en/predictions/YYYY-MM-DD?status=finished` | The same feed restricted to finished fixtures. |
-| `/en/how-it-works` | Interim methodology surface; replaced by 038. |
+| `/en/help` | App usage, forecast guidance and prediction results. |
+| `/en/how-it-works` | Permanent redirect to `/en/help` for saved links. |
 | `/en/privacy`, `/en/terms`, `/en/contact` | Interim information surfaces; replaced by 039–041. |
 | `/en/matches/fixture-id/home-v-away` | Link convention reserved for 035. Unknown fixtures currently return 404; no invented match pages. |
 
@@ -60,12 +61,11 @@ implement its metadata/canonical relationships under 042.
 `createMessages` exposes `text`, `plural`, `number` and `reportingDate`.
 Without translations it returns one frozen helper per locale, and option-specific
 number formatters are cached, so per-card and per-row calls stay cheap.
-Information-page prose (`messages/methodology.ts`, `privacy.ts`, `terms.ts`,
+Information-page prose (`messages/help.ts`, `privacy.ts`, `terms.ts`,
 `contact.ts`) is not part of `en`, which every Client Component bundles. Server
 Components read it through the `server-only` `createContentMessages` in
 `src/i18n/content-messages.ts`, typed by `ContentTextKey`. Page metadata titles
-and descriptions and `performance.resultsLink` stay in `en` because shared
-metadata and the client feed read them.
+and descriptions stay in `en` because shared metadata reads them.
 Translations can fall back per key; plural messages require `other`, select
 forms through `Intl.PluralRules` and format counts through `Intl.NumberFormat`.
 `feed.matchCount` is prepared but is not displayed without real feed data.
@@ -89,8 +89,8 @@ the isolated `test:styling` fixture remains available.
 
 All current locale pages inherit `noindex, follow`. The [032 feed](match-feed-page.md)
 renders stored fixtures, predictions, coverage and run progress, with truthful
-read-failure states. Methodology and information pages identify content being
-prepared; replace them in 038–041. Prompt 042 owns final indexing policy.
+read-failure states. Help provides app instructions and forecast guidance. Policy
+pages retain their publication status. Prompt 042 owns final indexing policy.
 
 ## Verification
 

@@ -51,10 +51,10 @@ this gate; visible copy and noindex are not an automated deployment lock.
   They never select a more favorable revision. Visitor reports do not themselves
   mutate stored records. Evidence: `src/server/results/`,
   `src/server/settlement/settlement-service.ts`, `src/server/settlement/settlement-read.ts`,
-  prediction-history/locking contracts and the published methodology.
-- Ordinary links lead to the current privacy, terms and methodology documents,
+  prediction-history/locking contracts and the Help guide.
+- Ordinary links lead to the current privacy, terms and Help documents,
   including the actual settlement section. The privacy choices, terms results/
-  corrections and methodology correction sections link back with the shared
+  corrections and Help result sections link back with the shared
   label "Contact availability and correction guidance". These labels do not
   imply that an inbox or submissions process is available.
 

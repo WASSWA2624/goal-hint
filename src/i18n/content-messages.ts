@@ -2,12 +2,12 @@ import "server-only";
 
 import { createMessages, fillMessage, type Messages, type TextKey } from "./messages.ts";
 import { contactMessages } from "./messages/contact.ts";
-import { methodologyMessages } from "./messages/methodology.ts";
+import { helpMessages } from "./messages/help.ts";
 import { privacyMessages } from "./messages/privacy.ts";
 import { termsMessages } from "./messages/terms.ts";
 
 // Information-page prose stays out of the shared client catalog; only Server Components read it.
-const content = { ...methodologyMessages, ...privacyMessages, ...termsMessages, ...contactMessages } as const;
+const content = { ...helpMessages, ...privacyMessages, ...termsMessages, ...contactMessages } as const;
 
 export type ContentTextKey = TextKey | keyof typeof content;
 export type ContentMessages = Omit<Messages, "text"> & {

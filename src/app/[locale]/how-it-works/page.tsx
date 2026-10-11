@@ -1,6 +1,8 @@
-import { createMethodologyRoute } from "@/app/_components/methodology-route";
-import { createInformationMetadata } from "@/server/seo/metadata";
+import { permanentRedirect } from "next/navigation";
+import { informationHref } from "@/domain/navigation";
 
-export const generateMetadata = createInformationMetadata("how-it-works");
-
-export default createMethodologyRoute();
+/** Keep saved links working after the information page was renamed. */
+export default async function LegacyHelpPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  permanentRedirect(informationHref("help", locale));
+}

@@ -199,6 +199,7 @@ const Toolbar = styled.div`
   ${media.belowDesktop} {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
     gap: 4px;
   }
 `;

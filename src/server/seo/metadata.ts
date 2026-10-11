@@ -35,13 +35,13 @@ export function feedMetadata(query: FeedQuery, today: ReportingDate, result: Fee
 
 export function createInformationMetadata(page: InformationPage, policy = getDiscoveryPolicy) {
   return async ({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {}): Promise<Metadata> => {
-    const messages = createMessages(), prefix = page === "how-it-works" ? "methodology" : page;
-    return pageMetadata({ title: messages.text(`${prefix}.metadataTitle`), description: messages.text(`${prefix}.description`),
+    const messages = createMessages();
+    return pageMetadata({ title: messages.text(`${page}.metadataTitle`), description: messages.text(`${page}.description`),
       path: `/en/${page}`, index: policy().index && informationPublicationReady(page) && Object.keys(await searchParams ?? {}).length === 0 });
   };
 }
 
 export function informationPublicationReady(page: InformationPage): boolean {
-  return page === "privacy" ? privacyNotice.releaseReady : page === "terms" ? termsNotice.releaseReady
-    : page === "contact" ? contactNotice.releaseReady : true;
+  return page === "help" ? true : page === "privacy" ? privacyNotice.releaseReady : page === "terms" ? termsNotice.releaseReady
+    : contactNotice.releaseReady;
 }

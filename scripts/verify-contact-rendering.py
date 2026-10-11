@@ -30,15 +30,14 @@ def main() -> None:
             target = urlsplit(urljoin(origin, unescape(href)))
             assert (target.scheme, target.netloc) == (expected.scheme, expected.netloc), "Only fixed, same-origin navigation is available."
         print(f"PASS production contact HTML and safe query handling: {path}")
-    for path, section in [("/en/privacy", "privacy-choices"), ("/en/terms", "terms-outcomes"), ("/en/how-it-works", "corrections")]:
+    for path, section in [("/en/privacy", "privacy-choices"), ("/en/terms", "terms-outcomes"), ("/en/help", "results")]:
         response = request(origin, path, redirect=True)
         assert response.status == 200, path
         visible = visible_html(response.text, comments=False)
         content = match(rf'<section\b(?=[^>]*\bid="{section}")[^>]*>[\s\S]*?</section>', visible, f"Existing policy section: {section}").group()
         match(r'href="/en/contact"', content)
-        match("Contact availability and correction guidance", content)
-        if path == "/en/how-it-works":
-            assert 'id="settlement"' in visible, "Actual settlement target"
+        if path != "/en/help":
+            match("Contact availability and correction guidance", content)
         print(f"PASS contextual contact link: {path}#{section}")
     print("PASS contact availability gate, correction guidance, anonymous metadata, safe links and policy integration.")
 

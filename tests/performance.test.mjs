@@ -91,6 +91,18 @@ test('stale audit input cannot score, evidence links are locked, bounded and det
   assert.doesNotMatch(JSON.stringify(one), /approvalRef|evidenceRef|transport|configurationJson|requestHash|private/u);
   assert.equal(performanceResponseSchema.safeParse({ ...one, private: true }).success, false);
 });
+
+test('evidence navigation is canonical, revision-specific and bounded even with long or unsafe team text', () => {
+  const record = performanceRecord();
+  record.fixture.homeTeam.name = '<script>Club & Co</script>';
+  record.fixture.awayTeam.name = 'Away Identifier '.repeat(25);
+  const data = report([record]), link = cell(data).evidence.links[0];
+  assert.equal(link.pageHref, `/en/matches/${record.fixture.id}/script-club-co-script-vs-${('away-identifier-'.repeat(25)).slice(0, 75).replace(/-$/, '')}?revision=${record.revision.id}#revision-history`);
+  assert.equal(link.revisionId, record.cycle.lockedSetId);
+  assert.ok(link.pageHref.length <= 512);
+  assert.equal(cell(data).metrics.denominator, 1);
+  assert.equal(data.cohort.fixtureCount, 1);
+});
 test('mixed horizons and versions never borrow an approved gate from a different cohort', () => {
   const records = [performanceRecord(), performanceRecord()];
   records[0].revision.publishedAt = records[0].cycle.kickoffAt - 3_600_000;

@@ -147,7 +147,7 @@ export const ContextSection = memo(function ContextSection() {
         <dt>{messages.text("details.country")}</dt><dd>{value?.competition.country ?? fixture.competition.country ?? messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.round")}</dt><dd>{value?.competition.round ?? messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("match.kickoff")}</dt><dd>{kickoff === null ? messages.text("details.kickoffUnknown")
-          : <><time dateTime={toUtcIsoString(kickoff)}>{messages.reportingInstant(kickoff)}</time> · {messages.text("details.timeZone")}</>}</dd>
+          : <time dateTime={toUtcIsoString(kickoff)}>{messages.reportingInstant(kickoff)}</time>}</dd>
         <dt>{messages.text("details.status")}</dt><dd>{messages.text(`match.status.${fixture.status}`)}</dd>
         <dt>{messages.text("details.venue")}</dt><dd>{messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.weather")}</dt><dd>{messages.text("details.notAvailable")}</dd>

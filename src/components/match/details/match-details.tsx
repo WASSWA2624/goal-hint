@@ -8,7 +8,7 @@ import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
 import { defaultMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
 import { feedReturnStorageKey, homeHref } from "@/domain/navigation";
-import { createMessages } from "@/i18n/messages";
+import { useMessages } from "@/i18n/use-messages";
 import { media } from "@/styles/theme";
 import { BackIcon } from "./details-icons";
 import { DetailsProvider, Note, ViewProvider, desktop, focusRing, size, useStableDetails } from "./details-ui";
@@ -198,7 +198,7 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
   data: MatchDetailResponse; preview: InsightsPreview | null; locale?: string; history?: ReactNode; historyRequested?: boolean;
 }) {
   const { view, go, update } = useMatchView();
-  const messages = useMemo(() => createMessages(locale), [locale]);
+  const messages = useMessages(locale);
   const fixture = data.fixture;
   const home = fixture.homeTeam.name || messages.text("match.homeUnknown"), away = fixture.awayTeam.name || messages.text("match.awayUnknown");
   // Revision-history links arrive without a section; open the history section for them once.

@@ -78,8 +78,6 @@
     "test:history-page:rendering": "python scripts/verify-match-feed-rendering.py --history",
     "test:live-client": "node --conditions=react-server --test tests/live-client-refresh.test.mjs tests/feed-pagination.test.mjs tests/client-state.test.mjs",
     "test:live-client:rendering": "python scripts/verify-match-feed-rendering.py --live",
-    "test:methodology": "node --conditions=react-server --test tests/performance-page.test.mjs tests/performance.test.mjs",
-    "test:methodology:rendering": "python scripts/verify-methodology-rendering.py",
     "test:privacy:html": "python scripts/verify-privacy-rendering.py",
     "test:terms:html": "python scripts/verify-terms-rendering.py",
     "test:contact:html": "python scripts/verify-contact-rendering.py",

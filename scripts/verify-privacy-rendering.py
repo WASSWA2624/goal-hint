@@ -18,7 +18,7 @@ def main() -> None:
                 "At most 20 navigation records.*older than 30 minutes"],
             forbidden=r"TODO|TBD|Lorem ipsum|example\.com|mailto:|untrusted-query|\{(?:date|minutes|seconds|hours|entries)\}",
             forms=r"<form|<iframe|<input")
-        match(r'href="/en/how-it-works"', visible)
+        match(r'href="/en/help"', visible)
         print(f"PASS production privacy HTML: {path}")
     print("PASS initial privacy content, honest publication gate, review date, storage/cache disclosures, navigation and anonymous metadata.")
 

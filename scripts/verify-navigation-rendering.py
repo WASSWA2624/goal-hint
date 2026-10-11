@@ -41,7 +41,7 @@ def main() -> None:
         information = next((page for page in information_pages if target.path == f"/en/{page}"), None)
         if information:
             expected = f"/en/{information}"
-            assert_navigation(visible, primary=expected, footer=expected, mobile="/en/how-it-works")
+            assert_navigation(visible, primary=expected, footer=expected, mobile=expected if information == "help" else None)
         else:
             status = parse_qs(target.query).get("status", ["all"])[0]
             expected = results_path if status == "finished" else today_path + "?status=live" if status == "live" else today_path
@@ -51,6 +51,7 @@ def main() -> None:
         no_match(r'(?:href|action)="[^"\s]*/(?:sign[-_]?in|log[-_]?in|auth)(?:[/?#]|"|$)', visible, flags=re.I)
         no_match(r'<(?:button|a)\b[^>]*>\s*(?:sign[ -]?in|log[ -]?in)\s*<', visible, flags=re.I)
         no_match("Brand styling preview", visible, flags=re.I)
+        no_match(r'(?:href|action)="[^"\s]*how-it-works', visible)
         for page in information_pages:
             assert f'href="/en/{page}"' in visible
         if "to=2020-03-06" in path:
@@ -64,6 +65,9 @@ def main() -> None:
         assert response.status == 307, path
         target = urlsplit(urljoin(origin, response.headers.get("location")))
         assert target.path + ("?" + target.query if target.query else "") == expected
+    legacy = anonymous("/en/how-it-works?from=2026-10-09&to=2026-10-11")
+    assert legacy.status == 308
+    assert urlsplit(urljoin(origin, legacy.headers.get("location"))).path == "/en/help"
     for path in ["/en/predictions/2026-02-29", "/en/predictions/2026-1-01",
             "/en/predictions/2026-10-09?status=correct", "/en/predictions/2026-10-09?status=all&status=finished",
             "/en?sort=unsupported", "/en?market=total-goals&sort=probability&sortMarket=match-result",

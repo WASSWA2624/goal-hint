@@ -60,7 +60,7 @@ Paths below are relative to `src/` unless otherwise stated.
 | --- | --- |
 | Free, account-free information; no betting, payments or visitor subscriptions | `domain/public-policy.ts`, public page/HTTP handlers and Prisma schema. No visitor account, stakes, payment or subscription flow exists. |
 | Four forecast families, regulation including stoppage time; no extra time or shoot-outs | `domain/markets.ts`, `domain/market-settlement.ts`, `server/settlement/settlement-service.ts`. Over/under uses 2.5. |
-| Estimated probabilities; no guaranteed wins/accuracy; qualification remains provisional | `domain/markets.ts`, `server/performance/public-performance.ts`, `i18n/messages/methodology.ts`; OP-16/17 are still unapproved. Counts/withheld metrics are not a quality claim. |
+| Estimated probabilities; no guaranteed wins/accuracy; qualification remains provisional | `domain/markets.ts`, `server/performance/public-performance.ts`, `i18n/messages/help.ts`; OP-16/17 are still unapproved. Counts/withheld metrics are not a quality claim. |
 | AI first, validated API-Football fallback for missing groups; selection independent of the larger percentage | `server/refresh/refresh-service.ts`, `server/fallback/`, `server/predictor/` and published methodology. This describes the implemented process, not an assertion of active paid accounts, approved live model or source licensing. |
 | One daily midnight EAT run, today plus six days; partial/delayed/missing information | `domain/calendar.ts`, `server/selection/selection-trigger.ts`, `selection-service.ts`, `server/refresh/refresh-service.ts`. Public reads do not dispatch jobs. No new cadence or availability SLA is promised. |
 | Publication strictly before five-minute cutoff; earlier play closes publication; original clocks retained | `server/predictions/publication-eligibility.ts`, `cutoff-service.ts`, `server/refresh/refresh-service.ts`. Eligible old forecasts may remain when no source supplies a valid update; no new timestamp is invented. |
@@ -69,8 +69,8 @@ Paths below are relative to `src/` unless otherwise stated.
 | API-Football by API-Sports credit and original source attribution | Existing methodology, match detail provenance and permission-controlled source display; `assets/brand/README.md` governs local branding only. Source credit is not permission, endorsement or affiliation. OP-06/13 remain gates. |
 | Privacy facts are a prelaunch summary | `domain/privacy-notice.ts`, `/en/privacy`, `docs/privacy-page.md`. The terms link the actual summary without claiming that a final privacy notice is effective. |
 
-The terms link the actual probabilities, evidence, measured performance, schedule,
-settlement and correction sections of `/en/how-it-works`, plus `/en/privacy`.
+The terms link the forecast, update and result sections of `/en/help`, plus
+`/en/privacy` and the existing contact guidance.
 Detailed operational rules stay in those documents instead of being duplicated.
 
 ## Current authoritative references and applicability limits

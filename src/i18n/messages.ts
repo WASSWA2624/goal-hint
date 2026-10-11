@@ -4,23 +4,29 @@ import { resolveLocale } from "./locales.ts";
 import { en } from "./messages/en.ts";
 
 type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
-  days: Intl.DateTimeFormat; times: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat };
-// Immutable formatters are shared by locale; translations and visitor data are never cached.
+  days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;
+  zones: Intl.DateTimeFormat };
+// Immutable formatters are shared by locale and display zone; no visitor records are cached.
 const formattersByLocale = new Map<string, Formatters>();
-function formatters(language: string): Formatters {
-  const existing = formattersByLocale.get(language);
+function formatters(language: string, timeZone: string): Formatters {
+  const key = `${language}|${timeZone}`;
+  const existing = formattersByLocale.get(key);
   if (existing) return existing;
   const dateOptions = { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", year: "numeric" } as const;
+  const instantOptions = { timeZone, calendar: "gregory", hourCycle: "h23" } as const;
+  const dayOptions = { calendar: "gregory", weekday: "short", month: "short", day: "numeric" } as const;
   const created: Formatters = {
     numbers: new Intl.NumberFormat(language),
     plurals: new Intl.PluralRules(language),
     dates: new Intl.DateTimeFormat(language, { ...dateOptions, weekday: "long", month: "long", day: "numeric" }),
-    instants: new Intl.DateTimeFormat(language, { ...dateOptions, month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
-    days: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", weekday: "short", month: "short", day: "numeric" }),
-    times: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }),
+    instants: new Intl.DateTimeFormat(language, { ...instantOptions, year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+    days: new Intl.DateTimeFormat(language, { ...dayOptions, timeZone: publicPolicy.reportingTimeZone }),
+    instantDays: new Intl.DateTimeFormat(language, { ...dayOptions, timeZone }),
+    times: new Intl.DateTimeFormat(language, { ...instantOptions, hour: "2-digit", minute: "2-digit" }),
     mediumDates: new Intl.DateTimeFormat(language, { ...dateOptions, weekday: "short", month: "short", day: "numeric" }),
+    zones: new Intl.DateTimeFormat(language, { ...instantOptions, timeZoneName: "short" }),
   };
-  formattersByLocale.set(language, created);
+  formattersByLocale.set(key, created);
   return created;
 }
 
@@ -57,22 +63,25 @@ export type MessageCatalog = Readonly<Record<TextKey, string> & Record<PluralKey
 
 export type Messages = ReturnType<typeof buildMessages>;
 // The default-catalog helper holds no translations or visitor data, so one frozen instance per
-// locale serves every card, row and label render.
+// locale and display zone serves every card, row and label render.
 const defaultsByLocale = new Map<string, Messages>();
 
 /** Missing translations fall back per key. Only complete locales may be published. */
-export function createMessages(locale?: string, translations?: Partial<MessageCatalog>): Messages {
+export function createMessages(locale?: string, translations?: Partial<MessageCatalog>, timeZone: string = publicPolicy.reportingTimeZone): Messages {
   const language = resolveLocale(locale);
-  if (translations) return buildMessages(language, translations);
-  const existing = defaultsByLocale.get(language);
+  if (translations) return buildMessages(language, translations, timeZone);
+  const key = `${language}|${timeZone}`;
+  const existing = defaultsByLocale.get(key);
   if (existing) return existing;
-  const created = Object.freeze(buildMessages(language, {}));
-  defaultsByLocale.set(language, created);
+  const created = Object.freeze(buildMessages(language, {}, timeZone));
+  defaultsByLocale.set(key, created);
   return created;
 }
 
-function buildMessages(language: string, translations: Partial<MessageCatalog>) {
-  const { numbers, plurals, dates, instants, days, times, mediumDates } = formatters(language);
+function buildMessages(language: string, translations: Partial<MessageCatalog>, timeZone: string) {
+  const { numbers, plurals, dates, instants, days, instantDays, times, mediumDates, zones } = formatters(language, timeZone);
+  const zoneName = (value: UtcInstant): string => timeZone === publicPolicy.reportingTimeZone ? "EAT"
+    : zones.formatToParts(value).find((part) => part.type === "timeZoneName")!.value;
 
   return {
     text(key: TextKey, values: Readonly<Record<string, string>> = {}): string {
@@ -98,14 +107,19 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>) 
       return mediumDates.format(getReportingDayBounds(value).startInclusive);
     },
     reportingInstant(value: UtcInstant): string {
-      return instants.format(displayInstant(value)) + " EAT";
+      const instant = displayInstant(value);
+      return `${instants.format(instant)} ${zoneName(instant)}`;
     },
-    /** Compact EAT kickoff parts for cards; full labels remain on reportingInstant. */
+    /** Compact kickoff parts in the display zone; date-only reporting labels keep their named day. */
     reportingDay(value: UtcInstant): string {
-      return days.format(displayInstant(value));
+      return instantDays.format(displayInstant(value));
     },
     reportingTime(value: UtcInstant): string {
       return times.format(displayInstant(value));
+    },
+    /** The zone label at this instant, including its daylight-saving offset. */
+    timeZone(value: UtcInstant): string {
+      return zoneName(displayInstant(value));
     },
   };
 }

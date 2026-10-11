@@ -21,12 +21,12 @@ export function ContactContent({ locale }: { locale: string }) {
     <Stack as="section" id="contact-corrections" aria-labelledby="contact-corrections-heading" $gap="md">
       <SectionHeading id="contact-corrections-heading">{messages.text("contact.corrections.title")}</SectionHeading>
       <BodyText>{messages.text("contact.corrections.body")}</BodyText>
-      <TextLink href={`${informationHref("how-it-works", locale)}#settlement`} prefetch={false}>{messages.text("contact.corrections.link")}</TextLink>
+      <TextLink href={`${informationHref("help", locale)}#results`} prefetch={false}>{messages.text("contact.corrections.help")}</TextLink>
     </Stack>
     <Stack as="section" id="contact-policies" aria-labelledby="contact-policies-heading" $gap="md">
       <SectionHeading id="contact-policies-heading">{messages.text("contact.policies.title")}</SectionHeading>
       <nav aria-label={messages.text("contact.policies.navigation")}><Inline>
-        {(["privacy", "terms", "how-it-works"] as const).map((page) =>
+        {(["privacy", "terms", "help"] as const).map((page) =>
           <TextLink key={page} href={informationHref(page, locale)} prefetch={false}>{messages.text(`navigation.${page}`)}</TextLink>)}
       </Inline></nav>
     </Stack>

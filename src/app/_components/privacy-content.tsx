@@ -36,6 +36,6 @@ export function PrivacyContent({ locale }: { locale: string }) {
       {id === "release" && <ul>{privacyNotice.blockers.map((blocker) => <li key={blocker}><BodyText>{messages.text(`privacy.blocker.${blocker}`)}</BodyText></li>)}</ul>}
       {id === "choices" && <TextLink href={informationHref("contact", locale)} prefetch={false}>{messages.text("contact.link")}</TextLink>}
     </Stack>)}
-    <TextLink href="/en/how-it-works" prefetch={false}>{messages.text("privacy.methodology")}</TextLink>
+    <TextLink href={informationHref("help", locale)} prefetch={false}>{messages.text("privacy.help")}</TextLink>
   </Stack>;
 }

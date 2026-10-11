@@ -1,5 +1,6 @@
 // Server-only page prose (see ../content-messages.ts); page metadata lives in en.ts.
 export const privacyMessages = {
+  "privacy.help": "Read app help and forecast guidance",
   "privacy.intro": "Goal Hint is a free football information service. This page describes the current application's data handling and the facts that still need confirmation before public release.",
   "privacy.status.title": "Prelaunch data-handling summary",
   "privacy.status.body": "This is not a completed, effective privacy notice. The legal operator, applicable jurisdiction, privacy contact and hosting/log arrangements have not been confirmed. Final publication and public release remain blocked until these facts and the required privacy review are complete.",
@@ -46,5 +47,4 @@ export const privacyMessages = {
   "privacy.blocker.hosting": "Hosting providers, processing locations, contractual responsibilities and any required transfer safeguards.",
   "privacy.blocker.sources": "Permission-compatible retention and reuse of football and reporting sources.",
   "privacy.blocker.retention": "Verified deletion, audit and backup retention arrangements.",
-  "privacy.methodology": "Read how forecasts and measured performance work",
 } as const;

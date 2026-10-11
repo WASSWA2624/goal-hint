@@ -1,6 +1,7 @@
 import { BodyText, Inline, MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { TextLink } from "@/components/ui/controls";
-import { toUtcIsoString, type UtcInstant } from "@/domain/calendar";
+import { LocalTime } from "@/components/ui/local-time";
+import type { UtcInstant } from "@/domain/calendar";
 import type { DetailSnapshot, MatchDetailResponse } from "@/domain/match-detail";
 import type { MarketFamily, MarketSelection } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
@@ -14,7 +15,7 @@ import { OutcomeBadge } from "@/components/match/outcome-badge";
 export function DetailTime({ label, at, locale }: { label: TextKey; at: UtcInstant | null; locale: string }) {
   const messages = createMessages(locale);
   return <MutedText>{messages.text(label)}: {at === null ? messages.text("detail.unknownTime")
-    : <time dateTime={toUtcIsoString(at)}>{messages.reportingInstant(at)}</time>}</MutedText>;
+    : <LocalTime at={at} locale={locale} />}</MutedText>;
 }
 
 function MarketPrediction({ data, family, locale, sources, scope = "" }: {

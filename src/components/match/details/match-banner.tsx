@@ -164,7 +164,7 @@ const Featured = styled.button<{ $empty: boolean }>`
 `;
 
 /**
- * Fixture banner: competition, teams with recent form, kickoff in EAT, score when played, and the
+ * Fixture banner: competition, teams with recent form, device-local kickoff, score when played, and the
  * featured pick. It reads no view state, so section and filter changes skip it.
  */
 export const MatchBanner = memo(function MatchBanner() {
@@ -190,7 +190,7 @@ export const MatchBanner = memo(function MatchBanner() {
     <When>
       {fixture.kickoffAt !== null ? <>
         <span><CalendarIcon /><time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time></span>
-        <span><ClockIcon />{messages.reportingTime(fixture.kickoffAt)} EAT</span>
+        <span><ClockIcon />{messages.reportingTime(fixture.kickoffAt)} {messages.timeZone(fixture.kickoffAt)}</span>
       </> : <span>{messages.text("details.kickoffUnknown")}</span>}
     </When>
     <h1 id="match-banner-title" style={{ position: "absolute", inlineSize: 1, blockSize: 1, overflow: "hidden", clipPath: "inset(50%)" }}>

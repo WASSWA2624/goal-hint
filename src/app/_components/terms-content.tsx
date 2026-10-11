@@ -12,12 +12,9 @@ const sections = ["service", "estimates", "updates", "outcomes", "use", "sources
 const paragraphs = { service: ["body", "markets"], estimates: ["body", "sources"], updates: ["body", "limits"],
   outcomes: ["body", "process"], use: ["body"], sources: ["body", "permissions"], privacy: ["body"], release: ["body"] } as const;
 const links: Partial<Record<typeof sections[number], readonly { href: string; key: ContentTextKey }[]>> = {
-  estimates: [{ href: "/en/how-it-works#probabilities", key: "terms.link.probabilities" },
-    { href: "/en/how-it-works#evidence", key: "terms.link.evidence" },
-    { href: "/en/how-it-works#performance", key: "terms.link.performance" }],
-  updates: [{ href: "/en/how-it-works#schedule", key: "terms.link.schedule" }],
-  outcomes: [{ href: "/en/how-it-works#settlement", key: "terms.link.settlement" },
-    { href: "/en/how-it-works#corrections", key: "terms.link.corrections" }],
+  estimates: [{ href: "/en/help#predictions", key: "terms.link.predictions" }],
+  updates: [{ href: "/en/help#updates", key: "terms.link.updates" }],
+  outcomes: [{ href: "/en/help#results", key: "terms.link.results" }],
   privacy: [{ href: "/en/privacy", key: "terms.link.privacy" }],
 };
 

@@ -9,8 +9,7 @@ from lib.runtime import main_guard
 def main() -> None:
     origin = acceptance_origin(__doc__)
     notice = notices()["termsNotice"]
-    policy_links = ["/en/how-it-works#probabilities", "/en/how-it-works#evidence", "/en/how-it-works#performance",
-        "/en/how-it-works#schedule", "/en/how-it-works#settlement", "/en/how-it-works#corrections", "/en/privacy"]
+    policy_links = ["/en/help#predictions", "/en/help#updates", "/en/help#results", "/en/privacy", "/en/contact"]
     for path in ["/en/terms", "/en/terms?q=%3Cscript%3Euntrusted-query%3C%2Fscript%3E"]:
         visible = policy_document(origin, path, page="terms", title="Terms of use", notice=notice,
             sections=["service", "estimates", "updates", "outcomes", "use", "sources", "privacy", "release"],
@@ -32,7 +31,7 @@ def main() -> None:
             documents[target.path] = visible_html(response.text, comments=False)
         if target.fragment:
             assert f'id="{target.fragment}"' in documents[target.path], f"Existing section: {link}"
-    print("PASS actual methodology, performance, settlement/correction anchors and privacy destination.")
+    print("PASS actual help anchors, privacy and contact destinations.")
 
 
 if __name__ == "__main__":

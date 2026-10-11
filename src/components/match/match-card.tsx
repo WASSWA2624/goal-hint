@@ -13,6 +13,7 @@ import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages } from "@/i18n/messages";
+import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -711,7 +712,7 @@ function showFullNames(event: PointerEvent<HTMLElement>, title: string) {
 function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
-  const messages = createMessages(locale);
+  const messages = useMessages(locale);
   const titleId = `gh-match-${useId()}`;
   const eligible = markets && markets.length > 0 ? markets : [selectedFamily ?? "match-result"];
   const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
@@ -770,7 +771,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
           <KickoffDetails>
           <VisuallyHidden>{messages.text("match.kickoff")}: </VisuallyHidden>
           <span>{messages.reportingDay(fixture.kickoffAt)}</span><Dot aria-hidden="true">·</Dot>
-          <KickoffTime>{messages.reportingTime(fixture.kickoffAt)}<KickoffZone> EAT</KickoffZone></KickoffTime>
+          <KickoffTime>{messages.reportingTime(fixture.kickoffAt)}<KickoffZone> {messages.timeZone(fixture.kickoffAt)}</KickoffZone></KickoffTime>
           </KickoffDetails>
           <MatchStatus fixture={fixture} messages={messages} />
         </When>}

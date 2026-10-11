@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getReportingDate, parseReportingDate, parseUtcInstant } from "../src/domain/calendar.ts";
 import {
-  feedHref, getFeedEntry, homeHref, informationHref, matchHref, parseFeedView,
+  feedHref, getFeedEntry, homeHref, informationHref, informationPages, matchHref, parseFeedView,
 } from "../src/domain/navigation.ts";
 import { getLocaleRedirect, isSupportedLocale, resolveLocale } from "../src/i18n/locales.ts";
 import { createMessages } from "../src/i18n/messages.ts";
@@ -21,7 +21,7 @@ test("unpublished locale redirects preserve route identity and do not rewrite ar
     ["/fr", "/en"], ["/sw/privacy", "/en/privacy"], ["/EN/contact", "/en/contact"],
     ["/en-US/predictions/2026-10-07", "/en/predictions/2026-10-07"],
     ["/pt-BR/matches/fixture-123/home-v-away", "/en/matches/fixture-123/home-v-away"],
-    ["/eng/how-it-works", "/en/how-it-works"],
+    ["/eng/contact", "/en/contact"],
     ["/en", null], ["/en/terms", null], ["/", null], ["/_next/static/a.js", null],
     ["/privacy", null], ["/france/privacy", null], ["//fr/contact", null],
   ]) assert.equal(getLocaleRedirect(input), expected, input);
@@ -61,7 +61,9 @@ test("malformed dates and ambiguous or unsupported statuses cannot produce feed 
 });
 
 test("match and information links preserve locale-neutral IDs and route conventions", () => {
-  assert.equal(informationHref("how-it-works", "fr"), "/en/how-it-works");
+  assert.deepEqual(informationPages, ["help", "privacy", "terms", "contact"]);
+  assert.equal(informationHref("help", "fr"), "/en/help");
+  assert.equal(informationHref("contact", "fr"), "/en/contact");
   assert.equal(matchHref("fixture-123", "home-v-away"), "/en/matches/fixture-123/home-v-away");
   for (const [id, slug] of [["../privacy", "home-v-away"], ["123", "../../terms"], ["", "home-v-away"], ["123", ""]]) {
     assert.throws(() => matchHref(id, slug), RangeError);

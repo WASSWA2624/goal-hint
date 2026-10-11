@@ -4,11 +4,11 @@ import { cache } from "react";
 import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { TextLink } from "@/components/ui/controls";
-import { ChevronDownIcon, HomeIcon, InfoIcon, LiveIcon, ResultsIcon, SearchIcon, StatsIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, HelpIcon, HomeIcon, InfoIcon, LiveIcon, ResultsIcon, SearchIcon } from "@/components/ui/icons";
 import { Container, PageMain } from "@/components/ui/layout";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import {
-  feedHref, getFeedEntry, homeHref, informationHref, informationPages, performanceHref,
+  feedHref, getFeedEntry, homeHref, informationHref, informationPages,
   type NavigationLocation,
 } from "@/domain/navigation";
 import { feedQueryRules } from "@/domain/feed-query";
@@ -51,7 +51,8 @@ export async function PublicShell({ children, locale, current, today: reportingD
     { key: "live", href: feedHref({ date: today, status: "live" }, language), label: messages.text("navigation.live"), tab: messages.text("navigation.live"), Icon: LiveIcon, tone: "red" },
     { key: "results", href: resultsHref, label: messages.text("navigation.results"), tab: messages.text("navigation.results"), Icon: ResultsIcon, tone: "violet" },
   ] as const;
-  const informationCurrent = (informationPages as readonly string[]).includes(current ?? "");
+  const policyPages = informationPages.filter((page) => page !== "help");
+  const informationCurrent = policyPages.some((page) => page === current);
   const searchForm = search ?? { action: homeHref(language), hidden: [], value: "" };
 
   return (
@@ -67,12 +68,14 @@ export async function PublicShell({ children, locale, current, today: reportingD
               {sections.map(({ key, href, label, Icon, tone }) => <li key={key}>
                 <TopNavLink href={href} prefetch={false} $tone={tone} aria-current={current === key ? "page" : undefined}><Icon />{label}</TopNavLink>
               </li>)}
-              <li><TopNavLink href={performanceHref(language)} prefetch={false} $tone="amber"><StatsIcon />{messages.text("navigation.stats")}</TopNavLink></li>
+              <li><TopNavLink href={informationHref("help", language)} prefetch={false} $tone="blue" aria-current={current === "help" ? "page" : undefined}>
+                <HelpIcon />{messages.text("navigation.help")}
+              </TopNavLink></li>
               <li>
                 <MoreMenu $tone="blue">
                   <summary aria-current={informationCurrent ? "page" : undefined}><InfoIcon />{messages.text("navigation.more")}<ChevronDownIcon /></summary>
                   <MoreList>
-                    {informationPages.map((page) => <li key={page}>
+                    {policyPages.map((page) => <li key={page}>
                       <TextLink href={informationHref(page, language)} prefetch={false} aria-current={current === page ? "page" : undefined}>
                         {messages.text(`navigation.${page}`)}
                       </TextLink>
@@ -119,11 +122,9 @@ export async function PublicShell({ children, locale, current, today: reportingD
           {sections.map(({ key, href, tab, Icon, tone }) => <li key={key}>
             <TabLink href={href} prefetch={false} $tone={tone} aria-current={current === key ? "page" : undefined}><Icon />{tab}</TabLink>
           </li>)}
-          <li>
-            <TabLink href={informationHref("how-it-works", language)} prefetch={false} $tone="blue" aria-current={informationCurrent ? "page" : undefined}>
-              <InfoIcon />{messages.text("navigation.info")}
-            </TabLink>
-          </li>
+          <li><TabLink href={informationHref("help", language)} prefetch={false} $tone="blue" aria-current={current === "help" ? "page" : undefined}>
+            <HelpIcon />{messages.text("navigation.help")}
+          </TabLink></li>
         </TabList>
       </TabBar>
     </ShellFrame>

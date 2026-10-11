@@ -54,9 +54,13 @@ destinations remain confined to their original rendering tests.
 Open cycles display the supplied current prediction. Closed cycles display only
 the supplied locked forecast, or the explicit missing locked selection for that
 market. Historical scores and correctness remain separate. Publication and last
-sync use their original UTC instants formatted in EAT. Stored delays remain
-visible. The page never substitutes a sample forecast or selects a current preview
-for an empty lock.
+sync use their original UTC instants, displayed in the device's timezone after
+hydration with a stable EAT server fallback. Match kickoff and detail
+timestamps follow the same display rule. Date-only feed selections, reporting
+cohorts, prediction windows and schedules remain in EAT; displaying an instant
+in a different local calendar day does not change those boundaries. Stored
+delays remain visible. The page never substitutes a sample forecast or selects
+a current preview for an empty lock.
 
 ### Phone header
 

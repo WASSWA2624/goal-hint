@@ -60,8 +60,8 @@ test('page metadata has independent social fields, real canonical pagination and
   const history = matchDetailMetadata(fixture, 'en', true, approved);
   assert.equal(history.robots.index, false); assert.equal(history.alternates.canonical, known.alternates.canonical);
   assert.equal(matchDetailMetadata({ data: null, error: 'unavailable' }, 'en', false, approved).robots.index, false);
-  assert.equal((await createInformationMetadata('how-it-works', () => approved)()).robots.index, true);
-  assert.equal((await createInformationMetadata('how-it-works', () => approved)({ searchParams: Promise.resolve({ market: 'total-goals' }) })).robots.index, false);
+  assert.equal((await createInformationMetadata('help', () => approved)()).robots.index, true);
+  assert.equal((await createInformationMetadata('help', () => approved)({ searchParams: Promise.resolve({ market: 'total-goals' }) })).robots.index, false);
   for (const name of ['privacy', 'terms', 'contact']) assert.equal((await createInformationMetadata(name, () => approved)()).robots.index, false);
 });
 
@@ -87,7 +87,7 @@ test('sitemap shards preserve stored lastmod, advertise each bounded shard and p
   const robots = await routes.robots(); assert.equal(robots.sitemap.length, 5);
   assert.ok(robots.sitemap.includes('https://goalhint.com/matches/sitemap/2.xml'));
   const urls = (await routes.sitemap()).map(row => row.url);
-  assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/how-it-works']);
+  assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/help']);
   for (const id of ['-1', '01', '1.xml', '9999999999', 'x']) {
     assert.throws(() => sitemapPage(id), RangeError);
     await assert.rejects(routes.matches({ id: Promise.resolve(id) }), RangeError);

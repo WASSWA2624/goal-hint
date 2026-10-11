@@ -13,7 +13,7 @@ import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
-import { ButtonLink, TextLink } from "@/components/ui/controls";
+import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -22,7 +22,7 @@ import { feedQueryHref, isFeedDatePreset, panelFilterCount, resolveFeedDates, ty
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
-import { feedReturnStorageKey, performanceHref } from "@/domain/navigation";
+import { feedReturnStorageKey } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import type { FeedPageResult } from "@/server/matches/feed-page";
 import { FeedStateProvider } from "@/state/provider";
@@ -116,7 +116,6 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
       filters={{ open: filtersOpen, count: panelFilterCount(query), controls: filtersId, onToggle: toggleFilters }} />
     <FeedFilters query={query} today={today} leagues={leagues} total={result.data?.total ?? null} onApply={apply}
       phoneOpen={filtersOpen} phoneId={filtersId} />
-    {query.status === "finished" && <TextLink href={performanceHref(query.locale)} prefetch={false}>{messages.text("performance.resultsLink")}</TextLink>}
     {controls}
     {range.endDate > createPredictionWindow(today).lastDate && <FeedNote>{messages.text("feed.sevenDayAvailability")}</FeedNote>}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
