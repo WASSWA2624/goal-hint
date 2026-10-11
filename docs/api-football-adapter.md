@@ -200,7 +200,12 @@ substitute for regulation evidence; conflicting `FT` totals are rejected.
 
 Logos and player photos are nullable metadata with rights-review status. An exact
 URL must pass an explicit rights verifier and be credential-free HTTPS, without
-query credentials or fragments, before a URL is exposed. This adapter never
+query credentials or fragments, before a URL is exposed. Competitions also carry
+`countryFlag` from `/fixtures` `league.flag` or `/leagues` `country.flag` (per the
+official v3 examples, `https://media.api-sports.io/flags/<code>.svg`, null for
+"World" competitions) under the same verifier. Because the key was ignored before,
+any non-string value counts as no flag and never rejects the row
+([football catalog](football-catalog.md#country-flags)). This adapter never
 fetches, proxies, optimizes or stores image binaries. URL syntax and public
 availability do not establish third-party display rights.
 

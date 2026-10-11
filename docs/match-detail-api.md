@@ -152,7 +152,9 @@ filters. Applicable snapshots must agree with their card forecast's run, revisio
 publication and complete market groups. Detail cache projection 3 includes the
 run/provenance contract. The fixture's teams carry the same optional `code` as
 feed records ([match feed API](match-feed-api.md)); detail cache projection 5
-keeps responses cached without it from being reused. Prompt 052 adds a top-level `odds` array (at most 4,
+keeps responses cached without it from being reused. Its competition carries the
+same optional `countryFlagUrl` as feed records; detail cache projection 6 keeps
+responses cached without it from being reused. Prompt 052 adds a top-level `odds` array (at most 4,
 default `[]`) and moves the detail cache to projection 4. Each entry is one
 complete market-implied group for one family:
 `{ label: "market-implied", family, basis, method, overround, retrievedAt,

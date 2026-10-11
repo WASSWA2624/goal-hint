@@ -180,6 +180,27 @@ test('selection pages past recently checked leagues in kickoff order, so codeles
   assert.equal(TEAM_CODE_CANDIDATE_PAGE <= 500, true, 'a page fits the store bound');
 });
 
+test('a season whose earliest codeless kickoff moves between page reads is requested once per sweep', async () => {
+  // Page 1 ends with league 1_199. Before page 2 is read, a concurrent catalog write moves league 1_198's earliest
+  // codeless fixture later (its first fixture's team got a code), so the keyset read returns it again.
+  const first = Array.from({ length: TEAM_CODE_CANDIDATE_PAGE }, (_, index) => candidate(1_000 + index, NOW + index * MINUTE));
+  const second = [candidate(1_198, NOW + 300 * MINUTE), candidate(1_400, NOW + 301 * MINUTE)];
+  const settled = new Set(first.slice(0, 198).map(teamCodeScopeKey)), requests = [], checked = [];
+  const store = {
+    async candidates(_window, _limit, after = null) { return after === null ? first : second; },
+    async checks(targets) {
+      checked.push(targets.map((entry) => entry.competitionId));
+      return new Map(targets.filter((entry) => settled.has(teamCodeScopeKey(entry))).map((entry) => [teamCodeScopeKey(entry), { settledAt: NOW - DAY, failedAt: null }]));
+    },
+  };
+  const importer = { async import(request) { requests.push(request.selection.query.competitionId); return receipt(); } };
+  const service = createTeamCodeService({ store, importer, retentionEvidenceRef: 'synthetic-retention', bounds: teamCodeBounds, clock: () => NOW });
+  const summary = await service.sweep({ now: NOW, maxSeasons: 4, remainingMs: () => 10 * MINUTE });
+  assert.deepEqual(requests, [1_198, 1_199, 1_400]);
+  assert.deepEqual(checked[1], [1_400], 'the repeated season is neither re-checked nor re-selected');
+  assert.deepEqual([summary.candidates, summary.due], [202, 3]);
+});
+
 test('a season starts only while its provider window and write fit, and never after the job is aborted', async () => {
   const candidates = [candidate(61, NOW + HOUR), candidate(39, NOW + 2 * HOUR)];
   let remaining = TEAM_CODE_SEASON_RESERVE_MS;

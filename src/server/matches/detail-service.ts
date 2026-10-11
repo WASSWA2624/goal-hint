@@ -94,7 +94,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 5, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
+        query: { id, projection: 6, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
       return options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
     } catch (error) {
       if (refused) throw refused;

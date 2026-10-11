@@ -406,5 +406,29 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       p.setTime(p.now() + 60_000); assert.ok((await query({ q: 'club' })).total > 0);
       assert.equal((await p.a.query((tx) => tx.publicSearchLimit.findUniqueOrThrow({ where: { scope: 'matches' } }))).requests, 1);
     });
+    await t.test('country flag: the date sync stores league.flag, every card of the league publishes it, no fixture version moves', async () => {
+      const flag = 'https://media.api-sports.io/flags/gb-eng.svg';
+      const flagged = (value) => ({ ...rows[50], league: { ...rows[50].league, flag: value } });
+      const stored = async () => (await p.a.query((tx) => tx.footballCompetitionProvider.findUniqueOrThrow({
+        where: { provider_externalId: { provider: 'api-football', externalId: 39n } }, include: { competition: true } }))).competition.countryFlagUrl;
+      const [before, sibling] = [await card(3050), await card(3051)];
+      assert.equal(before.competition.countryFlagUrl, null, 'rows imported without the key store no flag');
+      assert.notEqual((await importRows([flagged(flag)], { kind: 'fixtures', query: { fixtureId: 3050 } })).status, 'failed');
+      assert.equal(await stored(), flag);
+      const [after, other] = [await card(3050), await card(3051)];
+      assert.equal(after.competition.countryFlagUrl, flag);
+      assert.equal(other.competition.countryFlagUrl, flag, 'the flag belongs to the competition, so every fixture of it shows it');
+      assert.deepEqual([after.dataVersion, other.dataVersion], [before.dataVersion, sibling.dataVersion], 'a flag alone versions no fixture');
+      // The anonymous HTTP body carries the same field.
+      const http = await createMatchFeedHandler((parameters) => service.query(parameters))(new Request('http://localhost/api/matches?date=2026-10-09&pageSize=100'));
+      const body = matchFeedResponseSchema.parse(await http.json());
+      assert.equal(body.records.find((item) => item.fixtureId === after.fixtureId).competition.countryFlagUrl, flag);
+      // International rows send null and recorded rows may omit the key: neither erases the stored flag.
+      for (const value of [null, undefined]) {
+        assert.notEqual((await importRows([flagged(value)], { kind: 'fixtures', query: { fixtureId: 3050 } })).status, 'failed');
+        assert.equal(await stored(), flag);
+      }
+      assert.equal((await card(3050)).competition.countryFlagUrl, flag);
+    });
   });
 });

@@ -56,6 +56,9 @@ export type NormalizedCompetition = Readonly<{
   round: string | null;
   seasons: readonly CompetitionSeason[];
   logo: ProviderLogo;
+  /** Flag of the competition's country: /fixtures `league.flag`, /leagues `country.flag`. Null for international
+   * ("World") competitions and whenever the provider omits it; the same rights review as logos applies. */
+  countryFlag: ProviderLogo;
   source: SourceTimestamps;
 }>;
 export type ScorePair = Readonly<{ home: number | null; away: number | null }>;
@@ -178,6 +181,9 @@ const teamSchema = z.object({
 const leagueSchema = z.object({
   id: identity, name: text, country: text, type: text, season: seasonYear.nullable().optional(),
   round: text, logo: longText,
+  // Decoration read only since the flag column: any malformed value counts as absent, so a fixture accepted before
+  // flags were read is never rejected because of one.
+  flag: z.unknown().optional(),
 });
 const coverageSchema = z.object({
   fixtures: z.object({ events: optionalBoolean, lineups: optionalBoolean,
@@ -191,7 +197,7 @@ const seasonSchema = z.object({
 });
 const teamEnvelopeSchema = z.object({ team: teamSchema });
 const competitionEnvelopeSchema = z.object({
-  league: leagueSchema, country: z.object({ name: text }).nullable().optional(),
+  league: leagueSchema, country: z.object({ name: text, flag: z.unknown().optional() }).nullable().optional(),
   seasons: z.array(seasonSchema).max(200).nullable().optional(),
 });
 const fixtureSchema = z.object({
@@ -337,7 +343,9 @@ function competition(raw: z.infer<typeof leagueSchema>, context: NormalizationCo
   return { id: raw.id, name: nullableText(raw.name, "competition-name", missing),
     country: nullableText(raw.country, "competition-country", missing), type: raw.type ?? null,
     season: raw.season ?? null, round: raw.round ?? null, seasons: [],
-    logo: approvedLogo(raw.logo, context, "competition-logo", missing), source: source(context, missing) };
+    logo: approvedLogo(raw.logo, context, "competition-logo", missing),
+    countryFlag: approvedLogo(typeof raw.flag === "string" ? raw.flag : null, context, "competition-country-flag", missing),
+    source: source(context, missing) };
 }
 function pair(raw: z.infer<typeof pairSchema> | null | undefined): ScorePair {
   return { home: raw?.home ?? null, away: raw?.away ?? null };
@@ -454,7 +462,9 @@ export function normalizeCompetition(raw: unknown, context: NormalizationContext
   if (!parsed.success) return invalid();
   const missing: string[] = [];
   const input = parsed.data;
-  const data = competition({ ...input.league, country: input.country?.name ?? input.league.country ?? null }, context, missing);
+  // /leagues carries the flag on its country object; a league-level flag is accepted the same way /fixtures sends it.
+  const data = competition({ ...input.league, country: input.country?.name ?? input.league.country ?? null,
+    flag: typeof input.country?.flag === "string" ? input.country.flag : input.league.flag }, context, missing);
   const seasons = (input.seasons ?? []).map((entry) => {
     const coverage = entry.coverage;
     if (!coverage) missing.push(`competition-${entry.year}-coverage`);

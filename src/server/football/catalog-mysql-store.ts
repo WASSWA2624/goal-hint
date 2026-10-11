@@ -79,7 +79,8 @@ export function catalogFixtureSnapshot(row: StoredFixture) {
     retrievedAt: instant(row.retrievedAt), providerUpdatedAt: row.providerUpdatedAt === null ? null : instant(row.providerUpdatedAt),
     dataVersion: row.dataVersion, homeTeam: team(row.homeTeam), awayTeam: team(row.awayTeam),
     season: Object.freeze({ year: row.season.year, competition: Object.freeze({ id: competition.id, name: competition.name,
-      country: competition.country, logoUrl: competition.logoUrl !== null && isSafeCatalogLogo(competition.logoUrl) ? competition.logoUrl : null }) }) });
+      country: competition.country, logoUrl: competition.logoUrl !== null && isSafeCatalogLogo(competition.logoUrl) ? competition.logoUrl : null,
+      countryFlagUrl: competition.countryFlagUrl !== null && isSafeCatalogLogo(competition.countryFlagUrl) ? competition.countryFlagUrl : null }) }) });
 }
 export type CatalogFixtureSnapshot = ReturnType<typeof catalogFixtureSnapshot>;
 export type CatalogMutationCoordinator = (mutation: Readonly<{
@@ -120,8 +121,9 @@ function remember<Entity extends { id: string }>(history: SharedHistory<Entity>,
 function sharedChanges<Entity extends FootballTeam | FootballCompetition>(history: SharedHistory<Entity>, row: Entity) {
   const entry = history.get(row.id);
   if (!entry) return null;
+  // A flag change alone never versions fixtures (see `competition`), but it is audited beside a versioned change.
   const visible = (entity: Entity): Record<string, unknown> => ({ name: entity.name, country: entity.country, logoUrl: entity.logoUrl,
-    ...("code" in entity ? { code: entity.code, national: entity.national } : { type: entity.type }) });
+    ...("code" in entity ? { code: entity.code, national: entity.national } : { type: entity.type, countryFlagUrl: entity.countryFlagUrl }) });
   const before = visible(entry.before), after = visible(row);
   return { id: row.id, fields: Object.fromEntries(Object.entries(after).filter(([key, value]) => before[key] !== value)
     .map(([key, value]) => [key, { before: before[key], after: value }])), aliasesAdded: entry.aliasesAdded };
@@ -230,7 +232,8 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
       current = await transaction.footballCompetition.create({ data: { id: randomUUID(), name: input.name,
         nameSearch: input.name === null ? null : normalizeCatalogSearch(input.name), country: input.country,
         countrySearch: input.country === null ? null : normalizeCatalogSearch(input.country), type: input.type,
-        logoUrl: permittedLogo(input.logo, null, authority), retrievedAt: new Date(input.source.retrievedAt), providerUpdatedAt: timestamp(input.source.providerUpdatedAt) } });
+        logoUrl: permittedLogo(input.logo, null, authority), countryFlagUrl: permittedLogo(input.countryFlag, null, authority),
+        retrievedAt: new Date(input.source.retrievedAt), providerUpdatedAt: timestamp(input.source.providerUpdatedAt) } });
       await transaction.footballCompetitionProvider.create({ data: { provider: PROVIDER, externalId: BigInt(input.id), competitionId: current.id,
         mappedAt: new Date(input.source.retrievedAt), sourceRef: input.source.endpoint } });
     } else {
@@ -241,7 +244,14 @@ export function createFootballCatalogStore(database: DatabaseRuntime, options: R
         if (Object.entries(data).some(([key, value]) => !same(current[key as keyof typeof data], value))) {
           changed.add(current.id); remember(history, current);
         }
-        current = await transaction.footballCompetition.update({ where: { id: current.id }, data: { ...data,
+        // The country flag is decoration of the (versioned) country name: a later null or unapproved flag keeps the stored
+        // one, and a flag change alone bumps no fixture version. Otherwise the first sync after the flag column ships would
+        // version every stored fixture of every competition in a worldwide date import inside one catalog transaction.
+        // Public reads still see it at once: every FootballCompetition update advances the `global:catalog` cache tag.
+        // The flag belongs to the country, so when the (versioned) country itself changes, the old flag is not kept: the
+        // competition shows the row's new flag, or none until a later row brings one.
+        const countryFlagUrl = permittedLogo(input.countryFlag, same(data.country, current.country) ? current.countryFlagUrl : null, authority);
+        current = await transaction.footballCompetition.update({ where: { id: current.id }, data: { ...data, countryFlagUrl,
           nameSearch: data.name === null ? null : normalizeCatalogSearch(data.name), countrySearch: data.country === null ? null : normalizeCatalogSearch(data.country),
           retrievedAt: new Date(input.source.retrievedAt), providerUpdatedAt: timestamp(input.source.providerUpdatedAt) ?? current.providerUpdatedAt } });
       }

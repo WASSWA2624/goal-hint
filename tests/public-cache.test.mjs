@@ -48,7 +48,7 @@ test('canonical keys resolve relative dates and isolate all allowed query and po
 test('odds bounds (052) isolate feed keys only where provider odds parse them; extremes share the unfiltered key', () => {
   const today = '2026-10-09', range = validateReportingDateRange(today, today, 1);
   const key = (input, providerOdds) => descriptor({ query: { ...parseMatchFeedQuery(new URLSearchParams(input), today, { providerOdds }),
-    projection: 7, dates: { from: today, to: today } }, range }).key;
+    projection: 8, dates: { from: today, to: today } }, range }).key;
   assert.equal(key('', true), key('', false));
   assert.equal(key('odds=1.01-1000.00', true), key('', false));
   assert.notEqual(key('odds=1.50-3.00', true), key('', true));

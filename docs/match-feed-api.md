@@ -127,6 +127,15 @@ uppercase); the schema refuses any other string. A new code arrives with a
 fixture-version bump, like any shared team change. Older responses without the
 field still parse, and feed cache projection 7 keeps them from being reused. See
 [match card](match-card.md).
+Country flags add an optional, nullable `competition.countryFlagUrl` to every
+fixture snapshot (feed records, the detail fixture and the client refresh parse
+all share it): the approved remote flag of the competition's country, or null for
+international competitions and until a date sync observes one. The schema
+accepts only credential-free HTTPS URLs without query or fragment, like logos.
+It is decoration: a flag change alone does not bump `dataVersion` (see
+[football catalog](football-catalog.md#country-flags)); the catalog cache tag
+still invalidates cached responses at once. Older responses without the field
+still parse, and feed cache projection 8 keeps them from being reused.
 Prompt 034 adds opaque `paginationVersion`, computed from the effective query,
 competition scope and committed date/catalog generations in the records' snapshot.
 Feed cache projection version 3 avoids reusing earlier responses without this

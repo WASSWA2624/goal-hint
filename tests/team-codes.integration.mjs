@@ -149,6 +149,11 @@ test('team-code import persistence on isolated genuine MySQL', { timeout: 300_00
         summary = await sweep();
         assert.deepEqual(teamsCalls().slice(before), ['94:2026'], 'after a day the failed league is retried; the others left the window');
         assert.deepEqual(await Promise.all([9401, 9402].map(code)), ['POR', 'BEN']);
+        // One marker per league from its latest receipt of each kind: the new settled answer beside the older failure.
+        const marker94 = (await store.checks([{ competitionId: 94, season: 2026 }], T0 - 30 * DAY)).get(teamCodeScopeKey({ competitionId: 94, season: 2026 }));
+        assert.equal(marker94.settledAt, T0 + DAY + 2 * MINUTE);
+        assert.ok(marker94.failedAt >= T0 + MINUTE && marker94.failedAt < T0 + DAY, String(marker94.failedAt));
+        assert.ok(Object.isFrozen(marker94));
 
         at(T0 + 29 * DAY);
         summary = await sweep();

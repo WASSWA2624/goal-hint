@@ -108,6 +108,15 @@ shown pick's own price, never another family's, and `sameCardFixture` compares
 prices so a card re-renders when its price moves. While
 `publicPolicy.features.providerOdds` is off, `prices` is always empty.
 
+Country flags add optional, nullable `competition.countryFlagUrl` (an approved
+remote flag URL, same structural check as logos). It rides in the snapshot but
+is a deliberate exception to "participate in the same fixture version": a flag
+change alone bumps no `dataVersion`, because a new flag column would otherwise
+version every stored fixture at once ([football catalog](football-catalog.md#country-flags)).
+It is **not** an observation field either: the equal-version merge keeps the
+record it has, so an open page shows a newly stored flag after that fixture's
+next version bump or a reload. Server reads show it at once.
+
 `dataVersion` is the catalog's positive MySQL unsigned BIGINT serialized as
 canonical decimal **text**, up to `18446744073709551615`. Comparison uses exact
 `BigInt` arithmetic locally; no BigInt enters Redux, actions, JSON or storage.

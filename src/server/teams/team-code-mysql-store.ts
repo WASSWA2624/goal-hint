@@ -5,8 +5,8 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { catalogScopeKey } from "../football/catalog-input.ts";
 
 const PROVIDER = "api-football";
-/** Upper bounds that keep one selection read small whatever the catalog holds. */
-const MAX_CANDIDATES = 500, MAX_RECEIPTS = 5_000;
+/** Upper bound that keeps one selection read small whatever the catalog holds (candidates per page, targets per check). */
+const MAX_CANDIDATES = 500;
 
 /** A competition-season with a fixture inside the window whose home or away team has no stored code. */
 export type TeamCodeCandidate = Readonly<{
@@ -67,11 +67,14 @@ export function createMysqlTeamCodeStore(database: DatabaseRuntime) {
         ) t
         JOIN FootballSeason s ON s.id = t.seasonId
         JOIN FootballCompetitionProvider cp ON cp.competitionId = s.competitionId AND cp.provider = ${PROVIDER}
+        WHERE cp.externalId BETWEEN 1 AND ${BigInt(Number.MAX_SAFE_INTEGER)} AND s.year BETWEEN 1 AND 9999
         GROUP BY s.id, cp.externalId, s.year
         HAVING MIN(t.kickoff) > ${cursor.kickoff} OR (MIN(t.kickoff) = ${cursor.kickoff} AND (cp.externalId > ${cursor.competitionId}
           OR (cp.externalId = ${cursor.competitionId} AND s.year > ${cursor.season})))
         ORDER BY firstKickoff ASC, competitionId ASC, season ASC
         LIMIT ${limit}`);
+      // The WHERE bounds keep unusable identities out before LIMIT, so a short page always means the candidates ran out;
+      // this filter only re-asserts them.
       return Object.freeze(rows.map((row) => Object.freeze({ seasonId: row.seasonId, competitionId: Number(row.competitionId), season: Number(row.season),
         firstKickoff: utcInstantFromEpochMilliseconds(row.firstKickoff.getTime()), teamsWithoutCode: Number(row.teamsWithoutCode) }))
         .filter((row) => Number.isSafeInteger(row.competitionId) && row.competitionId > 0 && Number.isSafeInteger(row.season) &&
@@ -83,14 +86,18 @@ export function createMysqlTeamCodeStore(database: DatabaseRuntime) {
       if (targets.length > MAX_CANDIDATES) throw new RangeError("Too many team-code targets.");
       const keys = [...new Set(targets.map(teamCodeScopeKey))];
       if (keys.length === 0) return new Map();
-      const rows = await database.query((client) => client.footballImport.findMany({ where: { kind: "teams", scopeKey: { in: keys },
-        observedAt: { gte: new Date(after) } }, select: { scopeKey: true, status: true, observedAt: true },
-        orderBy: [{ observedAt: "desc" }, { sequence: "desc" }], take: MAX_RECEIPTS }));
+      // The latest receipt per league and status (at most a few rows per target), so every marker is exact. A row cap over
+      // the raw receipts instead could let other leagues' daily failed retries push a league's only settled receipt out of
+      // the read, and that league would be requested again inside its 30 days.
+      const rows = await database.query((client) => client.footballImport.groupBy({ by: ["scopeKey", "status"],
+        where: { kind: "teams", scopeKey: { in: keys }, observedAt: { gte: new Date(after) } }, _max: { observedAt: true } }));
       const checks = new Map<string, { settledAt: UtcInstant | null; failedAt: UtcInstant | null }>();
+      const later = (current: UtcInstant | null, at: UtcInstant) => current !== null && current >= at ? current : at;
       for (const row of rows) {
-        const entry = checks.get(row.scopeKey) ?? { settledAt: null, failedAt: null }, at = utcInstantFromEpochMilliseconds(row.observedAt.getTime());
-        // Rows arrive newest first, so the first of each kind is its latest.
-        if (row.status === "failed") entry.failedAt ??= at; else entry.settledAt ??= at;
+        if (row._max.observedAt === null) continue;
+        const entry = checks.get(row.scopeKey) ?? { settledAt: null, failedAt: null }, at = utcInstantFromEpochMilliseconds(row._max.observedAt.getTime());
+        // Any observed outcome (complete, partial, degraded) settles the league; a failed one only backs it off.
+        if (row.status === "failed") entry.failedAt = later(entry.failedAt, at); else entry.settledAt = later(entry.settledAt, at);
         checks.set(row.scopeKey, entry);
       }
       return new Map([...checks].map(([key, value]) => [key, Object.freeze(value)]));

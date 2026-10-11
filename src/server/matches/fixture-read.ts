@@ -77,9 +77,12 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
   // Team fields change only with the fixture's dataVersion: a catalog change to a shared team bumps every fixture that renders it.
   const team = (value: typeof fixture.homeTeam) => ({ id: value.id, name: text(value.name), code: validTeamCode(value.code),
     logoUrl: isSafeRemoteImageUrl(value.logoUrl) ? value.logoUrl : null });
+  // The country flag is stored only once approved (same rights check as logos); a flag change alone bumps no fixture version.
+  const competition = fixture.season.competition;
   return { fixtureId: id, dataVersion: String(fixture.dataVersion), homeTeam: team(fixture.homeTeam), awayTeam: team(fixture.awayTeam),
-    competition: { id: fixture.season.competition.id, name: text(fixture.season.competition.name), country: text(fixture.season.competition.country),
-      logoUrl: isSafeRemoteImageUrl(fixture.season.competition.logoUrl) ? fixture.season.competition.logoUrl : null },
+    competition: { id: competition.id, name: text(competition.name), country: text(competition.country),
+      logoUrl: isSafeRemoteImageUrl(competition.logoUrl) ? competition.logoUrl : null,
+      countryFlagUrl: isSafeRemoteImageUrl(competition.countryFlagUrl) ? competition.countryFlagUrl : null },
     kickoffAt: fixture.kickoff ? historyTime(fixture.kickoff) : null, syncedAt: historyTime(fixture.resultState?.lastSyncAt ?? fixture.retrievedAt),
     status, score: isPlayedFinalStatus(status) && regulationScore
       ? regulationScore : live ? { home: result!.reportedGoals.home!, away: result!.reportedGoals.away! } : null,

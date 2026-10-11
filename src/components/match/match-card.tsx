@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useId, useRef, useState, type MouseEvent } from "react";
+import { memo, useId, useState, type PointerEvent } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
 import { countryCode } from "@/domain/country-code";
@@ -11,12 +11,11 @@ import { hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedC
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
-import { abbreviationSlotEm, abbreviationWidthEm, cardTeamAbbreviations, tightAbbreviationScale } from "@/domain/team-name";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { CheckIcon, ChevronIcon, CrossIcon, LockIcon, NoticeIcon, TrophyIcon, VoidIcon } from "./match-icons";
+import { CheckIcon, ChevronIcon, CrossIcon, FlagIcon, GlobeIcon, LockIcon, NoticeIcon, TrophyIcon, VoidIcon } from "./match-icons";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-row";
 
@@ -35,23 +34,21 @@ export type MatchCardProps = {
 };
 
 type Messages = ReturnType<typeof createMessages>;
+/** The competition's country flag URL arrives with the catalog's country records; optional, so cards render the
+ * neutral flag glyph before (and without) it. A flag change alone does not bump `dataVersion`, so `sameCardProps`
+ * compares it. */
+type CardCompetition = FixtureSnapshot["competition"] & { countryFlagUrl?: string | null };
+const countryFlagUrl = (fixture: FixtureSnapshot) => (fixture.competition as CardCompetition).countryFlagUrl ?? null;
 /**
  * Placement for the phone/tablet card; the table query restyles the same DOM as one row. Static strings, so the media
  * blocks need no theme lookup per card render. Widths are viewport rem, so enlarged text reaches the narrower variants:
- * 360–389px phones hide the market code's line ("O/U" for "O/U 2.5"); 320–359px phones also hide the league name and
- * stack the league crest over the country and time; below 20rem (only with enlarged text, or under 320px) the teams
- * and chips move under the league, and below 16.25rem each gets its own line; from 430px and from 512px the type and
- * crests grow.
+ * from 390px the league crest shows; below 360px chips and gaps tighten and the market code drops its goal line
+ * ("O/U" for "O/U 2.5"); below 20rem (only with enlarged text, or under 320px) the chips get a line of their own.
  */
 const tile = media.belowDesktop, table = media.desktop, wideTable = media.wide;
-const shortCodeTile = "@media (max-width: 24.37rem)";
-const smallTile = "@media (max-width: 22.49rem)";
-const narrowTile = "@media (min-width: 20rem) and (max-width: 22.49rem)";
+const crestTile = "@media (min-width: 24.375rem) and (max-width: 63.99rem)";
+const narrowTile = "@media (max-width: 22.49rem)";
 const stackedTile = "@media (max-width: 19.99rem)";
-const columnTile = "@media (max-width: 16.24rem)";
-const regularTile = "@media (min-width: 26.875rem) and (max-width: 63.99rem)";
-const wideTile = "@media (min-width: 32rem) and (max-width: 63.99rem)";
-const hoverTile = "@media (hover: hover) and (max-width: 63.99rem)";
 const pulse = keyframes`0%, 100% { opacity: 1; } 50% { opacity: 0.35; }`;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
 const visuallyHidden = css`
@@ -69,21 +66,30 @@ const tileShadow = {
   rest: "0 1px 2px rgb(11 31 51 / 5%), 0 2px 8px rgb(11 31 51 / 5%)",
   hover: "0 2px 4px rgb(11 31 51 / 7%), 0 6px 18px rgb(11 31 51 / 9%)",
 } as const;
-/** Rounded corners on phone and tablet cards only, at the owner's request; brand components are otherwise square. */
-const tileRadius = { card: "10px", chip: "5px" } as const;
+/** Near-square corners on phone and tablet cards and chips (owner: 0–2px); brand components are otherwise square. */
+const tileRadius = "2px";
+/**
+ * Chip slots in em of each chip's own type (Manrope Bold), so chips line up in columns down the list as in the
+ * owner's reference: the widest market code "O/U 2.5" (3.59em at 10px), "BTTS" once narrow phones hide the goal line
+ * (2.54em), the widest pick "Under" (2.96em at 11px) and a two-digit percent (2.2em at 11px heavy) plus the padlock or
+ * ✓/✗/⊘ mark (8px) and its 2px gap. Wider content ("<1%", ">99%" with a mark, a price) widens its own chip.
+ */
+const chipSlot = {
+  market: "calc(3.6em + 2 * var(--gh-chip-pad))",
+  shortMarket: "calc(2.55em + 2 * var(--gh-chip-pad))",
+  pick: "calc(2.97em + 2 * var(--gh-chip-pad))",
+  probability: "calc(2.2em + 0.625rem + 2 * var(--gh-chip-pad))",
+} as const;
 type TeamResult = "win" | "loss" | null;
 type StateTone = "live" | "final" | "halted";
 type LineTone = "time" | StateTone;
 
 /**
- * Phone card, one row in the shape of the owner's reference: the league crest beside the league name over the country
- * code and kickoff time ("ENG · 13:30"; the live minute, FT or a halted state replace the time), a hairline rule, the
- * teams as HOME [crest] vs-or-score [crest] AWAY with the crests against the centre, then the market code, pick and
- * probability chips (and a price chip when the fixture carries a public price) and a chevron.
- * Height: 1 + 8 + 36 (2.25rem row) + 8 + 1 = 54px (56px from 430px, 60px from 512px); notes add a row when present.
- * Tracks: league minmax(0, 1fr), teams fixed (two label slots of 2.375em of the label type, two crests, the centre and
- * gaps), chips 1fr with a fixed minimum that holds the widest cluster ("O/U 2.5" + "Under" + the probability chip),
- * so cards align down the list and, on tablets, the teams sit centred. docs/match-card.md has the arithmetic.
+ * Phone/tablet card, layout A (owner's choice): the teams get their own line under a meta line.
+ * Row 1: [flag] ARG · 13:30 · League name…  [1X2] [1] [62%]. Row 2: HOME NAME [crest] score-or-vs [crest] AWAY NAME.
+ * Height: 1 + 7 + 18 (chips) + 5 + 18 (crests) + 7 + 1 = 57px at every width from 320px while both names fit one line;
+ * a name that wraps makes row 2 two 15.6px lines (31.2px), so 70.2px; notes add a row when present.
+ * docs/match-card.md has the width arithmetic.
  */
 const Card = styled.article`
   position: relative;
@@ -101,122 +107,21 @@ const Card = styled.article`
   }
   @media (prefers-reduced-motion: reduce) { transition: none; }
   ${tile} {
-    /* 390–429px sizes; the variants below adjust them. Type-sized lengths are rem, spacing px. */
-    --gh-pad-start: 6px;
-    --gh-pad-end: 14px;
-    --gh-pad-block: 8px;
-    --gh-gap: 3px;
-    --gh-row: 2.25rem;
-    --gh-league-logo: 1rem;
-    --gh-league-gap: 4px;
-    --gh-team-logo: 1rem;
-    --gh-code-font: 0.6875rem;
-    --gh-pair-gap: 2px;
-    --gh-centre-gap: 2px;
-    --gh-centre: 1.3125rem;
-    --gh-score-font: 0.6875rem;
-    --gh-chip-height: 1.375rem;
-    --gh-chip-gap: 2px;
-    --gh-chip-pad: 3px;
-    --gh-market-font: 0.625rem;
-    --gh-pick-font: 0.625rem;
-    --gh-pick-min: 1.25rem;
-    --gh-prob: 2.375rem;
-    --gh-prob-font: 0.6875rem;
-    --gh-prob-pad: 2px;
-    --gh-icon: 0.5rem;
-    --gh-icon-gap: 2px;
-    --gh-chips: 7.5rem;
-    --gh-chevron: 0.875rem;
-    --gh-teams: calc(2 * ${abbreviationSlotEm} * var(--gh-code-font) + 2 * var(--gh-team-logo) + 2 * var(--gh-pair-gap)
-      + 2 * var(--gh-centre-gap) + var(--gh-centre));
-    --gh-chevron-top: calc(var(--gh-pad-block) + var(--gh-row) / 2);
-    /* The chips track's floor is the cluster's max-content width, which the Pick's min-inline-size (--gh-chips)
-     * raises to the widest cluster, so cards align; a wider cluster (a price chip) widens it instead of overlapping. */
-    grid-template-columns: minmax(0, 1fr) var(--gh-teams) minmax(max-content, 1fr);
-    grid-template-rows: minmax(var(--gh-row), auto);
-    grid-template-areas: "meta teams pick";
-    column-gap: var(--gh-gap);
+    --gh-chip-pad: 4px;
+    --gh-chip-gap: 3px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "meta pick" "teams teams";
+    gap: 5px 6px;
     align-items: center;
-    padding: var(--gh-pad-block) var(--gh-pad-end) var(--gh-pad-block) var(--gh-pad-start);
+    padding: 7px 9px;
     overflow: hidden;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: ${tileRadius.card};
+    border-radius: ${tileRadius};
     box-shadow: ${tileShadow.rest};
     ${media.hover} { &:hover { box-shadow: ${tileShadow.hover}; } }
   }
-  /* 360–389px: the market code drops its line, so the chips need 6.5rem. */
-  ${shortCodeTile} { --gh-chips: 6.5rem; }
-  ${smallTile} {
-    --gh-pad-end: 12px;
-    --gh-league-logo: 0.875rem;
-    --gh-team-logo: 0.875rem;
-    --gh-code-font: 0.65625rem;
-    --gh-centre: 1.25rem;
-    --gh-score-font: 0.65625rem;
-    --gh-chip-pad: 2px;
-    --gh-pick-min: 1.125rem;
-    --gh-prob: 2.0625rem;
-    --gh-prob-font: 0.625rem;
-    --gh-prob-pad: 1px;
-    --gh-icon-gap: 1px;
-    --gh-chips: 5.875rem;
-  }
-  ${stackedTile} {
-    --gh-chevron-top: calc(var(--gh-pad-block) + 1.6875rem + 7px + var(--gh-row) / 2);
-    grid-template-columns: var(--gh-teams) minmax(0, 1fr);
-    grid-template-rows: auto minmax(var(--gh-row), auto);
-    grid-template-areas: "meta meta" "teams pick";
-    row-gap: 6px;
-  }
-  ${columnTile} {
-    --gh-chevron-top: calc(var(--gh-pad-block) + 0.84375rem);
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(var(--gh-row), auto) auto;
-    grid-template-areas: "meta" "teams" "pick";
-  }
-  ${regularTile} {
-    --gh-pad-start: 8px;
-    --gh-pad-end: 16px;
-    --gh-pad-block: 9px;
-    --gh-gap: 4px;
-    --gh-league-logo: 1.125rem;
-    --gh-league-gap: 6px;
-    --gh-team-logo: 1.125rem;
-    --gh-code-font: 0.75rem;
-    --gh-pair-gap: 3px;
-    --gh-centre-gap: 3px;
-    --gh-centre: 1.5625rem;
-    --gh-score-font: 0.8125rem;
-    --gh-chip-height: 1.5rem;
-    --gh-chevron: 1rem;
-  }
-  ${wideTile} {
-    --gh-pad-start: 10px;
-    --gh-pad-end: 18px;
-    --gh-gap: 6px;
-    --gh-row: 2.5rem;
-    --gh-league-logo: 1.375rem;
-    --gh-league-gap: 8px;
-    --gh-team-logo: 1.375rem;
-    --gh-code-font: 0.8125rem;
-    --gh-pair-gap: 4px;
-    --gh-centre-gap: 4px;
-    --gh-centre: 1.75rem;
-    --gh-score-font: 0.875rem;
-    --gh-chip-height: 1.625rem;
-    --gh-chip-gap: 4px;
-    --gh-chip-pad: 6px;
-    --gh-market-font: 0.6875rem;
-    --gh-pick-font: 0.75rem;
-    --gh-pick-min: 1.75rem;
-    --gh-prob: 3rem;
-    --gh-prob-font: 0.75rem;
-    --gh-prob-pad: 4px;
-    --gh-icon: 0.625rem;
-    --gh-icon-gap: 3px;
-    --gh-chips: 9.75rem;
-  }
+  ${narrowTile} { --gh-chip-pad: 3px; --gh-chip-gap: 2px; column-gap: 4px; padding-inline: 8px; }
+  ${stackedTile} { grid-template-columns: minmax(0, 1fr); grid-template-areas: "meta" "pick" "teams"; row-gap: 4px; }
   ${table} {
     grid-template-columns: ${matchTableColumns.compact};
     column-gap: ${matchTableGap};
@@ -231,33 +136,24 @@ const Card = styled.article`
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
 `;
 
-/** Tile: the league crest spans the league name and the country/time line, with a hairline rule after them; on narrow
- * phones the name is hidden text and the crest sits over the line. */
+/** Tile: one line, [flag] code · state · [crest] league name; the league name gives way first. */
 const Meta = styled.header`
   ${tile} {
     grid-area: meta;
-    display: grid;
-    grid-template-columns: var(--gh-league-logo) minmax(0, 1fr);
-    grid-template-areas: "logo name" "logo when";
+    display: flex;
     align-items: center;
-    gap: 1px var(--gh-league-gap);
     min-inline-size: 0;
-    padding-inline-end: var(--gh-gap);
-    border-inline-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   }
-  ${narrowTile} { grid-template-columns: minmax(0, 1fr); grid-template-areas: "logo" "when"; row-gap: 2px; }
-  ${stackedTile} { padding-inline-end: 0; border-inline-end: 0; }
   ${table} { display: grid; grid-column: 1 / span 3; grid-template-columns: subgrid; }
 `;
 const Index = styled.span`
   display: none;
   ${table} { display: block; grid-column: 1; grid-row: 1; font-variant-numeric: tabular-nums; }
 `;
-/** Tile: one line, clipped with an ellipsis; the full name stays in the hidden heading's context and the table. */
+/** Tile: takes the meta line's remaining width (a zero basis, so the code and state keep theirs), one line with an
+ * ellipsis; the full name stays in the hidden heading's context and the table. */
 const LeagueName = styled.span`
-  ${tile} { grid-area: name; }
-  ${narrowTile} { && { ${visuallyHidden} } }
-  ${wideTile} { font-size: ${({ theme }) => theme.typography.scale.secondary}; line-height: 1rem; }
+  ${tile} { flex: 1 1 0; }
 `;
 const League = styled.p`
   display: flex;
@@ -266,24 +162,15 @@ const League = styled.p`
   min-inline-size: 0;
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
   > span { ${ellipsis} }
-  /* Tile: its parts join the meta grid; a missing crest becomes a soft disc around the trophy. */
+  /* Tile: its parts join the meta line; a missing crest shows nothing (the flag already leads the line). */
   ${tile} {
     display: contents;
     color: ${({ theme }) => theme.color.text};
     font-size: ${({ theme }) => theme.typography.scale.caption};
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     line-height: 0.875rem;
-    > svg {
-      grid-area: logo;
-      box-sizing: border-box;
-      inline-size: var(--gh-league-logo);
-      block-size: var(--gh-league-logo);
-      padding: 2px;
-      border-radius: 50%;
-      background: ${({ theme }) => theme.color.surfaceMuted};
-    }
+    > svg { display: none; }
   }
-  ${narrowTile} { > svg { justify-self: start; } }
   ${table} { grid-column: 3; grid-row: 1; gap: 8px; > svg { font-size: 1rem; } > span { white-space: normal; } }
 `;
 const LeagueLogo = styled.img`
@@ -291,8 +178,8 @@ const LeagueLogo = styled.img`
   inline-size: 12px;
   block-size: 12px;
   object-fit: contain;
-  ${tile} { grid-area: logo; inline-size: var(--gh-league-logo); block-size: var(--gh-league-logo); }
-  ${narrowTile} { justify-self: start; }
+  ${tile} { display: none; }
+  ${crestTile} { display: block; inline-size: 0.875rem; block-size: 0.875rem; margin-inline-end: 4px; }
   ${table} { inline-size: 18px; block-size: 18px; }
 `;
 /** The table's date and time cell; on tiles it stays as hidden text (full day, time and EAT) beside the visible line. */
@@ -314,33 +201,35 @@ const KickoffTime = styled.span`
   ${tile} { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 /**
- * Tile only, decorative: the competition's country code then the kickoff time (bold navy), the live minute or phase
- * (bold live red, after a dot that pulses while play runs), FT/AET/Pens (bold muted) or a short halted state (bold
- * amber). The time element and the score-line block keep the spoken versions. An over-long line clips its state.
+ * Tile only, decorative, leading the meta line: the country flag (or a neutral glyph), the competition's country code
+ * (11px semibold muted), then the kickoff time (bold navy), the live minute or phase (bold live red, after a dot that
+ * pulses while play runs), FT/AET/Pens (bold muted) or a short halted state (bold amber), and the dot before the
+ * league name. The time element and the score-line block keep the spoken versions. When even the league name has
+ * no room left, the state clips with an ellipsis.
  */
 const TileLine = styled.span<{ $tone: LineTone }>`
   display: none;
   ${tile} {
-    grid-area: when;
+    order: -1;
     display: flex;
+    flex: 0 1 auto;
     align-items: center;
     min-inline-size: 0;
     overflow: hidden;
     color: ${({ theme }) => theme.color.mutedText};
-    font-size: ${({ theme }) => theme.typography.scale.micro};
+    font-size: ${({ theme }) => theme.typography.scale.caption};
     font-weight: ${({ theme }) => theme.typography.weight.medium};
-    line-height: 0.8125rem;
+    line-height: 0.875rem;
     white-space: nowrap;
-    > i { flex: none; margin-inline: 0.2em; font-style: normal; }
+    > span, > i { flex: none; }
+    > i { margin-inline: 0.25em; font-style: normal; }
     > b {
       ${ellipsis}
       color: ${({ theme, $tone }) => ({ time: theme.color.text, live: theme.color.live.text, final: theme.color.mutedText,
         halted: theme.color.accent.amber.text })[$tone]};
       font-weight: ${({ theme }) => theme.typography.weight.bold};
-      font-variant-numeric: tabular-nums;
     }
   }
-  ${wideTile} { font-size: ${({ theme }) => theme.typography.scale.caption}; line-height: 0.875rem; }
 `;
 const TileLiveDot = styled.span`
   flex: none;
@@ -352,15 +241,34 @@ const TileLiveDot = styled.span`
   animation: ${pulse} 1.6s ease-in-out infinite;
   @media (prefers-reduced-motion: reduce) { animation: none; }
 `;
+/** 16×11 flag with a hairline ring so white flag fields keep an edge on the white card. */
+const FlagImage = styled.img`
+  flex: none;
+  inline-size: 16px;
+  block-size: 11px;
+  margin-inline-end: 4px;
+  object-fit: cover;
+  border-radius: 1px;
+  box-shadow: 0 0 0 0.5px rgb(11 31 51 / 22%);
+`;
+const FlagFallback = styled.span`
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 16px;
+  block-size: 11px;
+  margin-inline-end: 4px;
+  font-size: 11px;
+`;
 
 const Teams = styled.div`
   --gh-logo-size: 16px;
   --gh-logo-radius: 0;
   --gh-logo-font: 0.5rem;
-  /* Tile: HOME [crest] centre [crest] AWAY, crests against the centre; initials sit in a soft ringed disc, loaded
-   * crests keep their own shape. */
+  /* Tile: HOME NAME [crest] centre [crest] AWAY NAME on the full card width, crests against the centre, so the centre
+   * sits in the middle of every card; initials sit in a soft ringed disc, loaded crests keep their own shape. */
   ${tile} {
-    --gh-logo-size: var(--gh-team-logo);
+    --gh-logo-size: 1.125rem;
     --gh-logo-font: ${({ theme }) => theme.typography.scale.micro};
     --gh-logo-radius: 50%;
     --gh-logo-ring: inset 0 0 0 1px ${({ theme }) => theme.color.border};
@@ -372,7 +280,6 @@ const Teams = styled.div`
     [data-team-side="home"] > [data-team-logo] { grid-column: 2; grid-row: 1; }
     [data-team-side="away"] > [data-team-logo] { grid-column: 4; grid-row: 1; }
   }
-  ${columnTile} { justify-self: start; inline-size: var(--gh-teams); }
   ${table} { --gh-logo-size: 22px; --gh-logo-font: 0.625rem; display: grid; grid-column: 4 / span 3; grid-template-columns: subgrid; align-items: center; }
 `;
 const Team = styled.div`
@@ -384,39 +291,40 @@ const Team = styled.div`
   /* Both crests sit beside the score; the home name aligns towards it. */
   ${table} { gap: 8px; &[data-team-side="home"] { flex-direction: row-reverse; text-align: end; } }
 `;
-/** The full name: shown in the table, hidden text on tiles (the abbreviation shows instead). */
-const TeamName = styled.span`
+/**
+ * The full team name everywhere: no abbreviations or provider codes (owner decision). Tile: 13px semibold, the home
+ * name right-aligned against its crest and the away name left-aligned after its crest, on every line; after a decided
+ * final the loser's name is muted. A long name wraps rather than being cut (owner: "long team names, should wrap"):
+ * at word boundaries only (`break-word` replaces the inherited `anywhere`, so only a single word wider than the box
+ * breaks), balanced where `text-wrap: balance` is supported, and clamped with an ellipsis only beyond two lines.
+ * Line height 1.2: one line (15.6px) stays inside the 18px crest row; two lines (31.2px) grow the card by 13.2px,
+ * with the crests and score centred against the name. A clamped name puts both full names in the card's tooltip (see
+ * `showFullNames`); the hidden heading and the link name always carry them.
+ */
+const TeamName = styled.span<{ $result: TeamResult }>`
   flex: 1;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   ${ellipsis}
-  ${tile} { ${visuallyHidden} }
-  ${table} { white-space: normal; font-weight: ${({ theme }) => theme.typography.weight.body}; }
-`;
-/**
- * Tile only: the team's code or derived abbreviation in a slot of 2.375em of its type, the home one right-aligned
- * against its crest and the away one left-aligned after its crest. Wider labels set at 90% (`data-fit="tight"`).
- * After a decided final the loser's label is muted. Where the pointer can hover, the label rises above the card link
- * so its tooltip (the full name) shows; the card forwards a click on it to the link.
- */
-const TeamCode = styled.span<{ $result: TeamResult }>`
-  display: none;
   ${tile} {
-    display: block;
     grid-column: 1;
     grid-row: 1;
-    padding-inline-end: var(--gh-pair-gap);
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    padding-inline-end: 4px;
     color: ${({ theme, $result }) => $result === "loss" ? theme.color.mutedText : theme.color.text};
-    font-size: var(--gh-code-font);
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    line-height: 1.3;
+    font-size: ${({ theme }) => theme.typography.scale.body};
+    line-height: 1.2;
     text-align: end;
-    ${ellipsis}
-    &[data-fit="tight"] { font-size: max(${({ theme }) => theme.typography.scale.micro}, calc(var(--gh-code-font) * ${tightAbbreviationScale})); }
-    [data-team-side="away"] > & { grid-column: 5; padding-inline: var(--gh-pair-gap) 0; text-align: start; }
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-wrap: balance;
+    [data-team-side="away"] > & { grid-column: 5; padding-inline: 4px 0; text-align: start; }
   }
-  ${hoverTile} { position: relative; z-index: 2; cursor: pointer; }
+  ${table} { white-space: normal; font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
-/** Tile: "vs", or the score once live or final; the state chip stays as hidden text (the league line shows it). */
+/** Tile: "vs" (11px muted) before kickoff, or the score once live or final, in a 34px centre column that widens
+ * for three-character scores; the state chip stays as hidden text (the meta line shows the state). */
 const Center = styled.div`
   display: flex;
   flex-direction: column;
@@ -427,13 +335,13 @@ const Center = styled.div`
     grid-row: 1;
     flex-direction: row;
     justify-content: center;
-    min-inline-size: var(--gh-centre);
-    margin-inline: var(--gh-centre-gap);
+    min-inline-size: 2.125rem;
+    margin-inline: 2px;
   }
 `;
 const Versus = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
-  ${tile} { font-size: ${({ theme }) => theme.typography.scale.micro}; font-weight: ${({ theme }) => theme.typography.weight.medium}; line-height: 1; }
+  ${tile} { font-size: ${({ theme }) => theme.typography.scale.caption}; font-weight: ${({ theme }) => theme.typography.weight.medium}; line-height: 1; }
 `;
 const Score = styled.span<{ $live: boolean }>`
   display: inline-flex;
@@ -445,11 +353,12 @@ const Score = styled.span<{ $live: boolean }>`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   > span:nth-child(2) { color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  /* Proportional digits keep "0–0" within the centre track (22.7px at 12px would not fit 21px). */
+  /* Tile: "1 – 1" bold 13px, live red while live; proportional digits keep two-digit scores compact. */
   ${tile} {
-    gap: 1px;
+    gap: 3px;
     color: ${({ theme, $live }) => $live ? theme.color.live.text : theme.color.text};
-    font-size: var(--gh-score-font);
+    font-size: ${({ theme }) => theme.typography.scale.body};
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
     font-variant-numeric: normal;
   }
 `;
@@ -475,14 +384,15 @@ const LiveDot = styled.span`
   background: ${({ theme }) => theme.color.live.solid};
   animation: ${pulse} 1.6s ease-in-out infinite;
   @media (prefers-reduced-motion: reduce) { animation: none; }
+  /* Hidden on tiles, where TileLiveDot pulses instead. */
   ${tile} { animation: none; }
 `;
 
 /**
- * Tile: the market code chip (grey), the pick chip (the family's clean tint), the fixed-width probability chip (bold,
- * the tint with a family ring; once settled the outcome's tint with its ✓/✗/⊘) and, only when the fixture carries a
- * public price for the shown pick, a grey price chip; right-aligned in a track that holds the widest cluster.
- * Table: market, prediction and probability columns.
+ * Tile: right-aligned on the meta line, chips in the reference photo's style: the market code (grey), the pick (the
+ * family's clean tint and text colour) and the bold probability (the tint with a family ring; once settled the
+ * outcome's tint with its ✓/✗/⊘), each in a fixed slot so they align down the list; a grey price chip follows only
+ * when the fixture carries a public price for the shown pick. Table: market, prediction and probability columns.
  */
 const Pick = styled.div`
   ${tile} {
@@ -491,35 +401,34 @@ const Pick = styled.div`
     align-items: center;
     justify-content: flex-end;
     gap: var(--gh-chip-gap);
-    min-inline-size: var(--gh-chips);
   }
-  ${stackedTile} { min-inline-size: 0; }
-  ${columnTile} { justify-content: flex-start; }
+  ${stackedTile} { justify-content: flex-start; }
   ${table} { display: grid; grid-column: 7 / span 3; grid-template-columns: subgrid; align-items: center; }
 `;
-/** Shared tile chip box. */
+/** Shared tile chip box: 18px tall, near-square corners. */
 const chip = css`
   flex: none;
-  block-size: var(--gh-chip-height);
+  block-size: 1.125rem;
   padding: 0 var(--gh-chip-pad);
-  border-radius: ${tileRadius.chip};
-  line-height: var(--gh-chip-height);
+  border-radius: ${tileRadius};
+  line-height: 1.125rem;
   text-align: center;
   white-space: nowrap;
 `;
-/** Tile only: the short market code (1X2, DC, O/U 2.5, BTTS); below 390px the part after its last space (the goal
- * line, the only one the product offers) is hidden. */
+/** Tile only: the short market code (1X2, DC, O/U 2.5, BTTS), 10px bold grey; below 360px the part after its last
+ * space (the goal line, the only one the product offers) is hidden and the slot narrows to "BTTS". */
 const TileCode = styled.span`
   display: none;
   ${tile} {
     ${chip}
     display: block;
+    min-inline-size: ${chipSlot.market};
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surfaceMuted};
-    font-size: var(--gh-market-font);
+    font-size: ${({ theme }) => theme.typography.scale.micro};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
-  ${shortCodeTile} { > span { display: none; } }
+  ${narrowTile} { min-inline-size: ${chipSlot.shortMarket}; > span { display: none; } }
 `;
 /** Table: a tag washed from the family tint into white, with a hairline family ring and a solid 3px family edge; the
  * full colour fill is kept for the gradient prediction pill beside it. Inset shadows draw the ring and edge inside the
@@ -552,18 +461,18 @@ const Prediction = styled.span<{ $available: boolean }>`
   ${tile} { display: contents; }
   ${table} { display: contents; > svg { display: none; } }
 `;
-/** Tile: the short pick ("1", "X2", "Over", "Yes") in the family's clean tint (family text keeps 4.5:1 on it).
- * Table: the pick in a family-gradient pill. MarketColors keeps white text at 4.5:1 on both gradient stops
+/** Tile: the short pick ("1", "X2", "Over", "Yes"), 11px bold in the family's clean tint (family text keeps 4.5:1 on
+ * it). Table: the pick in a family-gradient pill. MarketColors keeps white text at 4.5:1 on both gradient stops
  * (tests/market-colors.test.mjs); AccentColors gradients are only rated for large text and must not be used here. */
 const PickShort = styled.span<{ $family: MarketFamily }>`
   display: none;
   ${tile} {
     ${chip}
     display: block;
-    min-inline-size: var(--gh-pick-min);
+    min-inline-size: ${chipSlot.pick};
     color: ${({ theme, $family }) => theme.color.market[$family].text};
     background: ${({ theme, $family }) => theme.color.market[$family].soft};
-    font-size: var(--gh-pick-font);
+    font-size: ${({ theme }) => theme.typography.scale.caption};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
   ${table} {
@@ -580,10 +489,9 @@ const PickShort = styled.span<{ $family: MarketFamily }>`
   }
 `;
 const settledTones: ReadonlySet<OutcomeTone> = new Set(["correct", "incorrect", "void"]);
-/** Tile: the bold probability chip at a fixed width (the padlock or ✓/✗/⊘ mark fits beside a two-digit percent).
- * Pending keeps the family tint and a family ring; Correct, Incorrect and Void take the outcome's green, red or grey
- * tint (each text colour keeps 4.5:1 on its tint) and lead with their mark, as a locked pending pick leads with the
- * padlock. */
+/** Tile: the bold (11px heavy) probability chip. Pending keeps the family tint and a family ring; Correct, Incorrect
+ * and Void take the outcome's green, red or grey tint (each text colour keeps 4.5:1 on its tint) and lead with their
+ * mark, as a locked pending pick leads with the padlock. */
 const Probability = styled.span<{ $family: MarketFamily; $outcome: OutcomeTone }>`
   display: inline-flex;
   flex: none;
@@ -593,10 +501,9 @@ const Probability = styled.span<{ $family: MarketFamily; $outcome: OutcomeTone }
   ${tile} {
     ${chip}
     justify-content: center;
-    gap: var(--gh-icon-gap);
-    inline-size: var(--gh-prob);
-    padding: 0 var(--gh-prob-pad);
-    overflow: hidden;
+    gap: 2px;
+    min-inline-size: ${chipSlot.probability};
+    font-size: ${({ theme }) => theme.typography.scale.caption};
     ${({ theme, $family, $outcome }) => {
       const colours = settledTones.has($outcome) ? theme.color.outcome[$outcome] : null;
       const market = theme.color.market[$family];
@@ -606,7 +513,7 @@ const Probability = styled.span<{ $family: MarketFamily; $outcome: OutcomeTone }
         box-shadow: inset 0 0 0 1px color-mix(in srgb, ${colours ? colours.border : market.solid} 40%, transparent);
       `;
     }}
-    > svg { display: block; flex: none; order: -1; font-size: var(--gh-icon); }
+    > svg { display: block; flex: none; order: -1; font-size: 0.5rem; }
   }
   ${table} { grid-column: 3; gap: 8px; }
 `;
@@ -616,7 +523,7 @@ const Percent = styled.span`
   line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  ${tile} { font-size: var(--gh-prob-font); line-height: var(--gh-chip-height); }
+  ${tile} { font-size: ${({ theme }) => theme.typography.scale.caption}; line-height: 1.125rem; font-variant-numeric: normal; }
   ${table} { min-inline-size: 2.5rem; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 const Bar = styled.span<{ $family: MarketFamily }>`
@@ -630,7 +537,8 @@ const Bar = styled.span<{ $family: MarketFamily }>`
     > span { display: block; block-size: 100%; background: ${({ theme, $family }) => theme.color.market[$family].gradient}; }
   }
 `;
-/** Tile: a muted "—" after the market code and no probability chip; the reason stays in the hidden label. */
+/** Tile: a muted "—" centred in the pick slot and no probability chip (its slot stays empty, so the market chip
+ * aligns with the cards above and below); the reason stays in the hidden label. */
 const NoPick = styled.span`
   display: inline-flex;
   align-items: baseline;
@@ -644,9 +552,10 @@ const NoPick = styled.span`
     > b {
       ${chip}
       display: block;
-      padding: 0 2px;
+      min-inline-size: ${chipSlot.pick};
+      margin-inline-end: calc(var(--gh-chip-gap) + ${chipSlot.probability});
       color: ${({ theme }) => theme.color.mutedText};
-      font-size: var(--gh-pick-font);
+      font-size: ${({ theme }) => theme.typography.scale.caption};
     }
     > span { display: none; }
   }
@@ -664,7 +573,7 @@ const Mark = styled.span<{ $tone: OutcomeTone }>`
   border-radius: 50%;
   font-size: 0.5625rem;
   /* Tile: a bare ✓/✗/⊘ leading the percent; the chip carries the outcome tint. */
-  ${tile} { order: -1; inline-size: auto; block-size: auto; color: inherit; background: none; border: 0; font-size: var(--gh-icon); }
+  ${tile} { order: -1; inline-size: auto; block-size: auto; color: inherit; background: none; border: 0; font-size: 0.5rem; }
   ${table} { inline-size: 1.125rem; block-size: 1.125rem; font-size: 0.6875rem; }
 `;
 /** Tile only: the public market price for exactly the shown pick (prompt 052), information only. */
@@ -676,8 +585,8 @@ const PriceChip = styled.span`
   ${chip}
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surfaceMuted};
-  font-size: var(--gh-pick-font);
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  font-size: ${({ theme }) => theme.typography.scale.micro};
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
   font-variant-numeric: tabular-nums;
 `;
 
@@ -691,7 +600,7 @@ const Notes = styled.ul`
   line-height: 1.35;
   list-style: none;
   /* An implicit row under the card, so cards without notes carry no empty track. */
-  ${tile} { grid-column: 1 / -1; padding-block-start: 6px; }
+  ${tile} { grid-column: 1 / -1; padding-block-start: 1px; }
   ${table} { grid-column: 4 / span 6; }
 `;
 const Note = styled.li`
@@ -703,10 +612,10 @@ const Note = styled.li`
   color: ${({ theme }) => theme.color.accent.amber.text};
   background: ${({ theme }) => theme.color.accent.amber.soft};
   > svg { flex: none; margin-block-start: 0.2em; }
-  ${tile} { border-radius: 4px; }
+  ${tile} { border-radius: ${tileRadius}; }
 `;
 
-/** The whole tile or row is the target. */
+/** The whole tile or row is the target. Tiles show no chevron (owner decision); the table keeps its open column. */
 const Open = styled(Link)`
   position: absolute;
   inset: 0;
@@ -718,20 +627,11 @@ const Open = styled(Link)`
     outline-offset: calc(-1 * ${({ theme }) => theme.border.focusWidth});
   }
   /* The link covers the tile, so its press tint lands at once over everything, chips included, in place of the
-   * browser's tap overlay, inside the card's rounded border. The chevron sits in the card's end padding, centred on
-   * the main row. */
+   * browser's tap overlay, inside the card's border. */
   ${tile} {
-    border-radius: calc(${tileRadius.card} - 1px);
+    border-radius: calc(${tileRadius} - 1px);
     -webkit-tap-highlight-color: transparent;
     &:active { background: color-mix(in srgb, ${({ theme }) => theme.color.text} 8%, transparent); }
-    > svg {
-      position: absolute;
-      inset-block-start: var(--gh-chevron-top);
-      inset-inline-end: 0;
-      display: block;
-      font-size: var(--gh-chevron);
-      translate: 0 -50%;
-    }
   }
   ${table} {
     position: static;
@@ -753,7 +653,7 @@ const Open = styled(Link)`
 const outcomeIcons = { correct: CheckIcon, incorrect: CrossIcon, void: VoidIcon } as const;
 /** Paused live phases keep the tile line's dot still. */
 const pausedPhases: ReadonlySet<string> = new Set(["half-time", "break", "interrupted", "suspended"]);
-/** Tile labels for a live fixture without a running minute; each fits the league line beside a country code. */
+/** Tile labels for a live fixture without a running minute; each fits the meta line beside a country code. */
 const tileClockKeys = {
   "first-half": "match.clockShort.first-half", "half-time": "match.clock.half-time", "second-half": "match.clockShort.second-half",
   "extra-time": "match.clockShort.extra-time", break: "match.clock.break", penalties: "match.clockShort.penalties",
@@ -825,20 +725,13 @@ function MatchState({ fixture, home, away, messages }: { fixture: FixtureSnapsho
   </Center>;
 }
 
-/** Whether a label needs the tighter type to fit its slot (see `abbreviationSlotEm`). */
-function labelFit(label: string): "tight" | undefined {
-  return abbreviationWidthEm(label) > abbreviationSlotEm ? "tight" : undefined;
-}
-
-function CardTeam({ team, side, name, label, eager, result }: {
-  team: FixtureSnapshot["homeTeam"]; side: "home" | "away"; name: string; label: string; eager: boolean; result: TeamResult;
+function CardTeam({ team, side, name, eager, result }: {
+  team: FixtureSnapshot["homeTeam"]; side: "home" | "away"; name: string; eager: boolean; result: TeamResult;
 }) {
   const url = isSafeRemoteImageUrl(team.logoUrl) ? team.logoUrl : undefined;
-  const shown = label || "—";
   return <Team data-team-side={side} data-result={result ?? undefined}>
     <TeamLogo key={`${team.id}:${url ?? "missing"}`} name={team.name} url={url} eager={eager} />
-    <TeamName>{name}</TeamName>
-    <TeamCode aria-hidden="true" data-team-code="" data-fit={labelFit(shown)} title={name} $result={result}>{shown}</TeamCode>
+    <TeamName data-team-name="" $result={result}>{name}</TeamName>
   </Team>;
 }
 
@@ -849,10 +742,33 @@ function CompetitionLogo({ url }: { url: string | null | undefined }) {
     : <TrophyIcon />;
 }
 
+/** Decorative country flag for the tile line; a missing, unsafe or failed image shows a neutral flag glyph (a globe
+ * for API-Football's international "World"). Keyed by URL where used, so a replacement URL gets a fresh attempt. */
+function CountryFlag({ url, international }: { url: string | null | undefined; international: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (url && !failed && isSafeRemoteImageUrl(url)) {
+    return <FlagImage src={url} alt="" width={16} height={11} loading="lazy" decoding="async" referrerPolicy="no-referrer"
+      onError={() => setFailed(true)} />;
+  }
+  return <FlagFallback>{international ? <GlobeIcon /> : <FlagIcon />}</FlagFallback>;
+}
+
 /** The market code with the part after its last space (the goal line) wrapped, so narrow phones can hide it. */
 function TileMarketCode({ code }: { code: string }) {
   const split = code.lastIndexOf(" ");
   return <TileCode aria-hidden="true">{split > 0 ? <>{code.slice(0, split)}<span>{code.slice(split)}</span></> : code}</TileCode>;
+}
+
+/** Where the pointer can hover, a clamped team name (more than two lines on a tile) puts both full names in the card's
+ * tooltip. The title goes on the article, the nearest titled ancestor of the covering link, so the link's accessible
+ * name and description stay as they are; cards whose names fit (and every table row, where names wrap unclamped)
+ * carry no title. The 1px allowance absorbs rounding of fractional line boxes. */
+function showFullNames(event: PointerEvent<HTMLElement>, title: string) {
+  const card = event.currentTarget;
+  const truncated = [...card.querySelectorAll<HTMLElement>("[data-team-name]")]
+    .some((name) => name.scrollHeight - name.clientHeight > 1 || name.scrollWidth - name.clientWidth > 1);
+  if (truncated) card.title = title;
+  else card.removeAttribute("title");
 }
 
 function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale: requestedLocale,
@@ -860,16 +776,15 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
-  const linkRef = useRef<HTMLAnchorElement>(null);
   const eligible = markets && markets.length > 0 ? markets : [selectedFamily ?? "match-result"];
   const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
   const away = fixture.awayTeam.name?.trim() || messages.text("match.awayUnknown");
-  const labels = cardTeamAbbreviations({ name: fixture.homeTeam.name, code: fixture.homeTeam.code },
-    { name: fixture.awayTeam.name, code: fixture.awayTeam.code });
+  const title = messages.text("match.title", { home, away });
   const competition = fixture.competition.name?.trim() || messages.text("match.competitionUnknown");
   const country = fixture.competition.country?.trim();
   const countryLabel = countryCode(country);
+  const flagUrl = countryFlagUrl(fixture);
   const prediction = selectedCardPrediction(fixture, shownFamily);
   const price = prediction ? selectedCardPrice(fixture, shownFamily) : null;
   const family = messages.text(`market.family.${shownFamily}`);
@@ -901,13 +816,9 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const lead = decided ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
   const state = tileState(fixture, messages);
   const reason = prediction ? null : messages.text(`match.noPickReason.${noPickReason(fixture)}`);
-  // A raised team label (hover devices) sits above the card link; its click still opens the analysis.
-  const openFromLabel = (event: MouseEvent<HTMLElement>) => {
-    if (event.target instanceof Element && event.target.closest("[data-team-code]")) linkRef.current?.click();
-  };
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={shownFamily}
-    data-status={fixture.status} onClick={openFromLabel}>
-    <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{messages.text("match.title", { home, away })}</VisuallyHidden>
+    data-status={fixture.status} onPointerEnter={(event) => showFullNames(event, title)}>
+    <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{title}</VisuallyHidden>
     <Meta>
       {position !== undefined && <Index aria-hidden="true">{messages.number(position)}</Index>}
       <League title={country ?? undefined}><CompetitionLogo url={fixture.competition.logoUrl} /><LeagueName>{competition}</LeagueName>
@@ -919,15 +830,14 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
           <KickoffTime>{messages.reportingTime(fixture.kickoffAt)}<VisuallyHidden> EAT</VisuallyHidden></KickoffTime>
         </When>}
       <TileLine aria-hidden="true" $tone={state.tone}>
-        {countryLabel && <>{countryLabel}<i>·</i></>}{state.dot && <TileLiveDot />}<b>{state.text}</b>
+        {(countryLabel || flagUrl) && <CountryFlag key={flagUrl ?? "none"} url={flagUrl} international={countryLabel === "INT"} />}
+        {countryLabel && <><span>{countryLabel}</span><i>·</i></>}{state.dot && <TileLiveDot />}<b>{state.text}</b><i>·</i>
       </TileLine>
     </Meta>
     <Teams>
-      <CardTeam team={fixture.homeTeam} side="home" name={home} label={labels.home} eager={eagerLogos}
-        result={lead > 0 ? "win" : lead < 0 ? "loss" : null} />
+      <CardTeam team={fixture.homeTeam} side="home" name={home} eager={eagerLogos} result={lead > 0 ? "win" : lead < 0 ? "loss" : null} />
       <MatchState fixture={fixture} home={home} away={away} messages={messages} />
-      <CardTeam team={fixture.awayTeam} side="away" name={away} label={labels.away} eager={eagerLogos}
-        result={lead < 0 ? "win" : lead > 0 ? "loss" : null} />
+      <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null} />
     </Teams>
     <Pick>
       <TileMarketCode code={messages.text(`market.code.${shownFamily}`)} />
@@ -947,7 +857,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
             {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}
           </VisuallyHidden>
         </> : <>
-          <NoPick aria-hidden="true" data-no-pick={noPickReason(fixture)}><b>—</b><span>{reason}</span></NoPick>
+          <NoPick aria-hidden="true" data-no-pick={noPickReason(fixture)} title={reason ?? undefined}><b>—</b><span>{reason}</span></NoPick>
           <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>
         </>}
       </Prediction>
@@ -955,16 +865,17 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
         <VisuallyHidden>{messages.text("details.odds")}: {price.price}</VisuallyHidden></TilePrice>}
     </Pick>
     {notes.length > 0 && <Notes>{notes.map((note, index) => <Note key={index}><NoticeIcon />{note}</Note>)}</Notes>}
-    <Open ref={linkRef} href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
+    <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
       <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
     </Open>
   </Card>;
 }
 
 /** Polls hand every card a fresh record; equal-version observations that look the same skip rendering.
- * A server refresh of the same query also brings an equal but new `markets` array. */
+ * A server refresh of the same query also brings an equal but new `markets` array. The country flag is decoration
+ * that can change without a version bump, so it is compared by value too. */
 function sameCardProps(previous: MatchCardProps, next: MatchCardProps): boolean {
-  if (!sameCardFixture(previous.fixture, next.fixture)) return false;
+  if (!sameCardFixture(previous.fixture, next.fixture) || countryFlagUrl(previous.fixture) !== countryFlagUrl(next.fixture)) return false;
   for (const key of new Set([...Object.keys(previous), ...Object.keys(next)]) as Set<keyof MatchCardProps>) {
     if (key === "fixture" || Object.is(previous[key], next[key])) continue;
     if (key !== "markets" || previous.markets?.length !== next.markets?.length ||

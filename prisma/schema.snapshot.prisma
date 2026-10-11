@@ -130,6 +130,8 @@ model FootballCompetition {
   countrySearch     String?                       @db.VarChar(256)
   type              String?                       @db.VarChar(32)
   logoUrl           String?                       @db.VarChar(2048)
+  // Approved remote flag image of the competition's country (/fixtures league.flag, /leagues country.flag); never bytes.
+  countryFlagUrl    String?                       @db.VarChar(2048)
   retrievedAt       DateTime                      @db.DateTime(3)
   providerUpdatedAt DateTime?                     @db.DateTime(3)
   createdAt         DateTime                      @default(now()) @db.DateTime(3)

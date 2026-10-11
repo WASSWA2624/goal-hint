@@ -143,7 +143,11 @@ export const fixtureSnapshotSchema = z.strictObject({
   dataVersion: version,
   homeTeam: team, awayTeam: team,
   competition: z.strictObject({ id: identity, name: z.string().max(512).nullable(), country: z.string().max(256).nullable(),
-    logoUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe logo URL.").nullable().optional() }),
+    logoUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe logo URL.").nullable().optional(),
+    /** Flag of the competition's country, under the same server approval as logos; null when none is stored (international
+     * competitions, or before the next date sync observes one). Optional, so payloads cached before flags still parse.
+     * Decoration only: a flag change alone does not bump `dataVersion`. */
+    countryFlagUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe flag URL.").nullable().optional() }),
   kickoffAt: instant.nullable(), syncedAt: instant.nullable(),
   status: z.enum(statuses), score: score.nullable(),
   partialCoverage: z.boolean().optional(),

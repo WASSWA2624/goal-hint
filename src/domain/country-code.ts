@@ -1,6 +1,6 @@
 /**
- * Three-letter codes for competition countries, shown beside the flag on the phone match card's main row
- * ("[flag] ENG · 13:30").
+ * Three-letter codes for competition countries, shown after the flag at the start of the phone match card's meta
+ * line ("[flag] ENG · 13:30 · Premier League").
  *
  * Codes are FIFA trigrammes (ENG, ESP, ITA, GER, FRA, POR, NED, KSA, TUR, SCO, BEL…), the form football fans read on
  * scoreboards, rather than ISO 3166 (which has no England, Scotland, Wales or Northern Ireland and differs for
@@ -59,13 +59,6 @@ const fifaCodes: Readonly<Record<string, string>> = {
 function key(name: string): string {
   return name.normalize("NFKD").replace(/\p{M}+/gu, "").toLowerCase().replace(/&/gu, " and ")
     .replace(/[^a-z0-9]+/gu, " ").trim();
-}
-
-/** The FIFA code of a country named exactly (in any of the matched spellings), else null; never derived. Domain
- * `team-name` uses it for national sides ("New Zealand W" → NZL). */
-export function fifaCountryCode(name: string): string | null {
-  const normalized = key(name);
-  return Object.hasOwn(fifaCodes, normalized) ? fifaCodes[normalized]! : null;
 }
 
 /** The competition country's three-letter code (see the module rules); "" when there is no name. */

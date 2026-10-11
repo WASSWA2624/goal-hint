@@ -71,14 +71,18 @@ export function createTeamCodeService(options: Readonly<{
   async function due(now: number, limit: number): Promise<Readonly<{ candidates: number; targets: readonly TeamCodeCandidate[] }>> {
     if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("Invalid team-code limit.");
     const window = { from: now - TEAM_CODE_WINDOW.beforeMs, to: now + TEAM_CODE_WINDOW.afterMs };
-    const targets: TeamCodeCandidate[] = [];
+    const targets: TeamCodeCandidate[] = [], seen = new Set<string>();
     let read = 0, after: TeamCodeCursor | null = null;
     for (let page = 0; page < TEAM_CODE_CANDIDATE_PAGES && targets.length < limit; page++) {
       const batch = await options.store.candidates(window, TEAM_CODE_CANDIDATE_PAGE, after);
       read += batch.length;
       if (batch.length === 0) break;
-      const checks = await options.store.checks(batch, now - TEAM_CODE_RECHECK_MS);
-      targets.push(...selectTeamCodeTargets(batch, checks, now, limit - targets.length));
+      // Pages are separate reads: a catalog write in between can move a season's earliest codeless kickoff past the
+      // cursor, so it would come round again. Each /teams query is considered once per sweep.
+      const unseen = batch.filter((entry) => !seen.has(`${entry.competitionId}:${entry.season}`));
+      for (const entry of batch) seen.add(`${entry.competitionId}:${entry.season}`);
+      const checks = await options.store.checks(unseen, now - TEAM_CODE_RECHECK_MS);
+      targets.push(...selectTeamCodeTargets(unseen, checks, now, limit - targets.length));
       if (batch.length < TEAM_CODE_CANDIDATE_PAGE) break;
       const last = batch.at(-1)!;
       after = { firstKickoff: last.firstKickoff, competitionId: last.competitionId, season: last.season };

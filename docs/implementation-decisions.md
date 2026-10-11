@@ -3352,3 +3352,81 @@ has a code, the card uses the safe shortening rules, then an ellipsis.
   history grows large.
 - Match insights (head-to-head and form lists) and the detail banner do not use
   codes; they are not tight spots.
+
+### Review follow-up (11 October 2026, second pass)
+
+- **Re-checked and kept.** The keyset cursor (a `HAVING` on the grouped
+  earliest kickoff, then league id and season, matching the `ORDER BY`), pages
+  of 200 with at most five per sweep, per-page marker reads by scope key, the
+  30-day and 1-day markers, the Free/slow-plan gate (`teamCodeImportsEnabled`
+  needs the odds eligibility, and the job re-checks the shared spare for its
+  whole 8-request ceiling before any call) and the per-slot bound (4 leagues,
+  2 requests each) are correct. The selection does at most 5 candidate reads
+  and 5 marker reads per sweep.
+- **Fixed: a season could be requested twice in one sweep.** Pages are separate
+  reads. If a catalog write between two reads moved a season's earliest
+  codeless kickoff past the cursor (its first fixture's team got a code, or the
+  fixture moved), the keyset read returned that season again and the sweep could
+  import the same league twice. `due()` now considers each `(league, season)`
+  once per sweep.
+- **Fixed: a short page now always means the end.** The store dropped rows with
+  an unusable league id or season after `LIMIT`, so such a row would make a full
+  page look short and end the paging early. Those bounds are now in the SQL
+  `WHERE` (the in-memory filter stays as a re-check).
+- **Card display.** The owner has since said codes are no longer shown on
+  cards; the card is the UI workflow's ([match card](match-card.md)). The read
+  path keeps publishing `code` and the import stays as committed.
+
+## Country flags beside competitions (11 October 2026)
+
+Owner: "The country should be displayed alongside its flag on the left." No flag
+was stored: the normalizer kept `country { name }` only and
+`FootballCompetition` had `country` and `logoUrl`. The card itself is the UI
+workflow's; this records the data side.
+
+- **Sources.** `/fixtures` `league.flag` (the regular date sync, so no extra
+  requests) and `/leagues` `country.flag` (the `competitions` catalog import;
+  a league-level `flag` is accepted when the country has none). The official v3
+  examples show `https://media.api-sports.io/flags/<code>.svg` and `null` for
+  "World" competitions. No recorded real payload in the repository contains the
+  key (the synthetic fixtures omit it), and no live call was made to confirm it,
+  so absent and null are both handled as "no flag".
+- **Leniency.** The key was stripped before this change, so a malformed value
+  (anything but a string) counts as no flag instead of rejecting a fixture row
+  that used to be accepted. Strings go through the logo path unchanged.
+- **Rights.** The same checks as logos: `isSafeRemoteImageUrl` (credential-free
+  HTTPS, no query or fragment, at most 2,048 characters) in the normalizer, the
+  catalog batch and the read; `verifyLogo` in the normalizer, the batch and the
+  store. The live authority's media pattern now also accepts
+  `https://media(-N).api-sports.io/flags/<xx>.svg` and `<xx>-<sub>.svg`, under
+  the same owner-recorded public-rights reference as logos.
+- **Storage.** `FootballCompetition.countryFlagUrl VARCHAR(2048) NULL`, migration
+  `20261011075627_competition_country_flag`: one additive nullable column, no
+  backfill (MySQL 8.4 adds it in place). A later null, absent or unapproved flag
+  keeps the stored one, as for logos.
+- **No fixture version bump for a flag alone.** Shared competition changes
+  version every fixture of the competition, history included, in the import
+  transaction. A flag is new for every competition at once, so the first date
+  sync after the migration would have versioned nearly every stored fixture in
+  one transaction (live timeout 120 s) and risked failing the date sync. A flag
+  is decoration of the already versioned country name, so it is written without
+  marking the competition changed. The public cache still invalidates (every
+  `FootballCompetition` update advances `global:catalog`, and feed/detail entries
+  live 5 seconds). A page left open shows the flag after that fixture's next
+  version bump or a reload. When a flag changes together with a versioned field,
+  the shared-identity audit records both.
+- **Publication.** Optional nullable `competition.countryFlagUrl` on the fixture
+  snapshot (`src/domain/fixture-snapshot.ts`), so the feed record, the detail
+  fixture and the client refresh parse it, and older cached payloads still
+  parse. `fixture-read.ts` publishes the stored value only if it is still a safe
+  URL. Feed cache projection 7 → 8, detail 5 → 6. The catalog fixture snapshot
+  (coordinator input) carries it too. The feed's league filter options and match
+  insights are unchanged.
+- **When flags appear.** The catalog date sync is the runner's daily selection:
+  seven `/fixtures?date=` imports at each 21:00 UTC occurrence (00:00 EAT), or as
+  soon as the runner starts when that night's run is missing. The result poller
+  and the refresh status reads do not write competitions. So after the migration
+  is applied, every competition with a fixture in those seven dates gets its
+  flag at the next daily selection (tonight, 11 October 21:00 UTC, if the runner
+  is up). Competitions with no fixture in the synced dates get one when they next
+  appear. International competitions never get one.

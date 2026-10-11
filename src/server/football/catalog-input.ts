@@ -80,7 +80,7 @@ const coverageKeys = new Set(["fixtures.events", "fixtures.lineups", "fixtures.s
 const competitionSchema = z.object({ id: identity, name: searchableText(512), country, type: string(32).nullable(), season: season.nullable(), round: text,
   seasons: z.array(z.object({ year: season, current: z.boolean().nullable(),
     coverage: z.record(z.string(), z.boolean().nullable()).refine((values) => Object.keys(values).every((key) => coverageKeys.has(key))),
-  }).strict()).max(200), logo: logoSchema, source: sourceSchema,
+  }).strict()).max(200), logo: logoSchema, countryFlag: logoSchema, source: sourceSchema,
 }).strict().refine((competition) => new Set(competition.seasons.map((entry) => entry.year)).size === competition.seasons.length);
 const goal = nonnegative.max(1000);
 const pair = z.object({ home: goal.nullable(), away: goal.nullable() }).strict();
@@ -254,9 +254,12 @@ function approvedRow(row: CatalogProviderRow, authority: CatalogAuthority, missi
       }
     }
     return { ...row, homeTeam: approvedTeam(row.homeTeam, authority, missing), awayTeam: approvedTeam(row.awayTeam, authority, missing),
-      competition: { ...row.competition, logo: approvedLogo(row.competition.logo, authority, missing) }, regulationScore };
+      competition: { ...row.competition, logo: approvedLogo(row.competition.logo, authority, missing),
+        countryFlag: approvedLogo(row.competition.countryFlag, authority, missing) }, regulationScore };
   }
-  return { ...row, logo: approvedLogo(row.logo, authority, missing) };
+  // Country flags are remote provider media too: the same structural check and rights verifier as logos.
+  return "seasons" in row ? { ...row, logo: approvedLogo(row.logo, authority, missing), countryFlag: approvedLogo(row.countryFlag, authority, missing) }
+    : { ...row, logo: approvedLogo(row.logo, authority, missing) };
 }
 
 /** Validated structured observations only; this function never fetches or stores raw provider data. */

@@ -26,7 +26,10 @@ import { cutoffPolicy, evidencePolicy, fallbackRefreshPlan, lifecyclePolicy, pro
 /** Clock skew tolerated between provider retrieval stamps and this process. */
 const SKEW_MS = 5_000;
 export const LIVE_ACTOR = "goal-hint-live-runner";
-const API_FOOTBALL_MEDIA = /^https:\/\/media(?:-\d+)?\.api-sports\.io\/football\/(?:teams|leagues)\/\d+\.png$/u;
+/** Team and league logos, and country flags (`/flags/gb.svg`, subdivisions such as `/flags/gb-eng.svg`), on the provider's media host. */
+const API_FOOTBALL_MEDIA = /^https:\/\/media(?:-\d+)?\.api-sports\.io\/(?:football\/(?:teams|leagues)\/\d+\.png|flags\/[a-z]{2}(?:-[a-z]{2,4})?\.svg)$/u;
+/** Whether a URL is provider media the owner-recorded public rights decision covers (logos and country flags). */
+export function isApiFootballMediaUrl(url: string): boolean { return API_FOOTBALL_MEDIA.test(url); }
 const same = (value: unknown, expected: unknown) => evidenceFingerprint(value) === evidenceFingerprint(expected);
 function pages(result: Pick<ApiFootballResult<unknown>, "provenance">, endpoint: ApiFootballEndpoint, now: number) {
   return Array.isArray(result.provenance) && result.provenance.every((page) => page.provider === "api-football" &&
@@ -60,8 +63,8 @@ export function createLiveAuthorities(options: Readonly<{
     verifyRetention: (permission) => permission.evidenceRef === refs.retention && permission.rawPayloadsStored === false &&
       permission.purpose === "structured-catalog-and-audit-history",
     verifyObservation: (_request, result) => pages(result, "fixtures", now()) || pages(result, "teams", now()) || pages(result, "competitions", now()),
-    // Remote provider logos display under the owner-recorded public rights decision.
-    verifyLogo: (url) => verify(refs.publicRights, "football-public-rights") && API_FOOTBALL_MEDIA.test(url),
+    // Remote provider logos and country flags display under the owner-recorded public rights decision.
+    verifyLogo: (url) => verify(refs.publicRights, "football-public-rights") && isApiFootballMediaUrl(url),
     // API-Football score.fulltime is the regulation score, including after extra time or penalties.
     verifyRegulationScore: verifyScore,
     regulationEvidenceRef: (candidate) => verifyScore(candidate)

@@ -309,6 +309,18 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       } finally { globalThis.fetch = fetch; }
       assert.equal(writes, 0); assert.equal(outbound, 0); assert.deepEqual(await counts(), before);
     });
+    await t.test('the detail fixture carries the stored competition country flag through the shared record mapper', async () => {
+      // Seeded straight into the column (the catalog import path is covered by test:catalog and test:feed).
+      const state = states.get(3000), flag = 'https://media.api-sports.io/flags/gb-eng.svg';
+      const { season } = await p.a.query((tx) => tx.footballFixture.findUniqueOrThrow({ where: { id: state.fixture.id }, include: { season: true } }));
+      const before = await read(state);
+      assert.equal(before.fixture.competition.countryFlagUrl, null);
+      await p.a.query((tx) => tx.footballCompetition.update({ where: { id: season.competitionId }, data: { countryFlagUrl: flag } }));
+      const after = await read(state);
+      assert.equal(after.fixture.competition.countryFlagUrl, flag);
+      assert.equal(after.fixture.dataVersion, before.fixture.dataVersion, 'decoration only: no fixture version moves');
+      assert.equal(matchDetailResponseSchema.parse(JSON.parse(JSON.stringify(after))).fixture.competition.countryFlagUrl, flag);
+    });
     await savePageScenarios(t, 'MATCH_DETAIL_PAGE_CAPTURE', captured);
   });
 });

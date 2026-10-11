@@ -198,6 +198,17 @@ since moved forward, so in-flight refreshes are unaffected). Requests are attrib
 attempt. Monitoring reports the lookback total as `team-code-requests` (informational, no alert rule).
 Recovery repair expires a stalled `teams.codes` job once its slot has ended.
 
+## Country flags
+
+Cards show the competition's country beside its flag. The flag URL arrives with the fixtures the daily
+selection already imports (`league.flag` on `/fixtures?date=`), so it costs no requests and has no switch.
+It needs migration `20261011075627_competition_country_flag` (`npm run db:deploy`; it adds one nullable column to
+`FootballCompetition`). Until then the web app and the runner fail on the missing column, so deploy it before
+restarting either. After the migration, flags fill in at the next daily selection (21:00 UTC, or at runner start
+when that night's run is missing) for every competition with a fixture in its seven dates; international
+competitions have none. A flag displays under the same public-rights reference as logos
+([football catalog](football-catalog.md#country-flags)).
+
 ## Commands
 
 | Command | Purpose |

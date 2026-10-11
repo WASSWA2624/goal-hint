@@ -106,12 +106,14 @@ function validLogo(value: unknown): value is ProviderLogo & { url: string } {
   if (!isRecord(value) || value.rights !== "approved" || typeof value.url !== "string") return false;
   return isSafeRemoteImageUrl(value.url);
 }
+/** Every retained remote image reference: logos and competition country flags. */
 function logoReferences(data: unknown): unknown[] {
   if (!isRecord(data)) return [];
-  const references = [data.logo, ...[data.homeTeam, data.awayTeam, data.team, data.competition]
-    .filter(isRecord).map((identity) => identity.logo)].filter((logo) => isRecord(logo) && logo.url !== null);
+  const images = (identity: Record<string, unknown>) => [identity.logo, identity.countryFlag];
+  const references = [...images(data), ...[data.homeTeam, data.awayTeam, data.team, data.competition]
+    .filter(isRecord).flatMap(images)].filter((logo) => isRecord(logo) && logo.url !== null);
   if (Array.isArray(data.statistics)) references.push(...data.statistics.flatMap((entry) => isRecord(entry) ?
-    [entry.team, entry.competition].filter(isRecord).map((identity) => identity.logo).filter((logo) => isRecord(logo) && logo.url !== null) : []));
+    [entry.team, entry.competition].filter(isRecord).flatMap(images).filter((logo) => isRecord(logo) && logo.url !== null) : []));
   return references;
 }
 /** A paginated request names its page explicitly and, once a valid envelope arrived, that page was returned. */

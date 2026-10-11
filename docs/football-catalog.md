@@ -75,6 +75,47 @@ Aliases preserve provider-observed names, normalized search values, observation 
 - An incoming normalized `unknown` status preserves an existing known status/provider status. A valid newer explicit provider status may change the state, including postponement, cancellation or corrections. Missing fixtures never imply full time, cancellation, deletion or an empty catalog.
 - Persist regulation scores only after independent verification plus an attributable evidence reference. The regulation period includes stoppage time and excludes extra-time/shootout totals. Missing or unverified scores preserve a previously verified score only while its status/provider-status context is unchanged; a changed context clears that old score until new proof is available. Paired scores and evidence/timestamp are enforced in SQL.
 - Store approved HTTPS logo URL strings only. The importer does not fetch, proxy, cache or store provider image bytes. It rejects credential-bearing/query/fragment URLs. A denied existing URL can be removed on a fresh shared-record update even when the incoming logo is missing. Downstream public display still needs current rights approval; a stored URL is not a perpetual permission grant.
+- Competition country flags (`FootballCompetition.countryFlagUrl`) follow the same rules as logos; see [Country flags](#country-flags) for the one difference (no fixture version bump).
+
+## Country flags
+
+Cards show the competition's country beside its flag. The flag URL comes from
+two provider fields, both run through the logo path (structural check in the
+normalizer, the catalog authority's `verifyLogo`, then `permittedLogo` in the
+store):
+
+- `/fixtures` rows: `league.flag`. This is the regular date sync, so flags fill
+  in without extra requests. The official v3 examples show
+  `https://media.api-sports.io/flags/<code>.svg`, and `null` for international
+  ("World") competitions. The repository's synthetic fixtures omit the key.
+- `/leagues` (the `competitions` catalog import): `country.flag`, or a
+  league-level `flag` when the country object has none.
+
+The flag is decoration that was never validated before this change, so an
+absent, `null` or malformed value (not a string) counts as "no flag" and never
+rejects a row; it is recorded as missing coverage `competition-country-flag`. An
+unsafe or unapproved URL is dropped (`competition-country-flag-rights-review`).
+The live authority approves `https://media(-N).api-sports.io/flags/<xx>.svg` and
+`/flags/<xx>-<sub>.svg` (for example `gb-eng`) besides the logo paths, under the
+same owner-recorded public-rights reference.
+
+Storage: `FootballCompetition.countryFlagUrl VARCHAR(2048) NULL` (migration
+[`20261011075627_competition_country_flag`](../prisma/migrations/20261011075627_competition_country_flag/migration.sql)).
+A later import with no flag (null, absent or unapproved) keeps the stored one,
+exactly like a logo; a stored flag the verifier no longer approves is removed on
+the next fresh update.
+
+**No version bump.** Unlike name, country, type and logo, a flag change alone is
+not a shared-identity change: it bumps no fixture `dataVersion` and writes no
+fixture audit. Otherwise the first date sync after the column ships would mark
+every competition of a worldwide date as changed and version every stored
+fixture of those competitions (history included) inside one catalog
+transaction. When a flag changes together with a versioned field, the
+shared-identity audit records it beside that field. Public reads still show a new
+flag at once: every `FootballCompetition` update advances the `global:catalog`
+cache tag (trigger from the public response cache), and feed and detail
+responses are only cached for 5 seconds. A page left open keeps the record it has
+until that fixture's next version bump or a reload.
 
 ## Coverage and empty dates
 
@@ -118,7 +159,9 @@ that runs those imports from spare quota only:
   checked recently. Leagues that stay codeless after their check remain
   candidates, so the read pages through that order (keyset pages of 200, at most
   five per sweep) until it has the sweep's due seasons; checked leagues therefore
-  never crowd unchecked ones out of a bounded read. Up to four are imported per
+  never crowd unchecked ones out of a bounded read. A season that comes round
+  again on a later page (a catalog write moved its earliest codeless kickoff
+  between the reads) is considered once per sweep. Up to four are imported per
   sweep, one at a time, through the ordinary `createFootballCatalogImporter` with
   a new UUID each.
 - **Writes.** The job writes no codes itself. The catalog store keeps an existing
@@ -146,6 +189,6 @@ owned MySQL under the application role's catalog grants).
 
 ## Migration and local checks
 
-The incremental migration is [`20261008214325_canonical_football_catalog`](../prisma/migrations/20261008214325_canonical_football_catalog/migration.sql). It adds only catalog tables; existing quota state remains unchanged. The reviewed SQL includes InnoDB, binary collations, restrictive foreign keys, uniqueness/search indexes and checks for distinct home/away teams, valid paired score/date fields, positive versions and nonnegative counts. Prisma cannot represent these CHECK constraints in its schema snapshot, so review the SQL as well as the generated Prisma diff.
+The incremental migration is [`20261008214325_canonical_football_catalog`](../prisma/migrations/20261008214325_canonical_football_catalog/migration.sql), extended additively by [`20261011075627_competition_country_flag`](../prisma/migrations/20261011075627_competition_country_flag/migration.sql) (one nullable column). It adds only catalog tables; existing quota state remains unchanged. The reviewed SQL includes InnoDB, binary collations, restrictive foreign keys, uniqueness/search indexes and checks for distinct home/away teams, valid paired score/date fields, positive versions and nonnegative counts. Prisma cannot represent these CHECK constraints in its schema snapshot, so review the SQL as well as the generated Prisma diff.
 
 Use the repository's pinned Node/npm versions. `npm run db:validate` and `npm run db:generate` operate offline. `npm run db:deploy` requires the separately approved migration account and target policy; application credentials are not substituted. Run `npm run check` for the local lint/type/unit/build checks and `npm run test:catalog` for durable concurrency, rollback, coverage and version acceptance against an owned throwaway MySQL server. Local fixtures are synthetic and do not satisfy the outstanding live-trial evidence gates.

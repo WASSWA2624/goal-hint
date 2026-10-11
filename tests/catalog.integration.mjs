@@ -478,6 +478,59 @@ test("canonical football catalog invariants on isolated genuine MySQL", { timeou
       assert.equal(mapping.competition.logoUrl, "https://media.api-sports.io/football/leagues/260.png");
     });
 
+    await t.test("country flags come from date syncs and the competitions catalog; null keeps them and a flag alone versions no fixture", async () => {
+      const columns = await firstDatabase.query((client) => client.$queryRaw`SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH AS width, IS_NULLABLE
+        FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'FootballCompetition' AND COLUMN_NAME = 'countryFlagUrl'`);
+      assert.deepEqual(columns.map((column) => [column.DATA_TYPE, Number(column.width), column.IS_NULLABLE]), [["varchar", 2048, "YES"]]);
+      const flag = "https://media.api-sports.io/flags/gb-eng.svg", other = "https://media.api-sports.io/flags/gb.svg";
+      const raw = (id, league = {}) => catalogFixture(id, { competitionId: 290, homeId: 6900 + id % 10 * 2, awayId: 6901 + id % 10 * 2,
+        league: { id: 290, name: "Synthetic competition 290", country: "Synthetic country", season: 2026, round: "Synthetic round 1", ...league } });
+      const stored = async () => (await firstDatabase.query((client) => client.footballCompetitionProvider.findUnique({
+        where: { provider_externalId: { provider: "api-football", externalId: 290n } }, include: { competition: true } }))).competition.countryFlagUrl;
+      let now = CATALOG_NOW + 10_000;
+      const sync = async (row, authority) => operation([row], { now: now += 1000, ...(authority ? { authority } : {}) }).run(fixtureSelection(row.fixture.id));
+      await sync(raw(6911));
+      assert.equal(await stored(), null, "a row without the key stores no flag");
+      const versions = async () => (await Promise.all([fixture(6911), fixture(6912)])).map((row) => row?.dataVersion ?? null);
+      await sync(raw(6912, { flag: null }));
+      const before = await versions();
+      const flagged = await sync(raw(6912, { flag }));
+      assert.equal(await stored(), flag);
+      assert.deepEqual(await versions(), before, "the flag alone bumps neither the synced fixture nor its sibling");
+      assert.equal(await firstDatabase.query((client) => client.footballFixtureAudit.count({ where: { importId: flagged.id } })), 0);
+      assert.equal((await firstStore.fixtureByProviderId(6911)).season.competition.countryFlagUrl, flag, "the catalog snapshot carries it");
+      for (const value of [null, undefined, 7]) {
+        await sync(raw(6911, { flag: value }));
+        assert.equal(await stored(), flag, `a later ${String(value)} keeps the stored flag`);
+      }
+      // The competitions catalog (/leagues country.flag) updates it the same way.
+      await operation([catalogCompetition(290, 2026, { country: { name: "Synthetic country", code: "GB", flag: other } })], { now: now += 1000 })
+        .run({ kind: "competitions", query: { competitionId: 290, season: 2026 } });
+      assert.equal(await stored(), other);
+      // Beside a versioned change (the name) the flag change is audited with it.
+      const beforeRename = await versions();
+      const renamed = await sync(raw(6911, { flag, name: "Synthetic renamed competition 290" }));
+      assert.deepEqual((await versions()).map((version, index) => version - beforeRename[index]), [1n, 1n]);
+      const audits = await firstDatabase.query((client) => client.footballFixtureAudit.findMany({ where: { importId: renamed.id } }));
+      assert.equal(audits.length, 2);
+      for (const audit of audits) {
+        const changes = audit.changes.sharedIdentity.competitions[0].fields;
+        assert.deepEqual([changes.name.after, changes.countryFlagUrl], ["Synthetic renamed competition 290", { before: other, after: flag }]);
+      }
+      // Like a logo, a stored flag the rights verifier no longer approves is removed on the next fresh update.
+      await sync(raw(6911, { flag }), syntheticAuthority({ verifyLogo: (url) => !url.includes("/flags/") }));
+      assert.equal(await stored(), null);
+      // The flag belongs to the country: a country change keeps no old flag, only one the same row brings.
+      await sync(raw(6911, { flag }));
+      assert.equal(await stored(), flag);
+      await sync(raw(6911, { flag: null, country: "World" }));
+      assert.equal(await stored(), null, "a new country without a flag shows none, never the previous country's flag");
+      await sync(raw(6911, { flag: other, country: "Synthetic country" }));
+      assert.equal(await stored(), other, "a country change with its own flag stores that flag");
+      await sync(raw(6911, { flag: null }));
+      assert.equal(await stored(), other, "an unchanged country still keeps its flag through a null");
+    });
+
     await t.test("UTC instants and EAT dates agree across midnight and opaque fixture IDs remain unchanged", async () => {
       const state = operation([catalogFixture(2700, { homeId: 2701, awayId: 2702,
         kickoff: "2026-10-09T21:30:00.000Z" })]);
