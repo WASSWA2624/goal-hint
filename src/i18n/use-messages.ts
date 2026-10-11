@@ -39,8 +39,12 @@ function subscribe(listener: () => void) {
 const snapshot = () => timeZone;
 const serverSnapshot = () => publicPolicy.reportingTimeZone;
 
+export function useDeviceTimeZone() {
+  return useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+}
+
 /** SSR and hydration share a stable zone; mounted displays follow the device. */
 export function useMessages(locale?: string) {
-  const zone = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  const zone = useDeviceTimeZone();
   return createMessages(locale, undefined, zone);
 }

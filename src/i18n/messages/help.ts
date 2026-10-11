@@ -9,7 +9,7 @@ export const helpMessages = {
   "help.dates.search.title": "Search teams or leagues",
   "help.dates.search.body": "Open Search in the header, enter a team or league name and submit. Clear the search to show the full list again. Your other selected filters stay applied.",
   "help.dates.time.title": "Your device’s time zone",
-  "help.dates.time.body": "Kickoff times and other event timestamps use your device’s time zone in 24-hour format. The zone is shown with the time. The date picker and daily run dates use East Africa Time (EAT), so a match’s local date can differ near midnight.",
+  "help.dates.time.body": "Kickoff times and other event timestamps use your device’s time zone in 24-hour format. The zone is shown with the time. Choose Kickoff time below the dates to filter an exact minute or a time range. Time-filtered dates use your device’s zone; otherwise the date picker and daily run dates use East Africa Time (EAT).",
   "help.filters.title": "Refine the list",
   "help.filters.open.title": "Open Filters",
   "help.filters.open.body": "Use the funnel button in the header. Open Markets, Leagues or Countries and tick the options you want. Search is available for leagues and countries. At least one market must remain selected. Untick the selected leagues or countries to include all of them.",

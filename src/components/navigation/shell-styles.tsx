@@ -285,6 +285,7 @@ export const TabLink = styled(Link)<{ $tone: AccentName }>`
   > svg { font-size: 1.25rem; }
   &[aria-current="page"] {
     color: ${({ theme, $tone }) => theme.color.accent[$tone].solid};
+    background: linear-gradient(180deg, ${({ theme, $tone }) => theme.color.accent[$tone].soft}, ${({ theme }) => theme.color.surface});
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     &::before {
       content: "";

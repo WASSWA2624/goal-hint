@@ -50,7 +50,7 @@ const visuallyHidden = css`
   white-space: nowrap;
   border: 0;
 `;
-const tileRadius = "6px";
+const tileRadius = "0px";
 const Card = styled.article`
   position: relative;
   display: grid;
@@ -75,7 +75,8 @@ const Card = styled.article`
     align-items: center;
     padding: 4px 8px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-color: color-mix(in srgb, ${({ theme }) => theme.color.border} 80%, ${({ theme }) => theme.color.mutedText});
+    border-color: ${({ theme }) => theme.color.border};
+    box-shadow: 0 1px 2px rgb(11 31 51 / 5%);
     border-radius: ${tileRadius};
   }
   ${table} {
@@ -297,10 +298,6 @@ const Versus = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
   ${tile} { font-size: 0.75rem; font-weight: 400; line-height: 1; text-transform: uppercase; }
 `;
-const ScoredVersus = styled(Versus)`
-  display: none;
-  ${tile} { display: block; }
-`;
 const Score = styled.span<{ $live: boolean }>`
   display: inline-flex;
   align-items: center;
@@ -485,6 +482,7 @@ const NoPick = styled.span`
     > b {
       ${chip}
       grid-column: 2;
+      background: ${({ theme }) => theme.color.surfaceMuted};
       color: ${({ theme }) => theme.color.mutedText};
       font-size: ${({ theme }) => theme.typography.scale.caption};
     }
@@ -573,7 +571,7 @@ const Open = styled(Link)`
   /* The link covers the tile, so its press tint lands at once over everything, chips included, in place of the
    * browser's tap overlay, inside the card's border. */
   ${tile} {
-    border-radius: calc(${tileRadius} - 1px);
+    border-radius: ${tileRadius};
     -webkit-tap-highlight-color: transparent;
     &:active { background: color-mix(in srgb, ${({ theme }) => theme.color.text} 8%, transparent); }
   }
@@ -631,11 +629,10 @@ function MatchState({ fixture, home, away, messages }: { fixture: FixtureSnapsho
   const final = hasFinalScoreStatus(status);
   const scoreline = score && (status === "live" || final) ? <>
     <Score aria-hidden="true" $live={status === "live"}><span>{messages.number(score.home)}</span><span>–</span><span>{messages.number(score.away)}</span></Score>
-    {status !== "live" && <ScoredVersus aria-hidden="true">{messages.text("match.versus")}</ScoredVersus>}
     <VisuallyHidden>{messages.text("match.scoreline", { label: messages.text(final ? "match.finalScore" : "match.liveScore"),
       home, away, homeScore: messages.number(score.home), awayScore: messages.number(score.away) })}</VisuallyHidden>
   </> : <>
-    <Versus aria-hidden="true">{status === "live" ? "–" : messages.text("match.versus")}</Versus>
+    <Versus aria-hidden="true">{status === "live" || final ? "–" : messages.text("match.versus")}</Versus>
     {(status === "live" || final) && <VisuallyHidden>{messages.text(final ? "match.finalScoreUnknown" : "match.scoreUnknown")}</VisuallyHidden>}
   </>;
   if (status === "live") {

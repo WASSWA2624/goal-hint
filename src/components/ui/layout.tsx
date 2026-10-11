@@ -57,7 +57,7 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean }>`
   ${({ $compact }) => $compact && css`
     ${media.belowDesktop} {
       padding-block: 8px 12px;
-      background: color-mix(in srgb, ${({ theme }) => theme.color.page} 92%, ${({ theme }) => theme.color.text});
+      background: ${({ theme }) => theme.color.page};
       > ${Container} { padding-inline: 8px; }
     }
   `}

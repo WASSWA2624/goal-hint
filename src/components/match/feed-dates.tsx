@@ -12,7 +12,7 @@ import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media } from "@/styles/theme";
-import { focusRing, plainClick } from "./filter-parts";
+import { controlFeedback, focusRing, plainClick } from "./filter-parts";
 
 const field = css`
   position: relative;
@@ -56,6 +56,7 @@ const flush = css`
   white-space: normal;
   > span { min-inline-size: 0; padding-block: 3px; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+  &[aria-expanded="true"] { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; }
   @container phone-filters (max-width: 18rem) { > svg:first-child { display: none; } }
 `;
 const FieldButton = styled.button`${field} min-inline-size: 0; > span { overflow: hidden; text-overflow: ellipsis; }`;
@@ -210,6 +211,7 @@ const Stepper = styled.div`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 0;
+  ${controlFeedback}
   > a, > span {
     display: grid;
     place-items: center;
@@ -264,8 +266,8 @@ const PresetList = styled.div`
     white-space: nowrap;
     text-decoration: none;
     ${focusRing}
-    ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.blue.solid}; color: ${({ theme }) => theme.color.accent.blue.text}; } }
-    &[aria-current="date"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.gradient.action}; border-color: transparent; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+    ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; color: ${({ theme }) => theme.color.accent.teal.text}; } }
+    &[aria-current="date"] { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   }
 `;
 

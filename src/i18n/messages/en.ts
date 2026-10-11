@@ -1,6 +1,17 @@
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  "match.columns.score": "Score",
+  "feed.time.title": "Kickoff time",
+  "feed.time.any": "Any time",
+  "feed.time.exact": "Specific time",
+  "feed.time.range": "Time range",
+  "feed.time.from": "Start time",
+  "feed.time.to": "End time",
+  "feed.time.apply": "Apply time",
+  "feed.time.clear": "Clear time",
+  "feed.time.help": "Times and selected dates use {zone} (24-hour).",
+  "feed.time.invalid": "End time must be at or after start time.",
   "help.metadataTitle": "Help | Goal Hint",
   "help.description": "Learn how to find matches, choose dates, search and filter predictions, read live scores and explore Goal Hint match analysis.",
   "privacy.metadataTitle": "Privacy and data handling | Goal Hint",

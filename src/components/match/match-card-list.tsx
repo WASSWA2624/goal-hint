@@ -67,7 +67,7 @@ export function MatchCardList({ locale, ...props }: MatchCardListProps) {
     <Columns aria-hidden="true">
       <span>{messages.text("match.columns.number")}</span><span>{messages.text("match.columns.dateTime")}</span>
       <span>{messages.text("match.columns.league")}</span><span>{messages.text("match.columns.home")}</span>
-      <span>{messages.text("match.versus")}</span><span>{messages.text("match.columns.away")}</span>
+      <span>{messages.text("match.columns.score")}</span><span>{messages.text("match.columns.away")}</span>
       <span>{messages.text("match.columns.market")}</span><span>{messages.text("match.columns.prediction")}</span>
       <span><span data-short>{messages.text("match.columns.probabilityShort")}</span><span data-full>{messages.text("match.columns.probability")}</span></span><span />
     </Columns>

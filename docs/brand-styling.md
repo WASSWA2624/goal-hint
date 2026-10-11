@@ -181,3 +181,5 @@ and the installed Next.js 16.4 documentation. The components use
 [styled-components theming and server rendering](https://styled-components.com/docs/advanced)
 and [transient props](https://styled-components.com/docs/api#transient-props).
 Font delivery uses [Next.js local fonts](https://nextjs.org/docs/app/api-reference/components/font#local-fonts).
+
+Feed surfaces use a cool blue-gray canvas, white square cards with fine borders, a restrained teal-to-blue header edge, and teal utility selections. Semantic prediction and result colors retain their existing meaning.

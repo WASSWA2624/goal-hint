@@ -1,3 +1,4 @@
+import { validKickoffTime, type KickoffTimeFilter } from "./kickoff-time.ts";
 import {
   addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate,
 } from "./calendar.ts";
@@ -28,6 +29,8 @@ export type FeedQuery = Readonly<{
   locale: Locale;
   dates: DateSelection;
   search: string;
+  /** Local kickoff minutes and IANA device zone; absent means all times. */
+  time?: KickoffTimeFilter | null;
   /** Canonical competition IDs, sorted; empty means every league. */
   leagues: string[];
   /** Canonical competition country names, sorted; empty means every country. */
@@ -62,7 +65,7 @@ export class FeedQueryError extends RangeError {
   constructor() { super("Invalid or incompatible feed parameters."); this.name = "FeedQueryError"; }
 }
 function fail(): never { throw new FeedQueryError(); }
-const keys = new Set(["date", "from", "to", "when", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
+const keys = new Set(["date", "from", "to", "when", "timeFrom", "timeTo", "tz", "q", "league", "country", "status", "market", "prob", "odds", "picks", "sort", "dir", "page", "pageSize"]);
 const leaguePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/u;
 const countryPattern = /^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} .'()&-]{0,127}$/u;
 
@@ -174,6 +177,10 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
     }
   }
   resolveFeedDates({ dates }, context.today);
+  const timeFrom = get("timeFrom"), timeTo = get("timeTo"), zone = get("tz");
+  const time = timeFrom === undefined && timeTo === undefined && zone === undefined ? null
+    : { from: timeFrom ?? "", to: timeTo ?? timeFrom ?? "", zone: zone ?? "" };
+  if (time && !validKickoffTime(time)) fail();
   const rawSearch = get("q") ?? "";
   if (rawSearch.length > feedQueryRules.maximumSearchLength || /[\u0000-\u001f\u007f]/u.test(rawSearch)) fail();
   const search = rawSearch.normalize("NFC").trim().replace(/\s+/gu, " ");
@@ -187,7 +194,7 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const by = get("sort") ?? "kickoff", direction = get("dir");
   if (by !== "kickoff" && by !== "probability" || direction !== undefined && direction !== "asc" && direction !== "desc") fail();
   return {
-    locale: resolveLocale(context.locale), dates, search, leagues, countries, status: parseFeedStatus(get("status")), markets,
+    locale: resolveLocale(context.locale), dates, search, ...(time ? { time } : {}), leagues, countries, status: parseFeedStatus(get("status")), markets,
     probability: probabilityRange(get("prob")), odds: oddsRange(get("odds"), context.providerOdds ?? publicPolicy.features.providerOdds), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
     page: integer(get("page"), 1, feedQueryRules.maximumPage),
@@ -207,6 +214,10 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   if (dates.kind === "date") result.set("date", dates.date);
   else if (dates.kind === "range") { result.set("from", dates.from); result.set("to", dates.to); }
   else if (dates.kind !== "today") result.set("when", dates.kind);
+  if (query.time) {
+    if (!validKickoffTime(query.time)) fail();
+    result.set("timeFrom", query.time.from); result.set("timeTo", query.time.to); result.set("tz", query.time.zone);
+  }
   if (query.search) result.set("q", query.search);
   const leagues = [...new Set(query.leagues)].sort(), countries = [...new Set(query.countries.map((item) => item.normalize("NFC")))].sort();
   if (leagues.length > 0) result.set("league", leagues.join(","));
@@ -259,10 +270,10 @@ export function feedQueryKey(query: FeedQuery, today: ReportingDate): string {
 
 /** Filters that narrow the cohort (dates and order excluded). */
 /** Choices made inside the filter panel itself: leagues, countries, markets, probability and odds. */
-export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability"> & Partial<Pick<FeedQuery, "odds">>): number {
+export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability"> & Partial<Pick<FeedQuery, "odds" | "time">>): number {
   return query.leagues.length + query.countries.length +
     Number(!sameList(canonicalMarkets(query.markets), defaultMarkets)) + Number(!isAnyProbability(query.probability)) +
-    Number(!isAnyOdds(query.odds ?? null));
+    Number(!isAnyOdds(query.odds ?? null)) + Number(Boolean(query.time));
 }
 
 export function activeFeedFilterCount(query: FeedQuery): number {

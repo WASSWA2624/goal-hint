@@ -36,7 +36,7 @@ export const matchFeedResponseSchema = z.strictObject({
   message: z.string().max(512).nullable(),
   coverage: z.strictObject({ partial: z.boolean(), knownFixtures: count, matchingWithMarket: count,
     dates: z.array(z.strictObject({ date, status: z.enum(["complete", "partial", "degraded", "failed", "unknown", "pending"]),
-      observedAt: at.nullable(), authoritative: z.boolean() })).min(1).max(feedQueryRules.maximumDays) }),
+      observedAt: at.nullable(), authoritative: z.boolean() })).min(1).max(feedQueryRules.maximumDays + 2) }),
   run: dailyRunProgressSchema,
 }).superRefine((value, ctx) => {
   if (value.records.length !== Math.min(value.pageSize, Math.max(0, value.total - (value.page - 1) * value.pageSize)) ||

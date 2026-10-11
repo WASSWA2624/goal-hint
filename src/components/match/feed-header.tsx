@@ -12,7 +12,7 @@ import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets, DateRangePicker } from "./feed-dates";
-import { CompactSelect, focusRing, IconButton } from "./filter-parts";
+import { CompactSelect, controlFeedback, focusRing, IconButton } from "./filter-parts";
 
 const desktop = media.desktop;
 
@@ -83,6 +83,7 @@ const RoundButton = styled(IconButton)`
   block-size: 2rem;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.controlFill};
+  box-shadow: inset 0 0 0 1px ${({ theme }) => theme.header.controlBorder};
   border-radius: 0;
   font-size: 1rem;
   transition: background-color 120ms ease, color 120ms ease;
@@ -102,8 +103,8 @@ const FilterToggle = styled(RoundButton)`
     min-inline-size: 1rem;
     block-size: 1rem;
     padding-inline: 3px;
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.accent.pink.solid};
+    color: ${({ theme }) => theme.header.onAccent};
+    background: ${({ theme }) => theme.header.accent};
     border: 1.5px solid ${({ theme }) => theme.header.onAccent};
     border-radius: 999px;
     font-size: 0.625rem;
@@ -123,8 +124,9 @@ const SearchForm = styled.form`
   padding-inline: 8px 2px;
   min-block-size: 2rem;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 0;
+  ${controlFeedback}
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
   > input { flex: 1; min-inline-size: 0; border: 0; background: none; color: ${({ theme }) => theme.color.text}; font: inherit; font-size: 1rem; outline: none; }
   > button { inline-size: 2rem; block-size: 2rem; font-size: 1rem; }
@@ -281,10 +283,12 @@ const PicksToggle = styled.button`
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   white-space: nowrap;
   cursor: pointer;
+  ${controlFeedback}
   &::before { content: ""; inline-size: 8px; block-size: 8px; border: 1.5px solid currentColor; border-radius: 2px; }
   &[aria-pressed="true"] {
-    color: ${({ theme }) => theme.color.accent.emerald.text};
-    background: ${({ theme }) => theme.color.accent.emerald.soft};
+    color: ${({ theme }) => theme.color.accent.teal.text};
+    background: ${({ theme }) => theme.color.brandSoft};
+    border-color: ${({ theme }) => theme.color.brand};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     &::before { background: currentColor; }
   }

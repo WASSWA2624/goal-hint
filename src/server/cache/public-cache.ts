@@ -5,7 +5,7 @@ import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.
 import { observeCache, type CacheOutcome, type ReadFamily } from "../monitoring/server-measurements.ts";
 
 export const publicCacheRules = Object.freeze({ mutableMs: 5000, immutableMs: 6 * 60 * 60 * 1000,
-  maximumBytes: 1024 * 1024, maximumTags: 34, recoveryBatch: 100 });
+  maximumBytes: 1024 * 1024, maximumTags: 36, recoveryBatch: 100 });
 export type CacheDescriptor<T> = Readonly<{ key: string; tags: readonly string[]; lifetimeMs: number;
   deadlineAt: number; kind?: ReadFamily; validUntil?: () => number; parse(value: unknown): T }>;
 export type CacheSnapshot = Readonly<{ generations: Readonly<Record<string, string>>; value: unknown; createdAt: number | null; expiresAt: number | null }>;

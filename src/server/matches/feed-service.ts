@@ -1,7 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
-import { addReportingDays, createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds, type Clock, type ReportingDate } from "../../domain/calendar.ts";
+import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
+import { addReportingDays, createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate } from "../../domain/calendar.ts";
 import { feedQueryKey, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
 import { matchFeedRules, matchFeedResponseSchema, type MatchFeedResponse } from "../../domain/match-feed.ts";
 import { createMessages, type TextKey } from "../../i18n/messages.ts";
@@ -46,12 +47,17 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
   return Object.freeze({ async query(input: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}): Promise<MatchFeedResponse> {
     const asOf = clock.now(), today = getReportingDate(asOf), query = parseMatchFeedQuery(input, today, { ...context, providerOdds });
     const range = resolveFeedDates(query, today), window = createPredictionWindow(today), messages = createMessages(query.locale);
+    const localDays = query.time ? kickoffTimeWindows(range, { ...query.time, from: "00:00", to: "23:59" }) : null;
+    // Provider receipts and invalidations are keyed by EAT dates, which can straddle local dates.
+    const sourceRange = localDays?.length ? validateReportingDateRange(
+      getReportingDate(utcInstantFromEpochMilliseconds(localDays[0]!.start)),
+      getReportingDate(utcInstantFromEpochMilliseconds(localDays[localDays.length - 1]!.end - 1)), feedQueryRules.maximumDays + 2) : range;
     try {
       if (query.search) await limiter.consume();
       const read = () => database.transaction(async (tx) => {
         // Source writes and these generations commit atomically. Progress-only
         // changes do not reorder a cohort; catalog/date changes conservatively do.
-        const tags = ["global:catalog", ...Array.from({ length: range.dayCount }, (_, day) => `date:${addReportingDays(range.startDate, day)}`)];
+        const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
         const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v1", query: feedQueryKey(query, today),
           scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
         const sql = feedSql(query, range, competitionIds, providerOdds);
@@ -68,7 +74,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const total = Number(matching.total), knownFixtures = Number(known.total), matchingWithMarket = Number(matching.available ?? 0);
         const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} WHERE ${sql.where}
           ORDER BY ${sql.order} LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`);
-        const dates = await storedFeedCoverage(tx, range), partial = dates.some((date) => !date.authoritative);
+        const dates = await storedFeedCoverage(tx, sourceRange), partial = dates.some((date) => !date.authoritative);
         const run = await storedFeedRun(tx, today, range);
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
         const records = [];
@@ -92,7 +98,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
-      return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range,
+      return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         query: { ...query, projection: 8, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {

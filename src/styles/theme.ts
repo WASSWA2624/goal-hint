@@ -180,7 +180,7 @@ export const lightTheme: GoalHintTheme = {
   color: {
     text: brandTokens.colors.navy,
     mutedText: brandTokens.colors.muted,
-    page: brandTokens.colors.paper,
+    page: "#EDF3F7",
     surface: brandTokens.colors.white,
     surfaceMuted: "#EAF0F2",
     // Brand dividers are decorative; controls need a stronger accessible boundary.
@@ -263,8 +263,8 @@ export const lightTheme: GoalHintTheme = {
   gradient: {
     action: "linear-gradient(135deg, #0F766E 0%, #2563EB 100%)",
     tableHeader: "linear-gradient(90deg, #0B1F33 0%, #172F63 55%, #0F5E6E 100%)",
-    edge: "linear-gradient(90deg, #0F766E 0%, #2563EB 30%, #7C3AED 55%, #DB2777 78%, #F59E0B 100%)",
-    page: "radial-gradient(70rem 26rem at 0% -6rem, #DDF3FF 0%, rgb(221 243 255 / 0%) 70%), radial-gradient(60rem 24rem at 100% -4rem, #F1E7FF 0%, rgb(241 231 255 / 0%) 70%), #F4F7FA",
+    edge: "linear-gradient(90deg, #39D5CA 0%, #0891B2 55%, #2563EB 100%)",
+    page: "linear-gradient(180deg, #E8F3F6 0%, #EDF3F7 24rem)",
   },
   // Worst case is the teal stop: white 9.15:1, links 6.72:1, placeholder 4.55:1 on the focused field,
   // white icons 5.08:1 on controlHover, accent 5.03:1; navy on accent 9.18:1.

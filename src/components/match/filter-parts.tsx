@@ -18,6 +18,13 @@ export const focusRing = css`
   }
 `;
 
+/** Shared feedback for compact white controls, without changing their dimensions. */
+export const controlFeedback = css`
+  transition: border-color 120ms ease, background-color 120ms ease;
+  ${media.hover} { &:hover:not([aria-pressed="true"]):not([aria-expanded="true"]) { border-color: ${({ theme }) => theme.color.controlBorder}; } }
+  &:focus-within { border-color: ${({ theme }) => theme.color.brand}; }
+`;
+
 /** Plain left clicks are handled in the browser; modified clicks keep native link behaviour. */
 export function plainClick(event: MouseEvent, action: () => void) {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -117,6 +124,7 @@ const SelectFace = styled.span`
   border-radius: 6px;
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.body};
+  ${controlFeedback}
   > span { display: grid; min-inline-size: 0; }
   > span > span { grid-area: 1 / 1; min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   > span > span:not([data-current]) { visibility: hidden; }
@@ -131,7 +139,7 @@ const SelectFace = styled.span`
     cursor: pointer;
     &:disabled { cursor: not-allowed; }
   }
-  > svg { position: absolute; inset-inline-end: 8px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
+  > svg { position: absolute; inset-inline-end: 8px; inset-block-start: 50%; transform: translateY(-50%); color: ${({ theme }) => theme.color.brand}; pointer-events: none; }
   &:has(select:focus-visible) {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
     outline-offset: 2px;
@@ -171,10 +179,11 @@ const PickerSummary = styled.button`
   line-height: 1.25;
   text-align: start;
   cursor: pointer;
+  ${controlFeedback}
   > [data-picker-label] { flex: none; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > [data-picker-value] { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; text-align: end; }
   > svg { flex: none; font-size: 1rem; }
-  &[aria-expanded="true"] { border-color: ${({ theme }) => theme.color.brand}; }
+  &[aria-expanded="true"] { border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   ${focusRing}
 `;
@@ -221,6 +230,7 @@ const PickerList = styled.ul`
     font-size: 0.8125rem;
     cursor: pointer;
     ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+    &:has(input:checked) { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; }
     > input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
     > img { flex: none; inline-size: 16px; block-size: 16px; object-fit: contain; }
     > span { min-inline-size: 0; flex: 1; }

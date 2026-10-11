@@ -19,6 +19,7 @@ import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
+import { FeedTimeFilter } from "./feed-time";
 import { DateRangePicker, DateStepper } from "./feed-dates";
 import { ChipText, CompactSelect, FilterChip, focusRing, OptionPicker, plainClick, RangeSlider } from "./filter-parts";
 
@@ -418,12 +419,13 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
           <DateRangePicker query={phone} today={today} onApply={apply} compact />
         </DateStepper>
       </DateRow>
+      <FeedTimeFilter query={phone} onApply={apply} />
       <PhoneMore id={phoneId} hidden={!phoneOpen}>
         {phonePicker("markets", marketList)}
         {phonePicker("leagues", leagueList)}
         {phonePicker("countries", countryList)}
         <BottomRow>
-          <SelectGroup $accent="pink">
+          <SelectGroup $accent="teal">
             {probabilityLabel}
             <SelectBox aria-label={messages.text("feed.filters.probability")} value={`${phone.probability.min}-${phone.probability.max}`}
               options={probabilityOptions.map((preset) => ({ value: `${preset.min}-${preset.max}`, label: rangeText(messages, preset) }))}
@@ -439,6 +441,7 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
     </PhoneOnly>
 
     <DesktopOnly>
+      <FeedTimeFilter query={draft} onApply={apply} />
       <DesktopGrid>
         {multiField("leagues", leagueList)}
         {multiField("countries", countryList)}

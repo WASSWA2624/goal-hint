@@ -1,4 +1,5 @@
 import "server-only";
+import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
 
 import { addReportingDays, type ReportingDateRange, type ReportingDate } from "../../domain/calendar.ts";
 import { isAnyProbability, type FeedQuery } from "../../domain/feed-query.ts";
@@ -40,8 +41,14 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
       WHERE b.setId=${displayedSet} AND b.family IN (${markets}) AND b.available=TRUE
       ORDER BY b.selectedProbability DESC, FIELD(b.family, ${Prisma.join(publicPolicy.markets)}) ASC LIMIT 1)
     ${providerOdds ? oddsPriceJoin : Prisma.empty}`;
-  const scope = publicFixtureCohortScope(range, competitionIds);
+  const timeWindows = query.time ? kickoffTimeWindows(range, query.time) : null;
+  const days = query.time ? kickoffTimeWindows(range, { ...query.time, from: "00:00", to: "23:59" }) : null;
+  const inWindows = (windows: { start: number; end: number }[]) => windows.length
+    ? Prisma.sql`(${Prisma.join(windows.map((window) => Prisma.sql`(f.kickoff>=${new Date(window.start)} AND f.kickoff<${new Date(window.end)})`), " OR ")})`
+    : Prisma.sql`FALSE`;
+  const scope = days ? Prisma.sql`${publicFixtureScope(competitionIds)} AND ${inWindows(days)}` : publicFixtureCohortScope(range, competitionIds);
   const filters: Prisma.Sql[] = [scope];
+  if (timeWindows) filters.push(inWindows(timeWindows));
   if (query.leagues.length > 0) filters.push(Prisma.sql`l.id IN (${Prisma.join(query.leagues)})`);
   if (query.countries.length > 0) filters.push(Prisma.sql`l.country IN (${Prisma.join(query.countries)})`);
   if (query.status !== "all") filters.push(query.status === "finished"
