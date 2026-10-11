@@ -3953,3 +3953,118 @@ in `.env.operations` ([live operations](live-operations.md#odds-imports-052)).
 separate task.
 
 Prompt 053 has not been started.
+
+## Team codes for phone cards (11 October 2026)
+
+**Status:** implemented and verified on synthetic data. Owner decision: API team
+codes stand in for long names on phone cards ("Team names stay abbreviated"),
+filled by a low-priority import that spends spare quota only. The design and
+every choice are in [implementation decisions](implementation-decisions.md)
+("Team codes for tight phone cards"); the runbook is
+[live operations](live-operations.md#team-codes) and the catalog side is
+[football catalog](football-catalog.md#team-codes-spare-quota-import). The phone
+card itself (how a code or a derived abbreviation is shown) is the UI
+workflow's, in [match card](match-card.md).
+
+**Current data:** 0 of 5,251 stored teams have a code. The live pipeline imports
+teams through `/fixtures`, which carries no code; only `/teams?league&season`
+does. On the current Free plan the import does not run at all: the ordinary
+floor is 99 of 100 requests (spare 1) and pacing is slow, so the odds gate never
+opens. After an upgrade to a 7,500-a-day plan the spare is 861, and team codes
+can take up to 8 requests an hour (about 96 leagues a day) while odds are off.
+"Off on Free" does not meet the owner's "slow on Free", so it is an open owner
+decision (see **Owner actions** below). Until the owner decides, the code stays
+off on Free, and the phone card shows its derived abbreviation for every
+codeless team, which today is every team. Either way, team names on the card
+stay abbreviated.
+
+### Changed behavior and files
+
+- **Read path.** `src/domain/fixture-snapshot.ts`: fixture teams carry an
+  optional, nullable `code` matching `^[A-Z0-9]{2,5}$` (optional, so payloads
+  cached before codes still parse). `src/server/matches/fixture-read.ts`
+  publishes `validTeamCode(FootballTeam.code)` (trimmed ASCII letters and digits,
+  uppercased, else null) for the feed, the detail read and the client refresh,
+  which all reuse the same team schema. Cache projections: feed 6 → 7, detail
+  4 → 5.
+- **Import job** (new `src/server/teams/`): `team-code-mysql-store.ts`
+  (candidate competition-seasons and their checked-at markers, read from the
+  catalog's own `teams` receipts, so no migration), `team-code-service.ts`
+  (selection and the sweep through the ordinary catalog teams import) and
+  `team-code-jobs.ts` (`teams.codes` v1, one job per UTC hour, priority 0, the
+  odds quota gate with the slot's whole ceiling of 8 requests).
+- **Wiring.** `src/server/config/runtime-policy.ts` and `.env.example`:
+  `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED` (default `true`, still spare-gated).
+  `src/server/live/live-plan.ts` (`teamCodeImportsEnabled`, `teamCodeBounds`),
+  `live-runtime.ts` (shared enrichment registry), `live-runner.ts` (hourly
+  scheduling, `ready` fields), `src/server/recovery/recovery-service.ts` (a stalled
+  job expires after its slot), `src/server/monitoring/` (informational
+  `team-code-requests`), `scripts/live-status.mjs` (`teamCodes` block).
+- **Review fix (this run).** The selection read the nearest 200 candidates and
+  only then dropped recently checked leagues, so leagues that stay codeless after
+  their check could crowd unchecked ones out of every sweep. It now pages through
+  the kickoff order with a keyset cursor (200 per page, at most five pages) until
+  it has the sweep's due seasons.
+- **Review finding: Free plan (documentation only).** A later review confirmed
+  that `teamCodeImportsEnabled` uses the odds eligibility, which is false on
+  Free (`liveWorkload(100, 1, "Free", 10)`: floor 99, spare 1, reserve 14, slow
+  pacing). So the current plan makes no `/teams` requests, and the earlier
+  "Owner actions: none required" line hid that gap. It is a quota decision for
+  the owner, so this run changed no code. The **Owner actions** line below now
+  lists the decision and both options.
+- **Tests.** `tests/team-codes.test.mjs` (code validation and old-payload parsing,
+  markers, selection and paging, sweep bounds, envelopes, eligibility, the
+  shared spare gate and outcomes), `tests/team-codes.integration.mjs` (MySQL:
+  candidates and keyset pages, a bounded sweep storing codes and bumping fixture
+  versions, the feed read publishing `ARS` for a stored `ars`, 30-day and 1-day
+  markers, append-only receipts), plus team-code cases in
+  `tests/live-runtime.integration.mjs`, `tests/runtime-policy.test.mjs`,
+  `tests/recovery-watchdog.integration.mjs` and
+  `tests/operations-monitoring.integration.mjs`. `npm run test:team-codes` runs
+  the focused set.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm); owned isolated MySQL 8.4.11 under `.tmp/mysql-tools`
+(`MYSQL_TEST_SERVER_BINARY`). Logs are `.tmp/teamcodes-r2-*.log`.
+
+| Check | Actual result |
+| --- | --- |
+| `npx tsc --noEmit` | Exit 0 before the review fix and at the end of the run. One run in between reported a transient error in the UI workflow's in-progress `src/components/match/short-team-name.tsx`, which that workflow then deleted; none in the files this run changed. |
+| `npx eslint . --max-warnings=0` | Exit 0 before the review fix, after it and at the end of the run. |
+| `npm test` (unit suite) | Before the review fix: 1,094 tests, 1,093 pass, 0 fail, 1 skipped (the existing Windows POSIX-mode skip). After it: 1,090 tests, 1,088 pass, 1 fail, 1 skipped. The failure is `tests/team-name.test.mjs`, which no longer loads: it imports `shortTeamName`, which the UI workflow's in-progress `src/domain/team-name.ts` removed. Every team-code test passed. |
+| `npm run test:team-codes` | 24/24 before the UI workflow's `team-name.ts` change, including the new paging unit test and the keyset subtests on MySQL. After it, `tests/team-codes.test.mjs` plus `tests/team-codes.integration.mjs` 18/18; the script's third file is the UI workflow's `tests/team-name.test.mjs` (above). |
+| `npm run test:feed` | 61/61. |
+| `npm run test:detail` | 36/36. |
+| `npm run test:catalog` | 28/28. |
+| `tests/live-runtime.integration.mjs` | 11/11, including the team-code sweep on the enrichment worker and the Pro/reserve gating. An earlier run (`.tmp/teamcodes-final-live-runtime-2.log`) failed once in the unrelated "one selection imports seven dates" subtest (1 of 2 `/predictions?fixture` calls in its fixed worker loop); it passed on rerun with no change. |
+
+**Not run:** `next build`, browser checks, `npm run live:status` (it reads the
+real account), any live API-Football call and any command against the developer
+database except one read-only `SELECT` of 30 team names for the card sample.
+
+**Owner actions:** one decision is open. Team-code imports on the Free plan:
+"slow on Free" is not met, because today the import makes no requests on Free.
+Choose one:
+
+- **(a) Accept "off on Free".** No code change. Codes start to fill after the
+  plan upgrade. Until then, phone cards show the derived abbreviation for
+  codeless teams. The choice is then recorded as an owner decision in
+  [implementation decisions](implementation-decisions.md).
+- **(b) A Free trickle with its own gate.** At most one league a day: one
+  `/teams` page plus one retry, so 2 requests. It runs only after the day's
+  refresh jobs (21:00–24:00 UTC) have run. It also needs the provider-reported
+  remaining quota to cover the 2 requests, the 14-request reserve and every
+  ordinary request still due before the UTC rollover. That gate is new code,
+  separate from `oddsQuotaAllows`, so the shared odds gate is not loosened and
+  odds stay off on Free. Expected yield is about 30 leagues per 30 days, nearest
+  kickoff first. It spends only slack that would otherwise expire at the
+  rollover.
+
+Until the owner chooses, the code behaves as (a).
+
+Nothing else is needed. There is no migration and no new grant: the job reads
+`FootballFixture`, `FootballTeam`, `FootballSeason`,
+`FootballCompetitionProvider` and `FootballImport`, and writes only through the
+catalog import, all under the existing catalog grants. To keep imports off on a
+paid plan, set `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED=false` in `.env.operations`.

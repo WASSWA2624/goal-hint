@@ -12,8 +12,9 @@ import { createTeamCodeJobDefinitions, latestTeamCodesSlot, TEAM_CODES_HANDLER_V
   TEAM_CODES_REQUESTS_PER_SEASON, TEAM_CODES_SEASONS_PER_SLOT, TEAM_CODES_SLOT_MS, TEAM_CODES_TYPE, teamCodeJobOutcome,
   teamCodesEnvelope } from '../src/server/teams/team-code-jobs.ts';
 import { teamCodeScopeKey } from '../src/server/teams/team-code-mysql-store.ts';
-import { createTeamCodeService, selectTeamCodeTargets, teamCodeCheckDue, TEAM_CODE_FAILED_RECHECK_MS, TEAM_CODE_PROVIDER_WINDOW_MS,
-  TEAM_CODE_RECHECK_MS, TEAM_CODE_SEASON_RESERVE_MS, TEAM_CODE_WINDOW } from '../src/server/teams/team-code-service.ts';
+import { createTeamCodeService, selectTeamCodeTargets, teamCodeCheckDue, TEAM_CODE_CANDIDATE_PAGE, TEAM_CODE_CANDIDATE_PAGES,
+  TEAM_CODE_FAILED_RECHECK_MS, TEAM_CODE_PROVIDER_WINDOW_MS, TEAM_CODE_RECHECK_MS, TEAM_CODE_SEASON_RESERVE_MS,
+  TEAM_CODE_WINDOW } from '../src/server/teams/team-code-service.ts';
 import { fixture } from './helpers/client-state-fixtures.mjs';
 import { liveRecord } from './helpers/live-refresh-fixtures.mjs';
 
@@ -135,6 +136,48 @@ test('nothing due makes no request; a failed receipt stops the sweep and storage
     assert.equal(h.requests.length, 2);
     assert.deepEqual([summary.stopped, summary.uncertain, summary.requestsDispatched, summary.seasons.length], [stopped, true, 1, 1], error.message);
   }
+});
+
+test('selection pages past recently checked leagues in kickoff order, so codeless leagues never starve unchecked ones', async () => {
+  // Leagues that stay codeless after their check remain candidates; 230 of them kick off before the first unchecked one.
+  const all = Array.from({ length: 1_300 }, (_, index) => candidate(1_000 + index, NOW + index * MINUTE));
+  const order = (left, right) => left.firstKickoff - right.firstKickoff || left.competitionId - right.competitionId || left.season - right.season;
+  const harness = (settledCount) => {
+    const reads = [], requests = [];
+    const settled = new Set(all.slice(0, settledCount).map(teamCodeScopeKey));
+    const store = {
+      async candidates(window, limit, after = null) {
+        reads.push({ kind: 'candidates', limit, after: after && after.competitionId });
+        return all.filter((entry) => after === null || order(entry, after) > 0).slice(0, limit);
+      },
+      async checks(targets, since) {
+        reads.push({ kind: 'checks', targets: targets.length });
+        assert.equal(since, NOW - TEAM_CODE_RECHECK_MS);
+        return new Map(targets.filter((entry) => settled.has(teamCodeScopeKey(entry)))
+          .map((entry) => [teamCodeScopeKey(entry), { settledAt: NOW - DAY, failedAt: null }]));
+      },
+    };
+    const importer = { async import(request) { requests.push(request.selection.query.competitionId); return receipt(); } };
+    return { reads, requests, service: createTeamCodeService({ store, importer, retentionEvidenceRef: 'synthetic-retention', bounds: teamCodeBounds, clock: () => NOW }) };
+  };
+  let h = harness(230);
+  let summary = await h.service.sweep({ now: NOW, maxSeasons: 4, remainingMs: () => 10 * MINUTE });
+  assert.deepEqual(h.requests, [1_230, 1_231, 1_232, 1_233], 'the nearest unchecked leagues, behind 230 checked ones');
+  assert.deepEqual(h.reads, [{ kind: 'candidates', limit: TEAM_CODE_CANDIDATE_PAGE, after: null }, { kind: 'checks', targets: 200 },
+    { kind: 'candidates', limit: TEAM_CODE_CANDIDATE_PAGE, after: 1_199 }, { kind: 'checks', targets: 200 }],
+  'the second page starts after the last candidate of the first and the read stops once four are due');
+  assert.deepEqual([summary.candidates, summary.due, summary.stopped], [400, 4, null]);
+
+  h = harness(1_300);
+  summary = await h.service.sweep({ now: NOW, maxSeasons: 4, remainingMs: () => 10 * MINUTE });
+  assert.deepEqual([h.requests.length, summary.candidates, summary.due], [0, TEAM_CODE_CANDIDATE_PAGE * TEAM_CODE_CANDIDATE_PAGES, 0],
+    'the read is bounded: five pages, then the sweep waits for the window to move');
+  assert.equal(h.reads.filter((entry) => entry.kind === 'candidates').length, TEAM_CODE_CANDIDATE_PAGES);
+
+  h = harness(198);
+  summary = await h.service.sweep({ now: NOW, maxSeasons: 4, remainingMs: () => 10 * MINUTE });
+  assert.deepEqual(h.requests, [1_198, 1_199, 1_200, 1_201], 'targets that straddle a page boundary keep their kickoff order');
+  assert.equal(TEAM_CODE_CANDIDATE_PAGE <= 500, true, 'a page fits the store bound');
 });
 
 test('a season starts only while its provider window and write fit, and never after the job is aborted', async () => {

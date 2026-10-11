@@ -3269,8 +3269,9 @@ has a code, the card uses the safe shortening rules, then an ellipsis.
   every import, not one league.
 - **Selection.** Each sweep reads competition-seasons with a fixture kicking off
   from 3 hours ago to 8 days ahead whose home or away team has `code IS NULL`
-  (at most 200, nearest kickoff first). It skips leagues checked recently and
-  imports at most 4, one at a time. A failed receipt ends the sweep.
+  (nearest kickoff first, in keyset pages of 200, at most five pages). It skips
+  leagues checked recently and imports at most 4, one at a time. A failed
+  receipt ends the sweep. See "Review fix" below for the paging.
 - **Shared spare.** Team codes use the odds gate (`oddsQuotaAllows`) with the
   slot's whole ceiling of 8 requests (4 leagues × one page plus one retry).
   `oddsUsed` counts every dispatched `enrichment` attempt, so odds and team codes
@@ -3299,6 +3300,49 @@ has a code, the card uses the safe shortening rules, then an ellipsis.
   metric `team-code-requests` sums `requestsDispatched` of `teams` receipts in
   the lookback window. It reads `FootballImport` without an index on
   `kind`/`recordedAt`, which is acceptable at tens of receipts a day.
+
+### Review fix: paged selection (11 October 2026)
+
+- **Defect.** The selection read the nearest 200 candidate competition-seasons
+  and only then dropped the ones checked recently. Leagues that stay codeless
+  after their check (youth, women's, small clubs) remain candidates, and a
+  worldwide date import puts far more than 200 competition-seasons in an 8-day
+  window. Whenever the nearest 200 had all been checked, a sweep made no
+  request even though unchecked leagues kicked off later, so nearest-first was
+  not honoured and spare slots were wasted.
+- **Fix.** `candidates(window, limit, after)` takes a keyset cursor (earliest
+  kickoff, league id, season; a `HAVING` on the grouped row) and
+  `createTeamCodeService` pages through that order: 200 per page, at most five
+  pages (1,000 competition-seasons) per sweep, stopping once it has the sweep's
+  due seasons. Each page's markers are read by scope key as before (indexed).
+  Past five pages the sweep waits for the window to move. No schema change.
+- **Free plan (open owner decision).** The owner asked for "slow on Free,
+  quick after the plan upgrade". With the odds gate the Free plan gets no
+  imports at all. `teamCodeImportsEnabled` requires `workload.odds.eligible`,
+  and `liveWorkload(100, 1, "Free", 10)` gives floor 99, spare 1, reserve 14 and
+  slow pacing, so it is false. A later review confirmed this. The import code
+  stays as it is because the choice spends Free-plan quota, which is the
+  owner's to decide.
+  - **(a) Off on Free.** Accept the current behavior and record it here as an
+    owner decision. Until the upgrade, phone cards show the card's derived
+    abbreviation for codeless teams ([match card](match-card.md)).
+  - **(b) A Free trickle with its own gate.** At most one league a day (2
+    requests: one page plus one retry). It runs only after the day's refresh
+    jobs (21:00–24:00 UTC) have run. The provider-reported remaining quota must
+    still cover those 2 requests, the reserve and every ordinary request still
+    due before the UTC rollover. This needs a new gate, separate from
+    `oddsQuotaAllows`, so the shared odds gate is not loosened and odds stay off
+    on Free. It yields about 30 leagues per 30 days.
+
+  Until the owner chooses, behavior is (a). The open decision is listed under
+  "Owner actions" in [development progress](development-progress.md).
+- **Card follow-up.** The owner asked again (11 October) that phone-card team
+  names stay abbreviated. The UI workflow is changing the card to always show
+  the valid provider code, or else a derived three-letter abbreviation
+  (`src/domain/team-name.ts`). That supersedes the "Card" bullet above and the
+  "shortening rules, then an ellipsis" fallback. The read path and the import
+  are unchanged by it. The card's rules are recorded in
+  [match card](match-card.md).
 
 ### Flagged, not changed
 

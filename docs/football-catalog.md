@@ -99,8 +99,9 @@ Fixture `dataVersion` is an unsigned monotonic integer, initially 1. Material re
 
 ## Team codes (spare-quota import)
 
-Phone match cards show a team's provider code (for example `MUN`) when its full
-name does not fit ([match card](match-card.md#team-names-in-tight-spots)). The
+Phone match cards show team names abbreviated: the provider code (for example
+`MUN`) when the team has one, else a derived abbreviation
+([match card](match-card.md)). The
 live pipeline imports teams through `/fixtures`, which carries no code, so
 `FootballTeam.code` stays null until a `teams` import by competition/season
 (`/teams?league&season`) observes the league. That endpoint returns every team of
@@ -113,9 +114,13 @@ that runs those imports from spare quota only:
 - **Selection** (`team-code-mysql-store.ts`, `team-code-service.ts`). Each sweep
   reads the competition-seasons with a fixture kicking off from 3 hours ago to
   8 days ahead whose home or away team has `code IS NULL`. It orders them by that
-  earliest kickoff and skips every competition-season checked recently. Up to
-  four are imported per sweep, one at a time, through the ordinary
-  `createFootballCatalogImporter` with a new UUID each.
+  earliest kickoff (then league id and season) and skips every competition-season
+  checked recently. Leagues that stay codeless after their check remain
+  candidates, so the read pages through that order (keyset pages of 200, at most
+  five per sweep) until it has the sweep's due seasons; checked leagues therefore
+  never crowd unchecked ones out of a bounded read. Up to four are imported per
+  sweep, one at a time, through the ordinary `createFootballCatalogImporter` with
+  a new UUID each.
 - **Writes.** The job writes no codes itself. The catalog store keeps an existing
   code when the provider sends null, creates league teams that have no fixture
   yet, and bumps `dataVersion` (with a shared-identity audit) on every fixture

@@ -126,7 +126,7 @@ valid code. The read normalizes the stored provider code (trim, ASCII only,
 uppercase); the schema refuses any other string. A new code arrives with a
 fixture-version bump, like any shared team change. Older responses without the
 field still parse, and feed cache projection 7 keeps them from being reused. See
-[match card](match-card.md#team-names-in-tight-spots).
+[match card](match-card.md).
 Prompt 034 adds opaque `paginationVersion`, computed from the effective query,
 competition scope and committed date/catalog generations in the records' snapshot.
 Feed cache projection version 3 avoids reusing earlier responses without this

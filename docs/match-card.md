@@ -12,12 +12,12 @@ Import directly from the owning module under `@/components/match`:
 | Module | Public contract |
 | --- | --- |
 | `match-card` | `MatchCard`, `MatchCardProps`: validated `fixture`, required canonical `analysisSlug`, optional `selectedFamily` (default `match-result`), locale, heading level 2–4 (default 2), `eagerLogos` (default false) and an optional one-based `position` for the desktop `#` column. Memoized: `sameCardFixture` (domain `match-card`) treats an equal-version record as unchanged unless a field `mergeFixtureObservation` refreshes differs; `markets` compares by content and every other prop by identity. Team names, codes and logos are not compared: a catalog change to a shared team bumps the version of every fixture that renders it. |
-| `team-row` | `TeamRow`, `TeamRowProps`: public team, Home/Away side, nullable score, locale and optional eager logo loading, used by the detail page. `TeamLogo` is shared with the card; containers size it with `--gh-logo-size` (default 32px). Names remain visible when a logo fails. |
+| `team-row` | `TeamRow`, `TeamRowProps`: public team, Home/Away side, nullable score, locale and optional eager logo loading, used by the detail page. `TeamLogo` is shared with the card; containers size it with `--gh-logo-size` (default 32px) and may place it by its `data-team-logo` attribute. Names remain visible when a logo fails. |
 | `probability-label` | `ProbabilityLabel`, `ProbabilityLabelProps`: a complete `AcceptedMarket`, optional selection within that market, and locale. Displays an estimated probability using domain group rounding. |
 | `outcome-badge` | `OutcomeBadge`, `OutcomeBadgeProps`: one canonical settlement outcome status and locale. Explicit text plus the shared decorative icon; no live-region announcements for static cards. |
 | `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children and an optional locale. One column of tiles below `lg` (64rem) and an aligned table with a decorative navy column header from `lg`. Source order remains visual and keyboard order. |
 | `match-icons` | Decorative inline SVG icons (`aria-hidden`, not focusable). |
-| `short-team-name` | `ShortTeamName`, `ShortTeamNameProps`: a team `name`, an optional provider `code` (2–5 letters or digits; the card passes the fixture team's `code`, or `null` when the team has none) and a `className`. Renders the full name (always on the server); in a single-line box that overflows it swaps to the code, else the shortened name from domain `team-name`, and finally truncates with an ellipsis. The full name stays in visually hidden text and the tooltip whenever another form shows. Used only by the phone tile; a wrapping box (the desktop table) keeps the full name. |
+| Domain `team-name`, `country-code` | `teamAbbreviation`, `cardTeamAbbreviations`, `validTeamCode` and the label width helpers; `countryCode`. Used by the phone tile (below). |
 
 The card is deliberately visual and terse. It shows four bands:
 
@@ -49,129 +49,145 @@ away, market, prediction and a chevron.
 
 ### Phone and tablet tile (below 64rem)
 
-The same DOM becomes a white row card in the shape of the owner's reference:
-league on the left, the stacked teams in the middle, the pick chips and a
-chevron on the right. Home and away keep their own lines, each with crest, name
-and score. Every match state, including every no-pick reason, is 62px tall (1
-border + 8 padding + 44 teams track + 8 padding + 1 border) from 22.5rem
-(360px). Two cases are taller on purpose: notes add a row underneath (about
-20px) only when present, because they carry delays and coverage gaps, and
-narrow phones (below 22.5rem) are 80px (below). A missing kickoff time
-("Kickoff unavailable") wraps to a second line and adds 14px.
-Line boxes are in rem, so 200% text scales the spacing with the type, and the
-variants below are rem media queries, so enlarged text reaches them on wider
-phones too.
+The same DOM becomes one white rounded row in the shape of the owner's
+reference photo (match cards only), with the owner's four exceptions: team
+crests sit against the score, the home label is right-aligned, the kickoff time
+follows the country under the league name, and team names are always
+abbreviated.
+
+```text
+[crest] Premier League │ ARS [crest] vs [crest] LIV │ [1X2] [1] [62%] [2.10]? ›
+        ENG · 13:30    │
+```
 
 - Surface: `theme.color.surface`, a hairline `theme.color.border` border, a
   10px radius (rounded corners are an explicit owner request for phone and
   tablet cards only; the desktop table and other components stay square), a
   soft two-layer shadow that lifts on hover only where `(hover: hover)`, and an
-  immediate 8% navy press tint on the full-card link, clipped to the radius. No
-  market edge.
-- Meta column (5.5rem; 4.5rem on 360–389px phones): the league crest (18px; a
-  missing crest becomes a soft disc around the trophy) spans the league name
-  (11px semibold navy, up to two lines, hyphenating a long word before the
-  clamp) and the kickoff line, the short EAT weekday and the time in bold
-  (`Sun 21:00`, 11px muted). The weekday stays because date ranges list several
-  days. On 360–389px phones the kickoff line (up to 58px, `Wed 21:00`) runs
-  under the crest instead, which leaves the league name 50px and the team names
-  16px more. The `time`
-  element keeps its full title and its hidden text (full day, time and EAT).
-  Live, finished and halted matches show a decorative chip in the kickoff
-  line's place: red with the minute or phase (the dot pulses only while play
-  runs, not at half-time, break, interruption or suspension), outlined `FT`,
-  `AET*` or `Pens*`, or amber `Postponed`, `Canceled`, `Abandoned`, `Awarded`.
-  The kickoff then stays in hidden text, and the score-line block (hidden on
-  tiles) still announces the state.
-- Teams column (up to 24rem): 18px crests (initials, 10px, fall back to a
-  ringed disc via `--gh-logo-radius` and `--gh-logo-ring`), the fitted name
-  (13px semibold, `ShortTeamName`) and the score at the right (14px heavy, red
-  while live). After a decided final the winner's name turns bold and the
-  loser's name and score are muted; a level score, or a 90-minute score shown
-  for an extra-time or penalties finish, marks neither side.
-- Pick chips (5.625rem, two 20px rows aligned with the team rows): the market
-  code (`market.code.*`: 1X2, DC, O/U 2.5, BTTS; grey) and the short pick
-  (`market.pick.*`: 1, X, 2, 1X, X2, 12, Over, Under, Yes, No; the family's
-  clean tint and text colour) on the first row; the probability (12px heavy)
-  across the second. Pending keeps the family tint with a 40% family ring and
-  leads with the padlock once locked; Correct, Incorrect and Void take the
-  outcome's green, red or grey tint and lead with ✓, ✗ or ⊘. Without a pick the
-  pick chip is a muted outlined `—` and the full reason (10px muted, up to two
-  13px lines) takes the probability's place. Every reason fits two lines (the
-  widest line, "Predictions start", needs 80.4px), and a negative block margin
-  lets the 26px of text sit in the 20px row, spilling 3px into the row gap and
-  the card padding, so the card keeps its height and the cap tops still clear
-  the chips by 5px. The widest pair, `O/U 2.5` + `Under`,
-  needs 87.5px. From 30rem the three chips share one line in a 9.5rem block,
-  the probability in a fixed 3.75rem column so it aligns across cards.
-- Chevron: decorative, in the card's right padding, centred on the team rows.
+  immediate 8% navy press tint on the full-card link, clipped to the radius.
+- League block: the league crest (a missing crest becomes a soft disc around the
+  trophy) spans two lines: the league name (11px semibold navy, one line,
+  ellipsis) over the competition's country code and the state (10px). The code
+  comes from domain `country-code` (FIFA trigrammes: ENG, ESP, ITA, GER, FRA,
+  POR, NED, KSA, TUR, SCO, BEL…; API-Football's "World" reads INT; an unlisted
+  country derives one). The state is the kickoff time in bold navy
+  (`ENG · 13:30`), the live minute or phase in bold live red after a dot that
+  pulses while play runs (`ENG · ● 67′`, `HT`, `Break`, `1H`, `2H`, `ET`,
+  `Pens`, `Int.`, `Susp.`, `Live`), `FT`/`AET*`/`Pens*` in bold muted, or a
+  short halted state in bold amber (`Postp.`, `Canc.`, `Abd.`, `Awd.`); `TBC`
+  stands for a missing kickoff. The line is decorative: the `time` element (full
+  day, time and EAT) and the score-line block stay as hidden text. A hairline
+  rule follows the block. The weekday no longer shows, as the owner specified
+  country then time; on a multi-day range the day stays in hidden text only.
+- Teams: `HOME [crest] centre [crest] AWAY`. Each label is the fixture team's
+  provider code when valid (`validTeamCode`), else `teamAbbreviation(name)`, and
+  `cardTeamAbbreviations` guarantees the two differ (below). Labels are 11px
+  bold in a slot of 2.375em of their type (26px), the home one right-aligned
+  against its crest and the away one left-aligned after its crest; a wider label
+  (Manrope Bold advances above 2.375em: WOH, MUM, RWW, most 4–5 character codes)
+  sets at 90%, which fits every derived abbreviation of the 5,251 stored teams.
+  After a decided final the loser's label is muted. Crests are 16px (initials,
+  10px, fall back to a ringed disc). The centre is `vs` (10px muted) before
+  kickoff and the score (`2–1`, 11px heavy, proportional digits so `0–0` fits
+  the 21px track; live red while live) once live or final. Full names stay in
+  the card heading, as hidden text beside each label and as each label's
+  `title`: where the pointer can hover, the label rises above the card link so
+  the tooltip shows, and the card forwards a click on it to the link.
+- Chips: the market code (`market.code.*`: 1X2, DC, O/U 2.5, BTTS; grey), the
+  short pick (`market.pick.*`: 1, X, 2, 1X, X2, 12, Over, Under, Yes, No; the
+  family's clean tint and text colour) and the bold probability chip at a fixed
+  width so it aligns down the list. Pending keeps the family tint with a 40%
+  family ring and leads with the padlock once locked; Correct, Incorrect and
+  Void take the outcome's green, red or grey tint and lead with ✓, ✗ or ⊘.
+  Without a pick the cluster is the market code and a muted `—` (no empty pill,
+  no probability chip); the reason stays in the hidden label. A grey price chip
+  follows only when the fixture carries a public price for exactly the shown
+  pick (`selectedCardPrice`, prompt 052); while odds are private `prices` is
+  empty, so it is normally absent. Below 390px the market code hides the part
+  after its last space, the goal line (`O/U` for `O/U 2.5`); the product offers
+  only the 2.5 line and the hidden label names it.
+- Chevron: decorative, in the card's end padding, centred on the row.
 
-Column budget (Manrope advance widths, kerning ignored). The name box is the
-teams track minus the crest and its gap (24px), and minus the score and its
-gap (18px; one tabular digit is 8.7px) when scores show. "Full fit" is the
-share of the 5,251 stored team names whose full name fits at 13px semibold:
+Tracks: league `minmax(0, 1fr)`, teams fixed (two label slots, two crests, the
+centre and their gaps), chips `minmax(max-content, 1fr)` with the cluster's
+minimum width raised to the widest cluster (`O/U 2.5` + `Under` + probability),
+so the rule, teams and probability chips align down the list; a wider cluster
+(a price chip) widens its own card's track instead of overlapping. On tablets
+the league and chips tracks share the spare width, so the teams sit centred.
+Text-sized lengths are rem and the variants are rem media queries, so enlarged
+text scales the spacing and reaches the narrower variants. Card text is 10px
+or larger; small-text colours keep 4.5:1 or better on their fills (muted text,
+live red, amber, the grey chip and each family and outcome tint; see
+tests/market-colors.test.mjs for the market hues).
 
-| Viewport | Card | Content | Meta | Teams | Chips | Name box with / without scores | Full fit |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 320px (narrow) | 288 | 260 | 14px line on top | 164 | 90 | 122 / 140 | 93% / 98% |
-| 360px (compact) | 328 | 300 | 72 | 126 | 90 | 84 / 102 | 60% / 79% |
-| 375px (compact) | 343 | 315 | 72 | 141 | 90 | 99 / 117 | 76% / 90% |
-| 390px | 358 | 330 | 88 | 140 | 90 | 98 / 116 | 75% / 90% |
-| 430px | 398 | 370 | 88 | 180 | 90 | 138 / 156 | 97% / 99% |
+Widths from CSS arithmetic and Manrope advance widths (kerning ignored). Card
+is the viewport minus 16px gutters; content is the card minus its 1px borders
+and start/end padding; the league track holds its crest, gap and text plus the
+3–4px rule padding and the 1px rule:
 
-Content is the card minus the 1px borders and 8px left / 18px right padding;
-the teams track gets what the meta, the two 6px gaps and the chips (90) leave.
-Names that do not fit swap to the team's code when it has one (a 2–5 letter
-code always fits). Teams without a code shorten (16–50 of the stored names at
-360–390px, depending on the box) or end in an ellipsis. Below 22.5rem (320px phones) the crest, league name (one line) and
-kickoff or state chip share a 14px line above the teams and chips (80px tall).
-That costs 18px of height but keeps the names readable: three columns with a
-time-only 4rem meta column would leave a 52px name box beside a score (21% of
-names fit) and 70px without (44%).
-Below 20rem, reached only with enlarged text (125% or more on a 360px phone),
-the chips drop under the teams on one line. Card text is 10px or larger and
-every text colour keeps 4.5:1 on its fill, including under the hover tint and
-the press tint (code chip 5.2:1, muted text 5.5:1 on the hover row, family text
-5.4:1 or better on its tint under the press tint).
+| Viewport | Card | Content | League track (text) | Teams (label slot) | Chips track | Height |
+| --- | --- | --- | --- | --- | --- | --- |
+| 320px (narrow) | 288 | 268 | 58.1 (58.1, name hidden) | 105.9 (24.9) | 94.0 | 54 |
+| 360px | 328 | 306 | 78.8 (58.8) | 113.2 (26.1) | 104.0 | 54 |
+| 375px | 343 | 321 | 93.8 (73.8) | 113.2 (26.1) | 104.0 | 54 |
+| 390px | 358 | 336 | 92.8 (72.8) | 113.2 (26.1) | 120.0 | 54 |
+| 412px | 380 | 358 | 114.8 (94.8) | 113.2 (26.1) | 120.0 | 54 |
+| 430px | 398 | 372 | 109.0 (85.0) | 130.0 (28.5) | 120.0 | 56 |
+| 512px | 480 | 450 | 125.2 (95.2) | 149.8 (30.9) | 156.0 | 60 |
 
-#### Team names in tight spots
+The widest clusters: 102.7px at 360px (`O/U` + `Under` + 38px probability),
+119.5px from 390px (`O/U 2.5` + `Under` + 38px), 93.7px at 320px and 155.0px
+from 512px. The league line needs 52.6px for `ENG · 13:30` and 58.1px for the
+widest common state, `ENG · Postp.`; a longer line clips its state with an
+ellipsis. From 412px "Premier League" (82px) fits; longer league names end in
+an ellipsis (the hidden text keeps them). The probability chip holds the padlock
+or mark beside a two-digit percent (37.4px in 38px; 32.3px in 33px at 320px;
+46.5px in 48px from 512px).
 
-`ShortTeamName` tries `teamDisplayCandidates(name, code)` from domain
-`team-name` in order: the full name, the code (when it is 2–5 letters or
-digits), then `shortTeamName(name)` when it differs; if none fits, the last one
-truncates with an ellipsis. A code therefore replaces a name only when the full
-name would not fit, and a team without a code falls back to the shortened name
-and then the ellipsis. Shortening is minimal and documented in the module: it only swaps in forms fans already read as the same
-club (Man Utd, Man City, Leeds Utd, Wigan Ath, St Mirren, St-Étienne) and never
-drops a word, then the ellipsis takes over. Club tokens (FC, CF, SC, CD, AFC,
-FK) always stay, because what remains is often a city, a country, another
-stored club's name or an adjective ("Andorra CF", "Hong Kong FC",
-"Internacional SC", "CD Olimpia", "Chemnitzer FC"); prefixes (AC Milan, AS
-Roma) and qualifiers (II, B, U21, W, Women, Reserves) are never touched. 118 of
-the stored names have a shorter form, and none of them equals another stored
-team's name or another team's short form.
+Variants (viewport rem): from 430px (26.875rem) crests grow to 18px, labels to
+12px, the score to 13px and chips to 24px tall (56px card); from 512px (32rem)
+crests are 22px, labels 13px, chips 11–12px in 26px pills and the league line
+11px (60px card). Below 390px (24.375rem) the market code drops its line. On
+320–359px phones (20–22.49rem) the league name becomes hidden text and the
+crest sits over the country/time line, crests are 14px, labels 10.5px and chips
+tighter. Below 20rem (only with enlarged text, such as 125% on a 360px phone, or
+viewports under 320px) the teams and chips move under the league block, and
+below 16.25rem (150% or more) each gets its own line. Notes add a row (about
+20px) only when present, because they carry delays and coverage gaps.
+
+#### Team labels
+
+Domain `team-name` documents and unit-tests the derivation:
+`teamAbbreviation(name)` strips accents (NFKD) and transliterates letters that
+do not decompose (Ø, Æ, Œ, ß, Ł, Đ, Þ), drops club-type tokens (FC, CF, SC, AFC,
+CD, AC, CA, SL, FK and similar: AS, SSC, VfB, HNK, IF, BK…), women's, reserve
+and youth qualifiers (W, Women, II, B, U21, Sub-20…), linking words (de, del,
+da, do, la, el, los, the, of, al…), lone initials and numbers. A leading common
+prefix (Real, Atlético, Deportivo, Sporting, Club, Racing, Union, Inter, Dynamo,
+Dinamo, Olympique, Borussia, Saint/San/Santa/São, Hapoel, Maccabi…) followed by
+another word gives the prefix initial plus two letters of that word (Real
+Madrid RMA, Atletico Tucuman ATU, Sporting CP SCP); otherwise the first three
+letters of the first remaining word (Platense FC PLA, Juticalpa JUT, Boca
+Juniors BOC, Al-Hilal Saudi FC HIL). Too few letters take the name's numbers
+(B 93 B93).
+
+`cardTeamAbbreviations(home, away)` uses valid codes first. When both labels
+read the same, a side with a code keeps it and each derived side takes the same
+fallback rule at each step: initial plus two letters of the second word
+(Manchester United v Manchester City: MUN v MCI), the second word's first three
+letters (Stade Rennais v Stade de Reims: REN v REI), the initials of three
+words (Real Madrid v Real Madrid Castilla: RMA v RMC), the first two letters
+plus the last (Bocholt), then every first-letter-plus-two-later-letters form,
+and as a last resort a digit on the away label (identical codes: ARS v AR2).
 
 **Where codes come from.** Fixture snapshot teams carry an optional `code`
 (`fixture-snapshot.ts`; 2–5 capital letters or digits, or null). The feed and
-detail read (`storedFeedFixture`) publish `validTeamCode(FootballTeam.code)`:
-trimmed, ASCII letters and digits only, uppercased, else null. The feed and
-detail cache projections moved to 7 and 5, and payloads cached without `code`
-still parse. `MatchCard` passes `team.code ?? null` for both teams, and
-`ShortTeamName` checks the code again before using it. Codes are stored by
-the spare-quota team-code import
-([football catalog](football-catalog.md#team-codes-spare-quota-import)). It is
-off on Free and slow plans, so until a team's league is imported (and always
-for clubs the provider never codes) the card uses the shortened name, then the
-ellipsis.
-
-Fitting measures without layout reads in loops: one module-level
-`ResizeObserver` reports each name box's content width, and one animation-frame
-batch reads computed fonts, measures candidates on a shared canvas (cached per
-font and text, cleared when web fonts load) and then applies all results. Each
-name holds its choice in local state, so a swap re-renders only that name, never
-the memoized card. Only a single-line (`white-space: nowrap`) box swaps; the
-table's wrapping names always stay full. The name box must not size to its text
-(the tile's `flex: 1 1 0` does not).
+detail read (`storedFeedFixture`) publish `validTeamCode(FootballTeam.code)`,
+and the card checks it again. Codes are stored by the spare-quota team-code
+import ([football catalog](football-catalog.md#team-codes-spare-quota-import));
+until a team's league is imported (and always for clubs the provider never
+codes) the card shows the derived abbreviation. On 11 October 2026 no stored
+team had a code yet, so every label was derived.
 
 Use the existing root style provider. The desktop table uses `theme.border.cardRadius`,
 `theme.shadow.card` and the per-family `theme.color.market` hues (match result
@@ -281,7 +297,7 @@ exact URLs may be projected to visitors.
 
 Logos use native `styled.img` with the exact supplied URL, empty alt text,
 32px width/height attributes and `object-fit: contain`. The container reserves
-its `--gh-logo-size` square before loading (18px on phone tiles, 22px in table rows). Default loading is lazy; callers may explicitly opt into eager loading
+its `--gh-logo-size` square before loading (14–22px on phone tiles, 22px in table rows). Default loading is lazy; callers may explicitly opt into eager loading
 for known above-the-fold cards. Requests use `no-referrer`. There is no Next
 optimizer, server proxy, binary download, image database column or asset copy.
 
@@ -297,7 +313,7 @@ technology; full team names provide identity throughout.
 
 ```text
 npm run test:card
-node --conditions=react-server --test tests/team-name.test.mjs
+node --conditions=react-server --test tests/team-name.test.mjs tests/country-code.test.mjs
 npm run test:card:rendering
 npm run test:card:rendering -- --serve
 npm run check
@@ -306,10 +322,15 @@ npm run check
 The nine domain/state contract tests cover family independence, supplied
 outcomes, binding/validation, all sources/notices, boundary/group rounding,
 Unicode initials, structural URL checks, actual EAT times and atomic version
-replacement; a further test keeps a short market code and pick for every family
-and selection, which the phone chips need. `tests/team-name.test.mjs` covers
-the shortening rules, real club names that must keep their club token, kept
-prefixes and qualifiers, code validation and the candidate order. The rendering script builds a separate production Next app under
+replacement; further tests keep a short market code and pick for every family
+and selection, check that only the total-goals code has a hideable goal line,
+keep every league-line state within six characters and give every no-pick
+reason visitor text. `tests/team-name.test.mjs` covers the abbreviation rules
+(the documented examples, accents, ignored tokens, prefixes, short names),
+codes first, collision handling over every pair of a near-identical sample,
+code validation and the label width helpers; `tests/country-code.test.mjs`
+covers the photo's countries, provider spellings and variants, distinct codes
+for every stored country and the derived fallback. The rendering script builds a separate production Next app under
 `.tmp/match-card-*` using the real root layout and shared components. Twelve
 labeled synthetic examples include every outcome, both sources, missing/broken
 logos, delayed/limited/partial coverage, unknown fields and long names. An

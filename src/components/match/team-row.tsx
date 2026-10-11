@@ -24,7 +24,8 @@ const Row = styled.div`
   gap: ${({ theme }) => theme.space.sm};
   min-inline-size: 0;
 `;
-/** Containers may set --gh-logo-size; 32px remains the reserved default. --gh-logo-ring outlines the initials only. */
+/** Containers may set --gh-logo-size; 32px remains the reserved default. --gh-logo-ring outlines the initials only.
+ * `data-team-logo` lets a container's grid place the box. */
 const LogoBox = styled.span<{ $loaded: boolean }>`
   display: grid;
   flex-shrink: 0;
@@ -75,7 +76,7 @@ export function TeamLogo({ name, url, eager }: { name: string | null; url: strin
       else setFailed(true);
     }
   }, []);
-  return <LogoBox aria-hidden="true" $loaded={loaded}>
+  return <LogoBox aria-hidden="true" data-team-logo="" $loaded={loaded}>
     <span hidden={loaded}>{teamInitials(name)}</span>
     {url && !failed && <LogoImage ref={imageRef} src={url} alt="" width={32} height={32}
       loading={eager ? "eager" : "lazy"} decoding="async" referrerPolicy="no-referrer" $loaded={loaded}

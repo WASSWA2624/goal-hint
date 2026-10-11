@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import type { ApiFootballBounds } from "../football/api-football-contract.ts";
 import { CatalogStoreError, type CatalogImportSummary } from "../football/catalog-mysql-store.ts";
-import { teamCodeScopeKey, type MysqlTeamCodeStore, type TeamCodeCandidate, type TeamCodeCheck } from "./team-code-mysql-store.ts";
+import { teamCodeScopeKey, type MysqlTeamCodeStore, type TeamCodeCandidate, type TeamCodeCheck, type TeamCodeCursor } from "./team-code-mysql-store.ts";
 
 const MINUTE = 60_000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
 /** A league whose /teams answer was stored is not requested again for this long, codes or not. */
@@ -17,7 +17,12 @@ export const TEAM_CODE_WINDOW = Object.freeze({ beforeMs: 3 * HOUR, afterMs: 8 *
 export const TEAM_CODE_PROVIDER_WINDOW_MS = MINUTE;
 /** A season starts only while this much of the attempt remains: its provider window plus a long catalog write. */
 export const TEAM_CODE_SEASON_RESERVE_MS = 3 * MINUTE;
-const CANDIDATE_LIMIT = 200;
+/** Candidates are read in pages of this size, nearest kickoff first, until a sweep has its due seasons. Leagues that stay
+ * codeless after their check (youth, women's, small clubs) remain candidates, so one bounded read could otherwise
+ * fill up with recently checked leagues and starve the unchecked ones behind them. */
+export const TEAM_CODE_CANDIDATE_PAGE = 200;
+/** At most this many pages per sweep (1,000 competition-seasons); further leagues wait for the window to move. */
+export const TEAM_CODE_CANDIDATE_PAGES = 5;
 
 /** Whether a competition-season is due for a /teams request at `now`, given its marker. */
 export function teamCodeCheckDue(check: TeamCodeCheck | undefined, now: number): boolean {
@@ -37,8 +42,8 @@ export function selectTeamCodeTargets(candidates: readonly TeamCodeCandidate[], 
 export type TeamCodeSeasonOutcome = Readonly<{ competitionId: number; season: number; teamsWithoutCode: number;
   status: CatalogImportSummary["status"]; requestsDispatched: number; importedTeams: number }>;
 export type TeamCodeSweepSummary = Readonly<{
-  /** Competition-seasons with codeless teams in the window (bounded), and those selected for this sweep: not checked
-   * recently, nearest kickoff first, at most `maxSeasons`. */
+  /** Competition-seasons with codeless teams in the window that the selection read (paged and bounded), and those
+   * selected for this sweep: not checked recently, nearest kickoff first, at most `maxSeasons`. */
   candidates: number; due: number;
   seasons: readonly TeamCodeSeasonOutcome[];
   /** Requests the stored receipts dispatched; an import that threw is counted as uncertain instead. */
@@ -61,10 +66,24 @@ export function createTeamCodeService(options: Readonly<{
   clock?: () => number;
 }>) {
   const clock = options.clock ?? Date.now;
+  /** Pages through the candidates in kickoff order until `limit` due seasons are found, the candidates run out or the
+   * page bound is reached. Pages are consecutive in that order, so the targets stay nearest kickoff first. */
   async function due(now: number, limit: number): Promise<Readonly<{ candidates: number; targets: readonly TeamCodeCandidate[] }>> {
-    const candidates = await options.store.candidates({ from: now - TEAM_CODE_WINDOW.beforeMs, to: now + TEAM_CODE_WINDOW.afterMs }, CANDIDATE_LIMIT);
-    const checks = await options.store.checks(candidates, now - TEAM_CODE_RECHECK_MS);
-    return Object.freeze({ candidates: candidates.length, targets: selectTeamCodeTargets(candidates, checks, now, limit) });
+    if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("Invalid team-code limit.");
+    const window = { from: now - TEAM_CODE_WINDOW.beforeMs, to: now + TEAM_CODE_WINDOW.afterMs };
+    const targets: TeamCodeCandidate[] = [];
+    let read = 0, after: TeamCodeCursor | null = null;
+    for (let page = 0; page < TEAM_CODE_CANDIDATE_PAGES && targets.length < limit; page++) {
+      const batch = await options.store.candidates(window, TEAM_CODE_CANDIDATE_PAGE, after);
+      read += batch.length;
+      if (batch.length === 0) break;
+      const checks = await options.store.checks(batch, now - TEAM_CODE_RECHECK_MS);
+      targets.push(...selectTeamCodeTargets(batch, checks, now, limit - targets.length));
+      if (batch.length < TEAM_CODE_CANDIDATE_PAGE) break;
+      const last = batch.at(-1)!;
+      after = { firstKickoff: last.firstKickoff, competitionId: last.competitionId, season: last.season };
+    }
+    return Object.freeze({ candidates: read, targets: Object.freeze(targets) });
   }
   return Object.freeze({
     due,

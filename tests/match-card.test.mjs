@@ -159,7 +159,7 @@ test("compact kickoff parts use the EAT reporting zone regardless of the visitor
 });
 
 test("phone chips have a short market code and pick for every family and selection", () => {
-  // The tile's two-row chip block (5.625rem) is budgeted for the widest pair, "O/U 2.5" + "Under" (docs/match-card.md).
+  // The phone card's chip track is budgeted for the widest pair, "O/U 2.5" + "Under" (docs/match-card.md).
   const messages = createMessages();
   for (const [family, selections] of Object.entries(marketSelections)) {
     const code = messages.text(`market.code.${family}`);
@@ -171,18 +171,33 @@ test("phone chips have a short market code and pick for every family and selecti
   }
 });
 
-test("every no-pick reason wraps to at most two lines of the phone chip block", () => {
-  // The 62px tile holds two 13px reason lines in the 5.625rem block; the widest line today, "Predictions start" (17
-  // characters), measures 80.4px at 10px semibold (docs/match-card.md). A third line would be clamped away.
+test("below 390px the market code hides only the goal line after its last space", () => {
+  // The card wraps the part after the last space so 360–389px phones can show "O/U"; the product offers one line.
+  const messages = createMessages();
+  for (const family of Object.keys(marketSelections)) {
+    const code = messages.text(`market.code.${family}`), split = code.lastIndexOf(" ");
+    if (family === "total-goals") assert.equal(code.slice(split + 1), String(marketRules.totalGoalsLine));
+    else assert.equal(split, -1, code);
+  }
+});
+
+test("league-line states stay short enough to follow a country code on a 320px card", () => {
+  // The line holds "ENG · " (26.6px at 10px) plus the state; "Postp." is the widest at 31.5px (docs/match-card.md).
+  const messages = createMessages();
+  const keys = ["match.clockShort.first-half", "match.clockShort.second-half", "match.clockShort.extra-time", "match.clockShort.penalties",
+    "match.clockShort.interrupted", "match.clockShort.suspended", "match.statusShort.postponed", "match.statusShort.canceled",
+    "match.statusShort.abandoned", "match.statusShort.awarded", "match.kickoffShort", "match.clock.half-time", "match.clock.break",
+    "match.liveBadge", "match.final.finished-regulation", "match.final.finished-extra-time", "match.final.finished-penalties"];
+  for (const key of keys) {
+    const text = messages.text(key);
+    assert.ok(text !== key && text.length <= 6, `${key}: ${text}`);
+  }
+  assert.equal(messages.text("match.clock.minute", { minute: "120" }).length, 4);
+});
+
+test("every no-pick reason has visitor text for the card's hidden label", () => {
   const messages = createMessages();
   for (const reason of ["market", "outside", "updating", "unselected", "closed", "failed", "awaiting"]) {
-    const text = messages.text(`match.noPickReason.${reason}`);
-    assert.notEqual(text, `match.noPickReason.${reason}`);
-    const lines = [];
-    for (const word of text.split(" ")) {
-      if (lines.length > 0 && `${lines.at(-1)} ${word}`.length <= 17) lines[lines.length - 1] += ` ${word}`;
-      else lines.push(word);
-    }
-    assert.ok(lines.length <= 2 && lines.every((line) => line.length <= 17), `${reason}: ${lines.join(" / ")}`);
+    assert.notEqual(messages.text(`match.noPickReason.${reason}`), `match.noPickReason.${reason}`);
   }
 });

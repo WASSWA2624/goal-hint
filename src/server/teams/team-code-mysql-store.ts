@@ -23,6 +23,8 @@ export type TeamCodeCandidate = Readonly<{
  * (complete, partial or degraded) settles it; a failed receipt only backs it off. */
 export type TeamCodeCheck = Readonly<{ settledAt: UtcInstant | null; failedAt: UtcInstant | null }>;
 export type TeamCodeTargetKey = Pick<TeamCodeCandidate, "competitionId" | "season">;
+/** Keyset position in the candidate order (earliest kickoff, league id, season): the next page starts after it. */
+export type TeamCodeCursor = Pick<TeamCodeCandidate, "firstKickoff" | "competitionId" | "season">;
 
 /** The catalog scope of the teams import for one competition-season; its receipts carry the same key. */
 export function teamCodeScopeKey(target: TeamCodeTargetKey): string {
@@ -33,15 +35,25 @@ const instant = (value: unknown) => {
   if (!Number.isSafeInteger(value)) throw new RangeError("Invalid team-code window.");
   return utcInstantFromEpochMilliseconds(value as number);
 };
+/** The first page starts just before the window, which sorts before every candidate in it. */
+function cursorAfter(from: number, after: TeamCodeCursor | null | undefined): Readonly<{ kickoff: Date; competitionId: bigint; season: number }> {
+  if (after === null || after === undefined) return { kickoff: new Date(from - 1), competitionId: 0n, season: 0 };
+  if (!Number.isSafeInteger(after.firstKickoff) || !bounded(after.competitionId, Number.MAX_SAFE_INTEGER) || !bounded(after.season, 9999)) {
+    throw new RangeError("Invalid team-code cursor.");
+  }
+  return { kickoff: new Date(after.firstKickoff), competitionId: BigInt(after.competitionId), season: after.season };
+}
 
 /** Read-only selection inputs for the team-code import. No migration: the catalog's own append-only teams receipts
  * (`FootballImport`, kind `teams`, indexed by scope key and observation time) are the per-competition-season markers. */
 export function createMysqlTeamCodeStore(database: DatabaseRuntime) {
   return Object.freeze({
-    /** Nearest-kickoff first. Only fixtures inside [from, to) count, and only their codeless teams. */
-    async candidates(window: Readonly<{ from: number; to: number }>, limit: number): Promise<readonly TeamCodeCandidate[]> {
+    /** Nearest-kickoff first. Only fixtures inside [from, to) count, and only their codeless teams. `after` pages through
+     * the same order (keyset), so leagues checked recently cannot crowd unchecked ones out of a bounded read. */
+    async candidates(window: Readonly<{ from: number; to: number }>, limit: number, after: TeamCodeCursor | null = null): Promise<readonly TeamCodeCandidate[]> {
       const from = instant(window.from), to = instant(window.to);
       if (from >= to || !bounded(limit, MAX_CANDIDATES)) throw new RangeError("Invalid team-code candidate bounds.");
+      const cursor = cursorAfter(from, after);
       const rows = await database.query((client) => client.$queryRaw<{ seasonId: string; competitionId: bigint | number; season: number;
         firstKickoff: Date; teamsWithoutCode: bigint | number }[]>`
         SELECT s.id AS seasonId, cp.externalId AS competitionId, s.year AS season, MIN(t.kickoff) AS firstKickoff,
@@ -56,6 +68,8 @@ export function createMysqlTeamCodeStore(database: DatabaseRuntime) {
         JOIN FootballSeason s ON s.id = t.seasonId
         JOIN FootballCompetitionProvider cp ON cp.competitionId = s.competitionId AND cp.provider = ${PROVIDER}
         GROUP BY s.id, cp.externalId, s.year
+        HAVING MIN(t.kickoff) > ${cursor.kickoff} OR (MIN(t.kickoff) = ${cursor.kickoff} AND (cp.externalId > ${cursor.competitionId}
+          OR (cp.externalId = ${cursor.competitionId} AND s.year > ${cursor.season})))
         ORDER BY firstKickoff ASC, competitionId ASC, season ASC
         LIMIT ${limit}`);
       return Object.freeze(rows.map((row) => Object.freeze({ seasonId: row.seasonId, competitionId: Number(row.competitionId), season: Number(row.season),

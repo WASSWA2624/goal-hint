@@ -79,6 +79,16 @@ test('team-code import persistence on isolated genuine MySQL', { timeout: 300_00
           'league 140 is fully coded, league 135 kicks off after the window, 6102 already has a code');
         assert.ok(candidates.every((entry) => typeof entry.seasonId === 'string' && Object.isFrozen(entry)));
         assert.deepEqual((await store.candidates({ from: T0 - 3 * HOUR, to: T0 + 8 * DAY }, 1)).map((entry) => entry.competitionId), [39]);
+        // Keyset pages follow the same order: (earliest kickoff, league id, season), strictly after the cursor.
+        const page = async (after, limit = 2) => (await store.candidates({ from: T0 - 3 * HOUR, to: T0 + 8 * DAY }, limit, after))
+          .map((entry) => entry.competitionId);
+        assert.deepEqual(await page(null), [39, 61]);
+        assert.deepEqual(await page(candidates[1]), [78, 94], 'the second page starts after the last candidate of the first');
+        assert.deepEqual(await page(candidates[3]), []);
+        assert.deepEqual(await page({ firstKickoff: T0 + 4 * HOUR, competitionId: 60, season: 2026 }, 1), [61], 'a kickoff tie orders by league id');
+        assert.deepEqual(await page({ firstKickoff: T0 + 4 * HOUR, competitionId: 61, season: 2025 }, 1), [61], 'then by season');
+        assert.deepEqual(await page({ firstKickoff: T0 + 4 * HOUR, competitionId: 61, season: 2026 }, 1), [78]);
+        await assert.rejects(store.candidates({ from: T0, to: T0 + DAY }, 10, { firstKickoff: T0, competitionId: 0, season: 2026 }), RangeError);
         assert.deepEqual(await store.checks(candidates, T0 - 30 * DAY), new Map(), 'no league has been checked');
         await assert.rejects(store.candidates({ from: T0, to: T0 }, 10), RangeError);
         await assert.rejects(store.candidates({ from: T0, to: T0 + DAY }, 0), RangeError);

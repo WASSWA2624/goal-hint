@@ -164,15 +164,21 @@ three together), `displayRightsRecorded`, the floor, spare and reserve per day, 
 
 ## Team codes
 
-Phone cards show a team's provider code when its full name does not fit. `/fixtures` carries no code, so the
+Phone cards show a team's provider code in place of its name (else a derived abbreviation). `/fixtures` carries no code, so the
 runner fills `FootballTeam.code` through `/teams?league&season`
 ([football catalog](football-catalog.md#team-codes-spare-quota-import)).
 
 **Switch and eligibility.** `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED` defaults to `true` (set `false` in
 `.env.operations` to keep imports off). Imports also need the odds eligibility: a verified plan with at least
-200 spare requests and standard pacing. They are therefore off on Free and slow plans whatever the switch says
-(slow on Free, quick after the plan upgrade). The `ready` log line reports `teamCodes` (running) and
-`teamCodesSwitch`; `npm run live:status` prints a `teamCodes` block with `enabled`, `eligible` and `imports`.
+200 spare requests and standard pacing. They are therefore off on Free and slow plans whatever the switch says.
+On Free (100 a day, 10 a minute) the ordinary floor is 99 requests, so the spare is 1 and pacing is slow: no
+import runs until the plan upgrade, and phone cards use their fallback for codeless teams meanwhile
+([match card](match-card.md)). The owner asked for "slow on Free", so "off on Free" is an open owner decision.
+The options are to accept it, or to add a separately gated trickle of one league a day after the day's refresh jobs.
+See "Owner actions" under team codes in [development progress](development-progress.md). On a 7,500-a-day plan the
+spare is 861, so team codes can take up to 8 requests an hour (about 96 leagues a day) beside odds. The `ready`
+log line reports `teamCodes` (running) and `teamCodesSwitch`; `npm run live:status` prints a `teamCodes` block with
+`enabled`, `eligible` and `imports`.
 
 **Schedule and gate.** At each new UTC hour the maintenance loop enqueues one `teams.codes` job for that slot
 (`team-codes-scheduled`); the job expires when its slot ends. The enrichment worker runs it after any odds job.
