@@ -103,7 +103,9 @@ Storage: `FootballCompetition.countryFlagUrl VARCHAR(2048) NULL` (migration
 [`20261011075627_competition_country_flag`](../prisma/migrations/20261011075627_competition_country_flag/migration.sql)).
 A later import with no flag (null, absent or unapproved) keeps the stored one,
 exactly like a logo; a stored flag the verifier no longer approves is removed on
-the next fresh update.
+the next fresh update. The flag belongs to the country, so a row that changes the
+competition's country keeps no old flag: it stores the row's own flag, or none
+until a later row brings one.
 
 **No version bump.** Unlike name, country, type and logo, a flag change alone is
 not a shared-identity change: it bumps no fixture `dataVersion` and writes no
@@ -176,7 +178,9 @@ that runs those imports from spare quota only:
   settles the league for 30 days whether or not codes arrived, so a codeless
   league is not requested again for a month. A failed receipt (provider or quota
   trouble) backs it off for one day. A failed receipt also ends the sweep, and
-  the next slot continues.
+  the next slot continues. The marker read takes the latest receipt of each
+  status per league (a grouped read, at most a few rows per league), so no
+  number of other receipts can hide a league's settled answer.
 - **Bounds.** `teamCodeBounds` (in `live-plan.ts`): `enrichment` priority, one
   page plus one retry (2 requests), at most 1,000 rows and 4 MB, never cached. Each
   league's provider window ends 60 seconds after it starts. A league starts only

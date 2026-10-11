@@ -4068,3 +4068,65 @@ Nothing else is needed. There is no migration and no new grant: the job reads
 `FootballCompetitionProvider` and `FootballImport`, and writes only through the
 catalog import, all under the existing catalog grants. To keep imports off on a
 paid plan, set `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED=false` in `.env.operations`.
+
+## Country flags beside competitions (11 October 2026)
+
+Owner: "The country should be displayed alongside its flag on the left." The
+card is the UI workflow's ([match card](match-card.md)); this records the data
+side. Decisions are in [implementation decisions](implementation-decisions.md)
+(Country flags beside competitions) and the storage rules in
+[football catalog](football-catalog.md#country-flags).
+
+### Changed behavior and files
+
+- **Provider fields.** `src/server/football/api-football-normalize.ts` reads
+  `/fixtures` `league.flag` and `/leagues` `country.flag` into the competition's
+  `countryFlag`, through the same rights path as logos. Absent, `null` or
+  non-string values mean "no flag" and never reject a row.
+- **Batch, store and rights.** `catalog-input.ts` re-checks flag rights like
+  logos. `catalog-mysql-store.ts` stores `FootballCompetition.countryFlagUrl`. A
+  later missing flag keeps the stored one, but a row that changes the country
+  keeps no old flag. A flag change alone bumps no fixture version; next to a
+  versioned change it is audited with it. `live-authorities.ts` approves
+  `https://media(-N).api-sports.io/flags/<xx>.svg` and `<xx>-<sub>.svg`.
+- **Migration.** `20261011075627_competition_country_flag`: one nullable
+  `VARCHAR(2048)` column, with `schema.prisma` and the schema snapshot updated.
+- **Publication.** Optional nullable `competition.countryFlagUrl` on the
+  fixture snapshot (feed record, detail fixture, client refresh). Older cached
+  payloads still parse. Feed cache projection 8, detail 6.
+- **Team-code review (third pass).** The keyset cursor, page limits, Free/slow
+  gate and per-slot bound were re-checked and kept. `checks()` now reads one
+  latest receipt per league and status (a grouped read) instead of a capped
+  newest-first scan that could drop a settled marker.
+- **Tests.** `tests/competition-flags.test.mjs`, plus flag subtests in
+  `tests/catalog.integration.mjs`, `tests/match-feed.integration.mjs` and
+  `tests/match-detail.integration.mjs`, and the marker assertion in
+  `tests/team-codes.integration.mjs`.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm); owned isolated MySQL 8.4.11 under `.tmp/mysql-tools`
+(`MYSQL_TEST_SERVER_BINARY`).
+
+| Check | Actual result |
+| --- | --- |
+| `npx tsc --noEmit` | Exit 0. |
+| `npx eslint . --max-warnings=0` | Exit 0. |
+| `npm test` (unit suite) | Before this pass's edits: 1,105 tests, 1,104 pass, 0 fail, 1 skipped. Final run: 1,108 tests, 1,106 pass, 1 fail, 1 skipped. The failure is the 25 ms timing test in `tests/fallback-service.test.mjs` ("an unfinished collector times out"), untouched by this work; it fails only under the suite's concurrent load and passed when rerun alone with `tests/database-cli.test.mjs` (48/48). |
+| `npm run test:team-codes` | 21/21. |
+| `npm run test:catalog` | 29/29. |
+| `npm run test:feed` | 62/62. |
+| `npm run test:detail` | 37/37. |
+| `npm run test:cache` | 25/25. |
+| `tests/live-runtime.integration.mjs` | 11/11, including the team-code sweep on the enrichment worker. |
+
+**Not run:** `next build`, browser checks, any live API-Football call and any
+command against the developer database.
+
+**Owner actions:** apply the migration to the developer database with
+`npm run db:deploy`, then `npm run db:verify` ([local database](local-database.md)).
+Until it is applied, the web app's feed and detail reads and the runner's
+catalog writes fail on the missing column. Then restart the live runner. Flags
+fill in at the next daily selection (21:00 UTC, or at runner start when that
+night's run is missing) for every competition with a fixture in its seven
+dates. International competitions have no flag.

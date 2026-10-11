@@ -51,7 +51,8 @@ away, market, prediction and a chevron.
 
 The same DOM becomes a compact white card in the owner's chosen layout A, "teams
 get their own line". Owner decisions in force: full team names only (no club
-abbreviations and no provider team codes), team crests right beside the score,
+abbreviations and no provider team codes), long names wrapping onto a second
+line rather than being cut, team crests right beside the score,
 the home name right-aligned, the country flag and code leading the meta line
 followed by the match time, near-square corners (2px) on the card and chips, no
 chevron (the whole card stays one link), and the reference photo's chip style
@@ -60,7 +61,15 @@ for the prediction.
 ```text
 [flag] ARG · 13:30 · [crest]? Liga Profesional…     [1X2] [ 1 ] [ 62% ] [2.10]?
         River Plate [crest]  1 – 1  [crest] Boca Juniors
+
+[flag] ENG · 21:00 · Premier League                 [O/U 2.5] [Over] [ 58% ]
+      Wolverhampton
+          Wanderers [crest]  vs  [crest] Aston Villa
 ```
+
+In the second card the long home name wraps onto two right-aligned lines; the
+crests, `vs` and "Aston Villa" are centred vertically against that two-line block
+(the plain-text sketch cannot show the half-line offset).
 
 - Surface: `theme.color.surface`, a hairline `theme.color.border` border, a
   2px radius, padding 7px 9px (8px sides below 360px) and a soft two-layer
@@ -117,24 +126,38 @@ for the prediction.
   `minmax(0, 1fr) auto auto auto minmax(0, 1fr)` holding HOME NAME, home crest,
   centre, away crest, AWAY NAME, so the score sits in the middle of every card
   and the crests line up down the list. Names are the full team names (13px
-  semibold navy, one line, ellipsis), the home name right-aligned with 4px
-  before its crest and the away name left-aligned 4px after its crest; after a
-  decided final the loser's name is muted. Crests are 18px (initials, 10px,
-  fall back to a ringed disc). The centre column is at least 34px with 2px
-  either side: `vs` (11px muted) before kickoff, the score (`1 – 1`, 13px bold,
-  proportional digits, the dash muted; live red while live) once live or
-  final, widening for three-character scores. Full names are always in the
-  card's hidden heading and link name. Where the pointer can hover, entering a
-  card whose name is truncated (`scrollWidth > clientWidth`) sets the article's
-  `title` to both full names ("River Plate v Boca Juniors"); the covering link
-  shows its nearest titled ancestor's tooltip, so the link's own name and
-  description stay unchanged, and untruncated cards carry no title.
+  semibold navy, line height 1.2), the home name right-aligned with 4px before
+  its crest and the away name left-aligned 4px after its crest, on every line;
+  after a decided final the loser's name is muted. A long name wraps instead of
+  being cut (owner: "Though we are opting for A, long team names, should
+  wrap"): `white-space: normal`, breaks at word boundaries only
+  (`overflow-wrap: break-word` overrides the global `anywhere`, so only a
+  single word wider than its box breaks inside the word), `text-wrap: balance`
+  where supported (Chrome 114+, Firefox 121+, Safari 17.5+; elsewhere greedy
+  wrapping with the same line count), and a two-line clamp
+  (`display: -webkit-box`, `-webkit-line-clamp: 2`) that adds an ellipsis only
+  beyond two lines. Crests and the centre stay vertically centred against the
+  taller name block (the grid's `align-items: center`). Crests are 18px
+  (initials, 10px, fall back to a ringed disc). The centre column is at least
+  34px with 2px either side: `vs` (11px muted) before kickoff, the score
+  (`1 – 1`, 13px bold, proportional digits, the dash muted; live red while
+  live) once live or final, widening for three-character scores. Full names
+  are always in the card's hidden heading and link name. Where the pointer can
+  hover, entering a card whose name is clamped (`scrollHeight` more than 1px
+  over `clientHeight`, or a horizontal overflow) sets the article's `title` to
+  both full names ("River Plate v Boca Juniors"); the covering link shows its
+  nearest titled ancestor's tooltip, so the link's own name and description
+  stay unchanged, and cards whose names fit (wrapped or not) carry no title.
 - Notes, when present, add a row under the teams (6px above it).
 
 Height: 1 + 7 + 18 (chips) + 5 + 18 (crests) + 7 + 1 = 57px at every phone
-width; notes add about 20px. Below 20rem (only with enlarged text, such as 125%
-on a 320px phone) the chips take their own line under the meta line (74px at
-the default text size, as the 14px meta line no longer shares the chips' row).
+width while both names fit one line (one 15.6px name line sits inside the 18px
+crest row). A card with a wrapped name grows by one name line: row 2 becomes two
+15.6px lines (31.2px), so 1 + 7 + 18 + 5 + 31.2 + 7 + 1 = 70.2px; a clamped name
+never exceeds that. Notes add about 20px. Below 20rem (only with enlarged text,
+such as 125% on a 320px phone) the chips take their own line under the meta
+line (74px at the default text size, 87.2px with a wrapped name, as the 14px
+meta line no longer shares the chips' row).
 Text-sized lengths are rem and the variants are rem media queries, so enlarged
 text scales spacing and reaches the narrower variants. Card text is 10px or
 larger.
@@ -147,24 +170,44 @@ the chips and the 6px column gap (4px below 360px). League name: the meta line
 minus the flag (16 + 4), the code, two dots (8.3px each) and the state, shown
 for `ENG · 13:30` (87.3px) and, worst common case, `KUW · Postp.` (96.2px), less
 the 18px league crest from 390px. Name box: (content − 2 × 18 crest − 34 centre
-− 2 × 2) / 2 − 4.
+− 2 × 2) / 2 − 4. Row 1 is the full content width (meta line + column gap +
+chips) and 18px tall (the chips; the meta line's text is 14px); row 2 is the
+full content width and 18px tall, or 31.2px when a name wraps.
 
-| Viewport | Card | Content | Chips | Meta line | League name (worst) | Name box, each | Height |
+| Viewport | Card | Content (rows 1 and 2) | Chips | Meta line | League name (worst) | Name box, each | Height (wrapped) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 320px | 288 | 270 | 114.4 | 151.6 | 64.3 (55.5) | 94.0 | 57 |
-| 360px | 328 | 308 | 132.9 | 169.1 | 81.8 (73.0) | 113.0 | 57 |
-| 375px | 343 | 323 | 132.9 | 184.1 | 96.8 (88.0) | 120.5 | 57 |
-| 390px | 358 | 338 | 132.9 | 199.1 | 93.8 (85.0) | 128.0 | 57 |
-| 412px | 380 | 360 | 132.9 | 221.1 | 115.8 (107.0) | 139.0 | 57 |
-| 430px | 398 | 378 | 132.9 | 239.1 | 133.8 (125.0) | 148.0 | 57 |
+| 320px | 288 | 270 | 114.4 | 151.6 | 64.3 (55.5) | 94.0 | 57 (70.2) |
+| 360px | 328 | 308 | 132.9 | 169.1 | 81.8 (73.0) | 113.0 | 57 (70.2) |
+| 375px | 343 | 323 | 132.9 | 184.1 | 96.8 (88.0) | 120.5 | 57 (70.2) |
+| 390px | 358 | 338 | 132.9 | 199.1 | 93.8 (85.0) | 128.0 | 57 (70.2) |
+| 412px | 380 | 360 | 132.9 | 221.1 | 115.8 (107.0) | 139.0 | 57 (70.2) |
+| 430px | 398 | 378 | 132.9 | 239.1 | 133.8 (125.0) | 148.0 | 57 (70.2) |
 
 "Premier League" needs 81.6px, so it fits from 360px. Of the 5,234 team names
-on stored fixtures (11 October 2026, measured at 13px semibold), these fit
-untruncated: 3,781 (72.2%) at 320px, 4,638 (88.6%) at 360px, 4,840 (92.5%) at
-375px, 4,972 (95.0%) at 390px, 5,124 (97.9%) at 412px and 5,178 (98.9%) at
-430px; the median name is 74px. "Manchester United" (118.6px) fits from 375px,
-"Paris Saint Germain" (121.1px) from 390px; the longest stored name, "San Juan
-Atletico de Montcada" (190.8px), ellipsizes up to tablets. Both rows fit
+on stored fixtures (11 October 2026, measured at 13px semibold with greedy
+wrapping at spaces, which `text-wrap: balance` keeps as the line count):
+
+| Viewport | One line | Two lines, at spaces | Two lines, a word broken | Clamped (3+ lines) | Shown in full |
+| --- | --- | --- | --- | --- | --- |
+| 320px | 3,781 (72.2%) | 1,395 | 26 | 32 | 5,202 (99.4%) |
+| 360px | 4,638 (88.6%) | 590 | 3 | 3 | 5,231 (99.9%) |
+| 375px | 4,840 (92.5%) | 392 | 2 | 0 | 5,234 (100%) |
+| 390px | 4,972 (95.0%) | 262 | 0 | 0 | 5,234 (100%) |
+| 412px | 5,124 (97.9%) | 110 | 0 | 0 | 5,234 (100%) |
+| 430px | 5,178 (98.9%) | 56 | 0 | 0 | 5,234 (100%) |
+
+Of the 2,628 stored fixtures, 542 cards (20.6%) have a wrapped name at 360px
+(1,195, 45.5%, at 320px; 250, 9.5%, at 390px; 56, 2.1%, at 430px) and are
+70.2px tall. "Manchester United" (118.6px) and "Paris Saint Germain" (121.1px)
+wrap at 360px ("Manchester / United", "Paris Saint / Germain"), "Wolverhampton
+Wanderers" splits into its two words, and the longest stored name, "San Juan
+Atletico de Montcada" (190.8px), reads "San Juan Atletico / de Montcada". A
+single word wider than the box breaks inside the word: 33 names at 320px (26
+still within two lines; such as "Wolverhampton", 98.5px, against a 94px box)
+and 4 at 360px ("Deutschlandsberger", 127.3px, "Mandalskameratene",
+"Hódmezővásárhely", "Mönchengladbach", 115.2px). The three names clamped at
+360px are "Futbol Consultants Moravia", "Borussia Mönchengladbach" and "FC
+Emmelshausen-Karbach" (a break also falls after a hyphen). Both rows fit
 320–430px without horizontal overflow; tablets give the spare width to the
 league name and the two names.
 
@@ -319,7 +362,13 @@ market code, short code, pick and two-digit probability fits the chip slots the
 card declares, check that only the total-goals code has a hideable goal line,
 keep every meta-line state within six characters, give every no-pick reason
 visitor text and guard that the card renders full team names (no team-name
-abbreviation helpers or provider codes). `tests/team-name.test.mjs` covers
+abbreviation helpers or provider codes). Three more keep long tile names
+wrapping (normal white space, `break-word`, `text-wrap: balance`, a two-line
+clamp, line height 1.2, each side's alignment, the clamp-only tooltip check),
+tie the 57px and 70.2px heights to the card's padding, gap, chip and crest
+sizes and the theme's 13px body type, and check with Manrope wght 600 metrics
+that well-known long names wrap onto two lines at spaces in the 113px name box
+at 360px. `tests/team-name.test.mjs` covers
 provider code validation against the stored pattern; `tests/country-code.test.mjs`
 covers the photo's countries, provider spellings and variants, distinct codes
 for every stored country and the derived fallback. The rendering script builds a separate production Next app under

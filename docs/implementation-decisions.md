@@ -3373,6 +3373,14 @@ has a code, the card uses the safe shortening rules, then an ellipsis.
   an unusable league id or season after `LIMIT`, so such a row would make a full
   page look short and end the paging early. Those bounds are now in the SQL
   `WHERE` (the in-memory filter stays as a re-check).
+- **Fixed: the marker read could drop a settled receipt.** `checks()` read the
+  raw `teams` receipts of a page's leagues newest first with a 5,000-row cap.
+  A league retried after daily failures keeps adding failed receipts, so enough
+  of them across a page could push another league's only settled receipt out of
+  the read, and that league would be requested again inside its 30 days. The
+  read now groups by scope key and status and takes `MAX(observedAt)` (at most a
+  few rows per league, on the existing `(scopeKey, observedAt, sequence)`
+  index), so every marker is exact and the cap is gone.
 - **Card display.** The owner has since said codes are no longer shown on
   cards; the card is the UI workflow's ([match card](match-card.md)). The read
   path keeps publishing `code` and the import stays as committed.
@@ -3403,7 +3411,9 @@ workflow's; this records the data side.
 - **Storage.** `FootballCompetition.countryFlagUrl VARCHAR(2048) NULL`, migration
   `20261011075627_competition_country_flag`: one additive nullable column, no
   backfill (MySQL 8.4 adds it in place). A later null, absent or unapproved flag
-  keeps the stored one, as for logos.
+  keeps the stored one, as for logos. The exception is a row that changes the
+  competition's country: the flag belongs to the country, so such a row stores
+  its own flag or none, never the previous country's.
 - **No fixture version bump for a flag alone.** Shared competition changes
   version every fixture of the competition, history included, in the import
   transaction. A flag is new for every competition at once, so the first date
