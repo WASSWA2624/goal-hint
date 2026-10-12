@@ -46,10 +46,16 @@ activates the new release, restarts the app and checks that the site returns HTT
 | `--restart` | Re-applies `~/goal-hint-private/` and restarts |
 | `--rollback` | Switches back to the previously active release |
 
-## Settings
+## Settings (over SSH)
 
-- Edit settings only in `~/goal-hint-private/`, using cPanel **File Manager** with
-  **Settings → Show Hidden Files** turned on. Then run `--restart`.
+```powershell
+python scripts/deploy-cpanel.py --config-pull   # server → deploy/.env.production.local, deploy/.goal-hint/owner-approvals.json
+# edit those git-ignored files locally
+python scripts/deploy-cpanel.py --config-push   # checks them, uploads them, restarts
+```
+
+- `--config-push` refuses to upload known mistakes: missing or invalid database
+  settings, unknown names, and approval references that don't match.
 - Copies under `~/goal-hint/standalone/` are replaced on every deploy and restart.
 - In **Setup Node.js App → Environment variables**, keep only
   `GOAL_HINT_DEPLOYMENT_ENVIRONMENT=production`. Anything set there overrides the
@@ -99,15 +105,16 @@ If a migration fails:
    Run the second command, then type the third in the SSH session it opens.
 
 **Enable** (once `db:status` reports the schema is up to date):
-1. Create `~/goal-hint-private/.goal-hint/owner-approvals.json`. The two references must
-   equal the settings in step 2.
+1. Create `deploy/.goal-hint/owner-approvals.json`. The two references must equal the
+   settings in step 2.
    ```json
    {"version": 1, "owner": "<name>", "approvals": [
      {"requirement": "database-access", "reference": "goalhint-prod-db", "approvedAt": "2026-10-12", "decision": "<what you approved>"},
      {"requirement": "budget-approval", "reference": "goalhint-prod-budget", "approvedAt": "2026-10-12", "decision": "<what you approved>"}]}
    ```
-2. Add to `~/goal-hint-private/.env.production.local`. Percent-encode the password, and
-   leave `GOAL_HINT_DATABASE_TLS_CA_FILE` unset.
+2. Replace the contents of `deploy/.env.production.local` with these lines (run
+   `--config-pull` first). Percent-encode the password, and leave
+   `GOAL_HINT_DATABASE_TLS_CA_FILE` unset.
    ```dotenv
    GOAL_HINT_DATABASE_ENABLED=true
    DATABASE_URL=mysql://hossuney_goalhint_db:<PASSWORD>@localhost:3306/hossuney_goalhint_db
@@ -119,8 +126,8 @@ If a migration fails:
    GOAL_HINT_BUDGET_APPROVAL_REF=goalhint-prod-budget
    GOAL_HINT_COMPETITION_IDS=<ids from .env.local>
    ```
-3. Run `--restart`.
-4. Check that `http://goalhint.com.hosspi.com/api/matches` returns 200, not 503.
+3. Run `python scripts/deploy-cpanel.py --config-push`. It reports `/api/matches`: 200
+   means the database is in use, and 503 means it's off or refused.
 
 **Content:** matches appear once the live runner (`npm run live`) writes them. Shared
 hosting stops long-running processes, so run it on your computer:

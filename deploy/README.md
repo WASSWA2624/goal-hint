@@ -77,7 +77,8 @@ Passenger assigns the listening socket. Database refusals at request time (appro
 register, credentials, TLS, `DEBUG`) are not logged: pages show "data unavailable"
 and `/api/*` answers 503.
 
-Put these lines in `~/goal-hint-private/.env.production.local`. The deploy script
+Put these lines in `~/goal-hint-private/.env.production.local`, editing it over SSH with
+`python scripts/deploy-cpanel.py --config-pull` / `--config-push`. The deploy script
 copies that file into each release, where Next.js loads it at startup. Keep secrets
 out of the cPanel **Environment variables** screen: it writes values into the
 domain's `.htaccess`, and any variable set there overrides the file. Never commit

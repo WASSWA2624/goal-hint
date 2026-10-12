@@ -6,11 +6,15 @@ Usage:
   python scripts/deploy-cpanel.py --logs [N]                last N lines of the app log
   python scripts/deploy-cpanel.py --rollback                reactivate the previously active release
   python scripts/deploy-cpanel.py --restart                 reapply private files, then restart
+  python scripts/deploy-cpanel.py --config-pull             server settings -> deploy/.env.production.local
+                                                            and deploy/.goal-hint/owner-approvals.json
+  python scripts/deploy-cpanel.py --config-push             check those files, upload them, restart
 
 Each release is extracted to ~/goal-hint-releases/<stamp>/ and activated by
 repointing the ~/goal-hint/standalone symlink, so rollback is a single swap.
 Private files live once in ~/goal-hint-private/ (.env.production.local and
-.goal-hint/) and are copied into every release; this script never reads them.
+.goal-hint/) and are copied into every release. --config-pull/--config-push edit
+them through git-ignored local copies; the files never pass through command lines.
 Authentication uses only the SSH key: password prompts are disabled.
 Override the target with CPANEL_SSH_HOST, CPANEL_SSH_PORT, CPANEL_SSH_USER,
 CPANEL_SSH_KEY, CPANEL_APP_ROOT and CPANEL_DOMAIN.
@@ -18,16 +22,19 @@ CPANEL_SSH_KEY, CPANEL_APP_ROOT and CPANEL_DOMAIN.
 from __future__ import annotations
 
 import argparse
+import base64
 from datetime import datetime, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import zipfile
 
 from lib.runtime import CommandError, ROOT, main_guard
@@ -39,6 +46,9 @@ KEY = Path(os.environ.get("CPANEL_SSH_KEY", Path.home() / ".ssh" / "goalhint_dep
 APP_ROOT = os.environ.get("CPANEL_APP_ROOT", "goal-hint")
 DOMAIN = os.environ.get("CPANEL_DOMAIN", "goalhint.com")
 ZIP = ROOT / "deploy/goal-hint-cpanel.zip"
+# Git-ignored local copies of ~/<app>-private (.gitignore: .env*, .goal-hint/).
+LOCAL_CONFIG = {".env.production.local": ROOT / "deploy/.env.production.local",
+                ".goal-hint/owner-approvals.json": ROOT / "deploy/.goal-hint/owner-approvals.json"}
 KEEP_RELEASES = 3
 # Created once with the app; later deploys never touch cPanel environment variables.
 # Database settings belong in ~/goal-hint-private/.env.production.local: cPanel writes
@@ -126,14 +136,29 @@ case "$command" in
     echo "Active release: $(current || echo none)"; cat "$app/BUILD_INFO.json" 2>/dev/null || true
     echo "Releases: $(ls -1t "$releases" 2>/dev/null | tr '\n' ' ')"
     app_exists && echo "Node.js application: configured" || echo "Node.js application: missing"
+    echo "cPanel environment variables: $(selector get | python3 -c 'import json,sys; d=json.load(sys.stdin); print(" ".join(sorted(k for v in d.get("available_versions",{}).values() for u in (v.get("users") or {}).values() for a,c in (u.get("applications") or {}).items() if a==sys.argv[1] for k in (c.get("env_vars") or {}))) or "none")' "$app_root")"
+    echo "Private files: $(cd "$private" 2>/dev/null && ls -1d .env.production.local .goal-hint/owner-approvals.json 2>/dev/null | tr '\n' ' ' || true)"
     if [ -f "$app/stderr.log" ]; then tail -n 20 "$app/stderr.log"; else echo "(no stderr.log yet)"; fi
     ;;
   logs) if [ -f "$app/stderr.log" ]; then tail -n "$3" "$app/stderr.log"; else echo "(no stderr.log yet)"; fi ;;
   restart) restart; echo "Restarted with the current private files." ;;
+  config-get)  # name<TAB>base64 per existing private file.
+    for f in .env.production.local .goal-hint/owner-approvals.json; do
+      [ ! -f "$private/$f" ] || printf '%s\t%s\n' "$f" "$(base64 -w0 "$private/$f")"
+    done ;;
+  config-install)  # Uploaded as *.new by scp; installed with owner-only permissions.
+    mkdir -p "$private/.goal-hint"; chmod 700 "$private" "$private/.goal-hint"
+    for f in .env.production.local .goal-hint/owner-approvals.json; do
+      [ ! -f "$private/$f.new" ] || { chmod 600 "$private/$f.new"; mv -f "$private/$f.new" "$private/$f"; echo "Installed $f."; }
+    done
+    restart ;;
   verify)  # Through the web server on this host, so it works before public DNS does.
     for i in $(seq 1 10); do
       code="$(curl -sk -L -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$3:443:$4" "https://$3/" || true)"
-      [ "$code" = 200 ] && { echo "Verified https://$3/ on the server -> HTTP 200"; exit 0; }
+      if [ "$code" = 200 ]; then
+        api="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$3:443:$4" "https://$3/api/matches" || true)"
+        echo "Verified https://$3/ on the server -> HTTP 200 (/api/matches -> HTTP $api; 503 = database off or refused)"; exit 0
+      fi
       echo "  waiting for the app (HTTP $code), attempt $i/10" >&2; sleep 5
     done
     echo "https://$3/ did not return HTTP 200; run --logs, or --rollback." >&2; exit 4 ;;
@@ -161,6 +186,91 @@ def remote(command: str, *args: str, timeout: int = 300) -> str:
     if result.returncode:
         raise CommandError(f"Remote {command} failed:\n{stderr or stdout}")
     return stdout
+
+
+def scp(local: Path, destination: str) -> None:
+    result = subprocess.run([tool("scp"), *SSH_OPTIONS, "-P", PORT, "-q", str(local), f"{USER}@{HOST}:{destination}"],
+                            capture_output=True, text=True, timeout=600)
+    if result.returncode:
+        raise CommandError(f"Upload failed:\n{result.stderr.strip()}")
+
+
+def config_pull() -> None:
+    files = dict(line.split("\t", 1) for line in remote("config-get").splitlines() if "\t" in line)
+    for name, local in LOCAL_CONFIG.items():
+        if name in files:
+            local.parent.mkdir(parents=True, exist_ok=True)
+            local.write_bytes(base64.b64decode(files[name]))
+            print(f"Pulled {name} -> {local.relative_to(ROOT)}")
+        else:
+            print(f"The server has no {name} yet.")
+
+
+def check_config(env_text: str | None, approvals_text: str | None) -> list[str]:
+    """Catch the mistakes that otherwise surface only as an unlogged 503 or a 500. Names only, never values."""
+    problems, env = [], {}
+    known = set(re.findall(r"^[A-Z][A-Z0-9_]*(?==)", (ROOT / ".env.example").read_text(encoding="utf-8"), re.M))
+    for number, line in enumerate((env_text or "").splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key.strip()):
+            problems.append(f".env.production.local line {number} is not NAME=value")
+            continue
+        env[key.strip()] = value.strip().strip("\"'")
+    for key in env:
+        if key.startswith("NEXT_PUBLIC_") or key in ("PORT", "HOSTNAME", "DEBUG", "NODE_ENV"):
+            problems.append(f"{key} must not be set in production")
+        elif key.startswith("GOAL_HINT_") and key not in known:
+            problems.append(f"{key} is not a known setting (see .env.example)")
+    if env.get("GOAL_HINT_DATABASE_ENABLED") == "true":
+        for key in ("DATABASE_URL", "GOAL_HINT_DATABASE_ACCESS_REF", "GOAL_HINT_BUDGET_APPROVAL_REF", "GOAL_HINT_COMPETITION_IDS"):
+            if not env.get(key):
+                problems.append(f"{key} is required when the database is enabled")
+        expected = {"GOAL_HINT_DATABASE_CONNECTION_MODE": "direct", "GOAL_HINT_DATABASE_TLS_MODE": "required"}
+        problems += [f"{key} must be {value}" for key, value in expected.items() if env.get(key) != value]
+        if not re.fullmatch(r"[1-9][0-9]*", env.get("GOAL_HINT_DATABASE_POOL_LIMIT", "")):
+            problems.append("GOAL_HINT_DATABASE_POOL_LIMIT must be a positive integer")
+        if not re.fullmatch(r"0|[1-9][0-9]*", env.get("GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS", "")):
+            problems.append("GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS must be a whole number of cents")
+        url = env.get("DATABASE_URL", "")
+        if url and (not url.startswith("mysql://") or "?" in url or "#" in url):
+            problems.append("DATABASE_URL must be mysql://user:percent-encoded-password@host:port/database with no ? or #")
+    if approvals_text is not None:
+        try:
+            register = json.loads(approvals_text)
+            records = register["approvals"]
+            valid = (set(register) == {"version", "owner", "approvals"} and register["version"] == 1 and str(register["owner"]).strip()
+                     and isinstance(records, list) and records
+                     and all(isinstance(item, dict) and set(item) == {"requirement", "reference", "approvedAt", "decision"}
+                             and re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(item["approvedAt"])) and str(item["decision"]).strip() for item in records))
+            pairs = [(item["requirement"], item["reference"]) for item in records] if valid else []
+        except (ValueError, KeyError, TypeError):
+            valid, pairs = False, []
+        if not valid or len(pairs) != len(set(pairs)):
+            problems.append("owner-approvals.json must be {version: 1, owner, approvals: [{requirement, reference, approvedAt: YYYY-MM-DD, decision}]} without duplicates")
+        elif env.get("GOAL_HINT_DATABASE_ENABLED") == "true":
+            for requirement, key in (("database-access", "GOAL_HINT_DATABASE_ACCESS_REF"), ("budget-approval", "GOAL_HINT_BUDGET_APPROVAL_REF")):
+                if env.get(key) and (requirement, env[key]) not in pairs:
+                    problems.append(f"{key} has no matching {requirement} record in owner-approvals.json")
+    return problems
+
+
+def config_push() -> None:
+    texts = {name: local.read_bytes().decode("utf-8-sig").replace("\r\n", "\n") for name, local in LOCAL_CONFIG.items() if local.exists()}
+    if not texts:
+        raise CommandError("Nothing to push. Run --config-pull first, or create deploy/.env.production.local.")
+    problems = check_config(texts.get(".env.production.local"), texts.get(".goal-hint/owner-approvals.json"))
+    if problems:
+        raise CommandError("Configuration not pushed:\n- " + "\n- ".join(problems))
+    with tempfile.TemporaryDirectory() as directory:
+        for name, text in texts.items():
+            staged = Path(directory) / Path(name).name
+            staged.write_text(text, encoding="utf-8", newline="\n")
+            scp(staged, f"{APP_ROOT}-private/{name}.new")
+    print(remote("config-install"))
+    verify()
 
 
 def build() -> None:
@@ -204,9 +314,7 @@ def deploy(archive: Path) -> None:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + info["commit"][:7]
     print(f"Deploying {archive.name}: commit {info['commit'][:7]}{' (uncommitted changes)' if info.get('uncommittedChanges') else ''}, built {info['builtAt']}")
     upload = f"{APP_ROOT}-upload-{stamp}.zip"
-    result = subprocess.run([tool("scp"), *SSH_OPTIONS, "-P", PORT, "-q", str(archive), f"{USER}@{HOST}:{upload}"], capture_output=True, text=True)
-    if result.returncode:
-        raise CommandError(f"Upload failed:\n{result.stderr.strip()}")
+    scp(archive, upload)
     check = subprocess.run([tool("ssh"), *SSH_OPTIONS, "-p", PORT, f"{USER}@{HOST}", "sha256sum " + shlex.quote(upload)],
                            capture_output=True, text=True, timeout=120)
     if check.returncode:
@@ -225,6 +333,8 @@ def main():
     action.add_argument("--logs", nargs="?", type=int, const=100, metavar="N", help="show the last N log lines")
     action.add_argument("--rollback", action="store_true", help="reactivate the previously active release")
     action.add_argument("--restart", action="store_true", help="reapply ~/goal-hint-private files and restart")
+    action.add_argument("--config-pull", action="store_true", help="download the server settings into deploy/ (git-ignored)")
+    action.add_argument("--config-push", action="store_true", help="check deploy/ settings, upload them and restart")
     parser.add_argument("--build", action="store_true", help="rebuild the zip with the pinned Node.js first")
     parser.add_argument("--zip", type=Path, default=ZIP, help="bundle to deploy (default: deploy/goal-hint-cpanel.zip)")
     options = parser.parse_args()
@@ -234,6 +344,10 @@ def main():
         print(remote("status"))
     elif options.logs is not None:
         print(remote("logs", str(max(options.logs, 1))))
+    elif options.config_pull:
+        config_pull()
+    elif options.config_push:
+        config_push()
     elif options.rollback or options.restart:
         print(remote("rollback" if options.rollback else "restart"))
         verify()
