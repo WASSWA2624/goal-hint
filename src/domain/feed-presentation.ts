@@ -2,6 +2,7 @@ import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";
 import type { MarketFamily } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
+import { countryFlagAsset } from "./country-flag.ts";
 
 /**
  * The shown pick: the highest selected probability among the chosen families, ties in policy
@@ -75,6 +76,6 @@ export function leagueOptions(leagues: MatchFeedResponse["leagues"], unknownLabe
 export function countryOptions(leagues: MatchFeedResponse["leagues"]): FilterOption[] {
   const totals = new Map<string, number>();
   for (const league of leagues) if (league.country) totals.set(league.country, (totals.get(league.country) ?? 0) + league.fixtures);
-  return [...totals].map(([country, fixtures]) => ({ value: country, label: country, detail: null, logoUrl: null, fixtures }))
+  return [...totals].map(([country, fixtures]) => ({ value: country, label: country, detail: null, logoUrl: countryFlagAsset(country), fixtures }))
     .sort((a, b) => b.fixtures - a.fixtures || a.label.localeCompare(b.label));
 }

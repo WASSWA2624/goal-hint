@@ -13,13 +13,12 @@ export function FeedTimeFilter({ query, from, to, onChange }: {
   const messages = useMessages(query.locale), deviceZone = useDeviceTimeZone();
   const zone = query.time?.zone ?? deviceZone, id = useId();
   const invalid = Boolean(from || to) && !validKickoffTime({ from, to, zone });
-  return <RangeFieldset>
-    <legend>{messages.text("feed.time.range")} <small>· {zone}</small></legend>
+  return <RangeFieldset aria-label={messages.text("feed.time.range")}>
     <RangeFields>
-      <label>{messages.text("feed.time.from")}<input type="time" step="60" value={from}
+      <label><span>{messages.text("feed.time.from")}</span><input type="time" step="60" value={from} title={zone}
         aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
         onChange={(event) => onChange(event.target.value, to)} /></label>
-      <label>{messages.text("feed.time.to")}<input type="time" step="60" value={to} min={from || undefined}
+      <label><span>{messages.text("feed.time.to")}</span><input type="time" step="60" value={to} min={from || undefined} title={zone}
         aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
         onChange={(event) => onChange(from, event.target.value)} /></label>
       {invalid && <RangeHelp id={`${id}-error`} role="alert">{messages.text("feed.time.invalid")}</RangeHelp>}

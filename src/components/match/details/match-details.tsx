@@ -30,7 +30,6 @@ const Page = styled.article`
 /**
  * The phone top bar matches the feed's branded bar: the navy to teal fill and brand edge, full bleed
  * past the page gutter and up through the app page's 10px top padding, with white text and icons.
- * After a failed live refresh its notice sits above, so the bar keeps its own place there.
  */
 const PhoneBar = styled.div`
   display: grid;
@@ -44,7 +43,6 @@ const PhoneBar = styled.div`
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.header.background};
   background-color: ${({ theme }) => theme.color.text};
-  [data-refresh-status] ~ * & { margin-block-start: 0; }
   ${desktop} { display: none; }
   > p { margin: 0; font-size: ${size("title")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
 `;

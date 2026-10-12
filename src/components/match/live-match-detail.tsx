@@ -11,7 +11,6 @@ import { DetailStateProvider } from "@/state/detail-provider";
 import { useDetailDispatch } from "@/state/detail-hooks";
 import { consumeRefresh } from "@/state/refresh-base";
 import { detailApi } from "@/state/detail-api";
-import { RefreshStatus } from "./refresh-status";
 import { useLiveRefresh } from "./use-live-refresh";
 
 type LiveDetailProps = { initial: MatchDetailResponse; today: ReportingDate; locale: string; children?: ReactNode;
@@ -21,7 +20,7 @@ type LiveDetailProps = { initial: MatchDetailResponse; today: ReportingDate; loc
 const shown = (detail: MatchDetailResponse) => JSON.stringify({ ...detail, asOf: 0, fixture: { ...detail.fixture, syncedAt: 0 } });
 
 function LiveDetail({ initial, today, locale, children, preview = null, historyRequested = false }: LiveDetailProps) {
-  const [data, setData] = useState(initial), [asOf, setAsOf] = useState(initial.asOf), [error, setError] = useState(false);
+  const [data, setData] = useState(initial), [asOf, setAsOf] = useState(initial.asOf);
   // The newest accepted response (for staleness checks); `data` changes only when something visible does.
   const accepted = useRef(data), request = useRef<AbortController | null>(null), mounted = useRef(false);
   const dispatch = useDetailDispatch(), router = useRouter();
@@ -47,9 +46,9 @@ function LiveDetail({ initial, today, locale, children, preview = null, historyR
       const result = await consumeRefresh(dispatch(detailApi.endpoints.detail.initiate(initial.fixture.fixtureId,
         { forceRefetch: true })), controller.signal);
       if (controller.signal.aborted || !mounted.current) return;
-      accept(mergeLiveDetail(accepted.current, result)); setError(false);
+      accept(mergeLiveDetail(accepted.current, result));
     } catch {
-      if (!controller.signal.aborted && mounted.current) setError(true);
+      // Keep the accepted snapshot; the next scheduled refresh retries automatically.
     } finally { if (request.current === controller) request.current = null; }
   }, [accept, dispatch, initial.fixture.fixtureId]);
   // A scheduled match polls fast only near kickoff, judged by the last read clock (no render-time Date.now()).
@@ -58,10 +57,7 @@ function LiveDetail({ initial, today, locale, children, preview = null, historyR
     (fixture.status === "scheduled" && kickoffAt !== null && Math.abs(kickoffAt - asOf) <= liveRefreshRules.kickoffLeadMs);
   useLiveRefresh({ today, enabled: true, interval: active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs,
     refresh, rollover: () => router.refresh() });
-  return <>
-    <RefreshStatus error={error} asOf={asOf} locale={locale} retry={() => { void refresh(); }} />
-    <MatchDetails data={data} preview={preview} locale={locale} history={children} historyRequested={historyRequested} />
-  </>;
+  return <MatchDetails data={data} preview={preview} locale={locale} history={children} historyRequested={historyRequested} />;
 }
 
 /** One explicit server projection initializes a fresh per-page refresh store. */

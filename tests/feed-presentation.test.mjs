@@ -57,6 +57,18 @@ test("league and country options order by fixture count, then name", () => {
   assert.deepEqual(countryOptions(leagues).map((option) => [option.value, option.fixtures]), [["England", 11], ["Spain", 9]]);
 });
 
+test("country filters show local flags for known countries and aliases without inventing international flags", () => {
+  const countries = ["England", "Saudi-Arabia", "Côte d’Ivoire", "BRA", "World", "Unknown country"];
+  const leagues = countries.map((country, index) => ({ id: String(index), name: country, country, logoUrl: null, fixtures: 1 }));
+  const options = new Map(countryOptions(leagues).map((option) => [option.value, option.logoUrl]));
+  assert.equal(options.get("England"), "/flags/gb-eng.svg");
+  assert.equal(options.get("Saudi-Arabia"), "/flags/sa.svg");
+  assert.equal(options.get("Côte d’Ivoire"), "/flags/ci.svg");
+  assert.equal(options.get("BRA"), "/flags/br.svg");
+  assert.equal(options.get("World"), null);
+  assert.equal(options.get("Unknown country"), null);
+});
+
 test("missing picks explain themselves from stored cycle and update facts only", () => {
   const cycle = (state) => ({ state, mode: { open: "current", closed: "locked", void: "void" }[state], ordinal: 1, lockedAt: null, voidReason: null });
   const update = (prediction) => ({ prediction, result: "untracked" });

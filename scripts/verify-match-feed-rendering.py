@@ -85,9 +85,14 @@ def verify_feed(origin, directory, scenarios):
         # The range fields are available in the initial document at every breakpoint.
         assert len(re.findall(r'<input\b[^>]*type="date"', visible)) == 2
         assert len(re.findall(r'<input\b[^>]*type="time"', visible)) == 2
-        for label in ["Date range", "From date", "To date", "Time range", "From time", "To time"]:
+        for label in ["From date", "To date", "From time", "To time"]:
             match(label, visible)
-        no_match("Picks only|With predictions|Any time|Specific time", visible)
+        filter_form = match(r'<form\b[^>]*aria-label="Search and filter matches"[\s\S]*?</form>', visible).group()
+        form_id = match(r'\bid="([^"]+)"', filter_form).group(1)
+        submit_buttons = [button for button in re.findall(r'<button\b[^>]*>', visible)
+            if 'type="submit"' in button and f'form="{form_id}"' in button]
+        assert len(submit_buttons) == 1
+        no_match('role="slider"|Picks only|With predictions|Any time|Specific time', visible)
         articles = re.findall(r'<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>([\s\S]*?)</article>', visible)
         data = scenario["result"].get("data")
         records = data["records"] if data else []

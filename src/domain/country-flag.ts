@@ -204,6 +204,13 @@ const flagCodes: Readonly<Record<string, string>> = {
   "ZIM": "zw"
 };
 
+const localFlagAssets = new Set(Object.values(flagCodes).map((code) => `/flags/${code}.svg`));
+
+/** Only bundled country flags can be used as local images in shared filter controls. */
+export function isLocalCountryFlagAsset(value: string): boolean {
+  return localFlagAssets.has(value);
+}
+
 /** Local flags keep catalog omissions and remote failures from leaving a blank country icon. */
 export function countryFlagAsset(country: string | null | undefined): string | null {
   const code = flagCodes[knownCountryCode(country)];

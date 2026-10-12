@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
 import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
@@ -199,7 +199,7 @@ const Toolbar = styled.div`
   gap: 6px 8px;
   ${media.belowDesktop} {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
     gap: 4px;
   }
@@ -221,11 +221,17 @@ const PhoneText = styled.span`${desktop} { display: none; }`;
 const DesktopText = styled.span`display: none; ${desktop} { display: inline; }`;
 const SortGroup = styled.div`
   display: flex;
-  flex: none;
+  flex-wrap: wrap;
+  min-inline-size: 0;
   align-items: center;
   gap: 4px;
   > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
-  ${media.belowDesktop} { display: contents; }
+  ${media.belowDesktop} {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+    > [data-filter-actions] { justify-content: flex-start; }
+  }
 `;
 const SelectWrap = styled.span`
   position: relative;
@@ -250,8 +256,7 @@ const SelectWrap = styled.span`
 const PhoneOrder = styled.div`
   display: inline-flex;
   min-inline-size: 0;
-  grid-column: 2;
-  grid-row: 1;
+  inline-size: 100%;
   ${desktop} { display: none; }
 `;
 const PhoneSort = styled(CompactSelect)`
@@ -271,8 +276,8 @@ const sortOptions: readonly FeedSort[] = [
 ];
 
 /** Result count and order; changes apply at once. */
-export function ResultsToolbar({ query, total, first, last, onApply }: {
-  query: FeedQuery; total: number; first: number; last: number; onApply: (next: FeedQuery) => void;
+export function ResultsToolbar({ query, total, first, last, onApply, actions }: {
+  query: FeedQuery; total: number | null; first: number; last: number; onApply: (next: FeedQuery) => void; actions?: ReactNode;
 }) {
   const messages = createMessages(query.locale);
   const sortKey = `${query.sort.by}-${query.sort.direction}`;
@@ -283,11 +288,12 @@ export function ResultsToolbar({ query, total, first, last, onApply }: {
   };
   return <Toolbar>
     <Count>
-      <h2><PhoneText>{messages.plural("feed.results.count", total)}</PhoneText><DesktopText>{messages.text("feed.results.title")}</DesktopText></h2>
-      <p>{total === 0 ? messages.text("feed.results.showing", { shown: "0", total: "0" })
-        : messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>
+      <h2><PhoneText>{total === null ? messages.text("feed.title") : messages.plural("feed.results.count", total)}</PhoneText><DesktopText>{messages.text("feed.results.title")}</DesktopText></h2>
+      {total !== null && <p>{total === 0 ? messages.text("feed.results.showing", { shown: "0", total: "0" })
+        : messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>}
     </Count>
     <SortGroup>
+      {actions}
       <PhoneOrder>
         <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => chooseKey(event.target.value)}
           options={sortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
