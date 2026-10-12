@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { ResetIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
@@ -27,6 +27,9 @@ import { ChipText, controlFeedback, FilterChip, focusRing, IconButton, OptionLog
 
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
+const buttonBorder = css`
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+`;
 
 function valid(query: FeedQuery, today: ReportingDate): boolean {
   try { serializeFeedQuery({ ...query, search: "" }, today); return true; } catch { return false; }
@@ -44,7 +47,7 @@ function toggledMarkets(query: FeedQuery, family: MarketFamily): FeedQuery | nul
 /** One form owns search and the entire draft; persistent actions use native form association. */
 const Panel = styled.form`
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-inline-size: 0;
 `;
 const SearchRow = styled.div`
@@ -79,12 +82,13 @@ const FilterToggle = styled(IconButton)`
   position: relative;
   inline-size: 2.75rem;
   block-size: 2.75rem;
+  background: ${({ theme }) => theme.color.surface};
+  ${buttonBorder}
   border-radius: 0;
   ${desktop} { display: none; }
   &[aria-expanded="true"] {
     color: ${({ theme }) => theme.color.onBrand};
     background: ${({ theme }) => theme.color.brand};
-    border-color: ${({ theme }) => theme.color.brand};
   }
   > b {
     position: absolute; inset-block-start: 1px; inset-inline-end: 2px;
@@ -106,7 +110,7 @@ const PhoneOnly = styled.div`
 /** Option fields reuse the existing compact checklists. */
 const PhoneMore = styled.div`
   display: grid;
-  gap: 8px;
+  gap: 4px;
   min-inline-size: 0;
   &[hidden] { display: none; }
 `;
@@ -115,25 +119,25 @@ const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 /** Desktop fields are always visible; only mobile fields follow the body toggle. */
 const FilterFieldsGroup = styled.div<{ $open: boolean }>`
   display: ${({ $open }) => $open ? "grid" : "none"};
-  gap: 8px;
+  gap: 4px;
   min-inline-size: 0;
-  padding: 8px;
+  padding: 6px;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  ${desktop} { display: grid; padding: 12px 14px 10px; border-block-start: 3px solid ${({ theme }) => theme.color.brand}; }
+  ${desktop} { display: grid; padding: 8px 10px; border-block-start: 3px solid ${({ theme }) => theme.color.brand}; }
 `;
 /** Date and time inputs remain direct controls within the expanded filter group. */
 const RangeRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 6px;
-  ${desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-block-end: 8px; }
+  gap: 4px;
+  ${desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-block-end: 4px; }
 `;
 /** One labelled trigger per filter replaces clipped suggestion chips and their duplicate menus. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
-  > button { min-block-size: 2.75rem; font-size: 0.875rem; }
+  > button { min-block-size: 2.25rem; font-size: 0.875rem; }
   [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; }
   > [role="group"] {
     grid-template-columns: minmax(0, 1fr);
@@ -306,6 +310,7 @@ const ApplyButton = styled.button`
   color: ${({ theme }) => theme.color.onBrand};
   background: ${({ theme }) => theme.gradient.action};
   border: 0;
+  ${media.belowDesktop} { ${buttonBorder} }
   border-radius: 0;
   font: inherit;
   font-size: 0.8125rem;
@@ -323,6 +328,10 @@ const OutlineButton = styled(QuietButton)`
   font-size: 0.8125rem;
   border-color: transparent;
   background: transparent;
+  ${media.belowDesktop} {
+    background: ${({ theme }) => theme.color.surface};
+    ${buttonBorder}
+  }
 `;
 const FilterActions = styled.div`
   display: flex;

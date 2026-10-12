@@ -104,6 +104,7 @@ left of the same row as Sort, Clear and Apply on the right. On mobile the
 summary stays underneath the action row. Mobile fields expand between search and the action row; search,
 sorting, Clear and Apply stay available in both states. Desktop fields always
 remain between search and the action row.
+On phones and tablets, Filter, Clear and Apply always retain visible backgrounds and solid 1px borders, with square corners.
 The applied match count sits with the results below the toolbar and summary and updates
 with the displayed projection. It is omitted when no successful projection is available. Draft
 edits make no count-preview requests. Apply filters submits the complete

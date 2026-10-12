@@ -19,14 +19,14 @@ export const FeedNote = styled(MutedText)`
 const SummaryList = styled.ul`
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
   min-inline-size: 0;
   margin: 0;
   padding: 0;
   list-style: none;
   > li {
     max-inline-size: 100%;
-    padding: 4px 7px;
+    padding: 2px 6px;
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.brandSoft};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};

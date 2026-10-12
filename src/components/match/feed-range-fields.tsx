@@ -56,9 +56,9 @@ export const RangeFields = styled.div`
   input::-webkit-date-and-time-value { min-inline-size: 0; text-align: start; }
   input::-webkit-calendar-picker-indicator { inline-size: 0.875rem; padding: 0; margin: 0; }
   ${media.belowDesktop} {
-    > label { flex-direction: column; align-items: stretch; gap: 4px; padding: 5px; }
-    > label > span { max-inline-size: none; font-size: 0.8125rem; line-height: 1.2; }
-    input { min-block-size: 2rem; font-size: 0.875rem; }
+    > label { flex-direction: column; align-items: stretch; gap: 1px; padding: 2px 4px; }
+    > label > span { max-inline-size: none; font-size: 0.8125rem; line-height: 1.1; }
+    input { min-block-size: 1.5rem; font-size: 0.875rem; }
   }
   @media (min-width: 480px) { > label > span { max-inline-size: none; white-space: nowrap; } }
 `;

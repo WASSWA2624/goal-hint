@@ -118,6 +118,7 @@ directly editable minimum/maximum fields, accepting decimal percentages from
 The muted Odds unavailable explanation remains compact. Mobile filter edits
 remain drafts until Apply; no timer applies them automatically.
 
+On phones and tablets, Filter, Clear and Apply always retain visible backgrounds and solid 1px borders, with square corners.
 One persistent action row below the filter options stays outside the mobile
 collapsible section and places Sort by first, followed by Clear and Apply
 filters. The action group aligns right on desktop, while mobile keeps Sort on
