@@ -4,6 +4,7 @@ import { cache } from "react";
 import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { TextLink } from "@/components/ui/controls";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ChevronDownIcon, HelpIcon, HomeIcon, InfoIcon, LiveIcon, ResultsIcon, SearchIcon } from "@/components/ui/icons";
 import { Container, PageMain } from "@/components/ui/layout";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
@@ -15,7 +16,7 @@ import { feedQueryRules } from "@/domain/feed-query";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import {
-  DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderContent, HeaderSearch, HomeLink,
+  DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderActions, HeaderContent, HeaderSearch, HomeLink,
   MoreList, MoreMenu, ShellFrame, SkipLink,
   TabBar, TabLink, TabList, TopNavLink, TopNavList,
 } from "@/components/navigation/shell-styles";
@@ -91,6 +92,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
             <input type="search" name="q" defaultValue={searchForm.value} maxLength={feedQueryRules.maximumSearchLength}
               placeholder={messages.text("navigation.search")} aria-label={messages.text("navigation.searchLabel")} autoComplete="off" />
           </HeaderSearch>
+          <HeaderActions><ThemeToggle /></HeaderActions>
         </HeaderContent>
       </Header>
       <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact}>

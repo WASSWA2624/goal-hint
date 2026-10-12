@@ -3,6 +3,7 @@ import type { MarketCategory } from "./match-view.ts";
 import type { MatchDetailResponse } from "./match-detail.ts";
 import { marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
+import { bestPublishedFamily } from "./market-ranking.ts";
 
 /**
  * Pure presentation rules for the match-details screen. Every value is read from the stored
@@ -36,14 +37,13 @@ export function marketRow(data: MatchDetailResponse, family: MarketFamily) {
   return { family, item, outcome, reason };
 }
 
-/** The featured pick: the highest selected probability across published families, ties in policy order. */
+/** Rank the displayed revision's published picks by unrounded probability, exact fresh odds, then policy order. */
 export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
-  let best: { family: MarketFamily; probability: number } | null = null;
-  for (const family of publicPolicy.markets) {
-    const item = data.snapshot?.markets.find((entry) => entry.market.family === family);
-    if (item && (best === null || item.market.selectedProbability > best.probability)) best = { family, probability: item.market.selectedProbability };
-  }
-  return best?.family ?? null;
+  // The fixture carries applicable-pick prices; the complete detail envelope also covers historical selections.
+  const prices = [...(data.fixture.prices ?? []), ...(data.odds ?? []).flatMap((group) => group.selections.map((price) => ({
+    family: group.family, selection: price.selection, price: price.price,
+  })))];
+  return bestPublishedFamily(data.snapshot?.markets, prices);
 }
 
 /** Families visible for a category and search text; search spans every category. */

@@ -37,7 +37,7 @@ access. All SQL values, limits and offsets are bound parameters.
 | `dir` | `asc` or `desc`. The default is `asc` for kickoff and `desc` for probability; a default direction is omitted from canonical URLs. |
 | `page` | Integer 1–10,000, default 1. |
 | `pageSize` | Integer 1–100, default 30. |
-| `leagues` | Optional response option, only `0`: the response carries `leagues: []`. Browser page refreshes, live polls and the desktop draft count use it because they never read filter options. It is removed before query parsing and not charged to the 2 KiB query limit, so it never enters the canonical query, cache key or page links. |
+| `leagues` | Optional response option, only `0`: the response carries `leagues: []`. Browser page refreshes and live polls use it because they never read filter options. It is removed before query parsing and not charged to the 2 KiB query limit, so it never enters the canonical query, cache key or page links. |
 
 Prompt 050 makes `league`, `country` and `market` lists. Plain checkbox forms that
 repeat a list key join exactly like a comma list; every other key must stay

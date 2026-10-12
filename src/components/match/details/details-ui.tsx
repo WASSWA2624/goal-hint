@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import styled, { css, type DefaultTheme } from "styled-components";
 import { ChevronRightIcon } from "@/components/ui/icons";
+import { paginationListStyles } from "@/components/ui/pagination-styles";
 import { TeamLogo } from "@/components/match/team-logo";
 import { paginationItems } from "@/domain/feed-presentation";
 import type { FormLetter } from "@/domain/match-details";
@@ -335,32 +336,7 @@ export function Crest({ name, url, size = 20, eager = false }: { name: string | 
 }
 
 const PagerList = styled.ol`
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1.75rem);
-  justify-content: start;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  > li > button, > li > span {
-    display: grid;
-    place-items: center;
-    inline-size: 100%;
-    block-size: 1.75rem;
-    color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.surface};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 4px;
-    font: inherit;
-    font-size: ${size("secondary")};
-    font-variant-numeric: tabular-nums;
-    cursor: pointer;
-    ${focusRing}
-  }
-  > li > button[aria-current="page"] { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.accent.blue.solid}; border-color: transparent; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  > li > span { border: 0; color: ${({ theme }) => theme.color.mutedText}; cursor: default; }
-  > li > button:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
+  ${paginationListStyles}
 `;
 /** Every page of a section's complete collection; the URL keeps the page for Back and refresh. */
 export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
@@ -369,7 +345,7 @@ export function Pager({ page, pages, onPage }: { page: number; pages: number; on
   return <nav aria-label={messages.text("details.pages")}>
     <PagerList>
       <li><button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label={messages.text("feed.pagination.previous")}>‹</button></li>
-      {paginationItems(page, pages).map((item) => item.kind === "gap" ? <li key={item.key}><span aria-hidden="true">…</span></li>
+      {paginationItems(page, pages).map((item) => item.kind === "gap" ? <li key={item.key}><span data-gap aria-hidden="true">…</span></li>
         : <li key={item.page}><button type="button" aria-current={item.current ? "page" : undefined} onClick={() => onPage(item.page)}
           aria-label={messages.text("feed.pagination.pageLink", { page: messages.number(item.page) })}>{messages.number(item.page)}</button></li>)}
       <li><button type="button" disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label={messages.text("feed.pagination.next")}>›</button></li>

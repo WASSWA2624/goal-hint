@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { activeFeedFilterCount, feedQueryHref, feedQueryKey, FeedQueryError, isAnyOdds, panelFilterCount, parseFeedQuery, resolveFeedDates,
-  serializeFeedQuery } from "../src/domain/feed-query.ts";
+  serializeFeedQuery, formatProbabilityValue, parseProbabilityValue, probabilityFraction, validProbabilityRange } from "../src/domain/feed-query.ts";
 import { publicPolicy } from "../src/domain/public-policy.ts";
 import { query, today } from "./helpers/client-state-fixtures.mjs";
 
@@ -77,6 +77,51 @@ test("sorting defaults direction per field and serializes only non-default direc
   assert.throws(() => serializeFeedQuery({ ...sorted, sort: { by: "probability", direction: "sideways" } }, today));
   assert.throws(() => serializeFeedQuery({ ...sorted, markets: [] }, today));
   assert.throws(() => serializeFeedQuery({ ...sorted, search: " unnormalized " }, today));
+});
+
+test("probability bounds accept decimals and equality, normalize plain decimal URLs, and retain their identity", () => {
+  for (const [raw, canonical, expected] of [
+    ["0.125-100.000", "0.125-100", { min: 0.125, max: 100 }],
+    ["35.7500-45.200", "35.75-45.2", { min: 35.75, max: 45.2 }],
+    ["58.2-58.2", "58.2-58.2", { min: 58.2, max: 58.2 }],
+    ["0.0000001-0.0000002", "0.0000001-0.0000002", { min: 1e-7, max: 2e-7 }],
+  ]) {
+    const parsed = query(`prob=${raw}`);
+    assert.deepEqual(parsed.probability, expected);
+    assert.equal(serializeFeedQuery(parsed, today).get("prob"), canonical);
+    assert.deepEqual(query(serializeFeedQuery(parsed, today).toString()), parsed);
+    assert.equal(feedQueryKey(parsed, today), feedQueryKey(query(`prob=${canonical}`), today));
+  }
+  assert.equal(serializeFeedQuery(query("prob=0.00-100.00"), today).has("prob"), false);
+  const tiny = { ...query(), probability: { min: Number.MIN_VALUE, max: 100 } };
+  const serialized = serializeFeedQuery(tiny, today);
+  assert.doesNotMatch(serialized.get("prob"), /e/u);
+  assert.deepEqual(query(serialized.toString()).probability, tiny.probability);
+  assert.notEqual(feedQueryKey(query("prob=58.2-60"), today), feedQueryKey(query("prob=58.21-60"), today));
+});
+
+test("probability values reject incomplete, reversed, out-of-range and nonfinite input", () => {
+  for (const raw of ["", " ", "1.", ".5", "01", "00.5", "-0", "-1", "+1", "1e1", "0x10", "NaN", "Infinity", "100.01", "100.000000000000000001", "5%", "5x", " 5", "5 ", 5, null]) {
+    assert.equal(parseProbabilityValue(raw), null, String(raw));
+  }
+  for (const raw of ["0.5-", "-0.5", "5.25-5.24", "0-100.01", "1e-7-100", "NaN-100", "0-Infinity", "0-5.5-6", "0-100.000000000000000001"]) {
+    assert.throws(() => query(`prob=${raw}`), FeedQueryError, raw);
+  }
+  for (const bounds of [{ min: -1, max: 100 }, { min: 0, max: 100.01 }, { min: 58.21, max: 58.2 }, { min: NaN, max: 100 }, { min: 0, max: Infinity }]) {
+    assert.equal(validProbabilityRange(bounds), false);
+    assert.throws(() => serializeFeedQuery({ ...query(), probability: bounds }, today), FeedQueryError);
+  }
+  assert.equal(validProbabilityRange({ min: 0, max: 0 }), true);
+  assert.equal(validProbabilityRange({ min: 100, max: 100 }), true);
+  assert.equal(parseProbabilityValue("0.5"), 0.5);
+  assert.equal(formatProbabilityValue(58.2), "58.2");
+});
+
+test("percentage-to-fraction conversion preserves decimal equality without an arithmetic division error", () => {
+  assert.notEqual(58.2 / 100, 0.582);
+  for (const [percent, probability] of [[0, 0], [100, 1], [58.2, 0.582], [60.0049, 0.600049], [0.0000001, 0.000000001]]) {
+    assert.equal(probabilityFraction(percent), probability);
+  }
 });
 
 test("odds= (052) is an unknown key while provider odds are not public, whatever its value", () => {

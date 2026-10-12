@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
@@ -16,7 +17,16 @@ import { DatePresets } from "./feed-dates";
 import { CompactSelect, controlFeedback, focusRing, IconButton } from "./filter-parts";
 
 const desktop = media.desktop;
-const HeaderContent = styled.div`display: grid; gap: 6px; min-inline-size: 0;`;
+const HeaderContent = styled.div`
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  ${media.belowDesktop} {
+    position: sticky;
+    inset-block-start: 8px;
+    z-index: 30;
+  }
+`;
 /** One semantic page title: visible on desktop, visually hidden on smaller screens. */
 const PageHeading = styled(VisuallyHidden)`
   ${desktop} {
@@ -50,15 +60,15 @@ const BrandBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   min-inline-size: 0;
   min-block-size: 3rem;
   margin-block-start: -8px;
   margin-inline: -8px;
   padding-inline: 8px;
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.header.background};
-  background-color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.header.background};
+  border-block-end: 2px solid ${({ theme }) => theme.header.accent};
   ${desktop} { display: none; }
 `;
 /** Inverse-teal focus rings read on every stop of the bar. */
@@ -78,17 +88,18 @@ const HomeLink = styled(Link)`
 const PhoneActions = styled.div`
   display: flex;
   flex: none;
-  gap: 8px;
+  gap: 4px;
 `;
-/** Compact translucent controls; an open panel or search fills its button with inverse teal. */
+/** Borderless title-bar icons; an open panel or search retains a clear active fill. */
 const RoundButton = styled(IconButton)`
-  inline-size: 2rem;
-  block-size: 2rem;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.controlFill};
-  box-shadow: inset 0 0 0 1px ${({ theme }) => theme.header.controlBorder};
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   border-radius: 0;
-  font-size: 1rem;
+  font-size: 0.875rem;
   transition: background-color 120ms ease, color 120ms ease;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
   &[aria-expanded="true"] { color: ${({ theme }) => theme.header.onAccent}; background: ${({ theme }) => theme.header.accent}; }
@@ -165,6 +176,7 @@ export function FeedHeader({ query, today, onApply, filters }: {
           <BrandLogo alt="" variant="inverse" />
         </HomeLink>
         <PhoneActions>
+          <ThemeToggle />
           {filters && <FilterToggle type="button" aria-expanded={filters.open} aria-controls={filters.controls} title={messages.text("feed.filters.toggle")}
             aria-label={filters.count > 0 ? messages.plural("feed.filters.toggleCount", filters.count) : messages.text("feed.filters.toggle")}
             onClick={filters.onToggle}>
@@ -193,7 +205,7 @@ export function FeedHeader({ query, today, onApply, filters }: {
   </HeaderContent>;
 }
 
-/** Count and order share one row, including on phones. */
+/** Desktop keeps its section heading; compact screens start with the action row. */
 const Toolbar = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -201,10 +213,7 @@ const Toolbar = styled.div`
   justify-content: space-between;
   gap: 6px 8px;
   ${media.belowDesktop} {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: 4px;
+    display: block;
   }
 `;
 const Count = styled.div`
@@ -214,27 +223,40 @@ const Count = styled.div`
   > h2 { font-size: 0.75rem; ${desktop} { font-size: 1.25rem; } }
   > p { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: block; } }
   ${media.belowDesktop} {
-    grid-column: 1;
-    grid-row: 1;
-    color: ${({ theme }) => theme.color.mutedText};
-    > h2 { font-weight: 500; line-height: 1.25; }
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 `;
-const PhoneText = styled.span`${desktop} { display: none; }`;
 const DesktopText = styled.span`display: none; ${desktop} { display: inline; }`;
 const SortGroup = styled.div`
   display: flex;
   flex-wrap: wrap;
   min-inline-size: 0;
-  align-items: center;
+  align-items: start;
   gap: 4px;
   > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
   ${media.belowDesktop} {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px;
-    > [data-filter-actions] { justify-content: flex-start; }
+    gap: 4px;
   }
+`;
+/** The applied count sits directly under the right edge of Apply filters. */
+const ActionGroup = styled.div`
+  display: grid;
+  gap: 3px;
+  min-inline-size: 0;
+`;
+const ResultCount = styled.p`
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.caption};
+  line-height: 1.2;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 `;
 const SelectWrap = styled.span`
   position: relative;
@@ -271,6 +293,12 @@ const PhoneSort = styled(CompactSelect)`
   inline-size: 100%;
   > span { flex: 1; }
   > span > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.2; }
+  > select {
+    font-size: inherit;
+    > option { font-size: 0.6875rem; }
+    /* iOS presents its own picker; keep its input large enough to avoid focus zoom. */
+    @supports (-webkit-touch-callout: none) { font-size: 16px; }
+  }
   > svg { inset-inline-end: 7px; }
 `;
 const sortOptions: readonly FeedSort[] = [
@@ -291,7 +319,7 @@ export function ResultsToolbar({ query, total, first, last, onApply, actions }: 
   };
   return <Toolbar>
     <Count>
-      <h2><PhoneText>{total === null ? messages.text("feed.title") : messages.plural("feed.results.count", total)}</PhoneText><DesktopText>{messages.text("feed.results.title")}</DesktopText></h2>
+      <h2>{messages.text("feed.results.title")}</h2>
       {total !== null && <p>{total === 0 ? messages.text("feed.results.showing", { shown: "0", total: "0" })
         : messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>}
     </Count>
@@ -309,7 +337,10 @@ export function ResultsToolbar({ query, total, first, last, onApply, actions }: 
         </select>
         <ChevronDownIcon />
       </SelectWrap>
-      {actions}
+      <ActionGroup>
+        {actions}
+        {total !== null && <ResultCount data-match-count>{messages.plural("feed.results.count", total)}</ResultCount>}
+      </ActionGroup>
     </SortGroup>
   </Toolbar>;
 }

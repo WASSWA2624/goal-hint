@@ -1,23 +1,15 @@
 import type { FixtureSnapshot } from "./fixture-snapshot.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";
 import type { MarketFamily } from "./markets.ts";
-import { publicPolicy } from "./public-policy.ts";
+import { bestPublishedFamily } from "./market-ranking.ts";
 import { countryFlagAsset } from "./country-flag.ts";
 
 /**
- * The shown pick: the highest selected probability among the chosen families, ties in policy
- * order. This mirrors the feed SQL so cards display the pick that ordering and filters used.
+ * The shown pick mirrors feed SQL: highest unrounded probability, then exact fresh public odds,
+ * then policy order. Ordering and filters therefore refer to the pick the card actually shows.
  */
-export function bestCardFamily(fixture: Pick<FixtureSnapshot, "forecast">, markets: readonly MarketFamily[]): MarketFamily | null {
-  let best: { family: MarketFamily; probability: number } | null = null;
-  for (const family of publicPolicy.markets) {
-    if (!markets.includes(family)) continue;
-    const item = fixture.forecast?.markets.find((entry) => entry.market.family === family);
-    if (!item) continue;
-    const probability = item.market.selectedProbability;
-    if (best === null || probability > best.probability) best = { family, probability };
-  }
-  return best?.family ?? null;
+export function bestCardFamily(fixture: Pick<FixtureSnapshot, "forecast" | "prices">, markets: readonly MarketFamily[]): MarketFamily | null {
+  return bestPublishedFamily(fixture.forecast?.markets, fixture.prices ?? [], markets);
 }
 
 export type NoPickReason = "market" | "outside" | "updating" | "unselected" | "closed" | "failed" | "awaiting";

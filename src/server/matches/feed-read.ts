@@ -2,7 +2,7 @@ import "server-only";
 import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
 
 import { addReportingDays, type ReportingDateRange, type ReportingDate } from "../../domain/calendar.ts";
-import { isAnyProbability, type FeedQuery } from "../../domain/feed-query.ts";
+import { isAnyProbability, probabilityFraction, type FeedQuery } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { MatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -32,14 +32,18 @@ const displayedSet = Prisma.sql`CASE
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
   providerOdds: boolean = publicPolicy.features.providerOdds) {
   const markets = Prisma.join(query.markets);
-  // One shown pick per fixture: the highest selected probability among the chosen families,
-  // ties broken by policy order. Browser presentation applies the same rule to the same doubles.
+  // One shown pick per fixture: highest unrounded probability, then the exact fresh public price,
+  // then policy order. Candidate odds remain unread while their public feature is disabled.
+  const candidatePriceJoin = providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id
+      AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE` : Prisma.empty;
+  const candidatePriceOrder = providerOdds ? Prisma.sql`bp.displayHundredths DESC,` : Prisma.empty;
   const joins = Prisma.sql`FROM FootballFixture f JOIN FootballTeam h ON h.id=f.homeTeamId JOIN FootballTeam a ON a.id=f.awayTeamId
     JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
     LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id
     LEFT JOIN MarketPrediction m ON m.setId=${displayedSet} AND m.family=(SELECT b.family FROM MarketPrediction b
+      ${candidatePriceJoin}
       WHERE b.setId=${displayedSet} AND b.family IN (${markets}) AND b.available=TRUE
-      ORDER BY b.selectedProbability DESC, FIELD(b.family, ${Prisma.join(publicPolicy.markets)}) ASC LIMIT 1)
+      ORDER BY b.selectedProbability DESC, ${candidatePriceOrder} FIELD(b.family, ${Prisma.join(publicPolicy.markets)}) ASC LIMIT 1)
     ${providerOdds ? oddsPriceJoin : Prisma.empty}`;
   const timeWindows = query.time ? kickoffTimeWindows(range, query.time) : null;
   const days = query.time ? kickoffTimeWindows(range, { ...query.time, from: "00:00", to: "23:59" }) : null;
@@ -55,9 +59,9 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     ? Prisma.sql`f.status IN ('finished-regulation','finished-extra-time','finished-penalties')` : Prisma.sql`f.status=${query.status}`);
   if (query.picks === "only") filters.push(Prisma.sql`m.available=TRUE`);
   if (!isAnyProbability(query.probability)) {
-    // Whole-percent bounds include values that display as the boundary percentage.
-    filters.push(Prisma.sql`m.available=TRUE AND m.selectedProbability>=${(query.probability.min - 0.5) / 100}
-      AND m.selectedProbability<${(query.probability.max + 0.5) / 100}`);
+    // Inclusive unrounded bounds. Decimal-text scaling avoids introducing an arithmetic rounding error at equality.
+    filters.push(Prisma.sql`m.available=TRUE AND m.selectedProbability>=${probabilityFraction(query.probability.min)}
+      AND m.selectedProbability<=${probabilityFraction(query.probability.max)}`);
   }
   // Inclusive bounds on the shown pick's own stored two-place price. A fixture without a fresh price for exactly
   // that family and selection drops out through NULL semantics; another family's price never qualifies it.

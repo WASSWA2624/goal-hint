@@ -46,7 +46,7 @@ editable and disable Apply. Date steppers, date popovers and time mode menus are
 absent. Historical queries retain the MySQL-supported years 1000–9999. Direct
 invalid or incompatible dates/queries return the existing 404 shell.
 
-The page uses the shared light shell, square controls, feedback and match cards.
+The page uses the shared light or dark shell, square controls, feedback and match cards.
 Cards form one column below 64rem and an aligned table above it. Every feed logo
 is lazy with reserved dimensions and initials fallbacks; an eager logo would be
 hoisted as a third-party image preload competing with the page's own font, CSS
@@ -81,7 +81,9 @@ branded bar. It uses the same navy-to-teal `theme.header.background` and brand
 edge as the desktop header, has a 3rem (48px) minimum height, and runs past the
 feed's 8px gutters and top padding to the screen edge. The inverse logo links
 home as "Goal Hint home" and can shrink on narrow screens with enlarged text.
-The 32px translucent filter and search buttons sit at the end of the row and
+The 32px theme, filter and search buttons sit at the end of the row. The theme
+button switches between the approved R03 Light and R04 Dark palettes. Filter
+and search buttons
 fill with inverse teal while open. Feed sections use 6px gaps. There is no
 visible feed page heading or subtitle on phones or tablets. One responsive h1
 preserves the semantic page heading and becomes visible on desktop. An open
@@ -110,8 +112,11 @@ the muted Odds unavailable explanation remain compact. Mobile filter edits
 remain drafts until Apply; no timer applies them automatically.
 
 The results toolbar stays outside the collapsible section and places Sort by
-on the left, followed by Clear and Apply. Phones use compact action labels, with
-the current loaded match count on its own row above. Empty-result messages
+on the left, followed by Clear and Apply filters. The applied query's total
+match count sits directly below Apply filters, aligned to its right edge. It
+updates with the displayed results and is omitted when no successful projection
+is available. Editing a draft does not request an advisory count or change that
+label. Empty-result messages
 appear below the action row. The sort menu
 contains both kickoff directions and
 both probability directions. Picks only/With predictions and a separate
@@ -123,8 +128,21 @@ and table layout.
 Its visible inline date/time controls precede one row of Leagues,
 Countries, Markets, Odds and Probability fields. Probability uses compact
 minimum/maximum number inputs; the row contains no sliders. One Apply action
-submits all filter edits, and its desktop label can show the advisory draft
-count. The independent sort menu remains in the results toolbar.
+submits all filter edits. The independent sort menu remains in the results toolbar.
+
+Mobile cards use the approved flat-dividers presentation: tiny Market, Pick,
+Prob. and Result captions above compact values, with exact available
+odds beneath the prediction. White or dark surfaces, fine borders and square
+edges separate cards from the darker page canvas. Textual Win, Loss and Pending
+labels carry green, red and amber semantic tones. Desktop retains its table
+composition and adds the aligned Result column. Missing predictions use dashes
+on mobile and Unavailable on desktop, with the complete reason kept accessible.
+
+The distinct bottom navigation bar is 42px tall before the device safe-area
+inset. It uses the dark title-bar surface in both themes and a single teal
+current-page indicator. Theme preference is stored locally; absent a saved
+choice, the browser's preferred colour scheme is used after hydration. No
+account, analytics or external service is needed to switch themes.
 
 ## Coverage, progress and errors
 

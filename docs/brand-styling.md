@@ -7,18 +7,25 @@ honest development state until their later implementation prompts.
 
 ## Theme and rendering
 
-`src/styles/theme.ts` exports `lightTheme`, `GoalHintTheme` and `OutcomeTone`.
+`src/styles/theme.ts` exports `lightTheme`, `darkTheme`, `GoalHintTheme` and `OutcomeTone`.
 Semantic colors, typography, spacing, breakpoints, borders, focus and control
-dimensions share one contract. A later theme can implement that contract; only
-the light theme is active. Brand teal remains separate from outcome colors:
-Correct is green, Incorrect is red, and Pending, Void and Unavailable are gray.
+dimensions share one contract, including a light/dark mode for native controls.
+The approved R03 Light and R04 Dark palettes use a darker page canvas, neutral
+card surfaces and flat mobile dividers. Brand teal remains separate from outcome
+colors: Win is green, Loss is red, Pending is amber, and Void/Unavailable are
+neutral. Explicit result labels preserve their meaning without depending on color.
 
 The server root layout wraps its children in one `StyleProvider`. Its Client
 Component registry creates a `ServerStyleSheet` per instance, inserts collected
 rules through `useServerInsertedHTML`, and clears each emitted tag. The browser
 uses the existing sheet through styled-components hydration. A single
 `ThemeProvider` supplies the tokens and a single `GlobalStyle` supplies the
-reset. Nested route layouts must reuse this arrangement rather than mount
+reset. `useSyncExternalStore` keeps server rendering and initial hydration on a
+stable light snapshot, then reads the saved browser preference or system color
+scheme. The shared title-bar `ThemeToggle` switches the mode and persists only
+that local preference under `goal-hint-theme`; blocked storage retains a working
+in-memory choice. Changes synchronize between tabs and system preference changes
+apply when no explicit choice is saved. Nested route layouts must reuse this arrangement rather than mount
 another provider or registry. Do not seal the sheet while a response streams.
 
 `compiler.styledComponents` provides stable component identities. Styled
@@ -50,7 +57,8 @@ Import directly from the owning module to keep dependencies clear:
 | Module | Exports and use |
 | --- | --- |
 | `@/styles/provider` | `StyleProvider`, used once by the root layout. |
-| `@/styles/theme` | `lightTheme`, `GoalHintTheme`, `OutcomeTone`, and static `media` query strings. |
+| `@/styles/theme` | `lightTheme`, `darkTheme`, `GoalHintTheme`, `OutcomeTone`, and static `media` query strings. |
+| `@/components/ui/theme-toggle` | `ThemeToggle`: shared accessible title-bar button with a visible icon, action label, pressed state and focus ring. |
 | `@/components/ui/brand` | `BrandLogo`, `BrandMark`, `BrandImageProps`. Named primary, inverse and monochrome variants with reserved dimensions and clear space. |
 | `@/components/ui/layout` | `Container`, `Stack`, `Inline`, `Surface`, `PageMain`, `PageHeading`, `SectionHeading`, `BodyText`, `MutedText`. Logical spacing, wrapping and bounded content width. |
 | `@/components/ui/controls` | `Button`, `ButtonLink`, `TextLink`, `TextInput`, `SelectInput` and their prop types. Native button, Next.js link and labeled native form semantics. |

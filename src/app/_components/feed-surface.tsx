@@ -31,6 +31,8 @@ import { media } from "@/styles/theme";
 const noLeagues: MatchFeedResponse["leagues"] = [];
 /** Keep the mobile feed's stacked controls close while retaining desktop spacing tokens. */
 const FeedStack = styled(Stack)`${media.belowDesktop} { gap: 6px; }`;
+/** Keep a DOM dismissal boundary without constraining the sticky header to the filter panel. */
+const FilterRegion = styled.div`display: contents;`;
 /** Pending navigations dim the list in place instead of inserting a line that shifts it. */
 const Results = styled(FeedStack)`
   transition: opacity 150ms ease;
@@ -85,7 +87,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   const closeFilters = useCallback(() => setFiltersOpen(false), []);
   useOutsideDismiss({ enabled: filtersOpen, root: filterRoot, onDismiss: closeFilters });
   const filtersFormId = useId();
-  const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true, total: result.data?.total ?? null });
+  const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true });
   const filterActions = useMemo(() => <FeedFilterActions formId={filtersFormId} locale={query.locale} status={filterStatus} />,
     [filterStatus, filtersFormId, query.locale]);
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
@@ -116,12 +118,12 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? messages.plural("feed.matchCount", result.data.total)
     : messages.text(`feed.state.${result.data.state}`);
   return <FeedStack $gap="sm">
-    <FeedStack $gap="sm" ref={filterRoot}>
+    <FilterRegion ref={filterRoot}>
     <FeedHeader query={query} today={today} onApply={apply}
       filters={{ open: filtersOpen, count: panelFilterCount(query), controls: filtersId, onToggle: toggleFilters }} />
-    <FeedFilters query={query} today={today} leagues={leagues} total={result.data?.total ?? null} onApply={apply}
+    <FeedFilters query={query} today={today} leagues={leagues} onApply={apply}
       phoneOpen={filtersOpen} phoneId={filtersId} formId={filtersFormId} onDraftStatus={setFilterStatus} />
-    </FeedStack>
+    </FilterRegion>
     {controls}
     {range.endDate > createPredictionWindow(today).lastDate && <FeedNote>{messages.text("feed.sevenDayAvailability")}</FeedNote>}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>

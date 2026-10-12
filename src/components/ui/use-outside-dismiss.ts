@@ -12,11 +12,13 @@ export function useOutsideDismiss({ enabled, root, onDismiss }: {
     const container = root.current;
     if (!enabled || !container) return;
     const ownerDocument = container.ownerDocument;
-    const outside = (event: PointerEvent) => {
+    const outside = (event: MouseEvent) => {
       if (!event.composedPath().includes(container)) onDismiss();
     };
-    // Capture also catches clicks in controls that stop bubbling to the document.
-    ownerDocument.addEventListener("pointerdown", outside, true);
-    return () => ownerDocument.removeEventListener("pointerdown", outside, true);
+    // Dismiss after the tap resolves its click target. Closing on pointerdown can shift the
+    // layout before pointerup and send Apply/Clear taps to a match link underneath instead.
+    // Capture still catches controls that stop bubbling to the document.
+    ownerDocument.addEventListener("click", outside, true);
+    return () => ownerDocument.removeEventListener("click", outside, true);
   }, [enabled, root, onDismiss]);
 }

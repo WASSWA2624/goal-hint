@@ -83,8 +83,9 @@ remain removable. At least one market must stay selected. Probability uses the
 labeled preset field. Mobile retains the muted Odds unavailable explanation.
 
 One action row stays outside the collapsible filter section. Sort by appears
-first on the left, followed by Clear and Apply. Phones use compact action labels;
-desktop Apply can show the advisory draft count. Apply submits the complete
+first on the left, followed by Clear and Apply filters. The applied match count
+sits below Apply filters, aligned right. Draft edits make no count-preview requests.
+Apply filters submits the complete
 date, time and filter draft. Clear resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
 match result and kickoff ascending order, and resets page to one. It retains
@@ -94,8 +95,8 @@ appears below this action row. The sort menu includes
 both kickoff directions and both probability directions, without a separate
 reverse-order button.
 
-Checklist popovers use native buttons and fields, close on an outside pointer
-action or Escape, and return focus to their trigger on Escape. Outside-click
+Checklist popovers use native buttons and fields, close on an outside click
+or Escape, and return focus to their trigger on Escape. Outside-click
 dismissal also closes the expanded mobile/tablet filter section; closing it
 does not apply its draft. Shared fields provide labels, descriptions, errors
 and visible focus. A polite query status

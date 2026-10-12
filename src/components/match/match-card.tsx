@@ -17,7 +17,7 @@ import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { CheckIcon, ChevronIcon, CrossIcon, FlagIcon, GlobeIcon, LockIcon, NoticeIcon, TrophyIcon, VoidIcon } from "./match-icons";
+import { ChevronIcon, FlagIcon, GlobeIcon, NoticeIcon, TrophyIcon } from "./match-icons";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
 
@@ -67,16 +67,15 @@ const Card = styled.article`
   }
   @media (prefers-reduced-motion: reduce) { transition: none; }
   ${tile} {
-    --gh-chip-pad: 4px;
     font-family: ${({ theme }) => theme.typography.family};
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "when" "league" "teams" "pick";
-    gap: 2px;
+    gap: 3px;
     align-items: center;
-    padding: 4px 8px;
+    padding: 6px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-color: ${({ theme }) => theme.color.border};
-    box-shadow: 0 1px 2px rgb(11 31 51 / 5%);
+    box-shadow: none;
     border-radius: ${tileRadius};
   }
   ${table} {
@@ -189,7 +188,7 @@ const StatusBadge = styled.span<{ $tone: AccentName | "neutral" }>`
     gap: 4px;
     min-block-size: 1.125rem;
     padding-inline: 5px;
-    border-radius: 3px;
+    border-radius: 0;
     font-size: 0.75rem;
     font-weight: 500;
     line-height: 1.25;
@@ -270,9 +269,9 @@ const TeamName = styled.span<{ $result: TeamResult }>`
     grid-row: 1;
     display: block;
     padding-inline-end: 4px;
-    color: ${({ theme, $result }) => $result === "loss" ? theme.color.mutedText : theme.color.text};
+    color: ${({ theme }) => theme.color.text};
     font-size: 0.75rem;
-    font-weight: 350;
+    font-weight: ${({ theme }) => theme.typography.weight.medium};
     line-height: 1.25;
     text-align: end;
     white-space: nowrap;
@@ -314,7 +313,7 @@ const Score = styled.span<{ $live: boolean }>`
     gap: 3px;
     color: ${({ theme, $live }) => $live ? theme.color.live.text : theme.color.text};
     font-size: 0.875rem;
-    font-weight: ${({ $live }) => $live ? 700 : 500};
+    font-weight: 700;
     font-variant-numeric: normal;
   }
 `;
@@ -350,41 +349,54 @@ const Pick = styled.div`
   ${tile} {
     grid-area: pick;
     display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.45fr) minmax(0, 0.8fr) minmax(0, 1.15fr);
-    align-items: center;
-    gap: 4px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: stretch;
+    margin-block-start: 1px;
+    padding-block-start: 4px;
+    border-block-start: 1px solid ${({ theme }) => theme.color.border};
+    background: ${({ theme }) => theme.mode === "dark" ? theme.color.surfaceMuted : theme.color.surface};
   }
-  ${table} { display: grid; grid-column: 7 / span 3; grid-template-columns: subgrid; align-items: center; }
+  ${table} { display: grid; grid-column: 7 / span 4; grid-template-columns: subgrid; align-items: center; }
 `;
-const chip = css`
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/** A shared caption/value cell keeps every selected-pick fact in the same column on both layouts. */
+const PickCell = styled.span`
   min-inline-size: 0;
-  min-block-size: 1.5rem;
-  padding: 0 var(--gh-chip-pad);
-  border-radius: 4px;
-  line-height: 1.3;
-  text-align: center;
-  white-space: normal;
+  > [data-mobile-only] { display: none; }
+  ${tile} {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1px;
+    padding-inline: 3px;
+    text-align: center;
+    line-height: 1.3;
+    border-inline-start: 1px solid ${({ theme }) => theme.color.border};
+    > [data-pick-value] {
+      max-inline-size: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 0.75rem;
+      font-weight: ${({ theme }) => theme.typography.weight.bold};
+    }
+    > [data-mobile-only] { display: block; }
+    > [data-desktop-only] { display: none; }
+  }
 `;
-const TileCode = styled.span`
+const PickCaption = styled.span`
   display: none;
   ${tile} {
-    ${chip}
-    grid-column: 1;
+    display: block;
     color: ${({ theme }) => theme.color.mutedText};
-    background: ${({ theme }) => theme.color.surfaceMuted};
-    font-size: 0.75rem;
-    font-style: italic;
-    font-weight: 400;
+    font-size: 0.625rem;
+    font-weight: ${({ theme }) => theme.typography.weight.body};
+    white-space: nowrap;
   }
 `;
-const MarketName = styled.span<{ $family: MarketFamily }>`
-  font-size: 0.625rem;
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  ${ellipsis}
-  ${tile} { display: none; }
+const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
+  grid-column: 1;
+  ${tile} { border-inline-start: 0; > [data-pick-value] { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; } }
   ${table} {
     justify-self: start;
     padding: 2px 8px;
@@ -394,70 +406,50 @@ const MarketName = styled.span<{ $family: MarketFamily }>`
       inset 0 0 0 1px color-mix(in srgb, ${({ theme, $family }) => theme.color.market[$family].solid} 38%, transparent);
     font-size: 0.75rem;
     font-weight: ${({ theme }) => theme.typography.weight.bold};
-    white-space: normal;
   }
 `;
 const Prediction = styled.span<{ $available: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-inline-size: 0;
+  display: contents;
   color: ${({ theme, $available }) => $available ? "inherit" : theme.color.mutedText};
-  > svg { flex: none; font-size: 0.6875rem; }
-  /* Its chips join the pick row. */
-  ${tile} { display: contents; }
-  ${table} { display: contents; > svg { display: none; } }
 `;
-const PickShort = styled.span<{ $family: MarketFamily }>`
-  display: none;
-  ${tile} {
-    ${chip}
-    grid-column: 2;
-    color: ${({ theme }) => theme.color.accent.blue.text};
-    background: ${({ theme }) => theme.color.accent.blue.soft};
-    font-size: 0.75rem;
-    font-weight: 400;
-    > [data-short-pick] { display: none; }
-  }
+const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean }>`
+  grid-column: 2;
   ${table} {
-    display: inline-flex;
-    grid-column: 2;
-    justify-self: start;
-    justify-content: center;
-    min-inline-size: 3.25rem;
-    padding: 2px 8px;
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme, $family }) => theme.color.market[$family].gradient};
-    font-size: 0.75rem;
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    > [data-mobile-pick] { display: none; }
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-inline-size: 0;
+    > [data-pick-value] {
+      max-inline-size: 100%;
+      padding: ${({ $available }) => $available ? "2px 8px" : "2px 0"};
+      font-size: 0.75rem;
+      font-weight: ${({ theme }) => theme.typography.weight.bold};
+      color: ${({ theme, $available }) => $available ? theme.color.onBrand : theme.color.mutedText};
+      background: ${({ theme, $family, $available }) => $available ? theme.color.market[$family].gradient : "transparent"};
+    }
   }
 `;
-const Probability = styled.span`
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  > svg { display: none; }
-  ${tile} {
-    ${chip}
-    justify-content: center;
-    grid-column: 3;
-    color: ${({ theme }) => theme.color.text};
-    background: ${({ theme }) => theme.color.surfaceMuted};
-    font-size: 0.8125rem;
-    > svg { display: none; }
-  }
-  ${table} { grid-column: 3; gap: 8px; }
+const Price = styled.span`
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: 0.625rem;
+  font-weight: ${({ theme }) => theme.typography.weight.body};
+  line-height: 1.3;
+  max-inline-size: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  ${table} { margin-block-start: 3px; }
+`;
+const Probability = styled(PickCell)`
+  grid-column: 3;
+  ${table} { display: inline-flex; align-items: center; gap: 8px; }
 `;
 const Percent = styled.span`
   font-size: 0.8125rem;
-  font-weight: 800;
-  line-height: 1;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  ${tile} { font-size: 0.8125rem; font-weight: 500; line-height: 1.3; font-variant-numeric: normal; }
-  ${table} { min-inline-size: 2.5rem; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  ${table} { min-inline-size: 2.5rem; }
 `;
 const Bar = styled.span<{ $family: MarketFamily }>`
   display: none;
@@ -470,68 +462,11 @@ const Bar = styled.span<{ $family: MarketFamily }>`
     > span { display: block; block-size: 100%; background: ${({ theme, $family }) => theme.color.market[$family].gradient}; }
   }
 `;
-const NoPick = styled.span`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  min-inline-size: 0;
-  font-size: 0.6875rem;
-  > b { font-weight: 800; }
-  > span { ${ellipsis} }
-  ${tile} {
-    display: contents;
-    > b {
-      ${chip}
-      grid-column: 2;
-      background: ${({ theme }) => theme.color.surfaceMuted};
-      color: ${({ theme }) => theme.color.mutedText};
-      font-size: ${({ theme }) => theme.typography.scale.caption};
-    }
-    > span { display: none; }
-  }
-  ${table} { grid-column: 2 / span 2; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-`;
-const Mark = styled.span<{ $tone: OutcomeTone }>`
-  display: inline-grid;
-  flex: none;
-  place-items: center;
-  inline-size: 0.9375rem;
-  block-size: 0.9375rem;
-  color: ${({ theme, $tone }) => theme.color.outcome[$tone].text};
-  background: ${({ theme, $tone }) => theme.color.outcome[$tone].background};
-  border: 1px solid ${({ theme, $tone }) => theme.color.outcome[$tone].border};
-  border-radius: 50%;
-  font-size: 0.5625rem;
-  /* Tile: a bare ✓/✗/⊘ leading the percent; the chip carries the outcome tint. */
-  ${tile} { display: none; }
-  ${table} { inline-size: 1.125rem; block-size: 1.125rem; font-size: 0.6875rem; }
-`;
-const TileResult = styled.span<{ $outcome: OutcomeTone }>`
-  display: none;
-  ${tile} {
-    ${chip}
-    grid-column: 4;
-    gap: 4px;
-    color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
-    background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
-    font-size: 0.75rem;
-    font-weight: 500;
-    > svg {
-      flex: none;
-      inline-size: 1rem;
-      block-size: 1rem;
-      ${({ $outcome, theme }) => ($outcome === "correct" || $outcome === "incorrect") && css`
-        padding: 2px;
-        border-radius: 50%;
-        color: ${theme.color.surface};
-        background: ${theme.color.outcome[$outcome].text};
-      `}
-    }
-  }
-`;
-const MissingProbability = styled.span`
-  display: none;
-  ${tile} { ${chip} grid-column: 3; color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted}; }
+const Result = styled(PickCell)<{ $outcome: OutcomeTone }>`
+  grid-column: 4;
+  color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
+  font-size: 0.75rem;
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
 `;
 
 const Notes = styled.ul`
@@ -545,7 +480,7 @@ const Notes = styled.ul`
   list-style: none;
   /* An implicit row under the card, so cards without notes carry no empty track. */
   ${tile} { ${visuallyHidden} }
-  ${table} { grid-column: 4 / span 6; }
+  ${table} { grid-column: 4 / span 7; }
 `;
 const Note = styled.li`
   display: inline-flex;
@@ -579,7 +514,7 @@ const Open = styled(Link)`
   ${table} {
     position: static;
     display: grid;
-    grid-column: 10;
+    grid-column: 11;
     grid-row: 1;
     place-items: center;
     > svg { display: block; font-size: 1rem; }
@@ -593,7 +528,6 @@ const Open = styled(Link)`
   }
 `;
 
-const outcomeIcons = { correct: CheckIcon, incorrect: CrossIcon, void: VoidIcon } as const;
 function liveClockLabel(fixture: FixtureSnapshot, messages: Messages) {
   const minute = fixture.liveClock?.minute ?? null, phase = fixture.liveClock?.phase ?? "in-play";
   const stoppage = fixture.liveClock?.stoppageMinutes;
@@ -615,7 +549,7 @@ function MatchStatus({ fixture, messages }: { fixture: FixtureSnapshot; messages
   const final = hasFinalScoreStatus(status);
   const tone = paused || status === "postponed" ? "amber"
     : status === "live" || status === "canceled" || status === "abandoned" ? "red"
-    : status === "scheduled" ? "blue" : final ? "teal" : "neutral";
+    : "neutral";
   const label = clock ? clock.visible
     : status === "scheduled" ? messages.text("match.status.upcoming")
     : final ? messages.text("match.status.ended")
@@ -689,11 +623,6 @@ function CountryFlag({ url, country }: { url: string | null | undefined; country
   return <FlagFallback>{countryCode(country) === "INT" ? <GlobeIcon /> : <FlagIcon />}</FlagFallback>;
 }
 
-/** Keep the market's goal line visible at every phone width. */
-function TileMarketCode({ code }: { code: string }) {
-  return <TileCode aria-hidden="true">{code}</TileCode>;
-}
-
 /** Keep full names available on hover when a mobile name is ellipsized. */
 function showFullNames(event: PointerEvent<HTMLElement>, title: string) {
   const card = event.currentTarget;
@@ -722,7 +651,6 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const family = messages.text(`market.family.${shownFamily}`);
   const locked = fixture.cycle?.state === "closed";
   const outcome = prediction?.status ?? "unavailable";
-  const OutcomeIcon = outcome === "correct" || outcome === "incorrect" || outcome === "void" ? outcomeIcons[outcome] : null;
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent) })
     : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
@@ -776,37 +704,34 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
       <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null} />
     </Teams>
     <Pick>
-      <TileMarketCode code={messages.text(`market.code.${shownFamily}`)} />
-      <MarketName $family={shownFamily} aria-hidden="true">{family}</MarketName>
-      <Prediction $available={prediction !== null} data-prediction={selection ?? "none"} data-outcome={outcome} title={details ?? undefined}>
-        {prediction && selection ? <>
-          <PickShort $family={shownFamily} aria-hidden="true">
-            <span data-short-pick>{messages.text(`market.pick.${selection}`)}</span>
-            <span data-mobile-pick>{messages.text(`market.selection.${selection}`)}</span>
-          </PickShort>
-          <Probability aria-hidden="true">
-            {/* Once settled the ✓/✗/⊘ mark takes the padlock's place; the hidden text still reports the lock. */}
-            {locked && !OutcomeIcon && <LockIcon />}
-            <Percent>{percent}</Percent>
-            <Bar $family={shownFamily}><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></Bar>
-            {OutcomeIcon && <Mark $tone={outcome} title={messages.text(`outcome.${outcome}`)}><OutcomeIcon /></Mark>}
-          </Probability>
-          <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: messages.text(`market.selection.${selection}`),
-            probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
-            {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}
-          </VisuallyHidden>
-        </> : <>
-          <NoPick aria-hidden="true" data-no-pick={noPickReason(fixture)} title={reason ?? undefined}><b>—</b><span>{reason}</span></NoPick>
-          <MissingProbability aria-hidden="true">–</MissingProbability>
-          <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>
-        </>}
+      <MarketName $family={shownFamily} aria-hidden="true">
+        <PickCaption>{messages.text("match.columns.market")}</PickCaption>
+        <span data-pick-value="" data-mobile-only="">{messages.text(`market.code.${shownFamily}`)}</span>
+        <span data-pick-value="" data-desktop-only="">{family}</span>
+      </MarketName>
+      <Prediction $available={prediction !== null} data-prediction={selection ?? "none"} data-outcome={outcome} title={details ?? reason ?? undefined}>
+        <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={prediction ? undefined : noPickReason(fixture)}>
+          <PickCaption>{messages.text("match.columns.pickShort")}</PickCaption>
+          {selection ? <span data-pick-value="">{messages.text(`market.pick.${selection}`)}</span> : <>
+            <span data-pick-value="" data-mobile-only="">—</span>
+            <span data-pick-value="" data-desktop-only="">{messages.text("outcome.unavailable")}</span>
+          </>}
+          {price && <Price data-selected-odds="">{messages.text("details.odds")} {price.price}</Price>}
+        </PickShort>
+        <Probability aria-hidden="true">
+          <PickCaption>{messages.text("match.columns.probabilityShort")}</PickCaption>
+          <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
+          {prediction && <Bar $family={shownFamily}><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></Bar>}
+        </Probability>
+        {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: messages.text(`market.selection.${selection}`),
+          probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
+          {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}
+        </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>}
       </Prediction>
-      <TileResult aria-hidden="true" $outcome={outcome} data-result-badge={outcome}>
-        {outcome === "unavailable" ? <span>–</span> : <>
-          {OutcomeIcon ? <OutcomeIcon /> : <span>–</span>}
-          <span>{messages.text(outcome === "correct" ? "match.result.won" : outcome === "incorrect" ? "match.result.lost" : `outcome.${outcome}`)}</span>
-        </>}
-      </TileResult>
+      <Result aria-hidden="true" $outcome={outcome} data-result-badge={outcome}>
+        <PickCaption>{messages.text("match.columns.result")}</PickCaption>
+        <span data-pick-value="">{outcome === "unavailable" ? "—" : messages.text(outcome === "correct" ? "match.result.won" : outcome === "incorrect" ? "match.result.lost" : `outcome.${outcome}`)}</span>
+      </Result>
       {price && <VisuallyHidden>{messages.text("details.odds")}: {price.price}</VisuallyHidden>}
     </Pick>
     {notes.length > 0 && <Notes id={`${titleId}-notes`}>{notes.map((note, index) => <Note key={index}><NoticeIcon />{note}</Note>)}</Notes>}

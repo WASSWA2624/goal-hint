@@ -9,10 +9,9 @@ import { validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { applyFeedDraft, resetFeedFilters } from "@/domain/feed-controls";
-import { pinnedFeedQuery } from "@/domain/feed-pagination";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
 import {
-  anyProbability, canonicalMarkets, feedQueryHref, feedQueryKey, feedQueryRules, resolveFeedDates, serializeFeedQuery, type FeedQuery,
+  anyProbability, canonicalMarkets, feedQueryHref, feedQueryRules, resolveFeedDates, serializeFeedQuery, type FeedQuery,
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import type { MarketFamily } from "@/domain/markets";
@@ -27,8 +26,6 @@ import { ChipText, CompactSelect, FilterChip, focusRing, OptionLogo, OptionPicke
 
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
-/** Only desktop previews the draft count; every screen applies through the shared form. */
-const desktopQuery = media.desktop.replace("@media ", "");
 const probabilityPresets = [anyProbability, { min: 50, max: 100 }, { min: 60, max: 100 }, { min: 70, max: 100 }, { min: 80, max: 100 }, { min: 90, max: 100 }];
 
 function valid(query: FeedQuery, today: ReportingDate): boolean {
@@ -50,36 +47,15 @@ function rangeText(messages: Messages, range: FeedQuery["probability"]) {
     : messages.text("feed.filters.percentRange", { min: messages.number(range.min), max: messages.number(range.max) });
 }
 
-/** Debounced desktop draft count, from the public feed endpoint with a one-row page and no league options. */
-function useDraftTotal(draft: FeedQuery | null, query: FeedQuery, today: ReportingDate, appliedTotal: number | null) {
-  const key = (() => { try { return draft ? feedQueryKey(draft, today) : null; } catch { return null; } })(), appliedKey = feedQueryKey(query, today);
-  const [counted, setCounted] = useState<{ key: string; total: number } | null>(null);
-  useEffect(() => {
-    if (draft === null || key === null || key === appliedKey || !window.matchMedia(desktopQuery).matches) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      try {
-        const parameters = serializeFeedQuery({ ...pinnedFeedQuery(draft, today), page: 1, pageSize: 1 }, today);
-        const response = await fetch(`/api/matches?${parameters}&leagues=0`, { signal: controller.signal, headers: { accept: "application/json" } });
-        if (!response.ok) return;
-        const body: unknown = await response.json();
-        const total = (body as { total?: unknown } | null)?.total;
-        if (typeof total === "number" && Number.isSafeInteger(total) && total >= 0) setCounted({ key, total });
-      } catch { /* Counts are advisory; Apply still works. */ }
-    }, 350);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [appliedKey, draft, key, today]);
-  return key === appliedKey ? appliedTotal : counted?.key === key ? counted.total : null;
-}
-
-/** A thin multicolour edge tops the panel; filter rows carry their own accent. */
+/** A thin brand edge tops the desktop panel. */
 const Panel = styled.form`
   display: grid;
   gap: 6px;
   min-inline-size: 0;
   padding: 8px;
-  background: ${({ theme }) => theme.gradient.edge} top / 100% 3px no-repeat, ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 3px solid ${({ theme }) => theme.color.brand};
   border-radius: ${({ theme }) => theme.border.cardRadius};
   box-shadow: ${({ theme }) => theme.shadow.card};
   ${media.belowDesktop} {
@@ -166,17 +142,17 @@ const QuietButton = styled.button`
   gap: 6px;
   min-block-size: 1.875rem;
   padding-inline: 10px;
-  color: ${({ theme }) => theme.color.accent.red.text};
-  background: ${({ theme }) => theme.color.accent.red.soft};
-  border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 6px;
+  color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border-radius: 0;
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
   font: inherit;
   cursor: pointer;
   > svg { font-size: 1rem; }
-  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.red.solid}; } }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   ${focusRing}
 `;
 const OddsNote = styled.p`
@@ -281,18 +257,15 @@ const FilterActions = styled.div`
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
-  [data-filter-short] { display: none; }
   ${media.belowDesktop} {
     flex-wrap: nowrap;
     gap: 4px;
     > button { min-block-size: 1.75rem; gap: 4px; padding-inline: 6px; font-size: 0.6875rem; }
     > button > svg { font-size: 0.875rem; }
-    [data-filter-full] { display: none; }
-    [data-filter-short] { display: inline; }
   }
 `;
 
-export type FeedFilterDraftStatus = Readonly<{ valid: boolean; total: number | null }>;
+export type FeedFilterDraftStatus = Readonly<{ valid: boolean }>;
 /** Native form association keeps one action row beside sorting, outside the filter fields. */
 export function FeedFilterActions({ formId, locale, status }: {
   formId: string; locale: FeedQuery["locale"]; status: FeedFilterDraftStatus;
@@ -301,8 +274,7 @@ export function FeedFilterActions({ formId, locale, status }: {
   return <FilterActions data-filter-actions>
     <OutlineButton type="reset" form={formId}><ResetIcon />{messages.text("feed.filters.clearAll")}</OutlineButton>
     <ApplyButton type="submit" form={formId} disabled={!status.valid}>
-      <FilterIcon /><span data-filter-full>{status.total === null ? messages.text("feed.filters.applyPlain") : messages.plural("feed.filters.applyCount", status.total)}</span>
-      <span data-filter-short>{messages.text("feed.filters.applyShort")}</span>
+      <FilterIcon />{messages.text("feed.filters.applyPlain")}
     </ApplyButton>
   </FilterActions>;
 }
@@ -335,7 +307,7 @@ function WholeNumberInput({ value, min, max, label, onCommit }: {
 }
 
 type FeedFiltersProps = {
-  query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; total: number | null; onApply: (query: FeedQuery) => void;
+  query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (query: FeedQuery) => void;
   formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void;
   /** The header toggle opens all filter fields on phones and tablets. */
   phoneOpen?: boolean; phoneId?: string;
@@ -343,7 +315,7 @@ type FeedFiltersProps = {
 export function FeedFilters(props: FeedFiltersProps) {
   return <FilterFields key={feedQueryHref(props.query, props.today)} {...props} />;
 }
-function FilterFields({ query, today, leagues, total, onApply, formId, onDraftStatus, phoneOpen = true, phoneId }: FeedFiltersProps) {
+function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, phoneOpen = true, phoneId }: FeedFiltersProps) {
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
   useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   const draft = valid(storedDraft, today) ? storedDraft : query;
@@ -377,10 +349,9 @@ function FilterFields({ query, today, leagues, total, onApply, formId, onDraftSt
     onApply(applied);
   };
   const phone = draft;
-  const draftTotal = useDraftTotal(completeDraft, query, today, total);
   const reset = resetFeedFilters(query);
   const draftValid = completeDraft !== null;
-  useEffect(() => { onDraftStatus({ valid: draftValid, total: draftTotal }); }, [draftTotal, draftValid, onDraftStatus]);
+  useEffect(() => { onDraftStatus({ valid: draftValid }); }, [draftValid, onDraftStatus]);
 
   function phonePicker(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
     const label = messages.text(`feed.filters.${kind}`), selected: readonly string[] = phone[kind];

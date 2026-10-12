@@ -20,7 +20,7 @@ export const focusRing = css`
   }
 `;
 
-/** Shared feedback for compact white controls, without changing their dimensions. */
+/** Shared feedback for compact themed controls, without changing their dimensions. */
 export const controlFeedback = css`
   transition: border-color 120ms ease, background-color 120ms ease;
   ${media.hover} { &:hover:not([aria-pressed="true"]):not([aria-expanded="true"]) { border-color: ${({ theme }) => theme.color.controlBorder}; } }
@@ -45,9 +45,9 @@ const chipStyles = css<{ $selected?: boolean; $accent?: AccentName }>`
   color: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].text : theme.color.text};
   background: ${({ theme, $selected, $accent = "teal" }) => $selected ? theme.color.accent[$accent].soft : theme.color.surfaceMuted};
   border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 7px;
+  border-radius: 0;
   font-size: 0.6875rem;
-  ${media.desktop} { min-block-size: 1.75rem; font-size: 0.75rem; }
+  ${media.desktop} { min-block-size: 1.75rem; border-radius: 7px; font-size: 0.75rem; }
   font-weight: ${({ theme, $selected }) => $selected ? theme.typography.weight.bold : theme.typography.weight.body};
   line-height: 1.2;
   white-space: nowrap;
@@ -98,11 +98,11 @@ export const IconButton = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 0;
   /* 16px glyphs sit with the 11px phone controls; desktop keeps 20px. */
   font-size: 1rem;
   cursor: pointer;
-  ${media.desktop} { font-size: 1.25rem; }
+  ${media.desktop} { border-radius: 10px; font-size: 1.25rem; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.surfaceMuted}; } }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
   ${focusRing}
@@ -123,7 +123,7 @@ const SelectFace = styled.span`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.body};
   ${controlFeedback}
@@ -200,8 +200,9 @@ const PickerPanel = styled.div`
   padding: ${({ theme }) => theme.space.sm};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 6px;
+  border-radius: 0;
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
+  ${media.desktop} { border-radius: 6px; }
 `;
 /** Phones list compact 36px rows at 13px; desktop keeps its 40px rows at 15px. */
 const PickerSearch = styled.input`
@@ -210,7 +211,7 @@ const PickerSearch = styled.input`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 6px;
+  border-radius: 0;
   font: inherit;
   font-size: 0.8125rem;
   ${focusRing}
@@ -228,7 +229,7 @@ const PickerList = styled.ul`
     gap: 6px;
     min-block-size: 2.25rem;
     padding-inline: ${({ theme }) => theme.space.sm};
-    border-radius: 6px;
+    border-radius: 0;
     font-size: 0.8125rem;
     cursor: pointer;
     ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }

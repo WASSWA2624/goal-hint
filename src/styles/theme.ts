@@ -9,12 +9,12 @@ type OutcomeColors = Readonly<{
   border: string;
 }>;
 
-/** Solid fills carry white text at 4.5:1 or better; soft fills pair with `text`. */
+/** Solid fills pair with `onBrand`; soft fills pair with `text`. */
 export type AccentColors = Readonly<{
   solid: string;
   soft: string;
   text: string;
-  /** Large-text fills (bold 18.66px+): both stops keep white text at 3:1 or better. */
+  /** A solid fill or a decorative gradient, depending on the theme. */
   gradient: string;
 }>;
 /**
@@ -22,19 +22,20 @@ export type AccentColors = Readonly<{
  * tests/market-colors.test.mjs checks each pairing at 4.5:1.
  */
 export type MarketColors = Readonly<{
-  /** White text keeps 4.5:1 or better. */
+  /** Pairs with the theme's `onBrand` text. */
   solid: string;
-  /** Clean tint behind `text`; the pick box washes it into white. */
+  /** A quiet tint behind `text`. */
   soft: string;
-  /** Keeps 4.5:1 or better on `soft` and on white. */
+  /** Keeps 4.5:1 or better on `soft` and on the theme's surface. */
   text: string;
-  /** Small-text fills: white text keeps 4.5:1 or better at both stops, so 12px pick pills may sit on it. */
+  /** Light theme retains its desktop market gradients; dark theme uses flat fills. */
   gradient: string;
 }>;
 export type AccentName = "teal" | "blue" | "violet" | "orange" | "pink" | "amber" | "emerald" | "red";
 
 /** Semantic fields can support another theme without changing component contracts. */
 export interface GoalHintTheme {
+  readonly mode: "light" | "dark";
   readonly color: {
     readonly text: string;
     readonly mutedText: string;
@@ -44,6 +45,8 @@ export interface GoalHintTheme {
     readonly border: string;
     readonly controlBorder: string;
     readonly brand: string;
+    /** Text links also remain readable on the darker page background. */
+    readonly link: string;
     readonly brandHover: string;
     /** Selected chips and segments on light surfaces; pairs with `brand` text. */
     readonly brandSoft: string;
@@ -60,7 +63,7 @@ export interface GoalHintTheme {
     readonly rowHover: string;
   };
   readonly gradient: {
-    /** Primary actions and current selections; white text passes 4.5:1 at both stops. */
+    /** Flat primary action fills paired with `onBrand`. */
     readonly action: string;
     readonly tableHeader: string;
     /** Thin decorative edge on feature panels. */
@@ -69,14 +72,14 @@ export interface GoalHintTheme {
   };
   /**
    * The branded top bar: the desktop shell header and every phone top bar (shell, feed, match details)
-   * share one deep navy-to-teal fill behind the inverse logo. Light text passes 4.5:1 on every stop,
-   * including on the translucent control fills; `accent` (inverse teal) passes 3:1 for indicators and focus.
+   * share a solid navy/charcoal fill behind the inverse logo. Light text and inverse teal pass
+   * 4.5:1 on the bar and control fills.
    */
   readonly header: {
     readonly background: string;
     /** Primary text and icons on the bar. */
     readonly text: string;
-    /** Resting navigation links: 6.7:1 or better on every stop. */
+    /** Resting navigation links stay readable on the bar. */
     readonly mutedText: string;
     /** Search placeholder: 4.5:1 on the field fill at rest and when focused. */
     readonly placeholder: string;
@@ -84,7 +87,7 @@ export interface GoalHintTheme {
     readonly accent: string;
     /** Text and icons on an `accent` fill. */
     readonly onAccent: string;
-    /** Round icon buttons; `controlHover` keeps white icons at 4.5:1. */
+    /** Square icon buttons; `controlHover` keeps light icons at 4.5:1. */
     readonly controlFill: string;
     readonly controlHover: string;
     /** The search pill; `fieldFillActive` on hover and focus. */
@@ -177,27 +180,29 @@ export interface GoalHintTheme {
 }
 
 export const lightTheme: GoalHintTheme = {
+  mode: "light",
   color: {
-    text: brandTokens.colors.navy,
-    mutedText: brandTokens.colors.muted,
-    page: "#EDF3F7",
+    text: "#102A3A",
+    mutedText: "#486071",
+    page: "#CEDBE3",
     surface: brandTokens.colors.white,
     surfaceMuted: "#EAF0F2",
     // Brand dividers are decorative; controls need a stronger accessible boundary.
-    border: brandTokens.colors.border,
+    border: "#C5D4DE",
     controlBorder: "#7C8A95",
-    brand: brandTokens.colors.teal,
+    brand: "#007F7A",
+    link: "#00645F",
     brandHover: "#00645F",
     brandSoft: "#E2F3F1",
     onBrand: brandTokens.colors.white,
-    focus: brandTokens.colors.navy,
-    disabledText: brandTokens.colors.muted,
+    focus: "#007F7A",
+    disabledText: "#486071",
     disabledSurface: "#EAF0F2",
     // Outcome meanings stay separate from the teal brand accent.
     outcome: {
-      correct: { text: "#175A2F", background: "#EDF7EF", border: "#175A2F" },
+      correct: { text: "#007754", background: "#E5F4EC", border: "#007754" },
       incorrect: { text: "#9C2328", background: "#FFF0F1", border: "#9C2328" },
-      pending: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
+      pending: { text: "#8B5700", background: "#FFF3D6", border: "#8B5700" },
       void: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
       unavailable: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
     },
@@ -252,8 +257,8 @@ export const lightTheme: GoalHintTheme = {
   breakpoint: { sm: "30rem", md: "48rem", lg: "64rem", xl: "80rem" },
   border: {
     width: "1px",
-    radius: brandTokens.shape.componentRadius,
-    cardRadius: "4px",
+    radius: "0",
+    cardRadius: "0",
     pillRadius: "999px",
     focusWidth: "3px",
     focusOffset: "3px",
@@ -261,35 +266,103 @@ export const lightTheme: GoalHintTheme = {
   layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px" },
   control: { minHeight: "2.75rem", compactHeight: "2.25rem" },
   gradient: {
-    action: "linear-gradient(135deg, #0F766E 0%, #2563EB 100%)",
+    action: "#007F7A",
     tableHeader: "linear-gradient(90deg, #0B1F33 0%, #172F63 55%, #0F5E6E 100%)",
-    edge: "linear-gradient(90deg, #39D5CA 0%, #0891B2 55%, #2563EB 100%)",
-    page: "linear-gradient(180deg, #E8F3F6 0%, #EDF3F7 24rem)",
+    edge: "linear-gradient(90deg, #007F7A 0%, #007F7A 100%)",
+    page: "#CEDBE3",
   },
-  // Worst case is the teal stop: white 9.15:1, links 6.72:1, placeholder 4.55:1 on the focused field,
-  // white icons 5.08:1 on controlHover, accent 5.03:1; navy on accent 9.18:1.
+  // Flat navy and solid controls match the approved light preview.
   header: {
-    background: `linear-gradient(90deg, ${brandTokens.colors.navy} 0%, #12294F 55%, #0C4F5E 100%)`,
+    background: "#102A3A",
     text: brandTokens.colors.white,
-    mutedText: "rgb(255 255 255 / 82%)",
-    placeholder: "rgb(255 255 255 / 78%)",
+    mutedText: "#D6E2E9",
+    placeholder: "#CAD7E0",
     accent: brandTokens.colors.tealOnDark,
-    onAccent: brandTokens.colors.navy,
-    controlFill: "rgb(255 255 255 / 14%)",
-    controlHover: "rgb(255 255 255 / 22%)",
-    fieldFill: "rgb(255 255 255 / 10%)",
-    fieldFillActive: "rgb(255 255 255 / 14%)",
-    controlBorder: "rgb(255 255 255 / 22%)",
+    onAccent: "#102A3A",
+    controlFill: "#1D3B4A",
+    controlHover: "#294957",
+    fieldFill: "#1D3B4A",
+    fieldFillActive: "#294957",
+    controlBorder: "#617B8A",
     tone: {
       teal: "#5EEAD4", blue: "#93C5FD", violet: "#C4B5FD", orange: "#FDBA74",
       pink: "#F9A8D4", amber: "#FCD34D", emerald: "#6EE7B7", red: "#FCA5A5",
     },
     phoneHeight: "3.25rem",
-    shadow: "0 4px 18px rgb(11 31 51 / 16%)",
+    shadow: "none",
   },
   shadow: {
-    card: "0 1px 2px rgb(11 31 51 / 6%), 0 6px 20px rgb(11 31 51 / 6%)",
-    cardHover: "0 2px 4px rgb(11 31 51 / 8%), 0 10px 28px rgb(11 31 51 / 10%)",
+    card: "none",
+    cardHover: "none",
+  },
+};
+
+/** The same semantic contract keeps every native control and detail panel readable in dark mode. */
+export const darkTheme: GoalHintTheme = {
+  ...lightTheme,
+  mode: "dark",
+  color: {
+    ...lightTheme.color,
+    text: "#F2F7F8",
+    mutedText: "#B1BEC8",
+    page: "#141C22",
+    surface: "#1E2932",
+    surfaceMuted: "#18232B",
+    border: "#3C505E",
+    controlBorder: "#69808F",
+    brand: "#53D5C6",
+    link: "#53D5C6",
+    brandHover: "#8EE8DD",
+    brandSoft: "#183C3B",
+    onBrand: "#102A3A",
+    focus: "#53D5C6",
+    disabledText: "#B1BEC8",
+    disabledSurface: "#18232B",
+    outcome: {
+      correct: { text: "#70DEA4", background: "#1C342B", border: "#70DEA4" },
+      incorrect: { text: "#FF9C9C", background: "#3B252C", border: "#FF9C9C" },
+      pending: { text: "#F6C453", background: "#322A1E", border: "#F6C453" },
+      void: { text: "#B1BEC8", background: "#28343D", border: "#B1BEC8" },
+      unavailable: { text: "#B1BEC8", background: "#28343D", border: "#B1BEC8" },
+    },
+    market: {
+      "match-result": { solid: "#70DEA4", soft: "#1C342B", text: "#70DEA4", gradient: "#70DEA4" },
+      "double-chance": { solid: "#C6AEFF", soft: "#322B45", text: "#C6AEFF", gradient: "#C6AEFF" },
+      "total-goals": { solid: "#9EC5FF", soft: "#233449", text: "#9EC5FF", gradient: "#9EC5FF" },
+      "both-teams-to-score": { solid: "#FFBA8F", soft: "#3D2D25", text: "#FFBA8F", gradient: "#FFBA8F" },
+    },
+    live: { solid: "#FF9C9C", soft: "#3B252C", text: "#FF9C9C", gradient: "#FF9C9C" },
+    accent: {
+      teal: { solid: "#53D5C6", soft: "#183C3B", text: "#53D5C6", gradient: "#53D5C6" },
+      blue: { solid: "#9EC5FF", soft: "#233449", text: "#9EC5FF", gradient: "#9EC5FF" },
+      violet: { solid: "#C6AEFF", soft: "#322B45", text: "#C6AEFF", gradient: "#C6AEFF" },
+      orange: { solid: "#FFBA8F", soft: "#3D2D25", text: "#FFBA8F", gradient: "#FFBA8F" },
+      pink: { solid: "#F8AED2", soft: "#3B2938", text: "#F8AED2", gradient: "#F8AED2" },
+      amber: { solid: "#F6C453", soft: "#322A1E", text: "#F6C453", gradient: "#F6C453" },
+      emerald: { solid: "#70DEA4", soft: "#1C342B", text: "#70DEA4", gradient: "#70DEA4" },
+      red: { solid: "#FF9C9C", soft: "#3B252C", text: "#FF9C9C", gradient: "#FF9C9C" },
+    },
+    cardHeader: "#18232B",
+    rowHover: "#253541",
+  },
+  gradient: {
+    action: "#53D5C6",
+    tableHeader: "#10181D",
+    edge: "linear-gradient(90deg, #53D5C6 0%, #53D5C6 100%)",
+    page: "#141C22",
+  },
+  header: {
+    ...lightTheme.header,
+    background: "#10181D",
+    text: "#F2F7F8",
+    mutedText: "#B1BEC8",
+    placeholder: "#B1BEC8",
+    accent: "#53D5C6",
+    controlFill: "#1B2A34",
+    controlHover: "#283E4A",
+    fieldFill: "#1B2A34",
+    fieldFillActive: "#283E4A",
+    controlBorder: "#69808F",
   },
 };
 

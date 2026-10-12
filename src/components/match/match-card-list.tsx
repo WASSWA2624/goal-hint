@@ -69,7 +69,8 @@ export function MatchCardList({ locale, ...props }: MatchCardListProps) {
       <span>{messages.text("match.columns.league")}</span><span>{messages.text("match.columns.home")}</span>
       <span>{messages.text("match.columns.score")}</span><span>{messages.text("match.columns.away")}</span>
       <span>{messages.text("match.columns.market")}</span><span>{messages.text("match.columns.prediction")}</span>
-      <span><span data-short>{messages.text("match.columns.probabilityShort")}</span><span data-full>{messages.text("match.columns.probability")}</span></span><span />
+      <span><span data-short>{messages.text("match.columns.probabilityShort")}</span><span data-full>{messages.text("match.columns.probability")}</span></span>
+      <span>{messages.text("match.columns.result")}</span><span />
     </Columns>
     <List role="list" {...props} />
   </Board>;

@@ -21,6 +21,13 @@ Import directly from the owning module under `@/components/match`:
 
 Desktop presentation retains its compact table composition:
 
+When multiple market families are eligible, `bestCardFamily` uses the shared
+`bestPublishedFamily` ranking: highest unrounded win probability, then the
+higher available fresh price for the exact published family and selection.
+Remaining ties use policy order. Selection, probability, odds and result always
+come from that one shown published pick; an unrelated family cannot fill a
+missing field.
+
 1. Header: competition (and country), compact local kickoff day and time in one
    `time` element whose title carries the full instant and displayed zone.
 2. Teams: logos and names either side of a centre state. Scheduled shows `VS`;
@@ -29,15 +36,15 @@ Desktop presentation retains its compact table composition:
    `AET*` or `Pens*` (the asterisk marks a 90-minute score, explained in the
    chip title and hidden text); postponed/canceled/abandoned/awarded show a
    neutral status chip.
-3. Pick: the market family, the selection and the estimated percent. On
+3. Pick: the market family, selection, estimated percent and prediction result. On
    desktop the family is a tag washed from the family tint into white, with a
    1px family ring, a solid 3px family edge and bold family-coloured text
    (inset shadows draw the ring and edge, so rows keep their height); the
-   short pick sits in a pill in the family's gradient. Phone and tablet cards
-   show market code, pick and probability chips instead (below). A padlock replaces
-   the bar icon once the prediction is locked. Correct, Incorrect and Void add a
-   round ✓/✗/⊘ mark with a tooltip and hidden text. Missing families show
-   No pick.
+   short pick sits in a pill in the family's gradient. An available exact-pick
+   price appears on a small secondary line beneath the selection. The Result
+   column explicitly shows Win, Loss, Pending or Void. Missing predictions show
+   Unavailable with dashes for probability and result; they never appear as 0%
+   or Pending. Phone and tablet cards use the flat strip described below.
 4. Notes, only when supplied: updating, update delayed, result delayed, limited
    news, partial coverage, no locked selection, void reasons and outside-window
    availability.
@@ -45,26 +52,53 @@ Desktop presentation retains its compact table composition:
 Source, provisional status and publication time move to the pill tooltip; sync
 time stays on the detail page. On desktop each card becomes one table row
 using `match-columns.ts` tracks and CSS subgrid: #, time, league, home, score,
-away, market, prediction and a chevron.
+away, market, prediction, probability, result and a chevron. Column headers and
+rows share the same eleven grid tracks at compact and wide desktop sizes.
 
 ### Phone and tablet tile (below 64rem)
 
-The mobile card has exactly four visible rows; the desktop retains its existing table columns:
+The mobile card has four visible rows:
 
-1. Match date and 24-hour local kickoff time with a visible zone together on the left; a color-coded match status badge on the right. For live matches this badge shows the supplied elapsed minute, including stoppage notation such as `90+4′`, instead of Live. With no minute, it shows the actual phase or a dash when the phase is unknown.
+1. Match date and 24-hour local kickoff time with a visible zone together on the left; a match status badge on the right. Upcoming and Ended use neutral tones. For live matches the red badge shows the supplied elapsed minute, including stoppage notation such as `90+4′`, instead of Live. With no minute, it shows the actual phase or a dash when the phase is unknown.
 2. Country flag and FIFA code on the left; one-line, ellipsized league name and competition logo on the right, with the logo at the outer edge.
 3. Single-line home name and crest, compact centered match state, away crest and single-line name. A live match shows its bold score in place of VS, with no minute repeated beneath it. Upcoming matches show VS; finished matches retain their score and final state.
-4. Four compact cells: market code, full selection label, estimated probability and outcome. No heading row.
+4. One flat strip with four equal cells separated by thin vertical dividers. Each
+   cell contains a tiny caption (Market, Pick, Prob. or Result) above
+   its value. Mobile markets use established 1X2, DC, O/U 2.5 or BTTS notation;
+   desktop retains the full family name. The prediction uses its compact
+   selection code (for example 1X), and the exact available price a small Odds
+   line beneath the prediction. The strip has no boxed pills, gradients or
+   shadows. Its fill uses the light or dark theme's neutral surface.
 
 All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Within the existing desktop league column, country metadata sits above the league name and logo to keep both readable without adding table columns.
 
-Cards use 4px vertical/8px horizontal padding, 2px internal row gaps, 8px page gutters and 6px list gaps. Metadata and team names are 12px, scores 14px and prediction cells have a 24px minimum height. Cards remain about 101px at normal text size; the live clock adds no separate center row. Long names ellipsize on one line; wrapping prediction/result labels may grow naturally. The existing variable Manrope font uses a lighter 350 weight for mobile team names and regular prediction labels. Fine borders, square edges and a shallow shadow distinguish white cards from the cool blue-gray canvas. Desktop typography remains unchanged. Text is in rem; card/cell heights are never fixed.
+Cards use 6px padding, 3px internal row gaps, 8px page gutters and 6px list gaps.
+Metadata and team names are 12px, bold scores 14px, and prediction captions 10px.
+Team names use the shared medium weight. Fine borders and square edges separate
+white or dark cards from the darker page canvas; mobile cards have no shadow.
+Long names ellipsize on one line. Captions, metric values and the secondary odds
+line stay on one line, with bounded ellipsis only at unusually narrow effective
+widths or enlarged text. Full semantic descriptions remain accessible. Text
+uses rem units and card/cell heights are never fixed.
 
-Blue prediction cells and neutral/green/red result cells follow the mobile reference. `correct` is presented as Won (✓), `incorrect` as Lost (✕), and pending as Pending (–). Void retains its label; unavailable displays a dash, with the full missing-prediction reason retained in accessible text. Only supplied, correctly bound final settlements can show Won/Lost. Scheduled matches show VS without an invented score. Running clocks include available `stoppageMinutes`; paused phases retain their phase label. Top-row badges show blue Upcoming, the red live clock and teal Ended; postponed, canceled, abandoned, awarded and paused live states retain their actual labels instead of being grouped into an inaccurate status. Live score changes never settle a pending prediction.
+The result uses explicit text: green Win, red Loss, amber Pending and neutral
+Void. A missing prediction and its probability/result display dashes on mobile;
+desktop retains Unavailable in the prediction column. The full missing-prediction reason is in
+accessible text. Only supplied, correctly bound final settlements can show
+Win/Loss; live score changes never settle a pending prediction. Scheduled
+matches show VS without an invented score. Running clocks include available
+`stoppageMinutes`; paused phases retain their phase label. Postponed, canceled,
+abandoned, awarded and paused live states retain their actual labels.
 
 Local MIT-licensed SVG flags in `public/flags` resolve recognized football countries, including England, Scotland, Wales and Northern Ireland, and work without a remote image request. A safe supplied provider flag is a secondary fallback. Unknown countries never borrow another country's flag from a derived abbreviation; international fixtures retain a globe. League/team images keep the existing URL safety and loading fallback behavior.
 
-The same full-card link, canonical navigation, hidden full team names, score/outcome descriptions and supplied notes remain accessible. Notes occupy no fifth visible mobile row and are linked with `aria-describedby`; desktop notices remain visible. Public odds for the selected pick stay in the prediction tooltip and accessible text, without adding a fifth prediction cell. Long team names ellipsize on one line with full names in the heading/link and a hover tooltip. League names truncate first.
+The same full-card link, canonical navigation, hidden full team names,
+score/outcome descriptions and supplied notes remain accessible. Notes occupy
+no fifth visible mobile row and are linked with `aria-describedby`; desktop
+notices remain visible. Public odds for the selected pick appear beneath the
+prediction and remain in its tooltip and accessible text. No unrelated or
+missing price fills that line. Long team names ellipsize with full names in
+the heading/link and a hover tooltip; league names truncate first.
 
 Browser acceptance covers 320, 360, 390 and 430px, 200% root text, long names, scheduled/live/final states, local flags, four visible rows and no page/card horizontal overflow. Date controls stack at narrow effective container widths to preserve readable labels with enlarged text.
 
@@ -148,10 +182,11 @@ remain independently rounded. Boundary labels are Less than 1% and More than
 validation. Switching families switches the pick, probability, source and
 outcome together; correctness never colors unrelated markets or the whole card.
 
-Correct and Incorrect use their existing green/red outcome tones and Void uses
-gray, each with a distinct non-color icon, a tooltip and hidden explicit text.
-Pending and Unavailable add no mark; their status remains in hidden text and
-`data-outcome`. Fixture status and score remain separate from prediction outcome.
+Correct and Incorrect use green Win/red Loss text, Pending uses amber text,
+and Void uses a neutral tone. Explicit labels and hidden descriptions preserve
+their meaning without depending on colour. Unavailable predictions have no
+invented correctness or probability. Fixture status and score remain separate
+from prediction outcome.
 
 Source comes from the selected market (AI prediction or API-Football fallback).
 The card's pill tooltip names the source and the actual forecast `publishedAt`

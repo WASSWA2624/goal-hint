@@ -10,7 +10,7 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   html {
-    color-scheme: light;
+    color-scheme: ${({ theme }) => theme.mode};
     font-size: 100%;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -94,7 +94,7 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   :where(a) {
-    color: ${({ theme }) => theme.color.brand};
+    color: ${({ theme }) => theme.color.link};
     text-decoration-thickness: 0.08em;
     text-underline-offset: 0.2em;
   }

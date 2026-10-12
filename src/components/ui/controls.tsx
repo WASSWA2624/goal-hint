@@ -80,7 +80,7 @@ const buttonTreatment = css<{ $variant: ButtonVariant }>`
         `;
       case "quiet":
         return css`
-          color: ${theme.color.brand};
+          color: ${theme.color.link};
           background: transparent;
           border-color: transparent;
 
@@ -130,7 +130,7 @@ const TextAnchor = styled(Link)`
   align-items: center;
   min-block-size: 2rem;
   max-inline-size: 100%;
-  color: ${({ theme }) => theme.color.brand};
+  color: ${({ theme }) => theme.color.link};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: underline;
   text-underline-offset: 0.2em;

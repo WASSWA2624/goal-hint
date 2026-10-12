@@ -31,8 +31,13 @@ export function cardExamples() {
   const broken = cardFixture({ fixtureId: "card-broken", homeTeam: { id: "broken-home", name: "Missing Logo Home", logoUrl: "https://static.match-card.test/broken-home.svg" },
     awayTeam: { id: "broken-away", name: "Missing Logo Away", logoUrl: "https://static.match-card.test/throttled-away.svg" } });
   return [
-    { label: "Example: correct match result, incorrect total goals and BTTS", fixture: cardFixture() },
-    { label: "Example: incorrect API-Football fallback", fixture: cardFixture({ fixtureId: "card-incorrect", score: { home: 0, away: 1 } }, "api-football", "incorrect") },
+    { label: "Example: correct match result, incorrect total goals and BTTS", fixture: cardFixture({ prices: [
+      { family: "match-result", selection: "home-win", price: "1.85", basis: "bookmaker", retrievedAt: now, providerUpdatedAt: now },
+      { family: "total-goals", selection: "under-2.5", price: "2.10", basis: "median", retrievedAt: now, providerUpdatedAt: null },
+    ] }) },
+    { label: "Example: incorrect API-Football fallback", fixture: cardFixture({ fixtureId: "card-incorrect", score: { home: 0, away: 1 }, prices: [
+      { family: "total-goals", selection: "under-2.5", price: "2.25", basis: "bookmaker", retrievedAt: now, providerUpdatedAt: now },
+    ] }, "api-football", "incorrect") },
     { label: "Example: live score, pending prediction", fixture: cardFixture({ fixtureId: "card-pending", status: "live", score: { home: 2, away: 0 },
       liveClock: { phase: "second-half", minute: 67 } }, "ai", null) },
     { label: "Example: void cycle", fixture: cardFixture({ fixtureId: "card-void", status: "postponed", score: null }, "ai", "void") },

@@ -38,7 +38,7 @@ export type FeedQuery = Readonly<{
   status: FeedStatus;
   /** Selected market families in policy order. Each fixture shows its best pick among them. */
   markets: MarketFamily[];
-  /** Whole-percent bounds applied to the shown pick; 0–100 applies no filter. */
+  /** Inclusive unrounded percentage bounds (decimals allowed) on the shown pick; 0–100 applies no filter. */
   probability: ProbabilityRange;
   /** Inclusive two-place price bounds (hundredths) on the shown pick's own market price; null applies no
    * filter. Accepted only while publicPolicy.features.providerOdds is on (052). */
@@ -114,12 +114,39 @@ export function canonicalMarkets(markets: readonly string[]): MarketFamily[] {
   return publicPolicy.markets.filter((family) => markets.includes(family));
 }
 
+/** Complete plain decimal percentage; no signs, exponents, leading zeros, or silent nonzero underflow. */
+export function parseProbabilityValue(value: string): number | null {
+  if (typeof value !== "string") return null;
+  const match = /^(0|[1-9]\d{0,2})(?:\.(\d+))?$/u.exec(value);
+  if (!match || match[1] === "100" && /[1-9]/u.test(match[2] ?? "")) return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 && number <= 100 && !(number === 0 && /[1-9]/u.test(value)) ? number : null;
+}
+
+export function validProbabilityRange(range: ProbabilityRange): boolean {
+  return Number.isFinite(range.min) && Number.isFinite(range.max) && range.min >= 0 && range.max <= 100 && range.min <= range.max;
+}
+
+/** Shortest round-trippable decimal, with scientific notation expanded for plain-decimal URLs. */
+export function formatProbabilityValue(value: number): string {
+  if (!validProbabilityRange({ min: value, max: value })) fail();
+  const [mantissa, exponent] = String(value).split("e");
+  return exponent === undefined ? mantissa! : `0.${"0".repeat(-Number(exponent) - 1)}${mantissa!.replace(".", "")}`;
+}
+
+/** Shift the decimal percentage text before reading the fraction: arithmetic division can move exact boundaries. */
+export function probabilityFraction(value: number): number {
+  const [whole, fraction = ""] = formatProbabilityValue(value).split(".");
+  const digits = whole!.padStart(3, "0");
+  return Number(`${digits.slice(0, -2)}.${digits.slice(-2)}${fraction}`);
+}
+
 function probabilityRange(value: string | undefined): ProbabilityRange {
   if (value === undefined) return anyProbability;
-  const match = /^(0|[1-9]\d?|100)-(0|[1-9]\d?|100)$/u.exec(value);
-  if (!match) fail();
-  const min = Number(match[1]), max = Number(match[2]);
-  return min <= max ? { min, max } : fail();
+  const parts = value.split("-");
+  if (parts.length !== 2) fail();
+  const min = parseProbabilityValue(parts[0]!), max = parseProbabilityValue(parts[1]!);
+  return min !== null && max !== null && validProbabilityRange({ min, max }) ? { min, max } : fail();
 }
 
 export function isAnyProbability(range: ProbabilityRange): boolean {
@@ -225,7 +252,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   if (query.status !== feedDefaults.today.status) result.set("status", query.status);
   const markets = canonicalMarkets(query.markets);
   if (!sameList(markets, defaultMarkets)) result.set("market", markets.join(","));
-  if (!isAnyProbability(query.probability)) result.set("prob", `${query.probability.min}-${query.probability.max}`);
+  if (!isAnyProbability(query.probability)) result.set("prob", `${formatProbabilityValue(query.probability.min)}-${formatProbabilityValue(query.probability.max)}`);
   const requested = query.odds ?? null;
   if (requested !== null && (![requested.min, requested.max].every((value) => Number.isSafeInteger(value) &&
     value >= oddsRules.minimumHundredths && value <= oddsRules.maximumHundredths) || requested.min > requested.max)) fail();

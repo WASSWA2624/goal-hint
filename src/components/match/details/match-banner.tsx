@@ -27,8 +27,9 @@ const Box = styled.section`
   align-items: center;
   gap: 8px 8px;
   padding: 10px;
-  background: ${({ theme }) => theme.gradient.edge} top / 100% 3px no-repeat, ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-block-start: 3px solid ${({ theme }) => theme.color.brand};
   border-radius: ${({ theme }) => theme.border.cardRadius};
   box-shadow: ${({ theme }) => theme.shadow.card};
   ${scrollClearance}

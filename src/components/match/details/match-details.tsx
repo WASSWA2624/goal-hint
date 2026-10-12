@@ -4,6 +4,7 @@ import Link from "next/link";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { CloseIcon, SearchIcon } from "@/components/ui/icons";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
@@ -35,21 +36,21 @@ const PhoneHeaderGroup = styled.div`
   ${desktop} { display: none; }
 `;
 /**
- * The phone top bar matches the feed's branded bar: the navy to teal fill and brand edge, full bleed
+ * The phone top bar matches the feed's solid branded bar and teal edge, full bleed
  * past the page gutter and up through the app page's 10px top padding, with white text and icons.
  */
 const PhoneBar = styled.div`
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) 2rem;
+  grid-template-columns: 1.75rem minmax(0, 1fr) 1.75rem 1.75rem;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   margin-block-start: -10px;
   margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
   padding-inline: ${({ theme }) => theme.layout.gutter};
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.header.background};
-  background-color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.header.background};
+  border-block-end: 2px solid ${({ theme }) => theme.header.accent};
   ${desktop} { display: none; }
   > p { margin: 0; font-size: ${size("title")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
 `;
@@ -60,26 +61,26 @@ const barFocus = css`
 const RoundLink = styled(Link)`
   display: grid;
   place-items: center;
-  inline-size: 2rem;
-  block-size: 2rem;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
   color: ${({ theme }) => theme.header.text};
-  border-radius: 50%;
-  font-size: 1.125rem;
+  border-radius: 0;
+  font-size: 0.875rem;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlFill}; } }
   ${barFocus}
 `;
-/** Translucent white round, like the feed bar's; open search fills it with inverse teal. */
+/** Square title-bar control; open search uses inverse teal. */
 const RoundButton = styled.button`
   display: grid;
   place-items: center;
-  inline-size: 2rem;
-  block-size: 2rem;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
   padding: 0;
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.controlFill};
+  background: transparent;
   border: 0;
-  border-radius: 50%;
-  font-size: 1rem;
+  border-radius: 0;
+  font-size: 0.875rem;
   cursor: pointer;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
   &[aria-expanded="true"] { color: ${({ theme }) => theme.header.onAccent}; background: ${({ theme }) => theme.header.accent}; }
@@ -93,11 +94,11 @@ const SearchForm = styled.form`
   padding-inline: 10px 6px;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
-  border-radius: 6px;
+  border-radius: 0;
   ${desktop} { display: none; }
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
   > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; font: inherit; font-size: ${size("emphasis")}; outline: none; }
-  > button { padding: 4px 8px; color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; border: 0; border-radius: 4px; font: inherit; font-size: ${size("secondary")}; cursor: pointer; ${focusRing} }
+  > button { padding: 4px 8px; color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; border: 0; border-radius: 0; font: inherit; font-size: ${size("secondary")}; cursor: pointer; ${focusRing} }
 `;
 const BackLink = styled(Link)`
   display: none;
@@ -186,6 +187,7 @@ function PhoneHeader() {
     <PhoneBar>
       <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
       <p>{messages.text("details.title")}</p>
+      <ThemeToggle />
       <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-controls="details-search" aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
         onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => searchInput.current?.focus()); }}>
         {searching ? <CloseIcon /> : <SearchIcon />}

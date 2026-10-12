@@ -5,6 +5,7 @@ import test from 'node:test';
 import { matchFeedResponseSchema, matchFeedRules } from '../src/domain/match-feed.ts';
 import { parseFixtureSnapshot } from '../src/domain/fixture-snapshot.ts';
 import { selectedCardPrice } from '../src/domain/match-card.ts';
+import { bestCardFamily } from '../src/domain/feed-presentation.ts';
 import { createMatchFeedService } from '../src/server/matches/feed-service.ts';
 import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
 import { createMysqlPublicSearchLimiter } from '../src/server/matches/search-limit.ts';
@@ -152,6 +153,13 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       const confident = await query({ market: 'match-result,total-goals', prob: '60-100', pageSize: '100' });
       assert.equal(confident.total, 5);
       assert.deepEqual(new Set(confident.records.map((item) => item.fixtureId)), new Set(pick(3003, 3002, 3001, 3005, 3000)));
+      const exact = await query({ market: 'match-result', prob: '60.0049-60.0049', pageSize: '100' });
+      assert.deepEqual(new Set(exact.records.map((item) => item.fixtureId)), new Set(pick(3001, 3005)), 'equal decimal bounds include exactly the unrounded percentage');
+      const inclusive = await query({ market: 'match-result', prob: '60.0041-60.0049', pageSize: '100' });
+      assert.deepEqual(new Set(inclusive.records.map((item) => item.fixtureId)), new Set(pick(3000, 3001, 3005)), 'both decimal endpoints are inclusive');
+      assert.equal((await query({ market: 'match-result', prob: '60-60' })).total, 0, 'a pick displaying rounded 60% does not fabricate an exact 60% forecast');
+      assert.equal((await query({ market: 'match-result', prob: '0-0' })).total, 0);
+      assert.equal((await query({ market: 'match-result', prob: '100-100' })).total, 0);
       const partial = await card(3004);
       assert.equal(partial.unavailableMarkets.length, 2); assert.ok(partial.unavailableMarkets.every((item) => item.reason === 'unsupported'));
       await publish(3006, 0.45, 0.65);
@@ -188,7 +196,8 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       const kickoff = (id) => Date.parse('2026-10-09T10:00:00Z') + (id - 3000) * 60_000;
       const book = { 3000: { home: '1.50' }, 3001: { home: '1.85' }, 3002: { home: '3.00' }, 3004: { home: '5.00' },
         // A renamed match-result bet withholds that family's price; the total-goals price stays.
-        3005: { matchWinnerName: 'Match Winner (synthetic rename)', over: '2.00' }, 3010: { home: '2.00' } };
+        // Its goals and BTTS forecasts both have unrounded 0.6 probability; BTTS has the higher exact pick price.
+        3005: { matchWinnerName: 'Match Winner (synthetic rename)', over: '2.00', yes: '2.20' }, 3010: { home: '2.00' } };
       async function sweep(ids = Object.keys(book).map(Number)) {
         p.setTime(p.now() + 1000);
         odds.state.rows = ids.map((id) => rawOddsRow(id, kickoff(id), { update: offsetTime(p.now() - 60_000), bets: launchBets(book[id]) }));
@@ -220,6 +229,10 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       // 3005 shows its match-result pick (0.600049 > 0.6), which has no price; its in-range goals price never qualifies it.
       const mixed = await read({ market: 'match-result,total-goals', odds: '1.95-2.05' });
       assert.equal(mixed.total, 0); assert.equal(mixed.state, 'no-filter-matches');
+      const tie = await read({ market: 'total-goals,both-teams-to-score', odds: '2.20-2.20', sort: 'probability' });
+      assert.deepEqual(ids(tie), new Set([3005]), 'the SQL odds filter uses the highest-price pick only on an exact probability tie');
+      assert.equal(bestCardFamily(tie.records[0], ['total-goals', 'both-teams-to-score']), 'both-teams-to-score', 'browser pick matches SQL filter selection');
+      assert.equal(selectedCardPrice(tie.records[0], 'both-teams-to-score').price, '2.20');
       // Record prices: one per published family's pick, by the same rule as the SQL; nothing borrowed across families.
       const all = await read({ market: 'match-result' });
       const record = (id, page = all) => page.records.find((item) => item.fixtureId === published.get(id).fixture.id);
@@ -256,6 +269,11 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       assert.notEqual(await version(), moved);
       assert.deepEqual(ids(await read({ market: 'match-result', odds: '1.50-3.00' })), new Set([3000, 3001]));
       assert.deepEqual(record(3002, await read({ market: 'match-result' })).prices, []);
+      await sweep([3000, 3001, 3004, 3010]);
+      const staleTie = record(3005, await read({ market: 'total-goals,both-teams-to-score' }));
+      assert.deepEqual(staleTie.prices, []);
+      assert.equal(bestCardFamily(staleTie, ['total-goals', 'both-teams-to-score']), 'total-goals', 'withdrawn odds no longer break the probability tie');
+      assert.equal((await read({ market: 'total-goals,both-teams-to-score', odds: '2.20-2.20' })).total, 0, 'the SQL filter also stops reading withdrawn prices');
     });
     await t.test('run progress reflects durable job states instead of stale projected counters', async () => {
       const page = await query();

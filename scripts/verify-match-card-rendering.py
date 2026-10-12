@@ -30,13 +30,23 @@ def verify(origin, directory):
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
         match(f'data-outcome="{status}"', by_id[card])
-    for card, status, label in [("card-correct", "correct", "Won"), ("card-incorrect", "incorrect", "Lost"),
+    for card, status, label in [("card-correct", "correct", "Win"), ("card-incorrect", "incorrect", "Loss"),
         ("card-pending", "pending", "Pending")]:
         article = by_id[card]
         assert article.count(f'data-result-badge="{status}"') == 1
-        match(rf'data-result-badge="{status}"[^>]*>[\s\S]*?<span>{label}</span></span>', article)
+        match(rf'data-result-badge="{status}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span></span>', article)
     for card in ["card-unavailable", "card-missing-family"]:
-        match(r'data-result-badge="unavailable"[^>]*><span>–</span></span>', by_id[card])
+        match(r'data-result-badge="unavailable"[^>]*>[\s\S]*?<span data-pick-value[^>]*>—</span></span>', by_id[card])
+        no_match(r'data-pick-value[^>]*>(?:0%|Pending)</span>', by_id[card])
+        match(r'data-pick-value[^>]*>Unavailable</span>', by_id[card])
+    for _, article in articles:
+        for caption in ["Market", "Pick", "Prob.", "Result"]:
+            match(rf'<span[^>]*>{caption}</span>', article)
+    match(r'data-mobile-only=""[^>]*>1X2</span>', by_id["card-unavailable"])
+    match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
+    match(r'data-selected-odds[^>]*>Odds 1\.85</span>', by_id["card-correct"])
+    no_match(r"Odds 2\.10", by_id["card-correct"])
+    no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])
     no_match(r"Final score:|Live score:|data-live-minute=", by_id["card-delayed"])
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
     match(r'data-match-status="live"[^>]*>67′</span>', by_id["card-pending"])

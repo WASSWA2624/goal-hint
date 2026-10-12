@@ -62,7 +62,7 @@ export const SkipLink = styled.a`
 `;
 
 /**
- * The branded bar: deep navy to teal behind the inverse logo, with the multicolour brand edge along
+ * The branded bar: solid navy/charcoal behind the inverse logo, with the teal brand edge along
  * the bottom. App pages own their phone bar (same fill), so this one is desktop-only there.
  */
 export const Header = styled.header<{ $app?: boolean }>`
@@ -71,9 +71,8 @@ export const Header = styled.header<{ $app?: boolean }>`
   z-index: 20;
   display: ${({ $app }) => $app ? "none" : "block"};
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.gradient.edge} bottom / 100% 2px no-repeat, ${({ theme }) => theme.header.background};
-  /* Solid navy where gradients are dropped (forced colours, print). */
-  background-color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.header.background};
+  border-block-end: 2px solid ${({ theme }) => theme.header.accent};
   box-shadow: ${({ theme }) => theme.header.shadow};
   ${desktop} { display: block; }
 `;
@@ -85,6 +84,13 @@ export const HeaderContent = styled(Container)`
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   ${desktop} { flex-wrap: wrap; gap: ${({ theme }) => theme.space.lg}; min-block-size: 4rem; }
   ${media.wide} { gap: ${({ theme }) => theme.space.xl}; }
+`;
+
+export const HeaderActions = styled.div`
+  display: flex;
+  flex: none;
+  margin-inline-start: auto;
+  ${desktop} { margin-inline-start: 0; }
 `;
 
 /**
@@ -206,7 +212,7 @@ export const MoreList = styled.ul`
   list-style: none;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 6px;
+  border-radius: 0;
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
   a {
     display: flex;
@@ -214,7 +220,7 @@ export const MoreList = styled.ul`
     align-items: center;
     padding-inline: ${({ theme }) => theme.space.md};
     color: ${({ theme }) => theme.color.text};
-    border-radius: 8px;
+    border-radius: 0;
     text-decoration: none;
     ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
     &[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
@@ -275,8 +281,8 @@ export const TabBar = styled.nav`
   inset-block-end: 0;
   z-index: 20;
   padding-block-end: env(safe-area-inset-bottom);
-  background: ${({ theme }) => theme.color.surface};
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.header.background};
+  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
   box-shadow: none;
   ${desktop} { display: none; }
 `;
@@ -287,45 +293,46 @@ export const TabList = styled.ul`
   padding: 0;
   list-style: none;
 `;
-/** Each section lights up in its own colour when current. */
+/** A distinct 42px bar uses one teal indicator and keeps the four familiar sections. */
 export const TabLink = styled(Link)<{ $tone: AccentName }>`
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-block-size: 3.5rem;
-  padding: 4px;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
+  gap: 1px;
+  min-block-size: 2.625rem;
+  padding: 3px 4px;
+  color: ${({ theme }) => theme.header.text};
+  font-size: 0.625rem;
   line-height: 1.25;
   text-align: center;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
-  > svg { font-size: 1.25rem; }
+  > svg { font-size: 1.125rem; }
   &[aria-current="page"] {
-    color: ${({ theme, $tone }) => theme.color.accent[$tone].solid};
-    background: linear-gradient(180deg, ${({ theme, $tone }) => theme.color.accent[$tone].soft}, ${({ theme }) => theme.color.surface});
+    color: ${({ theme }) => theme.header.accent};
+    background: transparent;
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     &::before {
       content: "";
       position: absolute;
       inset-block-start: 0;
-      inset-inline: 30%;
-      block-size: 3px;
-      background: ${({ theme, $tone }) => theme.color.accent[$tone].gradient};
+      inset-inline: 10%;
+      block-size: 2px;
+      background: ${({ theme }) => theme.header.accent};
     }
   }
   ${focusRing}
-  &:focus-visible { outline-offset: -4px; }
+  &:focus-visible { outline-color: ${({ theme }) => theme.header.accent}; outline-offset: -4px; }
 `;
 
-/** Matches the header: white surface, multicolour edge, compact muted links; clears the phone tab bar. */
+/** A quiet surface with compact links; its bottom clearance matches the slim phone tab bar. */
 export const Footer = styled.footer`
-  padding-block: 10px calc(10px + 3.75rem + env(safe-area-inset-bottom));
+  padding-block: 10px calc(10px + 2.625rem + env(safe-area-inset-bottom));
   color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme }) => theme.gradient.edge} top / 100% 2px no-repeat, ${({ theme }) => theme.color.surface};
+  background: ${({ theme }) => theme.color.surface};
+  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   font-size: 0.75rem;
   line-height: 1.4;
   ${desktop} { padding-block: 14px; font-size: 0.8125rem; }
