@@ -9,6 +9,7 @@ Usage:
   python scripts/deploy-cpanel.py --config-pull             server settings -> deploy/.env.production.local
                                                             and deploy/.goal-hint/owner-approvals.json
   python scripts/deploy-cpanel.py --config-push             check those files, upload them, restart
+  python scripts/deploy-cpanel.py --repair                  restore the domain's .htaccess routing, restart
 
 Each release is extracted to ~/goal-hint-releases/<stamp>/ and activated by
 repointing the ~/goal-hint/standalone symlink, so rollback is a single swap.
@@ -142,6 +143,20 @@ case "$command" in
     ;;
   logs) if [ -f "$app/stderr.log" ]; then tail -n "$3" "$app/stderr.log"; else echo "(no stderr.log yet)"; fi ;;
   restart) restart; echo "Restarted with the current private files." ;;
+  repair)  # Recreate the Passenger block that routes the domain to the app (lost if ~/<domain>/.htaccess is deleted).
+    root="$(uapi --output=json DomainInfo single_domain_data domain="$3" | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["data"]["documentroot"])')"
+    node="$HOME/nodevenv/$app_root/24/bin/node"
+    [ -x "$node" ] || { echo "No Node.js 24 environment for $app_root; deploy first." >&2; exit 3; }
+    if grep -qF "PassengerAppRoot \"$app\"" "$root/.htaccess" 2>/dev/null; then
+      echo "$root/.htaccess already routes to $app."
+    else
+      { printf '# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN\nPassengerAppRoot "%s"\nPassengerBaseURI "/"\nPassengerNodejs "%s"\nPassengerAppType node\nPassengerStartupFile app.js\n# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END\n' "$app" "$node"
+        cat "$root/.htaccess" 2>/dev/null || true; } > "$root/.htaccess.new"
+      chmod 644 "$root/.htaccess.new"; mv -f "$root/.htaccess.new" "$root/.htaccess"
+      echo "Restored the Passenger routing in $root/.htaccess."
+    fi
+    selector set --app-root "$app_root" --env-vars "$4" >/dev/null  # rewrites the environment section
+    restart; echo "Restarted." ;;
   config-get)  # name<TAB>base64 per existing private file.
     for f in .env.production.local .goal-hint/owner-approvals.json; do
       [ ! -f "$private/$f" ] || printf '%s\t%s\n' "$f" "$(base64 -w0 "$private/$f")"
@@ -161,6 +176,7 @@ case "$command" in
       fi
       echo "  waiting for the app (HTTP $code), attempt $i/10" >&2; sleep 5
     done
+    [ "$code" != 404 ] || echo "A 404 from LiteSpeed means the domain no longer routes to the app; run --repair." >&2
     echo "https://$3/ did not return HTTP 200; run --logs, or --rollback." >&2; exit 4 ;;
   *) echo "Unknown command $command" >&2; exit 2 ;;
 esac
@@ -235,7 +251,9 @@ def check_config(env_text: str | None, approvals_text: str | None) -> list[str]:
         if not re.fullmatch(r"0|[1-9][0-9]*", env.get("GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS", "")):
             problems.append("GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS must be a whole number of cents")
         url = env.get("DATABASE_URL", "")
-        if url and (not url.startswith("mysql://") or "?" in url or "#" in url):
+        if "<" in url or ">" in url:
+            problems.append("DATABASE_URL still contains a <placeholder>")
+        elif url and (not url.startswith("mysql://") or "?" in url or "#" in url):
             problems.append("DATABASE_URL must be mysql://user:percent-encoded-password@host:port/database with no ? or #")
     if approvals_text is not None:
         try:
@@ -335,6 +353,7 @@ def main():
     action.add_argument("--restart", action="store_true", help="reapply ~/goal-hint-private files and restart")
     action.add_argument("--config-pull", action="store_true", help="download the server settings into deploy/ (git-ignored)")
     action.add_argument("--config-push", action="store_true", help="check deploy/ settings, upload them and restart")
+    action.add_argument("--repair", action="store_true", help="restore the domain's .htaccess routing and restart")
     parser.add_argument("--build", action="store_true", help="rebuild the zip with the pinned Node.js first")
     parser.add_argument("--zip", type=Path, default=ZIP, help="bundle to deploy (default: deploy/goal-hint-cpanel.zip)")
     options = parser.parse_args()
@@ -348,6 +367,9 @@ def main():
         config_pull()
     elif options.config_push:
         config_push()
+    elif options.repair:
+        print(remote("repair", DOMAIN, json.dumps(INITIAL_ENV)))
+        verify()
     elif options.rollback or options.restart:
         print(remote("rollback" if options.rollback else "restart"))
         verify()

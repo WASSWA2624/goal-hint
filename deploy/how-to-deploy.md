@@ -144,6 +144,7 @@ decision in your owner approvals.
 | Symptom | Fix |
 | --- | --- |
 | Site times out | DNS isn't pointed yet (one-time setup, step 3) |
+| LiteSpeed "404 Not Found" page | `~/goalhint.com/.htaccess` was deleted. Run `python scripts/deploy-cpanel.py --repair`, and don't delete files in `~/goalhint.com` |
 | Every page returns 500 | Run `--logs`: `RuntimePolicyError` names the bad setting |
 | `/api/*` returns 503 (not logged) | Check the approval references, password encoding, `GOAL_HINT_COMPETITION_IDS`, that `DEBUG` is unset, and `db:status` |
 | `Permission denied (publickey)` | The key isn't authorized in cPanel |
