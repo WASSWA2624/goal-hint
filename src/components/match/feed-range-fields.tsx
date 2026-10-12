@@ -2,6 +2,7 @@
 
 import styled from "styled-components";
 import { controlFeedback } from "./filter-parts";
+import { media } from "@/styles/theme";
 
 /** Date and time ranges share the same compact, always-visible controls. */
 export const RangeFieldset = styled.fieldset`
@@ -54,6 +55,11 @@ export const RangeFields = styled.div`
   }
   input::-webkit-date-and-time-value { min-inline-size: 0; text-align: start; }
   input::-webkit-calendar-picker-indicator { inline-size: 0.875rem; padding: 0; margin: 0; }
+  ${media.belowDesktop} {
+    > label { flex-direction: column; align-items: stretch; gap: 4px; padding: 5px; }
+    > label > span { max-inline-size: none; font-size: 0.8125rem; line-height: 1.2; }
+    input { min-block-size: 2rem; font-size: 0.875rem; }
+  }
   @media (min-width: 480px) { > label > span { max-inline-size: none; white-space: nowrap; } }
 `;
 

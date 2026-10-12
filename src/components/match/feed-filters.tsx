@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styled from "styled-components";
-import { ResetIcon, FilterIcon } from "@/components/ui/icons";
+import { ResetIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { validKickoffTime } from "@/domain/kickoff-time";
@@ -11,7 +11,7 @@ import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { applyFeedDraft, resetFeedFilters } from "@/domain/feed-controls";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
 import {
-  canonicalMarkets, feedQueryHref, feedQueryRules, formatProbabilityValue, parseProbabilityValue, resolveFeedDates,
+  canonicalMarkets, feedQueryHref, feedQueryRules, formatProbabilityValue, panelFilterCount, parseProbabilityValue, resolveFeedDates,
   serializeFeedQuery, validProbabilityRange, type FeedQuery,
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -23,13 +23,13 @@ import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { FeedTimeFilter } from "./feed-time";
 import { DateRangePicker } from "./feed-dates";
-import { ChipText, FilterChip, focusRing, OptionLogo, OptionPicker } from "./filter-parts";
+import { ChipText, controlFeedback, FilterChip, focusRing, IconButton, OptionLogo, OptionPicker } from "./filter-parts";
 
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
 
 function valid(query: FeedQuery, today: ReportingDate): boolean {
-  try { serializeFeedQuery(query, today); return true; } catch { return false; }
+  try { serializeFeedQuery({ ...query, search: "" }, today); return true; } catch { return false; }
 }
 function toggled(list: readonly string[], value: string, maximum: number): string[] {
   return list.includes(value) ? list.filter((item) => item !== value) : list.length >= maximum ? [...list] : [...list, value].sort();
@@ -41,57 +41,86 @@ function toggledMarkets(query: FeedQuery, family: MarketFamily): FeedQuery | nul
   return { ...query, markets: canonicalMarkets(has ? query.markets.filter((item) => item !== family) : [...query.markets, family]), page: 1 };
 }
 
-/** A thin brand edge tops the desktop panel. */
+/** One form owns search and the entire draft; persistent actions use native form association. */
 const Panel = styled.form`
   display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+`;
+const SearchRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   gap: 6px;
   min-inline-size: 0;
-  padding: 8px;
+  ${desktop} { grid-template-columns: minmax(0, 1fr); }
+`;
+const SearchField = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  min-block-size: 2.75rem;
+  padding-inline: 10px;
+  color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-block-start: 3px solid ${({ theme }) => theme.color.brand};
-  border-radius: ${({ theme }) => theme.border.cardRadius};
-  box-shadow: ${({ theme }) => theme.shadow.card};
-  ${media.belowDesktop} {
-    padding: 0;
-    background: none;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  ${controlFeedback}
+  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
+  > input {
+    inline-size: 100%; min-inline-size: 0; min-block-size: 2.5rem; padding: 0;
+    border: 0; background: transparent; color: inherit; font: inherit; font-size: 1rem;
+    &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
+    ${focusRing}
   }
-  ${desktop} { padding: 12px 14px 10px; }
+`;
+/** Square body toggle; its count describes applied choices, independent of unfinished edits. */
+const FilterToggle = styled(IconButton)`
+  position: relative;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border-radius: 0;
+  ${desktop} { display: none; }
+  &[aria-expanded="true"] {
+    color: ${({ theme }) => theme.color.onBrand};
+    background: ${({ theme }) => theme.color.brand};
+    border-color: ${({ theme }) => theme.color.brand};
+  }
+  > b {
+    position: absolute; inset-block-start: 1px; inset-inline-end: 2px;
+    color: ${({ theme }) => theme.color.accent.teal.text};
+    font-size: 0.625rem; line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  &[aria-expanded="true"] > b { color: inherit; }
 `;
 /** Raised above the cards' full-row links, so the date and option popovers that overlap them stay usable. */
 const PhoneOnly = styled.div`
   position: relative;
   z-index: 2;
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-inline-size: 0;
   container: phone-filters / inline-size;
   ${desktop} { display: none; }
 `;
-/** Collapsed by default on phones; the header toggle reveals the rows below the dates. */
+/** Option fields reuse the existing compact checklists. */
 const PhoneMore = styled.div`
   display: grid;
-  gap: 6px;
+  gap: 8px;
   min-inline-size: 0;
-  padding: 6px;
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   &[hidden] { display: none; }
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 
-/** One responsive group keeps all phone fields behind the header's filter toggle. */
+/** Desktop fields are always visible; only mobile fields follow the body toggle. */
 const FilterFieldsGroup = styled.div<{ $open: boolean }>`
-  display: grid;
-  gap: 6px;
+  display: ${({ $open }) => $open ? "grid" : "none"};
+  gap: 8px;
   min-inline-size: 0;
-  ${media.belowDesktop} {
-    display: ${({ $open }) => $open ? "grid" : "none"};
-    scroll-margin-block-start: 3rem;
-  }
+  padding: 8px;
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  ${desktop} { display: grid; padding: 12px 14px 10px; border-block-start: 3px solid ${({ theme }) => theme.color.brand}; }
 `;
 /** Date and time inputs remain direct controls within the expanded filter group. */
 const RangeRow = styled.div`
@@ -104,14 +133,15 @@ const RangeRow = styled.div`
 /** One labelled trigger per filter replaces clipped suggestion chips and their duplicate menus. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
+  > button { min-block-size: 2.75rem; font-size: 0.875rem; }
   [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; }
   > [role="group"] {
     grid-template-columns: minmax(0, 1fr);
     max-inline-size: 100%;
     border-radius: 0;
     box-shadow: none;
-    > input { min-inline-size: 0; border-radius: 0; }
-    label { border-radius: 0; }
+    > input { min-inline-size: 0; border-radius: 0; font-size: 1rem; }
+    label { min-block-size: 2.75rem; border-radius: 0; font-size: 0.875rem; }
   }
 `;
 /** The phone probability control grows naturally with larger text. */
@@ -123,12 +153,13 @@ const BottomRow = styled.div`
   @container phone-filters (max-width: 16rem) { grid-template-columns: minmax(0, 1fr); }
 `;
 const ProbabilityGroup = styled.div`
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
   min-inline-size: 0;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   > span { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 const ProbabilityInputs = styled.div`
@@ -145,7 +176,7 @@ const ProbabilityInputs = styled.div`
     border: 1px solid ${({ theme }) => theme.color.controlBorder};
     background: ${({ theme }) => theme.color.surface};
     color: ${({ theme }) => theme.color.mutedText};
-    font-size: 0.6875rem;
+    font-size: 0.8125rem;
     white-space: nowrap;
   }
   input {
@@ -161,6 +192,10 @@ const ProbabilityInputs = styled.div`
     ${focusRing}
   }
   > label:has([aria-invalid="true"]) { border-color: ${({ theme }) => theme.color.accent.red.text}; }
+  ${media.belowDesktop} {
+    > label { flex: 1; }
+    input { flex: 1; inline-size: 100%; min-block-size: 2.25rem; }
+  }
   ${desktop} {
     [data-bound-label] { display: none; }
     input { inline-size: 2.75rem; font-size: 0.8125rem; }
@@ -192,7 +227,7 @@ const QuietButton = styled.button`
 `;
 const OddsNote = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   line-height: 1.25;
 `;
 
@@ -286,6 +321,8 @@ const OutlineButton = styled(QuietButton)`
   min-block-size: 2rem;
   border-radius: 0;
   font-size: 0.8125rem;
+  border-color: transparent;
+  background: transparent;
 `;
 const FilterActions = styled.div`
   display: flex;
@@ -295,9 +332,10 @@ const FilterActions = styled.div`
   ${media.belowDesktop} {
     flex-wrap: nowrap;
     gap: 4px;
-    > button { min-block-size: 1.75rem; gap: 4px; padding-inline: 6px; font-size: 0.6875rem; }
+    > button { min-block-size: 2.5rem; gap: 4px; padding-inline: 8px; font-size: 0.875rem; }
     > button > svg { font-size: 0.875rem; }
   }
+  @media (max-width: 350px) { > button > svg { display: none; } }
 `;
 
 export type FeedFilterDraftStatus = Readonly<{ valid: boolean }>;
@@ -308,8 +346,8 @@ export function FeedFilterActions({ formId, locale, status }: {
   const messages = createMessages(locale);
   return <FilterActions data-filter-actions>
     <OutlineButton type="reset" form={formId}><ResetIcon />{messages.text("feed.filters.clearAll")}</OutlineButton>
-    <ApplyButton type="submit" form={formId} disabled={!status.valid}>
-      <FilterIcon />{messages.text("feed.filters.applyPlain")}
+    <ApplyButton type="submit" form={formId} disabled={!status.valid} aria-label={messages.text("feed.filters.applyPlain")}>
+      <FilterIcon />{messages.text("feed.filters.apply")}
     </ApplyButton>
   </FilterActions>;
 }
@@ -333,17 +371,17 @@ function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, mess
 type FeedFiltersProps = {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (query: FeedQuery) => void;
   formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void;
-  /** The header toggle opens all filter fields on phones and tablets. */
-  phoneOpen?: boolean; phoneId?: string;
+  open: boolean; panelId: string; onToggle: () => void; controls: ReactNode;
 };
 export function FeedFilters(props: FeedFiltersProps) {
   return <FilterFields key={feedQueryHref(props.query, props.today)} {...props} />;
 }
-function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, phoneOpen = true, phoneId }: FeedFiltersProps) {
+function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, open, panelId, onToggle, controls }: FeedFiltersProps) {
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
   useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   const draft = valid(storedDraft, today) ? storedDraft : query;
   const range = resolveFeedDates(query, today), deviceZone = useDeviceTimeZone();
+  const filterToggle = useRef<HTMLButtonElement>(null);
   const [dateInputs, setDateInputs] = useState({ from: String(range.startDate), to: String(range.endDate) });
   const [timeInputs, setTimeInputs] = useState({ from: query.time?.from ?? "", to: query.time?.to ?? "" });
   const [probabilityInputs, setProbabilityInputs] = useState({ min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max) });
@@ -360,7 +398,9 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, p
       resolveFeedDates({ dates }, today);
       const time = timeInputs.from || timeInputs.to ? { ...timeInputs, zone } : null;
       if (time && !validKickoffTime(time)) return null;
-      return { ...draft, dates, time, probability, page: 1 };
+      const next = { ...draft, dates, time, probability, page: 1 };
+      applyFeedDraft(next, today);
+      return next;
     } catch { return null; }
   }, [dateInputs, draft, probability, query.dates, range.endDate, range.startDate, timeInputs, today, zone]);
   const messages = createMessages(query.locale);
@@ -439,7 +479,13 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, p
   const probabilityFields = <ProbabilityRangeInputs values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
     onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
-  return <Panel id={formId} aria-label={messages.text("feed.filters.form")} onReset={(event) => {
+  const count = panelFilterCount(query);
+  const [action, parameters = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
+  return <Panel id={formId} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
+    if (event.key === "Escape" && open && !event.defaultPrevented && filterToggle.current?.getClientRects().length) {
+      event.preventDefault(); onToggle(); filterToggle.current?.focus();
+    }
+  }} onReset={(event) => {
     event.preventDefault();
     setDateInputs({ from: range.startDate, to: range.endDate });
     setTimeInputs({ from: "", to: "" });
@@ -449,7 +495,21 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, p
     event.preventDefault();
     if (completeDraft) apply(applyFeedDraft(completeDraft, today));
   }}>
-    <FilterFieldsGroup id={phoneId} $open={phoneOpen}>
+    {[...new URLSearchParams(parameters)].map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+    <SearchRow data-feed-search>
+      <SearchField>
+        <SearchIcon aria-hidden="true" />
+        <input type="search" name="q" value={draft.search} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
+          placeholder={messages.text("feed.search.placeholder")} aria-label={messages.text("feed.filters.search")}
+          onChange={(event) => edit({ ...draft, search: event.target.value })} />
+      </SearchField>
+      <FilterToggle ref={filterToggle} type="button" aria-expanded={open} aria-controls={panelId}
+        title={messages.text("feed.filters.toggle")}
+        aria-label={count > 0 ? messages.plural("feed.filters.toggleCount", count) : messages.text("feed.filters.toggle")} onClick={onToggle}>
+        <FilterIcon />{count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
+      </FilterToggle>
+    </SearchRow>
+    <FilterFieldsGroup id={panelId} $open={open}>
     <RangeRow>
       <DateRangePicker query={query} today={today} {...dateInputs} onChange={(from, to) => setDateInputs({ from, to })} />
       <FeedTimeFilter query={query} {...timeInputs} onChange={(from, to) => setTimeInputs({ from, to })} />
@@ -490,5 +550,6 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, p
     </DesktopOnly>
     {probability === null && <ProbabilityError id={probabilityErrorId}>{messages.text("feed.filters.probabilityInvalid")}</ProbabilityError>}
     </FilterFieldsGroup>
+    {controls}
   </Panel>;
 }

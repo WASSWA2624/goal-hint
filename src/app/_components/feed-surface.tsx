@@ -1,11 +1,11 @@
 "use client";
 
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
-import { FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
+import { FeedActiveFilterSummary, FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
 import { FeedFilterActions, FeedFilters, type FeedFilterDraftStatus } from "@/components/match/feed-filters";
-import { FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
+import { FeedFilterToolbar, FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
 import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
 import { FeedPagination } from "@/components/match/feed-pagination";
@@ -16,9 +16,8 @@ import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { createPredictionWindow, type ReportingDate } from "@/domain/calendar";
-import { feedQueryHref, isFeedDatePreset, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
+import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
@@ -29,10 +28,8 @@ import { FeedStateProvider } from "@/state/provider";
 import { media } from "@/styles/theme";
 
 const noLeagues: MatchFeedResponse["leagues"] = [];
-/** Keep the mobile feed's stacked controls close while retaining desktop spacing tokens. */
-const FeedStack = styled(Stack)`${media.belowDesktop} { gap: 6px; }`;
-/** Keep a DOM dismissal boundary without constraining the sticky header to the filter panel. */
-const FilterRegion = styled.div`display: contents;`;
+/** Compact spacing still separates controls and match cards clearly on phones. */
+const FeedStack = styled(Stack)`${media.belowDesktop} { gap: 8px; }`;
 /** Pending navigations dim the list in place instead of inserting a line that shifts it. */
 const Results = styled(FeedStack)`
   transition: opacity 150ms ease;
@@ -43,9 +40,9 @@ const Results = styled(FeedStack)`
 const PreviousNote = styled(FeedNote)`${media.desktop} { color: inherit; }`;
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
-const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onApply, actions }: {
+const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
-  onStatus: (href: string, message: string) => void; onApply: (next: FeedQuery) => void; actions: ReactNode;
+  onStatus: (href: string, message: string) => void;
 }) {
   const messages = createMessages(query.locale);
   const router = useRouter();
@@ -62,7 +59,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
     <ResultsToolbar query={query} total={data.total} first={first}
-      last={first + records.length - 1} onApply={onApply} actions={actions} />
+      last={first + records.length - 1} />
     {/* Fixtures without the selected market still list; each row states why it has no pick. */}
     {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
     {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
@@ -81,11 +78,8 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
-  // Phone filters start collapsed behind the header toggle; desktops always show them.
+  // The body toggle reveals fields without hiding search, actions or the applied summary.
   const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId();
-  const filterRoot = useRef<HTMLDivElement>(null);
-  const closeFilters = useCallback(() => setFiltersOpen(false), []);
-  useOutsideDismiss({ enabled: filtersOpen, root: filterRoot, onDismiss: closeFilters });
   const filtersFormId = useId();
   const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true });
   const filterActions = useMemo(() => <FeedFilterActions formId={filtersFormId} locale={query.locale} status={filterStatus} />,
@@ -111,27 +105,23 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
       else router.push(nextHref, { scroll: false });
     });
   }, [failed, href, pending, router, today]);
-  const toggleFilters = useCallback(() => {
-    setFiltersOpen(!filtersOpen);
-    if (!filtersOpen) requestAnimationFrame(() => document.getElementById(filtersId)?.scrollIntoView({ block: "start" }));
-  }, [filtersId, filtersOpen]);
+  const toggleFilters = useCallback(() => setFiltersOpen((open) => !open), []);
   const announcement = pending ? messages.text("feed.filters.loading") : result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
     : paginationStatus?.href === href ? paginationStatus.message
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? messages.plural("feed.matchCount", result.data.total)
     : messages.text(`feed.state.${result.data.state}`);
   return <FeedStack $gap="sm">
-    <FilterRegion ref={filterRoot}>
-    <FeedHeader query={query} today={today} onApply={apply}
-      filters={{ open: filtersOpen, count: panelFilterCount(query), controls: filtersId, onToggle: toggleFilters }} />
+    <FeedHeader query={query} today={today} onApply={apply} />
     <FeedFilters query={query} today={today} leagues={leagues} onApply={apply}
-      phoneOpen={filtersOpen} phoneId={filtersId} formId={filtersFormId} onDraftStatus={setFilterStatus} />
-    </FilterRegion>
+      open={filtersOpen} panelId={filtersId} onToggle={toggleFilters} formId={filtersFormId} onDraftStatus={setFilterStatus}
+      controls={<FeedFilterToolbar query={query} onApply={apply} actions={filterActions}
+        summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
     {controls}
     {range.endDate > createPredictionWindow(today).lastDate && <FeedNote>{messages.text("feed.sevenDayAvailability")}</FeedNote>}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     <Results $gap="md" aria-busy={pending} data-feed-results>
-      {!visible && <ResultsToolbar query={query} total={null} first={0} last={0} onApply={apply} actions={filterActions} />}
+      {!visible && <ResultsToolbar query={query} total={null} first={0} last={0} />}
       {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
         description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}
         action={<ButtonLink href={href} prefetch={false} variant="secondary" onClick={(event) => {
@@ -143,7 +133,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />
       </Stack>}
       {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate}
-        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} onApply={apply} actions={filterActions} />}
+        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;

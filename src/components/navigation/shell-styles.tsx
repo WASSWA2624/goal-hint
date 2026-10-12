@@ -90,7 +90,6 @@ export const HeaderActions = styled.div`
   display: flex;
   flex: none;
   margin-inline-start: auto;
-  ${desktop} { margin-inline-start: 0; }
 `;
 
 /**

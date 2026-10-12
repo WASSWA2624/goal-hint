@@ -40,7 +40,8 @@ export async function PublicShell({ children, locale, current, today: reportingD
   app?: boolean;
   /** Dense mobile feeds use 8px gutters; other app screens retain their existing spacing. */
   compact?: boolean;
-  search?: ShellSearch;
+  /** null lets a page own its body search without a duplicate shell field. */
+  search?: ShellSearch | null;
 }) {
   const language = resolveLocale(locale);
   const messages = createMessages(language);
@@ -86,12 +87,12 @@ export async function PublicShell({ children, locale, current, today: reportingD
               </li>
             </TopNavList>
           </DesktopNav>
-          <HeaderSearch action={searchForm.action} method="get" role="search" aria-label={messages.text("navigation.searchLabel")}>
+          {search !== null && <HeaderSearch action={searchForm.action} method="get" role="search" aria-label={messages.text("navigation.searchLabel")}>
             <SearchIcon />
             {searchForm.hidden.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
             <input type="search" name="q" defaultValue={searchForm.value} maxLength={feedQueryRules.maximumSearchLength}
               placeholder={messages.text("navigation.search")} aria-label={messages.text("navigation.searchLabel")} autoComplete="off" />
-          </HeaderSearch>
+          </HeaderSearch>}
           <HeaderActions><ThemeToggle /></HeaderActions>
         </HeaderContent>
       </Header>

@@ -1,20 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
+import { ChevronDownIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import type { ReportingDate } from "@/domain/calendar";
-import { feedQueryHref, feedQueryRules, resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
+import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets } from "./feed-dates";
-import { CompactSelect, controlFeedback, focusRing, IconButton } from "./filter-parts";
+import { CompactSelect, focusRing } from "./filter-parts";
 
 const desktop = media.desktop;
 const HeaderContent = styled.div`
@@ -54,7 +53,7 @@ const Row = styled.div`
  * App pages hide the shell header below desktop, so the feed carries the branded bar: the same navy
  * to teal fill and brand edge as the desktop header, full bleed past the page gutter and up through
  * the app page's 8px top padding to the screen edge. The inverse logo sits at the brand-kit minimum
- * 160px wide beside the filter and search buttons.
+ * 160px wide beside the theme control.
  */
 const BrandBar = styled.div`
   display: flex;
@@ -85,66 +84,9 @@ const HomeLink = styled(Link)`
   img { inline-size: 160px; max-inline-size: 100%; block-size: auto; }
   ${barFocus}
 `;
-const PhoneActions = styled.div`
-  display: flex;
-  flex: none;
-  gap: 4px;
-`;
-/** Borderless title-bar icons; an open panel or search retains a clear active fill. */
-const RoundButton = styled(IconButton)`
-  inline-size: 2rem;
-  block-size: 2rem;
-  color: ${({ theme }) => theme.header.text};
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  border-radius: 0;
-  font-size: 1.375rem;
-  transition: background-color 120ms ease, color 120ms ease;
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
-  &[aria-expanded="true"] { color: ${({ theme }) => theme.header.onAccent}; background: ${({ theme }) => theme.header.accent}; }
-  ${barFocus}
-`;
-/** Phone filter toggle; the badge counts the choices hidden in the collapsed panel. */
-const FilterToggle = styled(RoundButton)`
-  position: relative;
-  > b {
-    position: absolute;
-    inset-block-start: -3px;
-    inset-inline-end: -3px;
-    display: grid;
-    place-items: center;
-    min-inline-size: 1rem;
-    block-size: 1rem;
-    padding-inline: 3px;
-    color: ${({ theme }) => theme.header.onAccent};
-    background: ${({ theme }) => theme.header.accent};
-    border: 1.5px solid ${({ theme }) => theme.header.onAccent};
-    border-radius: 999px;
-    font-size: 0.625rem;
-    line-height: 1;
-    font-variant-numeric: tabular-nums;
-  }
-`;
 const DesktopActions = styled.div`
   display: none;
   ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-inline-start: auto; }
-`;
-/** Phone search, as tall as the other secondary controls, with 16px icons. */
-const SearchForm = styled.form`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-inline: 8px 2px;
-  min-block-size: 2rem;
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
-  ${controlFeedback}
-  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
-  > input { flex: 1; min-inline-size: 0; border: 0; background: none; color: ${({ theme }) => theme.color.text}; font: inherit; font-size: 1rem; outline: none; }
-  > button { inline-size: 2rem; block-size: 2rem; font-size: 1rem; }
-  ${desktop} { display: none; }
 `;
 
 export function feedHeading(query: FeedQuery, today: ReportingDate, messages: ReturnType<typeof createMessages>) {
@@ -156,56 +98,28 @@ export function feedHeading(query: FeedQuery, today: ReportingDate, messages: Re
   return messages.text("feed.heading.other");
 }
 
-/** Phones use filter and search toggles; desktops use quick date presets. */
-export type FilterToggleState = Readonly<{ open: boolean; count: number; controls: string; onToggle: () => void }>;
-
-export function FeedHeader({ query, today, onApply, filters }: {
-  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void; filters?: FilterToggleState;
+/** The brand bar carries page-level controls; search and filters belong in the body. */
+export function FeedHeader({ query, today, onApply }: {
+  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void;
 }) {
   const messages = createMessages(query.locale);
-  const [searching, setSearching] = useState(query.search !== ""), [value, setValue] = useState(query.search);
-  const input = useRef<HTMLInputElement>(null), toggle = useRef<HTMLButtonElement>(null);
-  const searchRoot = useRef<HTMLDivElement>(null);
-  const closeSearch = useCallback(() => setSearching(false), []);
-  useOutsideDismiss({ enabled: searching, root: searchRoot, onDismiss: closeSearch });
-  const [action, search = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
-  return <HeaderContent ref={searchRoot}>
+  return <HeaderContent>
     <Row>
       <BrandBar>
         <HomeLink href={homeHref(query.locale)} prefetch={false} aria-label={messages.text("navigation.home")}>
           <BrandLogo alt="" variant="inverse" />
         </HomeLink>
-        <PhoneActions>
-          <ThemeToggle />
-          {filters && <FilterToggle type="button" aria-expanded={filters.open} aria-controls={filters.controls} title={messages.text("feed.filters.toggle")}
-            aria-label={filters.count > 0 ? messages.plural("feed.filters.toggleCount", filters.count) : messages.text("feed.filters.toggle")}
-            onClick={filters.onToggle}>
-            <FilterIcon />{filters.count > 0 && <b aria-hidden="true">{messages.number(filters.count)}</b>}
-          </FilterToggle>}
-          <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
-            onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => input.current?.focus()); }}>
-            {searching ? <CloseIcon /> : <SearchIcon />}
-          </RoundButton>
-        </PhoneActions>
+        <ThemeToggle />
       </BrandBar>
       <PageHeading as="h1">{feedHeading(query, today, messages)}</PageHeading>
       <DesktopActions>
         <DatePresets query={query} today={today} onApply={onApply} />
       </DesktopActions>
     </Row>
-    {searching && <SearchForm action={action} method="get" role="search" aria-label={messages.text("feed.search.open")} onSubmit={(event) => {
-      event.preventDefault();
-      onApply({ ...query, search: value.normalize("NFC").trim().replace(/\s+/gu, " "), page: 1 });
-    }} onKeyDown={(event) => { if (event.key === "Escape") { setSearching(false); toggle.current?.focus(); } }}>
-      {[...new URLSearchParams(search)].map(([name, hidden]) => <input key={name} type="hidden" name={name} value={hidden} />)}
-      <input ref={input} type="search" name="q" value={value} maxLength={feedQueryRules.maximumSearchLength} autoComplete="off"
-        placeholder={messages.text("navigation.search")} aria-label={messages.text("feed.filters.search")} onChange={(event) => setValue(event.target.value)} />
-      <IconButton type="submit" aria-label={messages.text("feed.search.submit")}><SearchIcon /></IconButton>
-    </SearchForm>}
   </HeaderContent>;
 }
 
-/** Desktop keeps its section heading; compact screens start with the action row. */
+/** Sorting and filter actions stay outside the collapsible fields. */
 const Toolbar = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -214,6 +128,18 @@ const Toolbar = styled.div`
   gap: 6px 8px;
   ${media.belowDesktop} {
     display: block;
+  }
+`;
+/** Desktop shares one row; compact screens keep the summary below the actions. */
+const FilterToolbar = styled(Toolbar)`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  > [data-active-filter-summary] { grid-row: 2; }
+  ${desktop} {
+    grid-template-columns: minmax(0, 1fr) auto;
+    > [data-active-filter-summary] { grid-column: 1; grid-row: 1; }
+    > div { grid-column: 2; grid-row: 1; }
   }
 `;
 const Count = styled.div`
@@ -236,20 +162,15 @@ const SortGroup = styled.div`
   display: flex;
   flex-wrap: wrap;
   min-inline-size: 0;
-  align-items: start;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+  ${desktop} { margin-inline-start: auto; justify-content: flex-end; }
   > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
   ${media.belowDesktop} {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 4px;
   }
-`;
-/** The applied count sits directly under the right edge of Apply filters. */
-const ActionGroup = styled.div`
-  display: grid;
-  gap: 3px;
-  min-inline-size: 0;
 `;
 const ResultCount = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
@@ -285,17 +206,17 @@ const PhoneOrder = styled.div`
   ${desktop} { display: none; }
 `;
 const PhoneSort = styled(CompactSelect)`
-  min-block-size: 1.75rem;
+  min-block-size: 2.5rem;
   padding-block: 3px;
   padding-inline: 7px 22px;
   border-radius: 0;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   inline-size: 100%;
   > span { flex: 1; }
   > span > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.2; }
   > select {
     font-size: inherit;
-    > option { font-size: 0.6875rem; }
+    > option { font-size: inherit; }
     /* iOS presents its own picker; keep its input large enough to avoid focus zoom. */
     @supports (-webkit-touch-callout: none) { font-size: 16px; }
   }
@@ -306,9 +227,9 @@ const sortOptions: readonly FeedSort[] = [
   { by: "kickoff", direction: "asc" }, { by: "kickoff", direction: "desc" },
 ];
 
-/** Result count and order; changes apply at once. */
-export function ResultsToolbar({ query, total, first, last, onApply, actions }: {
-  query: FeedQuery; total: number | null; first: number; last: number; onApply: (next: FeedQuery) => void; actions?: ReactNode;
+/** One independent sort menu retains the established immediate sort behavior. */
+export function FeedFilterToolbar({ query, onApply, actions, summary }: {
+  query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode;
 }) {
   const messages = createMessages(query.locale);
   const sortKey = `${query.sort.by}-${query.sort.direction}`;
@@ -317,12 +238,8 @@ export function ResultsToolbar({ query, total, first, last, onApply, actions }: 
     const selected = sortOptions.find((sort) => `${sort.by}-${sort.direction}` === key);
     if (selected) choose(selected);
   };
-  return <Toolbar>
-    <Count>
-      <h2>{messages.text("feed.results.title")}</h2>
-      {total !== null && <p>{total === 0 ? messages.text("feed.results.showing", { shown: "0", total: "0" })
-        : messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>}
-    </Count>
+  return <FilterToolbar>
+    {summary}
     <SortGroup>
       <PhoneOrder>
         <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => chooseKey(event.target.value)}
@@ -337,10 +254,22 @@ export function ResultsToolbar({ query, total, first, last, onApply, actions }: 
         </select>
         <ChevronDownIcon />
       </SelectWrap>
-      <ActionGroup>
-        {actions}
-        {total !== null && <ResultCount data-match-count>{messages.plural("feed.results.count", total)}</ResultCount>}
-      </ActionGroup>
+      {actions}
     </SortGroup>
+  </FilterToolbar>;
+}
+
+/** Counts follow the successful result projection, including pagination and live refresh. */
+export function ResultsToolbar({ query, total, first, last }: {
+  query: FeedQuery; total: number | null; first: number; last: number;
+}) {
+  const messages = createMessages(query.locale);
+  return <Toolbar>
+    <Count>
+      <h2>{messages.text("feed.results.title")}</h2>
+      {total !== null && <p>{messages.text("feed.results.showing", { shown: total === 0 ? "0"
+        : `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>}
+    </Count>
+    {total !== null && <ResultCount data-match-count>{messages.plural("feed.results.count", total)}</ResultCount>}
   </Toolbar>;
 }

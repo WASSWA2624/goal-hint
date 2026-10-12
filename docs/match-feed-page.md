@@ -35,10 +35,13 @@ aggregate limiter before cache lookup.
 ## Navigation and presentation
 
 Desktop quick date presets use ordinary links with prefetch disabled and retain
-their existing date-navigation behavior. Four native From date, To date, From
-time and To time inputs share the collapsible mobile/tablet filter section and
-stay visible on desktop; one Apply action submits the complete filter draft
-and resets page position to one. Equal date endpoints select a day and equal
+their existing date-navigation behavior. The body search bar is shared across
+every screen size. Phones and tablets use a Filters button to reveal the fields;
+desktop always shows all fields and omits that toggle. Search edits the same Redux draft as the
+filter fields; Enter in search and Apply both submit the complete validated
+draft and reset page position to one. Four native From date, To date, From time
+and To time inputs share the filter section, which starts collapsed below
+64rem and remains expanded on desktop. Equal date endpoints select a day and equal
 time endpoints select a kickoff minute. Different date
 endpoints select an inclusive range of up to 31 days; time ranges retain inclusive
 minute bounds and their explicit timezone. Incomplete or invalid ranges remain
@@ -81,23 +84,25 @@ branded bar. It uses the same navy-to-teal `theme.header.background` and brand
 edge as the desktop header, has a 3rem (48px) minimum height, and runs past the
 feed's 8px gutters and top padding to the screen edge. The inverse logo links
 home as "Goal Hint home" and can shrink on narrow screens with enlarged text.
-The 32px theme, filter and search buttons sit at the end of the row. The theme
-button switches between the approved R03 Light and R04 Dark palettes. Filter
-and search buttons
-fill with inverse teal while open. Feed sections use 6px gaps. There is no
+The theme button sits at the end of the row and switches between the approved
+R03 Light and R04 Dark palettes. Feed sections use 6px gaps. There is no
 visible feed page heading or subtitle on phones or tablets. One responsive h1
-preserves the semantic page heading and becomes visible on desktop. An open
-search form has one search icon on its submit
-button, while the brand-bar toggle becomes Close.
+preserves the semantic page heading and becomes visible on desktop. The search
+bar and square Filters button sit below the header in the page body and remain
+visible whether filters are open or collapsed.
 
-On phones and tablets the header Filters toggle opens or collapses one section
+On phones and tablets the body Filters button opens or collapses one section
 containing the date/time pairs together with Markets, Leagues, Countries and
-Probability. Clicking outside closes that section without applying its draft.
-The common range controls render once: initial HTML contains exactly two date
-and two time inputs, with the section hidden at smaller sizes while collapsed.
+Probability. The section starts collapsed below 64rem; desktop always shows
+all fields. Escape closes the mobile section without applying its draft;
+clicking outside leaves it open. Checklist popovers retain their own
+outside-click and Escape dismissal. The common range controls render once:
+initial HTML contains exactly two date and two time inputs while collapsed.
 Full From date, To date, From time and To time labels sit inside their square
-controls, to the left of each native value. Each pair occupies one phone row
-and is directly editable when expanded. There are no visible Date range/Time
+controls, above each native value on phones and tablets and to its left on
+desktop. Each pair occupies one phone row and is directly editable when
+expanded. Readable text and larger touch targets let the expanded controls
+scroll naturally with the page on smaller screens. There are no visible Date range/Time
 range group headings, nested date/time panels or per-range Apply buttons.
 Accessible fieldset names, input labels, focus rings and invalid feedback remain
 present. Invalid or incomplete edits are retained; a single Apply action remains
@@ -113,24 +118,37 @@ directly editable minimum/maximum fields, accepting decimal percentages from
 The muted Odds unavailable explanation remains compact. Mobile filter edits
 remain drafts until Apply; no timer applies them automatically.
 
-The results toolbar stays outside the collapsible section and places Sort by
-on the left, followed by Clear and Apply filters. The applied query's total
-match count sits directly below Apply filters, aligned to its right edge. It
-updates with the displayed results and is omitted when no successful projection
-is available. Editing a draft does not request an advisory count or change that
-label. Empty-result messages
+One persistent action row below the filter options stays outside the mobile
+collapsible section and places Sort by first, followed by Clear and Apply
+filters. The action group aligns right on desktop, while mobile keeps Sort on
+the left. When the mobile fields are collapsed, the row follows search directly. A compact
+summary shows the applied date or range, markets, leagues
+and countries, with search, time and probability constraints when present.
+The summary uses the applied query and does not change while its draft is
+edited. On desktop its chips sit at the far left of the same row as the actions
+on the right; mobile places the summary underneath the actions. Filter fields sit between search
+and the action row, always visible on desktop and toggleable on mobile. The applied
+query's total match count sits with the results below the toolbar and summary, updates with
+the displayed projection and is omitted when no successful projection is available. Editing a draft
+does not request an advisory count or change that label. Empty-result messages
 appear below the action row. The sort menu
 contains both kickoff directions and
 both probability directions. Picks only/With predictions and a separate
 reverse-order button are absent on every device. Clear retains the applied
 date/range, status and page size while clearing the other filters and ordering.
 
-Desktop retains the visible page title, shell logo and search, quick date presets
-and table layout.
-Its visible inline date/time controls precede one row of Leagues,
-Countries, Markets, Odds and Probability fields. Probability uses compact
-minimum/maximum decimal percentage inputs; the row contains no sliders. One Apply action
-submits all filter edits. The independent sort menu remains in the results toolbar.
+Desktop retains the visible page title, shell logo, quick date presets and table
+layout, with its theme control at the far right of the shell header. Feed pages
+omit the shell search and use the same body search bar,
+persistent actions and applied summary as compact screens. All filter fields
+remain visible on desktop, without a Filters toggle. Inline date/time controls
+precede one row of Leagues, Countries,
+Markets, Odds and Probability fields. Probability uses compact minimum/maximum
+decimal percentage inputs; the row contains no sliders. One Apply action
+submits all search and filter edits. The sort menu remains independent and
+applies ordering immediately from the applied query. Sort, Clear and Apply
+align to the right below the fields, with the applied summary chips at the far
+left of that same row.
 
 Mobile cards use the approved flat-dividers presentation: tiny Market, Pick,
 Prob. and Result captions above compact values, with exact available

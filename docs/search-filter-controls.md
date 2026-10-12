@@ -1,34 +1,39 @@
 # Match search and filters
 
 The feed uses shared labeled native fields and a per-provider Redux draft;
-URLs and stored server projections remain authoritative. Filter edits remain
-unsubmitted on both desktop and mobile until the single Apply action. There is
-no mobile auto-apply debounce. Search text retains spaces while typing; search
-submission and filter Apply normalize NFC/whitespace, validate the query, and
-reset page to one. Search typing makes no requests.
+URLs and stored server projections remain authoritative. A persistent search
+bar sits in the page body on every screen size. A square Filters button beside
+it opens the filter fields on phones and tablets; desktop always shows the
+search bar and all filter fields, without a collapse toggle.
+Search and filter edits share one draft and remain unsubmitted until Enter in
+the search bar or the single Apply action submits the complete draft. Both
+submission paths normalize NFC/whitespace, validate all fields and reset page
+to one. Search text retains spaces while typing, and draft edits make no
+requests. There is no automatic mobile application or count preview.
 
 Apply navigates through `feedQueryHref` using the App Router and a transition.
 The same parser and stored service handle initial rendering, Apply, reload,
 shared URLs and Back. Next discards superseded navigations. Explicit filter
 actions always dispatch normal navigation, including a rapid Apply followed by
 Clear back to the currently displayed URL. Only an idle retry of a failed read
-at the same URL uses `router.refresh()`. The desktop Apply count reads
-`/api/matches` with `pageSize=1&leagues=0`, on desktops only; this advisory count
-never applies the draft. Phones retain their edits until Apply and do not request
-that count. The search GET form retains its ordinary URL fallback. Empty "all"
-options parse as empty lists and are omitted from canonical URLs. Repeated
+at the same URL uses `router.refresh()`. The shared form retains a canonical
+GET search fallback with the applied query parameters and page reset to one.
+Empty "all" options parse as empty lists and are omitted from canonical URLs. Repeated
 `league`, `country` and `market` keys from checkbox forms join like comma lists.
 Repeated single-value keys, unknown keys (including the removed `sortMarket`)
 and other malformed parameters remain invalid.
 
 From date, To date, From time and To time share the filter section with Markets,
-Leagues, Countries and Probability. On phones and tablets the header Filters
-toggle opens or collapses this complete section; clicking outside closes it.
-Desktop keeps the section visible. The common range controls are rendered once,
-so the initial HTML still contains exactly two date and two time inputs even
-when the section is hidden at smaller viewport sizes. Each full label sits
-inside its square control, to the left of the native input value. The date pair
-and time pair each occupy one phone row and are directly editable when expanded.
+Leagues, Countries and Probability. Below 64rem, the body Filters button opens
+or collapses this complete section, which starts collapsed. Escape also closes
+the section without applying its draft. Clicking outside does not close it.
+At desktop widths all fields remain visible. The common range controls are
+rendered once, so the initial HTML contains exactly two date and two time
+inputs, including when the mobile section is collapsed. Each full label sits
+inside its square control, above the native value on phones and tablets and
+to its left on desktop. The date pair and time pair each occupy one phone row
+and are directly editable when expanded. Readable text and larger touch targets
+let the expanded controls scroll naturally with the page on smaller screens.
 There are no visible group headings, date popovers, date steppers, time mode
 menus or separate range Apply buttons. The fieldsets retain accessible group
 names; focused controls and invalid values retain visible feedback.
@@ -69,8 +74,8 @@ exact probability; no display-rounding allowance is used. The Picks only/With pr
 control is absent at every screen size; existing shared URL/parser compatibility
 is unchanged. See the [stored match feed](match-feed-api.md) for that contract.
 
-Desktop places Leagues, Countries, Markets, Odds and Probability in one filter
-row. League, country and market fields retain selected chip links and complete
+Desktop filters place Leagues, Countries, Markets, Odds and Probability
+in one row. League, country and market fields retain selected chip links and complete
 checklists, searchable for leagues and countries. Each chip's `href` is the
 canonical URL with that value toggled and page reset, preserving ordinary link
 behavior. Probability uses compact minimum/maximum fields accepting plain
@@ -79,7 +84,7 @@ incomplete or invalid drafts prevent Apply. The filter
 row contains no sliders. Odds controls remain disabled with their explanation
 until provider odds display is enabled.
 
-Mobile filters use one compact labeled summary button per Markets, Leagues and
+Expanded mobile filters use one compact labeled summary button per Markets, Leagues and
 Countries field, without scrolling suggestion chips or a duplicate menu. One
 selection shows its name; multiple selections show their count. Empty league
 and country selections show All leagues and Any. Each summary opens the same
@@ -87,11 +92,22 @@ complete checklist, and selected values missing from a refreshed option list
 remain removable. At least one market must stay selected. Probability uses the
 same directly editable minimum/maximum fields as desktop. Mobile retains the muted Odds unavailable explanation.
 
-One action row stays outside the collapsible filter section. Sort by appears
-first on the left, followed by Clear and Apply filters. The applied match count
-sits below Apply filters, aligned right. Draft edits make no count-preview requests.
-Apply filters submits the complete
-date, time and filter draft. Clear resets
+One persistent action row sits below the filter options and outside the mobile
+collapsible section. Sort by appears first, followed by Clear and Apply filters.
+The actions align right on desktop; mobile keeps Sort on the left. When the
+mobile fields are collapsed, this row follows the search bar directly. A compact
+summary shows the applied date or range,
+markets, leagues and countries, plus applied search, time and probability
+constraints when present. These chips describe the query that has been
+applied, rather than unsent edits. On desktop the summary chips sit at the far
+left of the same row as Sort, Clear and Apply on the right. On mobile the
+summary stays underneath the action row. Mobile fields expand between search and the action row; search,
+sorting, Clear and Apply stay available in both states. Desktop fields always
+remain between search and the action row.
+The applied match count sits with the results below the toolbar and summary and updates
+with the displayed projection. It is omitted when no successful projection is available. Draft
+edits make no count-preview requests. Apply filters submits the complete
+search, date, time and filter draft. Clear resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
 match result and kickoff ascending order, and resets page to one. It retains
 the applied date/range, status entry and page size. There are no separate per-
@@ -101,9 +117,9 @@ both kickoff directions and both probability directions, without a separate
 reverse-order button.
 
 Checklist popovers use native buttons and fields, close on an outside click
-or Escape, and return focus to their trigger on Escape. Outside-click
-dismissal also closes the expanded mobile/tablet filter section; closing it
-does not apply its draft. Shared fields provide labels, descriptions, errors
+or Escape, and return focus to their trigger on Escape. Dismissing a checklist
+does not collapse the surrounding filter section or apply its draft. Shared
+fields provide labels, descriptions, errors
 and visible focus. A polite query status
 announces loading/counts/failures; cards are not live regions. Controls remain
 usable during navigation.
@@ -118,14 +134,15 @@ pending loads and restart that extent. [Live refresh](live-client-refresh.md)
 retains its existing refresh behavior. No browser provider/AI calls or polling
 are added by the controls.
 
-On phones and tablets the filter and search toggles sit in the feed's brand bar
-beside the logo. The filter toggle sets `aria-expanded`/`aria-controls` on the
-complete collapsible filter section and badges active choices. The search toggle
-opens a GET search form; Escape closes it and returns focus to the toggle. When
-open, the brand-bar
-search button becomes Close and the form contains one search icon on its submit
-button. The feed uses one semantic h1: it is visually hidden on phones and
-tablets and visible as the page title on desktop. The subtitle remains absent.
+On phones and tablets the feed's brand bar contains the home logo and theme
+control. Desktop retains the page title and quick date presets, with the theme
+control at the far right of the shell header; feed pages
+omit the shell search so there is one body search bar on every device. The
+mobile Filters button sets `aria-expanded`/`aria-controls` on the complete
+collapsible filter section and badges active choices. Search remains visible
+when mobile filters close. The feed uses one semantic h1: it is visually hidden on
+phones and tablets and visible as the page title on desktop. The subtitle
+remains absent.
 
 Acceptance uses owned MySQL storage with synthetic inputs, an isolated production
 Next app built from captured SQL projections, and Chrome through the Playwright
