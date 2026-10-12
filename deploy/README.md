@@ -87,6 +87,21 @@ Instead of using the cPanel screen, you can put the same lines in
 `~/goal-hint/standalone/.env.production.local`. Next.js loads it at startup, and
 it stays outside `public_html`. Never commit it or place it under `public_html`.
 
+Production database access also verifies the exact `database-access` and
+`budget-approval` references against the private operator register already used
+by the live runner. For this standalone web bundle, place the reviewed register
+at `~/goal-hint/standalone/.goal-hint/owner-approvals.json`: the generated Next
+server uses `standalone/` as its working directory. Migration commands and workers
+look for `.goal-hint/owner-approvals.json` under their own working directory.
+Restrict the file to the application/operator account, keep it outside the domain's
+document root, and never include it in the deployment ZIP or version control.
+
+Use only recorded, verified decisions for the actual deployment target and budget.
+Missing, malformed or mismatched records deny access; reference strings alone do
+not approve anything. Database-disabled previews and loopback development/test
+connections do not need a register. Removing a required approval also blocks the
+next web database access, even if the process already has a connection pool.
+
 ## Updating
 
 1. Run `npm run package:cpanel` locally and upload the new zip to your home directory.
@@ -102,8 +117,9 @@ zip and deploy it the same way.
 
 - **Database migrations.** Apply schema changes from a full checkout with the
   `db:*` commands described in the [database runbook](../docs/database.md). Those
-  commands intentionally fail closed for remote/production targets until an
-  approved operator verifier is wired.
+  commands require the verified private operator register for remote/production
+  targets, a compatible server and separate migration credentials. The web ZIP
+  does not include migration tooling or grant approval to a database target.
 - **Background workers** (`npm run live`, `worker:*`, `recovery`, `monitoring`).
   The website only reads stored data. Shared cPanel hosting usually stops
   long-running background processes, so run the live runner on a host that can keep

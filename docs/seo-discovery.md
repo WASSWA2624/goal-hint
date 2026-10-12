@@ -131,7 +131,15 @@ then be checked against the actual operator, audience and processing arrangement
   retention/deletion and backup settings before completing the notice. Visitor
   analytics, advertising and affiliate promotions stay disabled for launch by
   the owner's explicit choice. Voluntary contact emails use Gmail (Google);
-  retention and deletion of correspondence also need an actual policy.
+  the owner adopted correspondence retention starting 1 November 2026: six months
+  after resolution for routine support/corrections, twelve months after closure
+  for minimal privacy-request records, prompt deletion of unnecessary identity
+  documents, and documented dispute/legal exceptions reviewed every ninety days.
+  This records the policy; Gmail automation or mailbox deletion was not configured.
+  The [privacy review](privacy-page.md#namecheap-account-verification-12-october-2026)
+  now contains the Namecheap account checklist, official plan-specific findings,
+  a prepared support enquiry and the adopted email retention policy. These do not
+  establish actual hosting settings or change the publication gates.
 - **Terms/rights:** The owner confirmed permission for public API-Football data
   and logo display; this records the owner's statement, not independent contract
   verification. [API-Football's terms](https://www.api-football.com/terms) place

@@ -152,8 +152,10 @@ creates an explicitly owned runtime for an isolated context. Its `query(callback
 passes the generated Prisma client, `transaction(callback, options)` passes the
 transaction client, `readiness()` returns `ready` or `unavailable`, and
 `disconnect()` closes that runtime. `disconnectDatabase()` closes the cached
-process client. Remote/production callers supply the trusted budget and access
-evidence verifier required by policy; configured reference strings are not proof.
+process client. Remote/production `createDatabase` callers supply the trusted
+budget and access evidence verifier required by policy. `getDatabase()` defaults
+to the private operator register described below, while preserving an explicitly
+supplied verifier. Configured reference strings are not proof.
 
 The shared transaction helper passes a Prisma transaction client to the caller.
 Nested repositories accept that client so related writes share one transaction.
@@ -220,13 +222,20 @@ Use the npm wrapper commands. The Prisma config receives their validated prepare
 migration URL and contains no private service imports; it is not itself a service
 authorization boundary. Targetless commands omit that URL.
 
-The current operator CLI and health command intentionally provide no trusted
-budget/access evidence verifier. Remote/production target operations through
-these commands therefore fail closed even when reference settings are filled.
-A later approved operator integration must verify the underlying budget/access
-records before wiring those gates; switching technical mode or setting a reference is not
-an authorization workaround. The reusable runtime accepts an explicitly supplied
-trusted verifier, but no live verifier or production target is claimed.
+The web singleton, operator CLI and health command use the live runner's private
+`.goal-hint/owner-approvals.json` register for exact `budget-approval` and
+`database-access` references. Only an operator's verified records for the actual
+target and budget belong there. Missing, malformed or mismatched approvals deny
+access before a connection is opened. Other approval categories cannot grant
+database access, and this integration creates no approval records.
+
+The register is relative to the process working directory; the standalone web
+bundle uses `standalone/.goal-hint/owner-approvals.json`, as described in the
+[cPanel deployment guide](../deploy/README.md). Keep it private and out of Git and
+release archives. Each web access rechecks the register, including before reusing
+a cached pool. Local development/tests and targetless generation do not load it.
+Production TLS, connection sizing, separate migration roles and all existing
+configuration gates still apply; no hosted target is qualified by this wiring.
 
 Create migrations incrementally, commit reviewed SQL and never rewrite an
 already deployed migration. For a fresh authorized target, deploy, inspect status,

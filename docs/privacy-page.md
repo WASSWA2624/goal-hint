@@ -62,6 +62,112 @@ than introducing a second set of operating limits.
 
 ## External references and limits
 
+### Namecheap account verification (12 October 2026)
+
+The hosting plan, server country and account retention settings have **not** been
+verified. Public documentation describes plan capabilities, not Goal Hint's
+configuration. The available browser reached Namecheap's sign-in screen; a narrow
+search of connected Gmail found no matching Namecheap hosting records. No hosting
+setting, mailbox content, public notice or indexing flag was changed by this review.
+
+Use the following read-only checks after signing into the hosting account:
+
+| Check | Where to look | Evidence to record |
+| --- | --- | --- |
+| Hosting identity and location | Namecheap > Hosting List > relevant subscription > Manage > Server Hostname; alternatively cPanel > General Information > Server Information > Server Name | Product/plan, current server hostname and explicitly stated datacenter country. Confirm the app and database both use that location; domain registration or a DNS/CDN IP alone is insufficient. |
+| Website access logs | cPanel > Metrics > Raw Access > Configure Logs and Archived Raw Logs | Archive and automatic removal settings, domains covered, oldest archive date and rotation schedule. A monthly cleanup setting is not proof that every copy is deleted after exactly 30 days. |
+| Statistics and other logs | cPanel Metrics, application runtime/process-manager settings and Namecheap support | Whether AWStats or other hosting reports are retained, plus error, security and application-log retention. Check any CDN separately. |
+| Backups | cPanel > Exclusive for Namecheap Customers > AutoBackup, if included in the plan | Available daily/weekly/monthly versions, oldest snapshot, covered databases/files, backup storage countries and maximum retention. View the list without restoring or generating a download. |
+| Provider-controlled copies | Namecheap support | Retention/deletion of host security logs, maintenance backups, backup replicas and copies outside the account controls; behavior after file deletion/account termination. |
+
+Namecheap documents the [Hosting List hostname field](https://www.namecheap.com/support/knowledgebase/article.aspx/10730/22/faqs-on-migration-from-timico-to-datum-datacenter-on-shared-hosting/)
+and [cPanel/welcome-email alternatives](https://www.namecheap.com/support/knowledgebase/article.aspx/1425/27/what-server-is-my-account-hosted-on/).
+An old welcome email can predate a migration; prefer current account information.
+The [datacenter guide](https://www.namecheap.com/support/knowledgebase/article.aspx/136/22/where-are-your-datacenters-located-how-can-i-request-to-change-the-datacenter/)
+lists possible locations but does not identify this subscription's country. Ask
+support to confirm the country against its current hostname and any backup replicas.
+
+Namecheap's [access-log guide](https://www.namecheap.com/support/knowledgebase/article.aspx/9563/29/how-can-i-check-my-website-access-logs/)
+documents cPanel's archiving/removal controls. Its [visitor information article](https://www.namecheap.com/support/knowledgebase/article.aspx/10501/12/does-namecheap-collect-visitor-information-on-my-hosted-website/)
+states that Shared Hosting stores access logs containing IPs, request details,
+timestamps, referrers and browser information and processes them into cPanel
+statistics. Per-user log collection cannot be disabled on Shared Hosting. This
+must be distinguished from Goal Hint's disabled browser analytics; do not describe
+the hosting environment as collecting no visitor information.
+
+The [AutoBackup guide](https://www.namecheap.com/support/knowledgebase/article.aspx/10103/2210/how-to-use-autobackup-cpanel-plugin/)
+describes Stellar Plus/Business with six daily, three weekly and five monthly
+versions, and a list covering six months. The [product FAQ](https://www.namecheap.com/hosting/autobackup/)
+instead mentions recovery as far back as a year. Neither establishes this
+account's maximum physical deletion period. Ask support to reconcile the scope
+for the actual plan. The separate 15-day availability of generated downloads is
+not snapshot retention. Namecheap's [server-backup article](https://www.namecheap.com/support/knowledgebase/article.aspx/156/22/do-you-have-server-backups/)
+describes maintenance backup frequency without establishing a maximum deletion
+period for this account. Account-created/manual backup copies need their own
+deletion schedule.
+
+Suggested message for the owner to send through Namecheap's authenticated support
+channel (prepared only; not sent):
+
+> For the hosting subscription serving goalhint.com, please confirm the plan and
+> server hostname, the countries where the website/database and backup copies are
+> stored, and retention for access/error/security logs, AWStats records and any
+> enabled CDN logs. Which periods can I configure, and which are controlled by
+> Namecheap? Please confirm the backup schedule, maximum snapshot/replica retention,
+> deletion of expired copies and how deleted data ages out of backups. The AutoBackup
+> guide describes six months of listed backups while the product FAQ mentions a
+> year; which applies to my plan? Please distinguish frequency from retention.
+
+Record support's answer and review date privately; store only non-secret relevant
+facts/evidence references here. Do not commit credentials, raw visitor logs,
+download links, full support transcripts or database backups.
+
+### Adopted email retention policy (effective 1 November 2026)
+
+On **12 October 2026**, Wilson Wasswa explicitly adopted the following policy
+starting **1 November 2026** for Goal Hint correspondence at
+`wasswawilon0002@gmail.com`. It is an adopted operating policy with a future
+effective date, not a claim that Gmail deletion settings or automation have been
+configured. The full privacy notice's separate publication gate remains in place.
+
+| Category | Adopted rule |
+| --- | --- |
+| Routine support and correction correspondence | Keep up to six months after resolution. |
+| Privacy requests | Keep only a minimal request, response and outcome record for up to twelve months after closure; remove unnecessary attachments sooner. |
+| Identity verification material, only if necessary | Delete promptly when no longer needed. Do not routinely request identity documents. |
+| Unresolved cases or documented disputes/legal holds | Keep only relevant material while necessary. Record the reason and review every ninety days; delete when the exception ends if the normal deadline has passed. |
+
+These operating periods should be reviewed against actual needs. Section 18 of
+Uganda's [Data Protection and Privacy Act, Cap. 97](https://nita.go.ug/sites/default/files/2026-09/Data%20Protection%20and%20Privacy%20Act%20cap%2097.pdf)
+uses necessity-based retention with specified exceptions; it does not prescribe
+the six- and twelve-month periods above.
+
+Separate Goal Hint correspondence from personal mail with labels and record the
+case closure/deletion due date. Review monthly for upcoming deadlines and delete
+by the due date, including sent replies, archived messages, attachments and any
+exported copies under the operator's control. A received-message date is not the
+case closure date, so a broad age-based Gmail search alone cannot enforce this rule.
+
+[Gmail retains deleted messages in Trash for up to thirty days](https://support.google.com/mail/answer/7401?co=GENIE.Platform%3DDesktop&hl=en-GB).
+To meet the adopted maximum mailbox deadlines, the operator must permanently
+delete only the due Goal Hint messages by the deadline, including their Trash
+copies. The operator will handle this process; no messages were deleted or
+automation enabled by this task. It does not promise immediate deletion from
+Google's internal systems.
+
+Public wording records the adoption and future effective date:
+
+> From 1 November 2026, we will keep routine support and correction correspondence for up to six months after
+> resolution, and a minimal record of privacy requests for up to twelve months after
+> closure. We delete unnecessary identity-verification material promptly. We may
+> keep relevant information longer where necessary to resolve an ongoing dispute
+> or meet a legal obligation, with exceptions reviewed every ninety days. These periods apply to copies under our control;
+> Google processes email through Gmail under its own policies.
+
+Hosting verification, implementation of the adopted correspondence handling and
+the existing source-data retention/deletion evidence must inform the final notice. Policy adoption alone does not
+mark privacy or terms release-ready or satisfy the application's indexing gate.
+
 Reviewed on 10 October 2026:
 
 - [MDN localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage)

@@ -6,6 +6,7 @@ import { createPool, type Pool } from "mariadb";
 import { PrismaClient, type Prisma } from "../generated/prisma/client.ts";
 import { assertOperationAllowed, getRuntimePolicy, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import { assertSafeDatabaseDiagnostics, databasePoolOptions } from "./connection.ts";
+import { createDatabaseEvidenceVerifier } from "./operator-evidence.ts";
 
 type ErrorCode = "conflict" | "constraint" | "unavailable" | "failed" | "closed";
 
@@ -104,9 +105,10 @@ const processState = globalThis as typeof globalThis & { goalHintDatabase?: Data
 /** One lazy pool per Node process, retained across Next development module reloads. */
 export function getDatabase(verifyEvidence?: EvidenceVerifier): DatabaseRuntime {
   const policy = getRuntimePolicy();
-  assertOperationAllowed(policy, "database", verifyEvidence);
+  const verify = verifyEvidence ?? createDatabaseEvidenceVerifier();
+  assertOperationAllowed(policy, "database", verify);
   if (processState.goalHintDatabase === undefined || processState.goalHintDatabase.closed) {
-    processState.goalHintDatabase = createDatabase(policy, verifyEvidence);
+    processState.goalHintDatabase = createDatabase(policy, verify);
   }
   return processState.goalHintDatabase;
 }

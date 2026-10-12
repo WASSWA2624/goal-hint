@@ -8,6 +8,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { assertOperationAllowed, getRuntimePolicy, parseRuntimePolicy, RuntimePolicyError } from '../config/runtime-policy.ts';
 import { assertSafeDatabaseDiagnostics, migrationConnectionUrl } from '../database/connection.ts';
+import { createDatabaseEvidenceVerifier } from '../database/operator-evidence.ts';
 
 async function dispatch(action, payload) {
   switch (action) {
@@ -50,7 +51,7 @@ async function dispatch(action, payload) {
       const policy = getRuntimePolicy();
       const target = ['deploy', 'status', 'verify'].includes(payload.command);
       if (target && policy.secrets.migrationDatabaseUrl === null) throw new Error('MIGRATION_DATABASE_URL is required; application credentials are never substituted.');
-      if (target) assertOperationAllowed(policy, 'database-migration');
+      if (target) assertOperationAllowed(policy, 'database-migration', createDatabaseEvidenceVerifier());
       return { migrationUrl: target ? migrationConnectionUrl(policy) : null };
     }
     case 'database-health': {
