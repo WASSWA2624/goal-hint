@@ -14,7 +14,7 @@ Open [the standalone preview](goal-hint-brand-preview.html) or [the contact shee
 | `goal-hint-logo-inverse` | 553 × 128 / 1106 × 256 | Teal and white horizontal logo on navy. |
 | `goal-hint-logo-monochrome`, `goal-hint-logo-monochrome-inverse` | 553 × 128 / 1106 × 256 | Single-color navy or white reproduction. |
 | `goal-hint-mark-primary`, `-inverse`, `-monochrome`, `-monochrome-inverse` | 160 × 160 / 640 × 640 | Standalone full-detail symbols. |
-| `goal-hint-favicon` | SVG: 160 × 160; ICO: 16, 32 and 48 px | Simplified micro mark for browser tabs. Separate PNGs are named `goal-hint-favicon-16`, `-32` and `-48`. |
+| `goal-hint-favicon` | SVG: 160 × 160; ICO: 16, 32 and 48 px | Simplified primary micro mark on a transparent background, so it reads on light and dark tab bars. Separate PNGs are named `goal-hint-favicon-16`, `-32` and `-48`. |
 | `goal-hint-apple-touch-icon` | 180 × 180 / 180 × 180 | Apple touch icon. |
 | `goal-hint-app-icon-192`, `goal-hint-app-icon-512` | 192 × 192 and 512 × 512 | Prepared square icon exports; these do not enable a PWA. |
 | `goal-hint-social-avatar` | 512 × 512 / 512 × 512 | Profile/avatar image. |

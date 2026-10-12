@@ -103,7 +103,7 @@ const Index = styled.span`
 `;
 const LeagueName = styled.span`
   ${tile} { flex: 1 1 0; order: 1; text-align: end; }
-  ${table} { grid-column: 1; grid-row: 2; }
+  ${table} { grid-column: 2; grid-row: 2; }
 `;
 const League = styled.p`
   display: flex;
@@ -124,14 +124,15 @@ const League = styled.p`
     > svg { inline-size: 1rem; block-size: 1rem; }
     > img, > svg { order: 2; }
   }
+  /* Table: the crest leads the league name the way the flag leads the country, in a column as wide as the flag. */
   ${table} {
     display: grid;
     grid-column: 3;
     grid-row: 1;
-    grid-template-columns: minmax(0, 1fr) 18px;
-    gap: 2px 6px;
+    grid-template-columns: 16px minmax(0, 1fr);
+    gap: 2px 4px;
     > [data-country] { grid-column: 1 / -1; grid-row: 1; }
-    > img, > svg { grid-column: 2; grid-row: 2; }
+    > img, > svg { grid-column: 1; grid-row: 2; }
     > svg { font-size: 1rem; }
     > span { white-space: normal; }
   }
@@ -142,7 +143,7 @@ const LeagueLogo = styled.img`
   block-size: 12px;
   object-fit: contain;
   ${tile} { inline-size: 1rem; block-size: 1rem; }
-  ${table} { inline-size: 18px; block-size: 18px; }
+  ${table} { inline-size: 16px; block-size: 16px; }
 `;
 const When = styled.time`
   display: flex;

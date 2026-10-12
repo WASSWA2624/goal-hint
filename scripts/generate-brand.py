@@ -171,7 +171,8 @@ class Brand:
             logos[name] = svg(self.logo_width, 128, "Goal Hint", self.logo_body(accent, ink), "A geometric G around a football beside the Goal Hint wordmark.")
             self.save_svg("goal-hint-logo-" + name, logos[name], 2)
             self.save_svg("goal-hint-mark-" + name, svg(160, 160, "Goal Hint mark", self.mark(accent, ink)), 4)
-        favicon = svg(160, 160, "Goal Hint", f'<rect width="160" height="160" fill="{c["navy"]}"/>' + self.mark(c["tealOnDark"], c["white"], True))
+        # Transparent, so the tab strip shows through: the primary mark reads on light and dark tab bars alike.
+        favicon = svg(160, 160, "Goal Hint", self.mark(micro=True))
         self.save_svg("goal-hint-favicon", favicon)
         for size in (16, 32, 48):
             target = f"goal-hint-favicon-{size}.png"
