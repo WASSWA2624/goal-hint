@@ -706,6 +706,7 @@ model PredictionSet {
   settlements           MarketSettlementRevision[]
   goalMarketExtension   GoalMarketExtension?
   impliedMarketExtension ImpliedMarketExtension?
+  extendedMarketPublishedPicks ExtendedMarketPublishedPick[]
   extendedMarketSettlements ExtendedMarketSettlementRevision[]
 
   @@unique([id, cycleId, fixtureId])
@@ -787,6 +788,26 @@ model ImpliedMarketResultEvidence {
   result FixtureResult @relation(fields: [resultId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([fixtureId, resultId, sequence], map: "ImpliedMarketResultEvidence_result_idx")
+}
+
+// Bounded materialized picks keep public cards from fetching full distributions or bookmaker catalogues.
+model ExtendedMarketPublishedPick {
+  revisionId String @db.Char(36)
+  cycleId String @db.Char(36)
+  fixtureId String @db.Char(36)
+  marketKey String @db.VarChar(128)
+  source String @db.VarChar(32)
+  ruleVersion String @db.VarChar(64)
+  period String @db.VarChar(16)
+  selection String @db.VarChar(64)
+  selectedProbability Float @db.Double
+  sortOrder Int @db.UnsignedInt
+  integrity String @db.Char(64)
+  body Json
+  revision PredictionSet @relation(fields: [revisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([revisionId, marketKey])
+  @@index([revisionId, selectedProbability, sortOrder], map: "ExtendedMarketPublishedPick_probability_idx")
 }
 
 // Current pointer only. Exact picks, prior result evidence and corrections are immutable siblings.

@@ -1,4 +1,22 @@
 -- CreateTable
+CREATE TABLE `ExtendedMarketPublishedPick` (
+    `revisionId` CHAR(36) NOT NULL,
+    `cycleId` CHAR(36) NOT NULL,
+    `fixtureId` CHAR(36) NOT NULL,
+    `marketKey` VARCHAR(128) NOT NULL,
+    `source` VARCHAR(32) NOT NULL,
+    `ruleVersion` VARCHAR(64) NOT NULL,
+    `period` VARCHAR(16) NOT NULL,
+    `selection` VARCHAR(64) NOT NULL,
+    `selectedProbability` DOUBLE NOT NULL,
+    `sortOrder` INTEGER UNSIGNED NOT NULL,
+    `integrity` CHAR(64) NOT NULL,
+    `body` JSON NOT NULL,
+    INDEX `ExtendedMarketPublishedPick_probability_idx`(`revisionId`, `selectedProbability`, `sortOrder`),
+    PRIMARY KEY (`revisionId`, `marketKey`)
+) ENGINE=InnoDB DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+
+-- CreateTable
 CREATE TABLE `ImpliedMarketResultEvidence` (
     `id` CHAR(64) NOT NULL,
     `fixtureId` CHAR(36) NOT NULL,
@@ -110,6 +128,9 @@ ALTER TABLE ImpliedMarketExtension ADD CONSTRAINT ImpliedMarketExtension_predict
 ALTER TABLE ImpliedMarketResultEvidence ADD CONSTRAINT ImpliedMarketResultEvidence_resultId_fixtureId_fkey
   FOREIGN KEY (resultId, fixtureId) REFERENCES FixtureResult(id, fixtureId)
   ON DELETE RESTRICT ON UPDATE RESTRICT;
+ALTER TABLE ExtendedMarketPublishedPick ADD CONSTRAINT ExtendedMarketPublishedPick_revisionId_cycleId_fixtureId_fkey
+  FOREIGN KEY (revisionId, cycleId, fixtureId) REFERENCES PredictionSet(id, cycleId, fixtureId)
+  ON DELETE RESTRICT ON UPDATE RESTRICT;
 
 -- No old forecasts, family constraints, probabilities, locks or result revisions are rewritten.
 ALTER TABLE GoalMarketExtension ADD CONSTRAINT GoalMarketExtension_seal CHECK (
@@ -135,6 +156,26 @@ ALTER TABLE ImpliedMarketExtension ADD CONSTRAINT ImpliedMarketExtension_shape C
   AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.contentHash')) = contentHash, FALSE) = TRUE);
 ALTER TABLE ExtendedMarketSettlementRevision ADD CONSTRAINT ExtendedMarketSettlementRevision_seal CHECK (
   integrity = SHA2(CAST(body AS CHAR), 256));
+ALTER TABLE ExtendedMarketPublishedPick ADD CONSTRAINT ExtendedMarketPublishedPick_seal CHECK (
+  integrity = SHA2(CAST(body AS CHAR), 256));
+ALTER TABLE ExtendedMarketPublishedPick ADD CONSTRAINT ExtendedMarketPublishedPick_shape CHECK (COALESCE(
+  selectedProbability >= 0 AND selectedProbability <= 1 AND sortOrder <= 255
+  AND JSON_EXTRACT(body, '$.version') = 1
+  AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.revisionId')) = revisionId
+  AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.cycleId')) = cycleId
+  AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.fixtureId')) = fixtureId
+  AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.key')) = marketKey
+  AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.source')) = source
+  AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.ruleVersion')) = ruleVersion
+  AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.period')) = period
+  AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.selection')) = selection
+  AND CAST(JSON_EXTRACT(body, '$.selectedProbability') AS DOUBLE) = selectedProbability
+  AND JSON_EXTRACT(body, '$.sortOrder') = sortOrder
+  AND source IN ('ai-score-distribution','market-implied')
+  AND period IN ('full-time','half-time','second-half')
+  AND ((source = 'ai-score-distribution' AND marketKey LIKE 'goal:%')
+    OR (source = 'market-implied' AND marketKey LIKE 'implied:%')),
+  FALSE) = TRUE);
 ALTER TABLE ExtendedMarketSettlementRevision ADD CONSTRAINT ExtendedMarketSettlementRevision_shape CHECK (COALESCE(
   JSON_UNQUOTE(JSON_EXTRACT(body, '$.id')) = id
   AND JSON_UNQUOTE(JSON_EXTRACT(body, '$.fixtureId')) = fixtureId
@@ -169,4 +210,8 @@ CREATE TRIGGER ExtendedMarketSettlementRevision_no_update BEFORE UPDATE ON Exten
   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Extended settlement revisions are append-only';
 CREATE TRIGGER ExtendedMarketSettlementRevision_no_delete BEFORE DELETE ON ExtendedMarketSettlementRevision FOR EACH ROW
   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Extended settlement revisions are append-only';
+CREATE TRIGGER ExtendedMarketPublishedPick_no_update BEFORE UPDATE ON ExtendedMarketPublishedPick FOR EACH ROW
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published extended market picks are append-only';
+CREATE TRIGGER ExtendedMarketPublishedPick_no_delete BEFORE DELETE ON ExtendedMarketPublishedPick FOR EACH ROW
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published extended market picks are append-only';
 

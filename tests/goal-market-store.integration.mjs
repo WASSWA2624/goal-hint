@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile } from './helpers/command-runtime.mjs';
 import { promisify } from 'node:util';
 import test from 'node:test';
-import { goalAsianHandicapMarket, goalResultMarket } from '../src/domain/goal-market-definitions.ts';
+import { goalAsianHandicapMarket, goalResultMarket, goalHalfFullMarket } from '../src/domain/goal-market-definitions.ts';
 import { SCORE_DISTRIBUTION_VERSION } from '../src/domain/score-distribution.ts';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
 import { resolveFallbackCandidate } from '../src/server/fallback/fallback-resolution.ts';
@@ -19,12 +19,15 @@ import { createScheduleLifecycleService } from '../src/server/predictions/lifecy
 import { parseLifecycleInput } from '../src/server/predictions/lifecycle-input.ts';
 import { createMysqlResultSyncStore } from '../src/server/results/result-sync-mysql-store.ts';
 import { createMarketSettlementService } from '../src/server/settlement/settlement-service.ts';
+import { createExtendedMarketPerformanceService } from '../src/server/performance/extended-market-performance.ts';
 import { fallbackAuthority } from './helpers/fallback-fixtures.mjs';
 import { modelAuthority, modelVersion } from './helpers/predictor-fixtures.mjs';
 import { predictorOutputOptions, predictorRawOutput } from './helpers/predictor-output-fixtures.mjs';
 import { publicationAuthority, publicationPolicy, PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
 import { lifecycleAuthority, lifecycleInput, lifecyclePolicy } from './helpers/lifecycle-fixtures.mjs';
 import { resultHash } from './helpers/result-sync-fixtures.mjs';
+import { catalogFixture } from './helpers/catalog-fixtures.mjs';
+import { normalizeFixture } from '../src/server/football/api-football-normalize.ts';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
 
 const execute = promisify(execFile);
@@ -40,17 +43,20 @@ test('additive score extensions publish and settle atomically on genuine owned M
     await p.instance.executeAdmin(`
       GRANT SELECT, INSERT ON goal_hint_test.GoalMarketExtension TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.ImpliedMarketExtension TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT ON goal_hint_test.ImpliedMarketResultEvidence TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.ExtendedMarketSettlementRevision TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (revisionId) ON goal_hint_test.ExtendedMarketSettlement TO 'cutoff_app'@'127.0.0.1';`);
     const model = modelVersion({ promptVersion: SCORE_PROMPT_VERSION, schemaVersion: SCORE_SCHEMA_VERSION });
     await createMysqlModelVersionStore(p.a).save(model, modelAuthority());
-    const definitions = [goalResultMarket(), goalResultMarket('half-time'), goalAsianHandicapMarket(-.25), goalAsianHandicapMarket(.25), goalAsianHandicapMarket(0)];
+    const definitions = [goalResultMarket(), goalResultMarket('half-time'), goalAsianHandicapMarket(-.25), goalAsianHandicapMarket(.25), goalAsianHandicapMarket(0),
+      goalResultMarket('second-half'), goalHalfFullMarket()];
     let state, input, revision, originalCandidateHash;
     const trusted = new Set();
     const authority = publicationAuthority({ verifyGoalExtension: (value) => trusted.has(evidenceFingerprint(value.goalExtension)) });
     const publisher = createRevisionPublicationService({ database: p.a, queue: p.queue, policy: publicationPolicy(), authority });
     const settlement = createMarketSettlementService({ database: p.a, queue: p.queue, extendedMarketsEnabled: true });
     const legacySettlement = createMarketSettlementService({ database: p.a, queue: p.queue });
+    const performance = createExtendedMarketPerformanceService({ database: p.a, enabled: true });
     const lifecycle = createScheduleLifecycleService({ database: p.a, cutoff: p.first, policy: lifecyclePolicy(), authority: lifecycleAuthority() });
     const accountId = resultHash('synthetic-goal-extension-result-account');
     await p.a.query((tx) => tx.apiQuotaAccount.create({ data: { id: accountId } }));
@@ -72,11 +78,21 @@ test('additive score extensions publish and settle atomically on genuine owned M
       target.input = { ...target.input, candidate: resolved.candidate, goalExtension };
       return target;
     }
-    async function observe(home, away) {
+    async function observe(home, away, half = null) {
       p.setTime(Math.max(p.now() + 1000, state.cycle.kickoffAt + 7_200_000));
-      const observed = parseLifecycleInput(lifecycleInput(state, p.now(), { status: 'FT', raw: {
+      const source = lifecycleInput(state, p.now(), { status: 'FT', raw: {
         goals: { home, away }, score: { fulltime: { home, away }, halftime: { home: 0, away: 0 } },
-      } }));
+      } });
+      if (half) {
+        const row = catalogFixture(state.fixture.externalId, { kickoff: new Date(state.cycle.kickoffAt).toISOString(), status: 'FT',
+          homeId: state.fixture.homeExternalIds[0], awayId: state.fixture.awayExternalIds[0], goals: { home, away },
+          score: { fulltime: { home, away }, halftime: half } });
+        const normalized = normalizeFixture(row, { retrievedAt: p.now(), endpoint: '/fixtures', verifyRegulationScore: () => true,
+          verifyHalfTimeScore: () => true });
+        assert.equal(normalized.valid, true); assert.equal(normalized.data.halfTimeScore.verified, true);
+        source.fixture = normalized.data;
+      }
+      const observed = parseLifecycleInput(source);
       const id = resultHash(`goal-extension-result:${++sequence}`), lease = await results.acquire(resultHash(`goal-extension-owner:${sequence}`), 30_000);
       assert.ok(lease);
       const batch = { id, accountId, policyHash: resultHash('synthetic-goal-result-policy'), receivedAt: p.now(), channel: 'ids', date: null,
@@ -101,6 +117,7 @@ test('additive score extensions publish and settle atomically on genuine owned M
       await assert.rejects(publisher.publish(forged, state.lease), (error) => error instanceof RevisionPublicationError && error.reason === 'unauthorized');
       assert.equal(await p.a.query((tx) => tx.predictionSet.count({ where: { fixtureId: state.fixture.id } })), 0);
       assert.equal(await p.a.query((tx) => tx.goalMarketExtension.count({ where: { fixtureId: state.fixture.id } })), 0);
+      assert.equal(await p.a.query((tx) => tx.extendedMarketPublishedPick.count({ where: { fixtureId: state.fixture.id } })), 0);
     });
     await t.test('publication and extension insertion roll back together on final authority failure', async () => {
       let checks = 0;
@@ -116,17 +133,24 @@ test('additive score extensions publish and settle atomically on genuine owned M
       const saved = await p.a.query((tx) => readGoalMarketExtension(tx, revision.id));
       assert.equal(saved.revisionId, revision.id); assert.equal(saved.cycleId, state.cycle.id); assert.deepEqual(saved.scoreDistribution, distribution());
       assert.equal(saved.markets.length, definitions.length);
+      const picks = await p.a.query((tx) => tx.extendedMarketPublishedPick.findMany({ where: { revisionId: revision.id } }));
+      assert.equal(picks.length, definitions.length);
+      assert.ok(picks.every((pick) => pick.cycleId === state.cycle.id && pick.fixtureId === state.fixture.id && pick.source === 'ai-score-distribution'));
+      assert.ok(picks.every((pick) => !Object.hasOwn(pick.body, 'scoreDistribution') && !Object.hasOwn(pick.body, 'selections')));
       assert.equal((await publisher.publish(input, state.lease)).revision.id, revision.id);
       assert.equal(await p.a.query((tx) => tx.goalMarketExtension.count({ where: { fixtureId: state.fixture.id } })), 1);
+      assert.equal(await p.a.query((tx) => tx.extendedMarketPublishedPick.count({ where: { revisionId: revision.id } })), definitions.length);
       await assert.rejects(p.history.withFixtureTransaction(state.fixture.id, (_writer, tx) => appendGoalMarketExtension(tx, { ...input.goalExtension, definitions: [goalResultMarket()],
         revisionId: revision.id, cycleId: state.cycle.id, fixtureId: state.fixture.id, recordedAt: p.now() })),
         (error) => error instanceof PredictionHistoryError && error.reason === 'conflicting-request');
     });
     await t.test('database rejects archive UPDATE/DELETE even with accidental broad grants', async () => {
-      await p.instance.executeAdmin("GRANT UPDATE, DELETE ON goal_hint_test.GoalMarketExtension TO 'cutoff_app'@'127.0.0.1';");
+      await p.instance.executeAdmin("GRANT UPDATE, DELETE ON goal_hint_test.GoalMarketExtension TO 'cutoff_app'@'127.0.0.1'; GRANT UPDATE, DELETE ON goal_hint_test.ExtendedMarketPublishedPick TO 'cutoff_app'@'127.0.0.1';");
       await assert.rejects(p.a.query((tx) => tx.$executeRaw`UPDATE GoalMarketExtension SET contentHash = ${'f'.repeat(64)} WHERE revisionId = ${revision.id}`));
       await assert.rejects(p.a.query((tx) => tx.$executeRaw`DELETE FROM GoalMarketExtension WHERE revisionId = ${revision.id}`));
-      await p.instance.executeAdmin("REVOKE UPDATE, DELETE ON goal_hint_test.GoalMarketExtension FROM 'cutoff_app'@'127.0.0.1';");
+      await assert.rejects(p.a.query((tx) => tx.$executeRaw`UPDATE ExtendedMarketPublishedPick SET sortOrder = sortOrder WHERE revisionId = ${revision.id}`));
+      await assert.rejects(p.a.query((tx) => tx.$executeRaw`DELETE FROM ExtendedMarketPublishedPick WHERE revisionId = ${revision.id}`));
+      await p.instance.executeAdmin("REVOKE UPDATE, DELETE ON goal_hint_test.GoalMarketExtension FROM 'cutoff_app'@'127.0.0.1'; REVOKE UPDATE, DELETE ON goal_hint_test.ExtendedMarketPublishedPick FROM 'cutoff_app'@'127.0.0.1';");
     });
     await t.test('new siblings cannot retrofit a legacy accepted publication or extend a closed cycle', async () => {
       const legacy = await p.setup(3006), receipt = await p.publisher.publish(legacy.input, legacy.lease);
@@ -145,13 +169,17 @@ test('additive score extensions publish and settle atomically on genuine owned M
       assert.equal((await counts()).active, 0, 'default legacy service never reads or writes extended tables');
     });
     await t.test('one atomic extended batch preserves quarter payouts, missing HT evidence and correction history', async () => {
-      await observe(1, 0); assert.equal((await settlement.settleFixture(state.fixture.id)).changed, 9);
+      await observe(1, 0); assert.equal((await settlement.settleFixture(state.fixture.id)).changed, 11);
       const initial = await counts(), view = await settlement.extendedForFixture(state.fixture.id);
-      assert.equal(view.markets.length, 5); assert.equal(initial.active, 5);
+      assert.equal(view.markets.length, 7); assert.equal(initial.active, 7);
       const half = view.markets.find((entry) => entry.marketKey === goalResultMarket('half-time').key);
       assert.equal(half.settlement.status, 'pending'); assert.equal(half.settlement.reason, 'missing-verified-half-time-score');
       assert.equal((await settlement.settleFixture(state.fixture.id)).changed, 0); assert.deepEqual(await counts(), initial);
-      await observe(0, 0); await settlement.settleFixture(state.fixture.id);
+      await observe(0, 0);
+      const stale = await performance.read({ from: state.cycle.kickoffAt - 1, to: state.cycle.kickoffAt + 1, source: 'ai-score-distribution' });
+      assert.ok(stale.markets.every((entry) => entry.counts.correct === 0 && entry.binaryDenominator === 0),
+        'the prior result cannot remain a reported winner before correction reconciliation');
+      await settlement.settleFixture(state.fixture.id);
       const corrected = await settlement.extendedForFixture(state.fixture.id), byKey = new Map(corrected.markets.map((entry) => [entry.marketKey, entry]));
       assert.equal(byKey.get(goalAsianHandicapMarket(-.25).key).settlement.status, 'half-loss');
       assert.equal(byKey.get(goalAsianHandicapMarket(.25).key).settlement.status, 'half-win');
@@ -161,6 +189,28 @@ test('additive score extensions publish and settle atomically on genuine owned M
       assert.equal(audit[1].correctedAt, audit[1].at); assert.notEqual(audit[0].resultId, audit[1].resultId);
       assert.equal(audit[0].predictionRevisionId, audit[1].predictionRevisionId); assert.equal(audit[0].selection, audit[1].selection);
       assert.equal(evidenceFingerprint((await p.history.findRevision(revision.id)).candidate), originalCandidateHash);
+      const report = await performance.read({ from: state.cycle.kickoffAt - 1, to: state.cycle.kickoffAt + 1, source: 'ai-score-distribution' });
+      assert.equal(report.markets.length, 7); assert.ok(report.markets.every((entry) => entry.total === 1));
+      for (const key of [goalAsianHandicapMarket(-.25).key, goalAsianHandicapMarket(.25).key, goalAsianHandicapMarket(0).key]) {
+        const value = report.markets.find((entry) => entry.marketKey === key);
+        assert.equal(value.binaryDenominator, 0); assert.equal(value.binaryHitRate, null);
+      }
+    });
+    await t.test('separately verified sealed HT evidence settles HT/2H/HTFT, and same-FT half-time correction appends exact-pick history', async () => {
+      const keys = [goalResultMarket('half-time').key, goalResultMarket('second-half').key, goalHalfFullMarket().key];
+      await observe(0, 2, { home: 0, away: 2 }); await settlement.settleFixture(state.fixture.id);
+      const first = await settlement.extendedForFixture(state.fixture.id), firstByKey = new Map(first.markets.map((entry) => [entry.marketKey, entry]));
+      for (const key of keys) assert.equal(firstByKey.get(key).settlement.status, 'correct');
+      await observe(0, 2, { home: 0, away: 0 }); await settlement.settleFixture(state.fixture.id);
+      const latest = await settlement.extendedForFixture(state.fixture.id), byKey = new Map(latest.markets.map((entry) => [entry.marketKey, entry]));
+      for (const key of keys) {
+        const original = firstByKey.get(key).settlement, corrected = byKey.get(key).settlement;
+        assert.equal(corrected.status, 'incorrect'); assert.equal(corrected.kind, 'correction');
+        assert.equal(corrected.predictionRevisionId, original.predictionRevisionId); assert.equal(corrected.selection, original.selection);
+        assert.notEqual(corrected.resultId, original.resultId); assert.equal(corrected.correctedAt, corrected.at);
+        const history = await settlement.extendedAudit(state.cycle.id, key);
+        assert.equal(history.at(-2).id, original.id); assert.equal(history.at(-1).id, corrected.id);
+      }
     });
     await t.test('forged structural settlement plans cannot replace the locked pick or create audit history', async () => {
       const before = await counts();

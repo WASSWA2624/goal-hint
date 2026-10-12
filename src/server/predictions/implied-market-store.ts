@@ -4,7 +4,7 @@ import { deriveMappedImpliedMarket } from "../../domain/market-implied-markets.t
 import { NON_GOAL_MARKET_RULE_VERSION } from "../../domain/non-goal-market-definitions.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { storedOddsSnapshotSchema, type StoredOddsSnapshot } from "../odds/odds-mysql-store.ts";
+import { oddsValuesHash, storedOddsSnapshotSchema } from "../odds/odds-mysql-store.ts";
 import { historyFail } from "./history-contract.ts";
 import { historyId, historyInstant } from "./history-input.ts";
 import { assertHistorySeal, historyJson, historyTime, type HistoryRow } from "./history-read.ts";
@@ -47,7 +47,8 @@ export function impliedMarketExtensionFromRow(row: HistoryRow): StoredImpliedMar
   if (body.contentHash !== contentHash || row.contentHash !== contentHash || row.ruleVersion !== prepared.ruleVersion ||
       row.revisionId !== expected.revisionId || row.cycleId !== expected.cycleId || row.fixtureId !== expected.fixtureId ||
       historyTime(row.recordedAt) !== expected.recordedAt || evidenceFingerprint(body) !== evidenceFingerprint(expected) ||
-      prepared.snapshots.some((snapshot) => snapshot.fixtureId !== expected.fixtureId || snapshot.retrievedAt > prepared.confirmedAt ||
+      prepared.snapshots.some((snapshot) => snapshot.fixtureId !== expected.fixtureId || snapshot.valuesHash !== oddsValuesHash(snapshot.values) ||
+        snapshot.retrievedAt > prepared.confirmedAt || expected.recordedAt - snapshot.retrievedAt > prepared.freshnessMs ||
         snapshot.providerUpdatedAt !== null && snapshot.providerUpdatedAt > expected.recordedAt || snapshot.retainUntil <= expected.recordedAt) ||
       prepared.confirmedAt > expected.recordedAt || expected.recordedAt - prepared.confirmedAt > prepared.freshnessMs) return historyFail("invalid-state");
   return freezeEvidence(expected);
@@ -103,12 +104,15 @@ export async function appendImpliedMarketExtension(tx: Tx, input: ImpliedMarketE
     assertHistorySeal(row.validIntegrity);
     const snapshot = storedOddsSnapshotSchema.parse(historyJson(row.body));
     if (snapshot.id !== row.id || snapshot.fixtureId !== identity.fixtureId || snapshot.fixtureId !== row.fixtureId || snapshot.bookmakerId !== checked.bookmakerId ||
-        snapshot.bookmakerId !== Number(row.bookmakerExternalId) || snapshot.betId !== Number(row.betExternalId) || Boolean(row.replaced) ||
+        snapshot.bookmakerId !== Number(row.bookmakerExternalId) || snapshot.betId !== Number(row.betExternalId) ||
+        [true, 1, 1n, "1"].includes(row.replaced as never) || row.batchId !== state.latestBatchId ||
+        snapshot.valuesHash !== oddsValuesHash(snapshot.values) || identity.recordedAt - snapshot.retrievedAt > checked.freshnessMs ||
         snapshot.retrievedAt > state.lastRetrievedAt!.getTime() || snapshot.providerUpdatedAt !== null && snapshot.providerUpdatedAt > identity.recordedAt ||
         snapshot.retainUntil <= identity.recordedAt) return historyFail("invalid-state");
     return snapshot;
   });
   const prepared = prepareImpliedMarketExtension(checked, await storedCatalog(tx, identity.recordedAt), snapshots, state.lastRetrievedAt.getTime());
+  if (!prepared.markets.some(({ derivation }) => derivation.available)) return historyFail("invalid-request");
   const contentHash = evidenceFingerprint(prepared), value = freezeEvidence({ ...prepared, ...identity, contentHash }), body = evidenceSerialize(value);
   await tx.$executeRaw`INSERT INTO ImpliedMarketExtension (revisionId, cycleId, fixtureId, ruleVersion, contentHash, integrity, recordedAt, body)
     VALUES (${identity.revisionId}, ${identity.cycleId}, ${identity.fixtureId}, ${prepared.ruleVersion}, ${contentHash},
@@ -126,7 +130,7 @@ export function publicImpliedMarketExtension(extension: StoredImpliedMarketExten
       source: "market-implied" as const, method: derivation.market.method, probabilityBasis: derivation.market.probabilityBasis,
       selection: derivation.market.selection, selectedProbability: derivation.market.selectedProbability,
       selections: derivation.market.selections.map(({ key, label, normalizedProbability, displayHundredths }) => ({ key, label,
-        probability: normalizedProbability, price: snapshot.retainUntil > at ? `${Math.floor(displayHundredths / 100)}.${String(displayHundredths % 100).padStart(2, "0")}` : null })),
+        probability: normalizedProbability, capturedPrice: snapshot.retainUntil > at ? `${Math.floor(displayHundredths / 100)}.${String(displayHundredths % 100).padStart(2, "0")}` : null })),
       retrievedAt: snapshot.retrievedAt, providerUpdatedAt: snapshot.providerUpdatedAt, confirmedAt: extension.confirmedAt }];
   });
 }

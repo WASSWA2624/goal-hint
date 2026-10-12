@@ -14,6 +14,7 @@ import { planGoalMarketSettlements, persistGoalMarketSettlements, readGoalMarket
 import { storedFixtureResult } from "../results/result-read.ts";
 import { SETTLEMENT_JOB_TYPE, settlementFamily, settlementPayload, type SettlementRevision } from "./settlement-contract.ts";
 import { storedSettlementProjection, storedSettlementRevision } from "./settlement-read.ts";
+import { planImpliedMarketSettlements, persistImpliedMarketSettlements, readImpliedMarketSettlement } from "./implied-market-settlement.ts";
 
 type Tx = Prisma.TransactionClient;
 const sourceKinds = ["fixture-result", "cycle-closed", "cycle-voided", "schedule-lifecycle", "lifecycle-conflict", "eligibility-closed", "revision-published"];
@@ -36,8 +37,11 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
         }
         const snapshot = await storedSettlementProjection(tx, fixtureId), at = await serverNow(tx);
         const changes = snapshot.cycles.flatMap((entry) => entry.markets).filter((entry) => entry.previous?.inputHash !== entry.inputHash);
-        const extended = extendedMarketsEnabled ? await planGoalMarketSettlements(tx, fixtureId) : [];
-        const extendedChanges = extended.filter((entry) => entry.previous?.inputHash !== entry.inputHash);
+        const goals = extendedMarketsEnabled ? await planGoalMarketSettlements(tx, fixtureId) : [];
+        const implied = extendedMarketsEnabled ? await planImpliedMarketSettlements(tx, fixtureId) : [];
+        const goalChanges = goals.filter((entry) => entry.previous?.inputHash !== entry.inputHash);
+        const impliedChanges = implied.filter((entry) => entry.previous?.inputHash !== entry.inputHash);
+        const extendedChanges = [...goalChanges, ...impliedChanges];
         if (changes.length || extendedChanges.length) {
           const version = (await tx.footballFixture.update({ where: { id: fixtureId }, data: { dataVersion: { increment: 1 } }, select: { dataVersion: true } })).dataVersion;
           const batchId = evidenceFingerprint({ fixtureId, version, changes: changes.map((entry) => entry.inputHash),
@@ -57,7 +61,8 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
             await tx.marketSettlement.upsert({ where: { cycleId_family: { cycleId: base.cycleId, family: base.family } },
               create: { fixtureId, cycleId: base.cycleId, family: base.family, revisionId: id }, update: { revisionId: id } });
           }
-          if (extendedChanges.length) await persistGoalMarketSettlements(tx, extendedChanges, batchId, at);
+          if (goalChanges.length) await persistGoalMarketSettlements(tx, goalChanges, batchId, at);
+          if (impliedChanges.length) await persistImpliedMarketSettlements(tx, impliedChanges, batchId, at);
           await tx.predictionChangeEvent.create({ data: { fixtureId, version, settlementId: batchId, kind: "market-settlement", at: new Date(at) } });
         }
         // A late/duplicate event is acknowledged against the latest locked state,
@@ -86,7 +91,24 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
           WHERE c.state IN ('closed','void') AND JSON_LENGTH(JSON_EXTRACT(e.body, '$.markets')) >
             (SELECT COUNT(*) FROM ExtendedMarketSettlement s WHERE s.cycleId=c.id AND s.marketKey LIKE 'goal:%')
           ORDER BY e.fixtureId LIMIT ${limit}`).map((row) => row.fixtureId);
-        return [...new Set([...legacy, ...extended])].sort().slice(0, limit);
+        const implied = (await tx.$queryRaw<{ fixtureId: string }[]>`
+          SELECT DISTINCT e.fixtureId FROM ImpliedMarketExtension e JOIN PredictionCycle c ON c.lockedSetId=e.revisionId
+          WHERE c.state IN ('closed','void') AND JSON_LENGTH(JSON_EXTRACT(e.body, '$.markets')) >
+            (SELECT COUNT(*) FROM ExtendedMarketSettlement s WHERE s.cycleId=c.id AND s.marketKey LIKE 'implied:%')
+          ORDER BY e.fixtureId LIMIT ${limit}`).map((row) => row.fixtureId);
+        // Result-time statistics can be corrected without changing FT scores. Latest result-bound sequence remains discoverable without a watermark.
+        const evidence = (await tx.$queryRaw<{ fixtureId: string }[]>`
+          SELECT DISTINCT c.fixtureId FROM PredictionCycle c
+          JOIN ImpliedMarketExtension x ON x.revisionId=c.lockedSetId
+          JOIN FixtureResultState rs ON rs.fixtureId=c.fixtureId
+          JOIN ImpliedMarketResultEvidence e ON e.fixtureId=c.fixtureId AND e.resultId=rs.resultId
+          JOIN ExtendedMarketSettlement p ON p.cycleId=c.id AND p.marketKey LIKE 'implied:%'
+          JOIN ExtendedMarketSettlementRevision r ON r.id=p.revisionId AND r.source='market-implied'
+          WHERE c.state='closed' AND e.sequence=(SELECT MAX(latest.sequence) FROM ImpliedMarketResultEvidence latest
+            WHERE latest.fixtureId=e.fixtureId AND latest.resultId=e.resultId)
+            AND NOT (JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.evidenceId')) <=> e.id)
+          ORDER BY c.fixtureId LIMIT ${limit}`).map((row) => row.fixtureId);
+        return [...new Set([...legacy, ...extended, ...implied, ...evidence])].sort().slice(0, limit);
       });
     },
     async reconcile(limit = 100) {
@@ -130,9 +152,9 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
       if (!extendedMarketsEnabled) return historyFail("invalid-request");
       return database.transaction(async (tx) => {
         const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: fixtureId }, select: { activeCycleId: true, dataVersion: true } });
-        const plans = await planGoalMarketSettlements(tx, fixtureId);
+        const plans = [...await planGoalMarketSettlements(tx, fixtureId), ...await planImpliedMarketSettlements(tx, fixtureId)];
         return freezeEvidence({ fixtureId, fixtureVersion: fixture.dataVersion, applicableCycleId: fixture.activeCycleId,
-          markets: plans.map(({ base, inputHash, previous }) => ({ marketKey: base.marketKey, cycleId: base.cycleId,
+          markets: plans.map(({ base, inputHash, previous }) => ({ marketKey: base.marketKey, cycleId: base.cycleId, source: base.source,
             settlement: previous, isCurrent: previous?.inputHash === inputHash,
             applicable: base.cycleId === fixture.activeCycleId,
             eligibleForCounting: previous?.inputHash === inputHash && base.cycleId === fixture.activeCycleId && base.cycleState === "closed" &&
@@ -141,11 +163,12 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
     },
     async extendedAudit(cycleId: string, marketKey: string) {
       historyId.parse(cycleId);
-      if (!extendedMarketsEnabled || !/^goal:[a-z0-9:._-]{1,123}$/u.test(marketKey)) return historyFail("invalid-request");
+      if (!extendedMarketsEnabled || !/^(?:goal|implied):[a-z0-9:._-]+$/u.test(marketKey) || marketKey.length > 128) return historyFail("invalid-request");
       return database.transaction(async (tx) => {
         const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM ExtendedMarketSettlementRevision
           WHERE cycleId = ${cycleId} AND marketKey = ${marketKey}`;
-        const values = await Promise.all(rows.map(({ id }) => readGoalMarketSettlement(tx, id)));
+        const values = await Promise.all(rows.map(({ id }) => marketKey.startsWith("goal:")
+          ? readGoalMarketSettlement(tx, id) : readImpliedMarketSettlement(tx, id)));
         const ordered = [], byPrevious = new Map(values.map((value) => [value.previousId, value]));
         let value = byPrevious.get(null);
         while (value) { ordered.push(value); if (ordered.length > values.length) return historyFail("invalid-state"); value = byPrevious.get(value.id); }

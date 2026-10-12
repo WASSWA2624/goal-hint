@@ -169,7 +169,7 @@ export function projectGoalMarketSettlements(extension: StoredGoalMarketExtensio
   }));
 }
 
-/** The caller already owns the fixture lock. Missing separately verified HT evidence stays pending. */
+/** The caller already owns the fixture lock. Only separately verified, sealed HT evidence can settle period markets. */
 export async function planGoalMarketSettlements(tx: Tx, fixtureId: string): Promise<readonly GoalMarketSettlementPlan[]> {
   historyId.parse(fixtureId);
   const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: fixtureId } });
@@ -193,7 +193,8 @@ export async function planGoalMarketSettlements(tx: Tx, fixtureId: string): Prom
           : cycle.voidReason === "locked-cutoff-invalidated" ? "cutoff-invalidated" : "ineligible-cycle" },
       regulationScore: resultUsable && result?.regulation.verified ? { verified: true, period: "regulation-including-stoppage-time",
         home: result.regulation.home!, away: result.regulation.away! } : null,
-      halfTimeScore: null,
+      halfTimeScore: resultUsable && result?.halfTime ? { verified: true, period: result.halfTime.period,
+        home: result.halfTime.home, away: result.halfTime.away } : null,
     };
     plans.push(...projectGoalMarketSettlements(extension, cycle, context, result?.id ?? null, resultUsable, recorded));
   }

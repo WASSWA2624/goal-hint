@@ -40,7 +40,8 @@ const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEv
   'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent','PredictionCycleOperation','FixtureLifecycleObservation',
   'PredictionRefreshIntent','PredictionRefreshStage','PredictionRefreshOutcome','DurableJobUsage',
   'FixtureResult','ResultProviderObservation','SettlementBatch','MarketSettlementRevision','SettlementEventReceipt',
-  'OddsImportBatch','OddsBetObservation','ProviderOddsSnapshot'];
+  'OddsImportBatch','OddsBetObservation','ProviderOddsSnapshot',
+  'GoalMarketExtension','ImpliedMarketExtension','ImpliedMarketResultEvidence','ExtendedMarketSettlementRevision','ExtendedMarketPublishedPick'];
 // Odds (052): the per-fixture state and public projection take column-scoped updates; no odds row is ever deleted.
 const oddsColumns = {
   FixtureOddsState: 'latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion',
@@ -81,6 +82,7 @@ export async function withPredictionPipeline(t, operation, instanceOptions) {
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ResultPollerLease TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.FixtureResultState TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (revisionId) ON goal_hint_test.MarketSettlement TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE (revisionId) ON goal_hint_test.ExtendedMarketSettlement TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE (completedAt) ON goal_hint_test.ResultSyncBatch TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ApiQuotaAccount TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DailyRun TO 'cutoff_app'@'127.0.0.1';

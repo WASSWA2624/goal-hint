@@ -24,6 +24,21 @@ const context = (overrides = {}) => ({ status: "finished-regulation", cycleEligi
   regulationScore: { verified: true, period: "regulation-including-stoppage-time", home: 2, away: 1 },
   halfTimeScore: { verified: true, period: "first-half-including-stoppage-time", home: 1, away: 0 }, ...overrides });
 
+test("observed lines are independent of predictor support and numeric mass tolerance cannot exceed probability one", () => {
+  assert.equal(probability(market(goalTotalsMarket(80.5)), "under"), 1);
+  assert.equal(probability(market(goalTotalsMarket(100.25, "total", "full-time", "asian")), "under"), 1);
+  assert.equal(market(goalEuropeanHandicapMarket(-100)).selection, "away");
+  assert.equal(market(goalExactScoreMarket([{ home: 80, away: 0 }], "full-time", true)).selection, "other");
+  const tolerance = { version: SCORE_DISTRIBUTION_VERSION, unrepresentedProbability: 0, states: [
+    { home: 0, away: 0, halfHome: 0, halfAway: 0, probability: .6 },
+    { home: 1, away: 0, halfHome: 0, halfAway: 0, probability: .4000000005 },
+  ] };
+  const derived = market(goalBothTeamsScoreMarket(), tolerance);
+  assert.equal(derived.selectedProbability, 1);
+  assert.equal(derived.selections.find(({ key }) => key === "no").outcomes.win, 1);
+  assert.equal(tolerance.states[1].probability, .4000000005);
+});
+
 test("score distributions reject invalid mass, duplicated paths, impossible halves, extra fields and nonfinite probabilities", () => {
   for (const change of [
     (value) => { value.states[0].probability = NaN; },

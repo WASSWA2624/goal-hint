@@ -23,6 +23,7 @@ import { recordPublicationBarrier } from "./publication-barrier.ts";
 import { appendGoalMarketExtension } from "./goal-market-store.ts";
 import { appendImpliedMarketExtension } from "./implied-market-store.ts";
 import type { StoredImpliedMarketExtension } from "./implied-market-contract.ts";
+import { appendPublishedExtendedPicks } from "./extended-market-picks.ts";
 import { usesScoreDistribution } from "../predictor/predictor-prompt.ts";
 import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
 
@@ -170,6 +171,7 @@ export function createRevisionPublicationService(options: Readonly<{
                 revisionId: revision.id, cycleId: cycle.id, fixtureId: fixture.id, recordedAt: now });
               if (input.impliedExtension !== undefined) impliedSnapshot = await appendImpliedMarketExtension(tx, { ...input.impliedExtension,
                 revisionId: revision.id, cycleId: cycle.id, fixtureId: fixture.id, recordedAt: now });
+              if (input.goalExtension !== undefined || input.impliedExtension !== undefined) await appendPublishedExtendedPicks(tx, revision.id, now);
               const recorded = (await storedCycle(tx, cycle.id))!;
               await writer.changeCycle({ ...actor, cycleId: cycle.id, expectedVersion: recorded.version,
                 eventKey: evidenceFingerprint({ kind: "revision-published", ...identity }), at: now,

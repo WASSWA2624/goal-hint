@@ -8,9 +8,9 @@ export const goalMarketPeriods = ["full-time", "half-time", "second-half"] as co
 export type GoalMarketPeriod = typeof goalMarketPeriods[number];
 const team = z.enum(["home", "away"]), result = z.enum(["home", "draw", "away"]);
 const metric = z.enum(["total", "home", "away"]);
-const halfLine = z.number().finite().min(0).max(60).refine((value) => Number.isInteger(value * 2) && !Number.isInteger(value));
-const quarterLine = z.number().finite().min(-30).max(30).refine((value) => Number.isInteger(value * 4));
-const goals = z.number().int().min(0).max(30);
+const halfLine = z.number().finite().min(0).max(1000).refine((value) => Number.isSafeInteger(value * 2) && !Number.isInteger(value));
+const quarterLine = z.number().finite().min(-1000).max(1000).refine((value) => Number.isSafeInteger(value * 4));
+const goals = z.number().int().min(0).max(1000);
 const binaryRuleSchema = z.union([
   z.strictObject({ kind: z.literal("result"), result }),
   z.strictObject({ kind: z.literal("double-chance"), results: z.array(result).length(2).refine((values) => new Set(values).size === 2) }),
@@ -20,7 +20,7 @@ const binaryRuleSchema = z.union([
   z.strictObject({ kind: z.literal("clean-sheet"), team, yes: z.boolean() }),
   z.strictObject({ kind: z.literal("win-to-nil"), team, yes: z.boolean() }),
   z.strictObject({ kind: z.literal("exact-score"), home: goals, away: goals }),
-  z.strictObject({ kind: z.literal("handicap-result"), homeHandicap: z.number().int().min(-30).max(30), result }),
+  z.strictObject({ kind: z.literal("handicap-result"), homeHandicap: z.number().int().min(-1000).max(1000), result }),
   z.strictObject({ kind: z.literal("half-full-result"), half: result, full: result }),
 ]);
 export const goalRuleSchema = z.union([
@@ -122,7 +122,10 @@ export function deriveGoalMarket(distributionInput: unknown, definitionInput: un
       if (value === null) return { available: false, reason: "missing-half-time-distribution" };
       outcomes[value] += state.probability;
     }
-    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(outcomes), winProbability: outcomes.win + outcomes["half-win"] }));
+    // The validated total has a floating-point tolerance. Bound only representational overflow;
+    // never redistribute or discard the explicit unknown mass.
+    const bounded = Object.fromEntries(grades.map((item) => [item, Math.min(1, outcomes[item])])) as Record<GoalGrade, number>;
+    selections.push(Object.freeze({ ...selection, outcomes: Object.freeze(bounded), winProbability: Math.min(1, outcomes.win + outcomes["half-win"]) }));
   }
   // Check partition membership per state, not just aggregate mass: overlaps can otherwise cancel gaps.
   if (definition.group === "partition" && distribution.states.some((state) =>
