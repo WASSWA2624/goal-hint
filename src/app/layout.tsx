@@ -28,8 +28,8 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", images: [canonicalUrl("/brand/goal-hint-open-graph.png")] },
   icons: {
     icon: [
-      { url: "/brand/goal-hint-favicon.svg", type: "image/svg+xml" },
-      { url: "/brand/goal-hint-favicon.ico", sizes: "16x16 32x32 48x48" },
+      { url: "/brand/goal-hint-favicon.svg?v=20261012", type: "image/svg+xml" },
+      { url: "/brand/goal-hint-favicon.ico?v=20261012", sizes: "16x16 32x32 48x48" },
     ],
     apple: "/brand/goal-hint-apple-touch-icon.png",
   },

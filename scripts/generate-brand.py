@@ -115,7 +115,7 @@ class Brand:
         seams = ["M" + "L".join(map(project, sphere_line(a, b))) for a, b in self.seams if not hidden(*place(sphere_line(b, b, 1)[0]))]
         return "".join(panels), "".join(seams)
 
-    def mark(self, accent=None, ink=None, micro=False):
+    def mark(self, accent=None, ink=None, micro=False, ball_background=None):
         c = self.colors
         accent, ink = accent or c["teal"], ink or c["navy"]
         self.mask_count += 1
@@ -134,7 +134,15 @@ class Brand:
             body = f'<circle cx="80" cy="80" r="43.7" fill="none" stroke="white" stroke-width="4.6"/><path d="{panels}" fill="white"/>'
             if not micro:
                 body += f'<path d="{seams}" fill="none" stroke="white" stroke-width="3"/>'
-        return f'<path d="{self.g_path(tip)}" fill="{accent}"/><mask id="{identifier}" maskUnits="userSpaceOnUse" x="0" y="0" width="160" height="160">{body}{knockout}</mask><rect x="34" y="34" width="92" height="92" fill="{ink}" mask="url(#{identifier})"/>'
+        background = ""
+        if ball_background:
+            background = f'<mask id="{identifier}-background" maskUnits="userSpaceOnUse" x="0" y="0" width="160" height="160"><circle cx="80" cy="80" r="43.7" fill="white"/>{knockout}</mask><rect x="34" y="34" width="92" height="92" fill="{ball_background}" mask="url(#{identifier}-background)"/>'
+        return f'<path d="{self.g_path(tip)}" fill="{accent}"/>{background}<mask id="{identifier}" maskUnits="userSpaceOnUse" x="0" y="0" width="160" height="160">{body}{knockout}</mask><rect x="34" y="34" width="92" height="92" fill="{ink}" mask="url(#{identifier})"/>'
+
+    def favicon(self):
+        # An opaque white football and navy panels stay visible on either tab theme.
+        c = self.colors
+        return svg(160, 160, "Goal Hint", self.mark(c["tealOnDark"], c["navy"], micro=True, ball_background=c["white"]))
 
     def text_path(self, key, x, baseline, size, color):
         item = self.type[key]
@@ -171,8 +179,8 @@ class Brand:
             logos[name] = svg(self.logo_width, 128, "Goal Hint", self.logo_body(accent, ink), "A geometric G around a football beside the Goal Hint wordmark.")
             self.save_svg("goal-hint-logo-" + name, logos[name], 2)
             self.save_svg("goal-hint-mark-" + name, svg(160, 160, "Goal Hint mark", self.mark(accent, ink)), 4)
-        # Transparent, so the tab strip shows through: the primary mark reads on light and dark tab bars alike.
-        favicon = svg(160, 160, "Goal Hint", self.mark(micro=True))
+        # Keep the surrounding tab strip transparent and the football itself bright.
+        favicon = self.favicon()
         self.save_svg("goal-hint-favicon", favicon)
         for size in (16, 32, 48):
             target = f"goal-hint-favicon-{size}.png"

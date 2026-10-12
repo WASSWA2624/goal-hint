@@ -82,6 +82,12 @@ def verify_feed(origin, directory, scenarios):
         (directory / f"{name}.html").write_text(html, encoding="utf-8")
         assert 0 <= html.find("data-styled=") < html.find("<main"), name + ": CSS before content"
         assert len(re.findall(r"<h1[\s>]", visible)) == 1
+        # The range fields are available in the initial document at every breakpoint.
+        assert len(re.findall(r'<input\b[^>]*type="date"', visible)) == 2
+        assert len(re.findall(r'<input\b[^>]*type="time"', visible)) == 2
+        for label in ["Date range", "From date", "To date", "Time range", "From time", "To time"]:
+            match(label, visible)
+        no_match("Picks only|With predictions|Any time|Specific time", visible)
         articles = re.findall(r'<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>([\s\S]*?)</article>', visible)
         data = scenario["result"].get("data")
         records = data["records"] if data else []

@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { ResetIcon, FilterIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import type { ReportingDate } from "@/domain/calendar";
+import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
+import { validKickoffTime } from "@/domain/kickoff-time";
+import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { applyFeedDraft, resetFeedFilters } from "@/domain/feed-controls";
 import { pinnedFeedQuery } from "@/domain/feed-pagination";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
 import {
-  anyProbability, canonicalMarkets, feedQueryHref, feedQueryKey, feedQueryRules, serializeFeedQuery, type FeedQuery,
+  anyProbability, canonicalMarkets, feedQueryHref, feedQueryKey, feedQueryRules, resolveFeedDates, serializeFeedQuery, type FeedQuery,
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import type { MarketFamily } from "@/domain/markets";
@@ -20,7 +22,7 @@ import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { FeedTimeFilter } from "./feed-time";
-import { DateRangePicker, DateStepper } from "./feed-dates";
+import { DateRangePicker, DateStepper, rangeLabel } from "./feed-dates";
 import { ChipText, CompactSelect, FilterChip, focusRing, OptionPicker, plainClick, RangeSlider } from "./filter-parts";
 
 type Messages = ReturnType<typeof createMessages>;
@@ -28,8 +30,6 @@ const desktop = media.desktop;
 /** The draft count belongs to the desktop Apply button; phones apply selections directly. */
 const desktopQuery = media.desktop.replace("@media ", "");
 const probabilityPresets = [anyProbability, { min: 50, max: 100 }, { min: 60, max: 100 }, { min: 70, max: 100 }, { min: 80, max: 100 }, { min: 90, max: 100 }];
-/** Phone selections settle for this long before one navigation applies them all. */
-const phoneApplyDelayMs = 700;
 
 function valid(query: FeedQuery, today: ReportingDate): boolean {
   try { serializeFeedQuery(query, today); return true; } catch { return false; }
@@ -51,11 +51,11 @@ function rangeText(messages: Messages, range: FeedQuery["probability"]) {
 }
 
 /** Debounced desktop draft count, from the public feed endpoint with a one-row page and no league options. */
-function useDraftTotal(draft: FeedQuery, query: FeedQuery, today: ReportingDate, appliedTotal: number | null) {
-  const key = (() => { try { return feedQueryKey(draft, today); } catch { return null; } })(), appliedKey = feedQueryKey(query, today);
+function useDraftTotal(draft: FeedQuery | null, query: FeedQuery, today: ReportingDate, appliedTotal: number | null) {
+  const key = (() => { try { return draft ? feedQueryKey(draft, today) : null; } catch { return null; } })(), appliedKey = feedQueryKey(query, today);
   const [counted, setCounted] = useState<{ key: string; total: number } | null>(null);
   useEffect(() => {
-    if (key === null || key === appliedKey || !window.matchMedia(desktopQuery).matches) return;
+    if (draft === null || key === null || key === appliedKey || !window.matchMedia(desktopQuery).matches) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
       try {
@@ -73,7 +73,7 @@ function useDraftTotal(draft: FeedQuery, query: FeedQuery, today: ReportingDate,
 }
 
 /** A thin multicolour edge tops the panel; filter rows carry their own accent. */
-const Panel = styled.section`
+const Panel = styled.form`
   display: grid;
   gap: 6px;
   min-inline-size: 0;
@@ -113,14 +113,20 @@ const PhoneMore = styled.div`
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 
-/** One date control for days and ranges; its popover stays within the page gutters. */
-const DateRow = styled.div`
-  position: relative;
+/** Date and time fields stay visible while the other phone filters are collapsed. */
+const RangeRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
+  gap: 6px;
+  ${desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-block-end: 8px; }
+`;
+const DateGroup = styled.div`
+  display: grid;
+  min-inline-size: 0;
   gap: 6px;
 `;
+const PhoneDateNavigation = styled.div`${desktop} { display: none; }`;
 /** One labelled trigger per filter replaces clipped suggestion chips and their duplicate menus. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
@@ -133,10 +139,10 @@ const PhonePicker = styled(OptionPicker)`
     label { border-radius: 0; }
   }
 `;
-/** Probability and a quiet reset action share one row, growing naturally with larger text. */
+/** The phone probability control grows naturally with larger text. */
 const BottomRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 6px 8px;
   @container phone-filters (max-width: 16rem) { grid-template-columns: minmax(0, 1fr); }
@@ -170,15 +176,6 @@ const QuietLink = styled(Link)`
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.red.solid}; } }
   ${focusRing}
 `;
-const PhoneReset = styled(QuietLink)`
-  justify-self: end;
-  padding-inline: 6px;
-  color: ${({ theme }) => theme.color.mutedText};
-  background: none;
-  border-radius: 0;
-  font-size: 0.75rem;
-  ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.red.text}; background: ${({ theme }) => theme.color.accent.red.soft}; } }
-`;
 const OddsNote = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
   font-size: 0.75rem;
@@ -187,12 +184,11 @@ const OddsNote = styled.p`
 
 /**
  * Desktop: two dense rows of inline-labelled fields. Leagues, countries and markets fill the first,
- * odds and probability the second; Apply and Clear All share a trailing column.
- * Dates live in the header's range picker and presets directly above.
+ * odds and probability the second. One shared action row applies all fields.
  */
 const DesktopGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr)) minmax(12.5rem, auto);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   align-items: center;
   gap: 8px 10px;
   > [data-span="2"] { grid-column: span 2; }
@@ -256,7 +252,7 @@ const NumberPair = styled.div<{ $disabled?: boolean }>`
     &:disabled { color: ${({ theme }) => theme.color.disabledText}; }
   }
 `;
-const ApplyLink = styled(Link)`
+const ApplyButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -265,19 +261,28 @@ const ApplyLink = styled(Link)`
   padding-inline: 14px;
   color: ${({ theme }) => theme.color.onBrand};
   background: ${({ theme }) => theme.gradient.action};
-  border-radius: 6px;
-  box-shadow: 0 3px 10px rgb(37 99 235 / 22%);
+  border: 0;
+  border-radius: 0;
+  font: inherit;
   font-size: 0.875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
-  text-decoration: none;
+  cursor: pointer;
+  &:disabled { opacity: 0.5; cursor: default; }
   > svg { flex: none; font-size: 1rem; }
   ${media.hover} { &:hover { filter: brightness(0.95); } }
   ${focusRing}
 `;
 const OutlineLink = styled(QuietLink)`
   min-block-size: 2.375rem;
+  border-radius: 0;
   font-size: 0.8125rem;
+`;
+const FilterActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 `;
 
 /** Whole-number entry that commits on Enter or blur, never per keystroke; arrow keys step by one. */
@@ -307,22 +312,33 @@ function WholeNumberInput({ value, min, max, label, onCommit }: {
     }} />;
 }
 
-export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen = true, phoneId }: {
+type FeedFiltersProps = {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; total: number | null; onApply: (query: FeedQuery) => void;
-  /** Phones show only the dates until the header toggle opens the remaining rows. */
+  /** Dates and times remain visible while the header toggle opens the other phone filters. */
   phoneOpen?: boolean; phoneId?: string;
-}) {
+};
+export function FeedFilters(props: FeedFiltersProps) {
+  return <FilterFields key={feedQueryHref(props.query, props.today)} {...props} />;
+}
+function FilterFields({ query, today, leagues, total, onApply, phoneOpen = true, phoneId }: FeedFiltersProps) {
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
-  const pending = useRef<number | null>(null), latest = useRef<FeedQuery | null>(null), applyRef = useRef(onApply);
-  useEffect(() => { applyRef.current = onApply; });
-  // Keep the shared draft aligned with each applied server navigation; phone
-  // selections made while a navigation was in flight survive its arrival.
-  useEffect(() => {
-    dispatch(queryApplied(query));
-    if (pending.current !== null && latest.current) dispatch(draftChanged(latest.current));
-  }, [dispatch, query]);
-  useEffect(() => () => { if (pending.current !== null) window.clearTimeout(pending.current); }, []);
+  useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   const draft = valid(storedDraft, today) ? storedDraft : query;
+  const range = resolveFeedDates(query, today), deviceZone = useDeviceTimeZone();
+  const [dateInputs, setDateInputs] = useState({ from: String(range.startDate), to: String(range.endDate) });
+  const [timeInputs, setTimeInputs] = useState({ from: query.time?.from ?? "", to: query.time?.to ?? "" });
+  const zone = query.time?.zone ?? deviceZone;
+  const completeDraft = useMemo(() => {
+    try {
+      const from = parseReportingDate(dateInputs.from), to = parseReportingDate(dateInputs.to);
+      const dates: FeedQuery["dates"] = from === range.startDate && to === range.endDate ? query.dates
+        : from === to ? { kind: "date", date: from } : { kind: "range", from, to };
+      resolveFeedDates({ dates }, today);
+      const time = timeInputs.from || timeInputs.to ? { ...timeInputs, zone } : null;
+      if (time && !validKickoffTime(time)) return null;
+      return { ...draft, dates, time, page: 1 };
+    } catch { return null; }
+  }, [dateInputs, draft, query.dates, range.endDate, range.startDate, timeInputs, today, zone]);
   const messages = createMessages(query.locale);
   // Hundreds of leagues are sorted once per cohort, not on every chip tap.
   const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
@@ -331,30 +347,14 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
     label: createMessages(query.locale).text(`market.family.${family}`), detail: null, logoUrl: null, fixtures: 0 })), [query.locale]);
   const href = (next: FeedQuery) => feedQueryHref({ ...next, page: 1 }, today);
   const edit = (next: FeedQuery) => { if (valid(next, today)) dispatch(draftChanged({ ...next, page: 1 })); };
-  /** Immediate navigation (dates, Reset, Clear All); any pending phone selection is folded in or discarded by the caller. */
+  /** One application step for the complete draft. */
   const apply = (next: FeedQuery) => {
-    if (pending.current !== null) window.clearTimeout(pending.current);
-    pending.current = null; latest.current = null;
     const applied = { ...next, page: 1 };
     dispatch(draftChanged(applied));
     onApply(applied);
   };
-  /** Phone choices accumulate in the draft, so several options can be picked before one navigation applies them. */
-  const choose = (next: FeedQuery) => {
-    if (!valid(next, today)) return;
-    const checked = { ...next, page: 1 };
-    latest.current = checked;
-    dispatch(draftChanged(checked));
-    if (pending.current !== null) window.clearTimeout(pending.current);
-    pending.current = window.setTimeout(() => {
-      const value = latest.current;
-      pending.current = null; latest.current = null;
-      if (value) applyRef.current(value);
-    }, phoneApplyDelayMs);
-  };
-  /** Phone controls start from the draft so pending selections are never lost. */
-  const phone: FeedQuery = { ...draft, dates: query.dates };
-  const draftTotal = useDraftTotal(draft, query, today, total);
+  const phone = draft;
+  const draftTotal = useDraftTotal(completeDraft, query, today, total);
   const reset = resetFeedFilters(query);
 
   function phonePicker(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
@@ -370,7 +370,7 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
       searchable={kind !== "markets"} onToggle={(value) => {
         const next = kind === "markets" ? toggledMarkets(phone, value as MarketFamily)
           : { ...phone, [kind]: toggled(selected, value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) };
-        if (next) choose(next);
+        if (next) edit(next);
       }} findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")} />;
   }
 
@@ -412,14 +412,22 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
   const percent = (value: number) => `${messages.number(value)}%`, odds = (value: number) => (value / 100).toFixed(2);
   const setProbability = (min: number, max: number) => edit({ ...draft, probability: { min, max } });
 
-  return <Panel aria-label={messages.text("feed.filters.form")}>
+  return <Panel aria-label={messages.text("feed.filters.form")} onSubmit={(event) => {
+    event.preventDefault();
+    if (completeDraft) apply(applyFeedDraft(completeDraft, today));
+  }}>
+    <RangeRow>
+      <DateGroup>
+        <DateRangePicker query={query} today={today} {...dateInputs} onChange={(from, to) => setDateInputs({ from, to })} />
+        <PhoneDateNavigation>
+          <DateStepper query={query} today={today} onApply={apply}>
+            <span data-range-summary>{rangeLabel(query, today)}</span>
+          </DateStepper>
+        </PhoneDateNavigation>
+      </DateGroup>
+      <FeedTimeFilter query={query} {...timeInputs} onChange={(from, to) => setTimeInputs({ from, to })} />
+    </RangeRow>
     <PhoneOnly>
-      <DateRow>
-        <DateStepper query={phone} today={today} onApply={apply}>
-          <DateRangePicker query={phone} today={today} onApply={apply} compact />
-        </DateStepper>
-      </DateRow>
-      <FeedTimeFilter query={phone} onApply={apply} />
       <PhoneMore id={phoneId} hidden={!phoneOpen}>
         {phonePicker("markets", marketList)}
         {phonePicker("leagues", leagueList)}
@@ -431,26 +439,19 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
               options={probabilityOptions.map((preset) => ({ value: `${preset.min}-${preset.max}`, label: rangeText(messages, preset) }))}
               onChange={(event) => {
                 const [min, max] = event.target.value.split("-").map(Number);
-                choose({ ...phone, probability: { min: min!, max: max! } });
+                edit({ ...phone, probability: { min: min!, max: max! } });
               }} />
           </SelectGroup>
-          <PhoneReset href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}><ResetIcon />{messages.text("feed.filters.reset")}</PhoneReset>
         </BottomRow>
         <OddsNote title={messages.text("feed.filters.oddsPending")}>{messages.text("feed.filters.oddsUnavailable")}<VisuallyHidden>. {messages.text("feed.filters.oddsPending")}</VisuallyHidden></OddsNote>
       </PhoneMore>
     </PhoneOnly>
 
     <DesktopOnly>
-      <FeedTimeFilter query={draft} onApply={apply} />
       <DesktopGrid>
         {multiField("leagues", leagueList)}
         {multiField("countries", countryList)}
         {multiField("markets", marketList)}
-        <ApplyLink href={href(draft)} prefetch={false} onClick={(event) => plainClick(event, () => {
-          try { onApply(applyFeedDraft(draft, today)); } catch { /* An invalid draft is never applied. */ }
-        })}>
-          <FilterIcon />{draftTotal === null ? messages.text("feed.filters.applyPlain") : messages.plural("feed.filters.applyCount", draftTotal)}
-        </ApplyLink>
         <Field data-span="3" $accent="amber" $disabled role="group" aria-labelledby="filters-odds" title={messages.text("feed.filters.oddsPending")}>
           <FieldName id="filters-odds" $accent="amber">{oddsLabel}</FieldName>
           <RangeSlider min={101} max={2000} step={1} low={101} high={2000} disabled accent="amber" format={odds} onCommit={() => {}}
@@ -474,10 +475,15 @@ export function FeedFilters({ query, today, leagues, total, onApply, phoneOpen =
           </NumberPair>
           <VisuallyHidden>{messages.text("feed.filters.probabilityHelp")}</VisuallyHidden>
         </Field>
-        <OutlineLink href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}>
-          <ResetIcon />{messages.text("feed.filters.clearAll")}
-        </OutlineLink>
       </DesktopGrid>
     </DesktopOnly>
+    <FilterActions>
+      <OutlineLink href={href(reset)} prefetch={false} onClick={(event) => plainClick(event, () => apply(reset))}>
+        <ResetIcon />{messages.text("feed.filters.clearAll")}
+      </OutlineLink>
+      <ApplyButton type="submit" disabled={completeDraft === null}>
+        <FilterIcon />{draftTotal === null ? messages.text("feed.filters.applyPlain") : messages.plural("feed.filters.applyCount", draftTotal)}
+      </ApplyButton>
+    </FilterActions>
   </Panel>;
 }

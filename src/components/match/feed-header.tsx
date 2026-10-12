@@ -11,7 +11,7 @@ import { feedQueryHref, feedQueryRules, resolveFeedDates, type FeedQuery, type F
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
-import { DatePresets, DateRangePicker } from "./feed-dates";
+import { DatePresets } from "./feed-dates";
 import { CompactSelect, controlFeedback, focusRing, IconButton } from "./filter-parts";
 
 const desktop = media.desktop;
@@ -142,7 +142,7 @@ export function feedHeading(query: FeedQuery, today: ReportingDate, messages: Re
   return messages.text("feed.heading.other");
 }
 
-/** Title and subtitle; phones add the brand bar with filter and search toggles, desktops a date range and quick presets. */
+/** Title and subtitle; phones add the brand bar with filter and search toggles, desktops quick date presets. */
 export type FilterToggleState = Readonly<{ open: boolean; count: number; controls: string; onToggle: () => void }>;
 
 export function FeedHeader({ query, today, onApply, filters }: {
@@ -175,7 +175,6 @@ export function FeedHeader({ query, today, onApply, filters }: {
         <p>{messages.text("feed.subtitle")}</p>
       </Titles>
       <DesktopActions>
-        <DateRangePicker query={query} today={today} onApply={onApply} />
         <DatePresets query={query} today={today} onApply={onApply} />
       </DesktopActions>
     </Row>
@@ -191,7 +190,7 @@ export function FeedHeader({ query, today, onApply, filters }: {
   </>;
 }
 
-/** Equal phone controls above a right-aligned count; desktop retains its wrapping toolbar. */
+/** Count and order share one row, including on phones. */
 const Toolbar = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -200,7 +199,7 @@ const Toolbar = styled.div`
   gap: 6px 8px;
   ${media.belowDesktop} {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
     align-items: stretch;
     gap: 4px;
   }
@@ -212,9 +211,8 @@ const Count = styled.div`
   > h2 { font-size: 0.75rem; ${desktop} { font-size: 1.25rem; } }
   > p { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: block; } }
   ${media.belowDesktop} {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    text-align: end;
+    grid-column: 1;
+    grid-row: 1;
     color: ${({ theme }) => theme.color.mutedText};
     > h2 { font-weight: 500; line-height: 1.25; }
   }
@@ -267,44 +265,6 @@ const PhoneSort = styled(CompactSelect)`
   > span > span { overflow: visible; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
   > svg { inset-inline-end: 7px; }
 `;
-/** Toggle chip: keeps only matches that have a prediction. */
-const PicksToggle = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-block-size: 1.75rem;
-  padding-inline: 7px;
-  color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  border: ${({ theme }) => theme.border.width} solid transparent;
-  border-radius: 0;
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  white-space: nowrap;
-  cursor: pointer;
-  ${controlFeedback}
-  &::before { content: ""; inline-size: 8px; block-size: 8px; border: 1.5px solid currentColor; border-radius: 2px; }
-  &[aria-pressed="true"] {
-    color: ${({ theme }) => theme.color.accent.teal.text};
-    background: ${({ theme }) => theme.color.brandSoft};
-    border-color: ${({ theme }) => theme.color.brand};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    &::before { background: currentColor; }
-  }
-  ${focusRing}
-  ${media.belowDesktop} {
-    grid-column: 1;
-    grid-row: 1;
-    justify-content: center;
-    min-inline-size: 0;
-    white-space: normal;
-    &::before { flex: none; }
-    &:not([aria-pressed="true"]) { background: ${({ theme }) => theme.color.surface}; border-color: ${({ theme }) => theme.color.border}; }
-  }
-  ${desktop} { min-block-size: 2.375rem; padding-inline: 12px; border-radius: 6px; font-size: 0.875rem; }
-`;
-
 const sortOptions: readonly FeedSort[] = [
   { by: "probability", direction: "desc" }, { by: "probability", direction: "asc" },
   { by: "kickoff", direction: "asc" }, { by: "kickoff", direction: "desc" },
@@ -328,10 +288,6 @@ export function ResultsToolbar({ query, total, first, last, onApply }: {
         : messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>
     </Count>
     <SortGroup>
-      <PicksToggle type="button" aria-pressed={query.picks === "only"} title={messages.text("feed.picks.onlyHelp")}
-        onClick={() => onApply({ ...query, picks: query.picks === "only" ? "all" : "only", page: 1 })}>
-        <PhoneText>{messages.text("feed.picks.onlyShort")}</PhoneText><DesktopText>{messages.text("feed.picks.only")}</DesktopText>
-      </PicksToggle>
       <PhoneOrder>
         <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => chooseKey(event.target.value)}
           options={sortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import styled, { css } from "styled-components";
-import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
-import { CalendarIcon } from "./match-icons";
+import { useId, type ReactNode } from "react";
+import styled from "styled-components";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { RangeFields, RangeFieldset, RangeHelp } from "./feed-range-fields";
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { feedDateNavigation } from "@/domain/feed-date-navigation";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type DateSelection, type FeedDatePreset, type FeedQuery } from "@/domain/feed-query";
@@ -13,116 +13,6 @@ import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media } from "@/styles/theme";
 import { controlFeedback, focusRing, plainClick } from "./filter-parts";
-
-const field = css`
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-block-size: 1.875rem;
-  padding-inline: 9px;
-  color: ${({ theme }) => theme.color.text};
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 6px;
-  font: inherit;
-  font-size: 0.6875rem;
-  white-space: nowrap;
-  ${media.desktop} { min-block-size: 2.125rem; font-size: 0.8125rem; }
-  cursor: pointer;
-  > svg { flex: none; font-size: 0.875rem; }
-  > svg:first-child { color: ${({ theme }) => theme.color.accent.teal.solid}; }
-  ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.teal.solid}; } }
-  ${focusRing}
-`;
-/**
- * The middle of the phone date control: the stepper around it draws the box, so the date drops its
- * own and keeps the whole middle at 12px. Labels may wrap when text is enlarged; the date control
- * grows with them instead of clipping the selected day or range.
- */
-const flush = css`
-  flex: 1;
-  justify-content: center;
-  gap: 4px;
-  min-inline-size: 0;
-  min-block-size: 1.875rem;
-  padding-inline: 4px;
-  background: none;
-  border: 0;
-  border-radius: 0;
-  font-size: ${({ theme }) => theme.typography.scale.secondary};
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  line-height: 1.25;
-  white-space: normal;
-  > span { min-inline-size: 0; padding-block: 3px; }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-  &[aria-expanded="true"] { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; }
-  @container phone-filters (max-width: 18rem) { > svg:first-child { display: none; } }
-`;
-const FieldButton = styled.button`${field} min-inline-size: 0; > span { overflow: hidden; text-overflow: ellipsis; }`;
-const FlushButton = styled.button`${field} ${flush}`;
-/**
- * Compact phone sizes; desktop keeps its roomier popover. In the phone filters the popover starts
- * at the date row's edge (the nearest positioned box) and never outgrows it, so it stays on screen.
- */
-const Popover = styled.div<{ $compact: boolean }>`
-  position: absolute;
-  inset-block-start: calc(100% + 6px);
-  inset-inline-end: 0;
-  z-index: 15;
-  display: grid;
-  gap: 6px;
-  inline-size: min(19rem, calc(100vw - 32px));
-  padding: 12px;
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 6px;
-  box-shadow: ${({ theme }) => theme.shadow.cardHover};
-  ${({ $compact }) => $compact && css`
-    inset-inline: 0 auto;
-    inline-size: min(19rem, 100%);
-    border-radius: 0;
-    box-shadow: none;
-    input, button { border-radius: 0; }
-  `}
-  label { display: grid; gap: 3px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  input {
-    min-block-size: 2.25rem;
-    padding-inline: ${({ theme }) => theme.space.sm};
-    color: ${({ theme }) => theme.color.text};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-    border-radius: 6px;
-    font: inherit;
-    ${focusRing}
-  }
-  p { color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.75rem; }
-  ${media.desktop} {
-    gap: ${({ theme }) => theme.space.sm};
-    padding: ${({ theme }) => theme.space.md};
-    label { gap: 4px; font-size: 0.875rem; }
-    input { min-block-size: 2.5rem; border-radius: 8px; }
-    p { font-size: 0.8125rem; }
-  }
-`;
-const PopoverAction = styled.button`
-  min-block-size: 2.25rem;
-  color: ${({ theme }) => theme.color.onBrand};
-  background: ${({ theme }) => theme.gradient.action};
-  border: 0;
-  border-radius: 6px;
-  font: inherit;
-  font-size: 0.8125rem;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  cursor: pointer;
-  ${media.desktop} { min-block-size: 2.5rem; border-radius: 10px; font-size: inherit; }
-  ${media.hover} { &:hover { filter: brightness(0.95); } }
-  ${focusRing}
-`;
-const Anchor = styled.div<{ $compact: boolean }>`
-  position: ${({ $compact }) => $compact ? "static" : "relative"};
-  min-inline-size: 0;
-  display: flex;
-`;
 
 export function rangeLabel(query: FeedQuery, today: ReportingDate) {
   const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
@@ -153,56 +43,38 @@ export function shortRangeLabel(query: FeedQuery, today: ReportingDate) {
     to: (range.startDate.slice(0, 7) === range.endDate.slice(0, 7) ? day : monthDay).format(end) });
 }
 
-/** Choose any range of up to 31 days. Invalid input never leaves the popover. */
-export function DateRangePicker({ query, today, onApply, compact = false }: {
-  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void; compact?: boolean;
+/** Always-visible dates; equal endpoints select one date. */
+export function DateRangePicker({ query, today, from, to, onChange }: {
+  query: FeedQuery; today: ReportingDate; from: string; to: string; onChange: (from: string, to: string) => void;
 }) {
-  const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
-  const [open, setOpen] = useState(false), [from, setFrom] = useState<string>(range.startDate), [to, setTo] = useState<string>(range.endDate);
-  const [error, setError] = useState(false);
-  const root = useRef<HTMLDivElement>(null), button = useRef<HTMLButtonElement>(null), id = useId();
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
-  }, [open]);
-  function show() {
-    try {
-      const start = parseReportingDate(from), end = parseReportingDate(to);
-      const dates: DateSelection = start === end ? { kind: "date", date: start } : { kind: "range", from: start, to: end };
-      resolveFeedDates({ dates }, today);
-      setOpen(false); setError(false);
-      onApply({ ...query, dates, page: 1 });
-    } catch { setError(true); }
-  }
-  // The accessible name repeats the visible text; the compact label keeps the full dates as a title.
-  const label = rangeLabel(query, today), shown = !compact ? label
-    : range.dayCount === 1 ? messages.reportingDateShort(range.startDate) : shortRangeLabel(query, today);
-  // Compact pickers sit inside the phone date stepper, which draws their box.
-  const Trigger = compact ? FlushButton : FieldButton;
-  return <Anchor ref={root} $compact={compact} onKeyDown={(event) => {
-    if (event.key === "Escape" && open) { event.stopPropagation(); setOpen(false); button.current?.focus(); }
-  }}>
-    <Trigger ref={button} type="button" aria-expanded={open} aria-controls={id} onClick={() => {
-      setFrom(range.startDate); setTo(range.endDate); setError(false); setOpen(!open);
-    }} aria-label={`${messages.text("feed.date.choose")}: ${shown}`} title={compact ? label : undefined}>
-      <CalendarIcon /><span>{shown}</span><ChevronDownIcon />
-    </Trigger>
-    {open && <Popover id={id} $compact={compact} role="group" aria-label={messages.text("feed.date.choose")}>
-      <label>{messages.text("feed.date.from")}<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
-      <label>{messages.text("feed.date.to")}<input type="date" value={to} min={from}
-        max={(() => { try { return addReportingDays(parseReportingDate(from), feedQueryRules.maximumDays - 1); } catch { return undefined; } })()}
-        onChange={(event) => setTo(event.target.value)} /></label>
-      {error && <p role="alert">{messages.text("feed.date.tooLong")}</p>}
-      <PopoverAction type="button" onClick={show}>{messages.text("feed.date.show")}</PopoverAction>
-    </Popover>}
-  </Anchor>;
+  const messages = createMessages(query.locale), id = useId();
+  let dates: DateSelection | null = null, maximumTo: ReportingDate | undefined;
+  try {
+    const start = parseReportingDate(from);
+    try { maximumTo = addReportingDays(start, feedQueryRules.maximumDays - 1); }
+    catch { maximumTo = parseReportingDate("9999-12-31"); }
+    const end = parseReportingDate(to);
+    const selection: DateSelection = start === end ? { kind: "date", date: start } : { kind: "range", from: start, to: end };
+    resolveFeedDates({ dates: selection }, today);
+    dates = selection;
+  } catch { /* Incomplete or invalid endpoints stay editable without changing the applied query. */ }
+  const invalid = dates === null;
+  return <RangeFieldset>
+    <legend>{messages.text("feed.date.range")}</legend>
+    <RangeFields>
+      <label>{messages.text("feed.date.from")}<input type="date" value={from}
+        aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
+        onChange={(event) => onChange(event.target.value, to)} /></label>
+      <label>{messages.text("feed.date.to")}<input type="date" value={to} min={from || undefined} max={maximumTo}
+        aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
+        onChange={(event) => onChange(from, event.target.value)} /></label>
+      {invalid && <RangeHelp id={`${id}-error`} role="alert">{messages.text("feed.date.tooLong")}</RangeHelp>}
+    </RangeFields>
+  </RangeFieldset>;
 }
 
 /**
- * One 32px "‹ date ›" control: 28px steps at the ends, the date in the middle. It stays unpositioned
- * and unclipped, so the range popover still anchors to the date row and focus rings show in full.
+ * One compact "‹ date ›" control: previous and next steps surround the applied range summary.
  */
 const Stepper = styled.div`
   display: grid;
@@ -222,9 +94,18 @@ const Stepper = styled.div`
   }
   ${media.hover} { > a:hover { background: ${({ theme }) => theme.color.brandSoft}; } }
   > span { color: ${({ theme }) => theme.color.disabledText}; }
+  > [data-range-summary] {
+    min-inline-size: 0;
+    padding: 3px 6px;
+    color: ${({ theme }) => theme.color.text};
+    font-size: 0.75rem;
+    line-height: 1.3;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
 `;
 
-/** Previous/next day, or the adjacent block of equal length for a range, around the date picker. */
+/** Previous/next day, or the adjacent block of equal length for a range, around the applied date summary. */
 export function DateStepper({ query, today, onApply, children }: {
   query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void; children: ReactNode;
 }) {
