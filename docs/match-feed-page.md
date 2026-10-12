@@ -6,6 +6,10 @@ previous successful server projection. Prompt 034 adds
 [Load more and Back restoration](pagination-navigation.md) while keeping ordinary
 pagination links usable without JavaScript.
 
+Explicit filter actions always dispatch normal navigation, so Clear can
+supersede a rapid Apply even when returning to the currently displayed URL.
+An idle retry of a failed read at the same URL uses `router.refresh()`.
+
 Prompt 032 connects `/en` and `/en/predictions/YYYY-MM-DD` to the existing feed
 service. Today and Results share `FeedShell` and `MatchFeedPage`; Results retains
 the yesterday/finished default. The first page contains at most the existing
@@ -32,9 +36,10 @@ aggregate limiter before cache lookup.
 
 Desktop quick date presets use ordinary links with prefetch disabled and retain
 their existing date-navigation behavior. Four native From date, To date, From
-time and To time inputs stay visible on every device; one Apply action submits
-the complete filter draft and resets page position to one. Equal date endpoints
-select a day and equal time endpoints select a kickoff minute. Different date
+time and To time inputs share the collapsible mobile/tablet filter section and
+stay visible on desktop; one Apply action submits the complete filter draft
+and resets page position to one. Equal date endpoints select a day and equal
+time endpoints select a kickoff minute. Different date
 endpoints select an inclusive range of up to 31 days; time ranges retain inclusive
 minute bounds and their explicit timezone. Incomplete or invalid ranges remain
 editable and disable Apply. Date steppers, date popovers and time mode menus are
@@ -82,14 +87,18 @@ visible feed page heading or subtitle; a visually hidden h1 preserves the
 semantic page heading. An open search form has one search icon on its submit
 button, while the brand-bar toggle becomes Close.
 
-The date and time input pairs remain visible when the other phone filters are
-collapsed. Full From date, To date, From time and To time labels sit inside their
-square controls, to the left of each native value. Each pair occupies one phone
-row. There are no visible Date range/Time range group headings, nested date/time
-panels or per-range Apply buttons. Accessible fieldset names, input labels,
-focus rings and invalid feedback remain present. Invalid or incomplete edits
-are retained; a single Apply action remains disabled until the complete draft
-is valid.
+On phones and tablets the header Filters toggle opens or collapses one section
+containing the date/time pairs together with Markets, Leagues, Countries and
+Probability. Clicking outside closes that section without applying its draft.
+The common range controls render once: initial HTML contains exactly two date
+and two time inputs, with the section hidden at smaller sizes while collapsed.
+Full From date, To date, From time and To time labels sit inside their square
+controls, to the left of each native value. Each pair occupies one phone row
+and is directly editable when expanded. There are no visible Date range/Time
+range group headings, nested date/time panels or per-range Apply buttons.
+Accessible fieldset names, input labels, focus rings and invalid feedback remain
+present. Invalid or incomplete edits are retained; a single Apply action remains
+disabled until the complete draft is valid.
 
 Expanded mobile filters use one labeled summary dropdown each for Markets,
 Leagues and Countries. A single selection displays its name, multiple selections
@@ -99,15 +108,17 @@ SVG flags with readable names if a flag is unavailable. Probability presets and
 the muted Odds unavailable explanation remain compact. Mobile filter edits
 remain drafts until Apply; no timer applies them automatically.
 
-The results toolbar places the shared Clear and Apply actions to the left of
-Sort by. Phones use compact Clear/Apply labels, with the current loaded match
-count on its own row above. The sort menu contains both kickoff directions and
+The results toolbar stays outside the collapsible section and places Sort by
+on the left, followed by Clear and Apply. Phones use compact action labels, with
+the current loaded match count on its own row above. Empty-result messages
+appear below the action row. The sort menu
+contains both kickoff directions and
 both probability directions. Picks only/With predictions and a separate
 reverse-order button are absent on every device. Clear retains the applied
 date/range, status and page size while clearing the other filters and ordering.
 
 Desktop retains the shell logo and search, quick date presets and table layout.
-The same always-visible inline date/time controls precede one row of Leagues,
+Its visible inline date/time controls precede one row of Leagues,
 Countries, Markets, Odds and Probability fields. Probability uses compact
 minimum/maximum number inputs; the row contains no sliders. One Apply action
 submits all filter edits, and its desktop label can show the advisory draft
@@ -120,7 +131,7 @@ count. The independent sort menu remains in the results toolbar.
 | Complete imports and no known fixtures | No fixtures confirmed. |
 | Missing, pending, failed, partial or degraded coverage | No page-level banner; stored fixtures still list and each affected card notes partial coverage. Empty unknown dates say Fixture data unavailable. |
 | Matching fixtures without the selected family | No page-level notice; the fixture cards remain visible and each row states why it has no pick. |
-| Stored fixtures with no filter matches | No matches for these filters. |
+| Stored fixtures with no filter matches | No matches for these filters, below the action row. |
 | Direct page beyond the matching list | Match page unavailable; no invented cards. Previous page links return to a populated page when available. |
 | Temporary database/configuration/read failure | Matches temporarily unavailable with an ordinary retry link; no fixture count or fictional run. |
 | Aggregate search budget exhausted | Search temporarily busy with retry. |

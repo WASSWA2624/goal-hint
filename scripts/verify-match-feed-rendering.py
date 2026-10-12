@@ -77,12 +77,18 @@ def get(origin, path):
 
 
 def verify_feed(origin, directory, scenarios):
+    empty_titles = {
+        "no-fixtures": "No fixtures confirmed",
+        "no-filter-matches": "No matches for these filters",
+        "data-unavailable": "Fixture data unavailable",
+        "page-out-of-range": "Match page unavailable",
+    }
     for name, scenario in scenarios.items():
         html, visible = get(origin, f"/cases/{name}")
         (directory / f"{name}.html").write_text(html, encoding="utf-8")
         assert 0 <= html.find("data-styled=") < html.find("<main"), name + ": CSS before content"
         assert len(re.findall(r"<h1[\s>]", visible)) == 1
-        # The range fields are available in the initial document at every breakpoint.
+        # Expanding filters needs no extra fetch: range fields render once in the initial document.
         assert len(re.findall(r'<input\b[^>]*type="date"', visible)) == 2
         assert len(re.findall(r'<input\b[^>]*type="time"', visible)) == 2
         for label in ["From date", "To date", "From time", "To time"]:
@@ -95,6 +101,9 @@ def verify_feed(origin, directory, scenarios):
         no_match('role="slider"|Picks only|With predictions|Any time|Specific time', visible)
         articles = re.findall(r'<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>([\s\S]*?)</article>', visible)
         data = scenario["result"].get("data")
+        if data and data["state"] not in ("ready", "insufficient-data"):
+            heading = match(r'<h2\b[^>]*>' + re.escape(empty_titles[data["state"]]) + r'</h2>', visible)
+            assert visible.index(submit_buttons[0]) < heading.start(), name + ": filter actions before empty state"
         records = data["records"] if data else []
         assert [article[0] for article in articles] == [record["fixtureId"] for record in records]
         for (_, article), record in zip(articles, records):

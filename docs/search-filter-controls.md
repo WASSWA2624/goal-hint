@@ -9,9 +9,10 @@ reset page to one. Search typing makes no requests.
 
 Apply navigates through `feedQueryHref` using the App Router and a transition.
 The same parser and stored service handle initial rendering, Apply, reload,
-shared URLs and Back. Next discards superseded navigations. Reapplying the current
-query does nothing, unless it must supersede a pending navigation or retry a
-failed read, which refreshes its server projection. The desktop Apply count reads
+shared URLs and Back. Next discards superseded navigations. Explicit filter
+actions always dispatch normal navigation, including a rapid Apply followed by
+Clear back to the currently displayed URL. Only an idle retry of a failed read
+at the same URL uses `router.refresh()`. The desktop Apply count reads
 `/api/matches` with `pageSize=1&leagues=0`, on desktops only; this advisory count
 never applies the draft. Phones retain their edits until Apply and do not request
 that count. The search GET form retains its ordinary URL fallback. Empty "all"
@@ -20,13 +21,17 @@ options parse as empty lists and are omitted from canonical URLs. Repeated
 Repeated single-value keys, unknown keys (including the removed `sortMarket`)
 and other malformed parameters remain invalid.
 
-Four range inputs stay visible at every viewport size, including when the other
-phone filters are collapsed: From date, To date, From time and To time. Each full
-label sits inside its square control, to the left of the native input value.
-The date pair and time pair each occupy one phone row. There are no visible group
-headings, date popovers, date steppers, time mode menus or separate range Apply
-buttons. The fieldsets retain accessible group names; focused controls and
-invalid values retain visible feedback.
+From date, To date, From time and To time share the filter section with Markets,
+Leagues, Countries and Probability. On phones and tablets the header Filters
+toggle opens or collapses this complete section; clicking outside closes it.
+Desktop keeps the section visible. The common range controls are rendered once,
+so the initial HTML still contains exactly two date and two time inputs even
+when the section is hidden at smaller viewport sizes. Each full label sits
+inside its square control, to the left of the native input value. The date pair
+and time pair each occupy one phone row and are directly editable when expanded.
+There are no visible group headings, date popovers, date steppers, time mode
+menus or separate range Apply buttons. The fieldsets retain accessible group
+names; focused controls and invalid values retain visible feedback.
 
 Equal date endpoints select one day; different endpoints select an inclusive
 range of up to 31 days. Equal time endpoints select one kickoff minute; different
@@ -77,19 +82,23 @@ complete checklist, and selected values missing from a refreshed option list
 remain removable. At least one market must stay selected. Probability uses the
 labeled preset field. Mobile retains the muted Odds unavailable explanation.
 
-One action row sits to the left of Sort by in the results toolbar. Phones use
-compact Clear and Apply buttons; desktop Apply can show the advisory draft
-count. Apply submits the complete date, time and filter draft. Clear resets
+One action row stays outside the collapsible filter section. Sort by appears
+first on the left, followed by Clear and Apply. Phones use compact action labels;
+desktop Apply can show the advisory draft count. Apply submits the complete
+date, time and filter draft. Clear resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
 match result and kickoff ascending order, and resets page to one. It retains
 the applied date/range, status entry and page size. There are no separate per-
-filter action rows or duplicate mobile Apply controls. The sort menu includes
+filter action rows or duplicate mobile Apply controls. An empty-result message
+appears below this action row. The sort menu includes
 both kickoff directions and both probability directions, without a separate
 reverse-order button.
 
 Checklist popovers use native buttons and fields, close on an outside pointer
-action or Escape, and return focus to their trigger on Escape. Shared fields
-provide labels, descriptions, errors and visible focus. A polite query status
+action or Escape, and return focus to their trigger on Escape. Outside-click
+dismissal also closes the expanded mobile/tablet filter section; closing it
+does not apply its draft. Shared fields provide labels, descriptions, errors
+and visible focus. A polite query status
 announces loading/counts/failures; cards are not live regions. Controls remain
 usable during navigation.
 
@@ -103,10 +112,11 @@ pending loads and restart that extent. [Live refresh](live-client-refresh.md)
 retains its existing refresh behavior. No browser provider/AI calls or polling
 are added by the controls.
 
-On phones the filter and search toggles sit in the feed's brand bar beside the
-logo. The filter toggle sets `aria-expanded`/`aria-controls` on the collapsed
-rows and badges active choices. The search toggle opens a GET search form;
-Escape closes it and returns focus to the toggle. When open, the brand-bar
+On phones and tablets the filter and search toggles sit in the feed's brand bar
+beside the logo. The filter toggle sets `aria-expanded`/`aria-controls` on the
+complete collapsible filter section and badges active choices. The search toggle
+opens a GET search form; Escape closes it and returns focus to the toggle. When
+open, the brand-bar
 search button becomes Close and the form contains one search icon on its submit
 button. The feed retains a visually hidden semantic h1 without a visible page
 heading or subtitle above the filters.

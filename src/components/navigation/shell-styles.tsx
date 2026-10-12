@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { Container } from "@/components/ui/layout";
+import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
 
 const desktop = media.desktop;
@@ -168,12 +170,31 @@ const topLink = css<{ $tone?: AccentName }>`
 export const TopNavLink = styled(Link)<{ $tone?: AccentName }>`${topLink}`;
 
 /** The summary sits on the bar; its popup stays a light surface with dark links. */
-export const MoreMenu = styled.details<{ $tone?: AccentName }>`
+const MoreMenuDetails = styled.details<{ $tone?: AccentName }>`
   display: flex;
   > summary { ${topLink} list-style: none; &::-webkit-details-marker { display: none; } > svg:last-child { font-size: 1rem; } }
   &[open] > summary { color: ${({ theme }) => theme.header.text}; }
   &[open] > summary > svg:last-child { transform: rotate(180deg); }
 `;
+
+/** Keep native summary toggling, with the same dismissal behavior as the filter popovers. */
+export function MoreMenu({ children, $tone = "blue" }: { children: ReactNode; $tone?: AccentName }) {
+  const root = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(false);
+  const dismiss = useCallback(() => { if (root.current) root.current.open = false; }, []);
+  useOutsideDismiss({ enabled: open, root, onDismiss: dismiss });
+  return <MoreMenuDetails ref={root} $tone={$tone} onToggle={(event) => setOpen(event.currentTarget.open)}
+    onKeyDown={(event) => {
+      if (event.key !== "Escape" || !root.current?.open) return;
+      event.preventDefault();
+      event.stopPropagation();
+      dismiss();
+      root.current.querySelector("summary")?.focus();
+    }}
+    onClick={(event) => { if (event.target instanceof Element && event.target.closest("a")) dismiss(); }}>
+    {children}
+  </MoreMenuDetails>;
+}
 export const MoreList = styled.ul`
   position: absolute;
   inset-block-start: calc(100% + 4px);

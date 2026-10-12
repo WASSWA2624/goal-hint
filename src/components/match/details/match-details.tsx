@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { CloseIcon, SearchIcon } from "@/components/ui/icons";
+import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
 import { defaultMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
@@ -26,6 +27,12 @@ const Page = styled.article`
   min-inline-size: 0;
   overflow-wrap: anywhere;
   ${desktop} { gap: 12px; }
+`;
+const PhoneHeaderGroup = styled.div`
+  display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+  ${desktop} { display: none; }
 `;
 /**
  * The phone top bar matches the feed's branded bar: the navy to teal fill and brand edge, full bleed
@@ -164,12 +171,22 @@ function PhoneHeader() {
   const { locale, messages } = useStableDetails();
   const backHref = useBackHref(locale);
   const [searching, setSearching] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
-  return <>
+  const dismiss = useCallback(() => setSearching(false), []);
+  useOutsideDismiss({ enabled: searching, root, onDismiss: dismiss });
+  return <PhoneHeaderGroup ref={root} onKeyDown={(event) => {
+    if (event.key !== "Escape" || !searching) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dismiss();
+    toggle.current?.focus();
+  }}>
     <PhoneBar>
       <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
       <p>{messages.text("details.title")}</p>
-      <RoundButton type="button" aria-expanded={searching} aria-controls="details-search" aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
+      <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-controls="details-search" aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
         onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => searchInput.current?.focus()); }}>
         {searching ? <CloseIcon /> : <SearchIcon />}
       </RoundButton>
@@ -180,7 +197,7 @@ function PhoneHeader() {
         aria-label={messages.text("feed.filters.search")} />
       <button type="submit">{messages.text("feed.search.submit")}</button>
     </SearchForm>}
-  </>;
+  </PhoneHeaderGroup>;
 }
 
 /**

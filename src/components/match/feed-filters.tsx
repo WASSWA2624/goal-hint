@@ -27,7 +27,7 @@ import { ChipText, CompactSelect, FilterChip, focusRing, OptionLogo, OptionPicke
 
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
-/** The draft count belongs to the desktop Apply button; phones apply selections directly. */
+/** Only desktop previews the draft count; every screen applies through the shared form. */
 const desktopQuery = media.desktop.replace("@media ", "");
 const probabilityPresets = [anyProbability, { min: 50, max: 100 }, { min: 60, max: 100 }, { min: 70, max: 100 }, { min: 80, max: 100 }, { min: 90, max: 100 }];
 
@@ -113,7 +113,14 @@ const PhoneMore = styled.div`
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 
-/** Date and time fields stay visible while the other phone filters are collapsed. */
+/** One responsive group keeps all phone fields behind the header's filter toggle. */
+const FilterFieldsGroup = styled.div<{ $open: boolean }>`
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  ${media.belowDesktop} { display: ${({ $open }) => $open ? "grid" : "none"}; }
+`;
+/** Date and time inputs remain direct controls within the expanded filter group. */
 const RangeRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -330,7 +337,7 @@ function WholeNumberInput({ value, min, max, label, onCommit }: {
 type FeedFiltersProps = {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; total: number | null; onApply: (query: FeedQuery) => void;
   formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void;
-  /** Dates and times remain visible while the header toggle opens the other phone filters. */
+  /** The header toggle opens all filter fields on phones and tablets. */
   phoneOpen?: boolean; phoneId?: string;
 };
 export function FeedFilters(props: FeedFiltersProps) {
@@ -441,12 +448,13 @@ function FilterFields({ query, today, leagues, total, onApply, formId, onDraftSt
     event.preventDefault();
     if (completeDraft) apply(applyFeedDraft(completeDraft, today));
   }}>
+    <FilterFieldsGroup id={phoneId} $open={phoneOpen}>
     <RangeRow>
       <DateRangePicker query={query} today={today} {...dateInputs} onChange={(from, to) => setDateInputs({ from, to })} />
       <FeedTimeFilter query={query} {...timeInputs} onChange={(from, to) => setTimeInputs({ from, to })} />
     </RangeRow>
     <PhoneOnly>
-      <PhoneMore id={phoneId} hidden={!phoneOpen}>
+      <PhoneMore>
         {phonePicker("markets", marketList)}
         {phonePicker("leagues", leagueList)}
         {phonePicker("countries", countryList)}
@@ -490,5 +498,6 @@ function FilterFields({ query, today, leagues, total, onApply, formId, onDraftSt
         </Field>
       </DesktopGrid>
     </DesktopOnly>
+    </FilterFieldsGroup>
   </Panel>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useId, useMemo, useState, useTransition, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
@@ -16,6 +16,7 @@ import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { createPredictionWindow, type ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
@@ -80,6 +81,9 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   const router = useRouter(), [pending, startTransition] = useTransition();
   // Phone filters start collapsed behind the header toggle; desktops always show them.
   const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId();
+  const filterRoot = useRef<HTMLDivElement>(null);
+  const closeFilters = useCallback(() => setFiltersOpen(false), []);
+  useOutsideDismiss({ enabled: filtersOpen, root: filterRoot, onDismiss: closeFilters });
   const filtersFormId = useId();
   const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true, total: result.data?.total ?? null });
   const filterActions = useMemo(() => <FeedFilterActions formId={filtersFormId} locale={query.locale} status={filterStatus} />,
@@ -98,12 +102,10 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   const failed = result.error !== null;
   const apply = useCallback((next: FeedQuery) => {
     const nextHref = feedQueryHref(next, today);
-    // The visible list already matches; only a failed read is worth refreshing.
-    if (nextHref === href && !pending && !failed) return;
     // App Router discards superseded navigations. No per-keystroke requests.
     startTransition(() => {
-      // Reset to the visible URL must also supersede an unfinished navigation.
-      if (nextHref === href && !pending) router.refresh();
+      // Explicit Clear must supersede Apply even before React exposes pending=true.
+      if (nextHref === href && failed && !pending) router.refresh();
       else router.push(nextHref, { scroll: false });
     });
   }, [failed, href, pending, router, today]);
@@ -114,10 +116,12 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? messages.plural("feed.matchCount", result.data.total)
     : messages.text(`feed.state.${result.data.state}`);
   return <FeedStack $gap="sm">
+    <FeedStack $gap="sm" ref={filterRoot}>
     <FeedHeader query={query} today={today} onApply={apply}
       filters={{ open: filtersOpen, count: panelFilterCount(query), controls: filtersId, onToggle: toggleFilters }} />
     <FeedFilters query={query} today={today} leagues={leagues} total={result.data?.total ?? null} onApply={apply}
       phoneOpen={filtersOpen} phoneId={filtersId} formId={filtersFormId} onDraftStatus={setFilterStatus} />
+    </FeedStack>
     {controls}
     {range.endDate > createPredictionWindow(today).lastDate && <FeedNote>{messages.text("feed.sevenDayAvailability")}</FeedNote>}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>

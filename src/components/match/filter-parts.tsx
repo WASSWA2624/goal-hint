@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import {
-  useEffect, useId, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
+  useCallback, useId, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
 } from "react";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon, CloseIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { isLocalCountryFlagAsset } from "@/domain/country-flag";
 import type { FilterOption } from "@/domain/feed-presentation";
@@ -261,12 +262,8 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
 }) {
   const [open, setOpen] = useState(false), [filter, setFilter] = useState("");
   const root = useRef<HTMLDivElement>(null), button = useRef<HTMLButtonElement>(null), panelId = useId();
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
-    document.addEventListener("pointerdown", outside);
-    return () => document.removeEventListener("pointerdown", outside);
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
+  useOutsideDismiss({ enabled: open, root, onDismiss: close });
   const needle = filter.trim().toLocaleLowerCase();
   const visible = needle ? options.filter((option) => `${option.label} ${option.detail ?? ""}`.toLocaleLowerCase().includes(needle)) : options;
   const Trigger = summary ? PickerSummary : IconButton;

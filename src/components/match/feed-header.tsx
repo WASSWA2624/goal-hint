@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
 import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { homeHref } from "@/domain/navigation";
@@ -15,11 +16,9 @@ import { DatePresets } from "./feed-dates";
 import { CompactSelect, controlFeedback, focusRing, IconButton } from "./filter-parts";
 
 const desktop = media.desktop;
+const HeaderContent = styled.div`display: grid; gap: 6px; min-inline-size: 0;`;
 
-/**
- * Phones and tablets stack the brand bar and the titles 6px apart; desktop keeps one wrapping row
- * of titles and date controls under the shell header's own logo.
- */
+/** Phones show the brand bar; desktops align quick date presets beneath the shell header. */
 const Row = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -133,7 +132,7 @@ export function feedHeading(query: FeedQuery, today: ReportingDate, messages: Re
   return messages.text("feed.heading.other");
 }
 
-/** Title and subtitle; phones add the brand bar with filter and search toggles, desktops quick date presets. */
+/** Phones use filter and search toggles; desktops use quick date presets. */
 export type FilterToggleState = Readonly<{ open: boolean; count: number; controls: string; onToggle: () => void }>;
 
 export function FeedHeader({ query, today, onApply, filters }: {
@@ -142,8 +141,11 @@ export function FeedHeader({ query, today, onApply, filters }: {
   const messages = createMessages(query.locale);
   const [searching, setSearching] = useState(query.search !== ""), [value, setValue] = useState(query.search);
   const input = useRef<HTMLInputElement>(null), toggle = useRef<HTMLButtonElement>(null);
+  const searchRoot = useRef<HTMLDivElement>(null);
+  const closeSearch = useCallback(() => setSearching(false), []);
+  useOutsideDismiss({ enabled: searching, root: searchRoot, onDismiss: closeSearch });
   const [action, search = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
-  return <>
+  return <HeaderContent ref={searchRoot}>
     <Row>
       <BrandBar>
         <HomeLink href={homeHref(query.locale)} prefetch={false} aria-label={messages.text("navigation.home")}>
@@ -175,7 +177,7 @@ export function FeedHeader({ query, today, onApply, filters }: {
         placeholder={messages.text("navigation.search")} aria-label={messages.text("feed.filters.search")} onChange={(event) => setValue(event.target.value)} />
       <IconButton type="submit" aria-label={messages.text("feed.search.submit")}><SearchIcon /></IconButton>
     </SearchForm>}
-  </>;
+  </HeaderContent>;
 }
 
 /** Count and order share one row, including on phones. */
@@ -216,7 +218,7 @@ const SortGroup = styled.div`
   > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
   ${media.belowDesktop} {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 6px;
     > [data-filter-actions] { justify-content: flex-start; }
   }
@@ -281,7 +283,6 @@ export function ResultsToolbar({ query, total, first, last, onApply, actions }: 
         : messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>}
     </Count>
     <SortGroup>
-      {actions}
       <PhoneOrder>
         <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => chooseKey(event.target.value)}
           options={sortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
@@ -295,6 +296,7 @@ export function ResultsToolbar({ query, total, first, last, onApply, actions }: 
         </select>
         <ChevronDownIcon />
       </SelectWrap>
+      {actions}
     </SortGroup>
   </Toolbar>;
 }
