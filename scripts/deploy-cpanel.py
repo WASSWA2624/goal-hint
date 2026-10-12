@@ -4,7 +4,7 @@ Usage:
   python scripts/deploy-cpanel.py [--build] [--zip PATH]   upload, activate, restart, verify
   python scripts/deploy-cpanel.py --status                  deployed build, app state, log tail
   python scripts/deploy-cpanel.py --logs [N]                last N lines of the app log
-  python scripts/deploy-cpanel.py --rollback                reactivate the previous release
+  python scripts/deploy-cpanel.py --rollback                reactivate the previously active release
   python scripts/deploy-cpanel.py --restart                 reapply private files, then restart
 
 Each release is extracted to ~/goal-hint-releases/<stamp>/ and activated by
@@ -27,6 +27,7 @@ import shlex
 import shutil
 import socket
 import subprocess
+import sys
 import zipfile
 
 from lib.runtime import CommandError, ROOT, main_guard
@@ -55,30 +56,42 @@ command="$1"; app_root="$2"; app="$HOME/$app_root"
 releases="$HOME/$app_root-releases"; private="$HOME/$app_root-private"
 selector() { cloudlinux-selector "$@" --json --interpreter nodejs; }
 app_exists() { selector get | python3 -c 'import json,sys; d=json.load(sys.stdin); print(any(sys.argv[1] in (u.get("applications") or {}) for v in d.get("available_versions",{}).values() for u in (v.get("users") or {}).values()))' "$app_root" | grep -q True; }
-restart() { sync_private "$(readlink -f "$app/standalone")"; if app_exists; then selector restart --app-root "$app_root" >/dev/null; else mkdir -p "$app/tmp"; touch "$app/tmp/restart.txt"; fi; }
 current() { readlink "$app/standalone" 2>/dev/null | sed -E 's#^.*/([^/]+)/goal-hint/standalone$#\1#'; }
+complete() { [ -f "$releases/$1/goal-hint/app.js" ] && [ -f "$releases/$1/goal-hint/package.json" ] && [ -f "$releases/$1/goal-hint/standalone/server.js" ]; }
 
-sync_private() {  # Mirror ~/<app>-private into a release, including removals (a withdrawn approval must take effect).
-  local dir="$1"; [ -d "$dir" ] || return 0
-  if [ -f "$private/.env.production.local" ]; then install -m 600 "$private/.env.production.local" "$dir/.env.production.local"; else rm -f "$dir/.env.production.local"; fi
-  rm -rf "$dir/.goal-hint"
-  if [ -d "$private/.goal-hint" ]; then cp -a "$private/.goal-hint" "$dir/.goal-hint"; chmod -R go-rwx "$dir/.goal-hint"; fi
+sync_private() {  # Mirror ~/<app>-private into a release. A file missing there leaves the release
+  local dir="$1" name  # (a withdrawn approval must take effect) but is moved aside, never deleted.
+  for name in .env.production.local .goal-hint; do
+    if [ -e "$private/$name" ]; then
+      rm -rf "${dir:?}/$name"; cp -a "$private/$name" "$dir/$name"; chmod -R go-rwx "$dir/$name"
+    elif [ -e "$dir/$name" ]; then
+      mv "$dir/$name" "$private/$name.removed-$(date +%Y%m%d%H%M%S)"
+      echo "Moved $name out of the release into $private, because $private has no $name." >&2
+    fi
+  done
 }
 
-activate() {  # $1 = release stamp
-  local target="$releases/$1/goal-hint"
+restart() {
+  if [ -L "$app/standalone" ]; then sync_private "$(readlink -f "$app/standalone")"
+  elif [ -e "$app/standalone" ]; then echo "$app/standalone is not a release link; deploy once with this script first." >&2; exit 3; fi
+  if app_exists; then selector restart --app-root "$app_root" >/dev/null; else mkdir -p "$app/tmp"; touch "$app/tmp/restart.txt"; fi
+}
+
+activate() {  # $1 = release stamp. Touching the release keeps `ls -t` in activation order for rollback.
+  local target="$releases/$1/goal-hint" f
+  complete "$1" || { echo "Release $1 is incomplete." >&2; exit 3; }
   sync_private "$target/standalone"
-  for f in app.js package.json BUILD_INFO.json DEPLOY.md .env.example; do cp -p "$target/$f" "$app/$f"; done
+  for f in app.js package.json BUILD_INFO.json DEPLOY.md .env.example; do [ ! -e "$target/$f" ] || cp -p "$target/$f" "$app/$f"; done
   ln -sfn "$target/standalone" "$app/standalone.next" && mv -Tf "$app/standalone.next" "$app/standalone"
+  touch "$releases/$1"
 }
 
 case "$command" in
   deploy)
-    zip="$3"; stamp="$4"; env_json="$5"
+    zip="$HOME/$3"; stamp="$4"; env_json="$5"; domain="$6"; keep="$7"
+    trap 'rm -f "$zip"' EXIT
     mkdir -p "$releases" "$private" "$app"; chmod 700 "$releases" "$private"
-    unzip -q "$HOME/$zip" -d "$releases/$stamp"; rm -f "$HOME/$zip"
-    bundle="$releases/$stamp/goal-hint"
-    test -f "$bundle/app.js" -a -f "$bundle/standalone/server.js" || { echo "Uploaded bundle is incomplete." >&2; exit 3; }
+    unzip -q "$zip" -d "$releases/$stamp" && complete "$stamp" || { rm -rf "${releases:?}/$stamp"; echo "Uploaded bundle is incomplete." >&2; exit 3; }
     # A manually extracted standalone/ directory becomes a normal, restorable release.
     if [ -d "$app/standalone" ] && [ ! -L "$app/standalone" ]; then
       legacy="$releases/legacy-$stamp/goal-hint"; mkdir -p "$legacy"
@@ -91,20 +104,21 @@ case "$command" in
     previous="$(current || true)"
     activate "$stamp"
     if ! app_exists; then
-      selector create --app-root "$app_root" --domain "$6" --app-uri "" --version 24 --app-mode production \
+      selector create --app-root "$app_root" --domain "$domain" --app-uri "" --version 24 --app-mode production \
         --startup-file app.js --env-vars "$env_json" >/dev/null
-      echo "Created the Node.js application for $6."
+      echo "Created the Node.js application for $domain."
     fi
     restart
     # Keep the newest releases, plus whatever was active before this deploy.
-    ls -1t "$releases" | tail -n +$(( $7 + 1 )) | while read -r old; do
-      [ "$old" = "$previous" ] || rm -rf -- "${releases:?}/$old"
+    ls -1t "$releases" | tail -n +$(( keep + 1 )) | while read -r old; do
+      [ "$old" = "$previous" ] || [ "$old" = "$stamp" ] || rm -rf -- "${releases:?}/$old"
     done
     echo "Activated $stamp (previous: ${previous:-none})."
     ;;
   rollback)
     now="$(current || true)"; [ -n "$now" ] || { echo "No active release." >&2; exit 3; }
-    previous="$(ls -1t "$releases" | grep -vx "$now" | head -n 1 || true)"
+    previous=""
+    for r in $(ls -1t "$releases"); do [ "$r" != "$now" ] && complete "$r" && { previous="$r"; break; }; done
     [ -n "$previous" ] || { echo "No earlier release to roll back to." >&2; exit 3; }
     activate "$previous"; restart; echo "Rolled back from $now to $previous."
     ;;
@@ -112,15 +126,15 @@ case "$command" in
     echo "Active release: $(current || echo none)"; cat "$app/BUILD_INFO.json" 2>/dev/null || true
     echo "Releases: $(ls -1t "$releases" 2>/dev/null | tr '\n' ' ')"
     app_exists && echo "Node.js application: configured" || echo "Node.js application: missing"
-    tail -n "${3:-20}" "$app/stderr.log" 2>/dev/null || echo "(no stderr.log yet)"
+    if [ -f "$app/stderr.log" ]; then tail -n 20 "$app/stderr.log"; else echo "(no stderr.log yet)"; fi
     ;;
-  logs) tail -n "${3:-100}" "$app/stderr.log" 2>/dev/null || echo "(no stderr.log yet)" ;;
+  logs) if [ -f "$app/stderr.log" ]; then tail -n "$3" "$app/stderr.log"; else echo "(no stderr.log yet)"; fi ;;
   restart) restart; echo "Restarted with the current private files." ;;
   verify)  # Through the web server on this host, so it works before public DNS does.
-    for i in $(seq 1 12); do
-      code="$(curl -sk -L -o /dev/null -w '%{http_code}' --max-time 30 --resolve "$3:443:$4" "https://$3/" || true)"
+    for i in $(seq 1 10); do
+      code="$(curl -sk -L -o /dev/null -w '%{http_code}' --max-time 15 --resolve "$3:443:$4" "https://$3/" || true)"
       [ "$code" = 200 ] && { echo "Verified https://$3/ on the server -> HTTP 200"; exit 0; }
-      echo "  waiting for the app (HTTP $code), attempt $i/12" >&2; sleep 5
+      echo "  waiting for the app (HTTP $code), attempt $i/10" >&2; sleep 5
     done
     echo "https://$3/ did not return HTTP 200; run --logs, or --rollback." >&2; exit 4 ;;
   *) echo "Unknown command $command" >&2; exit 2 ;;
@@ -138,8 +152,11 @@ def tool(name: str) -> str:
 def remote(command: str, *args: str, timeout: int = 300) -> str:
     if not KEY.exists():
         raise CommandError(f"SSH key {KEY} is missing. Authorize its .pub in cPanel > SSH Access first.")
-    result = subprocess.run([tool("ssh"), *SSH_OPTIONS, "-p", PORT, f"{USER}@{HOST}", "bash -s -- " + shlex.join([command, APP_ROOT, *args])],
-                            input=REMOTE.encode(), capture_output=True, timeout=timeout)  # bytes: no CRLF on Windows
+    try:
+        result = subprocess.run([tool("ssh"), *SSH_OPTIONS, "-p", PORT, f"{USER}@{HOST}", "bash -s -- " + shlex.join([command, APP_ROOT, *args])],
+                                input=REMOTE.encode(), capture_output=True, timeout=timeout)  # bytes: no CRLF on Windows
+    except subprocess.TimeoutExpired:
+        raise CommandError(f"Remote {command} timed out after {timeout}s; run --logs.") from None
     stdout, stderr = result.stdout.decode("utf-8", "replace").strip(), result.stderr.decode("utf-8", "replace").strip()
     if result.returncode:
         raise CommandError(f"Remote {command} failed:\n{stderr or stdout}")
@@ -171,13 +188,14 @@ def inspect_bundle(archive: Path) -> dict:
 
 
 def verify() -> None:
-    print(remote("verify", DOMAIN, HOST))
+    server = socket.gethostbyname(HOST)
+    print(remote("verify", DOMAIN, server))
     try:
         public = socket.gethostbyname(DOMAIN)
     except OSError:
         public = "nothing"
-    if public != HOST:
-        print(f"Warning: public DNS for {DOMAIN} points to {public}, not {HOST}; visitors won't reach this deployment yet.")
+    if public != server:
+        print(f"Warning: public DNS for {DOMAIN} points to {public}, not {server}; visitors won't reach this deployment yet.")
 
 
 def deploy(archive: Path) -> None:
@@ -189,9 +207,12 @@ def deploy(archive: Path) -> None:
     result = subprocess.run([tool("scp"), *SSH_OPTIONS, "-P", PORT, "-q", str(archive), f"{USER}@{HOST}:{upload}"], capture_output=True, text=True)
     if result.returncode:
         raise CommandError(f"Upload failed:\n{result.stderr.strip()}")
-    uploaded = subprocess.run([tool("ssh"), *SSH_OPTIONS, "-p", PORT, f"{USER}@{HOST}", "sha256sum " + shlex.quote(upload)],
-                              capture_output=True, text=True).stdout.split(" ")[0]
-    if uploaded != digest:
+    check = subprocess.run([tool("ssh"), *SSH_OPTIONS, "-p", PORT, f"{USER}@{HOST}", "sha256sum " + shlex.quote(upload)],
+                           capture_output=True, text=True, timeout=120)
+    if check.returncode:
+        raise CommandError(f"Could not checksum the upload:\n{check.stderr.strip()}")
+    if check.stdout.split(" ")[0] != digest:
+        subprocess.run([tool("ssh"), *SSH_OPTIONS, "-p", PORT, f"{USER}@{HOST}", "rm -f " + shlex.quote(upload)], capture_output=True, timeout=60)
         raise CommandError("Uploaded file checksum does not match; nothing was activated.")
     print(remote("deploy", upload, stamp, json.dumps(INITIAL_ENV), DOMAIN, str(KEEP_RELEASES)))
     verify()
@@ -201,16 +222,18 @@ def main():
     parser = argparse.ArgumentParser(description="Deploy Goal Hint to cPanel over key-only SSH.")
     action = parser.add_mutually_exclusive_group()
     action.add_argument("--status", action="store_true", help="show the deployed build, app state and log tail")
-    action.add_argument("--logs", nargs="?", const="100", metavar="N", help="show the last N log lines")
-    action.add_argument("--rollback", action="store_true", help="reactivate the previous release")
+    action.add_argument("--logs", nargs="?", type=int, const=100, metavar="N", help="show the last N log lines")
+    action.add_argument("--rollback", action="store_true", help="reactivate the previously active release")
     action.add_argument("--restart", action="store_true", help="reapply ~/goal-hint-private files and restart")
     parser.add_argument("--build", action="store_true", help="rebuild the zip with the pinned Node.js first")
     parser.add_argument("--zip", type=Path, default=ZIP, help="bundle to deploy (default: deploy/goal-hint-cpanel.zip)")
     options = parser.parse_args()
+    for stream in (sys.stdout, sys.stderr):  # Next's log symbols are not cp1252.
+        stream.reconfigure(encoding="utf-8", errors="replace")
     if options.status:
         print(remote("status"))
-    elif options.logs:
-        print(remote("logs", options.logs))
+    elif options.logs is not None:
+        print(remote("logs", str(max(options.logs, 1))))
     elif options.rollback or options.restart:
         print(remote("rollback" if options.rollback else "restart"))
         verify()

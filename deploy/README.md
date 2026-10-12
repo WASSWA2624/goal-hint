@@ -41,22 +41,14 @@ own virtual-environment link.
 - With no environment variables, the site runs in its safe default state: database
   and providers off, and indexing off.
 
-## First deployment
+## Deploying
 
-1. In **File Manager**, upload `goal-hint-cpanel.zip` to your home directory
-   (outside `public_html`). Then choose **Extract**. This creates `~/goal-hint/`.
-2. Open **Setup Node.js App → Create Application** and set:
-   - **Node.js version:** 24.x
-   - **Application mode:** Production
-   - **Application root:** `goal-hint`
-   - **Application URL:** your domain, for example `goalhint.com`
-   - **Application startup file:** `app.js`
-3. Add the production settings under **Environment variables** on the same screen
-   (see [Configuration](#configuration)), then select **Create** or **Save**.
-4. Select **Restart** and open the application URL.
-
-You can ignore cPanel's suggestion to run `npm install`. The root `package.json`
-has no dependencies.
+Use `python scripts/deploy-cpanel.py` from a full checkout. Its first run creates the
+**Setup Node.js App** entry (Node.js 24, application root `goal-hint`, startup file
+`app.js`). Every run uploads the zip into a new release under `~/goal-hint-releases/`
+and switches `~/goal-hint/standalone` to it. The step-by-step guide, including the
+database, is [how-to-deploy.md](how-to-deploy.md). Don't run cPanel's `npm install`:
+the root `package.json` has no dependencies.
 
 ## Configuration
 
@@ -81,20 +73,25 @@ The runtime policy validates every setting when the server starts. If a value is
 invalid or a prerequisite is missing, every request returns 500 and the log lists
 the failing setting names, never their values. Unknown `GOAL_HINT_*` and any
 `NEXT_PUBLIC_*` settings also fail. Don't set `PORT` or `HOSTNAME`, because
-Passenger assigns the listening socket.
+Passenger assigns the listening socket. Database refusals at request time (approval
+register, credentials, TLS, `DEBUG`) are not logged: pages show "data unavailable"
+and `/api/*` answers 503.
 
-Instead of using the cPanel screen, you can put the same lines in
-`~/goal-hint/standalone/.env.production.local`. Next.js loads it at startup, and
-it stays outside `public_html`. Never commit it or place it under `public_html`.
+Put these lines in `~/goal-hint-private/.env.production.local`. The deploy script
+copies that file into each release, where Next.js loads it at startup. Keep secrets
+out of the cPanel **Environment variables** screen: it writes values into the
+domain's `.htaccess`, and any variable set there overrides the file. Never commit
+the file or place it under the domain's document root.
 
 Production database access also verifies the exact `database-access` and
 `budget-approval` references against the private operator register already used
-by the live runner. For this standalone web bundle, place the reviewed register
-at `~/goal-hint/standalone/.goal-hint/owner-approvals.json`: the generated Next
-server uses `standalone/` as its working directory. Migration commands and workers
-look for `.goal-hint/owner-approvals.json` under their own working directory.
-Restrict the file to the application/operator account, keep it outside the domain's
-document root, and never include it in the deployment ZIP or version control.
+by the live runner. Keep the reviewed register at
+`~/goal-hint-private/.goal-hint/owner-approvals.json`; the deploy script copies it
+into the release, whose `standalone/` directory is the server's working directory.
+Migration commands and workers look for `.goal-hint/owner-approvals.json` under
+their own working directory. Never include it in the deployment ZIP or version control.
+Files saved directly under `~/goal-hint/standalone/` belong to one release and are
+replaced on the next deploy or `--restart`.
 
 Use only recorded, verified decisions for the actual deployment target and budget.
 Missing, malformed or mismatched records deny access; reference strings alone do
@@ -104,14 +101,9 @@ next web database access, even if the process already has a connection pool.
 
 ## Updating
 
-1. Run `npm run package:cpanel` locally and upload the new zip to your home directory.
-2. Delete `~/goal-hint/standalone/` so files from the previous build don't linger.
-   If you used it, keep a copy of `standalone/.env.production.local` first.
-3. Extract the zip over `~/goal-hint/`, restore any `.env.production.local`, and
-   select **Restart** in **Setup Node.js App**.
-
-`BUILD_INFO.json` shows which commit is deployed. To roll back, keep the previous
-zip and deploy it the same way.
+Run `python scripts/deploy-cpanel.py --build` to rebuild and deploy, and
+`--rollback` to return to the previously active release. `--status` shows the
+deployed `BUILD_INFO.json`. See [how-to-deploy.md](how-to-deploy.md).
 
 ## Not included
 
