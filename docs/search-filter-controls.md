@@ -2,8 +2,8 @@
 
 The feed uses shared labeled native fields and a per-provider Redux draft;
 URLs and stored server projections remain authoritative. A persistent search
-bar sits in the page body on every screen size. A square Filters button beside
-it opens the filter fields on phones and tablets; desktop always shows the
+bar sits in the page body on every screen size. A labelled Advanced filters
+button beside it opens the filter fields on phones and tablets; desktop always shows the
 search bar and all filter fields, without a collapse toggle.
 Search and filter edits share one draft and remain unsubmitted until Enter in
 the search bar or the single Apply action submits the complete draft. Both
@@ -24,16 +24,16 @@ Repeated single-value keys, unknown keys (including the removed `sortMarket`)
 and other malformed parameters remain invalid.
 
 From date, To date, From time and To time share the filter section with Markets,
-Leagues, Countries and Probability. Below 64rem, the body Filters button opens
+Leagues, Countries and Probability. Below 64rem, the body Advanced filters button opens
 or collapses this complete section, which starts collapsed. Escape also closes
 the section without applying its draft. Clicking outside does not close it.
 At desktop widths all fields remain visible. The common range controls are
 rendered once, so the initial HTML contains exactly two date and two time
 inputs, including when the mobile section is collapsed. Each full label sits
-inside its square control, above the native value on phones and tablets and
-to its left on desktop. The date pair and time pair each occupy one phone row
-and are directly editable when expanded. Readable text and larger touch targets
-let the expanded controls scroll naturally with the page on smaller screens.
+inside its square control, above the native value in narrower layouts and to
+its left in wider layouts. The date pair and time pair each occupy one phone row and are
+directly editable when expanded. Compact padding preserves readable text and
+lets the expanded controls scroll naturally with the page on smaller screens.
 There are no visible group headings, date popovers, date steppers, time mode
 menus or separate range Apply buttons. The fieldsets retain accessible group
 names; focused controls and invalid values retain visible feedback.
@@ -104,7 +104,7 @@ left of the same row as Sort, Clear and Apply on the right. On mobile the
 summary stays underneath the action row. Mobile fields expand between search and the action row; search,
 sorting, Clear and Apply stay available in both states. Desktop fields always
 remain between search and the action row.
-On phones and tablets, Filter, Clear and Apply always retain visible backgrounds and solid 1px borders, with square corners.
+On phones and tablets, Advanced filters, Clear and Apply always retain visible backgrounds and solid 1px borders, with square corners.
 The applied match count sits with the results below the toolbar and summary and updates
 with the displayed projection. It is omitted when no successful projection is available. Draft
 edits make no count-preview requests. Apply filters submits the complete
@@ -139,8 +139,11 @@ On phones and tablets the feed's brand bar contains the home logo and theme
 control. Desktop retains the page title and quick date presets, with the theme
 control at the far right of the shell header; feed pages
 omit the shell search so there is one body search bar on every device. The
-mobile Filters button sets `aria-expanded`/`aria-controls` on the complete
-collapsible filter section and badges active choices. Search remains visible
+mobile Advanced filters button has a visible label and a chevron pointing down
+when collapsed and up when expanded. Its accessible name and title state
+Show advanced filters or Hide advanced filters. It sets
+`aria-expanded`/`aria-controls` on the complete collapsible filter section and
+badges active choices. Search remains visible
 when mobile filters close. The feed uses one semantic h1: it is visually hidden on
 phones and tablets and visible as the page title on desktop. The subtitle
 remains absent.

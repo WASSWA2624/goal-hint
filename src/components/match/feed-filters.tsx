@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
-import { ResetIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, ResetIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { validKickoffTime } from "@/domain/kickoff-time";
@@ -47,7 +47,7 @@ function toggledMarkets(query: FeedQuery, family: MarketFamily): FeedQuery | nul
 /** One form owns search and the entire draft; persistent actions use native form association. */
 const Panel = styled.form`
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-inline-size: 0;
 `;
 const SearchRow = styled.div`
@@ -77,19 +77,28 @@ const SearchField = styled.label`
     ${focusRing}
   }
 `;
-/** Square body toggle; its count describes applied choices, independent of unfinished edits. */
+/** A labelled disclosure explains the panel; its chevron and accessible name reflect its state. */
 const FilterToggle = styled(IconButton)`
   position: relative;
-  inline-size: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  inline-size: auto;
   block-size: 2.75rem;
+  padding-inline: 8px;
+  font-size: 0.8125rem;
   background: ${({ theme }) => theme.color.surface};
   ${buttonBorder}
   border-radius: 0;
+  > span { max-inline-size: 4rem; text-align: start; line-height: 1.1; }
+  > svg { flex: none; font-size: 0.875rem; }
   ${desktop} { display: none; }
   &[aria-expanded="true"] {
     color: ${({ theme }) => theme.color.onBrand};
     background: ${({ theme }) => theme.color.brand};
   }
+  &[aria-expanded="true"] > svg { transform: rotate(180deg); }
   > b {
     position: absolute; inset-block-start: 1px; inset-inline-end: 2px;
     color: ${({ theme }) => theme.color.accent.teal.text};
@@ -110,7 +119,7 @@ const PhoneOnly = styled.div`
 /** Option fields reuse the existing compact checklists. */
 const PhoneMore = styled.div`
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-inline-size: 0;
   &[hidden] { display: none; }
 `;
@@ -118,34 +127,39 @@ const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
 
 /** Desktop fields are always visible; only mobile fields follow the body toggle. */
 const FilterFieldsGroup = styled.div<{ $open: boolean }>`
+  position: relative;
+  z-index: 2;
   display: ${({ $open }) => $open ? "grid" : "none"};
-  gap: 4px;
+  gap: 2px;
   min-inline-size: 0;
-  padding: 6px;
+  padding: 2px 4px;
+  container: feed-filter-fields / inline-size;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  ${desktop} { display: grid; padding: 8px 10px; border-block-start: 3px solid ${({ theme }) => theme.color.brand}; }
+  ${desktop} { display: grid; padding: 4px 8px; border-block-start: 3px solid ${({ theme }) => theme.color.brand}; }
 `;
 /** Date and time inputs remain direct controls within the expanded filter group. */
 const RangeRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 4px;
-  ${desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-block-end: 4px; }
+  gap: 2px;
+  ${desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-block-end: 2px; }
 `;
 /** One labelled trigger per filter replaces clipped suggestion chips and their duplicate menus. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
-  > button { min-block-size: 2.25rem; font-size: 0.875rem; }
+  > button { min-block-size: 1.875rem; padding: 0 6px; font-size: 0.875rem; }
   [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; }
   > [role="group"] {
     grid-template-columns: minmax(0, 1fr);
     max-inline-size: 100%;
     border-radius: 0;
     box-shadow: none;
-    > input { min-inline-size: 0; border-radius: 0; font-size: 1rem; }
-    label { min-block-size: 2.75rem; border-radius: 0; font-size: 0.875rem; }
+    padding: 4px;
+    gap: 4px;
+    > input { min-inline-size: 0; min-block-size: 2rem; border-radius: 0; font-size: 1rem; }
+    label { min-block-size: 2rem; border-radius: 0; font-size: 0.875rem; }
   }
 `;
 /** The phone probability control grows naturally with larger text. */
@@ -198,7 +212,7 @@ const ProbabilityInputs = styled.div`
   > label:has([aria-invalid="true"]) { border-color: ${({ theme }) => theme.color.accent.red.text}; }
   ${media.belowDesktop} {
     > label { flex: 1; }
-    input { flex: 1; inline-size: 100%; min-block-size: 2.25rem; }
+    input { flex: 1; inline-size: 100%; min-block-size: 1.75rem; }
   }
   ${desktop} {
     [data-bound-label] { display: none; }
@@ -489,6 +503,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
   const count = panelFilterCount(query);
+  const toggleLabel = messages.text(open ? "feed.filters.hideAdvanced" : "feed.filters.showAdvanced");
   const [action, parameters = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
   return <Panel id={formId} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
     if (event.key === "Escape" && open && !event.defaultPrevented && filterToggle.current?.getClientRects().length) {
@@ -513,9 +528,10 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
           onChange={(event) => edit({ ...draft, search: event.target.value })} />
       </SearchField>
       <FilterToggle ref={filterToggle} type="button" aria-expanded={open} aria-controls={panelId}
-        title={messages.text("feed.filters.toggle")}
-        aria-label={count > 0 ? messages.plural("feed.filters.toggleCount", count) : messages.text("feed.filters.toggle")} onClick={onToggle}>
-        <FilterIcon />{count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
+        title={toggleLabel}
+        aria-label={count > 0 ? `${toggleLabel}, ${messages.plural("feed.filters.activeCount", count)}` : toggleLabel} onClick={onToggle}>
+        <span>{messages.text("feed.filters.advanced")}</span><ChevronDownIcon />
+        {count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
       </FilterToggle>
     </SearchRow>
     <FilterFieldsGroup id={panelId} $open={open}>

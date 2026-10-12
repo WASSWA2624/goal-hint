@@ -36,7 +36,7 @@ aggregate limiter before cache lookup.
 
 Desktop quick date presets use ordinary links with prefetch disabled and retain
 their existing date-navigation behavior. The body search bar is shared across
-every screen size. Phones and tablets use a Filters button to reveal the fields;
+every screen size. Phones and tablets use an Advanced filters button to reveal the fields;
 desktop always shows all fields and omits that toggle. Search edits the same Redux draft as the
 filter fields; Enter in search and Apply both submit the complete validated
 draft and reset page position to one. Four native From date, To date, From time
@@ -88,21 +88,23 @@ The theme button sits at the end of the row and switches between the approved
 R03 Light and R04 Dark palettes. Feed sections use 6px gaps. There is no
 visible feed page heading or subtitle on phones or tablets. One responsive h1
 preserves the semantic page heading and becomes visible on desktop. The search
-bar and square Filters button sit below the header in the page body and remain
+bar and labelled Advanced filters button sit below the header in the page body and remain
 visible whether filters are open or collapsed.
 
-On phones and tablets the body Filters button opens or collapses one section
+On phones and tablets the body Advanced filters button opens or collapses one section
 containing the date/time pairs together with Markets, Leagues, Countries and
 Probability. The section starts collapsed below 64rem; desktop always shows
 all fields. Escape closes the mobile section without applying its draft;
-clicking outside leaves it open. Checklist popovers retain their own
+clicking outside leaves it open. A down or up chevron indicates the collapsed
+or expanded state, and the button's accessible name and title say Show advanced
+filters or Hide advanced filters. Checklist popovers retain their own
 outside-click and Escape dismissal. The common range controls render once:
 initial HTML contains exactly two date and two time inputs while collapsed.
 Full From date, To date, From time and To time labels sit inside their square
-controls, above each native value on phones and tablets and to its left on
-desktop. Each pair occupies one phone row and is directly editable when
-expanded. Readable text and larger touch targets let the expanded controls
-scroll naturally with the page on smaller screens. There are no visible Date range/Time
+controls, above each native value in narrower layouts and to its left in wider layouts.
+Each pair occupies one phone row and is directly editable when expanded.
+Compact padding preserves readable text and lets the expanded controls scroll
+naturally with the page on smaller screens. There are no visible Date range/Time
 range group headings, nested date/time panels or per-range Apply buttons.
 Accessible fieldset names, input labels, focus rings and invalid feedback remain
 present. Invalid or incomplete edits are retained; a single Apply action remains
@@ -118,7 +120,7 @@ directly editable minimum/maximum fields, accepting decimal percentages from
 The muted Odds unavailable explanation remains compact. Mobile filter edits
 remain drafts until Apply; no timer applies them automatically.
 
-On phones and tablets, Filter, Clear and Apply always retain visible backgrounds and solid 1px borders, with square corners.
+On phones and tablets, Advanced filters, Clear and Apply always retain visible backgrounds and solid 1px borders, with square corners.
 One persistent action row below the filter options stays outside the mobile
 collapsible section and places Sort by first, followed by Clear and Apply
 filters. The action group aligns right on desktop, while mobile keeps Sort on
