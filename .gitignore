@@ -20,3 +20,4 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 .goal-hint/
+deploy/deploy-credentials.md
