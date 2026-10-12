@@ -13,8 +13,10 @@
 
 ## One-time setup
 
-1. Install the pinned Node.js and the dependencies:
+1. Install the pinned Node.js and the dependencies. Run this and every later command
+   from the repository root:
    ```powershell
+   cd D:\coding\apps\nextjs\goal-hint
    fnm install 24.18.1
    fnm exec --using=24.18.1 npm.cmd ci
    ```
