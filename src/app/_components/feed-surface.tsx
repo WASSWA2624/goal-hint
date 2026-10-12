@@ -58,10 +58,10 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const first = feedRowNumber(view.firstPage, data.pageSize, 0);
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    {/* Fixtures without the selected market still list; each row states why it has no pick. */}
-    {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
     <ResultsToolbar query={query} total={data.total} first={first}
       last={first + records.length - 1} onApply={onApply} actions={actions} />
+    {/* Fixtures without the selected market still list; each row states why it has no pick. */}
+    {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
     {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
     {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale}>
       {records.map((fixture, index) => <li key={fixture.fixtureId}>

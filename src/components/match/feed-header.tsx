@@ -5,7 +5,7 @@ import { useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
 import { ChevronDownIcon, CloseIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
-import { PageHeading } from "@/components/ui/layout";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, feedQueryRules, resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { homeHref } from "@/domain/navigation";
@@ -63,15 +63,6 @@ const HomeLink = styled(Link)`
   img { inline-size: 160px; max-inline-size: 100%; block-size: auto; }
   ${barFocus}
 `;
-/** Below the brand bar, phones set the title and subtitle a little tighter; desktop is unchanged. */
-const Titles = styled.div`
-  display: grid;
-  gap: 0;
-  min-inline-size: 0;
-  > h1 { font-size: 1.125rem; line-height: 1.2; ${desktop} { font-size: 1.5rem; } }
-  > p { color: ${({ theme }) => theme.color.accent.teal.text}; font-size: 0.75rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.medium}; ${desktop} { font-size: 0.8125rem; } }
-  ${media.belowDesktop} { > h1 { line-height: 1.15; } > p { display: none; } }
-`;
 const PhoneActions = styled.div`
   display: flex;
   flex: none;
@@ -114,7 +105,7 @@ const FilterToggle = styled(RoundButton)`
 `;
 const DesktopActions = styled.div`
   display: none;
-  ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+  ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-inline-start: auto; }
 `;
 /** Phone search, as tall as the other secondary controls, with 16px icons. */
 const SearchForm = styled.form`
@@ -170,10 +161,7 @@ export function FeedHeader({ query, today, onApply, filters }: {
           </RoundButton>
         </PhoneActions>
       </BrandBar>
-      <Titles>
-        <PageHeading>{feedHeading(query, today, messages)}</PageHeading>
-        <p>{messages.text("feed.subtitle")}</p>
-      </Titles>
+      <VisuallyHidden as="h1">{feedHeading(query, today, messages)}</VisuallyHidden>
       <DesktopActions>
         <DatePresets query={query} today={today} onApply={onApply} />
       </DesktopActions>
@@ -238,14 +226,14 @@ const SelectWrap = styled.span`
   display: none;
   ${desktop} { display: inline-flex; }
   > select {
-    min-block-size: 2.375rem;
+    min-block-size: 2rem;
     padding-inline: 7px 22px;
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 6px;
+    border-radius: 0;
     font: inherit;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     appearance: none;
     cursor: pointer;
     ${focusRing}
@@ -264,10 +252,10 @@ const PhoneSort = styled(CompactSelect)`
   padding-block: 3px;
   padding-inline: 7px 22px;
   border-radius: 0;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   inline-size: 100%;
   > span { flex: 1; }
-  > span > span { overflow: visible; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+  > span > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.2; }
   > svg { inset-inline-end: 7px; }
 `;
 const sortOptions: readonly FeedSort[] = [

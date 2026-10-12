@@ -79,11 +79,12 @@ receives the explicit forward-only `calendarChanged` event. On return from a
 hidden/offline tab, rollover runs before fetching an obsolete relative range.
 
 Failed transport, busy search, malformed, stale and unstable responses retain
-loaded content. A compact Retry message reports the last successful stored read;
-card/detail source-sync clocks stay independent. Partial coverage retains its
-existing distinct display and cannot establish an authoritative empty result.
+loaded content. The owner removed the visible refresh warning, last-read timestamp
+and retry strip on 12 October 2026. Scheduled polling continues to retry, while
+card/detail source-sync clocks retain their original meanings. Partial coverage
+retains its distinct display and cannot establish an authoritative empty result.
+First-load failures and pagination errors keep their separate error/retry behavior.
 Run counts and ordinary successful polls have no live-region announcements.
-Identical repeated failures leave the same polite error text unchanged.
 
 ## Verification
 

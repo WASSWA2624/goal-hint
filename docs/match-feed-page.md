@@ -30,10 +30,15 @@ aggregate limiter before cache lookup.
 
 ## Navigation and presentation
 
-Today, Tomorrow and Next 7 days use ordinary links with prefetch disabled. Previous
-day and Next day link to explicit EAT dates adjacent to the selected range. Every
-date change preserves the applied filters and resets page position to one.
-Historical navigation stops at the MySQL-supported years 1000–9999. Direct
+Desktop quick date presets use ordinary links with prefetch disabled and retain
+their existing date-navigation behavior. Four native From date, To date, From
+time and To time inputs stay visible on every device; one Apply action submits
+the complete filter draft and resets page position to one. Equal date endpoints
+select a day and equal time endpoints select a kickoff minute. Different date
+endpoints select an inclusive range of up to 31 days; time ranges retain inclusive
+minute bounds and their explicit timezone. Incomplete or invalid ranges remain
+editable and disable Apply. Date steppers, date popovers and time mode menus are
+absent. Historical queries retain the MySQL-supported years 1000–9999. Direct
 invalid or incompatible dates/queries return the existing 404 shell.
 
 The page uses the shared light shell, square controls, feedback and match cards.
@@ -57,12 +62,14 @@ market. Historical scores and correctness remain separate. Publication and last
 sync use their original UTC instants, displayed in the device's timezone after
 hydration with a stable EAT server fallback. Match kickoff and detail
 timestamps follow the same display rule. Date-only feed selections, reporting
-cohorts, prediction windows and schedules remain in EAT; displaying an instant
-in a different local calendar day does not change those boundaries. Stored
-delays remain visible. The page never substitutes a sample forecast or selects
+cohorts, prediction windows and schedules remain in EAT; an explicit time filter
+retains the existing local-day/minute window behavior in its serialized IANA
+zone. Displaying an instant in a different local calendar day does not change
+the reporting boundaries. Stored delays remain visible. The page never
+substitutes a sample forecast or selects
 a current preview for an empty lock.
 
-### Phone header
+### Compact header and filters
 
 Below 64rem, feed pages hide the shell header, so `FeedHeader` opens with the
 branded bar. It uses the same navy-to-teal `theme.header.background` and brand
@@ -70,36 +77,41 @@ edge as the desktop header, has a 3rem (48px) minimum height, and runs past the
 feed's 8px gutters and top padding to the screen edge. The inverse logo links
 home as "Goal Hint home" and can shrink on narrow screens with enlarged text.
 The 32px translucent filter and search buttons sit at the end of the row and
-fill with inverse teal while open. The 18px title follows on the light page;
-the static subtitle is hidden on mobile. Feed sections use 6px gaps. An open
-search form has one search icon on its submit button, while the brand-bar
-toggle becomes Close.
+fill with inverse teal while open. Feed sections use 6px gaps. There is no
+visible feed page heading or subtitle; a visually hidden h1 preserves the
+semantic page heading. An open search form has one search icon on its submit
+button, while the brand-bar toggle becomes Close.
 
-One compact "‹ date ›" stepper remains visible while the filter panel is
-collapsed. Its central 12px date button opens the shared From/To picker; there
-are no Day/Range buttons. Equal start and end dates select a single day, and
-different values select a range of up to 31 days. Apply dates validates and
-applies the selection. Previous and next links preserve the other filters and
-move by the selected day or range length. The date row and labels grow
-naturally when text is enlarged.
+The date and time input pairs remain visible when the other phone filters are
+collapsed. Full From date, To date, From time and To time labels sit inside their
+square controls, to the left of each native value. Each pair occupies one phone
+row. There are no visible Date range/Time range group headings, nested date/time
+panels or per-range Apply buttons. Accessible fieldset names, input labels,
+focus rings and invalid feedback remain present. Invalid or incomplete edits
+are retained; a single Apply action remains disabled until the complete draft
+is valid.
 
-Expanded mobile filters replace scrolling suggestion chips and separate
-all-options buttons with one labeled summary dropdown each for Markets,
-Leagues and Countries. A single selection displays its name, multiple
-selections display a count, and the existing checklists retain all choices,
-with search for leagues and countries. Probability presets and a quiet Reset
-action share a row. Odds unavailable appears as a muted explanation instead of
-a disabled select.
+Expanded mobile filters use one labeled summary dropdown each for Markets,
+Leagues and Countries. A single selection displays its name, multiple selections
+display a count, and the checklists retain all choices, with search for leagues
+and countries. Country options and selected country summaries use bundled local
+SVG flags with readable names if a flag is unavailable. Probability presets and
+the muted Odds unavailable explanation remain compact. Mobile filter edits
+remain drafts until Apply; no timer applies them automatically.
 
-The mobile results toolbar places Picks only and the sort dropdown in one
-full-width row of two equally sized columns. Both controls fill their columns
-and retain 12px text. The match count from the current loaded projection sits
-on its own row below, aligned right. The sort menu contains both kickoff
-directions and both probability directions, with no separate reverse button.
-Controls grow naturally with enlarged text while retaining the two-column row.
-Desktop retains the shell logo and search, visible subtitle, date range and
-quick presets, draft filters with Apply, and its existing results toolbar and
-table layout.
+The results toolbar places the shared Clear and Apply actions to the left of
+Sort by. Phones use compact Clear/Apply labels, with the current loaded match
+count on its own row above. The sort menu contains both kickoff directions and
+both probability directions. Picks only/With predictions and a separate
+reverse-order button are absent on every device. Clear retains the applied
+date/range, status and page size while clearing the other filters and ordering.
+
+Desktop retains the shell logo and search, quick date presets and table layout.
+The same always-visible inline date/time controls precede one row of Leagues,
+Countries, Markets, Odds and Probability fields. Probability uses compact
+minimum/maximum number inputs; the row contains no sliders. One Apply action
+submits all filter edits, and its desktop label can show the advisory draft
+count. The independent sort menu remains in the results toolbar.
 
 ## Coverage, progress and errors
 
@@ -135,7 +147,8 @@ real provider coverage or production run completion. Fixtures are test-only and
 cannot be selected by production URL parameters. Logs and initial HTML remain
 in that isolated directory; browser artifacts belong under `output/playwright/`.
 
-No schema, migration, worker, schedule, paid operation or deployment is added.
+These control and presentation changes add no schema, migration, worker,
+schedule or paid provider operation.
 Existing database, competition, rights, provider/model, budget and hosting gates
 remain effective. An unavailable production configuration produces the error
 surface. Tests qualify implementation behavior using synthetic stored fixtures,

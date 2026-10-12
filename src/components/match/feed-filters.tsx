@@ -247,25 +247,25 @@ const ApplyButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-block-size: 2.375rem;
-  padding-inline: 14px;
+  gap: 6px;
+  min-block-size: 2rem;
+  padding-inline: 10px;
   color: ${({ theme }) => theme.color.onBrand};
   background: ${({ theme }) => theme.gradient.action};
   border: 0;
   border-radius: 0;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
   cursor: pointer;
   &:disabled { opacity: 0.5; cursor: default; }
-  > svg { flex: none; font-size: 1rem; }
+  > svg { flex: none; font-size: 0.875rem; }
   ${media.hover} { &:hover { filter: brightness(0.95); } }
   ${focusRing}
 `;
 const OutlineButton = styled(QuietButton)`
-  min-block-size: 2.375rem;
+  min-block-size: 2rem;
   border-radius: 0;
   font-size: 0.8125rem;
 `;
@@ -278,7 +278,8 @@ const FilterActions = styled.div`
   ${media.belowDesktop} {
     flex-wrap: nowrap;
     gap: 4px;
-    > button { min-block-size: 2rem; gap: 4px; padding-inline: 8px; font-size: 0.75rem; }
+    > button { min-block-size: 1.75rem; gap: 4px; padding-inline: 6px; font-size: 0.6875rem; }
+    > button > svg { font-size: 0.875rem; }
     [data-filter-full] { display: none; }
     [data-filter-short] { display: inline; }
   }
