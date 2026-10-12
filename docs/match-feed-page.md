@@ -83,8 +83,9 @@ feed's 8px gutters and top padding to the screen edge. The inverse logo links
 home as "Goal Hint home" and can shrink on narrow screens with enlarged text.
 The 32px translucent filter and search buttons sit at the end of the row and
 fill with inverse teal while open. Feed sections use 6px gaps. There is no
-visible feed page heading or subtitle; a visually hidden h1 preserves the
-semantic page heading. An open search form has one search icon on its submit
+visible feed page heading or subtitle on phones or tablets. One responsive h1
+preserves the semantic page heading and becomes visible on desktop. An open
+search form has one search icon on its submit
 button, while the brand-bar toggle becomes Close.
 
 On phones and tablets the header Filters toggle opens or collapses one section
@@ -117,7 +118,8 @@ both probability directions. Picks only/With predictions and a separate
 reverse-order button are absent on every device. Clear retains the applied
 date/range, status and page size while clearing the other filters and ordering.
 
-Desktop retains the shell logo and search, quick date presets and table layout.
+Desktop retains the visible page title, shell logo and search, quick date presets
+and table layout.
 Its visible inline date/time controls precede one row of Leagues,
 Countries, Markets, Odds and Probability fields. Probability uses compact
 minimum/maximum number inputs; the row contains no sliders. One Apply action

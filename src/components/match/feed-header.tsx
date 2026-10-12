@@ -17,6 +17,19 @@ import { CompactSelect, controlFeedback, focusRing, IconButton } from "./filter-
 
 const desktop = media.desktop;
 const HeaderContent = styled.div`display: grid; gap: 6px; min-inline-size: 0;`;
+/** One semantic page title: visible on desktop, visually hidden on smaller screens. */
+const PageHeading = styled(VisuallyHidden)`
+  ${desktop} {
+    position: static;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    font-size: ${({ theme }) => theme.typography.size.h1};
+  }
+`;
 
 /** Phones show the brand bar; desktops align quick date presets beneath the shell header. */
 const Row = styled.div`
@@ -163,7 +176,7 @@ export function FeedHeader({ query, today, onApply, filters }: {
           </RoundButton>
         </PhoneActions>
       </BrandBar>
-      <VisuallyHidden as="h1">{feedHeading(query, today, messages)}</VisuallyHidden>
+      <PageHeading as="h1">{feedHeading(query, today, messages)}</PageHeading>
       <DesktopActions>
         <DatePresets query={query} today={today} onApply={onApply} />
       </DesktopActions>

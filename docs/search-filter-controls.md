@@ -118,8 +118,8 @@ complete collapsible filter section and badges active choices. The search toggle
 opens a GET search form; Escape closes it and returns focus to the toggle. When
 open, the brand-bar
 search button becomes Close and the form contains one search icon on its submit
-button. The feed retains a visually hidden semantic h1 without a visible page
-heading or subtitle above the filters.
+button. The feed uses one semantic h1: it is visually hidden on phones and
+tablets and visible as the page title on desktop. The subtitle remains absent.
 
 Acceptance uses owned MySQL storage with synthetic inputs, an isolated production
 Next app built from captured SQL projections, and Chrome through the Playwright
