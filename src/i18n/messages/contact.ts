@@ -1,12 +1,12 @@
 // Server-only page prose (see ../content-messages.ts); page metadata lives in en.ts.
 export const contactMessages = {
-  "contact.intro": "Use this page to check contact availability and find guidance about fixture, source and result concerns.",
+  "contact.intro": "{operator} operates Goal Hint from {country} and handles general questions, privacy requests, corrections and disputes. Goal Hint is intended for {audience} aged {minimumAge} and over.",
   "contact.reviewed": "Technical review: {date}.",
-  "contact.reviewScope": "This date records a review of the application. It does not verify a contact destination or approve a public response process.",
-  "contact.status.title": "Public contact is not yet available",
-  "contact.status.body": "A verified public contact route and operator details have not been approved for publication. Correction/dispute ownership, intake and review arrangements remain unresolved. Public release is blocked until these facts are confirmed. This page does not collect or send reports, and no response time is promised.",
+  "contact.reviewScope": "This date records the owner-supplied contact details and a review of the application. It is not a delivery test or a response-time commitment.",
+  "contact.status.title": "Contact Goal Hint",
+  "contact.status.body": "Use the email below for questions, privacy requests, corrections or disputes. The link opens your email application; Goal Hint has no contact-form or email-sending system. {requestsOwner} reviews these requests, and no response time is promised.",
   "contact.report.title": "Details for a correction report",
-  "contact.report.body": "Once a verified route is published, reports about fixture or team identity, source mistakes, or result and forecast-outcome concerns should include:",
+  "contact.report.body": "Reports about fixture or team identity, source mistakes, or result and forecast-outcome concerns should include:",
   "contact.report.match": "The Goal Hint match URL, including the revision link if relevant.",
   "contact.report.issue": "What appears wrong and the correction you believe is needed.",
   "contact.report.source": "A supporting public source link, if available.",

@@ -1,8 +1,11 @@
-/** Repository facts only. Owner decisions and legal review still block final publication. */
+import { publicOperator } from "./public-operator.ts";
+
+/** Owner-approved launch facts and reuse terms; final privacy notice remains pending. */
 export const termsNotice = Object.freeze({
   publication: "prelaunch-draft",
   releaseReady: false,
-  reviewedOn: "2026-10-10",
+  reviewedOn: "2026-10-12",
   effectiveOn: null,
-  blockers: Object.freeze(["operator", "contact", "rights", "privacy", "review"] as const),
+  plannedEffectiveOn: publicOperator.plannedLaunchOn,
+  blockers: Object.freeze(["privacy"] as const),
 });

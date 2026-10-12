@@ -87,7 +87,10 @@ test('page metadata has independent social fields, real canonical pagination and
   assert.equal(matchDetailMetadata({ data: null, error: 'unavailable' }, 'en', false, approved).robots.index, false);
   assert.equal((await createInformationMetadata('help', () => approved)()).robots.index, true);
   assert.equal((await createInformationMetadata('help', () => approved)({ searchParams: Promise.resolve({ market: 'total-goals' }) })).robots.index, false);
-  for (const name of ['privacy', 'terms', 'contact']) assert.equal((await createInformationMetadata(name, () => approved)()).robots.index, false);
+  for (const name of ['privacy', 'terms']) assert.equal((await createInformationMetadata(name, () => approved)()).robots.index, false);
+  assert.equal((await createInformationMetadata('contact', () => approved)()).robots.index, true);
+  assert.equal((await createInformationMetadata('contact', () => ({ deployment: 'staging', index: false }))()).robots.index, false);
+  assert.equal((await createInformationMetadata('contact', () => approved)({ searchParams: Promise.resolve({ email: 'untrusted' }) })).robots.index, false);
 });
 
 test('disabled discovery never reads a database and robots allows noindex variants to be read', async () => {
@@ -112,7 +115,7 @@ test('sitemap shards preserve stored lastmod, advertise each bounded shard and p
   const robots = await routes.robots(); assert.equal(robots.sitemap.length, 5);
   assert.ok(robots.sitemap.includes('https://goalhint.com/matches/sitemap/2.xml'));
   const urls = (await routes.sitemap()).map(row => row.url);
-  assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/help']);
+  assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/help', 'https://goalhint.com/en/contact']);
   for (const id of ['-1', '01', '1.xml', '9999999999', 'x']) {
     assert.throws(() => sitemapPage(id), RangeError);
     await assert.rejects(routes.matches({ id: Promise.resolve(id) }), RangeError);

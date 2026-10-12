@@ -12,11 +12,16 @@ def main() -> None:
             notice=notice, sections=["access", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"],
             patterns=["not a completed, effective privacy notice", "not a legal approval or an effective date",
                 "cached pagination links can contain your search text", "not necessarily erased at that exact time",
-                "An owner-approved public privacy contact.*not yet available",
+                "Wilson Wasswa", "Uganda", "aged 18 and over", "Namecheap",
+                "Sunday, November 1, 2026", "server country and log and backup retention periods are not yet known",
+                "handles privacy requests through the email on the Contact page",
+                r"Gmail \(Google\) handles your sender address, message and any attachments",
+                "Retention and deletion periods for correspondence have not yet been confirmed",
+                "visitor analytics, advertising and affiliate promotions disabled at launch",
                 "your browser requests them directly from the remote image host",
                 "Current responses can be reused for up to 5 seconds.*up to 6 hours",
                 "At most 20 navigation records.*older than 30 minutes"],
-            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|mailto:|untrusted-query|\{(?:date|minutes|seconds|hours|entries)\}",
+            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|mailto:|untrusted-query|\{(?:date|minutes|seconds|hours|entries|operator|country|audience|minimumAge|requestsOwner)\}",
             forms=r"<form|<iframe|<input")
         match(r'href="/en/help"', visible)
         print(f"PASS production privacy HTML: {path}")

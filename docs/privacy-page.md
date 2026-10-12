@@ -5,40 +5,39 @@ The English page is server rendered, has section anchors, readable shared
 typography and square components, and retains the footer link and prelaunch
 `noindex, follow`. Its canonical is `https://goalhint.com/en/privacy`.
 
-## Publication gate
+## Publication gate and confirmed owner facts
 
-`src/domain/privacy-notice.ts` records `publication: prelaunch-summary`,
-`releaseReady: false`, no effective date and an actual repository review date of
-**10 October 2026**. The public page prominently explains that it is a factual
-prelaunch summary, not a completed/effective privacy notice. Unresolved facts
-are ordinary disclosures, not placeholder names, contacts or TODOs. No final
-notice branch or environment switch can bypass the missing approvals.
+On **12 October 2026**, the owner supplied Wilson Wasswa, Uganda, as the operator,
+a worldwide English-speaking audience aged 18+, and the same person as the
+privacy/correction/dispute owner. The exact approved public email is
+`wasswawilon0002@gmail.com`. `src/domain/public-operator.ts` holds the shared facts;
+the Contact page publishes the email without a form or sending backend.
 
-**Public release is blocked** until the owner supplies and verifies the operator,
-audience/jurisdiction, lawful public privacy contact, rights/request handling,
-actual hosting/log/recipient/processing-location arrangements, analytics decision
-and permission-compatible retention/deletion/backup rules. OP-26/27/28 are the
-direct notice gates; OP-08/13/31/32 own related retention/source/deployment facts.
-Jurisdiction-specific legal basis, rights, complaints, transfers, children's
-audience requirements and any consent obligations must be reviewed against those
-facts. The user's timezone and specification's author attribution establish
-neither the operator nor the applicable law.
+The owner confirmed a Namecheap-hosted database, no launch visitor analytics,
+advertising or affiliate promotions, and public API-Football data/logo permission.
+That is an owner confirmation, not an independent contract verification. Existing
+browser storage, third-party logo requests and source retention constraints remain.
 
-The user explicitly chose to keep operator/jurisdiction/contact unresolved and
-record release blockers, and to keep the current implementation while recording
-unresolved hosting/log, analytics and retention decisions. This does not approve
-those operating facts. There is no invented controller, postal address, email, regulator,
-response deadline, retention duration or claim of compliance/exemption. Final
-notice publication and production release need a new factual/legal review and
-an explicit recorded decision. Existing runtime operation approval does not
-complete this gate. Prompts 040–041 remain outside this implementation.
+Launch and the intended notice effective date are **1 November 2026**. They are
+planned dates: `privacyNotice.plannedEffectiveOn` records the plan and `effectiveOn`
+remains null. The server country and actual log/backup retention periods are
+explicitly unknown. A daily frequency does not establish a deletion period.
+`releaseReady` therefore remains false until the hosting, log, source-retention
+and deletion/backup disclosures can be completed from actual operating facts.
+The page no longer presents operator identity, contact, audience, analytics choice
+or a planned date as missing. No public indexing or deployment approval is implied.
+
+Earlier 10 October decisions deferred these owner facts; the 12 October answers
+supersede those deferrals for the facts listed above. Jurisdiction-specific privacy
+requirements must be assessed using the actual Ugandan operator, global audience
+and completed processing inventory, without inventing legal bases or exemptions.
 
 ## Actual inventory reviewed
 
 | Flow / purpose | Data and recipient | Actual storage / retention / evidence |
 | --- | --- | --- |
 | Public access | Page/API requests work without visitor accounts, authentication tokens, registration, payments or subscriptions. | `domain/public-policy.ts`, Prisma schema and public HTTP handlers contain no visitor account/session system. No privacy/contact form was added. |
-| Request delivery and infrastructure protection | A web/network host necessarily handles connection metadata, request address/query, time and browser headers. Its logging or additional protection cannot be inferred from repository code. | No hosting provider, region, access-log configuration, retention contract or deployed security/monitoring service is approved. No blanket claim of zero logs, zero personal data or a fixed log-deletion period is supportable. OP-26/27/30/32 remain open. |
+| Request delivery and infrastructure protection | A web/network host necessarily handles connection metadata, request address/query, time and browser headers. Its logging or additional protection cannot be inferred from repository code. | The owner identifies Namecheap database hosting; server country, access-log configuration, retention and any deployed security/monitoring service remain unknown. No blanket claim of zero logs, zero personal data or a fixed log-deletion period is supportable. OP-26/27/30/32 remain open. |
 | Application diagnostics | Public handlers return static classified failures; private workers emit allowlisted job/attempt/reason events. | `matches/public-http.ts`, `jobs/job-worker.ts`, `cost-control/cost-observability.ts` and worker entry points do not establish a visitor event-log database or a hosting-log retention policy. Framework/development/build telemetry is distinct from visitor analytics; this task does not change tool telemetry. |
 | Private operational monitoring (044) | An authenticated, approved operator binding can inspect aggregate stored run/job/lock/result/quota/cost state and bounded canonical correlations; alert payloads carry coded incident owner/destination and runbook references. No visitor identifiers, request URLs, raw evidence, headers, credentials or exception text are collected. | Owner explicitly chose **local verification only**. No live binding, destination, scheduler or hosted recipient is enabled. `OperationsMonitorState` is one bounded outbox (64 slots/128 KiB), not an event log. Approved future retention must be explicit, at most seven days, and prunes on authorized transactions; stopped monitoring/backups do not imply physical deletion. Canonical records retain their existing unresolved retention policy. The local test sink is bounded process memory with TTL. See `operations-monitoring.md`; OP-26/30/31/32 remain open. |
 | Optional aggregate server measurements (044) | Server-only HTTP latency/cache counters and fixed histograms contain only five route families and fixed outcome codes. They contain no search strings, fixture IDs, IPs, cookies or visitor/session identifiers. | Hooks are wired but **disabled by default**; an approved private bootstrap/retention reference is required to install a process-local collector. At most 25 series and an explicitly configured window of at most one day, expiring on access/cleared on close. No external upload or web endpoint. Hosting/fleet collection and recipients remain pending. This is not browser analytics, mobile field CWV or evidence of anonymous hosting logs. |
@@ -49,11 +48,11 @@ complete this gate. Prompts 040–041 remain outside this implementation.
 | Local layout preference | `goal-hint:preferences:v1`: format version and comfortable/compact density; local to the browser origin. The current feed has no exposed density switch; provider code reads a valid stored value and writes only when density changes. | `state/provider.tsx`, `state/preferences.ts`. No application expiry, account linkage or preference upload. It may remain until overwritten, cleared or removed by the browser. No automatic write on ordinary feed hydration or the privacy page. |
 | Back restoration | `goal-hint.feed-navigation.v1` in session storage: entry ID, query key/href (including searches), first/last page, scroll, focus fixture, version marker and save time. Random `goalHintFeed` history marker identifies a local entry. | `components/match/feed-restoration.ts`, `domain/feed-navigation.ts`. At most 20 entries; records older than 30 minutes are ignored and pruned on later saves, not necessarily physically removed at expiry. Browser page-session retention/restoration also applies. Markers/checkpoints are not uploaded; restored match pages are requested normally. No fixture/prediction/result payload persists here. |
 | Page memory and live refresh | Provider-local Redux/request state and currently loaded stored match projections. Browser GET updates omit credentials; hidden views pause background refresh. | `state/store.ts`, `refresh-api.ts`, `use-live-refresh.ts`, `use-feed-pagination.ts`. No visitor profile or fixture persistence in browser storage. Blocking storage preserves ordinary navigation; privacy content has no polling/store provider. |
-| Visitor cookies, analytics and advertising | No application-set visitor cookies, analytics SDK, ad tags, tracking pixels, consent platform or session replay exists. | Searched `src`, package dependencies, `next.config.ts` and proxy; inspected public handlers. Advertising remains fixed disabled in `publicPolicy`. No future analytics decision or consent exemption is inferred; OP-26 remains unresolved. Future hosting must be audited separately. |
+| Visitor cookies, analytics and advertising | No application-set visitor cookies, analytics SDK, ad tags, tracking pixels, consent platform or session replay exists. | Searched `src`, package dependencies, `next.config.ts` and proxy; inspected public handlers. Advertising remains fixed disabled in `publicPolicy`. The owner explicitly keeps analytics, ads and affiliate promotions disabled at launch; no consent exemption is inferred. Future hosting must be audited separately. |
 | Third-party images | Approved, structurally safe HTTPS team-logo URLs become native browser `img` requests to their actual media host. That host receives IP/request/browser information and can have its own cookies/logs under browser rules. | `components/match/team-logo.tsx` uses `referrerPolicy=no-referrer`; that suppresses the page address, not the connecting IP. `football/catalog-mysql-store.ts` verifies logo authority before persisting URLs. No application optimization proxy, binary storage or image cache. Competition logo URLs can be stored, but current cards/details do not render competition/editorial images. Browser HTTP caching is separate. |
 | First-party assets and source links | Bundled Goal Hint brand files and local Manrope font use site requests. Clicking news/provider links visits an external service with its own processing rules. | `app/layout.tsx`, brand components, `match-detail-content.tsx`. Per-match source links suppress referrers; do not claim that every external service's cookies/log retention is controlled by Goal Hint. No third-party asset is embedded by the privacy page. |
 | Football, reporting, evidence and predictions | Structured API-Football data, attributable reporting and immutable football/evaluation/audit records are distinct from visitor profiles; sources can mention identifiable players/people. | Catalog retention authority and evidence `reuse.retainUntil` gate permitted ingestion/reuse/display. Public reads cannot dispatch provider/research/model work or send visitor search text to those services. OP-08/13/31 still require actual permission-compatible retention/deletion/backup evidence. A permission deadline does not prove physical deletion of all copies. |
-| Privacy rights/contact | No owner-approved public privacy recipient or request-handling policy is supplied. | OP-27/28 block final notice/release. No fake email, link to a working intake, request form, mailbox, message or unsupported turnaround promise is added. Existing interim Contact page remains owned by 041. |
+| Privacy rights/contact | Wilson Wasswa handles requests at the owner-approved public email on Contact. | A fixed mailto opens the visitor's email client. No form, sending backend, delivery test or unsupported response deadline is added. The hosting/retention facts still prevent final notice publication. |
 | Backup and recovery tooling (045) | Private encrypted snapshots/logs can contain the database's structured football/source/history, operational records and shared caches (including request-derived pagination/search text). No visitor profile or new analytics collection is added. | Owner explicitly chose **local verification only**. The executed drill uses synthetic data and ephemeral in-memory keys, restores only to process-owned disposable instances and cleans its owned artifacts. No persistent application backup schedule, hosted storage recipient, deletion period or source-retention entitlement is enabled. Future backup/key access, source permissions, physical deletion/suppression after restore and hosted retention must be approved under OP-08/13/26/30/31/32. Private health events are allowlisted and backup metrics stay pending without fresh approved evidence. See `backup-restore.md`. |
 
 The application has not been redesigned to resolve these operating decisions.

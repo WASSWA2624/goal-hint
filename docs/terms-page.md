@@ -8,49 +8,29 @@ canonical is `https://goalhint.com/en/terms`; prelaunch `noindex, follow` remain
 
 ## Publication gate and owner decisions
 
-`src/domain/terms-notice.ts` records `publication: prelaunch-draft`,
-`releaseReady: false`, `effectiveOn: null` and the actual technical review date,
-**10 October 2026**. This is a factual prelaunch draft, not completed/effective
-terms or legal approval. The visible status and final section identify what is
-missing. There is no approved final-document branch or environment bypass.
-These disclosures and noindex do not enforce a deployment lock: release review
-must explicitly keep production publication blocked until approvals are recorded.
+The owner facts confirmed on **12 October 2026** supersede the earlier deferrals:
+Wilson Wasswa operates Goal Hint from Uganda for English-speaking football fans
+worldwide aged 18+, handles privacy/correction/dispute requests, and approves the
+published email `wasswawilon0002@gmail.com`. Shared operator facts come from
+`src/domain/public-operator.ts`; contact guidance retains concrete report details,
+audited correction behavior and no invented response deadline.
 
-The owner's existing decisions persist:
+The owner confirmed public API-Football data/logo permission. This is recorded as
+owner confirmation, not independent contract verification. The owner also permits
+copying, sharing, adapting and reusing **original material Goal Hint owns**, for
+any purpose without conditions. The public wording expressly excludes provider
+data/forecasts, logos, reporting and other third-party material; no downstream
+third-party rights are granted.
 
-- During 038: **"Keep unresolved and record the release blocker"** for correction/
-  dispute ownership, intake, review/evidence process and response commitments.
-  OP-25 remains unresolved; implemented audited result correction is not a public
-  complaint process.
-- During 039: **"Keep unresolved and record release blockers"** for legal operator,
-  jurisdiction/audience and verified public privacy contact, and **"Keep current
-  implementation; record unresolved decisions"** for hosting/logging, analytics
-  and source/evidence retention. OP-26/27/28 and related source/hosting/retention
-  gates remain open. These deferrals do not approve final legal terms.
+Launch and the intended effective date are **1 November 2026**. The plan is stored
+as `plannedEffectiveOn`; `effectiveOn` remains null and `releaseReady` remains false
+because the privacy notice's actual server country and log/backup retention are
+unknown. The public draft no longer lists operator, contact, content reuse or a
+planned date as missing. No automatic date-triggered release is introduced.
 
-Do not infer legal identity, domicile, governing law or contact permission from
-specification authorship, GitHub attribution, domain branding or the user's
-timezone. Do not make the interim Contact page an asserted working intake.
-
-Before final terms publication/public release, record and verify:
-
-1. Actual legal operator identity, intended audience and applicable jurisdiction
-   (OP-27), including any legally required operator disclosures.
-2. A verified publication-approved contact and approved correction/dispute owner,
-   intake, evidence/review process and any factual response commitment (OP-25/28).
-3. Evidence-backed provider, team-logo and reporting permissions, attribution,
-   redistribution and retention limits, plus an approved ownership/reuse statement
-   for original site material (OP-06/08/13). API access and an original brand kit
-   do not establish all public-use or downstream licensing rights.
-4. Resolution/review of the privacy page's operator, contact, hosting, logging,
-   analytics and retention requirements (039 and OP-26/27/28/31/32).
-5. Review against the actual jurisdiction/audience, owner-approved final wording
-   and a genuine effective date. Any eligibility, liability, dispute/forum or
-   service-change terms must come from that review; none is invented here.
-
-No acceptance/clickwrap, account, paywall, payment, betting, contact backend,
-tracking or deployment system is added. Completing local implementation checks
-does not clear these external release gates or qualify production forecasts.
+Final publication depends on completing the factual privacy notice and recording
+the applicable release decision. No acceptance/clickwrap, account, payment,
+betting, tracking or deployment system is introduced by these edits.
 
 ## Evidence checked against the implemented service
 

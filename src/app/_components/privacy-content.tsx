@@ -18,7 +18,7 @@ export function PrivacyContent({ locale }: { locale: string }) {
     seconds: messages.number(publicCacheRules.mutableMs / 1000), hours: messages.number(publicCacheRules.immutableMs / 3_600_000) };
   const paragraphs = { access: ["body"], requests: ["body", "logs"], search: ["body", "counter", "refresh"], storage: [],
     tracking: ["body", "scope"], images: ["body", "recipients"], football: ["body", "permissions"], retention: ["body", "expiry"],
-    choices: ["body", "contact"], release: ["body"] } as const;
+    choices: ["body", "contact", "correspondence"], release: ["body"] } as const;
   return <Stack $gap="xl" data-privacy-status={privacyNotice.publication} data-privacy-release-ready={privacyNotice.releaseReady}>
     <InformationNotice locale={locale} kind="privacy" reviewedOn={privacyNotice.reviewedOn} />
     <ContentsNav aria-label={messages.text("privacy.contents")}>

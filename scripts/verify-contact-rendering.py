@@ -8,7 +8,7 @@ from lib.rendering import match, request, visible_html
 from lib.runtime import main_guard
 
 
-def main() -> None:
+def main(*, indexable: bool = False) -> None:
     origin = acceptance_origin(__doc__)
     notice = notices()["contactNotice"]
     paths = ["/en/contact",
@@ -18,17 +18,24 @@ def main() -> None:
     for path in paths:
         visible = policy_document(origin, path, page="contact", title="Contact and corrections",
             notice=notice, sections=["report", "corrections", "policies"], patterns=[
-                "Public contact is not yet available", "Public release is blocked",
-                "does not collect or send reports", "no response time is promised",
-                "Once a verified route is published", "Goal Hint match URL",
+                "Contact Goal Hint",
+                "Wilson Wasswa", "Uganda", "aged 18 and over",
+                "no contact-form or email-sending system", "no response time is promised",
+                "Goal Hint match URL",
                 "supporting public source link", "same locked forecast",
                 "do not replace the pick with a more favorable revision"],
-            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|mailto:|tel:|untrusted-query|\{date\}",
-            forms=r"<form|<iframe|<input|<textarea")
+            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|tel:|untrusted-query|\{(?:date|operator|country|audience|minimumAge|requestsOwner)\}",
+            forms=r"<form|<iframe|<input|<textarea", indexable=indexable and "?" not in path)
         expected = urlsplit(origin)
+        assert visible.count(f'href="{notice["destination"]}"') == 1, "Exactly one fixed owner-approved email link."
         for href in re.findall(r'<a\b[^>]*\bhref="([^"]+)"', visible):
+            if unescape(href) == notice["destination"]:
+                target = urlsplit(unescape(href))
+                assert target.scheme == "mailto" and target.path == notice["email"]
+                assert not target.query and not target.fragment and "\r" not in href and "\n" not in href
+                continue
             target = urlsplit(urljoin(origin, unescape(href)))
-            assert (target.scheme, target.netloc) == (expected.scheme, expected.netloc), "Only fixed, same-origin navigation is available."
+            assert (target.scheme, target.netloc) == (expected.scheme, expected.netloc), "Other links remain fixed same-origin navigation."
         print(f"PASS production contact HTML and safe query handling: {path}")
     for path, section in [("/en/privacy", "privacy-choices"), ("/en/terms", "terms-outcomes"), ("/en/help", "results")]:
         response = request(origin, path, redirect=True)

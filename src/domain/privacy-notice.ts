@@ -1,8 +1,11 @@
-/** Reviewed repository facts, not owner/legal approval or a production notice. */
+import { publicOperator } from "./public-operator.ts";
+
+/** Confirmed owner facts; outstanding hosting details still prevent a final notice. */
 export const privacyNotice = Object.freeze({
   publication: "prelaunch-summary",
   releaseReady: false,
-  reviewedOn: "2026-10-10",
+  reviewedOn: "2026-10-12",
   effectiveOn: null,
-  blockers: Object.freeze(["operator", "contact", "logs", "analytics", "hosting", "sources", "retention"] as const),
+  plannedEffectiveOn: publicOperator.plannedLaunchOn,
+  blockers: Object.freeze(["logs", "hosting", "sources", "retention"] as const),
 });

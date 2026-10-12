@@ -17,8 +17,11 @@ def main() -> None:
                 "not legal approval or an effective date",
                 "does not offer betting, accept stakes, process payments or sell visitor subscriptions",
                 "does not guarantee wins, prediction accuracy",
-                "Public correction and dispute submissions are not yet available", "draft grants no content licence"],
-            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|mailto:|untrusted-query|\{date\}", forms=r"<form|<iframe|<input")
+                "Wilson Wasswa", "Uganda", "aged 18 and over",
+                "handles correction and dispute reports through the email on the Contact page",
+                "copy, share, adapt and reuse original Goal Hint material for any purpose",
+                "permission excludes third-party football data", "Sunday, November 1, 2026"],
+            forbidden=r"TODO|TBD|Lorem ipsum|example\.com|mailto:|untrusted-query|\{(?:date|operator|country|audience|minimumAge|requestsOwner)\}", forms=r"<form|<iframe|<input")
         for link in policy_links:
             assert f'href="{link}"' in visible, link
         print(f"PASS initial production terms HTML: {path}")

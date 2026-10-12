@@ -87,7 +87,8 @@ production artifact. The runtime environment contract recognizes the new field
 without granting provider/publication capabilities.
 
 The source-owned `discoveryReleaseApproval` is currently `{ verified: false,
-evidenceRef: null }`. Privacy, terms and contact also retain `releaseReady: false`.
+evidenceRef: null }`. Privacy and terms retain `releaseReady: false`. Contact is
+available and ready, using the owner's confirmed public email.
 Both verified release approval and all three publication gates are required in
 addition to production classification/runtime. No environment value or provider
 approval reference replaces these facts. All current HTML responses therefore
@@ -100,6 +101,53 @@ actual evidence and deliberately integrate the verified release/publication fact
 before indexing or deployment. This feature adds no switch that silently bypasses
 those decisions. Noindex is a crawl directive, not access control or a deployment
 lock.
+
+### Owner details needed to finalize publication
+
+The current defaults are English, `https://goalhint.com`, free account-free access,
+no betting or payments, disabled advertising/browser analytics, and provisional
+forecast labels. Browser preferences/navigation storage and direct third-party
+team-logo requests already exist. Hosting logs and recipients still need actual
+deployment facts. The recorded local provisional forecast approval does not
+authorize hosted release or public indexing.
+
+Complete the following with facts or mark an item unknown; do not supply passwords
+or API keys. These answers are enough to prepare final wording for review; existing
+lawyer-written policies are not a prerequisite. Applicable legal requirements can
+then be checked against the actual operator, audience and processing arrangements.
+
+- **Operator/audience:** Wilson Wasswa confirmed
+  on 12 October 2026 that he operates Goal Hint from Uganda for English-speaking
+  football fans worldwide aged 18 or older and handles support, corrections and
+  privacy requests. The public domain is `goalhint.com`.
+- **Contact/process:** Publish `wasswawilon0002@gmail.com` exactly as supplied.
+  Wilson Wasswa handles questions, privacy requests and corrections. The existing
+  report guidance asks for the match URL, issue and supporting public evidence;
+  no response deadline is promised. The mailto link adds no mail-sending backend.
+- **Privacy/operations:** The database will run on the public Namecheap hosting
+  server. The owner explicitly reports its country and actual log/backup
+  retention as unknown. The earlier answer "daily" is not treated as a retention
+  period. Confirm processing location, collected logs, access/recipients,
+  retention/deletion and backup settings before completing the notice. Visitor
+  analytics, advertising and affiliate promotions stay disabled for launch by
+  the owner's explicit choice. Voluntary contact emails use Gmail (Google);
+  retention and deletion of correspondence also need an actual policy.
+- **Terms/rights:** The owner confirmed permission for public API-Football data
+  and logo display; this records the owner's statement, not independent contract
+  verification. [API-Football's terms](https://www.api-football.com/terms) place
+  responsibility for necessary publication/visual-asset permissions on the user.
+  The owner permits unrestricted reuse of Goal Hint's original material; this
+  does not relicense provider data, logos or other third-party material.
+- **Publication/release:** Planned launch/effective date: **1 November 2026**.
+  This is a future target, not a claim that incomplete notices are effective.
+  Confirm final hosting/privacy facts and the actual production deployment's
+  domain/DNS/HTTPS and readiness before recording verified indexing approval.
+
+Once those facts are verified, update the public privacy/terms/contact wording,
+effective dates and real contact destination together with their publication
+records. Then record the applicable release evidence and verify production HTML,
+robots and sitemaps before enabling discovery. Flipping readiness booleans alone
+would leave the visible prelaunch notices and unresolved operational facts intact.
 
 The only structured data is the supported `WebSite` identity on the plain home
 page, matching the visible brand, English locale and canonical home URL. JSON-LD
@@ -139,8 +187,39 @@ action, ranking or rich-result promise is invented.
   can retain the previous route's title, description, canonical and Open Graph
   URL. Direct HTTP renders contain one correct metadata set; navigation after
   initial hydration also contains one correct set for Chrome and Bingbot user
-  agents. The issue persisted with blocking bot metadata, so the app retains the
-  native Metadata API without DOM cleanup or artificial navigation delays.
+  agents. The issue persisted with blocking bot metadata; no stable framework
+  patch was available at review time.
+- `MetadataRecovery` now handles the observed race while retaining the native
+  Metadata API. After client navigation only, it checks singleton title,
+  description, canonical and Open Graph URL tags and observes later head
+  insertions. Duplicates trigger one ordinary reload of the current destination;
+  this replaces the current history entry without changing React-owned nodes.
+  Correct client navigations, in-page interactions and initial document loads
+  do not reload. The original document URL comes from the browser's Navigation
+  Timing entry, so detection also works if a link hydrates before the guard.
+  Returning Back to the initial URL remains covered. A fresh document resets the
+  guard, preventing a recovery loop. No timers, storage, framework internals or
+  dependencies are added. The tradeoff is one extra document request when the
+  framework race actually occurs; this is an application recovery, not an upstream
+  framework fix.
+- Follow-up verification passed the final application production build, lint,
+  TypeScript, complete unit suite, six script tests, eight recovery lifecycle
+  unit tests, and **92 staging/synthetic-production HTTP checks**. The updated
+  privacy/terms/contact HTML checks also pass against the actual production build
+  with indexing still gated, including fixed-email/query-injection isolation and
+  the new Gmail correspondence disclosure.
+  Four Chrome/Bingbot browser cases at 4x CPU throttling verify that early
+  navigation recovers once, hydrated navigation remains within the same document,
+  and Back/history are preserved. A separate browser case verifies normalized
+  query URLs, returning Back to the original document URL, one-shot recovery and
+  absence of reload loops. **32 existing interaction/responsive checks** and
+  **18 policy-page layout checks** pass without page errors or horizontal
+  overflow. Contact at 320 pixels and terms at 1280 pixels were visually checked.
+  The acceptance fixture is `.tmp/seo-66f18d84`; browser evidence is in ignored
+  `output/playwright/metadata-recovery-*`, `seo-blockers-final-browser.js` and
+  `policy-final-browser.js`. Head ownership is inspected only by the browser
+  diagnostic to distinguish real hydration from arbitrary elapsed time; the
+  shipped recovery uses public browser APIs exclusively.
 - The checked run used MySQL Community Server 8.4.11: material rename versus
   retrieval-only sync, stable fixture identity, locked historical retention,
   stored feed/detail projections and absence of provider work passed. XML crawling

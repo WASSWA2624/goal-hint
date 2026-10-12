@@ -137,8 +137,9 @@ def verify(origin, cases, *, staging):
     assert stale.status == 308
     assert stale.headers.get("location") == detail["route"]["path"] + "?revision=" + cases["revision"] + "#revision-history"
     checks += 1
-    for name in ["privacy", "terms", "contact"]:
+    for name in ["privacy", "terms"]:
         page(f"/en/{name}", f"/en/{name}", False)
+    page("/en/contact", "/en/contact", not staging)
     page("/en/help", "/en/help", not staging)
     legacy = anonymous("/en/how-it-works")
     assert legacy.status == 308 and legacy.headers.get("location") == "/en/help"
@@ -156,7 +157,7 @@ def verify(origin, cases, *, staging):
         assert locations(dates) == []
     else:
         match(r"Sitemap: https://goalhint\.com/matches/sitemap/0\.xml", robots)
-        assert locations(sitemap) == [fixed + "/en", fixed + "/en/help"]
+        assert locations(sitemap) == [fixed + "/en", fixed + "/en/help", fixed + "/en/contact"]
         assert locations(matches) == [fixed + row["path"] for row in cases["matches"]]
         assert locations(dates) == [fixed + archive]
         for row in cases["matches"]:

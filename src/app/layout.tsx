@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import localFont from "next/font/local";
 import { publicPolicy } from "@/domain/public-policy";
 import { StyleProvider } from "@/styles/provider";
 import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
+import { MetadataRecovery } from "@/components/navigation/metadata-recovery";
 
 // Latin WOFF2 subset of the variable source TTF (see docs/brand-styling.md); other scripts use the fallback.
 const manrope = localFont({
@@ -37,7 +38,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang={publicPolicy.defaultLocale} className={manrope.variable}>
-      <body><StyleProvider>{children}</StyleProvider></body>
+      <body><Suspense fallback={null}><MetadataRecovery /></Suspense><StyleProvider>{children}</StyleProvider></body>
     </html>
   );
 }

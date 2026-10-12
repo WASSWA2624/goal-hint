@@ -54,7 +54,7 @@ def assert_navigation(visible: str, *, primary: str, mobile: str | None, footer:
 
 def policy_document(origin: str, path: str, *, page: str, title: str,
                     notice: dict, sections: list[str], patterns: list[str],
-                    forbidden: str, forms: str) -> str:
+                    forbidden: str, forms: str, indexable: bool = False) -> str:
     response = request(origin, path, redirect=True)
     assert response.status == 200, path
     assert response.headers.get("set-cookie") is None
@@ -62,7 +62,7 @@ def policy_document(origin: str, path: str, *, page: str, title: str,
     match(r'<html[^>]*lang="en"', html)
     match(rf'<title>{re.escape(title)} \| Goal Hint</title>', html)
     match(rf'rel="canonical" href="https://goalhint\.com/en/{page}"', html)
-    match(r'name="robots" content="noindex, follow"', html)
+    match(rf'name="robots" content="{"index" if indexable else "noindex"}, follow"', html)
     assert 0 <= html.find("data-styled=") < html.find("<header"), "Initial shell CSS"
     assert len(re.findall(r"<main[\s>]", visible)) == 1
     assert len(re.findall(r"<h1[\s>]", visible)) == 1
@@ -74,7 +74,7 @@ def policy_document(origin: str, path: str, *, page: str, title: str,
         if page != "contact":
             assert f'href="#{page}-{section}"' in visible
     assert f'data-{page}-status="{notice["publication"]}"' in visible
-    match(rf'data-{page}-release-ready="false"', visible)
+    match(rf'data-{page}-release-ready="{str(notice["releaseReady"]).lower()}"', visible)
     match(rf'datetime="{re.escape(notice["reviewedOn"])}"', visible, flags=re.I)
     for pattern in patterns:
         match(pattern, visible)

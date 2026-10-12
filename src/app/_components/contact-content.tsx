@@ -11,6 +11,7 @@ export function ContactContent({ locale }: { locale: string }) {
   const messages = createContentMessages(locale);
   return <Stack $gap="xl" data-contact-status={contactNotice.publication} data-contact-release-ready={contactNotice.releaseReady}>
     <InformationNotice locale={locale} kind="contact" reviewedOn={contactNotice.reviewedOn} />
+    <TextLink href={contactNotice.destination} prefetch={false}>{contactNotice.email}</TextLink>
     <Stack as="section" id="contact-report" aria-labelledby="contact-report-heading" $gap="md">
       <SectionHeading id="contact-report-heading">{messages.text("contact.report.title")}</SectionHeading>
       <BodyText>{messages.text("contact.report.body")}</BodyText>

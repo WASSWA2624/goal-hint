@@ -1,91 +1,52 @@
-# Contact page and correction-reporting availability
+# Contact page and correction reporting
 
-Prompt 041 implements `/en/contact` in the reusable information/public shell.
-The short English page has semantic headings, shared square components, readable
-typography and a canonical URL of `https://goalhint.com/en/contact`. Prelaunch
-`noindex, follow` remains. The existing footer marks Contact as the current page.
+`/en/contact` uses the existing reusable information/public shell, semantic headings
+and square components. Its canonical remains `https://goalhint.com/en/contact`.
 
-## Owner decisions and release blocker
+## Confirmed contact facts
 
-**No verified public contact route, publication-approved operator details or
-responsible correction/dispute owner has been supplied.** OP-25/27/28 remain
-explicit launch blockers. The owner chose to keep correction/dispute ownership,
-intake, evidence/review rules and response commitments unresolved during 038,
-then deferred operator/jurisdiction/public contact facts during 039. Those
-instructions carry forward; implementing 041 does not approve or reopen them.
-Incident ownership and private alert destinations also remain unresolved under
-OP-29/30; this page does not establish an incident-support service.
+On **12 October 2026**, the owner confirmed Wilson Wasswa, Uganda, as Goal Hint's
+operator and the person responsible for general questions, privacy requests,
+corrections and disputes. The intended audience is worldwide English-speaking
+football fans aged 18+. These shared facts live in `src/domain/public-operator.ts`.
 
-`src/domain/contact-notice.ts` records `publication: prelaunch-unavailable`,
-`releaseReady: false`, `destination: null` and the actual repository review date,
-10 October 2026. The shared `InformationNotice` displays the absence of a public
-route and the release block. No email, address, phone, operator name or response
-deadline is substituted. The page has no form, disabled submit control, upload,
-account, public comments system or messaging backend. Its factual unavailable
-state can be reviewed locally; it is not an operational intake route.
+The exact owner-approved public email is **wasswawilon0002@gmail.com**. Preserve
+that spelling. `contactNotice` records `publication: available`, `releaseReady:
+true` and the fixed bare `mailto:` destination. The Contact page opens the visitor's
+email application; no contact form, mailbox creation, email backend, test message
+or delivery guarantee is added. There is no promised response deadline.
 
-Before launch, the owner must supply and record:
+These new facts supersede the earlier OP-25/27/28 deferrals for contact identity,
+responsibility and destination. The owner confirmed the destination for public
+use; a successful delivery test is not claimed. Contact readiness alone cannot
+enable indexing: privacy, terms and the overall release gate remain incomplete.
+The intended launch is 1 November 2026; no automatic release is scheduled here.
 
-1. A verified public email or already established contact destination, evidence
-   of ownership/control and explicit publication approval (OP-28).
-2. The actual operator details approved for publication and applicable legal
-   review (OP-27). GitHub authorship, branding and timezone are not this evidence.
-3. The responsible correction/dispute owner, intake/review and supporting-evidence
-   rules, and any response commitment grounded in real capacity (OP-25). No
-   response time or automatic correction promise is approved.
+## Reporting and policy integration
 
-Destination-evidence matching and verification of a real external contact link
-remain **blocked**, rather than passed using a fake or test address. There is no
-active-contact branch or environment switch. Final release review must enforce
-this gate; visible copy and noindex are not an automated deployment lock.
+Reports should include the match/revision URL, observed issue or proposed
+correction and a supporting public source when available. Sensitive personal
+information is unnecessary. Wilson reviews reports against the available evidence.
+Verified result corrections preserve the immutable locked forecast and can leave
+an outcome pending while verified settlement is resolved. Reports themselves do
+not mutate stored results or forecasts; no automatic correction is promised.
 
-## Guidance and policy integration
-
-- Report guidance covers fixture/team identity, source mistakes and result/
-  forecast-outcome concerns. Once a verified route exists, the useful public
-  details are the match/revision URL, observed issue/proposed correction and a
-  supporting public source link if available. Personal/sensitive information is
-  unnecessary. The page currently collects nothing.
-- Verified result corrections preserve the immutable locked forecast, produce
-  audited outcomes and can leave an outcome pending before verified settlement.
-  They never select a more favorable revision. Visitor reports do not themselves
-  mutate stored records. Evidence: `src/server/results/`,
-  `src/server/settlement/settlement-service.ts`, `src/server/settlement/settlement-read.ts`,
-  prediction-history/locking contracts and the Help guide.
-- Ordinary links lead to the current privacy, terms and Help documents,
-  including the actual settlement section. The privacy choices, terms results/
-  corrections and Help result sections link back with the shared
-  label "Contact availability and correction guidance". These labels do not
-  imply that an inbox or submissions process is available.
+Existing Privacy, Terms and Help links and anchors remain in place. Privacy and
+Terms now identify the responsible person and direct requests to this page.
 
 ## Link and input boundary
 
-The page accepts only the route locale and normalizes internal links through
-`informationHref`; there are no user-provided contact destinations or mail
-headers. Request query fields such as email, operator, destination, subject,
-body or returnTo are ignored. All rendered navigation links are fixed local
-paths/fragments. This avoids introducing an unused arbitrary-mailto builder or
-trusting unapproved settings while the destination is absent.
-
-When real owner evidence is supplied, the active route must be reviewed and
-validated as the exact approved bare `mailto:` address or established HTTPS
-destination before publication. Reject executable/other schemes, credentials,
-control characters and header injection; keep visitor query data out of both
-destination and mail headers. Structural checks must not send messages or
-create/subscribe an inbox. No test email or third-party contact is authorized.
+The mailto is a source-owned constant, not built from visitor input. It contains
+only the approved email with no subject, body, additional recipient, query or
+fragment. Query fields such as email, operator, destination, subject, body and
+returnTo never alter the link or visible operator information. All other links
+remain fixed same-origin navigation.
 
 ## Local acceptance
 
-Build and start a local production server, then run
-`npm run test:contact:html -- http://127.0.0.1:<port>` alongside the existing
-privacy, terms and navigation HTML verifiers. The contact verifier checks initial
-server content/CSS, canonical/noindex, unavailable/release status, correction
-guidance, safe same-origin schemes and ignored CRLF/script/destination query
-payloads. It checks contextual contact links in all three actual policy pages.
-
-Browser acceptance covers footer/contextual links, logical keyboard navigation,
-visible focus, 320–desktop widths, 200% text, no-JavaScript and blocked-storage
-access. It also checks that the flow adds no cookies, storage writes, browser
-API polling, external requests or page errors. Build/type/lint and relevant
-navigation/settlement contracts verify integration. Actual results and remaining
-external checks are recorded in `docs/development-progress.md`.
+After a production build, run `npm run test:contact:html -- http://127.0.0.1:PORT`
+alongside privacy, terms and navigation verifiers. The contact verifier checks the
+single exact mailto, no mail headers, query-injection isolation, owner facts,
+no forms, canonical/noindex behavior and contextual policy links, without sending
+an email. Synthetic approved-production SEO checks include Contact in discovery;
+actual production discovery remains disabled by unfinished global release gates.

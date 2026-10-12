@@ -1,5 +1,7 @@
 import "server-only";
 
+import { publicOperator } from "../domain/public-operator.ts";
+import { parseReportingDate } from "../domain/calendar.ts";
 import { createMessages, fillMessage, type Messages, type TextKey } from "./messages.ts";
 import { contactMessages } from "./messages/contact.ts";
 import { helpMessages } from "./messages/help.ts";
@@ -21,8 +23,13 @@ export function createContentMessages(locale?: string): ContentMessages {
   const base = createMessages(locale);
   const existing = byBase.get(base);
   if (existing) return existing;
+  const defaults = {
+    operator: publicOperator.name, country: publicOperator.country, audience: publicOperator.audience,
+    minimumAge: String(publicOperator.minimumAge), requestsOwner: publicOperator.requestsOwner,
+    plannedLaunchDate: base.reportingDate(parseReportingDate(publicOperator.plannedLaunchOn)),
+  };
   const created: ContentMessages = Object.freeze({ ...base, text(key: ContentTextKey, values: Readonly<Record<string, string>> = {}) {
-    return Object.hasOwn(content, key) ? fillMessage(content[key as keyof typeof content], values) : base.text(key as TextKey, values);
+    return Object.hasOwn(content, key) ? fillMessage(content[key as keyof typeof content], { ...defaults, ...values }) : base.text(key as TextKey, values);
   } });
   byBase.set(base, created);
   return created;
