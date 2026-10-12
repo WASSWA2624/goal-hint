@@ -111,7 +111,10 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
       else router.push(nextHref, { scroll: false });
     });
   }, [failed, href, pending, router, today]);
-  const toggleFilters = useCallback(() => setFiltersOpen((open) => !open), []);
+  const toggleFilters = useCallback(() => {
+    setFiltersOpen(!filtersOpen);
+    if (!filtersOpen) requestAnimationFrame(() => document.getElementById(filtersId)?.scrollIntoView({ block: "start" }));
+  }, [filtersId, filtersOpen]);
   const announcement = pending ? messages.text("feed.filters.loading") : result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
     : paginationStatus?.href === href ? paginationStatus.message

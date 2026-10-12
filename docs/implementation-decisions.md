@@ -2915,10 +2915,14 @@ recorded from that code; the MySQL acceptance run is in the progress log.
   uses one correlated `ORDER BY … LIMIT 1` subquery in the `MarketPrediction`
   join, so a fixture never appears twice. `bestCardFamily` applies the same rule
   to the same doubles, so the card shows the pick that ordering used.
-- **Probability window matches the displayed percent.** `prob=MIN-MAX` uses
-  whole percents and keeps stored values in `[MIN−0.5, MAX+0.5)` points, so a pick
-  that displays as a boundary percent is included. Fixtures without a shown pick
-  are excluded whenever `prob` or `picks=only` is set. `0-100` is omitted.
+- **Inclusive unrounded probability bounds (updated 12 October 2026).**
+  `prob=MIN-MAX` accepts integer or plain decimal percentages in 0–100 with
+  MIN ≤ MAX. Equal bounds are valid. The shown pick's stored unrounded
+  probability must lie inside both inclusive endpoints; the earlier
+  half-percentage-point display-rounding window is superseded. Decimal-text
+  scaling preserves endpoint equality without multiplying or dividing binary
+  floats. Fixtures without a shown pick are excluded whenever a non-default
+  `prob` or `picks=only` is set. `0-100` is omitted.
 - **Ordering ties.** Missing shown picks sort last in both probability
   directions. Ties fall back to kickoff ascending, then fixture ID ascending, in
   both directions; `sort=kickoff&dir=desc` reverses kickoff and fixture ID

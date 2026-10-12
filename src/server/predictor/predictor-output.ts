@@ -3,12 +3,14 @@ import "server-only";
 import { z } from "zod";
 import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
 import { validateMarketSnapshot, type MarketSnapshot } from "../../domain/markets.ts";
+import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
+import { parseScoreDistribution, scoreDistributionSchema, type ScoreDistribution } from "../../domain/score-distribution.ts";
 import type { EvidenceAuthority, EvidenceContext, EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, parseEvidenceContext, parseEvidenceSnapshot } from "../evidence/evidence-input.ts";
 import { buildEvidenceSnapshot } from "../evidence/evidence-snapshot.ts";
 import type { ModelAuthority, ModelVersion } from "./predictor-contract.ts";
 import { parseModelVersion } from "./predictor-input.ts";
-import { PRIMARY_PROMPT_VERSION, PRIMARY_SCHEMA_VERSION } from "./predictor-prompt.ts";
+import { supportedPredictorVersions, usesScoreDistribution } from "./predictor-prompt.ts";
 
 export type PredictorReference = Readonly<{ sourceId: string; factId: string; claimId: string; subjectTeamId: string | null }>;
 export type PredictorExplanation = Readonly<{ text: string; references: readonly PredictorReference[] }>;
@@ -32,6 +34,8 @@ export type PredictorValidatedOutput = Readonly<{
   markets: MarketSnapshot; reasons: readonly PredictorExplanation[]; uncertainty: PredictorExplanation;
   sources: readonly PredictorSourceAttribution[]; timestamps: PredictorTransportMetadata;
   flags: readonly ("unknown-generation-time" | "unknown-provider-update-time")[];
+  /** Present only for a pinned v2 model; never inferred from v1 family probabilities. */
+  scoreDistribution?: ScoreDistribution | null;
 }>;
 export type PredictorOutputRejection = "invalid-output" | "wrong-identity" | "invalid-evidence" | "insufficient-evidence" |
   "invalid-timing" | "invalid-citation" | "unverified-explanation" | "not-authorized";
@@ -73,6 +77,8 @@ const envelope = z.object({ schemaVersion: z.string().min(1).max(128), modelVers
     "both-teams-to-score": z.unknown().optional() }).strict(),
   reasons: z.array(explanation).min(2).max(4), uncertainty: explanation,
 }).strict();
+const scoreEnvelope = envelope.omit({ groups: true }).extend({ scoreDistribution: scoreDistributionSchema.nullable() });
+type OutputEnvelope = z.infer<typeof envelope> | z.infer<typeof scoreEnvelope>;
 const metadataSchema = z.object({ generatedAt: instant.nullable(), retrievedAt: instant, providerUpdatedAt: instant.nullable(),
   evidenceRef: z.string().min(1).max(512).refine((value) => value === value.trim() && !/[\r\n\0]/u.test(value)) }).strict();
 function sync(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
@@ -106,7 +112,7 @@ function citationIsGenuine(item: PredictorReference, snapshot: EvidenceSnapshot)
     evidenceSerialize({ value: value.value, summary: value.summary, certainty: value.certainty, asOfAt: value.asOfAt }) ===
     evidenceSerialize({ value: claim.value, summary: claim.summary, certainty: claim.certainty, asOfAt: claim.asOfAt }));
 }
-function sameIdentity(output: z.infer<typeof envelope>, snapshot: EvidenceSnapshot, model: ModelVersion): boolean {
+function sameIdentity(output: OutputEnvelope, snapshot: EvidenceSnapshot, model: ModelVersion): boolean {
   const context = snapshot.context;
   return output.schemaVersion === model.schemaVersion && output.modelVersionId === model.id && output.evidenceHash === snapshot.hash &&
     output.fixtureId === context.fixtureId && output.fixtureVersion === context.fixtureVersion.toString() &&
@@ -149,7 +155,7 @@ export function isPredictorOutputCurrent(output: PredictorValidatedOutput, model
   try {
     const model = parseModelVersion(modelInput), context = parseEvidenceContext(output.context), metadata = metadataSchema.parse(output.timestamps), now = instant.parse(nowInput);
     return Object.isFrozen(output.timestamps) && output.modelVersionId === model.id && output.schemaVersion === model.schemaVersion &&
-      model.schemaVersion === PRIMARY_SCHEMA_VERSION && model.promptVersion === PRIMARY_PROMPT_VERSION &&
+      supportedPredictorVersions(model) &&
       evidenceFingerprint(output.outputTiming) === evidenceFingerprint(model.outputTiming) && timing(metadata, model.outputTiming, context, now);
   } catch { return false; }
 }
@@ -164,15 +170,16 @@ export function validatePredictorOutput(input: unknown, options: PredictorOutput
   const authority = options.authority;
   if (!authority) return reject("not-authorized");
   if (!authorized(model, authority.modelAuthority)) return reject("not-authorized");
-  if (model.schemaVersion !== PRIMARY_SCHEMA_VERSION || model.promptVersion !== PRIMARY_PROMPT_VERSION) return reject("invalid-output");
+  if (!supportedPredictorVersions(model) || usesScoreDistribution(model) && model.calibration.kind !== "none") return reject("invalid-output");
   if (Object.values(model.windows).some((window) => window !== null && window.endsAt > snapshot.context.cutoffAt)) return reject("invalid-evidence");
   // Archive hashes alone do not prove facts or permissions: rederive retained facts with current authority.
   if (!eligibleEvidence(snapshot, authority.evidenceAuthority) || snapshot.sources.length > model.bounds.maxSources ||
     snapshot.facts.length > model.bounds.maxFacts) return reject("invalid-evidence");
   if (!snapshot.coverage.sufficient || snapshot.sources.length === 0 || snapshot.facts.length === 0) return reject("insufficient-evidence");
   if (!trusted(() => authority.verifyTransport(metadata, model, snapshot)) || !timing(metadata, model.outputTiming, snapshot.context, now)) return reject("invalid-timing");
-  let output: z.infer<typeof envelope>;
-  try { output = envelope.parse(boundedInput(input, model.bounds.maxOutputBytes)); } catch { return reject("invalid-output"); }
+  let output: OutputEnvelope;
+  try { output = (usesScoreDistribution(model) ? scoreEnvelope : envelope).parse(boundedInput(input, model.bounds.maxOutputBytes)); }
+  catch { return reject("invalid-output"); }
   if (!sameIdentity(output, snapshot, model)) return reject("wrong-identity");
   if (new Set(output.reasons.map((reason) => reason.text)).size !== output.reasons.length) return reject("invalid-output");
   for (const [kind, items] of [["reason", output.reasons], ["uncertainty", [output.uncertainty]]] as const) {
@@ -185,7 +192,9 @@ export function validatePredictorOutput(input: unknown, options: PredictorOutput
       if (!trusted(() => authority.verifyExplanation(item, snapshot, model, kind))) return reject("unverified-explanation");
     }
   }
-  const markets = validateMarketSnapshot(Object.fromEntries(Object.entries(output.groups).map(([family, group]) => [family, aiCandidate(group)])));
+  const scoreDistribution = "scoreDistribution" in output && output.scoreDistribution !== null ? parseScoreDistribution(output.scoreDistribution) : null;
+  const markets = "groups" in output ? validateMarketSnapshot(Object.fromEntries(Object.entries(output.groups).map(([family, group]) => [family, aiCandidate(group)])))
+    : legacyMarketsFromScoreDistribution(scoreDistribution);
   const referenced = new Set([...output.reasons, output.uncertainty].flatMap((item) => item.references.map((entry) => entry.sourceId)));
   const sources = snapshot.sources.filter((source) => referenced.has(source.id)).map((source) => ({ sourceId: source.id,
     publisher: source.publisher, title: source.title, sourceUrl: source.sourceUrl, version: source.version,
@@ -195,6 +204,7 @@ export function validatePredictorOutput(input: unknown, options: PredictorOutput
   const accepted: PredictorValidatedOutput = freezeEvidence({ modelVersionId: model.id, evidenceHash: snapshot.hash, context: snapshot.context,
     evidence: { policyVersion: snapshot.policy.version, coverage: snapshot.coverage, missingness: snapshot.missingness },
     schemaVersion: model.schemaVersion, outputTiming: model.outputTiming, markets, reasons: output.reasons, uncertainty: output.uncertainty, sources, timestamps: metadata,
+    ...("scoreDistribution" in output ? { scoreDistribution } : {}),
     flags: [...(metadata.generatedAt === null ? ["unknown-generation-time" as const] : []),
       ...(metadata.providerUpdatedAt === null ? ["unknown-provider-update-time" as const] : [])] });
   validated.set(accepted, Object.freeze({ model, snapshot, authority }));

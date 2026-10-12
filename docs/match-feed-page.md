@@ -107,8 +107,10 @@ Expanded mobile filters use one labeled summary dropdown each for Markets,
 Leagues and Countries. A single selection displays its name, multiple selections
 display a count, and the checklists retain all choices, with search for leagues
 and countries. Country options and selected country summaries use bundled local
-SVG flags with readable names if a flag is unavailable. Probability presets and
-the muted Odds unavailable explanation remain compact. Mobile filter edits
+SVG flags with readable names if a flag is unavailable. Probability uses compact
+directly editable minimum/maximum fields, accepting decimal percentages from
+0 through 100 with minimum no greater than maximum; equal bounds are valid.
+The muted Odds unavailable explanation remains compact. Mobile filter edits
 remain drafts until Apply; no timer applies them automatically.
 
 The results toolbar stays outside the collapsible section and places Sort by
@@ -127,7 +129,7 @@ Desktop retains the visible page title, shell logo and search, quick date preset
 and table layout.
 Its visible inline date/time controls precede one row of Leagues,
 Countries, Markets, Odds and Probability fields. Probability uses compact
-minimum/maximum number inputs; the row contains no sliders. One Apply action
+minimum/maximum decimal percentage inputs; the row contains no sliders. One Apply action
 submits all filter edits. The independent sort menu remains in the results toolbar.
 
 Mobile cards use the approved flat-dividers presentation: tiny Market, Pick,

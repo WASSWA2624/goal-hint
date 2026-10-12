@@ -35,6 +35,7 @@ export type ApiFootballAdapterOptions = Readonly<{
   verifyBatchEvidence?: (evidence: ApiFootballBatchEvidence) => boolean;
   verifyLogo?: NormalizationContext["verifyLogo"];
   verifyRegulationScore?: NormalizationContext["verifyRegulationScore"];
+  verifyHalfTimeScore?: NormalizationContext["verifyHalfTimeScore"];
   cacheCapacity?: number;
 }>;
 type Params = Readonly<Record<string, string>>;
@@ -357,7 +358,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
           let invalidRows = 0;
           const context: NormalizationContext = { retrievedAt, endpoint: apiFootballEndpoints[endpoint].path,
             ...(options.verifyLogo === undefined ? {} : { verifyLogo: options.verifyLogo }),
-            ...(options.verifyRegulationScore === undefined ? {} : { verifyRegulationScore: options.verifyRegulationScore }) };
+            ...(options.verifyRegulationScore === undefined ? {} : { verifyRegulationScore: options.verifyRegulationScore }),
+            ...(options.verifyHalfTimeScore === undefined ? {} : { verifyHalfTimeScore: options.verifyHalfTimeScore }) };
           for (const row of rows.slice(0, bounds.maxRows)) {
             const normalized = normalize(row, context);
             if (normalized.valid && matchesScope(endpoint, params, normalized.data)) { data.push(normalized.data); for (const missing of normalized.missingCoverage) missingCoverage.add(missing); }

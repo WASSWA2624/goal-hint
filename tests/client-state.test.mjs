@@ -33,6 +33,21 @@ test("store factories isolate queries, drafts, records, history and preferences"
   assert.deepEqual(JSON.parse(JSON.stringify(a.getState())), a.getState());
 });
 
+test("decimal probability bounds survive server handoff, drafts, apply and navigation restoration", () => {
+  const store = makeStore(bootstrap("prob=58.2-58.2", []));
+  assert.deepEqual(state(store).query.probability, { min: 58.2, max: 58.2 });
+  store.dispatch(draftChanged(query("prob=58.21-60.0049")));
+  assert.deepEqual(state(store).draft.probability, { min: 58.21, max: 60.0049 });
+  assert.deepEqual(state(store).query.probability, { min: 58.2, max: 58.2 });
+  store.dispatch(queryApplied(state(store).draft));
+  store.dispatch(navigationSaved({ entryId: "decimal-bounds", scrollY: 20, now }));
+  store.dispatch(queryApplied(query()));
+  store.dispatch(navigationRestored({ entryId: "decimal-bounds", query: query("prob=58.21-60.0049"), now }));
+  assert.deepEqual(state(store).query.probability, { min: 58.21, max: 60.0049 });
+  assert.equal(state(store).view.scrollY, 20);
+  assert.throws(() => store.dispatch(draftChanged({ ...query(), probability: { min: 60.1, max: 60 } })));
+});
+
 test("versions use exact unsigned integer ordering, including values above JS precision", () => {
   assert.equal(compareFixtureVersions("10", "9"), 1);
   assert.equal(compareFixtureVersions("9007199254740993", "9007199254740992"), 1);

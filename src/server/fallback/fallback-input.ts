@@ -3,6 +3,9 @@ import "server-only";
 import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { marketRules, presentMarketProbabilities, validateMarketGroup, validateMarketSnapshot, type MarketSnapshot, type MarketSource } from "../../domain/markets.ts";
+import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
+import { scoreDistributionSchema } from "../../domain/score-distribution.ts";
+import { SCORE_SCHEMA_VERSION } from "../predictor/predictor-prompt.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, isSafeEvidenceLink, parseEvidenceContext } from "../evidence/evidence-input.ts";
 import { parseModelPin } from "../predictor/predictor-input.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
@@ -60,7 +63,8 @@ const aiOutput = z.object({ modelVersionId: identity, evidenceHash: identity, co
     unknownGeneration: z.enum(["reject", "allow-flagged"]), unknownUpdate: z.enum(["reject", "allow-flagged"]) }).strict(),
   evidence: z.object({ policyVersion: text, coverage, missingness: z.array(missing).max(100_000) }).strict(), markets: z.unknown(),
   reasons: z.array(explanation).min(2).max(4), uncertainty: explanation, sources: z.array(source).max(10_000),
-  timestamps: timestamps.extend({ evidenceRef: text }).strict(), flags, calibration, provisional: z.boolean(), evaluation }).strict()
+  timestamps: timestamps.extend({ evidenceRef: text }).strict(), flags, calibration, provisional: z.boolean(), evaluation,
+  scoreDistribution: scoreDistributionSchema.nullable().optional() }).strict()
   .refine((value) => value.provisional === (value.evaluation.status !== "evaluated"));
 const available = z.discriminatedUnion("available", [z.object({ available: z.literal(true), market: z.unknown() }).strict(),
   z.object({ available: z.literal(false), reason: z.enum(marketReasons) }).strict()]);
@@ -124,7 +128,10 @@ export function parseFallbackAiResult(value: unknown): PredictorResult {
   try {
     if (result.status === "denied") { if (result.markets !== undefined) parseFallbackMarketSnapshot(result.markets, "ai"); }
     else { parseModelPin(result.pin); parseEvidenceContext(result.output.context); parseFallbackMarketSnapshot(result.output.markets, "ai");
-      checkFlags(result.output.timestamps, result.output.flags); }
+      checkFlags(result.output.timestamps, result.output.flags);
+      if (result.output.scoreDistribution !== undefined && (result.output.schemaVersion !== SCORE_SCHEMA_VERSION ||
+          result.output.calibration.kind !== "none" || evidenceFingerprint(result.output.markets) !==
+            evidenceFingerprint(legacyMarketsFromScoreDistribution(result.output.scoreDistribution)))) throw new Error(); }
     return value as PredictorResult;
   } catch { throw new FallbackInputError(); }
 }

@@ -92,14 +92,14 @@ const PhoneActions = styled.div`
 `;
 /** Borderless title-bar icons; an open panel or search retains a clear active fill. */
 const RoundButton = styled(IconButton)`
-  inline-size: 1.75rem;
-  block-size: 1.75rem;
+  inline-size: 2rem;
+  block-size: 2rem;
   color: ${({ theme }) => theme.header.text};
   background: transparent;
   border: 0;
   box-shadow: none;
   border-radius: 0;
-  font-size: 0.875rem;
+  font-size: 1.375rem;
   transition: background-color 120ms ease, color 120ms ease;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
   &[aria-expanded="true"] { color: ${({ theme }) => theme.header.onAccent}; background: ${({ theme }) => theme.header.accent}; }

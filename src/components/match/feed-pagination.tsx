@@ -18,8 +18,15 @@ const Bar = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+  ${desktop} {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+  }
   > p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; ${desktop} { font-size: 0.875rem; } }
-  > nav { inline-size: 100%; min-inline-size: 0; }
+  > nav { inline-size: 100%; min-inline-size: 0; ${desktop} { inline-size: auto; max-inline-size: 100%; } }
 `;
 /** Always one row: buttons shrink together on narrow phones instead of wrapping. */
 const Pages = styled.ol`

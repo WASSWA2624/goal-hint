@@ -29,7 +29,7 @@ access. All SQL values, limits and offsets are bound parameters.
 | `league` | Comma list of canonical competition IDs (matching `competition.id`), at most 50. Absent or empty selects all leagues. |
 | `country` | Comma list of stored competition country names (`competition.country`), at most 50. Absent or empty selects all countries. |
 | `market` | Comma list of one or more of `match-result` (default), `double-chance`, `total-goals`, `both-teams-to-score`. Duplicates are rejected. |
-| `prob` | `MIN-MAX` whole percents, 0–100, MIN ≤ MAX, no leading zeros. It applies to each fixture's shown pick (below). `0-100` applies no filter and is omitted from canonical URLs. |
+| `prob` | `MIN-MAX` inclusive percentage bounds, integers or plain decimals in 0–100, MIN ≤ MAX; equal bounds are valid. Signs, exponents, nonfinite values, leading zeros and incomplete decimals are rejected. It applies to the shown pick's unrounded probability (below). Canonical URLs remove unnecessary decimal zeros; `0-100` applies no filter and is omitted. |
 | `odds` | Prompt 052, **currently rejected**. `MIN-MAX` decimal prices with exactly two places, 1.01 ≤ MIN ≤ MAX ≤ 1000.00, no leading zeros, applied inclusively to the shown pick's own stored price (below). `1.01-1000.00` (both slider extremes; the top stop reads "20.00+") applies no filter and is omitted from canonical URLs. Accepted only while `publicPolicy.features.providerOdds` is on; it is off until the owner records odds display rights (OP-36), so today any `odds` value is an unknown key (400). |
 | `picks` | `all` (default) or `only`, which keeps fixtures that have a shown pick. |
 | `status` | `all` (default), `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. `finished` includes regulation, extra-time and penalty finals. |
@@ -62,7 +62,8 @@ leading-wildcard substring search does not promise a prefix-index plan.
 
 Each fixture has at most one **shown pick**: in its displayed revision, the
 available family among the selected `market` families with the highest stored
-unrounded DOUBLE `selectedProbability`, ties broken in policy order. The SQL joins
+unrounded DOUBLE `selectedProbability`, then the highest fresh public odds for
+that exact family and selection when probabilities tie, then policy order. The SQL joins
 this pick once per fixture; `bestCardFamily` in `src/domain/feed-presentation.ts`
 applies the same rule to the same values, so cards show the pick that ordering and
 filters used. A family outside the selection never supplies a probability.
@@ -71,9 +72,12 @@ Default order is kickoff ascending, then canonical fixture ID ascending;
 `dir=desc` reverses both. Probability order uses the shown pick's unrounded
 value, descending by default or ascending with `dir=asc`. Fixtures without a shown
 pick come last in both directions, and ties fall back to kickoff ascending, then
-fixture ID ascending. `prob` keeps fixtures whose shown pick displays inside the
-whole-percent bounds: stored values from MIN − 0.5 points (inclusive) up to MAX +
-0.5 points (exclusive). Fixtures without a shown pick are excluded whenever `prob`
+fixture ID ascending. `prob` keeps fixtures whose shown pick's unrounded
+percentage falls inside both inclusive bounds. Decimal-text scaling converts
+each percentage endpoint to a 0–1 fraction before comparing the stored DOUBLE;
+there is no display rounding, half-point allowance or arithmetic scaling error
+at equality. For example, `60.0049-60.0049` selects an exact 60.0049% forecast,
+while a nearby forecast that also displays as 60% is excluded. Fixtures without a shown pick are excluded whenever a non-default `prob`
 or `picks=only` is set. `league` and `country` match the stored competition ID and
 country. Every fixture appears once, using its applicable cycle.
 
@@ -84,7 +88,9 @@ shown pick has a fresh stored price for exactly that family and selection with
 `stale = FALSE`. The table's primary key makes that join 1:1, so counts and league
 options never fan out. Fixtures without a shown pick, without a price, or with
 only a stale price drop out. A price on a family that is not shown never
-qualifies a fixture. Price never changes which pick is shown or the order. While
+qualifies a fixture. Price breaks exact probability ties between eligible
+published picks; it never outweighs a higher probability or changes the feed's
+kickoff/probability row ordering. While
 the flag is off, the SQL never references the odds tables.
 
 Responses include `page`, `pageSize`, `total`, `totalPages`, `nextPage`,

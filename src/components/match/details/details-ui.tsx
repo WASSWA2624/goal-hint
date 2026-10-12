@@ -337,6 +337,12 @@ export function Crest({ name, url, size = 20, eager = false }: { name: string | 
 
 const PagerList = styled.ol`
   ${paginationListStyles}
+  ${desktop} {
+    grid-auto-columns: minmax(0, 1.75rem);
+    gap: 4px;
+    font-size: ${size("secondary")};
+    > li > button, > li > span { block-size: 1.75rem; }
+  }
 `;
 /** Every page of a section's complete collection; the URL keeps the page for Back and refresh. */
 export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {

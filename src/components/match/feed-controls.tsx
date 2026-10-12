@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
-import type { FeedQuery } from "@/domain/feed-query";
+import { formatProbabilityValue, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
@@ -25,7 +25,7 @@ export function FeedAppliedSummary({ query, leagues }: { query: FeedQuery; leagu
     {leagueNames.length > 0 && <> · {leagueNames.join(", ")}</>}
     {query.countries.length > 0 && <> · {query.countries.join(", ")}</>}
     {(query.probability.min !== 0 || query.probability.max !== 100) && <> · {messages.text("feed.filters.percentRange",
-      { min: messages.number(query.probability.min), max: messages.number(query.probability.max) })}</>}
+      { min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max) })}</>}
     {query.search && <> · {messages.text("feed.filters.search")}: “{query.search}”</>}
   </FeedNote>;
 }

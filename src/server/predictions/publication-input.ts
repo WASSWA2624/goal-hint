@@ -5,6 +5,8 @@ import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseResolvedForecastCandidate } from "../fallback/fallback-input.ts";
 import { historyHash, historyId, historyInstant, historyVersion } from "./history-input.ts";
 import { publicationFail, type PublicationObservation, type PublicationPolicy, type PublishRevisionInput } from "./publication-contract.ts";
+import { parseGoalMarketExtensionInput } from "./goal-market-store.ts";
+import { parseImpliedMarketExtensionInput } from "./implied-market-contract.ts";
 
 const ref = z.string().trim().min(1).max(512).regex(/^[^\p{Cc}]+$/u);
 const freshness = z.strictObject({ maxAgeMs: z.number().int().nonnegative().max(2_147_483_647),
@@ -29,13 +31,17 @@ export function parsePublicationPolicy(input: unknown): PublicationPolicy {
 export function parsePublicationObservation(input: unknown): PublicationObservation { return parsePublication(observation, input); }
 export function parsePublishRevision(input: unknown): PublishRevisionInput {
   const value = parsePublication(z.strictObject({ attemptKey: historyHash, candidate: z.unknown(), evidenceSnapshotId: historyHash,
-    scheduleVersion: historyVersion, generationCompletedAt: historyInstant, observation }), input);
+    scheduleVersion: historyVersion, generationCompletedAt: historyInstant, observation,
+    goalExtension: z.unknown().optional(), impliedExtension: z.unknown().optional() }), input);
   try {
     const candidate = parseResolvedForecastCandidate(value.candidate), context = candidate.context.context;
     if (context.cycleId === null || context.runId === null || value.generationCompletedAt < context.analysisAt ||
       value.observation.fixtureId !== context.fixtureId || value.observation.externalFixtureId !== context.externalFixtureId ||
       value.observation.cycleId !== context.cycleId || Object.values(candidate.markets).some((item) =>
         item.available && item.timestamps.retrievedAt > value.generationCompletedAt)) return publicationFail("invalid-request");
-    return freezeEvidence({ ...value, candidate });
+    const { goalExtension, impliedExtension, ...base } = value;
+    return freezeEvidence({ ...base, candidate, ...(goalExtension === undefined ? {} : {
+      goalExtension: parseGoalMarketExtensionInput(goalExtension) }), ...(impliedExtension === undefined ? {} : {
+      impliedExtension: parseImpliedMarketExtensionInput(impliedExtension) }) });
   } catch { return publicationFail("invalid-request"); }
 }

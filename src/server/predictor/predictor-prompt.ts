@@ -1,6 +1,7 @@
 import "server-only";
 
 import { marketRules, marketSelections, type SourceGroup } from "../../domain/markets.ts";
+import { SCORE_DISTRIBUTION_VERSION, scoreDistributionRules } from "../../domain/score-distribution.ts";
 import type { EvidenceAuthority, EvidenceContext, EvidenceSnapshot, EvidenceSource } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, isSafeEvidenceLink, parseEvidenceSnapshot } from "../evidence/evidence-input.ts";
 import { buildEvidenceSnapshot } from "../evidence/evidence-snapshot.ts";
@@ -9,6 +10,14 @@ import { parseModelVersion } from "./predictor-input.ts";
 
 export const PRIMARY_PROMPT_VERSION = "regulation-ai-prompt-v1";
 export const PRIMARY_SCHEMA_VERSION = "regulation-ai-output-v1";
+export const SCORE_PROMPT_VERSION = "regulation-ai-score-prompt-v2";
+export const SCORE_SCHEMA_VERSION = "regulation-ai-score-output-v2";
+export function usesScoreDistribution(model: Pick<ModelVersion, "promptVersion" | "schemaVersion">): boolean {
+  return model.promptVersion === SCORE_PROMPT_VERSION && model.schemaVersion === SCORE_SCHEMA_VERSION;
+}
+export function supportedPredictorVersions(model: Pick<ModelVersion, "promptVersion" | "schemaVersion">): boolean {
+  return usesScoreDistribution(model) || model.promptVersion === PRIMARY_PROMPT_VERSION && model.schemaVersion === PRIMARY_SCHEMA_VERSION;
+}
 export type PredictorPromptAuthority = Readonly<{
   evidence: EvidenceAuthority;
   verifyModel(model: ModelVersion): boolean;
@@ -18,7 +27,8 @@ export type PredictorPromptAuthority = Readonly<{
 export type PredictorPrompt = Readonly<{
   instructions: string; inputJson: string; schema: Readonly<Record<string, unknown>>;
   sourceIds: readonly string[]; factIds: readonly string[];
-  promptVersion: typeof PRIMARY_PROMPT_VERSION; schemaVersion: typeof PRIMARY_SCHEMA_VERSION; bytes: number;
+  promptVersion: typeof PRIMARY_PROMPT_VERSION | typeof SCORE_PROMPT_VERSION;
+  schemaVersion: typeof PRIMARY_SCHEMA_VERSION | typeof SCORE_SCHEMA_VERSION; bytes: number;
 }>;
 export type BuiltPredictorPrompt = PredictorPrompt;
 const prepared = new WeakMap<PredictorPrompt, Readonly<{ modelVersionId: string; evidenceHash: string; authority: PredictorPromptAuthority }>>();
@@ -41,6 +51,11 @@ const instructions = [
   "Each reason requires a genuine supplied reference. An uncertainty about explicitly missing evidence may have no references; otherwise cite its supplied factual basis.",
   "Do not output internal reasoning, chain of thought, tool instructions, verbal confidence, extra fields, invented sources or timestamps. Event probability is unrelated to verbal model confidence.",
 ].join("\n");
+const scoreInstructions = instructions
+  .replace("Return regulation-time probabilities strictly between zero and one for the three requested source families. Return null for a family you cannot support; never fill a missing probability or convert odds.",
+    "Return one joint regulation full-time and half-time score distribution, or null when unsupported. Every state describes the same possible match path; half-time scores cannot exceed its full-time scores. Do not assume independent halves, normalize missing mass, convert odds, or invent missing evidence.")
+  .replace("Outcome probabilities in each complete family must sum to one within the supplied tolerance and obey the supplied cross-market constraints. Double chance is derived later by server code and must not be returned.",
+    "Represented state probability plus explicit unrepresentedProbability must sum to one. Retain unsupported tail mass explicitly. Use null for both half-time counts when that joint information is unavailable. Server code derives market groups; do not return market probability groups or verbal confidence.");
 function synchronous(value: unknown): unknown {
   if (value instanceof Promise) void value.catch(() => undefined);
   return value;
@@ -56,7 +71,7 @@ function authorize(snapshot: EvidenceSnapshot, model: ModelVersion, authority: P
     !proof(() => authority.verifyTransmission(source, snapshot.context, model))) throw new PredictorPromptError("not-authorized");
 }
 function verifyEvidence(snapshot: EvidenceSnapshot, model: ModelVersion, authority: PredictorPromptAuthority) {
-  if (model.promptVersion !== PRIMARY_PROMPT_VERSION || model.schemaVersion !== PRIMARY_SCHEMA_VERSION) throw new PredictorPromptError("unsupported-version");
+  if (!supportedPredictorVersions(model) || usesScoreDistribution(model) && model.calibration.kind !== "none") throw new PredictorPromptError("unsupported-version");
   if (Object.values(model.windows).some((window) => window !== null && window.endsAt > snapshot.context.cutoffAt))
     throw new PredictorPromptError("invalid-model");
   authorize(snapshot, model, authority);
@@ -108,7 +123,15 @@ function identityFor(snapshot: EvidenceSnapshot, model: ModelVersion) {
   return { fixtureId: context.fixtureId, fixtureVersion: context.fixtureVersion.toString(), externalFixtureId: context.externalFixtureId,
     homeTeamId: context.home.teamId, awayTeamId: context.away.teamId, homeExternalId: context.home.externalId,
     awayExternalId: context.away.externalId, cycleId: context.cycleId, runId: context.runId,
-    modelVersionId: model.id, evidenceHash: snapshot.hash, cutoffAt: context.cutoffAt, schemaVersion: PRIMARY_SCHEMA_VERSION };
+    modelVersionId: model.id, evidenceHash: snapshot.hash, cutoffAt: context.cutoffAt, schemaVersion: model.schemaVersion };
+}
+function scoreSchema() {
+  const goals = { type: "integer", minimum: 0, maximum: scoreDistributionRules.maximumGoals };
+  return { anyOf: [objectSchema({ version: { type: "string", const: SCORE_DISTRIBUTION_VERSION },
+    states: { type: "array", minItems: 1, maxItems: scoreDistributionRules.maximumStates, items: objectSchema({
+      home: goals, away: goals, halfHome: { anyOf: [goals, { type: "null" }] }, halfAway: { anyOf: [goals, { type: "null" }] },
+      probability: { type: "number", exclusiveMinimum: 0, maximum: 1 },
+    }) }, unrepresentedProbability: { type: "number", minimum: 0, maximum: 1 } }), { type: "null" }] };
 }
 function outputSchema(snapshot: EvidenceSnapshot, model: ModelVersion, references: readonly Reference[]) {
   const subjects = [...new Set(references.map((reference) => reference.subjectTeamId))];
@@ -121,8 +144,9 @@ function outputSchema(snapshot: EvidenceSnapshot, model: ModelVersion, reference
   });
   return objectSchema({ ...Object.fromEntries(Object.entries(identityFor(snapshot, model)).map(([key, value]) =>
     [key, value === null ? { type: "null" } : { type: typeof value, const: value }])),
-  groups: objectSchema({ "match-result": groupSchema("match-result"), "total-goals": groupSchema("total-goals"),
-    "both-teams-to-score": groupSchema("both-teams-to-score") }),
+  ...(usesScoreDistribution(model) ? { scoreDistribution: scoreSchema() } : {
+    groups: objectSchema({ "match-result": groupSchema("match-result"), "total-goals": groupSchema("total-goals"),
+      "both-teams-to-score": groupSchema("both-teams-to-score") }) }),
   reasons: { type: "array", minItems: 2, maxItems: 4, items: item(false) }, uncertainty: item(true) });
 }
 
@@ -139,7 +163,9 @@ export function buildPredictorPrompt(input: Readonly<{ snapshot: EvidenceSnapsho
   if (references.length === 0 || references.some((reference) => JSON.stringify(reference).length > model.bounds.maxCitationCharacters))
     throw new PredictorPromptError("input-limit");
   const schema = outputSchema(snapshot, model, references);
+  const selectedInstructions = usesScoreDistribution(model) ? scoreInstructions : instructions;
   const inputJson = evidenceSerialize({ identity: identityFor(snapshot, model),
+    ...(usesScoreDistribution(model) ? { scoreDistributionRules: { version: SCORE_DISTRIBUTION_VERSION, ...scoreDistributionRules } } : {}),
     fixture: { provider: snapshot.context.provider, kickoffAt: snapshot.context.kickoffAt, analysisAt: snapshot.context.analysisAt },
     marketRules: { version: marketRules.ruleVersion, period: marketRules.period, totalGoalsLine: marketRules.totalGoalsLine,
       probabilitySumTolerance: marketRules.probabilitySumTolerance, consistencyTolerance: marketRules.consistencyTolerance,
@@ -150,7 +176,7 @@ export function buildPredictorPrompt(input: Readonly<{ snapshot: EvidenceSnapsho
     sources: snapshot.sources.map((source) => ({ id: source.id, kind: source.kind, version: source.version, publisher: source.publisher,
       title: source.title, sourceUrl: source.sourceUrl, publishedAt: source.publishedAt, retrievedAt: source.retrievedAt, providerUpdatedAt: source.providerUpdatedAt })),
     references, missingness: snapshot.missingness, coverage: snapshot.coverage });
-  const bytes = Buffer.byteLength(evidenceSerialize({ instructions, inputJson, schema }), "utf8");
+  const bytes = Buffer.byteLength(evidenceSerialize({ instructions: selectedInstructions, inputJson, schema }), "utf8");
   if (bytes > model.bounds.maxInputBytes) throw new PredictorPromptError("input-limit");
   // Check current rights again after bounded serialization before returning anything dispatchable.
   authorize(snapshot, model, authority);
@@ -158,8 +184,10 @@ export function buildPredictorPrompt(input: Readonly<{ snapshot: EvidenceSnapsho
     const checked = buildEvidenceSnapshot({ context: snapshot.context, policy: snapshot.policy, sources: snapshot.sources }, authority.evidence);
     if (evidenceFingerprint(eligibleBody(snapshot)) !== evidenceFingerprint(eligibleBody(checked))) throw new Error();
   } catch { throw new PredictorPromptError("not-authorized"); }
-  const result: PredictorPrompt = freezeEvidence({ instructions, inputJson, schema, sourceIds: snapshot.sources.map((source) => source.id),
-    factIds: snapshot.facts.map((fact) => fact.id), promptVersion: PRIMARY_PROMPT_VERSION, schemaVersion: PRIMARY_SCHEMA_VERSION, bytes });
+  const result: PredictorPrompt = freezeEvidence({ instructions: selectedInstructions, inputJson, schema, sourceIds: snapshot.sources.map((source) => source.id),
+    factIds: snapshot.facts.map((fact) => fact.id),
+    promptVersion: usesScoreDistribution(model) ? SCORE_PROMPT_VERSION : PRIMARY_PROMPT_VERSION,
+    schemaVersion: usesScoreDistribution(model) ? SCORE_SCHEMA_VERSION : PRIMARY_SCHEMA_VERSION, bytes });
   prepared.set(result, Object.freeze({ modelVersionId: model.id, evidenceHash: snapshot.hash, authority }));
   return result;
 }

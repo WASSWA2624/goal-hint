@@ -41,7 +41,7 @@ const PhoneHeaderGroup = styled.div`
  */
 const PhoneBar = styled.div`
   display: grid;
-  grid-template-columns: 1.75rem minmax(0, 1fr) 1.75rem 1.75rem;
+  grid-template-columns: 2rem minmax(0, 1fr) 2rem 2rem;
   align-items: center;
   gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
@@ -61,11 +61,11 @@ const barFocus = css`
 const RoundLink = styled(Link)`
   display: grid;
   place-items: center;
-  inline-size: 1.75rem;
-  block-size: 1.75rem;
+  inline-size: 2rem;
+  block-size: 2rem;
   color: ${({ theme }) => theme.header.text};
   border-radius: 0;
-  font-size: 0.875rem;
+  font-size: 1.375rem;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlFill}; } }
   ${barFocus}
 `;
@@ -73,14 +73,14 @@ const RoundLink = styled(Link)`
 const RoundButton = styled.button`
   display: grid;
   place-items: center;
-  inline-size: 1.75rem;
-  block-size: 1.75rem;
+  inline-size: 2rem;
+  block-size: 2rem;
   padding: 0;
   color: ${({ theme }) => theme.header.text};
   background: transparent;
   border: 0;
   border-radius: 0;
-  font-size: 0.875rem;
+  font-size: 1.375rem;
   cursor: pointer;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
   &[aria-expanded="true"] { color: ${({ theme }) => theme.header.onAccent}; background: ${({ theme }) => theme.header.accent}; }

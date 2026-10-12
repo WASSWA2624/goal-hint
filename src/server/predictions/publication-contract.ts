@@ -4,6 +4,8 @@ import type { UtcInstant } from "../../domain/calendar.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
 import type { ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 import type { StoredRevision } from "./history-contract.ts";
+import type { GoalMarketExtensionInput } from "./goal-market-store.ts";
+import type { ImpliedMarketExtensionInput } from "./implied-market-contract.ts";
 
 export class RevisionPublicationError extends Error {
   readonly reason: "invalid-request" | "policy-required" | "unauthorized" | "conflicting-request" | "lost-lease" | "eligibility-expired" | "unavailable";
@@ -31,6 +33,10 @@ export type PublicationObservation = Readonly<{
 export type PublishRevisionInput = Readonly<{
   attemptKey: string; candidate: ResolvedForecastCandidate; evidenceSnapshotId: string;
   scheduleVersion: number; generationCompletedAt: UtcInstant; observation: PublicationObservation;
+  /** An additive snapshot bound to this same revision; legacy candidate JSON remains unchanged. */
+  goalExtension?: GoalMarketExtensionInput;
+  /** Separately attributed de-margined provider odds, never relabelled as AI. */
+  impliedExtension?: ImpliedMarketExtensionInput;
 }>;
 export type PublicationAuthority = Readonly<{
   authorize(input: PublishRevisionInput): void;
@@ -39,6 +45,10 @@ export type PublicationAuthority = Readonly<{
   verifyObservation(observation: PublicationObservation): boolean;
   /** Proves owning job/model pin, evidence, source receipts, rights and grounding. No I/O here. */
   verifyCandidate(input: PublishRevisionInput, now: UtcInstant): boolean;
+  /** Required for extensions: authenticates the complete original v2 output and reviewed definitions, not just its v1 marginals. */
+  verifyGoalExtension?: (input: PublishRevisionInput, now: UtcInstant) => boolean;
+  /** Required for the exact reviewed bookmaker/catalog mappings and frozen odds references. */
+  verifyImpliedExtension?: (input: PublishRevisionInput, now: UtcInstant) => boolean;
 }>;
 export type PublicationReason = "accepted" | "no-valid-family" | "not-selected" | "outside-window" | "wrong-cycle" |
   "schedule-changed" | "closed-cycle" | "early-play" | "status-ineligible" | "cutoff-passed" |

@@ -33,6 +33,7 @@ export type LifecycleObservation = Readonly<{
   retrievedAt: UtcInstant; providerUpdatedAt: UtcInstant | null; endpoint: string;
   reportedGoals: Readonly<{ home: number | null; away: number | null }>;
   regulationScore: NormalizedFixture["regulationScore"];
+  halfTimeScore?: NormalizedFixture["halfTimeScore"];
   extraTimeScore: Readonly<{ home: number | null; away: number | null }>;
   penaltyScore: Readonly<{ home: number | null; away: number | null }>;
   actor: string; evidenceRef: string;

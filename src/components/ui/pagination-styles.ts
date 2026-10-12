@@ -1,12 +1,13 @@
 import { css } from "styled-components";
 import { media } from "@/styles/theme";
 
-/** Equal-width slots fill their container for any visible page count, always on one row. */
+/** Mobile slots fill the container; desktops retain compact pagination on one row. */
 export const paginationListStyles = css`
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(1.5rem, 1fr);
-  inline-size: 100%;
+  grid-auto-columns: minmax(0, 2.25rem);
+  inline-size: max-content;
+  max-inline-size: 100%;
   min-inline-size: 0;
   align-items: center;
   gap: 4px;
@@ -14,6 +15,10 @@ export const paginationListStyles = css`
   padding: 0;
   list-style: none;
   font-size: 0.8125rem;
+  ${media.belowDesktop} {
+    grid-auto-columns: minmax(1.5rem, 1fr);
+    inline-size: 100%;
+  }
   @media (max-width: 20rem) { gap: 2px; }
   @media (max-width: 18.75rem) { gap: 0; }
   ${media.desktop} { gap: 6px; font-size: 0.875rem; }
@@ -53,4 +58,6 @@ export const paginationListStyles = css`
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
   > li > span[data-gap] { background: none; border: 0; color: ${({ theme }) => theme.color.mutedText}; }
-  > li > :disabled, > li > [aria-disabled="true"] { color: ${({ theme }) => theme.color.disabledText}; cursor: not-al
+  > li > :disabled, > li > [aria-disabled="true"] { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
+  svg { font-size: 1.125rem; }
+`;

@@ -20,6 +20,11 @@ import { observationShowsPlay, publicationEligibility, publicationSourceIsFresh,
 import { parsePublication, parsePublicationPolicy, parsePublishRevision } from "./publication-input.ts";
 import { publicationResult, storedPublicationBarrier, storedRefreshResult } from "./publication-read.ts";
 import { recordPublicationBarrier } from "./publication-barrier.ts";
+import { appendGoalMarketExtension } from "./goal-market-store.ts";
+import { appendImpliedMarketExtension } from "./implied-market-store.ts";
+import type { StoredImpliedMarketExtension } from "./implied-market-contract.ts";
+import { usesScoreDistribution } from "../predictor/predictor-prompt.ts";
+import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
 
 type Transaction = Prisma.TransactionClient;
 async function serverNow(tx: Transaction) {
@@ -34,6 +39,8 @@ function authorized(authority: PublicationAuthority, policy: PublicationPolicy, 
   try {
     checked(authority.authorize(input), undefined); checked(authority.verifyPolicy(policy), true);
     checked(authority.verifyObservation(input.observation), true); checked(authority.verifyCandidate(input, now), true);
+    if (input.goalExtension !== undefined) checked(authority.verifyGoalExtension?.(input, now), true);
+    if (input.impliedExtension !== undefined) checked(authority.verifyImpliedExtension?.(input, now), true);
   } catch { return publicationFail("unauthorized"); }
 }
 
@@ -107,7 +114,8 @@ export function createRevisionPublicationService(options: Readonly<{
             reason = "status-ineligible";
           const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" } });
           if (reason === null && latest && latest.runSequence >= run.sequence) reason = "older-run";
-          let revision = null, outcome: RefreshPublicationResult["outcome"] = "skipped";
+          let revision = null, impliedSnapshot: StoredImpliedMarketExtension | null = null,
+            outcome: RefreshPublicationResult["outcome"] = "skipped";
           if (reason === null) {
             await queue.assertOwned(tx, lease);
             const snapshot = await evidence.findInTransaction(tx, input.evidenceSnapshotId);
@@ -115,6 +123,14 @@ export function createRevisionPublicationService(options: Readonly<{
               evidenceFingerprint(snapshot.snapshot.context) !== evidenceFingerprint(context)) return publicationFail("invalid-request");
             const model = candidate.context.pin === null ? null : await models.findInTransaction(tx, candidate.context.pin.modelVersionId);
             if (candidate.context.pin !== null && model === null) return publicationFail("invalid-request");
+            if (input.goalExtension !== undefined) {
+              if (!model || !usesScoreDistribution(model) || model.calibration.kind !== "none" || candidate.audit.aiStatus !== "candidate")
+                return publicationFail("invalid-request");
+              const derived = legacyMarketsFromScoreDistribution(input.goalExtension.scoreDistribution);
+              for (const [family, item] of Object.entries(candidate.markets)) if (item.available && item.market.source === "ai" &&
+                  evidenceFingerprint(derived.markets[family as keyof typeof derived.markets]) !==
+                    evidenceFingerprint({ available: true, market: item.market })) return publicationFail("invalid-request");
+            }
             for (const [family, item] of Object.entries(candidate.markets)) if (item.available) {
               if (item.provenance.kind === "ai" ? candidate.audit.aiStatus !== "candidate"
                 : candidate.audit.providerStatus !== "candidate" || !item.provenance.source.supportEvidenceRefs[
@@ -150,6 +166,10 @@ export function createRevisionPublicationService(options: Readonly<{
               const actor = { actor: "revision-publication", reason: "Eligible complete snapshot accepted", evidenceRef: policy.evidenceRef };
               revision = await writer.appendRevision({ ...actor, candidate, evidenceSnapshotId: input.evidenceSnapshotId,
                 scheduleVersion: input.scheduleVersion, generationCompletedAt: input.generationCompletedAt, publishedAt: now });
+              if (input.goalExtension !== undefined) await appendGoalMarketExtension(tx, { ...input.goalExtension,
+                revisionId: revision.id, cycleId: cycle.id, fixtureId: fixture.id, recordedAt: now });
+              if (input.impliedExtension !== undefined) impliedSnapshot = await appendImpliedMarketExtension(tx, { ...input.impliedExtension,
+                revisionId: revision.id, cycleId: cycle.id, fixtureId: fixture.id, recordedAt: now });
               const recorded = (await storedCycle(tx, cycle.id))!;
               await writer.changeCycle({ ...actor, cycleId: cycle.id, expectedVersion: recorded.version,
                 eventKey: evidenceFingerprint({ kind: "revision-published", ...identity }), at: now,
@@ -176,6 +196,8 @@ export function createRevisionPublicationService(options: Readonly<{
           if (outcome === "published" || outcome === "retained-previous" || outcome === "unavailable") {
             await queue.assertOwned(tx, lease);
             const finished = await serverNow(tx); authorized(authority, policy, input, finished);
+            if (impliedSnapshot && (finished - impliedSnapshot.confirmedAt > impliedSnapshot.freshnessMs ||
+                impliedSnapshot.snapshots.some((snapshot) => snapshot.retainUntil <= finished))) return publicationFail("eligibility-expired");
             if (finished < now || finished >= cycle.cutoffAt || finished - input.observation.retrievedAt > policy.maxObservationAgeMs ||
               Object.values(candidate.markets).some((item) => item.available && (!publicationSourceIsFresh(item.timestamps, policy.sources[item.market.source], finished) ||
                 item.provenance.kind === "ai" && !publicationSourceIsFresh(item.timestamps, item.provenance.outputTiming, finished)))) return publicationFail("eligibility-expired");

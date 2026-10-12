@@ -84,6 +84,46 @@ test("regulation verification binds fixture, provider status and the separate fu
   assert.deepEqual(normalized.extraTimeScore, { home: 4, away: 2 });
 });
 
+test("half-time is optional legacy data and requires separate final-period verification", () => {
+  const raw = fixture(); raw.score.halftime = { home: 1, away: 0 };
+  assert.equal(Object.hasOwn(data(normalizeFixture(raw, context())), "halfTimeScore"), false);
+  for (const short of ["FT", "AET", "PEN"]) {
+    raw.fixture.status.short = short;
+    let seen;
+    const normalized = data(normalizeFixture(raw, context("/fixtures", {
+      verifyRegulationScore: () => true,
+      verifyHalfTimeScore: (candidate) => { seen = candidate; return true; },
+    })));
+    assert.ok(Object.isFrozen(seen));
+    assert.deepEqual(seen, { fixtureId: 101, providerStatus: short, sourceField: "score.halftime",
+      period: "first-half-including-stoppage-time", home: 1, away: 0 });
+    assert.equal(normalized.halfTimeScore.verified, true);
+  }
+  const unverified = normalizeFixture(raw, context("/fixtures", { verifyHalfTimeScore: () => true }));
+  assert.equal(data(unverified).halfTimeScore.verified, false);
+  assert.ok(unverified.missingCoverage.includes("half-time-score-verification"));
+  const refusal = data(normalizeFixture(raw, context("/fixtures", {
+    verifyRegulationScore: () => true, verifyHalfTimeScore: () => { throw Error("no verified half-time contract"); },
+  })));
+  assert.equal(refusal.halfTimeScore.verified, false);
+});
+
+test("half-time cannot use total goals, live scores, invalid fields or a score above regulation", () => {
+  const reviewed = context("/fixtures", { verifyRegulationScore: () => true, verifyHalfTimeScore: () => true });
+  for (const halftime of [undefined, null, { home: 3, away: 0 }, { home: 1, away: null },
+    { home: "1", away: 0 }, { home: 1.5, away: 0 }, { home: -1, away: 0 }]) {
+    const raw = fixture(); raw.score.halftime = halftime;
+    assert.equal(data(normalizeFixture(raw, reviewed)).halfTimeScore, null);
+    assert.equal(Object.hasOwn(data(normalizeFixture(raw, context())), "halfTimeScore"), false);
+  }
+  for (const short of ["HT", "2H", "ET", "P", "ABD", "AWD"]) {
+    const raw = fixture(); raw.fixture.status.short = short; raw.score.halftime = { home: 1, away: 0 };
+    let checked = false;
+    const normalized = data(normalizeFixture(raw, { ...reviewed, verifyHalfTimeScore: () => { checked = true; return true; } }));
+    assert.equal(normalized.halfTimeScore, null); assert.equal(checked, false);
+  }
+});
+
 test("extra-time and shootout aggregate totals cannot fill missing regulation scores", () => {
   for (const short of ["ET", "P", "AET", "PEN", "LIVE"]) {
     const raw = fixture();

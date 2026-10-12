@@ -634,6 +634,8 @@ model PredictionCycle {
   lifecycleObservations FixtureLifecycleObservation[]
   settlements           MarketSettlement[]
   settlementRevisions   MarketSettlementRevision[]
+  extendedMarketSettlements ExtendedMarketSettlement[]
+  extendedMarketSettlementRevisions ExtendedMarketSettlementRevision[]
 
   @@unique([id, fixtureId])
   @@unique([fixtureId, creationKey])
@@ -702,6 +704,9 @@ model PredictionSet {
   refreshResults        PredictionRefreshResult[]
   cycleOperations       PredictionCycleOperation[]
   settlements           MarketSettlementRevision[]
+  goalMarketExtension   GoalMarketExtension?
+  impliedMarketExtension ImpliedMarketExtension?
+  extendedMarketSettlements ExtendedMarketSettlementRevision[]
 
   @@unique([id, cycleId, fixtureId])
   @@unique([runId, fixtureId, cycleId], map: "PredictionSet_refresh_key")
@@ -735,6 +740,94 @@ model MarketPrediction {
 
   @@id([setId, family])
   @@index([family, source])
+}
+
+// Additive immutable sibling: legacy candidateJson/four-family rows keep their original bytes.
+model GoalMarketExtension {
+  revisionId String @id @db.Char(36)
+  cycleId String @db.Char(36)
+  fixtureId String @db.Char(36)
+  ruleVersion String @db.VarChar(64)
+  contentHash String @db.Char(64)
+  integrity String @db.Char(64)
+  recordedAt DateTime @db.DateTime(3)
+  body Json
+  revision PredictionSet @relation(fields: [revisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([revisionId, cycleId, fixtureId], map: "GoalMarketExtension_identity_key")
+  @@index([fixtureId, cycleId])
+}
+
+// Separate provenance: normalized bookmaker evidence never becomes an AI score distribution.
+model ImpliedMarketExtension {
+  revisionId String @id @db.Char(36)
+  cycleId String @db.Char(36)
+  fixtureId String @db.Char(36)
+  ruleVersion String @db.VarChar(64)
+  contentHash String @db.Char(64)
+  integrity String @db.Char(64)
+  recordedAt DateTime @db.DateTime(3)
+  body Json
+  revision PredictionSet @relation(fields: [revisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict, map: "ImpliedMarketExtension_prediction_fkey")
+
+  @@unique([revisionId, cycleId, fixtureId], map: "ImpliedMarketExtension_identity_key")
+  @@index([fixtureId, cycleId])
+}
+
+// Result-time facts have their own immutable evidence stream; forecast-time averages are never settlement inputs.
+model ImpliedMarketResultEvidence {
+  id String @id @db.Char(64)
+  fixtureId String @db.Char(36)
+  resultId String @db.Char(64)
+  sequence BigInt @unique @default(autoincrement()) @db.UnsignedBigInt
+  recordedAt DateTime @db.DateTime(3)
+  contentHash String @db.Char(64)
+  integrity String @db.Char(64)
+  body Json
+  result FixtureResult @relation(fields: [resultId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([fixtureId, resultId, sequence], map: "ImpliedMarketResultEvidence_result_idx")
+}
+
+// Current pointer only. Exact picks, prior result evidence and corrections are immutable siblings.
+model ExtendedMarketSettlement {
+  fixtureId String @db.Char(36)
+  cycleId String @db.Char(36)
+  marketKey String @db.VarChar(128)
+  revisionId String @unique @db.Char(64)
+  cycle PredictionCycle @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  revision ExtendedMarketSettlementRevision @relation("ActiveExtendedMarketSettlement", fields: [revisionId, cycleId, marketKey], references: [id, cycleId, marketKey], onDelete: Restrict, onUpdate: Restrict, map: "ExtendedMarketSettlement_revision_fkey")
+
+  @@id([cycleId, marketKey])
+  @@unique([revisionId, cycleId, marketKey], map: "ExtendedMarketSettlement_active_key")
+  @@index([fixtureId, cycleId])
+}
+
+model ExtendedMarketSettlementRevision {
+  id String @id @db.Char(64)
+  fixtureId String @db.Char(36)
+  cycleId String @db.Char(36)
+  marketKey String @db.VarChar(128)
+  predictionRevisionId String @db.Char(36)
+  source String @db.VarChar(32)
+  batchId String @db.Char(64)
+  previousId String? @unique @db.Char(64)
+  resultId String? @db.Char(64)
+  inputHash String @db.Char(64)
+  at DateTime @db.DateTime(3)
+  integrity String @db.Char(64)
+  body Json
+  cycle PredictionCycle @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  prediction PredictionSet @relation(fields: [predictionRevisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict, map: "ExtendedMarketSettlementRevision_prediction_fkey")
+  batch SettlementBatch @relation(fields: [batchId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  result FixtureResult? @relation(fields: [resultId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+  active ExtendedMarketSettlement? @relation("ActiveExtendedMarketSettlement")
+  previous ExtendedMarketSettlementRevision? @relation("ExtendedMarketSettlementHistory", fields: [previousId, cycleId, marketKey], references: [id, cycleId, marketKey], onDelete: Restrict, onUpdate: Restrict, map: "ExtendedMarketSettlementRevision_previous_fkey")
+  next ExtendedMarketSettlementRevision? @relation("ExtendedMarketSettlementHistory")
+
+  @@unique([id, cycleId, marketKey], map: "ExtendedMarketSettlementRevision_identity_key")
+  @@unique([previousId, cycleId, marketKey], map: "ExtendedMarketSettlementRevision_previous_key")
+  @@index([cycleId, marketKey, at, id], map: "ExtendedMarketSettlementRevision_history_idx")
 }
 
 model PredictionAudit {
@@ -958,6 +1051,8 @@ model FixtureResult {
   states             FixtureResultState[]
   event              PredictionChangeEvent?
   settlements        MarketSettlementRevision[]
+  extendedMarketSettlements ExtendedMarketSettlementRevision[]
+  impliedMarketEvidence ImpliedMarketResultEvidence[]
 
   @@unique([id, fixtureId])
   @@unique([id, fixtureId, fixtureVersion], map: "FixtureResult_change_key")
@@ -972,6 +1067,7 @@ model SettlementBatch {
   at             DateTime                   @db.DateTime(3)
   fixture        FootballFixture            @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   revisions      MarketSettlementRevision[]
+  extendedMarketRevisions ExtendedMarketSettlementRevision[]
   event          PredictionChangeEvent?
 
   @@unique([id, fixtureId])

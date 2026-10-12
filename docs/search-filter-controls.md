@@ -57,12 +57,15 @@ country options, selected chips and a single-country mobile summary. Unmapped
 or failed flags leave the readable country name in place.
 
 The feed filters and orders by each fixture's shown pick: the most likely
-available pick among the selected markets, ties in policy order. The same rule
+available pick among the selected markets, with exact probability ties broken
+by fresh odds for the same published family/selection, then policy order. The same rule
 picks the market shown on the card (`bestCardFamily`). Default order is kickoff
 ascending, then fixture ID. `dir=desc` reverses kickoff order. Probability order
 is descending by default (`dir=asc` reverses it), with missing picks last and
-kickoff/ID ties. The probability range (`prob`, whole percents) keeps only
-fixtures whose shown pick displays inside it. The Picks only/With predictions
+kickoff/ID ties. The probability range (`prob`) accepts integer or decimal
+percentages in 0–100 and keeps only fixtures whose shown pick's unrounded
+percentage lies between both inclusive endpoints. Equal endpoints select an
+exact probability; no display-rounding allowance is used. The Picks only/With predictions
 control is absent at every screen size; existing shared URL/parser compatibility
 is unchanged. See the [stored match feed](match-feed-api.md) for that contract.
 
@@ -70,7 +73,9 @@ Desktop places Leagues, Countries, Markets, Odds and Probability in one filter
 row. League, country and market fields retain selected chip links and complete
 checklists, searchable for leagues and countries. Each chip's `href` is the
 canonical URL with that value toggled and page reset, preserving ordinary link
-behavior. Probability uses compact minimum/maximum number fields; the filter
+behavior. Probability uses compact minimum/maximum fields accepting plain
+decimal numbers from 0 through 100; the minimum cannot exceed the maximum, and
+incomplete or invalid drafts prevent Apply. The filter
 row contains no sliders. Odds controls remain disabled with their explanation
 until provider odds display is enabled.
 
@@ -80,7 +85,7 @@ selection shows its name; multiple selections show their count. Empty league
 and country selections show All leagues and Any. Each summary opens the same
 complete checklist, and selected values missing from a refreshed option list
 remain removable. At least one market must stay selected. Probability uses the
-labeled preset field. Mobile retains the muted Odds unavailable explanation.
+same directly editable minimum/maximum fields as desktop. Mobile retains the muted Odds unavailable explanation.
 
 One action row stays outside the collapsible filter section. Sort by appears
 first on the left, followed by Clear and Apply filters. The applied match count

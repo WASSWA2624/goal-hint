@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 import { ResetIcon, FilterIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -11,7 +11,8 @@ import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { applyFeedDraft, resetFeedFilters } from "@/domain/feed-controls";
 import { countryOptions, leagueOptions, type FilterOption } from "@/domain/feed-presentation";
 import {
-  anyProbability, canonicalMarkets, feedQueryHref, feedQueryRules, resolveFeedDates, serializeFeedQuery, type FeedQuery,
+  canonicalMarkets, feedQueryHref, feedQueryRules, formatProbabilityValue, parseProbabilityValue, resolveFeedDates,
+  serializeFeedQuery, validProbabilityRange, type FeedQuery,
 } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import type { MarketFamily } from "@/domain/markets";
@@ -22,11 +23,10 @@ import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
 import { FeedTimeFilter } from "./feed-time";
 import { DateRangePicker } from "./feed-dates";
-import { ChipText, CompactSelect, FilterChip, focusRing, OptionLogo, OptionPicker } from "./filter-parts";
+import { ChipText, FilterChip, focusRing, OptionLogo, OptionPicker } from "./filter-parts";
 
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
-const probabilityPresets = [anyProbability, { min: 50, max: 100 }, { min: 60, max: 100 }, { min: 70, max: 100 }, { min: 80, max: 100 }, { min: 90, max: 100 }];
 
 function valid(query: FeedQuery, today: ReportingDate): boolean {
   try { serializeFeedQuery(query, today); return true; } catch { return false; }
@@ -39,12 +39,6 @@ function toggledMarkets(query: FeedQuery, family: MarketFamily): FeedQuery | nul
   const has = query.markets.includes(family);
   if (has && query.markets.length === 1) return null;
   return { ...query, markets: canonicalMarkets(has ? query.markets.filter((item) => item !== family) : [...query.markets, family]), page: 1 };
-}
-/** Presets read "50%+"; the narrow phone select has no room for "50% - 100%". */
-function rangeText(messages: Messages, range: FeedQuery["probability"]) {
-  return range.min === 0 && range.max === 100 ? messages.text("feed.filters.any")
-    : range.max === 100 ? messages.text("feed.filters.percentMin", { min: messages.number(range.min) })
-    : messages.text("feed.filters.percentRange", { min: messages.number(range.min), max: messages.number(range.max) });
 }
 
 /** A thin brand edge tops the desktop panel. */
@@ -94,7 +88,10 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
   display: grid;
   gap: 6px;
   min-inline-size: 0;
-  ${media.belowDesktop} { display: ${({ $open }) => $open ? "grid" : "none"}; }
+  ${media.belowDesktop} {
+    display: ${({ $open }) => $open ? "grid" : "none"};
+    scroll-margin-block-start: 3rem;
+  }
 `;
 /** Date and time inputs remain direct controls within the expanded filter group. */
 const RangeRow = styled.div`
@@ -125,16 +122,54 @@ const BottomRow = styled.div`
   gap: 6px 8px;
   @container phone-filters (max-width: 16rem) { grid-template-columns: minmax(0, 1fr); }
 `;
-const SelectGroup = styled.label<{ $accent: AccentName }>`
-  display: inline-flex;
+const ProbabilityGroup = styled.div`
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   min-inline-size: 0;
-  color: ${({ theme, $accent }) => theme.color.accent[$accent].text};
   font-size: 0.75rem;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  > span { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
-const SelectBox = styled(CompactSelect)`flex: 1; border-radius: 0; font-size: 0.75rem;`;
+const ProbabilityInputs = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  > label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-inline-size: 0;
+    padding-inline: 5px;
+    border: 1px solid ${({ theme }) => theme.color.controlBorder};
+    background: ${({ theme }) => theme.color.surface};
+    color: ${({ theme }) => theme.color.mutedText};
+    font-size: 0.6875rem;
+    white-space: nowrap;
+  }
+  input {
+    inline-size: 3.25rem;
+    min-inline-size: 0;
+    min-block-size: 1.75rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: ${({ theme }) => theme.color.text};
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    ${focusRing}
+  }
+  > label:has([aria-invalid="true"]) { border-color: ${({ theme }) => theme.color.accent.red.text}; }
+  ${desktop} {
+    [data-bound-label] { display: none; }
+    input { inline-size: 2.75rem; font-size: 0.8125rem; }
+  }
+`;
+const ProbabilityError = styled.p`
+  color: ${({ theme }) => theme.color.accent.red.text};
+  font-size: 0.75rem;
+`;
 const QuietButton = styled.button`
   display: inline-flex;
   align-items: center;
@@ -279,31 +314,20 @@ export function FeedFilterActions({ formId, locale, status }: {
   </FilterActions>;
 }
 
-/** Whole-number entry that commits on Enter or blur, never per keystroke; arrow keys step by one. */
-function WholeNumberInput({ value, min, max, label, onCommit }: {
-  value: number; min: number; max: number; label: string; onCommit: (value: number) => void;
+/** Shared decimal entry on every screen; incomplete drafts never become an applied filter. */
+function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, messages }: {
+  values: { min: string; max: string }; onChange: (bound: "min" | "max", value: string) => void;
+  invalid: boolean; descriptionId: string; messages: Messages;
 }) {
-  const [text, setText] = useState<string | null>(null);
-  const settle = (raw: string) => {
-    setText(null);
-    const trimmed = raw.trim().replace(/%$/u, ""), parsed = Number(trimmed);
-    if (trimmed === "" || !Number.isFinite(parsed)) return;
-    const next = Math.round(Math.min(max, Math.max(min, parsed)));
-    if (next !== value) onCommit(next);
-  };
-  const step = (delta: number) => {
-    setText(null);
-    const next = Math.min(max, Math.max(min, value + delta));
-    if (next !== value) onCommit(next);
-  };
-  return <input type="text" inputMode="numeric" value={text ?? String(value)} aria-label={label} autoComplete="off"
-    onFocus={(event) => event.currentTarget.select()} onChange={(event) => setText(event.target.value)}
-    onBlur={(event) => settle(event.target.value)}
-    onKeyDown={(event) => {
-      if (event.key === "Enter") { event.preventDefault(); settle(event.currentTarget.value); }
-      else if (event.key === "Escape") setText(null);
-      else if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); step(event.key === "ArrowUp" ? 1 : -1); }
-    }} />;
+  return <ProbabilityInputs>
+    {(["min", "max"] as const).map((bound) => <Fragment key={bound}><label>
+      <span data-bound-label>{messages.text(`feed.filters.${bound}`)}</span>
+      <input type="text" inputMode="decimal" autoComplete="off" value={values[bound]}
+        aria-label={messages.text(bound === "min" ? "feed.filters.minimum" : "feed.filters.maximum", { label: messages.text("feed.filters.probabilityLabel") })}
+        aria-invalid={invalid} aria-describedby={invalid ? descriptionId : undefined}
+        onChange={(event) => { if (/^\d*(?:\.\d*)?$/u.test(event.target.value)) onChange(bound, event.target.value); }} />
+    </label>{bound === "min" && <span aria-hidden="true">–</span>}</Fragment>)}
+  </ProbabilityInputs>;
 }
 
 type FeedFiltersProps = {
@@ -322,18 +346,23 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, p
   const range = resolveFeedDates(query, today), deviceZone = useDeviceTimeZone();
   const [dateInputs, setDateInputs] = useState({ from: String(range.startDate), to: String(range.endDate) });
   const [timeInputs, setTimeInputs] = useState({ from: query.time?.from ?? "", to: query.time?.to ?? "" });
+  const [probabilityInputs, setProbabilityInputs] = useState({ min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max) });
+  const minimum = parseProbabilityValue(probabilityInputs.min), maximum = parseProbabilityValue(probabilityInputs.max);
+  const probability = useMemo(() => minimum !== null && maximum !== null && validProbabilityRange({ min: minimum, max: maximum })
+    ? { min: minimum, max: maximum } : null, [minimum, maximum]);
   const zone = query.time?.zone ?? deviceZone;
   const completeDraft = useMemo(() => {
     try {
+      if (!probability) return null;
       const from = parseReportingDate(dateInputs.from), to = parseReportingDate(dateInputs.to);
       const dates: FeedQuery["dates"] = from === range.startDate && to === range.endDate ? query.dates
         : from === to ? { kind: "date", date: from } : { kind: "range", from, to };
       resolveFeedDates({ dates }, today);
       const time = timeInputs.from || timeInputs.to ? { ...timeInputs, zone } : null;
       if (time && !validKickoffTime(time)) return null;
-      return { ...draft, dates, time, page: 1 };
+      return { ...draft, dates, time, probability, page: 1 };
     } catch { return null; }
-  }, [dateInputs, draft, query.dates, range.endDate, range.startDate, timeInputs, today, zone]);
+  }, [dateInputs, draft, probability, query.dates, range.endDate, range.startDate, timeInputs, today, zone]);
   const messages = createMessages(query.locale);
   // Hundreds of leagues are sorted once per cohort, not on every chip tap.
   const leagueList = useMemo(() => leagueOptions(leagues, createMessages(query.locale).text("match.competitionUnknown")), [leagues, query.locale]);
@@ -405,15 +434,16 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, p
     </Field>;
   }
 
-  const probabilityOptions = probabilityPresets.some((preset) => preset.min === draft.probability.min && preset.max === draft.probability.max)
-    ? probabilityPresets : [...probabilityPresets, draft.probability];
   const oddsLabel = messages.text("feed.filters.oddsLabel"), probabilityLabel = messages.text("feed.filters.probabilityLabel");
-  const setProbability = (min: number, max: number) => edit({ ...draft, probability: { min, max } });
+  const probabilityErrorId = `${formId}-probability-error`;
+  const probabilityFields = <ProbabilityRangeInputs values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
+    onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
   return <Panel id={formId} aria-label={messages.text("feed.filters.form")} onReset={(event) => {
     event.preventDefault();
     setDateInputs({ from: range.startDate, to: range.endDate });
     setTimeInputs({ from: "", to: "" });
+    setProbabilityInputs({ min: formatProbabilityValue(reset.probability.min), max: formatProbabilityValue(reset.probability.max) });
     apply(reset);
   }} onSubmit={(event) => {
     event.preventDefault();
@@ -430,15 +460,9 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, p
         {phonePicker("leagues", leagueList)}
         {phonePicker("countries", countryList)}
         <BottomRow>
-          <SelectGroup $accent="teal">
-            {probabilityLabel}
-            <SelectBox aria-label={messages.text("feed.filters.probability")} value={`${phone.probability.min}-${phone.probability.max}`}
-              options={probabilityOptions.map((preset) => ({ value: `${preset.min}-${preset.max}`, label: rangeText(messages, preset) }))}
-              onChange={(event) => {
-                const [min, max] = event.target.value.split("-").map(Number);
-                edit({ ...phone, probability: { min: min!, max: max! } });
-              }} />
-          </SelectGroup>
+          <ProbabilityGroup role="group" aria-label={probabilityLabel}>
+            <span>{messages.text("match.columns.probabilityShort")}</span>{probabilityFields}%
+          </ProbabilityGroup>
         </BottomRow>
         <OddsNote title={messages.text("feed.filters.oddsPending")}>{messages.text("feed.filters.oddsUnavailable")}<VisuallyHidden>. {messages.text("feed.filters.oddsPending")}</VisuallyHidden></OddsNote>
       </PhoneMore>
@@ -459,16 +483,12 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, p
         </Field>
         <Field $accent="pink" role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
           <FieldName id="filters-probability" $accent="pink">{probabilityLabel}</FieldName>
-          <NumberPair>
-            <WholeNumberInput value={draft.probability.min} min={0} max={draft.probability.max} label={messages.text("feed.filters.minimum", { label: probabilityLabel })}
-              onCommit={(min) => setProbability(min, draft.probability.max)} />–
-            <WholeNumberInput value={draft.probability.max} min={draft.probability.min} max={100} label={messages.text("feed.filters.maximum", { label: probabilityLabel })}
-              onCommit={(max) => setProbability(draft.probability.min, max)} />%
-          </NumberPair>
+          {probabilityFields}%
           <VisuallyHidden>{messages.text("feed.filters.probabilityHelp")}</VisuallyHidden>
         </Field>
       </DesktopGrid>
     </DesktopOnly>
+    {probability === null && <ProbabilityError id={probabilityErrorId}>{messages.text("feed.filters.probabilityInvalid")}</ProbabilityError>}
     </FilterFieldsGroup>
   </Panel>;
 }

@@ -17,9 +17,14 @@ const resultSchema = z.strictObject({ id: historyHash, fixtureId: historyId, fix
   stoppageMinutes: z.number().int().min(0).max(1000).nullable().optional(),
   reportedGoals: pair, extraTimeScore: pair, penaltyScore: pair,
   regulation: z.strictObject({ verified: z.boolean(), home: goal.nullable(), away: goal.nullable(), evidenceRef: z.string().min(1).max(512).nullable() }),
+  halfTime: z.strictObject({ verified: z.literal(true), period: z.literal("first-half-including-stoppage-time"),
+    home: goal, away: goal, evidenceRef: z.string().min(1).max(512) }).optional(),
 }).refine((v) => v.regulation.verified
   ? v.regulation.home !== null && v.regulation.away !== null && v.regulation.evidenceRef !== null && v.regulationVerifiedAt !== null && v.regulationVerifiedAt <= v.observedAt
-  : v.regulation.home === null && v.regulation.away === null && v.regulation.evidenceRef === null && v.regulationVerifiedAt === null);
+  : v.regulation.home === null && v.regulation.away === null && v.regulation.evidenceRef === null && v.regulationVerifiedAt === null)
+  .refine((v) => v.halfTime === undefined || v.regulation.verified && v.regulation.home !== null && v.regulation.away !== null &&
+    v.halfTime.home <= v.regulation.home && v.halfTime.away <= v.regulation.away &&
+    ["finished-regulation", "finished-extra-time", "finished-penalties"].includes(v.status));
 export type StoredFixtureResult = Readonly<z.infer<typeof resultSchema>>;
 
 export function fixtureResultMatchesCanonical(fixture: Pick<FootballFixture, "status" | "regulationHome" | "regulationAway" | "regulationVerifiedAt" | "regulationEvidenceRef">,
@@ -44,7 +49,8 @@ export function fixtureResultFromRow(row: HistoryRow): StoredFixtureResult {
   const v = parsed.data;
   const content = { status: v.status, providerStatus: v.providerStatus, elapsedMinutes: v.elapsedMinutes,
     ...(v.stoppageMinutes !== undefined ? { stoppageMinutes: v.stoppageMinutes } : {}),
-    reportedGoals: v.reportedGoals, extraTimeScore: v.extraTimeScore, penaltyScore: v.penaltyScore, regulation: v.regulation };
+    reportedGoals: v.reportedGoals, extraTimeScore: v.extraTimeScore, penaltyScore: v.penaltyScore, regulation: v.regulation,
+    ...(v.halfTime === undefined ? {} : { halfTime: v.halfTime }) };
   if (v.id !== row.id || v.fixtureId !== row.fixtureId || v.fixtureVersion !== row.fixtureVersion || v.observedAt !== historyTime(row.observedAt) ||
       v.status !== row.status || v.regulation.verified !== Boolean(row.regulationVerified) ||
       v.regulation.home !== (typeof row.regulationHome === "bigint" ? Number(row.regulationHome) : row.regulationHome) ||

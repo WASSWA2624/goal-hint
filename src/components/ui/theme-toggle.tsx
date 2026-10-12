@@ -9,14 +9,14 @@ const Toggle = styled.button`
   display: inline-grid;
   flex: none;
   place-items: center;
-  inline-size: 1.75rem;
-  block-size: 1.75rem;
+  inline-size: 2rem;
+  block-size: 2rem;
   padding: 0;
   color: ${({ theme }) => theme.header.text};
   background: transparent;
   border: 0;
   border-radius: 0;
-  font-size: 0.875rem;
+  font-size: 1.375rem;
   cursor: pointer;
   ${media.desktop} { inline-size: 2rem; block-size: 2rem; font-size: 1rem; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }

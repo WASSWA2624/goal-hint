@@ -22,11 +22,18 @@ export const lifecycleObservationSchema = z.strictObject({
   regulationScore: z.strictObject({ fixtureId: externalId, providerStatus: z.enum(["FT", "AET", "PEN"]),
     sourceField: z.literal("score.fulltime"), period: z.literal("regulation-including-stoppage-time"),
     home: goal.unwrap(), away: goal.unwrap(), verified: z.boolean() }).nullable(),
+  halfTimeScore: z.strictObject({ fixtureId: externalId, providerStatus: z.enum(["FT", "AET", "PEN"]),
+    sourceField: z.literal("score.halftime"), period: z.literal("first-half-including-stoppage-time"),
+    home: goal.unwrap(), away: goal.unwrap(), verified: z.boolean() }).nullable().optional(),
   actor: label(128), evidenceRef: label(512),
 }).refine((value) => value.homeExternalId !== value.awayExternalId &&
   (value.providerUpdatedAt === null || value.providerUpdatedAt <= value.retrievedAt) &&
   (value.actualStartedAt === null || value.actualStartedAt <= value.retrievedAt) &&
-  (value.regulationScore === null || value.regulationScore.fixtureId === value.externalFixtureId));
+  (value.regulationScore === null || value.regulationScore.fixtureId === value.externalFixtureId) &&
+  (value.halfTimeScore == null || value.halfTimeScore.fixtureId === value.externalFixtureId &&
+    value.halfTimeScore.providerStatus === value.providerStatus && value.regulationScore !== null &&
+    value.halfTimeScore.home <= value.regulationScore.home && value.halfTimeScore.away <= value.regulationScore.away &&
+    (!value.halfTimeScore.verified || value.regulationScore.verified)));
 export function parseLifecycle<Value>(schema: z.ZodType<Value>, value: unknown): Value {
   try { return schema.parse(value); } catch { return lifecycleFail("invalid-request"); }
 }
@@ -41,6 +48,7 @@ export function parseLifecycleInput(input: LifecycleInput): LifecycleObservation
       ...(fixture.stoppageMinutes !== undefined ? { stoppageMinutes: fixture.stoppageMinutes } : {}),
       retrievedAt: fixture.source.retrievedAt, providerUpdatedAt: fixture.source.providerUpdatedAt, endpoint: fixture.source.endpoint,
       reportedGoals: fixture.reportedGoals, regulationScore: fixture.regulationScore,
+      ...(fixture.halfTimeScore !== undefined ? { halfTimeScore: fixture.halfTimeScore } : {}),
       extraTimeScore: fixture.extraTimeScore, penaltyScore: fixture.penaltyScore }));
   } catch { return lifecycleFail("invalid-request"); }
 }

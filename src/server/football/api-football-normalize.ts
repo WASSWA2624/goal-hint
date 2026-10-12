@@ -14,11 +14,21 @@ export type RegulationScoreCandidate = Readonly<{
   home: number;
   away: number;
 }>;
+export type HalfTimeScoreCandidate = Readonly<{
+  fixtureId: number;
+  providerStatus: "FT" | "AET" | "PEN";
+  sourceField: "score.halftime";
+  period: "first-half-including-stoppage-time";
+  home: number;
+  away: number;
+}>;
 export type NormalizationContext = Readonly<{
   retrievedAt: UtcInstant;
   endpoint: string;
   verifyLogo?: (url: string) => boolean;
   verifyRegulationScore?: (candidate: RegulationScoreCandidate) => boolean;
+  /** Separate verification; full-time evidence cannot authorize a half-time value. */
+  verifyHalfTimeScore?: (candidate: HalfTimeScoreCandidate) => boolean;
 }>;
 export type SourceTimestamps = Readonly<{
   provider: "api-football";
@@ -74,6 +84,8 @@ export type NormalizedFixture = Readonly<{
   /** API-Football fixture.status.extra: additional minutes played in the current half. */
   stoppageMinutes?: number | null | undefined;
   regulationScore: (RegulationScoreCandidate & Readonly<{ verified: boolean }>) | null;
+  /** Absent on the legacy normalization contract and until separate verification is configured. */
+  halfTimeScore?: (HalfTimeScoreCandidate & Readonly<{ verified: boolean }>) | null;
   reportedGoals: ScorePair;
   extraTimeScore: ScorePair;
   penaltyScore: ScorePair;
@@ -210,7 +222,7 @@ const fixtureSchema = z.object({
   league: leagueSchema,
   teams: z.object({ home: teamSchema, away: teamSchema }),
   goals: pairSchema.nullable().optional(),
-  score: z.object({ fulltime: pairSchema.nullable().optional(), extratime: pairSchema.nullable().optional(),
+  score: z.object({ fulltime: pairSchema.nullable().optional(), halftime: z.unknown().optional(), extratime: pairSchema.nullable().optional(),
     penalty: pairSchema.nullable().optional() }).nullable().optional(),
 });
 const playerSchema = z.object({ player: z.object({
@@ -441,11 +453,25 @@ export function normalizeFixture(raw: unknown, context: NormalizationContext): N
     regulationScore = { ...candidate, verified };
     if (!verified) missing.push("regulation-score-verification");
   } else missing.push("regulation-score");
+  let halfTimeScore: NormalizedFixture["halfTimeScore"] = null;
+  if (context.verifyHalfTimeScore !== undefined) {
+    const half = pairSchema.safeParse(input.score?.halftime);
+    if (regulationScore && half.success && half.data.home != null && half.data.away != null &&
+        half.data.home <= regulationScore.home && half.data.away <= regulationScore.away) {
+      const candidate: HalfTimeScoreCandidate = freeze({ fixtureId: input.fixture.id, providerStatus: regulationScore.providerStatus,
+        sourceField: "score.halftime", period: "first-half-including-stoppage-time", home: half.data.home, away: half.data.away });
+      let verified = false;
+      try { verified = regulationScore.verified && context.verifyHalfTimeScore(candidate) === true; } catch { /* Missing separate evidence stays unavailable. */ }
+      halfTimeScore = { ...candidate, verified };
+      if (!verified) missing.push("half-time-score-verification");
+    } else missing.push("half-time-score");
+  }
   return valid({ id: input.fixture.id, homeTeam: team(input.teams.home, context, missing, "home-team"),
     awayTeam: team(input.teams.away, context, missing, "away-team"), competition: competition(input.league, context, missing),
     kickoff: instant, status, providerStatus, elapsedMinutes: input.fixture.status?.elapsed ?? null,
     ...(input.fixture.status?.extra !== undefined ? { stoppageMinutes: input.fixture.status.extra } : {}),
-    regulationScore, reportedGoals: pair(input.goals), extraTimeScore: pair(input.score?.extratime),
+    regulationScore, ...(context.verifyHalfTimeScore === undefined ? {} : { halfTimeScore }),
+    reportedGoals: pair(input.goals), extraTimeScore: pair(input.score?.extratime),
     penaltyScore: pair(input.score?.penalty), source: source(context, missing) }, missing);
 }
 

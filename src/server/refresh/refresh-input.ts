@@ -8,6 +8,8 @@ import { parseCatalogImportRequest, parseCatalogEvidenceRef } from "../football/
 import { createModelPin } from "../predictor/predictor-input.ts";
 import { parseProviderFallbackRequest } from "../fallback/fallback-adapter.ts";
 import { refreshFail, type RefreshMember, type RefreshPlan } from "./refresh-contract.ts";
+import { goalMarketDefinitionSchema } from "../../domain/score-distribution-markets.ts";
+import { parseImpliedMarketExtensionInput } from "../predictions/implied-market-contract.ts";
 
 export const refreshPayload = z.strictObject({ input: z.unknown(), runId: z.uuid(), fixtureId: z.uuid(), cycleId: z.uuid(),
   runDate: z.iso.date(), rank: z.number().int().nonnegative() });
@@ -23,10 +25,13 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
       evidence: z.unknown(), ai: z.strictObject({ job: z.unknown(), request: z.unknown(), maxElapsedMs: z.number() }).nullable(),
       fallback: z.strictObject({ bounds: z.unknown(), maxElapsedMs: z.number() }),
       observation: z.strictObject({ bounds: z.unknown(), maxAgeMs: z.number() }), publicationReserveMs: z.number(),
-      footballRequestLimit: z.number().int().positive().max(4_294_967_295) });
+      footballRequestLimit: z.number().int().positive().max(4_294_967_295),
+      goalDefinitions: z.array(goalMarketDefinitionSchema).max(256).optional(), impliedExtension: z.unknown().optional() });
     shape.parse(input);
     // Provider-fallback-only plans omit both the model and its AI allocation.
     if ((input.ai === null) !== (input.modelVersionId === null)) throw new Error();
+    if (input.goalDefinitions !== undefined && (input.ai === null ||
+        new Set(input.goalDefinitions.map(({ key }) => key)).size !== input.goalDefinitions.length)) throw new Error();
     const evidence = parseEvidenceCollectionRequest(input.evidence);
     const ai = input.ai === null ? null : { job: parseCostJob(input.ai.job), request: parseCostRequest(input.ai.request), maxElapsedMs: input.ai.maxElapsedMs };
     const bounds = (value: unknown) => parseCatalogImportRequest({ id: member.context.fixtureId,
@@ -62,7 +67,9 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
     if (research && (research.job.jobId !== member.jobId || research.job.startsAt !== member.now || research.job.deadlineAt > hardDeadline ||
       research.job.fallbackReserveMs !== reserve || research.request.attemptId !== refreshReference(member.jobId, "research") ||
       research.request.timeoutMs > evidence.maxElapsedMs || research.job.timeLimitMs > (ai?.job.timeLimitMs ?? primaryLimitMs))) throw new Error();
-    return freezeEvidence({ ...input, evidenceRef: parseCatalogEvidenceRef(input.evidenceRef), evidence, ai, fallback, observation });
+    const { impliedExtension, ...base } = input;
+    return freezeEvidence({ ...base, evidenceRef: parseCatalogEvidenceRef(input.evidenceRef), evidence, ai, fallback, observation,
+      ...(impliedExtension === undefined ? {} : { impliedExtension: parseImpliedMarketExtensionInput(impliedExtension) }) });
   } catch { return refreshFail("policy-required"); }
 }
 /** Provider-fallback-only plans have no model to pin. */

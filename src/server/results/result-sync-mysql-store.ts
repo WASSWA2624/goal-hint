@@ -145,7 +145,12 @@ export function createMysqlResultSyncStore(options: Readonly<{
               ...(observation.stoppageMinutes !== undefined ? { stoppageMinutes: observation.stoppageMinutes } : {}),
               reportedGoals: observation.reportedGoals, extraTimeScore: observation.extraTimeScore, penaltyScore: observation.penaltyScore,
               regulation: { verified, home: verified ? fixture.regulationHome : null, away: verified ? fixture.regulationAway : null,
-                evidenceRef: verified ? fixture.regulationEvidenceRef : null } };
+                evidenceRef: verified ? fixture.regulationEvidenceRef : null },
+              ...(verified && finalStatus(fixture.status) && observation.halfTimeScore?.verified &&
+                observation.halfTimeScore.home <= fixture.regulationHome! && observation.halfTimeScore.away <= fixture.regulationAway!
+                ? { halfTime: { verified: true as const, period: observation.halfTimeScore.period,
+                  home: observation.halfTimeScore.home, away: observation.halfTimeScore.away,
+                  evidenceRef: `api-football:fixture:${observation.externalFixtureId}:${observation.halfTimeScore.providerStatus}:score.halftime` } } : {}) };
             const contentHash = evidenceFingerprint(value);
             let resultId = previous?.id ?? null;
             if (accepted && previous?.contentHash !== contentHash) {

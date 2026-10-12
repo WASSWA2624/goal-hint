@@ -15,6 +15,7 @@ import type { createScheduleLifecycleService } from "../predictions/lifecycle-se
 import type { createRevisionPublicationService } from "../predictions/publication-service.ts";
 import type { PublicationResult } from "../predictions/publication-contract.ts";
 import { RevisionPublicationError } from "../predictions/publication-contract.ts";
+import { parseGoalMarketExtensionInput } from "../predictions/goal-market-store.ts";
 import type { DailySelectionStore } from "../selection/selection-mysql-store.ts";
 import { PredictionRefreshError, refreshFail, type RefreshAuthority, type RefreshIntent, type RefreshMember,
   type RefreshOutcome, type RefreshPhase, type RefreshPlan } from "./refresh-contract.ts";
@@ -193,6 +194,8 @@ export function createPredictionRefreshService(options: Readonly<{
       if (fallback.status === "denied") return finish("failed", `fallback:${fallback.reason}`);
       if (fallback.candidate.audit.providerReason !== null) phases.fallback = fallback.candidate.audit.providerReason;
       const candidate = parseResolvedForecastCandidate(fallback.candidate);
+      const goalExtension = ai.status === "candidate" && ai.output.scoreDistribution && plan.goalDefinitions !== undefined
+        ? parseGoalMarketExtensionInput({ scoreDistribution: ai.output.scoreDistribution, definitions: plan.goalDefinitions }) : undefined;
       const generationCompletedAt = utcInstantFromEpochMilliseconds((await options.store.stage(lease.jobId, "fallback", "completed"))!.at);
       const observation = await phase<Observation | null>("observation", plan.observation.bounds.timeoutMs * plan.observation.bounds.maxRequests,
         plan.publicationReserveMs, (workflow) => options.observation.collect(saved.member, plan.observation.bounds, workflow), () => null);
@@ -207,6 +210,8 @@ export function createPredictionRefreshService(options: Readonly<{
       await checkpoint();
       if (original.kickoffAt === null || original.kickoffAt !== candidate.context.context.kickoffAt) return finish("skipped", "schedule-changed");
       const result = await options.publisher.publish({ candidate, evidenceSnapshotId: plan.evidence.requestId,
+        ...(goalExtension === undefined ? {} : { goalExtension }),
+        ...(plan.impliedExtension === undefined ? {} : { impliedExtension: plan.impliedExtension }),
         attemptKey: refreshReference(lease.jobId, "publication"), scheduleVersion: saved.member.cycle.scheduleVersion, generationCompletedAt,
         observation: { provider: "api-football", fixtureId: identity.fixtureId, externalFixtureId: original.externalFixtureId,
           cycleId: identity.cycleId, kickoffAt: original.kickoffAt, status: original.status, retrievedAt: original.retrievedAt,
