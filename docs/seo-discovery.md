@@ -12,10 +12,20 @@ navigation redirects permanently to `/en`. The application configuration also
 redirects `www.goalhint.com` to the canonical HTTPS origin, preserving path and
 query. Actual DNS, certificates and hosting rules still belong to deployment.
 
+Known campaign/click attribution parameters (UTM and Google, Meta and Microsoft
+click IDs) redirect permanently to the same clean page URL. Shared/search links
+therefore reach the feed or match instead of failing strict query validation.
+Filters, pagination, revision history and repeated functional parameters are
+preserved; unknown application parameters still receive the existing validation.
+This normalization stores no attribution and adds no analytics. The API remains
+outside the page proxy and retains its strict input contract.
+
 Shared `pageMetadata` supplies complete page-specific Open Graph and Twitter
 fields because Next metadata objects merge shallowly. The homepage title is
 `Goal Hint | Daily Football Predictions`; archive titles include the EAT day and
-pagination number; match titles include the teams and Goal Hint suffix. Existing
+pagination number; match titles include the teams, known kickoff's EAT date and
+Goal Hint suffix. Dates distinguish repeat fixtures between the same clubs without
+inventing a kickoff when none is stored. Existing
 named first-party favicon, touch icon and 1200 × 630 social PNG assets are reused.
 
 `createFeedRoute` shares its stored read and request-owned reporting clock between
@@ -23,6 +33,9 @@ metadata and meaningful initial HTML. Dated collections and pagination keep thei
 own canonical identities. For example, `/en?page=2` canonicalizes to
 `/en/predictions/YYYY-MM-DD?page=2`, never to page one. Relative date aliases pin
 to the corresponding dated collection; the ordinary home page stays `/en`.
+Match metadata shares the fixture read with its page; only page rendering reads
+optional section insights, in parallel with that fixture read. An insights retry
+or slow insights query cannot hold up the canonical/title metadata.
 
 Search, league/status/market/probability-order filters, nondefault page sizes and
 multiday collections receive `noindex, follow`. Their normalized canonical retains
@@ -105,6 +118,29 @@ action, ranking or rich-result promise is invented.
   then checks staging and synthetic approved production against the same build.
   Synthetic release evidence exists solely inside `.tmp` acceptance code. It is
   not production approval, live provider data or a production configuration path.
+- The 12 October 2026 SEO review passed **22 targeted unit checks**, a fresh
+  genuine MySQL discovery capture, and **28 staging / 64 synthetic production
+  HTTP/HTML checks**. All 35 stored match destinations render even when optional
+  insights throw synchronously; campaign redirects preserve pagination/history.
+  Unit coverage also verifies distinct rematch metadata across the EAT midnight
+  boundary. The fixture's production build, TypeScript and focused lint passed.
+- Final optimization verification passed the full application test suite,
+  lint, production build and **32 browser checks**: server-rendered pagination,
+  unique direct-load canonical metadata, all four prediction markets, no
+  horizontal overflow at 320/390/1280 pixels, lazy section loading, cache reuse,
+  and live detail refresh without browser errors. Remote resources were blocked;
+  interaction endpoints used captured fixture data. Captures and the browser
+  harness are in ignored `output/playwright/seo-*`; fresh SQL evidence is in
+  `.tmp/seo-capture-optimization`, and final rendering evidence is in
+  `.tmp/seo-4f88f593`. See `live-client-refresh.md` for measured bundle changes.
+- JavaScript browser review found the open [Next.js initial metadata hydration
+  race](https://github.com/vercel/next.js/issues/97472#issuecomment-5653284177)
+  on the installed Next 16.4.0: immediate client navigation after the initial load
+  can retain the previous route's title, description, canonical and Open Graph
+  URL. Direct HTTP renders contain one correct metadata set; navigation after
+  initial hydration also contains one correct set for Chrome and Bingbot user
+  agents. The issue persisted with blocking bot metadata, so the app retains the
+  native Metadata API without DOM cleanup or artificial navigation delays.
 - The checked run used MySQL Community Server 8.4.11: material rename versus
   retrieval-only sync, stable fixture identity, locked historical retention,
   stored feed/detail projections and absence of provider work passed. XML crawling

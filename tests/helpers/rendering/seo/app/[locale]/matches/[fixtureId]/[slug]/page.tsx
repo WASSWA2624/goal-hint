@@ -1,3 +1,5 @@
 import {createMatchDetailRoute} from '@/app/_components/match-detail-route';
 import {readDetail} from '../../../../stored';import {policy} from '../../../../policy';
-const route=createMatchDetailRoute(readDetail,policy);export const generateMetadata=route.generateMetadata;export default route.Page;
+// A synchronous optional-reader failure must not hide a successfully stored fixture.
+const route=createMatchDetailRoute(readDetail,policy,()=>{throw new Error('Isolated optional insights unavailable.');});
+export const generateMetadata=route.generateMetadata;export default route.Page;

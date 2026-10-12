@@ -23,13 +23,6 @@ export const ClockIcon = (props: IconProps) => <Icon {...props}>
   <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
 </Icon>;
 
-export const BallIcon = (props: IconProps) => <Icon {...props}>
-  <circle cx="12" cy="12" r="9" />
-  <path d="m12 7.5 4 2.9-1.5 4.7h-5L8 10.4l4-2.9ZM12 3v4.5M21 10.4l-5 0M17.5 19.5l-3-4.4M6.5 19.5l3-4.4M3 10.4h5" />
-</Icon>;
-
-export const BarsIcon = (props: IconProps) => <Icon strokeWidth={2.5} {...props}><path d="M6 20v-6M12 20V8M18 20V4" /></Icon>;
-
 export const LockIcon = (props: IconProps) => <Icon {...props}>
   <rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" />
 </Icon>;

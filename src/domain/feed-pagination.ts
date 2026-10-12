@@ -1,16 +1,13 @@
 import type { ReportingDate } from "./calendar.ts";
+import { FeedPaginationError } from "./feed-pagination-error.ts";
 import { feedQueryHref, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
 import { matchFeedResponseSchema, type MatchFeedRecord, type MatchFeedResponse } from "./match-feed.ts";
 
+export { FeedPaginationError } from "./feed-pagination-error.ts";
+
 export const feedPaginationRules = Object.freeze({ maximumLoadedPages: 10 });
 export type LoadedFeed = Readonly<{ data: MatchFeedResponse; records: readonly MatchFeedRecord[]; firstPage: number; lastPage: number; pages: number }>;
-export class FeedPaginationError extends Error {
-  readonly code: "changed" | "invalid-response" | "stale-data" | "unavailable" | "rate-limited";
-  constructor(code: FeedPaginationError["code"]) {
-    super("Match pagination could not be completed."); this.name = "FeedPaginationError"; this.code = code;
-  }
-}
 export function pinnedFeedQuery(query: FeedQuery, today: ReportingDate): FeedQuery {
   const range = resolveFeedDates(query, today);
   return { ...query, dates: range.dayCount === 1 ? { kind: "date", date: range.startDate }

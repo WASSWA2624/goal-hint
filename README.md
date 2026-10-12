@@ -4,9 +4,11 @@
 
 A free football prediction website with estimated probabilities, clear analysis and verifiable outcomes.
 
-The Next.js foundation, runtime policy, MySQL/Prisma access, calendar, market domain
-and shared football quota limiter are implemented. The entry page states that
-predictions are not yet available; product features follow the numbered plan.
+The Next.js application includes a responsive match feed, match details, revision
+history, live refresh, stored-data APIs, and private football processing workers.
+Visitors read published data; public requests never trigger provider imports.
+Public search indexing remains disabled until the recorded launch requirements
+are satisfied; see [SEO and discovery](docs/seo-discovery.md).
 
 - [App specification](app-write-up.md): scope, user experience, prediction rules, architecture and launch requirements.
 - [Development prompts](dev-plan/000-index.md): run numbered feature prompts in order to implement the application.
@@ -62,7 +64,7 @@ debounces saves; generated output and dependency directories are excluded.
 | `npm run policy:check` | Validate server configuration from the process and optional `.env.local`. |
 | `npm run build` | Compile and prerender the production application. |
 | `npm start` | Serve the completed production build. |
-| `npm run check` | Run lint, type-check, tests and production build in order. |
+| `npm run check` | Generate and validate Prisma, then run lint, type-check, Node/Python tests and production build. |
 | `npm run db:generate` / `npm run db:validate` | Generate the guarded Prisma client and validate the MySQL schema without a database. |
 | `npm run db:migrate -- --name <change>` | Generate a reviewable migration offline from the committed schema snapshot. |
 | `npm run db:deploy` / `npm run db:status` / `npm run db:verify` | Deploy reviewed migrations, check their state and detect schema drift using separate migration credentials. |
@@ -190,8 +192,8 @@ requires that marker and restricts imports across layers. Share public types
 through `src/domain`, not a barrel that re-exports server or worker code. Keep
 provider SDKs, secrets and queue dependencies in the appropriate server boundary.
 
-Redux Toolkit, react-redux and styled-components are pinned but their providers
-and rendering setup are deliberately deferred to prompts 015–017. Read
+Redux Toolkit and react-redux manage anonymous feed preferences and live data;
+styled-components supplies shared themed components and server-rendered styles. Read
 [implementation decisions](docs/implementation-decisions.md) for compatibility
 evidence and [development progress](docs/development-progress.md) for verified
 checks and outstanding work.
@@ -289,8 +291,8 @@ selection and qualifying observations remain pending; **014 remains unchecked**.
 The application uses the existing navy/teal brand, locally loaded Manrope and
 one streamed styled-components registry with a light theme. Reusable layout,
 brand image, button/link, labeled field, status and empty-state primitives use
-square corners, visible focus and responsive logical spacing. A component
-preview appears on the development homepage; production retains the honest
-development state. Read the [styling runbook](docs/brand-styling.md) for exports
+square corners, visible focus and responsive logical spacing. Component previews
+live in isolated rendering fixtures, outside the shipped application.
+Read the [styling runbook](docs/brand-styling.md) for exports
 and accessibility contracts. `npm run test:styling` verifies production initial
 HTML, genuine delayed streaming, style reuse and the browser/server boundary.

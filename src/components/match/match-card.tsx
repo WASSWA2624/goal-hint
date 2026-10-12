@@ -19,7 +19,7 @@ import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { CheckIcon, ChevronIcon, CrossIcon, FlagIcon, GlobeIcon, LockIcon, NoticeIcon, TrophyIcon, VoidIcon } from "./match-icons";
 import { matchTableColumns, matchTableGap } from "./match-columns";
-import { TeamLogo } from "./team-row";
+import { TeamLogo } from "./team-logo";
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;

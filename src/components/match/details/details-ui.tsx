@@ -3,8 +3,7 @@
 import { createContext, useContext, useEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import styled, { css, type DefaultTheme } from "styled-components";
 import { ChevronRightIcon } from "@/components/ui/icons";
-import { TeamLogo } from "@/components/match/team-row";
-import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { TeamLogo } from "@/components/match/team-logo";
 import { paginationItems } from "@/domain/feed-presentation";
 import type { FormLetter } from "@/domain/match-details";
 import type { MatchDetailResponse } from "@/domain/match-detail";
@@ -484,8 +483,4 @@ export function useRevealOnOpen<T extends HTMLElement>(open: boolean, key: strin
     };
   }, [key, open, reveal]);
   return target;
-}
-
-export function Hidden({ children }: { children: ReactNode }) {
-  return <VisuallyHidden>{children}</VisuallyHidden>;
 }

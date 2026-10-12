@@ -5,10 +5,11 @@ import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { formLetters, goalTotals, marketRow } from "@/domain/match-details";
+import type { InsightResult } from "@/domain/match-insights";
 import {
   comparisonMetrics, formRecords, headToHead, pageOf, perMatchValue, resultFor, teamComparison,
-  type ComparisonMetric, type InsightResult,
-} from "@/domain/match-insights";
+  type ComparisonMetric,
+} from "@/domain/match-insight-presentation";
 import { formWindows, openItem, type FormWindow, type MatchSection, type VenueFocus } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
 import { media } from "@/styles/theme";

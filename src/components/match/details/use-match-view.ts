@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { previewHoldsSection, type InsightSections, type InsightsPreview } from "@/domain/match-insights";
+import type { InsightSections, InsightsPreview } from "@/domain/match-insights";
+import { previewHoldsSection } from "@/domain/match-insight-presentation";
 import { parseMatchView, serializeMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
-import { useAppDispatch, useAppSelector } from "@/state/hooks";
+import { useDetailDispatch, useDetailSelector } from "@/state/detail-hooks";
 import { detailApi } from "@/state/detail-api";
 
 export type ViewNavigation = "push" | "replace";
@@ -40,10 +41,10 @@ const previewReuseMs = 5 * 60_000;
  * page's recent preview already holds the whole collection, no request is made.
  */
 export function useInsightSection<S extends MatchSection>(id: string, section: S, enabled: boolean, preview: InsightsPreview | null = null) {
-  const dispatch = useAppDispatch();
+  const dispatch = useDetailDispatch();
   const [attempt, setAttempt] = useState(0);
   const select = useMemo(() => detailApi.endpoints.insights.select({ id, section }), [id, section]);
-  const state = useAppSelector(select);
+  const state = useDetailSelector(select);
   const completeAt = preview && previewHoldsSection(preview, section) ? preview.asOf : null;
   useEffect(() => {
     if (!enabled || (completeAt !== null && Date.now() - completeAt < previewReuseMs)) return;

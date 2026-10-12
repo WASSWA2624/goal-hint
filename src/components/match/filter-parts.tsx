@@ -289,37 +289,6 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   </PickerRoot>;
 }
 
-/**
- * 30px track, matching the date stepper beside it on phones. Each option is a full 30px target; a
- * transparent 2px border insets the selected pill, so the track still shows around it.
- */
-export const Segmented = styled.div`
-  display: inline-grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  background: ${({ theme }) => theme.color.surfaceMuted};
-  border-radius: 8px;
-  > a {
-    display: grid;
-    place-items: center;
-    min-block-size: 1.875rem;
-    padding-inline: 6px;
-    color: ${({ theme }) => theme.color.text};
-    border: 2px solid transparent;
-    border-radius: 8px;
-    font-size: ${({ theme }) => theme.typography.scale.caption};
-    font-weight: ${({ theme }) => theme.typography.weight.medium};
-    white-space: nowrap;
-    text-decoration: none;
-    ${focusRing}
-    &[aria-current="true"] {
-      color: ${({ theme }) => theme.color.onBrand};
-      background: ${({ theme }) => theme.gradient.action} padding-box;
-      font-weight: ${({ theme }) => theme.typography.weight.bold};
-    }
-  }
-`;
-
 const SliderRoot = styled.div<{ $disabled: boolean }>`
   position: relative;
   flex: 1;

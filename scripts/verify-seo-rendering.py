@@ -75,6 +75,8 @@ def verify(origin, cases, *, staging):
         assert metadata(html, "robots") == f'{"index" if index else "noindex"}, follow', path
         assert response.headers.get("x-robots-tag") == ("noindex, follow" if staging else None), path
         canonical_url = fixed + canonical.replace("&", "&amp;")
+        for singleton in ['<title>', '<meta name="description"', '<link rel="canonical"', '<meta property="og:url"']:
+            assert html.count(singleton) == 1, (path, singleton)
         assert f'<link rel="canonical" href="{canonical_url}"' in html, path
         assert metadata(html, "og:url", property=True) == canonical_url
         assert metadata(html, "og:site_name", property=True) == "Goal Hint"
@@ -95,6 +97,13 @@ def verify(origin, cases, *, staging):
     assert www.headers.get("location") == fixed + "/en/predictions/2026-10-09?page=2"
     checks += 1
     home = page("/en", "/en", not staging)
+    for path in ["/en", "/en/predictions/2026-10-09?page=2"]:
+        separator = "&" if "?" in path else "?"
+        shared = anonymous(path + separator + "utm_source=search&gclid=click")
+        assert shared.status == 308
+        assert urljoin(origin, shared.headers.get("location")) == origin + path
+        assert shared.headers.get("x-robots-tag") == ("noindex, follow" if staging else None)
+        checks += 1
     match(r"<title>Goal Hint \| Daily Football Predictions</title>", home)
     structured = json.loads(match(r'<script type="application/ld\+json">([^<]+)</script>', home).group(1))
     assert structured["@type"] == "WebSite"
@@ -111,6 +120,10 @@ def verify(origin, cases, *, staging):
         canonical = archive + path[len("/en"):] if path in ("/en?page=2", "/en?page=10000") else path
         page(path, canonical, path == "/en?page=2" and not staging)
     detail = cases["details"][cases["publishedId"]]["current"]["data"]
+    shared_detail = anonymous(detail["route"]["path"] + "?revision=" + cases["revision"] + "&fbclid=shared")
+    assert shared_detail.status == 308
+    assert urljoin(origin, shared_detail.headers.get("location")) == origin + detail["route"]["path"] + "?revision=" + cases["revision"]
+    checks += 1
     html = page(detail["route"]["path"], detail["route"]["path"], not staging)
     match("Renamed Discovery Club", visible_html(html, comments=False))
     match("data-detail-market=", html)

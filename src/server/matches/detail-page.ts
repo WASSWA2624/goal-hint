@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Metadata } from "next";
-import type { Clock } from "../../domain/calendar.ts";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import type { MatchDetailResponse } from "../../domain/match-detail.ts";
 import type { DiscoveryPolicy } from "../../domain/discovery.ts";
 import { createMessages } from "../../i18n/messages.ts";
@@ -43,7 +43,10 @@ export function matchDetailMetadata(result: DetailPageResult, locale = "en", var
   if (!data) return pageMetadata({ title: messages.text("detail.unavailableTitle"), description: messages.text("detail.unavailable") });
   const title = messages.text("match.title", { home: data.fixture.homeTeam.name || messages.text("match.homeUnknown"),
     away: data.fixture.awayTeam.name || messages.text("match.awayUnknown") });
-  const pageTitle = messages.text("detail.metadataTitle", { match: title.slice(0, 180) });
-  const description = messages.text("detail.metadataDescription", { match: title.slice(0, 240) });
+  const date = data.fixture.kickoffAt == null ? null : getReportingDate(utcInstantFromEpochMilliseconds(data.fixture.kickoffAt));
+  const pageTitle = date ? messages.text("detail.datedMetadataTitle", { match: title.slice(0, 180), date: messages.reportingDateMedium(date) })
+    : messages.text("detail.metadataTitle", { match: title.slice(0, 180) });
+  const description = date ? messages.text("detail.datedMetadataDescription", { match: title.slice(0, 240), date: messages.reportingDate(date) })
+    : messages.text("detail.metadataDescription", { match: title.slice(0, 240) });
   return pageMetadata({ title: pageTitle, description, path: data.route.path, index: policy.index && !variant });
 }

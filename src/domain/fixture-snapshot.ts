@@ -5,19 +5,8 @@ import { isPlayedFinalStatus, type SettlementOutcomeStatus, type SettlementStatu
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { teamCodePattern } from "./team-name.ts";
 
-/** MySQL UNSIGNED BIGINT travels as canonical decimal text, never a JS number. */
-export const maximumFixtureVersion = "18446744073709551615";
-export function parseFixtureVersion(value: unknown): string {
-  if (typeof value !== "string" || !/^[1-9]\d{0,19}$/.test(value) || BigInt(value) > BigInt(maximumFixtureVersion)) {
-    throw new RangeError("Fixture version must be a positive unsigned 64-bit decimal string.");
-  }
-  return value;
-}
-export function compareFixtureVersions(left: string, right: string): -1 | 0 | 1 {
-  const a = BigInt(parseFixtureVersion(left));
-  const b = BigInt(parseFixtureVersion(right));
-  return a < b ? -1 : a > b ? 1 : 0;
-}
+import { parseFixtureVersion } from "./fixture-version.ts";
+export { maximumFixtureVersion, parseFixtureVersion, compareFixtureVersions } from "./fixture-version.ts";
 
 const identity = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/);
 const text = z.string().max(2000);

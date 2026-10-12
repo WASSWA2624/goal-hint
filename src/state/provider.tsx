@@ -21,9 +21,13 @@ export function FeedStateProvider({ initial, children }: { initial: FeedBootstra
       const preferences = readPreferences(window.localStorage.getItem(preferencesStorageKey));
       if (preferences) store.dispatch(preferencesChanged(preferences));
     } catch { /* Storage can be blocked. URL and server state still work. */ }
-    let previous = serializePreferences(store.getState().preferences);
+    let previousPreferences = store.getState().preferences;
+    let previous = serializePreferences(previousPreferences);
     return store.subscribe(() => {
-      const next = serializePreferences(store.getState().preferences);
+      const preferences = store.getState().preferences;
+      if (preferences === previousPreferences) return;
+      previousPreferences = preferences;
+      const next = serializePreferences(preferences);
       if (next === previous) return;
       previous = next;
       try { window.localStorage.setItem(preferencesStorageKey, next); } catch { /* Optional anonymous preference only. */ }

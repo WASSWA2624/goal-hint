@@ -552,6 +552,8 @@ export const en = {
   "details.revisionCount": { one: "{count} revision", other: "{count} revisions" },
   "detail.metadataTitle": "{match} | Goal Hint",
   "detail.metadataDescription": "Stored predictions, sources and regulation-time results for {match}.",
+  "detail.datedMetadataTitle": "{match} · {date} | Goal Hint",
+  "detail.datedMetadataDescription": "Football predictions, sources and regulation-time results for {match} on {date} in East Africa Time.",
   "detail.unavailableTitle": "Match temporarily unavailable",
   "detail.unavailable": "The stored match could not be loaded.",
   "detail.rateLimited": "Match requests are temporarily busy.",

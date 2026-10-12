@@ -7,7 +7,12 @@ typed hooks and explicit handoff/request actions described in
 
 URL parameters own applied filters. Redux owns drafts, view preferences and
 transient accepted fixture/list state. Only the allowlisted anonymous density
-preference uses local storage. `refreshApi` exposes only implemented anonymous
-stored-data feed/detail GETs for the live browser boundary. No provider clients,
+preference uses local storage. `refreshApi` and `detailApi` expose implemented anonymous
+stored-data GETs for their respective routes. No provider clients,
 server imports or worker/job endpoints belong in this layer. Lifecycle timers
 live in the shared refresh hook. See [live refresh](../../docs/live-client-refresh.md).
+
+Match details use `DetailStateProvider` and `makeDetailStore()` for a separate
+request cache without feed drafts, snapshot reducers or preference storage.
+Both routes inject their endpoints into `refresh-base.ts`; detail validators load
+alongside the first API read, while the initial server projection renders directly.

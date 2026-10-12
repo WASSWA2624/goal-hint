@@ -3,11 +3,21 @@
 The server renders the initial feed and applicable detail snapshot. The same
 React tree then owns the browser projection; hydration does not fetch a second
 initial copy. Each provider creates its own Redux store. `refreshApi` supplies
-only the existing anonymous `GET /api/matches` and `GET /api/matches/{id}` reads,
-with schema validation, omitted credentials, no browser HTTP cache and a
+feed reads; `detailApi` supplies match and section reads through the same anonymous
+transport. Match pages use a cache-only store, without feed drafts or preferences.
+Their response validators load alongside the first request, preserving schema
+validation without adding a network waterfall. Both APIs use omitted credentials, no browser HTTP cache and a
 30-second deadline. RTK Query deduplicates simultaneous subscribers by canonical
 endpoint/query identity. Canceling one consumer unsubscribes it without aborting
 another consumer's shared request. No forecast data is persisted in the browser.
+
+The 12 October 2026 cleanup reduced the match-detail route's application chunks
+from 472,785 to 336,084 bytes (138,912 to 100,889 bytes gzip, a 27.4% compressed
+reduction). These measurements sum unique client-reference chunks from production
+builds, excluding shared framework bootstrap files; they are not total page weight
+or a field Core Web Vitals score. The initial detail import test rejects eager
+validation-library or feed-state imports, and response validation remains covered
+by the detail cache tests.
 
 ## Cadence and lifecycle
 

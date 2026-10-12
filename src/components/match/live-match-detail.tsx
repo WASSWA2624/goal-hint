@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import { MatchDetails } from "@/components/match/details/match-details";
 import type { InsightsPreview } from "@/domain/match-insights";
 import type { ReportingDate } from "@/domain/calendar";
-import { parseFeedQuery } from "@/domain/feed-query";
 import { liveRefreshRules, mergeLiveDetail } from "@/domain/live-refresh";
 import type { MatchDetailResponse } from "@/domain/match-detail";
-import { FeedStateProvider } from "@/state/provider";
-import { useAppDispatch } from "@/state/hooks";
-import { consumeRefresh } from "@/state/refresh-api";
+import { DetailStateProvider } from "@/state/detail-provider";
+import { useDetailDispatch } from "@/state/detail-hooks";
+import { consumeRefresh } from "@/state/refresh-base";
 import { detailApi } from "@/state/detail-api";
 import { RefreshStatus } from "./refresh-status";
 import { useLiveRefresh } from "./use-live-refresh";
@@ -25,7 +24,7 @@ function LiveDetail({ initial, today, locale, children, preview = null, historyR
   const [data, setData] = useState(initial), [asOf, setAsOf] = useState(initial.asOf), [error, setError] = useState(false);
   // The newest accepted response (for staleness checks); `data` changes only when something visible does.
   const accepted = useRef(data), request = useRef<AbortController | null>(null), mounted = useRef(false);
-  const dispatch = useAppDispatch(), router = useRouter();
+  const dispatch = useDetailDispatch(), router = useRouter();
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; request.current?.abort(); };
@@ -67,8 +66,7 @@ function LiveDetail({ initial, today, locale, children, preview = null, historyR
 
 /** One explicit server projection initializes a fresh per-page refresh store. */
 export function LiveMatchDetail(props: LiveDetailProps) {
-  return <FeedStateProvider key={props.initial.fixture.fixtureId}
-    initial={{ query: parseFeedQuery(new URLSearchParams(), { today: props.today, locale: props.locale }), today: props.today, data: null }}>
+  return <DetailStateProvider key={props.initial.fixture.fixtureId}>
     <LiveDetail {...props} />
-  </FeedStateProvider>;
+  </DetailStateProvider>;
 }

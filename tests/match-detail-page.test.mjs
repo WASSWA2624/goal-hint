@@ -74,3 +74,17 @@ test('detail metadata uses fixture-derived canonical identity, safe brand previe
   assert.equal(matchDetailMetadata({ data: null, error: 'unavailable' }).alternates, undefined);
   assert.match(matchDetailMetadata({ data: { ...data, fixture: { homeTeam: { name: null }, awayTeam: { name: null } } }, error: null }).title, /unavailable/);
 });
+
+test('repeat fixtures have distinct dated metadata using the reporting day, including its midnight boundary', () => {
+  const data = { fixture: { homeTeam: { name: 'Home Club' }, awayTeam: { name: 'Away Club' }, kickoffAt: Date.parse('2026-10-09T21:30:00Z') },
+    route: { path: `/en/matches/${id}/home-club-v-away-club` } };
+  const metadata = matchDetailMetadata({ data, error: null });
+  assert.equal(metadata.title, 'Home Club v Away Club · Sat, Oct 10, 2026 | Goal Hint');
+  assert.match(metadata.description, /Saturday, October 10, 2026 in East Africa Time/);
+  assert.equal(metadata.openGraph.title, metadata.title);
+  assert.equal(metadata.twitter.description, metadata.description);
+  const rematch = matchDetailMetadata({ data: { ...data, fixture: { ...data.fixture, kickoffAt: Date.parse('2027-10-09T21:30:00Z') } }, error: null });
+  assert.notEqual(rematch.title, metadata.title);
+  assert.notEqual(rematch.description, metadata.description);
+  assert.equal(matchDetailMetadata({ data, error: null }, 'en', true).title, metadata.title, 'History retains the actual fixture date.');
+});

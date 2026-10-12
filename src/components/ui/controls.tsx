@@ -317,12 +317,3 @@ export function SelectInput({ label, hint, error, children, ...props }: SelectIn
     </Field>
   );
 }
-
-/** Search and filters share the same labeled, accessible field treatment. */
-export function SearchInput(props: Omit<TextInputProps, "type">) {
-  return <TextInput {...props} type="search" />;
-}
-
-export function FilterControl(props: SelectInputProps) {
-  return <SelectInput {...props} />;
-}

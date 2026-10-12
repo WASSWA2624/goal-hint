@@ -7,11 +7,36 @@ import { feedMetadata, createInformationMetadata } from '../src/server/seo/metad
 import { matchDetailMetadata } from '../src/server/matches/detail-page.ts';
 import { createDiscoveryRoutes } from '../src/server/seo/discovery-routes.ts';
 import { getDiscoveryPolicy } from '../src/server/seo/policy.ts';
+import { createDiscoveryProxy } from '../src/server/seo/proxy.ts';
+import { NextRequest } from 'next/server.js';
 
 const today = parseReportingDate('2026-10-09');
 const approved = { deployment: 'production', index: true };
 const populated = { data: { records: [{}], state: 'ready' }, error: null };
 const query = values => parseFeedQuery(values, { today });
+
+test('search and social attribution redirects to a clean landing URL without changing application state', () => {
+  const proxy = createDiscoveryProxy(() => approved);
+  for (const path of ['/en', '/en/predictions/2026-10-09', '/en/matches/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/home-vs-away', '/en/help']) {
+    const response = proxy(new NextRequest(`https://goalhint.com${path}?utm_source=search&gclid=click&UTM_CAMPAIGN=football&fbclid=social`));
+    assert.equal(response.status, 308);
+    assert.equal(response.headers.get('location'), `https://goalhint.com${path}`);
+    assert.equal(response.headers.get('set-cookie'), null);
+    assert.equal(response.headers.get('x-robots-tag'), null);
+  }
+  const filters = 'league=one&league=two&q=Home+Club&page=2';
+  const filtered = proxy(new NextRequest(`https://goalhint.com/en?utm_source=first&utm_source=second&${filters}&msclkid=click`));
+  assert.equal(filtered.headers.get('location'), `https://goalhint.com/en?${filters}`);
+  const history = proxy(new NextRequest('https://goalhint.com/en/matches/id/home-vs-away?section=history&revision=revision-id&utm_medium=social'));
+  assert.equal(history.headers.get('location'), 'https://goalhint.com/en/matches/id/home-vs-away?section=history&revision=revision-id');
+  const clean = proxy(new NextRequest('https://goalhint.com/en?page=2&unsupported=still-validated'));
+  assert.equal(clean.headers.get('location'), null, 'Unrecognized application parameters are never silently dropped.');
+  const staging = createDiscoveryProxy(() => ({ deployment: 'staging', index: false }));
+  const fallback = staging(new NextRequest('https://goalhint.com/fr/help?utm_source=shared&page=2'));
+  assert.equal(fallback.status, 307, 'Unpublished language redirects keep their existing temporary semantics.');
+  assert.equal(fallback.headers.get('location'), 'https://goalhint.com/en/help?page=2');
+  assert.equal(fallback.headers.get('x-robots-tag'), 'noindex, follow');
+});
 
 test('indexing needs an explicit production runtime and verified release; missing or preview configuration fails closed', () => {
   for (const deployment of [undefined, '', 'development', 'staging', 'preview', 'Production', 'production']) {

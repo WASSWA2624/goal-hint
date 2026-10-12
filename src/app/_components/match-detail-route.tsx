@@ -21,10 +21,14 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
   readInsights: typeof readPublicMatchInsights = readPublicMatchInsights) {
   const loadCurrent = cache(async (id: string) => {
     const instant = await getShellInstant();
-    const [result, preview] = await Promise.all([loadMatchDetailPage(id, { now: () => instant }, read),
-      // Section previews are optional: a failed insights read leaves each section with its own retry.
-      readInsights(id, { now: () => instant }).then(insightsPreview).catch((): InsightsPreview | null => null)]);
-    return { result, preview, today: getReportingDate(instant), instant };
+    const result = await loadMatchDetailPage(id, { now: () => instant }, read);
+    return { result, today: getReportingDate(instant), instant };
+  });
+  const loadPreview = cache(async (id: string): Promise<InsightsPreview | null> => {
+    const instant = await getShellInstant();
+    // Optional section previews must not delay metadata; failed reads retain each section's retry.
+    try { return insightsPreview(await readInsights(id, { now: () => instant })); }
+    catch { return null; }
   });
   const load = cache(async (id: string, query: string) => {
     const current = await loadCurrent(id);
@@ -32,7 +36,7 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       ? await loadMatchDetailPage(id, { now: () => current.instant }, read, new URLSearchParams(query)) : current.result;
     return { ...current, historyResult, query };
   });
-  async function resolve({ params, searchParams }: Props) {
+  async function resolve({ params, searchParams }: Props, withPreview = false) {
     const route = await params;
     let id, query, viewQuery;
     try {
@@ -42,9 +46,9 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       viewQuery = matchDetailPageParameters(input).toString();
     }
     catch (error) { if (error instanceof MatchFeedError) notFound(); throw error; }
-    const loaded = await load(id, query);
+    const [loaded, preview] = await Promise.all([load(id, query), withPreview ? loadPreview(id) : null]);
     if (loaded.result.error === "not-found" || loaded.historyResult.error === "not-found") notFound();
-    return { ...loaded, route, viewQuery };
+    return { ...loaded, preview, route, viewQuery };
   }
   return {
     async generateMetadata(props: Props) {
@@ -52,7 +56,7 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       return matchDetailMetadata(result, route.locale, query !== "", policy());
     },
     async Page(props: Props) {
-      const { result, historyResult, query, today, route, preview, viewQuery } = await resolve(props);
+      const { result, historyResult, query, today, route, preview, viewQuery } = await resolve(props, true);
       if (result.data && (route.slug !== result.data.route.slug || route.fixtureId !== result.data.route.fixtureId)) {
         permanentRedirect(`${result.data.route.path}${viewQuery ? `?${viewQuery}` : ""}${query ? "#revision-history" : ""}`);
       }

@@ -1,5 +1,5 @@
 import { getReportingDate, getReportingDayBounds, utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
-import { FeedPaginationError } from "./feed-pagination.ts";
+import { FeedPaginationError } from "./feed-pagination-error.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
 import type { MatchDetailResponse } from "./match-detail.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";

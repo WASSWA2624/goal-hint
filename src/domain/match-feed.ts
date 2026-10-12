@@ -4,8 +4,7 @@ import { feedQueryRules, maximumCompetitionScope } from "./feed-query.ts";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { fixtureSnapshotSchema, fixtureCycleSchema, fixturePriceSchema, fixtureUpdateSchema, unavailableMarketSchema } from "./fixture-snapshot.ts";
 
-export const matchFeedRules = Object.freeze({ maximumQueryBytes: 2048, maximumResponseBytes: 1_048_576,
-  searchWindowMs: 60_000, searchRequestsPerWindow: 120 });
+export { matchFeedRules } from "./match-feed-rules.ts";
 const date = z.string().refine((value) => { try { parseReportingDate(value); return true; } catch { return false; } });
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const at = z.number().int();

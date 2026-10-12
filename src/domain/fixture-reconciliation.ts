@@ -1,4 +1,5 @@
-import { compareFixtureVersions, type FixtureSnapshot } from "./fixture-snapshot.ts";
+import type { FixtureSnapshot } from "./fixture-snapshot.ts";
+import { compareFixtureVersions } from "./fixture-version.ts";
 
 /** Versions order whole snapshots; cycle/reference checks also reject malformed regressions. */
 export function fixtureAdvance(previous: FixtureSnapshot, next: FixtureSnapshot): -1 | 0 | 1 {
