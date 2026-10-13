@@ -90,15 +90,25 @@ logo, light tokens, square corners and logical spacing are reused.
 The earlier development primitive demo is no longer mounted on public pages;
 the isolated `test:styling` fixture remains available.
 
-The desktop header keeps the four app destinations on one row, preserves search
-on pages that use the shell search and keeps the theme control at the far right.
-Help, Privacy, Terms and Contact share a three-dot More disclosure, keeping the
-app destinations available when header space is constrained. The phone bar has
-five columns: Matches, Live, Results, Slip builder and More. Its square More popup opens
-upward, stays within the viewport and scrolls when necessary. Native
+Both desktop and phone navigation derive their primary links and overflow from
+one serializable destination list. Initial HTML shows Matches, Live and Results
+directly, with Slip builder, Help, Privacy, Terms and Contact in native More.
+After hydration, each bar measures its available width and the actual label,
+icon and control sizes to show as many ordered destinations as fit. Overflow
+keeps at least three primary destinations plus More; when all destinations fit,
+all appear directly. Resizing and completed font loads update the fit. Every
+overflow item pairs its label with an appropriate decorative stroke icon, and
+More uses three vertical dots on both layouts.
+
+The desktop header keeps these links on one row, preserves search on pages that
+use the shell search and keeps the theme control at the far right. The phone bar
+gives each rendered primary link and More an equal-width column. Hidden inert
+measurement spans reuse the link styles without creating extra interactive links.
+Its square More popup opens upward, stays within the viewport and scrolls
+when necessary. Native
 `details`/`summary` toggling keeps those links usable without JavaScript; Escape,
 outside-click dismissal and focus restoration enhance the hydrated menu.
-Information pages mark both their menu link and the visible More trigger as
+Overflow destinations mark both their menu link and the visible More trigger as
 current, so a collapsed menu still identifies the active section. App pages
 continue to own their branded phone header.
 

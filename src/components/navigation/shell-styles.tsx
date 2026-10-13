@@ -113,10 +113,10 @@ export const HomeLink = styled(TextLink)`
   }
 `;
 
-/** App destinations stay together; information links use More instead of wrapping the header. */
+/** A stable header width lets adaptive destinations use More without moving the other controls. */
 export const DesktopNav = styled.nav`
   display: none;
-  flex: none;
+  flex: 1 1 0;
   max-inline-size: 100%;
   min-inline-size: 0;
   align-self: stretch;
@@ -131,6 +131,7 @@ export const TopNavList = styled.ul`
   margin: 0;
   padding: 0;
   list-style: none;
+  block-size: 100%;
   > li { display: flex; position: relative; }
 `;
 
@@ -173,8 +174,10 @@ const topLink = css<{ $tone?: AccentName }>`
   ${headerFocus}
 `;
 export const TopNavLink = styled(Link)<{ $tone?: AccentName }>`${topLink}`;
+/** Noninteractive intrinsic-width measurements reuse the actual link typography and padding. */
+export const TopNavMeasure = styled.span<{ $tone?: AccentName }>`flex: none; ${topLink}`;
 
-/** Shared by the four app links and the native More disclosure in the five-column phone bar. */
+/** Shared by primary destination links and the native More disclosure in the equally spaced phone bar. */
 const tabLink = css`
   position: relative;
   display: flex;
@@ -191,6 +194,7 @@ const tabLink = css`
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
   > svg { flex: none; font-size: 1.125rem; }
+  > span { min-inline-size: 0; overflow-wrap: anywhere; }
   &[aria-current="page"] {
     color: ${({ theme }) => theme.header.accent};
     background: transparent;
@@ -206,6 +210,11 @@ const tabLink = css`
   }
   ${focusRing}
   &:focus-visible { outline-color: ${({ theme }) => theme.header.accent}; outline-offset: -4px; }
+`;
+export const TabMeasure = styled.span<{ $tone?: AccentName }>`
+  ${tabLink}
+  flex: none; min-inline-size: 2.75rem; inline-size: max-content;
+  > span { white-space: nowrap; }
 `;
 
 /** The summary sits on the bar; its popup stays a light surface with dark links. */
@@ -272,12 +281,17 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
   a {
     display: flex;
+    min-inline-size: 0;
     min-block-size: 2.5rem;
     align-items: center;
+    gap: 8px;
     padding-inline: ${({ theme }) => theme.space.md};
     color: ${({ theme }) => theme.color.text};
     border-radius: 0;
     text-decoration: none;
+    overflow-wrap: anywhere;
+    > svg { flex: none; inline-size: 1.125rem; block-size: 1.125rem; }
+    > span { min-inline-size: 0; }
     ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
     &[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
     ${focusRing}
@@ -293,7 +307,7 @@ export const HeaderSearch = styled.form`
   display: none;
   ${desktop} {
     display: flex;
-    flex: 1 1 9rem;
+    flex: 0 1 14rem;
     max-inline-size: 26rem;
     min-inline-size: 6rem;
     align-items: center;
@@ -344,12 +358,13 @@ export const TabBar = styled.nav`
 `;
 export const TabList = styled.ul`
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   margin: 0;
   padding: 0;
   list-style: none;
 `;
-/** A distinct 42px bar keeps Matches, Live, Results, Slips and More available. */
+/** A distinct 42px bar keeps the generated primary destinations and More available. */
 export const TabLink = styled(Link)<{ $tone: AccentName }>`${tabLink}`;
 
 /** A quiet surface with compact links; its bottom clearance matches the slim phone tab bar. */

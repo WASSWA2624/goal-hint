@@ -2,7 +2,7 @@
 import re
 from urllib.parse import parse_qs, urljoin, urlsplit
 
-from lib.policy_rendering import acceptance_origin, assert_navigation, notices
+from lib.policy_rendering import acceptance_origin, assert_navigation, assert_navigation_overflow, notices
 from lib.rendering import match, no_match, request, visible_html
 from lib.runtime import main_guard
 
@@ -37,6 +37,10 @@ def main() -> None:
         match(r"<style data-styled[=\s]", html, f"{path}: server-rendered styled-components CSS")
         assert 0 <= html.find("data-styled=") < html.find("<header"), f"{path}: initial shell CSS"
         visible = visible_html(html, comments=False)
+        assert_navigation_overflow(visible,
+            primary=[today_path, today_path + "?status=live", results_path],
+            overflow=["/en/slips", *[f"/en/{page}" for page in information_pages]],
+            footer=[f"/en/{page}" for page in information_pages])
         target = urlsplit(path)
         information = next((page for page in information_pages if target.path == f"/en/{page}"), None)
         if information:
