@@ -1,11 +1,39 @@
 # Slip builder
 
-`/en/slips` implements the selected compact criteria ribbon and classic table
-slips. Markets occupy a separate full-width criteria row below the targets,
+`/en/slips` implements the selected compact mobile accordion and classic table
+slips, with all criteria expanded on desktop. Markets occupy a separate
+full-width criteria row below the targets,
 selection limits and kickoff range. Each slip has its total odds, average forecast
 probability and selection count in its title, with one semantic table row per match.
 The shared navigation includes Slip builder; its More menu holds the items that exceed the compact primary
 navigation. Controls and results use the existing square, themed components.
+
+## Responsive criteria layout
+
+Mobile groups the criteria into three native `<details>` sections: Targets,
+Limits and Kickoff. Targets and Kickoff start closed; Limits
+starts open. Their summaries show the current draft ranges and requested slip
+count, so collapsed sections still explain their settings. With JavaScript,
+these summaries update as fields change, without submitting a build. Desktop
+keeps all three groups expanded and the fields visible.
+
+Markets and its result pickers remain outside the three accordion sections and
+stay visible below the other criteria. Match reuse follows Markets in both the
+visual layout and keyboard order, followed by Reset and Build slips.
+Collapsing a group hides its controls visually while retaining
+the enabled, named inputs in the same native GET form; date, time and numeric
+ranges continue to submit without JavaScript. Native summaries can open the
+sections without JavaScript as well. Mobile sections opened before hydration
+keep that native open state when the enhanced controls attach.
+
+A validation error opens the group containing its invalid controls on every
+failed submission, even if the group was subsequently closed. A blank required
+slip count shows Required in the Targets summary. The entered
+draft remains editable, the offending fields retain their accessible error
+association, and the error explanation stays visible. The responsive layout
+changes neither the criteria contract nor the stored-data generation rules.
+When resizing to desktop hides a focused accordion summary, focus moves to its
+first input so keyboard navigation retains a visible target.
 
 ## Criteria and submission
 
@@ -177,6 +205,8 @@ outcome, manual choices using their own probabilities and quotes, multi-result
 combinations, missing outcome prices and invalid outcome-family mappings.
 
 `npm run test:slips:rendering` builds the isolated Next.js fixture and verifies
-real server-rendered controls, result states, native GET builds, invalid criteria,
+real server-rendered controls, the three native accordion groups and their
+default states, retained inputs in collapsed sections, draft summaries and
+validation-driven expansion. It also checks result states, native GET builds, invalid criteria,
 navigation overflow, summaries inside slip titles and one row per selection.
 Its `--serve` option keeps the fixture available for browser inspection.

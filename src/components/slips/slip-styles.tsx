@@ -17,16 +17,22 @@ export const CriteriaPanel = styled(Surface)`
   && { padding: 8px; border-radius: 0; }
   ${media.desktop} { && { padding: 10px; } }
 `;
-export const CriteriaForm = styled.form`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+export const CriteriaForm = styled.form<{ $hasError: boolean }>`
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
+  grid-template-areas: "targets" "limits" "kickoff" "markets" "reuse" ${({ $hasError }) => $hasError ? '"error"' : ""} "actions";
   min-inline-size: 0; margin-block-start: 8px;
-  ${media.desktop} { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  > [data-slip-criteria-group="targets"] { grid-area: targets; }
+  > [data-slip-criteria-group="limits"] { grid-area: limits; }
+  > [data-slip-criteria-group="kickoff"] { grid-area: kickoff; }
+  ${media.desktop} {
+    grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
+    grid-template-areas: "targets limits kickoff" "markets markets markets" ${({ $hasError }) => $hasError ? '"error error error"' : ""} "reuse actions actions";
+  }
 `;
 export const FieldGroup = styled.fieldset`
   border: 0; padding: 0; margin: 0; min-inline-size: 0;
   > legend { padding: 0; margin-block-end: 5px; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  &[data-criteria-field="markets"] { grid-column: 1 / -1; }
-  ${media.belowDesktop} { &[data-criteria-field="kickoff"] { grid-column: 1 / -1; } }
+  &[data-criteria-field="markets"] { grid-area: markets; }
 `;
 export const Fields = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px;
@@ -34,6 +40,12 @@ export const Fields = styled.div`
   > div > label { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
   > div > input { min-block-size: 2rem; padding: 3px 6px; border-radius: 0; font-size: 1rem; }
   ${media.desktop} { > div > input { font-size: 0.875rem; } }
+`;
+export const LimitGroups = styled.div`
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  @media (max-width: 22.5rem) { grid-template-columns: minmax(0, 1fr); }
+  > fieldset { padding: 0; margin: 0; border: 0; min-inline-size: 0; }
+  > fieldset > legend { padding: 0; margin-block-end: 4px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 export const MarketChoices = styled.div`
   display: grid; gap: 4px; grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -48,13 +60,17 @@ export const MarketChoice = styled.label`
   > input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
 export const MarketField = styled.div`display: grid; gap: 4px; align-content: start; min-inline-size: 0;`;
+export const ReuseRow = styled.div`
+  grid-area: reuse; display: flex; align-items: center; min-inline-size: 0;
+  > label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; cursor: pointer; }
+  input[type="checkbox"] { inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
+  ${media.desktop} { padding-block-start: 7px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+`;
 export const Actions = styled.div`
-  grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center;
+  grid-area: actions; display: flex; flex-wrap: wrap; align-items: center;
   justify-content: flex-end; gap: 6px; padding-block-start: 7px;
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  > label { display: inline-flex; align-items: center; gap: 6px; margin-inline-end: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
-  input[type="checkbox"] { accent-color: ${({ theme }) => theme.color.brand}; }
-  @media (max-width: 37.5rem) { > label { flex-basis: 100%; } > button { flex: 1; } }
+  @media (max-width: 37.5rem) { > button { flex: 1; } }
 `;
 export const BuildButton = styled(Button)`
   && { min-block-size: 2.5rem; border-radius: 0; padding: 6px 10px; font-size: 0.8125rem; }
@@ -64,7 +80,7 @@ export const ClearLink = styled(ButtonLink)`
   && { min-block-size: 2.5rem; border-radius: 0; padding: 6px 10px; font-size: 0.8125rem; }
   ${media.desktop} { && { min-block-size: 2.25rem; } }
 `;
-export const CriteriaError = styled.p`grid-column: 1 / -1; color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;
+export const CriteriaError = styled.p`grid-area: error; color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;
 export const Results = styled.section`
   display: grid; gap: 9px; min-inline-size: 0;
   &[aria-busy="true"] { opacity: 0.65; }
