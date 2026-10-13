@@ -12,12 +12,15 @@ provider and requires no visitor credentials, tokens or cookies.
 | `/en` | The Today view of the shared feed; no decorative hero. |
 | `/en/predictions/YYYY-MM-DD` | One EAT reporting day, including historical dates. |
 | `/en/predictions/YYYY-MM-DD?status=finished` | The same feed restricted to finished fixtures. |
+| `/en/slips` | Automatic slip builder with its own selection criteria. |
 | `/en/help` | App usage, forecast guidance and prediction results. |
 | `/en/how-it-works` | Permanent redirect to `/en/help` for saved links. |
 | `/en/privacy`, `/en/terms`, `/en/contact` | Interim information surfaces; replaced by 039–041. |
 | `/en/matches/fixture-id/home-v-away` | Link convention reserved for 035. Unknown fixtures currently return 404; no invented match pages. |
 
-`src/domain/navigation.ts` is the shared route contract. `feedDefaults`, owned
+`src/domain/navigation.ts` is the shared route contract. `slipsHref` produces the
+locale-prefixed builder destination independently of feed dates and statuses;
+Slip builder is an app section alongside Matches, Live and Results. `feedDefaults`, owned
 by `src/domain/feed-query.ts` and re-exported by navigation, defines
 Today as day offset **0**, status **all**, and Results as day offset **−1**,
 status **finished**. Both use `getFeedEntry` and `feedHref`; `/en/results` is
@@ -83,9 +86,21 @@ The native fragment skip link moves keyboard focus to the main landmark.
 
 Client styling stays in `src/components/navigation/shell-styles.tsx` and the
 existing `ui/` primitives. One root style provider/registry, named first-party
-logo, light tokens, square corners, wrapping and logical spacing are reused.
+logo, light tokens, square corners and logical spacing are reused.
 The earlier development primitive demo is no longer mounted on public pages;
 the isolated `test:styling` fixture remains available.
+
+The desktop header keeps the four app destinations on one row, preserves search
+on pages that use the shell search and keeps the theme control at the far right.
+Help, Privacy, Terms and Contact share a three-dot More disclosure, keeping the
+app destinations available when header space is constrained. The phone bar has
+five columns: Matches, Live, Results, Slip builder and More. Its square More popup opens
+upward, stays within the viewport and scrolls when necessary. Native
+`details`/`summary` toggling keeps those links usable without JavaScript; Escape,
+outside-click dismissal and focus restoration enhance the hydrated menu.
+Information pages mark both their menu link and the visible More trigger as
+current, so a collapsed menu still identifies the active section. App pages
+continue to own their branded phone header.
 
 All current locale pages inherit `noindex, follow`. The [032 feed](match-feed-page.md)
 renders stored fixtures, predictions, coverage and run progress, with truthful

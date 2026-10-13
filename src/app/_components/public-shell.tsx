@@ -5,11 +5,11 @@ import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { TextLink } from "@/components/ui/controls";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { ChevronDownIcon, HelpIcon, HomeIcon, InfoIcon, LiveIcon, ResultsIcon, SearchIcon } from "@/components/ui/icons";
+import { HomeIcon, LiveIcon, MoreIcon, ResultsIcon, SearchIcon, SlipIcon } from "@/components/ui/icons";
 import { Container, PageMain } from "@/components/ui/layout";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import {
-  feedHref, getFeedEntry, homeHref, informationHref, informationPages,
+  feedHref, getFeedEntry, homeHref, informationHref, informationPages, slipsHref,
   type NavigationLocation,
 } from "@/domain/navigation";
 import { feedQueryRules } from "@/domain/feed-query";
@@ -36,7 +36,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
   locale?: string;
   current?: NavigationLocation;
   today?: Awaited<ReturnType<typeof getShellDate>>;
-  /** Feed screens: their own phone heading, a wider desktop table and the phone tab bar. */
+  /** App screens have their own phone heading, wider desktop content and the phone tab bar. */
   app?: boolean;
   /** Dense mobile feeds use 8px gutters; other app screens retain their existing spacing. */
   compact?: boolean;
@@ -52,10 +52,18 @@ export async function PublicShell({ children, locale, current, today: reportingD
     { key: "today", href: todayHref, label: messages.text("navigation.predictions"), tab: messages.text("navigation.matches"), Icon: HomeIcon, tone: "teal" },
     { key: "live", href: feedHref({ date: today, status: "live" }, language), label: messages.text("navigation.live"), tab: messages.text("navigation.live"), Icon: LiveIcon, tone: "red" },
     { key: "results", href: resultsHref, label: messages.text("navigation.results"), tab: messages.text("navigation.results"), Icon: ResultsIcon, tone: "violet" },
+    { key: "slips", href: slipsHref(language), label: messages.text("navigation.slips"), tab: messages.text("navigation.slips"), Icon: SlipIcon, tone: "teal" },
   ] as const;
-  const policyPages = informationPages.filter((page) => page !== "help");
-  const informationCurrent = policyPages.some((page) => page === current);
+  const informationCurrent = informationPages.some((page) => page === current);
   const searchForm = search ?? { action: homeHref(language), hidden: [], value: "" };
+
+  const moreLinks = (mobile = false) => <MoreList $mobile={mobile}>
+    {informationPages.map((page) => <li key={page}>
+      <TextLink href={informationHref(page, language)} prefetch={false} aria-current={current === page ? "page" : undefined}>
+        {messages.text(`navigation.${page}`)}
+      </TextLink>
+    </li>)}
+  </MoreList>;
 
   return (
     <ShellFrame>
@@ -70,19 +78,9 @@ export async function PublicShell({ children, locale, current, today: reportingD
               {sections.map(({ key, href, label, Icon, tone }) => <li key={key}>
                 <TopNavLink href={href} prefetch={false} $tone={tone} aria-current={current === key ? "page" : undefined}><Icon />{label}</TopNavLink>
               </li>)}
-              <li><TopNavLink href={informationHref("help", language)} prefetch={false} $tone="blue" aria-current={current === "help" ? "page" : undefined}>
-                <HelpIcon />{messages.text("navigation.help")}
-              </TopNavLink></li>
               <li>
-                <MoreMenu $tone="blue">
-                  <summary aria-current={informationCurrent ? "page" : undefined}><InfoIcon />{messages.text("navigation.more")}<ChevronDownIcon /></summary>
-                  <MoreList>
-                    {policyPages.map((page) => <li key={page}>
-                      <TextLink href={informationHref(page, language)} prefetch={false} aria-current={current === page ? "page" : undefined}>
-                        {messages.text(`navigation.${page}`)}
-                      </TextLink>
-                    </li>)}
-                  </MoreList>
+                <MoreMenu $tone="blue" current={informationCurrent} label={<><MoreIcon />{messages.text("navigation.more")}</>}>
+                  {moreLinks()}
                 </MoreMenu>
               </li>
             </TopNavList>
@@ -125,9 +123,11 @@ export async function PublicShell({ children, locale, current, today: reportingD
           {sections.map(({ key, href, tab, Icon, tone }) => <li key={key}>
             <TabLink href={href} prefetch={false} $tone={tone} aria-current={current === key ? "page" : undefined}><Icon />{tab}</TabLink>
           </li>)}
-          <li><TabLink href={informationHref("help", language)} prefetch={false} $tone="blue" aria-current={current === "help" ? "page" : undefined}>
-            <HelpIcon />{messages.text("navigation.help")}
-          </TabLink></li>
+          <li>
+            <MoreMenu $mobile current={informationCurrent} label={<><MoreIcon />{messages.text("navigation.more")}</>}>
+              {moreLinks(true)}
+            </MoreMenu>
+          </li>
         </TabList>
       </TabBar>
     </ShellFrame>

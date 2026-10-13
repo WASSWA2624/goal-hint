@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { Container } from "@/components/ui/layout";
@@ -80,10 +80,10 @@ export const Header = styled.header<{ $app?: boolean }>`
 export const HeaderContent = styled(Container)`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.space.lg};
+  gap: ${({ theme }) => theme.space.sm};
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
-  ${desktop} { flex-wrap: wrap; gap: ${({ theme }) => theme.space.lg}; min-block-size: 4rem; }
-  ${media.wide} { gap: ${({ theme }) => theme.space.xl}; }
+  ${desktop} { flex-wrap: nowrap; gap: 12px; min-block-size: 4rem; }
+  ${media.wide} { gap: ${({ theme }) => theme.space.md}; }
 `;
 
 export const HeaderActions = styled.div`
@@ -113,7 +113,7 @@ export const HomeLink = styled(TextLink)`
   }
 `;
 
-/** Links retain natural widths and can flow onto another line with enlarged text. */
+/** App destinations stay together; information links use More instead of wrapping the header. */
 export const DesktopNav = styled.nav`
   display: none;
   flex: none;
@@ -125,7 +125,7 @@ export const DesktopNav = styled.nav`
 
 export const TopNavList = styled.ul`
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: stretch;
   gap: ${({ theme }) => theme.space.xs};
   margin: 0;
@@ -159,7 +159,7 @@ const topLink = css<{ $tone?: AccentName }>`
     inset-inline: 12px;
     inset-block-end: -1px;
     block-size: 3px;
-    border-radius: 3px 3px 0 0;
+    border-radius: 0;
   }
   ${media.hover} {
     &:hover { color: ${({ theme }) => theme.header.text}; }
@@ -174,38 +174,95 @@ const topLink = css<{ $tone?: AccentName }>`
 `;
 export const TopNavLink = styled(Link)<{ $tone?: AccentName }>`${topLink}`;
 
-/** The summary sits on the bar; its popup stays a light surface with dark links. */
-const MoreMenuDetails = styled.details<{ $tone?: AccentName }>`
+/** Shared by the four app links and the native More disclosure in the five-column phone bar. */
+const tabLink = css`
+  position: relative;
   display: flex;
-  > summary { ${topLink} list-style: none; &::-webkit-details-marker { display: none; } > svg:last-child { font-size: 1rem; } }
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-block-size: 2.625rem;
+  padding: 3px 4px;
+  color: ${({ theme }) => theme.header.text};
+  font-size: 0.625rem;
+  line-height: 1.25;
+  text-align: center;
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  text-decoration: none;
+  > svg { flex: none; font-size: 1.125rem; }
+  &[aria-current="page"] {
+    color: ${({ theme }) => theme.header.accent};
+    background: transparent;
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
+    &::before {
+      content: "";
+      position: absolute;
+      inset-block-start: 0;
+      inset-inline: 10%;
+      block-size: 2px;
+      background: ${({ theme }) => theme.header.accent};
+    }
+  }
+  ${focusRing}
+  &:focus-visible { outline-color: ${({ theme }) => theme.header.accent}; outline-offset: -4px; }
+`;
+
+/** The summary sits on the bar; its popup stays a light surface with dark links. */
+const MoreMenuDetails = styled.details<{ $tone?: AccentName; $mobile?: boolean }>`
+  position: relative;
+  display: flex;
+  ${({ $mobile }) => $mobile && css`inline-size: 100%;`}
+  > summary {
+    ${({ $mobile }) => $mobile ? tabLink : topLink}
+    ${({ $mobile }) => $mobile && css`inline-size: 100%;`}
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+  }
   &[open] > summary { color: ${({ theme }) => theme.header.text}; }
-  &[open] > summary > svg:last-child { transform: rotate(180deg); }
 `;
 
 /** Keep native summary toggling, with the same dismissal behavior as the filter popovers. */
-export function MoreMenu({ children, $tone = "blue" }: { children: ReactNode; $tone?: AccentName }) {
+export function MoreMenu({ children, label, current = false, $tone = "blue", $mobile = false }: {
+  children: ReactNode; label: ReactNode; current?: boolean; $tone?: AccentName; $mobile?: boolean;
+}) {
   const root = useRef<HTMLDetailsElement>(null);
+  const popupId = useId();
   const [open, setOpen] = useState(false);
-  const dismiss = useCallback(() => { if (root.current) root.current.open = false; }, []);
+  const dismiss = useCallback(() => {
+    const menu = root.current;
+    if (!menu) return;
+    const trigger = menu.querySelector("summary");
+    const restoreFocus = menu.contains(menu.ownerDocument.activeElement) && menu.ownerDocument.activeElement !== trigger;
+    menu.open = false;
+    setOpen(false);
+    if (restoreFocus) trigger?.focus({ preventScroll: true });
+  }, []);
   useOutsideDismiss({ enabled: open, root, onDismiss: dismiss });
-  return <MoreMenuDetails ref={root} $tone={$tone} onToggle={(event) => setOpen(event.currentTarget.open)}
+  return <MoreMenuDetails ref={root} $tone={$tone} $mobile={$mobile} onToggle={(event) => setOpen(event.currentTarget.open)}
     onKeyDown={(event) => {
       if (event.key !== "Escape" || !root.current?.open) return;
       event.preventDefault();
       event.stopPropagation();
       dismiss();
-      root.current.querySelector("summary")?.focus();
+      root.current.querySelector("summary")?.focus({ preventScroll: true });
     }}
     onClick={(event) => { if (event.target instanceof Element && event.target.closest("a")) dismiss(); }}>
-    {children}
+    <summary aria-controls={popupId} aria-current={current ? "page" : undefined}>{label}</summary>
+    <div id={popupId}>{children}</div>
   </MoreMenuDetails>;
 }
-export const MoreList = styled.ul`
+export const MoreList = styled.ul<{ $mobile?: boolean }>`
   position: absolute;
-  inset-block-start: calc(100% + 4px);
+  inset-block-start: ${({ $mobile }) => $mobile ? "auto" : "calc(100% + 4px)"};
+  inset-block-end: ${({ $mobile }) => $mobile ? "calc(100% + 4px)" : "auto"};
   inset-inline-end: 0;
   z-index: 25;
-  min-inline-size: 12rem;
+  min-inline-size: min(12rem, calc(100vw - 16px));
+  max-inline-size: calc(100vw - 16px);
+  ${({ $mobile }) => $mobile && css`inline-size: min(16rem, calc(100vw - 16px));`}
+  max-block-size: calc(100dvh - 4rem - env(safe-area-inset-bottom));
+  overflow-y: auto;
   margin: 0;
   padding: ${({ theme }) => theme.space.xs};
   list-style: none;
@@ -228,7 +285,7 @@ export const MoreList = styled.ul`
 `;
 
 /**
- * A translucent pill on the bar. White text and the placeholder keep 4.5:1 over the teal stop at
+ * A square search field on the bar. White text and the placeholder keep 4.5:1 over the teal stop at
  * rest and when focused; focus draws a 2px inverse-teal ring. Dark color-scheme lightens the native
  * clear button.
  */
@@ -238,7 +295,7 @@ export const HeaderSearch = styled.form`
     display: flex;
     flex: 1 1 9rem;
     max-inline-size: 26rem;
-    min-inline-size: 9rem;
+    min-inline-size: 6rem;
     align-items: center;
     gap: ${({ theme }) => theme.space.sm};
     margin-inline-start: auto;
@@ -247,7 +304,7 @@ export const HeaderSearch = styled.form`
     color: ${({ theme }) => theme.header.mutedText};
     background: ${({ theme }) => theme.header.fieldFill};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
-    border-radius: ${({ theme }) => theme.border.pillRadius};
+    border-radius: 0;
     transition: background-color 120ms ease, border-color 120ms ease;
     &:focus-within {
       color: ${({ theme }) => theme.header.text};
@@ -287,44 +344,13 @@ export const TabBar = styled.nav`
 `;
 export const TabList = styled.ul`
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   list-style: none;
 `;
-/** A distinct 42px bar uses one teal indicator and keeps the four familiar sections. */
-export const TabLink = styled(Link)<{ $tone: AccentName }>`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  min-block-size: 2.625rem;
-  padding: 3px 4px;
-  color: ${({ theme }) => theme.header.text};
-  font-size: 0.625rem;
-  line-height: 1.25;
-  text-align: center;
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  text-decoration: none;
-  > svg { font-size: 1.125rem; }
-  &[aria-current="page"] {
-    color: ${({ theme }) => theme.header.accent};
-    background: transparent;
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    &::before {
-      content: "";
-      position: absolute;
-      inset-block-start: 0;
-      inset-inline: 10%;
-      block-size: 2px;
-      background: ${({ theme }) => theme.header.accent};
-    }
-  }
-  ${focusRing}
-  &:focus-visible { outline-color: ${({ theme }) => theme.header.accent}; outline-offset: -4px; }
-`;
+/** A distinct 42px bar keeps Matches, Live, Results, Slips and More available. */
+export const TabLink = styled(Link)<{ $tone: AccentName }>`${tabLink}`;
 
 /** A quiet surface with compact links; its bottom clearance matches the slim phone tab bar. */
 export const Footer = styled.footer`

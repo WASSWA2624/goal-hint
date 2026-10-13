@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getReportingDate, parseReportingDate, parseUtcInstant } from "../src/domain/calendar.ts";
 import {
-  feedHref, getFeedEntry, homeHref, informationHref, informationPages, matchHref, parseFeedView,
+  feedHref, getFeedEntry, homeHref, informationHref, informationPages, matchHref, parseFeedView, slipsHref,
 } from "../src/domain/navigation.ts";
 import { getLocaleRedirect, isSupportedLocale, resolveLocale } from "../src/i18n/locales.ts";
 import { createMessages } from "../src/i18n/messages.ts";
@@ -12,6 +12,7 @@ test("English is the only published locale and all other message/link locales fa
   for (const locale of [undefined, "fr", "en-US", "EN", "__proto__", "en/../fr"]) {
     assert.equal(resolveLocale(locale), "en");
     assert.equal(homeHref(locale), "/en");
+    assert.equal(slipsHref(locale), "/en/slips");
     assert.equal(createMessages(locale).text("navigation.today"), "Today");
   }
 });
@@ -21,10 +22,17 @@ test("unpublished locale redirects preserve route identity and do not rewrite ar
     ["/fr", "/en"], ["/sw/privacy", "/en/privacy"], ["/EN/contact", "/en/contact"],
     ["/en-US/predictions/2026-10-07", "/en/predictions/2026-10-07"],
     ["/pt-BR/matches/fixture-123/home-v-away", "/en/matches/fixture-123/home-v-away"],
+    ["/fr/slips", "/en/slips"],
     ["/eng/contact", "/en/contact"],
     ["/en", null], ["/en/terms", null], ["/", null], ["/_next/static/a.js", null],
     ["/privacy", null], ["/france/privacy", null], ["//fr/contact", null],
   ]) assert.equal(getLocaleRedirect(input), expected, input);
+});
+
+test("Slips has a stable locale-prefixed route independent of feed dates and status", () => {
+  assert.equal(slipsHref("en"), "/en/slips");
+  assert.equal(slipsHref(), "/en/slips");
+  assert.equal(slipsHref("en/../privacy"), "/en/slips");
 });
 
 test("both navigation entries use one dated feed and change together at EAT midnight", () => {

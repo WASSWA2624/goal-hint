@@ -29,3 +29,6 @@ export const LiveIcon = (props: IconProps) => <Icon {...props}>
 </Icon>;
 /** Finished matches: a completed check. */
 export const ResultsIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="m8 12.5 2.75 2.75L16.5 9.5" /></Icon>;
+/** A selection slip: square paper with compact checked rows. */
+export const SlipIcon = (props: IconProps) => <Icon {...props}><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5" /></Icon>;
+export const MoreIcon = (props: IconProps) => <Icon {...props}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></Icon>;

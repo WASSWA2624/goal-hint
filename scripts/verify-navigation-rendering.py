@@ -20,7 +20,7 @@ def main() -> None:
     root = anonymous("/")
     assert root.status == 308
     assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en"
-    paths = ["/en", today_path, results_path, "/en?status=live", "/en/predictions/2020-02-29?status=finished",
+    paths = ["/en", "/en/slips", today_path, results_path, "/en?status=live", "/en/predictions/2020-02-29?status=finished",
         "/en?sort=probability", "/en?from=2026-10-09&to=2026-10-16",
         "/en?when=tomorrow&status=scheduled&market=total-goals&sort=probability",
         "/en/predictions/2020-02-29?to=2020-03-06&q=Synthetic&league=league-a&page=2&pageSize=40",
@@ -41,7 +41,7 @@ def main() -> None:
         information = next((page for page in information_pages if target.path == f"/en/{page}"), None)
         if information:
             expected = f"/en/{information}"
-            assert_navigation(visible, primary=expected, footer=expected, mobile=expected if information == "help" else None)
+            assert_navigation(visible, primary=expected, footer=expected, mobile=expected)
             if information == "help":
                 for section in ["dates", "filters", "browsing", "cards", "predictions", "updates", "results"]:
                     assert f'id="{section}"' in visible
@@ -50,12 +50,15 @@ def main() -> None:
                         "elapsed minutes in the top-right badge", "A live 1X2 prediction remains Pending"]:
                     assert phrase in visible
                 no_match(r'data-stored-performance|data-performance-cell|action="[^"\s]*#performance', visible)
+        elif target.path == "/en/slips":
+            assert_navigation(visible, primary="/en/slips", mobile="/en/slips")
         else:
             status = parse_qs(target.query).get("status", ["all"])[0]
             expected = results_path if status == "finished" else today_path + "?status=live" if status == "live" else today_path
             assert_navigation(visible, primary=expected, mobile=expected)
         assert f'href="{today_path}"' in visible, f"{path}: Today target"
         assert f'href="{results_path}"' in visible, f"{path}: Results target"
+        assert 'href="/en/slips"' in visible, f"{path}: Slips target"
         no_match(r'(?:href|action)="[^"\s]*/(?:sign[-_]?in|log[-_]?in|auth)(?:[/?#]|"|$)', visible, flags=re.I)
         no_match(r'<(?:button|a)\b[^>]*>\s*(?:sign[ -]?in|log[ -]?in)\s*<', visible, flags=re.I)
         no_match("Brand styling preview", visible, flags=re.I)

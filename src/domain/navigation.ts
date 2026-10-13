@@ -6,7 +6,7 @@ export { feedDefaults } from "./feed-query.ts";
 export type { FeedStatus } from "./feed-query.ts";
 export type FeedView = Readonly<{ date: ReportingDate; status: FeedStatus }>;
 export type FeedEntry = "today" | "results";
-export type AppSection = FeedEntry | "live";
+export type AppSection = FeedEntry | "live" | "slips";
 export const informationPages = ["help", "privacy", "terms", "contact"] as const;
 export type InformationPage = (typeof informationPages)[number];
 export type NavigationLocation = AppSection | InformationPage;
@@ -23,6 +23,10 @@ export function parseFeedView(date: unknown, status?: string | string[]): FeedVi
 
 export function homeHref(locale?: string): string {
   return `/${resolveLocale(locale)}`;
+}
+
+export function slipsHref(locale?: string): string {
+  return `${homeHref(locale)}/slips`;
 }
 
 export function feedHref(view: FeedView, locale?: string): string {

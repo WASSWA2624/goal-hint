@@ -1,15 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import type { ReactNode } from "react";
-import styled, { css } from "styled-components";
-import { BrandLogo } from "@/components/ui/brand";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
+import styled from "styled-components";
+import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import type { ReportingDate } from "@/domain/calendar";
 import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
-import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets } from "./feed-dates";
@@ -49,41 +46,6 @@ const Row = styled.div`
   gap: 12px 24px;
   ${media.belowDesktop} { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 `;
-/**
- * App pages hide the shell header below desktop, so the feed carries the branded bar: the same navy
- * to teal fill and brand edge as the desktop header, full bleed past the page gutter and up through
- * the app page's 8px top padding to the screen edge. The inverse logo sits at the brand-kit minimum
- * 160px wide beside the theme control.
- */
-const BrandBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  min-inline-size: 0;
-  min-block-size: 3rem;
-  margin-block-start: -8px;
-  margin-inline: -8px;
-  padding-inline: 8px;
-  color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.background};
-  border-block-end: 2px solid ${({ theme }) => theme.header.accent};
-  ${desktop} { display: none; }
-`;
-/** Inverse-teal focus rings read on every stop of the bar. */
-const barFocus = css`
-  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
-`;
-/** The gutter and the bar's 7.5px above and below the artwork give the logo its clear space. */
-const HomeLink = styled(Link)`
-  display: inline-flex;
-  flex: 0 1 160px;
-  min-inline-size: 0;
-  text-decoration: none;
-  > span { padding: 0; }
-  img { inline-size: 160px; max-inline-size: 100%; block-size: auto; }
-  ${barFocus}
-`;
 const DesktopActions = styled.div`
   display: none;
   ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-inline-start: auto; }
@@ -105,12 +67,7 @@ export function FeedHeader({ query, today, onApply }: {
   const messages = createMessages(query.locale);
   return <HeaderContent>
     <Row>
-      <BrandBar>
-        <HomeLink href={homeHref(query.locale)} prefetch={false} aria-label={messages.text("navigation.home")}>
-          <BrandLogo alt="" variant="inverse" />
-        </HomeLink>
-        <ThemeToggle />
-      </BrandBar>
+      <AppBrandBar locale={query.locale} />
       <PageHeading as="h1">{feedHeading(query, today, messages)}</PageHeading>
       <DesktopActions>
         <DatePresets query={query} today={today} onApply={onApply} />

@@ -78,7 +78,7 @@ def policy_document(origin: str, path: str, *, page: str, title: str,
     match(rf'datetime="{re.escape(notice["reviewedOn"])}"', visible, flags=re.I)
     for pattern in patterns:
         match(pattern, visible)
-    assert_navigation(visible, primary=f"/en/{page}", footer=f"/en/{page}", mobile=None)
+    assert_navigation(visible, primary=f"/en/{page}", footer=f"/en/{page}", mobile=f"/en/{page}")
     no_match(r'(?:href|action)="[^"\s]*how-it-works', visible)
     no_match(forbidden, visible, flags=re.I)
     main = match(r"<main\b[^>]*>([\s\S]*?)</main>", visible).group(1)
