@@ -927,6 +927,45 @@ test("fallback workflow rechecks a cached page after cache permission callbacks"
   assert.equal(state.network.length, 1);
 });
 
+function queuedRetryAdapter(denials) {
+  const reservations = [];
+  let now = NOW;
+  const limiter = {
+    async reserve(request) { reservations.push(request); return denials[reservations.length - 1] ?? { status: "denied", reason: "daily-limit" }; },
+    async claimLaunch() { assert.fail("a denied request never launches"); },
+    async complete() { assert.fail("a denied request never completes"); },
+    async abandon() { return { status: "abandoned" }; },
+  };
+  const adapter = createApiFootballAdapter({ accountId: hash("synthetic-account"), credential: { read: () => KEY },
+    gateway: createQuotaGateway({ limiter, authorize() {} }), authorize() {}, clock: { now: () => now }, random: () => 0.5,
+    sleep: async (ms) => { now += ms; }, fetcher: async () => assert.fail("no dispatch without a reservation") });
+  return { adapter, reservations };
+}
+
+test("a queued attempt re-reserves with its original timeout after the workflow deadline shortens it", async () => {
+  const { adapter, reservations } = queuedRetryAdapter([{ status: "denied", reason: "pacing", retryAt: NOW + 6000 }]);
+  const workflow = { signal: new AbortController().signal, deadlineAt: NOW + 74_977, check() {} };
+  const result = await adapter.evidence.fixtures({ fixtureId: 101 },
+    bounds({ deadlineAt: NOW + 120_000, timeoutMs: 75_000, retry: { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 100 } }), workflow);
+  assert.equal(result.error.quotaReason, "daily-limit");
+  assert.equal(reservations.length, 2);
+  assert.equal(reservations[1].requestId, reservations[0].requestId);
+  assert.equal(reservations[1].timeoutMs, reservations[0].timeoutMs, "the limiter rejects a changed timeout for the same queued attempt");
+});
+
+test("rolling second and minute windows that name their reopening are retried like pacing", async () => {
+  for (const reason of ["second-limit", "minute-limit"]) {
+    const { adapter, reservations } = queuedRetryAdapter([{ status: "denied", reason, retryAt: NOW + 1000 }]);
+    const result = await adapter.evidence.fixtures({ fixtureId: 101 },
+      bounds({ retry: { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 100 } }));
+    assert.equal(result.error.quotaReason, "daily-limit", reason);
+    assert.equal(reservations.length, 2, `${reason} is transient`);
+  }
+  const { adapter, reservations } = queuedRetryAdapter([{ status: "denied", reason: "minute-limit" }]);
+  await adapter.evidence.fixtures({ fixtureId: 101 }, bounds({ retry: { maxAttempts: 3, baseDelayMs: 10, maxDelayMs: 100 } }));
+  assert.equal(reservations.length, 1, "a minute limit without a reopening time is not retried");
+});
+
 test("a caller that stops waiting releases its queued request, bounded by its workflow deadline", async () => {
   const reservations = [], abandoned = [];
   const limiter = {

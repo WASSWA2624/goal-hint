@@ -280,6 +280,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
     async function attempts(): Promise<PageOutcome<T>> {
       let lastError: ApiFootballFailure = failure("transport-error", true);
       let attemptId = randomBytes(32).toString("hex");
+      // A re-reserved queued attempt must repeat its original request exactly; the limiter
+      // rejects a changed timeout, so it is fixed per attempt id rather than per pass.
+      let attemptTimeoutMs: number | null = null;
       // A queued reservation never outlives its caller: an abandoned waiter would otherwise
       // hold the shared priority queue until its own, later deadline.
       const deadlineAt = workflow === undefined ? bounds.deadlineAt
@@ -298,8 +301,9 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         let captured: ApiFootballFailure | null = null;
         let responseObservation: ApiFootballPageProvenance | null = null;
         let didDispatch = false;
+        attemptTimeoutMs ??= Math.min(bounds.timeoutMs, deadlineAt - clock.now());
         const result = await options.gateway.execute({ requestId: attemptId, workKey, priority: bounds.priority,
-          deadlineAt, timeoutMs: Math.min(bounds.timeoutMs, deadlineAt - clock.now()) }, async (signal, _permit, observe) => {
+          deadlineAt, timeoutMs: attemptTimeoutMs }, async (signal, _permit, observe) => {
           if (!workflowAllowed(workflow)) throw new Error("Fallback refresh is no longer authorized.");
           const dispatchCheck: unknown = workflow?.beforeDispatch?.();
           if (dispatchCheck instanceof Promise) void dispatchCheck.catch(() => undefined);
@@ -390,10 +394,13 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         if (result.status === "joined") return { error: failure("shared-work-pending") };
         if (result.status === "denied") {
           if (result.reason === "operation-not-authorized") return { error: failure("operation-not-authorized") };
-          lastError = { ...failure("quota-denied", ["pacing", "retry-delay", "priority-wait"].includes(result.reason)), quotaReason: result.reason,
+          // Rolling second/minute windows that name their reopening are transient like pacing.
+          const transient = ["pacing", "retry-delay", "priority-wait"].includes(result.reason) ||
+            ["second-limit", "minute-limit"].includes(result.reason) && result.retryAt !== undefined;
+          lastError = { ...failure("quota-denied", transient), quotaReason: result.reason,
             ...(result.retryAt === undefined ? {} : { retryAt: result.retryAt }) };
         } else lastError = captured ?? failure("transport-error", true);
-        if (didDispatch) attemptId = randomBytes(32).toString("hex");
+        if (didDispatch) { attemptId = randomBytes(32).toString("hex"); attemptTimeoutMs = null; }
         if (!lastError.retryable || attempt + 1 >= bounds.retry.maxAttempts || budget.requests >= bounds.maxRequests) return { error: lastError };
         const jitter = Math.min(1, Math.max(0, random()));
         const backoff = Math.ceil(Math.min(bounds.retry.maxDelayMs, bounds.retry.baseDelayMs * 2 ** Math.min(attempt, 30)) * jitter);
