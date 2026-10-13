@@ -1,14 +1,14 @@
 import "server-only";
 import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
 
-import { addReportingDays, type ReportingDateRange, type ReportingDate } from "../../domain/calendar.ts";
+import { addReportingDays, createPredictionWindow, type PredictionWindow, type ReportingDateRange, type ReportingDate } from "../../domain/calendar.ts";
 import { isAnyProbability, probabilityFraction, type FeedQuery } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { MatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { catalogScopeKey, normalizeCatalogSearch, parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { oddsPriceJoin } from "../odds/odds-read.ts";
-import { storedSelectionManifest } from "../selection/selection-read.ts";
+import { selectionRunWindow, storedSelectionManifest } from "../selection/selection-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 
 type Tx = Prisma.TransactionClient;
@@ -104,12 +104,17 @@ export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Pro
   return dates;
 }
 
-export async function storedFeedRun(tx: Tx, today: ReportingDate, range: ReportingDateRange): Promise<MatchFeedResponse["run"]> {
-  if (range.endDate < today || range.startDate > addReportingDays(today, 6)) return null;
+/** The frozen current run authorizes its projection horizon; a deployment cannot extend an old seven-day run. */
+export async function storedFeedRunContext(tx: Tx, today: ReportingDate, range: ReportingDateRange): Promise<Readonly<{
+  window: PredictionWindow; run: MatchFeedResponse["run"];
+}>> {
   const row = await tx.dailyRun.findUnique({ where: { eatDate: new Date(`${today}T00:00:00Z`) } });
-  if (!row) return { id: null, sequence: null, date: today, phase: "not-started", total: null, completed: 0, terminal: 0, failed: 0, published: 0, partialCoverage: false, message: null };
+  const window = row ? selectionRunWindow(row) : createPredictionWindow(today);
+  const result = (run: MatchFeedResponse["run"]) => ({ window, run });
+  if (range.window.endExclusive <= window.startInclusive || range.window.startInclusive >= window.endExclusive) return result(null);
+  if (!row) return result({ id: null, sequence: null, date: today, phase: "not-started", total: null, completed: 0, terminal: 0, failed: 0, published: 0, partialCoverage: false, message: null });
   const manifest = await storedSelectionManifest(tx, row);
-  if (!manifest) return { id: row.id, sequence: String(row.sequence), date: today, phase: "selecting", total: null, completed: 0, terminal: 0, failed: 0, published: 0, partialCoverage: false, message: null };
+  if (!manifest) return result({ id: row.id, sequence: String(row.sequence), date: today, phase: "selecting", total: null, completed: 0, terminal: 0, failed: 0, published: 0, partialCoverage: false, message: null });
   const entries = await tx.runFixture.findMany({ where: { runId: row.id }, select: { fixtureId: true, cycleId: true, job: { select: { state: true } } } });
   const membership = new Set(manifest.entries.map((item) => `${item.fixtureId}:${item.cycleId}`));
   if (entries.length !== manifest.entries.length || new Set(entries.map((item) => `${item.fixtureId}:${item.cycleId}`)).size !== entries.length ||
@@ -118,6 +123,10 @@ export async function storedFeedRun(tx: Tx, today: ReportingDate, range: Reporti
   const failed = entries.filter((item) => item.job && ["failed", "expired"].includes(item.job.state)).length;
   const terminal = completed + failed;
   const published = await tx.predictionRefreshResult.count({ where: { runId: row.id, outcome: "published" } });
-  return { id: row.id, sequence: String(row.sequence), date: today, phase: terminal < entries.length ? "updating" : manifest.partial || failed > 0 ? "partial" : "complete",
-    total: entries.length, completed, terminal, failed, published, partialCoverage: manifest.partial, message: null };
+  return result({ id: row.id, sequence: String(row.sequence), date: today, phase: terminal < entries.length ? "updating" : manifest.partial || failed > 0 ? "partial" : "complete",
+    total: entries.length, completed, terminal, failed, published, partialCoverage: manifest.partial, message: null });
+}
+
+export async function storedFeedRun(tx: Tx, today: ReportingDate, range: ReportingDateRange): Promise<MatchFeedResponse["run"]> {
+  return (await storedFeedRunContext(tx, today, range)).run;
 }

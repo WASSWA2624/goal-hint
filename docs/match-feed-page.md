@@ -19,8 +19,9 @@ existing selected market, filters, sorting and bounded page-size contract.
 `server/matches/public-feed.ts` composes the same database, configured competition
 scope and MySQL response cache for pages and `/api/matches`. Server Components
 call it directly. `getShellInstant` supplies one request-scoped instant to the
-header, reporting date and page read so an EAT midnight cannot split a single
-render across dates. Cache hits preserve their original response/source clocks.
+header, browsing date and page read so midnight cannot split a single
+render across dates. A serialized `tz` resolves Today and date presets in that
+zone. Cache hits preserve their original response/source clocks.
 Full-page HTTP caching remains disabled by dynamic request rendering.
 
 `FeedStateProvider` receives the query with `data: null`: cards render from the
@@ -29,7 +30,10 @@ does not validate the page's records a second time.
 Initial server rendering supplies the cards without reading Redux or starting browser
 requests. Search/filter controls now use the shared persistent surface; the
 pagination uses the same surface and a bounded metadata-only checkpoint. Prompt 037 owns live refresh and
-open-tab midnight rollover. Search visits continue to consume the shared
+open-tab midnight rollover. An unzoned relative entry adopts the device zone
+after hydration using one canonical replacement navigation; polling pauses
+while its actual local-day fixture window loads. Named dates and applied zones
+remain stable. Search visits continue to consume the shared
 aggregate limiter before cache lookup.
 
 ## Navigation and presentation
@@ -69,11 +73,15 @@ the supplied locked forecast, or the explicit missing locked selection for that
 market. Historical scores and correctness remain separate. Publication and last
 sync use their original UTC instants, displayed in the device's timezone after
 hydration with a stable EAT server fallback. Match kickoff and detail
-timestamps follow the same display rule. Date-only feed selections, reporting
-cohorts, prediction windows and schedules remain in EAT; an explicit time filter
-retains the existing local-day/minute window behavior in its serialized IANA
-zone. Displaying an instant in a different local calendar day does not change
-the reporting boundaries. Stored delays remain visible. The page never
+timestamps follow the same display rule. Browsing dates with `tz` select actual
+local-day UTC boundaries, including fixtures from adjacent EAT reporting days
+and daylight-saving changes. Blank time fields retain that browsing zone;
+optional time bounds narrow its daily minutes. Unzoned explicit dates retain
+their EAT boundaries. Provider receipts, prediction windows, run identities and
+the daily forecast schedule retain their operational EAT calendar. Today and
+the next six browsing dates form the seven-day browsing preset; rollover follows
+the selected zone's midnight without shifting a named historical date. Stored
+delays remain visible. The page never
 substitutes a sample forecast or selects
 a current preview for an empty lock.
 

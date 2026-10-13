@@ -12,7 +12,7 @@ export function MatchFeedPage(props: {
 }) {
   const { query, today } = props;
   const current = query.status === "finished" ? "results" : query.status === "live" ? "live" : "today";
-  return <PublicShell locale={query.locale} today={today} current={current} app compact search={null}>
+  return <PublicShell locale={query.locale} today={today} zone={query.zone ?? query.time?.zone ?? null} current={current} app compact search={null}>
     <FeedSurface {...props} />
   </PublicShell>;
 }

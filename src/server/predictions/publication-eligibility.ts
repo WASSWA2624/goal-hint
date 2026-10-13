@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createPredictionWindow, getReportingDate, isInWindow, type UtcInstant } from "../../domain/calendar.ts";
+import { createPredictionWindow, getReportingDate, isInWindow, predictionWindowDays, type UtcInstant } from "../../domain/calendar.ts";
 import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import type { ForecastTimestamps } from "../fallback/fallback-contract.ts";
 import type { StoredCycle, StoredRevision } from "./history-contract.ts";
@@ -26,7 +26,10 @@ export function publicationEligibility(input: Readonly<{
   if (input.earlierCloseAt !== null || observationShowsPlay(observation) || statusShowsPlay(input.status)) return "early-play";
   if (input.scheduleVersion !== cycle.scheduleVersion || input.candidateKickoffAt !== cycle.kickoffAt ||
     input.kickoffAt !== cycle.kickoffAt || observation.kickoffAt !== cycle.kickoffAt) return "schedule-changed";
-  if (!isInWindow(cycle.kickoffAt, input.originalWindow) || !isInWindow(cycle.kickoffAt, createPredictionWindow(getReportingDate(now)))) return "outside-window";
+  try {
+    const days = predictionWindowDays(input.originalWindow);
+    if (!isInWindow(cycle.kickoffAt, input.originalWindow) || !isInWindow(cycle.kickoffAt, createPredictionWindow(getReportingDate(now), days))) return "outside-window";
+  } catch { return "outside-window"; }
   if (now >= cycle.cutoffAt) return "cutoff-passed";
   if (observation.retrievedAt > now) return "future-observation";
   if (now - observation.retrievedAt > input.maxObservationAgeMs) return "stale-observation";

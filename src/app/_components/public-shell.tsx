@@ -13,6 +13,7 @@ import {
   type NavigationLocation,
 } from "@/domain/navigation";
 import { feedQueryRules } from "@/domain/feed-query";
+import { deviceFeedEntryHref } from "@/domain/device-feed";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import {
@@ -30,11 +31,13 @@ export const getShellDate = cache(async () => getReportingDate(await getShellIns
 /** A GET search that keeps the visitor's other feed parameters. */
 export type ShellSearch = Readonly<{ action: string; hidden: readonly (readonly [string, string])[]; value: string }>;
 
-export async function PublicShell({ children, locale, current, today: reportingDate, app = false, compact = false, search }: {
+export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, search }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
   today?: Awaited<ReturnType<typeof getShellDate>>;
+  /** A shared browsing zone keeps server-rendered navigation consistent with the selected day. */
+  zone?: string | null;
   /** App screens have their own phone heading, wider desktop content and the phone tab bar. */
   app?: boolean;
   /** Dense mobile feeds use 8px gutters; other app screens retain their existing spacing. */
@@ -45,11 +48,11 @@ export async function PublicShell({ children, locale, current, today: reportingD
   const language = resolveLocale(locale);
   const messages = createMessages(language);
   const today = reportingDate ?? await getShellDate();
-  const todayHref = feedHref(getFeedEntry(today, "today"), language);
-  const resultsHref = feedHref(getFeedEntry(today, "results"), language);
+  const todayHref = zone ? deviceFeedEntryHref("today", today, zone, language) : feedHref(getFeedEntry(today, "today"), language);
+  const resultsHref = zone ? deviceFeedEntryHref("results", today, zone, language) : feedHref(getFeedEntry(today, "results"), language);
   const sections = [
     { key: "today", href: todayHref, label: messages.text("navigation.predictions"), tab: messages.text("navigation.matches"), icon: "matches", tone: "teal" },
-    { key: "live", href: feedHref({ date: today, status: "live" }, language), label: messages.text("navigation.live"), tab: messages.text("navigation.live"), icon: "live", tone: "red" },
+    { key: "live", href: zone ? deviceFeedEntryHref("live", today, zone, language) : feedHref({ date: today, status: "live" }, language), label: messages.text("navigation.live"), tab: messages.text("navigation.live"), icon: "live", tone: "red" },
     { key: "results", href: resultsHref, label: messages.text("navigation.results"), tab: messages.text("navigation.results"), icon: "results", tone: "violet" },
     { key: "slips", href: slipsHref(language), label: messages.text("navigation.slips"), tab: messages.text("navigation.slips"), icon: "slips", tone: "teal" },
   ] as const;

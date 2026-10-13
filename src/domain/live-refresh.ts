@@ -1,4 +1,5 @@
 import { getReportingDate, getReportingDayBounds, utcInstantFromEpochMilliseconds, type ReportingDate } from "./calendar.ts";
+import { getDateInTimeZone, getDayBoundsInTimeZone } from "./device-calendar.ts";
 import { FeedPaginationError } from "./feed-pagination-error.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
 import type { MatchDetailResponse } from "./match-detail.ts";
@@ -8,7 +9,7 @@ export const liveRefreshRules = Object.freeze({ activeMs: 20_000, quietMs: 60_00
 
 /** Fast polling only while something can change soon: an updating run, a live match or a scheduled
  * kickoff within the lead either side of now. Other views, relative dates included, poll quietly;
- * the loop still wakes at EAT midnight. */
+ * the loop still wakes at the view's calendar midnight. */
 export function feedRefreshInterval(data: Pick<MatchFeedResponse, "run">,
   records: readonly Pick<MatchFeedResponse["records"][number], "status" | "kickoffAt">[], now: number): number {
   const active = data.run?.phase === "updating" || records.some((record) => record.status === "live" ||
@@ -51,27 +52,32 @@ export type RefreshEnvironment = Readonly<{
 
 /** One serial loop per visible view; lifecycle changes cancel obsolete work. */
 export function startLiveRefresh(options: {
-  today: ReportingDate; interval(): number; refresh(): Promise<unknown>; rollover(today: ReportingDate): void;
+  today: ReportingDate; zone?: string | null; interval(): number; refresh(): Promise<unknown>; rollover(today: ReportingDate): void;
 }, environment: RefreshEnvironment) {
   let stopped = false, running = false, timer: unknown, day = options.today;
+  const dateAt = (now: number) => {
+    const instant = utcInstantFromEpochMilliseconds(now);
+    return options.zone ? getDateInTimeZone(instant, options.zone) : getReportingDate(instant);
+  };
   const arm = () => {
     environment.cancel(timer);
     if (stopped || !environment.available()) return;
     const now = utcInstantFromEpochMilliseconds(environment.now());
-    const untilMidnight = getReportingDayBounds(getReportingDate(now)).endExclusive - now;
+    const date = dateAt(now);
+    const untilMidnight = (options.zone ? getDayBoundsInTimeZone(date, options.zone) : getReportingDayBounds(date)).endExclusive - now;
     timer = environment.schedule(() => { void tick(); }, Math.min(options.interval(), untilMidnight));
   };
   const tick = async () => {
     environment.cancel(timer);
     if (stopped || running || !environment.available()) return;
-    const nextDay = getReportingDate(utcInstantFromEpochMilliseconds(environment.now()));
+    const nextDay = dateAt(environment.now());
     if (nextDay > day) { day = nextDay; options.rollover(day); arm(); return; }
     running = true;
     try { await options.refresh(); } catch { /* The view owns its retained-data error. */ } finally { running = false; arm(); }
   };
   const unlisten = environment.listen(() => { if (environment.available()) void tick(); else environment.cancel(timer); });
-  // Check reporting rollover without fetching a duplicate initial page.
-  const current = getReportingDate(utcInstantFromEpochMilliseconds(environment.now()));
+  // Check the selected calendar's rollover without fetching a duplicate initial page.
+  const current = dateAt(environment.now());
   if (current > day) { day = current; options.rollover(day); }
   arm();
   return () => { stopped = true; environment.cancel(timer); unlisten(); };

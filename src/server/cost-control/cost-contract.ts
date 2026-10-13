@@ -10,6 +10,8 @@ export type CostPriority = Readonly<{ kind: "fixture"; kickoffAt: UtcInstant }> 
 export type CostPeriodPolicy = Readonly<{
   accountId: string; category: CostCategory; periodId: string; startsAt: UtcInstant; endsAt: UtcInstant;
   capUsdPicos: CostAmount; openingChargedUsdPicos: CostAmount; evidenceRef: string;
+  /** Explicit AI usage billing; zero is a storage placeholder, not a spending ceiling. */
+  billingMode?: "capped" | "usage-based" | undefined;
 }>;
 export type CostJobPolicy = Readonly<{
   accountId: string; category: CostCategory; jobId: string; workKey: string; costCapUsdPicos: CostAmount;

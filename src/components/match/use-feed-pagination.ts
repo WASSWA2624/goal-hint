@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ReportingDate } from "@/domain/calendar";
+import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import type { FeedCheckpoint } from "@/domain/feed-navigation";
 import { appendFeedPage, FeedPaginationError, initialLoadedFeed, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
 import { feedQueryHref, feedQueryKey, type FeedQuery } from "@/domain/feed-query";
@@ -69,7 +69,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
         next = replaceFeedPages(base, pages);
       }
       if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
-      acceptRun(base.data.run, next.data.run, next.data.today);
+      acceptRun(base.data.run, next.data.run, getReportingDate(utcInstantFromEpochMilliseconds(next.data.asOf)));
       setRefreshError(false);
       restored.current = true; retryCheckpoint.current = null;
       if (mode !== "background") focusTarget.current = { fixtureId: mode === "append" ? next.records[base.records.length]?.fixtureId ?? null : checkpoint?.focusFixtureId ?? null,

@@ -25,7 +25,8 @@ test("time URLs round trip and invalid or incomplete filters fail", () => {
   assert.equal(parsed.time.to, "12:30");
   assert.deepEqual(parseFeedQuery(serializeFeedQuery(parsed, today), { today }), parsed);
   assert.notEqual(feedQueryKey(parsed, today), feedQueryKey({ ...parsed, time: null }, today));
-  for (const value of ["timeFrom=24:00&tz=UTC", "timeFrom=12:00", "tz=UTC", "timeFrom=12:00&timeTo=11:00&tz=UTC", "timeFrom=12:00&tz=Invalid/Zone"]) {
+  assert.equal(parseFeedQuery(new URLSearchParams("tz=UTC"), { today }).zone, "UTC");
+  for (const value of ["timeFrom=24:00&tz=UTC", "timeFrom=12:00", "tz=Invalid/Zone", "timeFrom=12:00&timeTo=11:00&tz=UTC", "timeFrom=12:00&tz=Invalid/Zone"]) {
     assert.throws(() => parseFeedQuery(new URLSearchParams(value), { today }));
   }
 });

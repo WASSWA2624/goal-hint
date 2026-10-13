@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
+import { getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
 import { matchDetailResponseSchema, type MatchDetailResponse } from "../../domain/match-detail.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
 import { matchHref } from "../../domain/navigation.ts";
@@ -12,7 +12,7 @@ import { runFromRow, storedCycle, storedCycleDisplay, storedRevision } from "../
 import { storedFeedFixture } from "./fixture-read.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { storedFixtureOddsGroups } from "../odds/odds-read.ts";
-import { storedFeedCoverage, storedFeedRun } from "./feed-read.ts";
+import { storedFeedCoverage, storedFeedRunContext } from "./feed-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { detailHistoryLink, parseMatchDetailQuery } from "./detail-query.ts";
 import { publicDetailCycle, publicDetailRevision, publicDetailSnapshot } from "./detail-read.ts";
@@ -35,8 +35,9 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           const known = await tx.footballFixture.findUnique({ where: { id }, select: { id: true, kickoff: true } });
           if (!known) throw new MatchFeedError("not-found");
           const date = known.kickoff ? getReportingDate(utcInstantFromEpochMilliseconds(known.kickoff.getTime())) : today;
-          const coverage = await storedFeedCoverage(tx, validateReportingDateRange(date, date, 1));
-          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, createPredictionWindow(today), "en", { prices: providerOdds });
+          const range = validateReportingDateRange(date, date, 1), coverage = await storedFeedCoverage(tx, range);
+          const { run, window } = await storedFeedRunContext(tx, today, range);
+          const fixture = await storedFeedFixture(tx, id, !coverage[0]?.authoritative, window, "en", { prices: providerOdds });
           // Market-implied odds groups are mutable observation data, read outside the immutable revision cache.
           const odds = await storedFixtureOddsGroups(tx, id, providerOdds);
           const currentRevisionId = fixture.forecast?.revisionId ?? null;
@@ -82,7 +83,6 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
             cycle: publicDetailCycle(await cycleFor(entry.cycleId)) });
           for (const row of cycles.slice(0, query.limit)) cycleHistory.push(publicDetailCycle(await cycleFor(row.id)));
           const slug = canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name);
-          const run = await storedFeedRun(tx, today, validateReportingDateRange(date, date, 1));
           const response = matchDetailResponseSchema.parse({ fixture, asOf, run, odds, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
             currentRevisionId, selection: query.revision ? "revision" : query.cycle ? "cycle" : "applicable", selectedCycle: display ? publicDetailCycle(display.cycle) : null, snapshot,
             history: { limit: query.limit, revisions: { anchor: anchors.revision, entries: revisions,
@@ -94,7 +94,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 6, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
+        query: { id, projection: 7, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
       return options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
     } catch (error) {
       if (refused) throw refused;

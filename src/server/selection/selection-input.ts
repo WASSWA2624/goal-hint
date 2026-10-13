@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import { createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds, type PredictionWindowDays } from "../../domain/calendar.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseCatalogImportRequest } from "../football/catalog-input.ts";
@@ -13,8 +13,8 @@ const actor = z.string().min(1).max(128).regex(/^[^\p{Cc}]+$/u);
 export const scheduledSelection = z.strictObject({ scheduledFor: jobInstant }).refine(({ scheduledFor }) => {
   try { return selectionWindow(scheduledFor).startInclusive === scheduledFor; } catch { return false; }
 });
-export function selectionWindow(scheduledFor: number) {
-  const at = utcInstantFromEpochMilliseconds(scheduledFor), window = createPredictionWindow(getReportingDate(at));
+export function selectionWindow(scheduledFor: number, days: PredictionWindowDays = 7) {
+  const at = utcInstantFromEpochMilliseconds(scheduledFor), window = createPredictionWindow(getReportingDate(at), days);
   if (at !== window.startInclusive) return selectionFail("invalid-request");
   return window;
 }
@@ -32,10 +32,11 @@ const policy = z.strictObject({ version: z.literal(1), evidenceRef: ref,
     .refine((ids) => new Set(ids).size === ids.length), eligibleStatuses: z.tuple([z.literal("scheduled")]),
   degradationPolicyRef: ref.nullable(), retentionEvidenceRef: ref, leaseMs: z.number().int().min(1000).max(120_000),
   attemptsPerInvocation: z.number().int().min(1).max(4), maxFixtures: z.number().int().min(1).max(10_000),
+  windowDays: z.union([z.literal(7), z.literal(8)]).optional(),
   // Optional nearest-kickoff budget priority; omitted keeps every eligible fixture.
   refreshCapacity: z.number().int().min(0).max(10_000).optional(),
   // Optional provider date horizon; later dates stay explicit missing coverage without a request.
-  importDays: z.number().int().min(1).max(7).optional(),
+  importDays: z.number().int().min(1).max(8).optional(),
   // Optional minimum time before the publication cutoff; omitted keeps the cutoff itself as the limit.
   refreshLeadMs: z.number().int().min(0).max(24 * 60 * 60 * 1000).optional(),
   importBounds: z.strictObject({ priority: z.literal("daily-inputs"), deadlineMs: z.number().int().min(100).max(3_600_000),
@@ -43,7 +44,7 @@ const policy = z.strictObject({ version: z.literal(1), evidenceRef: ref,
     maxRows: z.number().int().positive(), maxResponseBytes: z.number().int().positive(),
     retry: z.strictObject({ maxAttempts: z.number().int().positive(), baseDelayMs: z.number().int().nonnegative(), maxDelayMs: z.number().int().nonnegative() }),
     cacheMaxAgeMs: z.number().int().nonnegative() }), refresh: z.unknown(),
-});
+}).refine((value) => (value.importDays ?? value.windowDays ?? 7) <= (value.windowDays ?? 7));
 export function parseSelectionPolicy(input: unknown): SelectionPolicy {
   if (input === null || input === undefined) return selectionFail("policy-required");
   const value = parseSelection(policy, input);

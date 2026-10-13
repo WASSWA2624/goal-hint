@@ -19,7 +19,11 @@ trusted server code, never HTTP payloads.
 
 The member loader verifies the sealed daily manifest, committed boundaries and
 selection hash, exact entry/envelope/job identity, cycle, canonical fixture/teams,
-current rolling window and schedule. It rejects an older run after a newer
+current rolling window and schedule. The window length comes from the owning
+run's frozen selection policy: seven dates for legacy runs or eight for explicit
+device-day edge coverage. Current kickoff must remain in both original and
+current windows; a later configuration cannot extend an older run.
+It rejects an older run after a newer
 accepted revision. Model configuration and all request/cost intents are persisted
 once, before outbound work. Restarting a job restores that intent rather than
 reading newly selected configuration. A model registry's `verifyPriorPin` and

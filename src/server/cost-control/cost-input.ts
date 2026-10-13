@@ -44,7 +44,9 @@ const rationalInteger = z.string().max(38).regex(/^[1-9][0-9]*$/u);
 const quantitiesSchema = z.object({ requests: quantity, inputTokens: quantity, outputTokens: quantity, billedUnits: quantity }).strict();
 const periodSchema = z.object({ accountId: identity, category, periodId: identity, startsAt: instant, endsAt: instant,
   capUsdPicos: amount, openingChargedUsdPicos: amount, evidenceRef: reference,
-}).strict().refine((value) => value.startsAt < value.endsAt);
+  billingMode: z.enum(["capped", "usage-based"]).optional(),
+}).strict().refine((value) => value.startsAt < value.endsAt &&
+  (value.billingMode !== "usage-based" || (value.category === "ai" && value.capUsdPicos === 0n)));
 const jobSchema = z.object({ accountId: identity, category, jobId: identity, workKey: identity, costCapUsdPicos: amount,
   requestLimit: positive, inputTokenLimit: quantity, outputTokenLimit: quantity, billedUnitLimit: quantity,
   startsAt: instant, deadlineAt: instant, timeLimitMs: duration, fallbackReserveMs: quantity.max(2_147_483_647), evidenceRef: reference,

@@ -5,7 +5,7 @@ import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } fro
 import type { EvidenceAuthority } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { ProviderFallbackAuthority, ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import type { FallbackResolutionAuthority } from "../fallback/fallback-contract.ts";
+import type { FallbackContext, FallbackResolutionAuthority, ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 import type { FallbackRefreshRequest } from "../fallback/fallback-service.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballEndpoint, type ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixture, RegulationScoreCandidate } from "../football/api-football-normalize.ts";
@@ -17,6 +17,10 @@ import type { LifecycleAuthority, LifecyclePolicy } from "../predictions/lifecyc
 import type { PublicationAuthority, PublicationPolicy } from "../predictions/publication-contract.ts";
 import type { RefreshAuthority, RefreshMember } from "../refresh/refresh-contract.ts";
 import { parseRefreshPlan } from "../refresh/refresh-input.ts";
+import type { ModelVersion } from "../predictor/predictor-contract.ts";
+import type { PredictorResult } from "../predictor/predictor-service.ts";
+import { liveAiEvidencePolicy, liveAiRefreshPlan } from "./live-ai-plan.ts";
+import { verifyLiveFootballSource } from "./live-ai-evidence.ts";
 import type { ResultSyncAuthority, ResultSyncPolicy } from "../results/result-sync-contract.ts";
 import type { SelectionAuthority, SelectionPolicy } from "../selection/selection-contract.ts";
 import { parseSelectionPolicy } from "../selection/selection-input.ts";
@@ -36,7 +40,7 @@ function pages(result: Pick<ApiFootballResult<unknown>, "provenance">, endpoint:
     page.endpoint === endpoint && page.contractVersion === API_FOOTBALL_CONTRACT_VERSION && page.retrievedAt <= now + SKEW_MS);
 }
 
-/** Trusted operator binding for the fallback-only live pipeline. Every approval
+/** Trusted operator binding for the primary and fallback live pipeline. Every approval
  * re-runs the runtime gates against the owner register, binds exact policies, and
  * refuses manual-operator paths (voids, recovery, identity remapping) this runner never uses. */
 export function createLiveAuthorities(options: Readonly<{
@@ -46,6 +50,9 @@ export function createLiveAuthorities(options: Readonly<{
   refreshPacing: RefreshPacing;
   /** The exact odds policy configured from the same workload as the runtime, or null without a bookmaker. */
   oddsPolicy?: OddsPolicy | null;
+  aiModel?: ModelVersion;
+  verifyPrimary?(result: PredictorResult, context: FallbackContext): boolean;
+  verifyPrimaryCandidate?(candidate: ResolvedForecastCandidate): boolean;
 }>) {
   const { policy, verify, refs } = options;
   const now = () => options.clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
@@ -103,18 +110,23 @@ export function createLiveAuthorities(options: Readonly<{
     verifyPolicy: (value) => same(value, expected.publication),
     verifyObservation: (observation) => observation.provider === "api-football" && observation.evidenceRef === options.statusEvidenceRef &&
       observation.retrievedAt <= now() + SKEW_MS,
-    // Fallback-only revisions carry no model pin and only validated provider groups.
-    verifyCandidate: (input) => input.candidate.context.pin === null && verify(refs.publicRights, "football-public-rights") &&
-      Object.values(input.candidate.markets).every((market) => !market.available || market.provenance.kind === "api-football" &&
-        market.provenance.policyVersion === expected.fallback.version && market.provenance.policyEvidenceRef === expected.fallback.evidenceRef),
+    verifyCandidate: (input) => {
+      if (!verify(refs.publicRights, "football-public-rights")) return false;
+      return Object.values(input.candidate.markets).every((market) => {
+        if (!market.available) return true;
+        if (market.provenance.kind === "api-football") return market.provenance.policyVersion === expected.fallback.version &&
+          market.provenance.policyEvidenceRef === expected.fallback.evidenceRef;
+        return options.aiModel !== undefined && options.verifyPrimaryCandidate?.(input.candidate) === true;
+      });
+    },
   });
   const evidence: EvidenceAuthority = Object.freeze({
     authorize() { football(); },
     verifyContext: (context) => context.provider === "api-football" && context.cycleId !== null && context.runId !== null,
-    verifyPolicy: (value) => same(value, expected.evidence),
-    // No external evidence source is licensed yet; refuse any source rather than trusting it.
-    verifySource: () => false,
-    verifyReuse: () => false,
+    verifyPolicy: (value) => same(value, expected.evidence) || policy.capabilities.ai && same(value, liveAiEvidencePolicy(refs)),
+    verifySource: (source, context) => policy.capabilities.ai && verifyLiveFootballSource(source, context, refs),
+    verifyReuse: (source, context) => policy.capabilities.ai && source.reuse.allowSummary && source.reuse.evidenceRef === refs.retention &&
+      source.reuse.retainUntil >= context.analysisAt && verify(refs.retention, "football-private-use"),
   });
   const providerFallback: ProviderFallbackAuthority = Object.freeze({
     authorize() { football(); },
@@ -129,18 +141,24 @@ export function createLiveAuthorities(options: Readonly<{
     result.requestsDispatched === 0 && result.requestCountUnknown === false;
   const fallback: FallbackResolutionAuthority = Object.freeze({
     authorize() { football(); },
-    verifyContext: (context) => context.pin === null && context.context.cycleId !== null && context.context.runId !== null,
-    // AI is disabled: only the refresh service's explicit no-dispatch denial is acceptable.
-    verifyAi: (result) => !policy.capabilities.ai && unconfiguredAi(result),
+    verifyContext: (context) => context.context.cycleId !== null && context.context.runId !== null &&
+      (context.pin === null || options.aiModel !== undefined && context.pin.modelVersionId === options.aiModel.id),
+    verifyAi: (result, context) => context.pin === null ? unconfiguredAi(result) : options.verifyPrimary?.(result, context) === true,
     verifyProvider: (candidate, context) => candidate.provenance.provider === "api-football" && candidate.provenance.jobId === context.jobId &&
       candidate.policyVersion === expected.fallback.version && same(candidate.context, context.context),
   });
-  const verifyFallbackRequest = (request: FallbackRefreshRequest) => request.expected.pin === null && unconfiguredAi(request.ai) &&
+  const verifyFallbackRequest = (request: FallbackRefreshRequest) =>
+    (request.expected.pin === null ? unconfiguredAi(request.ai) : options.verifyPrimary?.(request.ai, request.expected) === true) &&
     request.bounds !== null && request.bounds.priority === "near-kickoff-fallback";
   const refresh: RefreshAuthority = Object.freeze({
     authorize() { publish(); },
     verifyPlan: (plan, member: RefreshMember) => {
-      try { return same(plan, parseRefreshPlan(fallbackRefreshPlan(member, refs, options.refreshPacing), member)); } catch { return false; }
+      try {
+        const reviewed = plan.modelVersionId === null ? fallbackRefreshPlan(member, refs, options.refreshPacing) :
+          options.aiModel === undefined ? null : liveAiRefreshPlan(member, refs, policy, options.aiModel,
+            plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing);
+        return reviewed !== null && same(plan, parseRefreshPlan(reviewed, member));
+      } catch { return false; }
     },
   });
   const results: ResultSyncAuthority = Object.freeze({

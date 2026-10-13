@@ -59,7 +59,10 @@ Inside that transaction it verifies the sealed manifest/policy and immutable
 membership/envelope/job link, original kickoff membership, canonical fixture/
 teams, current active open cycle and accepted schedule version. Analysis must
 follow manifest commit and cycle opening. Current kickoff must remain in both
-the original window and today's seven-day EAT window. A newer canonical
+the original window and today's EAT window with that run's validated seven/eight-day
+horizon. Stored policy, manifest and row bounds must agree; arbitrary intervals
+cannot authorize publication. Older seven-day runs retain their original horizon.
+A newer canonical
 observation cannot be overridden by older eligibility evidence. Both canonical
 and observed status must be scheduled; unknown eligibility is refused.
 

@@ -11,7 +11,7 @@ export function FeedTimeFilter({ query, from, to, onChange }: {
   query: FeedQuery; from: string; to: string; onChange: (from: string, to: string) => void;
 }) {
   const messages = useMessages(query.locale), deviceZone = useDeviceTimeZone();
-  const zone = query.time?.zone ?? deviceZone, id = useId();
+  const zone = query.zone ?? query.time?.zone ?? deviceZone, id = useId();
   const invalid = Boolean(from || to) && !validKickoffTime({ from, to, zone });
   return <RangeFieldset aria-label={messages.text("feed.time.range")}>
     <RangeFields>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import styled from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { DocumentIcon, HelpIcon, HomeIcon, LiveIcon, MailIcon, MoreIcon, ResultsIcon, ShieldIcon, SlipIcon } from "@/components/ui/icons";
 import type { NavigationLocation } from "@/domain/navigation";
+import { deviceFeedEntryHref } from "@/domain/device-feed";
+import { useDeviceCalendar } from "@/i18n/use-messages";
 import type { AccentName } from "@/styles/theme";
 import { fitNavigationItems, minimumPrimaryDestinations } from "./navigation-fit";
 import { MoreList, MoreMenu, TabLink, TabList, TabMeasure, TopNavLink, TopNavList, TopNavMeasure } from "./shell-styles";
@@ -36,9 +38,16 @@ function restoreTarget(container: HTMLElement, target: FocusTarget) {
 }
 
 /** The server renders three destinations and native More; hydration fills the measured space. */
-export function ResponsiveNavigation({ destinations, current, moreLabel, mobile = false }: {
+export function ResponsiveNavigation({ destinations: serverDestinations, current, moreLabel, mobile = false }: {
   destinations: readonly NavigationDestination[]; current?: NavigationLocation; moreLabel: string; mobile?: boolean;
 }) {
+  const device = useDeviceCalendar();
+  const destinations = useMemo(() => device ? serverDestinations.map((destination) => {
+    const { key } = destination;
+    if (key !== "today" && key !== "live" && key !== "results") return destination;
+    const locale = destination.href.split("/")[1];
+    return { ...destination, href: deviceFeedEntryHref(key, device.today, device.zone, locale) };
+  }) : serverDestinations, [device, serverDestinations]);
   const root = useRef<HTMLDivElement>(null), measurements = useRef<HTMLDivElement>(null), list = useRef<HTMLUListElement>(null);
   const [count, setCount] = useState(Math.min(minimumPrimaryDestinations, destinations.length));
   const pendingFocus = useRef<{ target: FocusTarget; previous: Element | null } | null>(null);

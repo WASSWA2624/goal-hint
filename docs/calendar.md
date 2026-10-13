@@ -18,7 +18,7 @@ Adapters must enforce their storage type's narrower bounds, including MySQL
 | `parseReportingDate`, `addReportingDays` | Reject impossible/noncanonical dates and invalid increments; advance Gregorian dates across month, year and leap-day boundaries. Arithmetic outside the supported reporting years fails. |
 | `parseUtcInstant`, `utcInstantFromEpochMilliseconds`, `utcInstantFromDate`, `toUtcIsoString` | Accept explicit UTC strings with seconds and optional one-to-three fractional digits, or valid integer milliseconds. Offset, timezone-less, extra-precision and normalized invalid inputs fail. Copy Date values into primitives; serialization emits UTC ISO strings. |
 | `getReportingDate`, `getReportingDayBounds` | Derive a named-zone reporting date and its inclusive start/exclusive end. Use explicit Gregorian/Latin `Intl` parts, independent of host timezone and locale. Historical timezone changes are respected. |
-| `createPredictionWindow`, `isInWindow` | Freeze scalar run identity and original boundaries; test `[startInclusive, endExclusive)`. A run's seven-day end date must remain within supported reporting years. |
+| `createPredictionWindow`, `predictionWindowDays`, `isInWindow` | Freeze scalar run identity and original boundaries; test `[startInclusive, endExclusive)`. The default remains seven EAT dates; an explicit operational horizon can be eight. Stored bounds must match exactly seven or eight EAT civil dates and remain within supported reporting years. |
 | `validateReportingDateRange` | Require both inclusive endpoints and an explicit positive finite integer maximum day count. Reject open, inverted and excessive ranges. Historical queries work independently of prediction eligibility. The last supported day's exclusive UTC bound may lie in year 10000. |
 | `getPublicationDeadline`, `isBeforePublicationCutoff` | Standard deadline is scheduled kickoff minus 300 seconds; optional earlier closure can reduce it. Equality at either deadline rejects publication. |
 | `isEligibleForPrediction`, `isTemporallyEligibleForPublication` | Require trusted original-manifest membership and kickoff membership in both the original and current windows. Publication also checks the strict deadline. |
@@ -43,7 +43,16 @@ For run date `2026-10-07`, the frozen window begins at
 `2026-10-13T21:00:00.000Z`. It covers 7–13 October EAT. Persist these original
 boundaries with the eventual run manifest. A later decision derives a fresh
 rolling window from its captured publication instant and intersects eligibility
-with the original window; it never rewrites the original run.
+with the original window; it never rewrites the original run. The current window
+uses the original run's validated seven/eight-day length.
+
+Live selection explicitly uses an eight-date operational window to supply the
+edge coverage needed by seven device-local browsing dates. For 7 October this
+ends at `2026-10-14T21:00:00.000Z`, covering 7–14 October EAT. Public
+`publicPolicy.predictionWindowDays`, date presets and the default `createPredictionWindow`
+remain seven days. Existing seven-day runs retain their original policy,
+membership and bounds; neither a later deployment nor a caller-created interval
+can extend them.
 
 ```ts
 import {
@@ -85,10 +94,14 @@ operation authority and does not reopen a closed cycle. Historical results and
 previously locked forecasts remain addressable when their dates leave the
 prediction window.
 
-Visitor display never supplies reporting dates, run IDs, range bounds or cutoff
-values. For example, a kickoff may display on 6 October in Los Angeles while its
-EAT reporting date remains 7 October. Keep the local timezone visibly labeled
-when that optional UI is implemented.
+Visitor browsing never changes operational reporting dates, run IDs or cutoff
+values. `src/domain/device-calendar.ts` derives a civil date from one captured
+instant and an explicit IANA zone, and builds full-day UTC bounds with the same
+DST-aware offset segments as kickoff filtering. The default feed adopts the
+device zone after hydration; its complete local day can overlap two EAT reporting
+days. Explicit dates keep their named calendar date and applied zone. For example,
+a kickoff may display on 6 October in Los Angeles while its operational EAT
+reporting date remains 7 October.
 
 The explicit timezone and part-based formatting contract follows the
 [ECMAScript Internationalization specification](https://tc39.es/ecma402/#sec-intl.datetimeformat).

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createPredictionWindow, isInWindow, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { isInWindow, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
@@ -10,6 +10,7 @@ import { JobQueueError, type JobLease, type JobQueue } from "../jobs/job-contrac
 import { durableJobId, parseJobEnvelope } from "../jobs/job-input.ts";
 import { createMysqlModelVersionStore } from "../predictor/predictor-mysql-store.ts";
 import type { SelectionManifest } from "../selection/selection-contract.ts";
+import { selectionRunWindow } from "../selection/selection-read.ts";
 import { PredictionHistoryError } from "./history-contract.ts";
 import { historyHash, historyId, historyVersion } from "./history-input.ts";
 import { createMysqlPredictionHistoryStore } from "./history-mysql-store.ts";
@@ -74,7 +75,7 @@ export function createRevisionPublicationService(options: Readonly<{
           const member = await tx.runFixture.findUnique({ where: { runId_fixtureId_cycleId: identity }, include: { run: { include: { manifest: true } } } });
           if (!member || !member.run.manifest || member.run.committedAt === null) return publicationFail("invalid-request");
           const run = member.run, sealed = run.manifest!, manifest = sealed.manifestJson as unknown as SelectionManifest;
-          const window = createPredictionWindow(parseReportingDate(run.eatDate.toISOString().slice(0, 10)));
+          const window = selectionRunWindow(run);
           const entry = manifest.entries.find((item) => item.fixtureId === identity.fixtureId && item.cycleId === identity.cycleId);
           if (evidenceFingerprint(manifest) !== sealed.manifestHash || manifest.runId !== run.id || manifest.sequence !== String(run.sequence) ||
             manifest.selectionHash !== run.selectionHash || evidenceFingerprint(run.selectionJson) !== run.selectionHash ||

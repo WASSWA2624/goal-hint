@@ -1,17 +1,17 @@
 # Live operations (real API-Football data)
 
 The live runner connects the existing daily pipeline to the real API-Football account:
-daily selection at 00:00 EAT, fallback prediction refreshes, cutoff locks, result
+daily selection at 00:00 EAT, primary/fallback prediction refreshes, cutoff locks, result
 polling, settlement and public-cache maintenance. Visitor requests still never call the
 provider. The web app only reads what the runner stores in MySQL.
 
 ## Current operating mode
 
-Owner decisions of 10 October 2026, recorded in the ignored `.goal-hint/owner-approvals.json`:
+Owner decisions through 13 October 2026, recorded in the ignored `.goal-hint/owner-approvals.json`:
 
 | Decision | Effect |
 | --- | --- |
-| **Fallback-only** | AI and research stay disabled (prompts 011/012 remain partial). Each refresh publishes the API-Football `predictions.percent` match-result distribution and its derived double chance. Total goals and both-teams-to-score show as unavailable. |
+| **OpenAI primary, API-Football fallback (13 October 2026)** | The live AI binding is implemented. Activation requires the private key and exact owner references. With AI disabled, the existing fallback-only path needs no AI key. AI failures retain valid independent families and request API-Football for supported missing families. Research stays disabled. |
 | **Publish now, provisional** | Forecasts are published before shadow qualification (047) and release gates (048/049). Every API-Football forecast carries the existing *Provisional estimate* label, and no accuracy claim is made. |
 | **All available competitions** | `GOAL_HINT_COMPETITION_IDS` lists every league with a current season on the plan (`npm run live:competitions`). |
 | **Local only** | Production scope may run in development mode **only** against a loopback database. Remote or hosted targets still need `NODE_ENV=production` and verified TLS. |
@@ -30,15 +30,45 @@ Confirm API-Sports terms for public display/redistribution before any public dep
 `.env.operations` (ignored) holds the runner-only settings: production scope, football enabled and
 the owner-approved references. The web dev server never loads it.
 
+### OpenAI activation
+
+The [AI runbook](ai-predictor.md#live-openai-binding) describes the reviewed
+`gpt-6.1-sol` Responses contract and provisional evidence policy. Set the private
+key through `AI_API_KEY`; runner-only choices include `GOAL_HINT_AI_ENABLED`,
+provider/model, calibration reference and `GOAL_HINT_AI_BILLING_MODE=usage-based`.
+Usage-based mode has no application monthly AI cap; it keeps request, token,
+time and per-job reservations with durable measured-cost accounting. The
+structured football evidence requires separate owner approval for the exact
+`${GOAL_HINT_EVIDENCE_POLICY_REF}#openai-transmission` reference. Readiness rejects
+missing approvals or an unreviewed model before provider I/O.
+
+The prepared runner configuration leaves `GOAL_HINT_AI_ENABLED=false` until the
+private key is installed, with provider `openai`, model `gpt-6.1-sol`, usage-based
+billing, a blank monthly AI cap, 100,000 job tokens and a 300-second job time
+limit. The calibration reference records **no calibration, provisional**, not
+an evaluated artifact. Installing the key does not itself enable dispatch:
+set the AI switch to true and restart the runner after readiness succeeds.
+Previously committed seven-day runs retain their original intent and model
+pin; new daily selections use the eight-day edge window.
+
+The account check on 13 October 2026 reports **Free**, 100 requests/day and
+10 requests/minute. The current Free workload imports two dates; the remaining
+forecast dates stay explicitly unavailable. Full seven-day coverage requires a
+plan with the necessary fixture dates and history access. The runner adapts when
+the verified account plan changes. OpenAI cannot fill missing fixture schedules.
+
 ## What the runner does
 
 - **Schedule:** it enqueues the daily selection for the latest 21:00 UTC occurrence on start and at each
   occurrence (one durable job per EAT run date). A missed night runs as soon as the runner starts.
-- **Selection:** it imports seven dates with `/fixtures?date=`. Every fixture is stored and shown; the nearest
+- **Selection:** it imports eight EAT dates with `/fixtures?date=` on plans that support them. The edge day covers
+  today plus six visitor-local dates across time zones. Every fixture is stored and shown; the nearest
   kickoffs up to the plan's refresh capacity get prediction cycles. Later fixtures are recorded as
   `refresh-capacity` exclusions. After three failed attempts, known coverage is finalized as partial.
-- **Refresh:** one job per selected fixture. No evidence or AI dispatch, then one `/predictions` and one fresh
-  `/fixtures?id=` status read, then atomic publication before the five-minute cutoff. Jobs wait (retryably)
+- **Refresh:** one job per selected fixture. When AI is enabled, up to two bounded team-history imports finish
+  before the immutable analysis cutoff; the pinned OpenAI attempt uses stored verified regulation history and
+  derived form. API-Football supplies supported missing families on primary failure. A fresh
+  `/fixtures?id=` status read precedes atomic publication before the five-minute cutoff. Jobs wait (retryably)
   instead of spending the reserve kept for result checks.
 - **Results:** a leased poller covers the competitions with prediction cycles in the window. Settlement and
   cache reconciliation run every 30 seconds without provider calls.
@@ -50,12 +80,14 @@ UTC provider day. Nothing is hard-coded to a plan.
 
 | Plan (daily limit) | Refreshes/day | Workers | Live feed | Date poll | Odds floor / spare per day |
 | --- | --- | --- | --- | --- | --- |
-| Free (100) | 23 | 1 | off (date sync shows live status) | ~58 min | 99 / 1 — never eligible |
-| Pro (7,500) | 2,000 | 2 | off | 1 min | 6,639 / 861 |
-| Ultra (75,000) | 2,000 | 3 | 15 s | 1 min | 30,264 / 44,736 |
-| Mega (150,000; app ceiling 120,000) | 2,000 | 6 | 15 s | 60 s | 46,014 / 73,986 |
+| Free (100) | 10 | 1 | off (date sync shows live status) | ~58 min | 97 / 3 — never eligible |
+| Pro (7,500) | 1,214 | 2 | off | 1 min | 7,497 / 3 — never eligible |
+| Ultra (75,000) | 2,000 | 3 | 15 s | 1 min | 34,266 / 40,734 |
+| Mega (150,000; app ceiling 120,000) | 2,000 | 6 | 15 s | 60 s | 50,016 / 69,984 |
 
-The odds column is explained in [Odds imports](#odds-imports-052) below.
+This table assumes AI is enabled and reserves four football requests per
+refresh: two history imports, fallback and status. Fallback-only refreshes
+reserve two. The odds column is explained in [Odds imports](#odds-imports-052) below.
 
 **Slow plans (under 60 requests/minute, e.g. Free at 10/minute).** A provider call may have to wait most of a
 rolling minute for a limiter slot. Refresh jobs on these plans get a 5-minute timeout and a 200-second reserve, and
@@ -63,7 +95,10 @@ each provider call waits up to 75 seconds for the slot the limiter names instead
 waiting never adds a second dispatch. Selection also skips fixtures whose publication cutoff falls inside the time
 the refresh queue needs to drain (`cutoff-too-close`, at most two hours), so the daily capacity goes to matches that
 can still be predicted. A refresh whose cycle has too little time left is recorded as skipped (`insufficient-time`)
-rather than failed. These settings apply to runs created after the runner restarts.
+rather than failed. AI-enabled jobs instead allow five minutes on standard
+pacing and eight minutes on slow pacing, keeping the same fallback reserves;
+history imports and primary generation must fit before that reserve. These
+settings apply to runs created after the runner restarts.
 
 On upgrade, the runner detects the new plan within 10 minutes and rebuilds its workload from the new limits;
 no code change is needed. The essential quota reserve is 20,000 of the 120,000 ceiling (spec) and the same
@@ -92,7 +127,7 @@ Odds imports are built but **off**. The storage, mapping and rights rules are in
 **Eligibility.** Odds run only when all three hold: the switch is `true`, a bookmaker is configured, and the
 verified plan is eligible. A plan is eligible when its pacing is standard (60 or more requests per minute) and
 at least 200 requests per day remain above the odds floor. The floor is every ordinary need of the provider day:
-the results share, the reserve, every refresh job (refresh capacity × 2) and the 14 selection requests. Refresh
+the results share, the reserve, every refresh job (capacity × 4 with AI, × 2 without AI) and the 16 selection requests. Refresh
 jobs run 21:00–24:00 UTC, at the end of the UTC provider day, so the floor protects all of them, not just the
 refresh floor. The Free plan (1 spare request per day, 10 per minute) is never eligible. On upgrade, the runner
 rebuilds its workload and picks up eligibility without a code change.
@@ -176,7 +211,7 @@ import runs until the plan upgrade, and phone cards use their fallback for codel
 ([match card](match-card.md)). The owner asked for "slow on Free", so "off on Free" is an open owner decision.
 The options are to accept it, or to add a separately gated trickle of one league a day after the day's refresh jobs.
 See "Owner actions" under team codes in [development progress](development-progress.md). On a 7,500-a-day plan the
-spare is 861, so team codes can take up to 8 requests an hour (about 96 leagues a day) beside odds. The `ready`
+spare is 859 in fallback-only mode, so team codes can take up to 8 requests an hour (about 96 leagues a day) beside odds. The `ready`
 log line reports `teamCodes` (running) and `teamCodesSwitch`; `npm run live:status` prints a `teamCodes` block with
 `enabled`, `eligible` and `imports`.
 
@@ -231,5 +266,5 @@ attribution then counts both. Past the reserve, the live gate refuses before any
 
 ## Not yet live
 
-AI prediction (012), licensed research/news (011), shadow qualification (047), release readiness (048),
+Counted OpenAI activation, licensed research/news (011), shadow qualification (047), release readiness (048),
 hosted deployment and scheduling (046/049), the recovery watchdog binding (043) and monitoring delivery (044).

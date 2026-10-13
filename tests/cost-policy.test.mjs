@@ -98,6 +98,40 @@ test("monthly ledger caps must exactly match runtime cents and retain independen
   assert.deepEqual(await research.service.initialize({ ...research.period, capUsdPicos: s.period.capUsdPicos }), denied("unverified-policy"));
 });
 
+test("usage-based AI policy requires an explicit uncapped period while research retains its monthly cap", async () => {
+  const settings = { GOAL_HINT_AI_BILLING_MODE: "usage-based", GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: undefined };
+  const s = scenario("usage-policy", { settings });
+  const uncapped = { ...s.period, billingMode: "usage-based", capUsdPicos: 0n };
+  assert.deepEqual(await s.service.initialize(s.period), denied("unverified-policy"));
+  assert.deepEqual(await s.service.initialize({ ...uncapped, capUsdPicos: USD }), denied("invalid-request"));
+  assert.deepEqual(await s.service.initialize(uncapped), { status: "initialized" });
+  const job = s.job("usage-policy"), decision = await s.service.reserve(job, costRequest(job, "usage-policy"));
+  assert.equal(decision.status, "reserved"); assert.equal((await s.service.markDispatched(decision.permit)).status, "claimed");
+  assert.equal((await s.service.summary()).remainingUsdPicos, null);
+  const research = scenario("usage-research", { category: "research", settings });
+  assert.deepEqual(await research.service.initialize({ ...research.period, billingMode: "usage-based", capUsdPicos: 0n }), denied("invalid-request"));
+  assert.equal((await research.service.initialize(research.period)).status, "initialized");
+  assert.equal((await research.service.summary()).remainingUsdPicos, 5n * USD);
+  const capped = scenario("capped-rejects-unlimited");
+  assert.deepEqual(await capped.service.initialize({ ...capped.period, billingMode: "usage-based", capUsdPicos: 0n }), denied("unverified-policy"));
+});
+
+test("usage-based monthly billing keeps verified job allocation and authorization mandatory", async () => {
+  const settings = { GOAL_HINT_AI_BILLING_MODE: "usage-based", GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: undefined };
+  const s = scenario("usage-policy-limits", { settings });
+  const uncapped = { ...s.period, billingMode: "usage-based", capUsdPicos: 0n };
+  assert.equal((await s.service.initialize(uncapped)).status, "initialized");
+  for (const [index, violation] of [{ costCapUsdPicos: 3n * USD }, { inputTokenLimit: 401 }, { requestLimit: 3 },
+    { outputTokenLimit: 201 }, { fallbackReserveMs: 1 }].entries()) {
+    const job = s.job(`usage-limit-${index}`, violation);
+    assert.deepEqual(await s.service.reserve(job, costRequest(job, `usage-limit-${index}`)), denied("unverified-policy"));
+  }
+  const unverified = scenario("usage-policy-unverified", { settings, verifyAllocation: () => false });
+  assert.deepEqual(await unverified.service.initialize({ ...unverified.period, billingMode: "usage-based", capUsdPicos: 0n }), denied("unverified-policy"));
+  const revoked = scenario("usage-policy-revoked", { settings, verifyEvidence: (_ref, requirement) => requirement !== "budget-approval" });
+  assert.deepEqual(await revoked.service.initialize({ ...revoked.period, billingMode: "usage-based", capUsdPicos: 0n }), denied("operation-not-authorized"));
+});
+
 test("provider and AI model must match the existing runtime selection", async () => {
   for (const [label, changed] of [["provider", { provider: "another-provider" }], ["model", { model: "another-model" }]]) {
     const s = scenario(label, { rateFor: () => costRate("ai", changed) });

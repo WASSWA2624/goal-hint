@@ -86,8 +86,11 @@ evidence and existing locks remain irreversible after resolution. Same-time
 conflicts remain held rather than choosing a winner by completion order.
 
 `refreshEligibility(fixtureId)` reports stored status/cycle/conflict/window/cutoff
-eligibility with `trackResult: true`; 025 must use this before spending prediction
-resources. Publication independently rechecks the same stored conflict projection
+eligibility with `trackResult: true`, using the latest selected run's immutable
+seven/eight-day horizon when a committed membership exists. Rescheduling outside
+that original window remains ineligible; unselected fixtures retain the seven-day
+default. The refresh worker uses this before spending prediction resources.
+Publication independently rechecks the same stored conflict projection
 under its transaction. Lifecycle handling never calls research/AI/fallback.
 
 ## Persistence and grants

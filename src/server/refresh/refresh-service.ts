@@ -33,7 +33,9 @@ function checked(value: unknown, expected: unknown) {
  * existing predictor, fallback resolver and atomic publication service. */
 export function createPredictionRefreshService(options: Readonly<{
   type: string; handlerVersion: number; store: RefreshStore; selection: Pick<DailySelectionStore, "progress" | "inspect">;
-  authority: RefreshAuthority; configure(member: RefreshMember): RefreshPlan;
+  authority: RefreshAuthority; configure(member: RefreshMember): RefreshPlan | Promise<RefreshPlan>;
+  /** Optional bounded input imports before the immutable analysis cutoff is captured. */
+  prepare?(member: RefreshMember, context: JobHandlerContext): Promise<void>;
   models: Pick<ModelRegistry, "resolve">; evidence: Pick<ReturnType<typeof createEvidenceService>, "collect">;
   predictor: Pick<ReturnType<typeof createPredictorService>, "predict">;
   fallback: Pick<ReturnType<typeof createFallbackService>, "resolve" | "resolveWithoutProvider">;
@@ -86,8 +88,25 @@ export function createPredictionRefreshService(options: Readonly<{
     }
     let intent = await options.store.intent(lease.jobId);
     if (!intent) {
+      if (options.prepare) {
+        const prepared = await options.store.stage(lease.jobId, "preparation", "completed");
+        if (prepared) phases.preparation = "reused";
+        else if (await options.store.start(lease, "preparation")) {
+          await context.checkpoint();
+          let result = "prepared";
+          try { await options.prepare(member, context); }
+          catch (error) {
+            if (context.signal.aborted || error instanceof PredictionRefreshError && error.reason === "unauthorized") throw error;
+            result = "unavailable";
+          }
+          await context.checkpoint();
+          await options.store.complete(lease, "preparation", { status: result }); phases.preparation = result;
+        } else phases.preparation = "interrupted";
+        // Imports keep their original retrieval clocks. Analysis begins only after them.
+        member = await options.store.loadMember(lease);
+      }
       let configured: RefreshPlan;
-      try { configured = options.configure(member); }
+      try { configured = await options.configure(member); }
       catch (error) {
         if (error instanceof PredictionRefreshError && error.reason === "ineligible") return finish("skipped", error.detail);
         throw error;
@@ -104,10 +123,16 @@ export function createPredictionRefreshService(options: Readonly<{
     if (member.context.kickoffAt !== saved.member.context.kickoffAt || member.cycle.scheduleVersion !== saved.member.cycle.scheduleVersion)
       return finish("skipped", "schedule-changed");
     await context.checkpoint();
+    let modelUnavailable = false;
     if (saved.pin !== null) {
-      const resolved = await options.models.resolve(saved.pin);
-      if (plan.ai === null || resolved.pin.id !== saved.pin.id || resolved.model.id !== plan.modelVersionId ||
-        resolved.model.provider !== plan.ai.request.provider || resolved.model.model !== plan.ai.request.model) return refreshFail("unauthorized");
+      try {
+        const resolved = await options.models.resolve(saved.pin);
+        if (plan.ai === null || resolved.pin.id !== saved.pin.id || resolved.model.id !== plan.modelVersionId ||
+          resolved.model.provider !== plan.ai.request.provider || resolved.model.model !== plan.ai.request.model) return refreshFail("unauthorized");
+      } catch (error) {
+        if (!(error instanceof ModelRegistryError) || !["unavailable", "unconfigured", "capacity-exhausted"].includes(error.reason)) throw error;
+        modelUnavailable = true;
+      }
     } else if (plan.ai !== null || plan.modelVersionId !== null) return refreshFail("unauthorized");
     async function checkpoint() {
       await context.checkpoint(); authorize();
@@ -121,12 +146,14 @@ export function createPredictionRefreshService(options: Readonly<{
         const item = (provider: JobUsage["provider"], reference: string, requests: number, uncertain: boolean, costReference: string | null): JobUsage =>
           ({ provider, requestReference: refreshReference(lease.jobId, reference), costReference,
             phase: uncertain ? "uncertain" : "completed", requests, durationMs: null });
-        if (name === "evidence") {
+        if (name === "evidence" || name === "evidence-empty") {
           const result = value as EvidenceServiceResult;
-          return result.status === "denied" ? [item("football", "evidence", 0, plan.evidence.footballPlan !== null, null),
-            item("research", "research", 0, plan.evidence.researchPlan !== null, plan.evidence.researchPlan?.request.attemptId ?? null)] :
-            [item("football", "evidence", result.usage.football.requests, result.usage.football.uncertain, null),
-              item("research", "research", result.usage.research.requests, result.usage.research.uncertain, plan.evidence.researchPlan?.request.attemptId ?? null)];
+          const primary = name === "evidence", researchReference = primary ? "research" : "research-empty";
+          const researchCost = primary ? plan.evidence.researchPlan?.request.attemptId ?? null : null;
+          return result.status === "denied" ? [item("football", name, 0, primary && plan.evidence.footballPlan !== null, null),
+            item("research", researchReference, 0, primary && plan.evidence.researchPlan !== null, researchCost)] :
+            [item("football", name, result.usage.football.requests, result.usage.football.uncertain, null),
+              item("research", researchReference, result.usage.research.requests, result.usage.research.uncertain, researchCost)];
         }
         const result = value as PredictorResult | FallbackRefreshResult | Observation | null;
         return [item(name === "ai" ? "ai" : "football", name, result?.requestsDispatched ?? 0,
@@ -169,13 +196,27 @@ export function createPredictionRefreshService(options: Readonly<{
       await checkpoint(); await options.store.complete(lease, name, value, usage(value)); return value;
     }
     try {
-      const evidence = await phase<EvidenceServiceResult>("evidence", plan.evidence.maxElapsedMs, lease.job.envelope.fallbackReserveMs,
+      let evidence = await phase<EvidenceServiceResult>("evidence", plan.evidence.maxElapsedMs, lease.job.envelope.fallbackReserveMs,
         (workflow) => options.evidence.collect(plan.evidence, workflow), () => ({ status: "denied", reason: "unavailable" }));
+      let evidenceSnapshotId = plan.evidence.requestId, primaryEvidenceUnavailable = false;
+      if (evidence.status === "denied" && ["unavailable", "timeout", "snapshot-too-large"].includes(evidence.reason)) {
+        primaryEvidenceUnavailable = true;
+        evidenceSnapshotId = refreshReference(lease.jobId, "fallback-evidence");
+        // A distinct stored request preserves the failed primary intent and explicitly records missing evidence.
+        evidence = await phase<EvidenceServiceResult>("evidence-empty", 5000, lease.job.envelope.fallbackReserveMs,
+          (workflow) => options.evidence.collect({ ...plan.evidence, requestId: evidenceSnapshotId,
+            cachedSources: [], footballPlan: null, researchPlan: null, maxElapsedMs: 5000 }, workflow),
+          () => ({ status: "denied", reason: "unavailable" }));
+      }
       if (evidence.status === "denied") return finish("failed", `evidence:${evidence.reason}`);
       const aiPlan = plan.ai, pin = saved.pin;
       // A fallback-only plan never dispatches AI; its denial is explicit and costs nothing.
       const rawAi: PredictorResult = aiPlan === null || pin === null
         ? Object.freeze({ status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false })
+        : modelUnavailable || primaryEvidenceUnavailable
+        ? await phase<PredictorResult>("ai", aiPlan.maxElapsedMs, lease.job.envelope.fallbackReserveMs,
+          async () => ({ status: "denied", reason: "unavailable", requestsDispatched: 0, requestCountUnknown: false }),
+          () => ({ status: "denied", reason: "unavailable", requestsDispatched: 0, requestCountUnknown: false }))
         : await phase<PredictorResult>("ai", aiPlan.maxElapsedMs, lease.job.envelope.fallbackReserveMs,
           (workflow) => options.predictor.predict({ ...aiPlan, pin, snapshot: evidence.snapshot }, workflow),
           () => ({ status: "denied", reason: "uncertain-usage", requestsDispatched: 0, requestCountUnknown: true }));
@@ -209,7 +250,7 @@ export function createPredictionRefreshService(options: Readonly<{
       if (!eligibility.eligible) return finish("skipped", eligibility.reason ?? "ineligible");
       await checkpoint();
       if (original.kickoffAt === null || original.kickoffAt !== candidate.context.context.kickoffAt) return finish("skipped", "schedule-changed");
-      const result = await options.publisher.publish({ candidate, evidenceSnapshotId: plan.evidence.requestId,
+      const result = await options.publisher.publish({ candidate, evidenceSnapshotId,
         ...(goalExtension === undefined ? {} : { goalExtension }),
         ...(plan.impliedExtension === undefined ? {} : { impliedExtension: plan.impliedExtension }),
         attemptKey: refreshReference(lease.jobId, "publication"), scheduleVersion: saved.member.cycle.scheduleVersion, generationCompletedAt,

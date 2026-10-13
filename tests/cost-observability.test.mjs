@@ -19,3 +19,20 @@ test("internal cost telemetry preserves exact values and excludes private payloa
   assert.equal(Object.isFrozen(record), true);
   assert.throws(() => costSummaryRecord({ ...summary, accountId: "PRIVATE_KEY" }), { name: "CostInputError" });
 });
+
+test("usage-based telemetry represents no monthly ceiling with null cap and remaining while preserving spending", () => {
+  const summary = { status: "summary", accountId: costId("usage-account"), category: "ai", periodId: costId("usage-period"),
+    billingMode: "usage-based", capUsdPicos: 0n, openingChargedUsdPicos: 12n * USD,
+    liabilityUsdPicos: 15n * USD + 1n, remainingUsdPicos: null, estimatedUsdPicos: 3n * USD,
+    observedUsdPicos: 3n * USD + 1n, invoicedUsdPicos: 0n, requests: 3n, inputTokens: 120n,
+    outputTokens: 30n, billedUnits: 20n, elapsedMs: 1200n, attemptCount: 3n, hasOverage: false, overageBlocked: false,
+    credential: "PRIVATE_USAGE_KEY", prompt: "PRIVATE_USAGE_PROMPT" };
+  const record = costSummaryRecord(summary);
+  assert.equal(record.billingMode, "usage-based"); assert.equal(record.cap, null); assert.equal(record.remaining, null);
+  assert.equal(record.openingCharged, "12.000000000000"); assert.equal(record.liability, "15.000000000001");
+  assert.equal(record.observed, "3.000000000001"); assert.equal(record.requests, "3"); assert.equal(record.billedUnits, "20");
+  assert.equal(record.overageBlocked, false); assert.equal(JSON.stringify(record).includes("PRIVATE_USAGE_"), false);
+  const capped = costSummaryRecord({ ...summary, billingMode: "capped", capUsdPicos: 20n * USD, remainingUsdPicos: 5n * USD - 1n });
+  assert.equal(capped.cap, "20.000000000000"); assert.equal(capped.remaining, "4.999999999999");
+  assert.equal(Object.hasOwn(capped, "billingMode"), false, "legacy capped telemetry retains its existing shape");
+});

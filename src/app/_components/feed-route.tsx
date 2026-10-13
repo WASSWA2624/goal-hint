@@ -4,7 +4,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { getReportingDate, type UtcInstant } from "@/domain/calendar";
 import { feedDiscovery, serializeStructuredData, websiteStructuredData } from "@/domain/discovery";
-import { serializeFeedQuery } from "@/domain/feed-query";
+import { getFeedToday, serializeFeedQuery } from "@/domain/feed-query";
 import { parseMatchFeedQuery } from "@/server/matches/feed-service";
 import { loadMatchFeedPage } from "@/server/matches/feed-page";
 import { readPublicMatchFeed } from "@/server/matches/public-feed";
@@ -20,15 +20,17 @@ type Props = { params: Promise<{ locale: string; date?: string }>;
 /** Metadata and initial HTML share the same stored read and request-owned clock. */
 export function createFeedRoute({ dated = false, read = readPublicMatchFeed, instant = getShellInstant, policy = getDiscoveryPolicy } = {}) {
   const load = cache(async (parameters: string, locale: string, at: UtcInstant) => {
-    const today = getReportingDate(at), query = parseMatchFeedQuery(new URLSearchParams(parameters), today, { locale });
+    const query = parseMatchFeedQuery(new URLSearchParams(parameters), getReportingDate(at), { locale, asOf: at });
+    const today = getFeedToday(query, at);
     return loadMatchFeedPage(query, today, { now: () => at }, read);
   });
   async function resolve({ params, searchParams }: Props) {
-    const route = await params, at = await instant(), today = getReportingDate(at);
+    const route = await params, at = await instant();
     let query;
-    try { query = parseMatchFeedQuery(await searchParams, today, { locale: route.locale, ...(dated ? { routeDate: route.date } : {}) }); }
+    try { query = parseMatchFeedQuery(await searchParams, getReportingDate(at), { locale: route.locale, asOf: at,
+      ...(dated ? { routeDate: route.date } : {}) }); }
     catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
-    const result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
+    const today = getFeedToday(query, at), result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
     return { query, today, result };
   }
   return {

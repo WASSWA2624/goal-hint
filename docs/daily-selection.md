@@ -43,10 +43,19 @@ The policy explicitly supplies competition IDs, the pre-match `scheduled` status
 retention/evidence references, renewable selection lease duration, per-invocation
 retry count, fixture cap, import bounds and refresh envelope settings/payload.
 There are no default competitions, spending allocations or model selections.
-Changing the policy on an existing run conflicts, including after commit.
+Optional `windowDays` selects seven or eight EAT dates and defaults to seven
+without changing older policy hashes. New live runs select eight dates for the
+device-local seven-day browsing edge. An uncommitted run rejects a different
+policy. A committed run can be reacquired for reconciliation after a deployment,
+while retaining its sealed policy, original lease duration, manifest and bounds;
+only lease ownership is updated and no imports or replacement commit occur.
 
-Under a renewable database-UTC lease, import each of the seven EAT dates through
-the canonical importer. Each original request is persisted in `DailyRunImport`
+Under a renewable database-UTC lease, import every date in the selected horizon
+through the canonical importer, or only the explicit bounded `importDays` that
+the provider plan permits. `importDays` cannot exceed `windowDays`; omitted
+dates remain explicit missing coverage in the complete seven/eight-date manifest.
+The Free plan's two-date limit therefore stays visible as partial coverage.
+Each original request is persisted in `DailyRunImport`
 before I/O, including its import UUID and absolute deadline. Complete receipts
 are reused; incomplete/failed dates get bounded new attempts. A catalog receipt
 committed before a crash is reconciled without another fetch. Expired unfinished

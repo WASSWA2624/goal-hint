@@ -113,11 +113,11 @@ test('workload scales from verified limits without code changes', () => {
   assert.equal(free.importDays, 2, 'the free plan only requests the dates it can serve');
   assert.equal(free.cadence.liveMs, null); assert.ok(free.cadence.dateMs >= 3_000_000 && free.cadence.dateMs <= 7_200_000);
   assert.equal(free.workers, 1);
-  const freeRequests = 14 + free.refreshCapacity * REFRESH_REQUESTS_PER_JOB + Math.ceil(DAY / free.cadence.dateMs);
+  const freeRequests = 16 + free.refreshCapacity * REFRESH_REQUESTS_PER_JOB + Math.ceil(DAY / free.cadence.dateMs);
   assert.ok(freeRequests + free.refreshFloor - Math.floor(100 * 0.25) <= 100, `free plan fits its day (${freeRequests})`);
   assert.ok(free.refreshCapacity > 0);
   const mega = liveWorkload(150_000, 12, 'Mega');
-  assert.equal(mega.importDays, 7);
+  assert.equal(mega.importDays, 8);
   assert.equal(mega.cadence.liveMs, 15_000); assert.equal(mega.cadence.dateMs, 60_000); assert.equal(mega.cadence.activeMs, 60_000);
   assert.equal(mega.refreshCapacity, 2000); assert.equal(mega.workers, 6);
   for (const limit of [1, 100, 7500, 75_000, 150_000]) {
@@ -127,14 +127,34 @@ test('workload scales from verified limits without code changes', () => {
   }
 });
 
+test('primary workloads reserve football history, fallback and status within the same daily quota', () => {
+  for (const [limit, secondLimit, plan, minuteLimit] of [[100, 1, 'Free', 10], [7500, 5, 'Pro', 300], [150_000, 12, 'Mega', 900]]) {
+    const primary = liveWorkload(limit, secondLimit, plan, minuteLimit, true);
+    const fallback = liveWorkload(limit, secondLimit, plan, minuteLimit);
+    assert.equal(primary.refreshRequestsPerJob, 4);
+    assert.equal(fallback.refreshRequestsPerJob, 2);
+    assert.ok(primary.refreshCapacity <= fallback.refreshCapacity);
+    const usable = Math.min(limit, 120_000), results = Math.max(4, Math.floor(usable * 0.25));
+    const reserve = Math.max(16, Math.floor(usable * 0.1));
+    assert.ok(16 + results + reserve + primary.refreshCapacity * primary.refreshRequestsPerJob <= usable);
+    assert.equal(primary.odds.floor + primary.odds.spare, usable);
+    assert.ok(primary.odds.floor >= 16 + results + reserve + primary.refreshCapacity * 4);
+    assert.equal(primary.importDays, plan === 'Free' ? 2 : 8);
+  }
+  assert.equal(refreshEnvelopeFor('standard', true).timeoutMs, 300_000);
+  assert.equal(refreshEnvelopeFor('slow', true).timeoutMs, 480_000);
+  assert.equal(refreshEnvelopeFor('standard', true).fallbackReserveMs, refreshEnvelopeFor('standard').fallbackReserveMs);
+  assert.equal(refreshEnvelopeFor('slow', true).fallbackReserveMs, refreshEnvelopeFor('slow').fallbackReserveMs);
+});
+
 test('odds spend only quota above every ordinary need of the day and stay off on free and slow plans', () => {
   // [daily limit, plan, minute limit] -> [floor, spare, eligible]; Mega keeps the internal 120,000 ceiling.
-  const plans = [[100, 'Free', 10, 99, 1, false], [100, 'Free', Number.POSITIVE_INFINITY, 99, 1, false], [7500, 'Pro', 300, 6639, 861, true],
-    [75_000, 'Ultra', 450, 30_264, 44_736, true], [150_000, 'Mega', 900, 46_014, 73_986, true]];
+  const plans = [[100, 'Free', 10, 99, 1, false], [100, 'Free', Number.POSITIVE_INFINITY, 99, 1, false], [7500, 'Pro', 300, 6641, 859, true],
+    [75_000, 'Ultra', 450, 30_266, 44_734, true], [150_000, 'Mega', 900, 46_016, 73_984, true]];
   for (const [limit, plan, minuteLimit, floor, spare, eligible] of plans) {
     const workload = liveWorkload(limit, 12, plan, minuteLimit), usable = Math.min(limit, 120_000);
-    const resultsShare = Math.max(4, Math.floor(usable * 0.25)), reserve = Math.max(14, Math.floor(usable * 0.1));
-    const ordinary = 14 + workload.refreshCapacity * REFRESH_REQUESTS_PER_JOB + resultsShare + reserve;
+    const resultsShare = Math.max(4, Math.floor(usable * 0.25)), reserve = Math.max(16, Math.floor(usable * 0.1));
+    const ordinary = 16 + workload.refreshCapacity * REFRESH_REQUESTS_PER_JOB + resultsShare + reserve;
     assert.deepEqual([workload.odds.floor, workload.odds.spare, workload.odds.eligible], [floor, spare, eligible], `${plan} ${limit}`);
     assert.equal(workload.odds.reserve, Math.min(workload.odds.floor, reserve), 'odds never take the ordinary reserve');
     assert.ok(ordinary <= workload.odds.floor && workload.odds.floor <= usable, 'the floor protects selection, every refresh, results and the reserve');
@@ -165,7 +185,7 @@ test('odds spend only quota above every ordinary need of the day and stay off on
 
 test('partly spent ordinary quota leaves the odds spare intact: on Pro the gate counts ordinary use once', async () => {
   const pro = liveWorkload(7500, 5, 'Pro', 300), allowance = { floor: pro.odds.floor, spare: pro.odds.spare, reserve: pro.odds.reserve };
-  assert.deepEqual(allowance, { floor: 6639, spare: 861, reserve: 750 });
+  assert.deepEqual(allowance, { floor: 6641, spare: 859, reserve: 750 });
   const need = oddsMaxRequests('prices', pro.odds.maxPages), pollsPerHour = 3_600_000 / pro.cadence.dateMs;
   assert.equal(pollsPerHour, 60, 'Pro polls the date feed every minute');
   // One request per date poll; every 3-hour slot sweeps all seven dates at ten pages each.
@@ -185,8 +205,8 @@ test('partly spent ordinary quota leaves the odds spare intact: on Pro the gate 
   assert.deepEqual(slots, Array(8).fill(7), 'the 18:00 and 21:00 UTC slots still reconfirm prices for late kickoffs');
   assert.ok(oddsUsed <= allowance.spare);
   // Odds stop once their own spend leaves less than one ceiling of the spare, whatever ordinary work has used.
-  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - 707, used: 1500 + 707, oddsUsed: 707 }, allowance, need), true);
-  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - 708, used: 1500 + 708, oddsUsed: 708 }, allowance, need), false);
+  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - 705, used: 1500 + 705, oddsUsed: 705 }, allowance, need), true);
+  assert.equal(oddsQuotaAllows({ remaining: 7500 - 1500 - 706, used: 1500 + 706, oddsUsed: 706 }, allowance, need), false);
 
   // The router reads the gate's counters from the open provider day's durable limiter.
   const clock = { now: Date.parse('2026-10-10T12:00:00.000Z') }, store = memoryQuotaStore(clock);
@@ -206,7 +226,8 @@ test('every generated policy passes its owning service parser', () => {
   assert.deepEqual(selection.competitionIds, [39, 140]); assert.equal(selection.refreshCapacity, workload.refreshCapacity);
   assert.equal(selection.importDays, 2);
   assert.equal('importDays' in parseSelectionPolicy(selectionPolicy(policy, refs, liveWorkload(150_000, 12, 'Mega'))), false,
-    'full-horizon plans keep the original policy shape');
+    'full-horizon plans need no shortened import horizon');
+  assert.equal(selection.windowDays, 8, 'new runs include the visitor-local edge day');
   parsePublicationPolicy(publicationPolicy(refs)); parseProviderFallbackPolicy(providerFallbackPolicy(refs));
   parseCutoffPolicy(cutoffPolicy(refs)); parseLifecyclePolicy(lifecyclePolicy(refs));
 });

@@ -56,5 +56,10 @@ export function missingOwnerApprovals(policy: RuntimePolicy, verify: EvidenceVer
   }
   if (policy.mode === "production" || choices.database.accessRef !== null)
     check("GOAL_HINT_DATABASE_ACCESS_REF", choices.database.accessRef, "database-access");
+  if (policy.capabilities.ai) {
+    check("GOAL_HINT_CALIBRATION_REF", choices.ai.calibrationRef, "calibration-configuration");
+    check("GOAL_HINT_EVIDENCE_POLICY_REF#openai-transmission", choices.evidencePolicyRef === null ? null :
+      `${choices.evidencePolicyRef}#openai-transmission`, "evidence-policy");
+  }
   return Object.freeze(missing);
 }

@@ -42,12 +42,15 @@ Equal date endpoints select one day; different endpoints select an inclusive
 range of up to 31 days. Equal time endpoints select one kickoff minute; different
 endpoints select an inclusive minute range. Both time inputs empty mean no time
 filter. A missing endpoint, reversed range or invalid date/time remains editable
-and disables the shared Apply action. Date-only queries retain their EAT
-reporting boundaries. Time-filter queries retain the explicitly serialized IANA
-zone and the existing local-day/minute behavior, including DST boundaries. New
-time selections use the device zone; an applied time selection retains its
-stored zone, available from the input title. Desktop quick date links preserve
-their existing date-navigation behavior and the seven-day forecast window.
+and disables the shared Apply action. Browsing `tz` is independent of optional
+time bounds: dates select complete local days, including DST boundaries, and
+blank time fields keep that zone. Clear removes time bounds while retaining
+the applied dates and browsing zone. An unzoned relative entry adopts the device
+zone after hydration; explicit named dates and shared applied zones remain
+stable. Unzoned explicit dates retain their EAT boundaries. New time selections
+use the applied browsing zone, or the device zone when none is applied; its IANA
+name is available from each time input's title. Desktop quick date links retain
+the applied zone and resolve Today and the next six dates in that calendar.
 
 League options contain at most 1,000 unique visitor-facing id/name/country
 entries from the complete selected date cohort, independent of filters/page.

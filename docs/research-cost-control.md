@@ -13,22 +13,33 @@ for one outbound attempt. The generic `createCostService` is the accounting engi
 for isolated contract tests and trusted integrations. An application must not
 substitute permissive test authority for verified runtime approvals.
 
-There is no selected live provider, model, rate card, currency conversion,
-accounting period, cap, job allocation or fallback allowance. OP-09–11 in the
-[decision register](implementation-decisions.md) remain unresolved. References
-alone do not authorize work. Every paid operation checks the existing runtime
+The live binding supports OpenAI with a reviewed model and rate card; activation
+is described in [live operations](live-operations.md). References alone do not
+authorize work. Every paid operation checks the existing runtime
 scope, capability, credentials and trusted budget/license evidence, followed by
 the exact period, rate, job, request and usage verification hooks. `NODE_ENV=test`
 cannot authorize paid operations.
 
-The runtime monthly USD-cent cap must equal the approved period's exact cap.
+`GOAL_HINT_AI_BILLING_MODE=capped` is the backward-compatible default: the runtime
+monthly USD-cent cap must equal the approved period's exact cap.
+`usage-based` explicitly removes the monthly AI spending ceiling. It requires an
+AI period with `billingMode: "usage-based"` and a zero storage placeholder for
+`capUsdPicos`; that placeholder is never treated as a spending ceiling. Research
+retains its independent monthly cap. A period's mode cannot change after it is
+recorded, and a provider account's spending history remains durable.
+Usage-based summaries expose `null` for remaining monthly allowance, and
+telemetry exposes `null` for both monthly cap and remaining allowance. Actual,
+estimated, invoiced and unknown liabilities remain separate and measurable.
 Periods explicitly supply account/category identity, UTC start/end boundaries,
 opening charges and an approval reference. A verifier must confirm the real
 provider billing window, reservation assignment rules, exchange-rate coverage,
 taxes/fees and opening charges from every process/environment using that account.
 No automatic calendar reset, currency assumption or free allowance is applied.
 Calls must fit entirely inside both the period and rate validity windows.
-Verified opening debt above the cap is recorded and blocks paid work.
+Verified opening debt above a capped allowance is recorded and blocks paid work.
+In usage-based mode, per-job money, request, token, unit and time bounds still
+apply, including the fallback reserve. Dispatch rechecks those bounds after
+concurrent receipts; a job overage cannot launch another reserved request.
 
 The policy factory also requires an independently verified immutable joint
 allocation. Each enabled category supplies `costCapUsdPicos`, `requestLimit`,
@@ -88,13 +99,14 @@ a new attempt ID and a new reservation; a duplicate never dispatches twice.
 
 1. `initialize(period)` records a verified immutable, nonoverlapping active
    period. Starting a subsequent approved period retains prior accounting and
-   job ceilings. Historical billing overages continue blocking paid work.
+   job ceilings. Historical billing overages continue blocking capped paid work.
 2. `queue(job, request)` records intent. Explicit fixture priority uses nearest
    kickoff, then queue time; background work follows eligible fixture work.
    Queueing does not pick fixtures or start predictions. Ineligible entries stay
    audited without permanently starving affordable work.
 3. `reserve(job, request)` atomically holds maximum money, requests, tokens,
-   billed units and elapsed time. Aggregate/category and job caps both apply.
+   billed units and elapsed time. Monthly caps apply in capped mode; job bounds
+   apply in both billing modes.
    The returned owner permit has a short one-second claim window; this fencing
    interval is a technical dispatch safeguard, not an approved spending timeout.
 4. `markDispatched(permit)` consumes the single-use permit, rechecks approval,
@@ -111,7 +123,8 @@ invoice arrives. A complete measured receipt can settle according to its
 approved billing rule; estimates alone cannot satisfy invoice-required billing.
 An invoice with unknown counts cannot release token/unit/time reservations.
 Unpriced actual units or actual amounts/counts/time above the reservation are
-recorded conservatively and block later paid work, including pending permits.
+recorded conservatively and block later capped paid work, including pending permits.
+Usage-based mode permits an independent job to proceed within its own bounds.
 They are not hidden by moving to a new period.
 
 The MySQL store uses native indexed sums for caps. Each strictly parsed attempt

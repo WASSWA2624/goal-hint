@@ -86,8 +86,11 @@ export function createPolicyCostService(options: Readonly<{
     },
     verifyPeriod(period) {
       const cap = category === "ai" ? policy.choices.budgets.aiMonthlyUsdCents : policy.choices.budgets.researchMonthlyUsdCents;
-      return allocated() && cap !== null && period.category === category && period.accountId === options.accountId
-        && period.capUsdPicos === costUsdPicosFromCents(cap) && options.authority.verifyPeriod(period);
+      const usageBased = category === "ai" && policy.choices.budgets.aiBillingMode === "usage-based";
+      return allocated() && period.category === category && period.accountId === options.accountId
+        && (usageBased ? period.billingMode === "usage-based" && period.capUsdPicos === 0n
+          : period.billingMode !== "usage-based" && cap !== null && period.capUsdPicos === costUsdPicosFromCents(cap))
+        && options.authority.verifyPeriod(period);
     },
     verifyJob: (job) => jobFits(job) && options.authority.verifyJob(job),
     verifyRate: (rate) => rate.category === category && selected(rate.provider, rate.model) && options.authority.verifyRate(rate),

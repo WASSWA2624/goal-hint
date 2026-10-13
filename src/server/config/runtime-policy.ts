@@ -121,7 +121,7 @@ const environmentSchema = z.object({
     .describe("SEO deployment classification only; missing or unknown values disable indexing and production does not grant release approval."),
   GOAL_HINT_DATABASE_ENABLED: enabled.describe("Use true or false; database integration belongs to prompt 003."),
   GOAL_HINT_FOOTBALL_ENABLED: enabled.describe("Use true or false; paid calls require approved bounded policy."),
-  GOAL_HINT_AI_ENABLED: enabled.describe("Use true or false; AI calls require an approved separate budget."),
+  GOAL_HINT_AI_ENABLED: enabled.describe("Use true or false; AI calls require an approved billing policy."),
   GOAL_HINT_RESEARCH_ENABLED: enabled.describe("Use true or false; research calls require licensing and a separate budget."),
   DATABASE_URL: databaseUrl.describe("Supply a MySQL connection URL with a host and one database (003)."),
   TEST_DATABASE_URL: databaseUrl.describe("Supply a separate isolated MySQL test URL (003)."),
@@ -154,6 +154,8 @@ const environmentSchema = z.object({
   GOAL_HINT_ODDS_BOOKMAKER_ID: count.describe("Use the positive API-Football id of the one documented odds bookmaker; required when odds imports are enabled (052)."),
   GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: enabledByDefault.describe("Use true or false (default true); the live runner imports team codes only from spare quota, so they stay off on Free and slow plans."),
   GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate AI cap in integer US cents (010)."),
+  GOAL_HINT_AI_BILLING_MODE: optional(z.enum(["capped", "usage-based"])).transform((value) => value ?? "capped")
+    .describe("Capped requires the monthly AI allowance; explicitly approved usage-based billing has no monthly spending ceiling."),
   GOAL_HINT_RESEARCH_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate research cap in integer US cents (010)."),
   GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS: money.describe("Record an approved infrastructure cap in integer US cents (003/020/046)."),
   GOAL_HINT_BUDGET_APPROVAL_REF: text.describe("Reference recorded approvals for the configured caps and paid operation (008/010)."),
@@ -241,6 +243,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       },
       teamCodes: { enabled: settings.GOAL_HINT_TEAM_CODES_IMPORT_ENABLED },
       budgets: {
+        aiBillingMode: settings.GOAL_HINT_AI_BILLING_MODE,
         aiMonthlyUsdCents: settings.GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS,
         researchMonthlyUsdCents: settings.GOAL_HINT_RESEARCH_MONTHLY_BUDGET_USD_CENTS,
         infrastructureMonthlyUsdCents: settings.GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS,
@@ -354,7 +357,7 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
       need("AI_API_KEY", policy.secrets.aiKey);
       need("GOAL_HINT_AI_PROVIDER", policy.choices.ai.provider);
       need("GOAL_HINT_AI_MODEL", policy.choices.ai.model);
-      need("GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS", policy.choices.budgets.aiMonthlyUsdCents);
+      if (policy.choices.budgets.aiBillingMode !== "usage-based") need("GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS", policy.choices.budgets.aiMonthlyUsdCents);
       need("GOAL_HINT_JOB_TOKEN_LIMIT", policy.choices.job.tokenLimit);
       job();
     };
@@ -427,7 +430,7 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
   }
   const { aiMonthlyUsdCents, researchMonthlyUsdCents } = policy.choices.budgets;
   const researchAllowance = policy.capabilities.research ? researchMonthlyUsdCents : 0;
-  if (policy.choices.shadow.budgetUsdCents !== null && aiMonthlyUsdCents !== null
+  if (policy.choices.budgets.aiBillingMode !== "usage-based" && policy.choices.shadow.budgetUsdCents !== null && aiMonthlyUsdCents !== null
     && researchAllowance !== null
     && policy.choices.shadow.budgetUsdCents > aiMonthlyUsdCents + researchAllowance) {
     issues.push({ field: "GOAL_HINT_SHADOW_BUDGET_USD_CENTS", reason: "The shadow AI/research allowance must fit inside the separately approved monthly caps; category limits still apply." });

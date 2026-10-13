@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createPredictionWindow, getReportingDate, isInWindow, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { createPredictionWindow, getReportingDate, isInWindow, predictionWindowDays, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, parseEvidenceContext } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
@@ -9,6 +9,7 @@ import { durableJobId, parseJobEnvelope } from "../jobs/job-input.ts";
 import { storedCycle } from "../predictions/history-read.ts";
 import { publicationResult, storedRefreshResult } from "../predictions/publication-read.ts";
 import type { SelectionManifest } from "../selection/selection-contract.ts";
+import { selectionRunWindow } from "../selection/selection-read.ts";
 import { PredictionRefreshError, refreshFail, type RefreshIntent, type RefreshMember, type RefreshOutcome, type RefreshPhase } from "./refresh-contract.ts";
 import { parseRefreshPlan, refreshPin } from "./refresh-input.ts";
 
@@ -57,7 +58,7 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
     const row = await tx.runFixture.findUnique({ where: { runId_fixtureId_cycleId: identity }, include: { run: { include: { manifest: true } } } });
     if (!row?.run.manifest || row.run.committedAt === null) return refreshFail("invalid-request");
     const manifest = row.run.manifest.manifestJson as unknown as SelectionManifest;
-    const window = createPredictionWindow(parseReportingDate(row.run.eatDate.toISOString().slice(0, 10)));
+    const window = selectionRunWindow(row.run);
     const entry = manifest.entries.find((item) => item.fixtureId === identity.fixtureId && item.cycleId === identity.cycleId);
     const envelope = parseJobEnvelope(row.envelopeJson);
     if (!entry || row.jobId !== lease.jobId || durableJobId(envelope) !== lease.jobId ||
@@ -77,7 +78,8 @@ export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQue
     if ((await tx.fixtureLifecycleState.findUnique({ where: { fixtureId: fixture.id } }))?.issue) return refreshFail("ineligible", "lifecycle-conflict");
     const now = utcInstantFromEpochMilliseconds((await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at.getTime());
     if (now >= cycle.cutoffAt) return refreshFail("ineligible", "cutoff-passed");
-    if (!isInWindow(cycle.kickoffAt, createPredictionWindow(getReportingDate(now)))) return refreshFail("ineligible", "outside-window");
+    if (!isInWindow(cycle.kickoffAt, window) ||
+      !isInWindow(cycle.kickoffAt, createPredictionWindow(getReportingDate(now), predictionWindowDays(window)))) return refreshFail("ineligible", "outside-window");
     const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { runSequence: "desc" }, select: { runSequence: true } });
     if (latest && latest.runSequence >= row.run.sequence) return refreshFail("ineligible", "older-run");
     const external = (team: typeof fixture.homeTeam) => Number(team.providers.find((item) => item.provider === "api-football")?.externalId);

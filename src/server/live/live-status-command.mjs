@@ -22,12 +22,15 @@ try {
   policy ??= parseRuntimePolicy({ ...process.env, GOAL_HINT_OPERATION_SCOPE: 'trial', GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT: '1' });
   verify ??= ownerEvidenceVerifier(loadOwnerApprovals());
   const status = await createAccountStatusReader({ policy, verifyEvidence: verify })();
-  const workload = liveWorkload(status.dailyLimit, status.secondLimit, status.plan, status.minuteLimit);
+  const workload = liveWorkload(status.dailyLimit, status.secondLimit, status.plan, status.minuteLimit, policy.capabilities.ai);
   const value = { ready: gaps.length === 0, gaps,
     plan: status.plan, active: status.active, expiresAt: status.expiresAt === null ? null : new Date(status.expiresAt).toISOString(),
     dailyLimit: status.dailyLimit, usedToday: status.usedToday, minuteLimit: status.minuteLimit,
     competitions: policy.choices.competitionIds?.length ?? 0,
     workload: { importDays: workload.importDays, refreshCapacityPerDay: workload.refreshCapacity, workers: workload.workers,
+      refreshRequestsPerJob: workload.refreshRequestsPerJob,
+      ai: { enabled: policy.capabilities.ai, provider: policy.choices.ai.provider, model: policy.choices.ai.model,
+        billingMode: policy.choices.budgets.aiBillingMode },
       livePollSeconds: workload.cadence.liveMs === null ? null : workload.cadence.liveMs / 1000,
       datePollMinutes: workload.cadence.dateMs / 60_000,
       // Odds (052) run only when enabled, eligible on this plan and given a documented bookmaker.

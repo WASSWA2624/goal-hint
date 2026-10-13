@@ -119,6 +119,113 @@ test("verified measured completion releases unused reserves and retains separate
   assert.equal(summary.elapsedMs, 100n);
 });
 
+test("AI usage-based billing continues beyond the normal monthly cap with exact durable accounting", async () => {
+  const s = await scenario("usage-based", { period: { billingMode: "usage-based", capUsdPicos: 0n,
+    openingChargedUsdPicos: 8n * USD } });
+  for (const index of [0, 1, 2]) {
+    const job = costJob(s.period, `usage-based-${index}`, { costCapUsdPicos: 2n * USD });
+    const permit = await dispatched(s, job, `usage-based-${index}`, {
+      maximum: { requests: 1, inputTokens: 20, outputTokens: 10, billedUnits: 0 },
+    });
+    s.clock.value += 200;
+    const receipt = costUsage(permit, `usage-based-${index}`, { observedAt: s.clock.value,
+      observedQuantities: { requests: 1, inputTokens: 2, outputTokens: 1, billedUnits: 0 }, observedUsdPicos: USD + USD / 25n });
+    assert.equal((await s.service.reconcile(permit, receipt)).state, "completed");
+  }
+  const summary = await s.service.summary();
+  assert.equal(summary.billingMode, "usage-based"); assert.equal(summary.capUsdPicos, 0n);
+  assert.equal(summary.remainingUsdPicos, null); assert.equal(summary.overageBlocked, false);
+  assert.equal(summary.liabilityUsdPicos, 8n * USD + 3n * (USD + USD / 25n));
+  assert.ok(summary.liabilityUsdPicos > 10n * USD, "the previous synthetic monthly ceiling does not block new jobs");
+  assert.equal(summary.observedUsdPicos, 3n * (USD + USD / 25n));
+  assert.equal(summary.estimatedUsdPicos, summary.observedUsdPicos);
+  assert.equal(summary.requests, 3n); assert.equal(summary.inputTokens, 6n); assert.equal(summary.outputTokens, 3n);
+  assert.equal(summary.elapsedMs, 300n);
+  const restarted = createCostService({ accountId: s.period.accountId, category: "ai", store: s.store,
+    authority: s.authority, rateFor: () => s.rate });
+  assert.deepEqual(await restarted.summary(), summary);
+  assert.deepEqual(await restarted.initialize({ ...s.period, billingMode: "capped" }), deny("conflicting-policy"));
+});
+
+test("usage-based mode preserves per-job money, request, token, unit and fallback ceilings", async () => {
+  const cases = [
+    { reason: "job-budget-exhausted", job: { costCapUsdPicos: USD - 1n } },
+    { reason: "token-limit", job: { inputTokenLimit: 1 }, maximum: { requests: 1, inputTokens: 2, outputTokens: 0, billedUnits: 0 } },
+    { reason: "token-limit", job: { outputTokenLimit: 1 }, maximum: { requests: 1, inputTokens: 0, outputTokens: 2, billedUnits: 0 } },
+    { reason: "billed-unit-limit", job: { billedUnitLimit: 1 }, maximum: { requests: 1, inputTokens: 0, outputTokens: 0, billedUnits: 2 } },
+  ];
+  for (const [index, check] of cases.entries()) {
+    const s = await scenario(`usage-limits-${index}`, { period: { billingMode: "usage-based", capUsdPicos: 0n } });
+    const job = costJob(s.period, `usage-limits-${index}`, check.job);
+    assert.deepEqual(await s.service.reserve(job, costRequest(job, `usage-limits-${index}`,
+      check.maximum ? { maximum: check.maximum } : {})), deny(check.reason));
+  }
+  const s = await scenario("usage-request-limit", { period: { billingMode: "usage-based", capUsdPicos: 0n } });
+  const oneRequest = costJob(s.period, "usage-request-limit", { requestLimit: 1 });
+  const permit = await dispatched(s, oneRequest, "usage-first"); s.clock.value += 200;
+  await s.service.reconcile(permit, costUsage(permit, "usage-first", { observedAt: s.clock.value,
+    observedQuantities: { requests: 0, inputTokens: 0, outputTokens: 0, billedUnits: 0 } }));
+  assert.deepEqual(await s.service.reserve(oneRequest, costRequest(oneRequest, "usage-retry")), deny("request-limit"));
+  const fallback = costJob(s.period, "usage-fallback");
+  s.clock.value = fallback.startsAt + fallback.timeLimitMs - fallback.fallbackReserveMs;
+  assert.deepEqual(await s.service.reserve(fallback, costRequest(fallback, "usage-fallback")), deny("fallback-time-reserved"));
+});
+
+test("usage-based overages remain accountable without disabling an independent bounded job", async () => {
+  const s = await scenario("usage-overage", { period: { billingMode: "usage-based", capUsdPicos: 0n } });
+  const job = costJob(s.period, "usage-overage", { costCapUsdPicos: 2n * USD });
+  const permit = await dispatched(s, job, "usage-overage"); s.clock.value += 200;
+  await s.service.reconcile(permit, costUsage(permit, "usage-overage-invoice", { observedAt: s.clock.value, invoicedUsdPicos: 3n * USD }));
+  assert.deepEqual(await s.service.reserve(job, costRequest(job, "usage-same-job")), deny("job-budget-exhausted"));
+  const nextJob = costJob(s.period, "usage-independent", { costCapUsdPicos: 2n * USD });
+  await dispatched(s, nextJob, "usage-independent");
+  const summary = await s.service.summary();
+  assert.equal(summary.invoicedUsdPicos, 3n * USD); assert.equal(summary.liabilityUsdPicos, 4n * USD);
+  assert.equal(summary.hasOverage, true); assert.equal(summary.overageBlocked, false); assert.equal(summary.remainingUsdPicos, null);
+});
+
+test("a reconciled usage-based overage cannot launch an already reserved request above its job cap", async () => {
+  const s = await scenario("usage-pending-overage", { period: { billingMode: "usage-based", capUsdPicos: 0n } });
+  const job = costJob(s.period, "usage-pending-overage", { costCapUsdPicos: 2n * USD });
+  const first = await dispatched(s, job, "usage-pending-first");
+  const pending = await s.service.reserve(job, costRequest(job, "usage-pending-second"));
+  assert.equal(pending.status, "reserved"); s.clock.value += 200;
+  await s.service.reconcile(first, costUsage(first, "usage-pending-invoice", { observedAt: s.clock.value, invoicedUsdPicos: 3n * USD }));
+  assert.deepEqual(await s.service.markDispatched(pending.permit), deny("job-budget-exhausted"));
+  assert.deepEqual(await s.service.cancelBeforeDispatch(pending.permit), { status: "canceled" });
+  assert.equal((await s.service.jobSummary(job.jobId)).liabilityUsdPicos, 3n * USD);
+});
+
+test("pending usage-based dispatch rechecks token and unit ceilings after larger verified receipts", async () => {
+  for (const [field, limit, reason] of [["inputTokens", "inputTokenLimit", "token-limit"],
+    ["outputTokens", "outputTokenLimit", "token-limit"], ["billedUnits", "billedUnitLimit", "billed-unit-limit"]]) {
+    const s = await scenario(`usage-pending-${field}`, { period: { billingMode: "usage-based", capUsdPicos: 0n } });
+    const job = costJob(s.period, `usage-pending-${field}`, { [limit]: 2 });
+    const maximum = { requests: 1, inputTokens: 0, outputTokens: 0, billedUnits: 0, [field]: 1 };
+    const first = await dispatched(s, job, `usage-pending-first-${field}`, { maximum });
+    const pending = await s.service.reserve(job, costRequest(job, `usage-pending-second-${field}`, { maximum }));
+    assert.equal(pending.status, "reserved"); s.clock.value += 200;
+    await s.service.reconcile(first, costUsage(first, `usage-pending-receipt-${field}`, { observedAt: s.clock.value,
+      observedQuantities: { ...maximum, [field]: 3 } }));
+    assert.deepEqual(await s.service.markDispatched(pending.permit), deny(reason), field);
+    assert.deepEqual(await s.service.cancelBeforeDispatch(pending.permit), { status: "canceled" });
+  }
+});
+
+test("usage-based periods require explicit AI intent and cannot uncap research", async () => {
+  for (const [category, changes] of [["research", { capUsdPicos: 0n, billingMode: "usage-based" }],
+    ["ai", { capUsdPicos: USD, billingMode: "usage-based" }], ["ai", { capUsdPicos: 0n, billingMode: "unlimited" }]]) {
+    const s = await scenario(`invalid-usage-${category}`, { category, initialize: false, period: changes });
+    assert.deepEqual(await s.service.initialize(s.period), deny("invalid-request"));
+  }
+  for (const billingMode of [undefined, "capped"]) {
+    const s = await scenario(`default-cap-${billingMode}`, { period: { capUsdPicos: USD, ...(billingMode ? { billingMode } : {}) } });
+    const job = costJob(s.period, `default-cap-${billingMode}`); await dispatched(s, job, `default-cap-${billingMode}`);
+    assert.deepEqual(await s.service.reserve(job, costRequest(job, `default-cap-next-${billingMode}`)), deny("budget-exhausted"));
+    const summary = await s.service.summary(); assert.equal(summary.capUsdPicos, USD); assert.equal(summary.remainingUsdPicos, 0n);
+  }
+});
+
 test("invoice-required billing retains maximum money until a verified final invoice", async () => {
   const s = await scenario("invoice", { rate: { billingRule: "invoice-required" } }), job = costJob(s.period, "invoice");
   const permit = await dispatched(s, job, "invoice", { maximum: { requests: 1, inputTokens: 20, outputTokens: 0, billedUnits: 0 } });

@@ -36,9 +36,15 @@ import { createDailySelectionService } from "../selection/selection-service.ts";
 import { loadOwnerApprovals, missingOwnerApprovals, ownerEvidenceVerifier, type OwnerApprovals } from "./live-approvals.ts";
 import { createAccountStatusReader, createQuotaRouter, type QuotaDay } from "./live-account.ts";
 import { createLiveAuthorities, LIVE_ACTOR } from "./live-authorities.ts";
-import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveReferences, liveWorkload, REFRESH_REQUESTS_PER_JOB,
+import { createLiveAiRuntime, type LiveAiRuntime } from "./live-ai.ts";
+import { liveAiModel } from "./live-ai-model.ts";
+import { createLiveFootballPreparation, readLiveFootballSources } from "./live-ai-evidence.ts";
+import { liveAiEvidencePolicy } from "./live-ai-plan.ts";
+import { canRunLiveRefresh } from "./live-refresh-quota.ts";
+import { fallbackRefreshPlan, LIVE_REFRESH_TYPE, liveReferences, liveWorkload,
   resultSyncPolicy, selectionPolicy, cutoffPolicy, lifecyclePolicy, providerFallbackPolicy, publicationPolicy,
-  oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled } from "./live-plan.ts";
+  oddsPolicy, oddsImportBounds, oddsCatalogBounds, oddsMaxRequests, ODDS_FRESHNESS_MS, teamCodeBounds, teamCodeImportsEnabled,
+  refreshEnvelopeFor } from "./live-plan.ts";
 import { oddsFail } from "../odds/odds-contract.ts";
 import { createOddsJobDefinitions, ODDS_PROVIDER_WINDOW_MS, ODDS_SWEEP_MS, type OddsQuotaUsage } from "../odds/odds-jobs.ts";
 import { createMysqlOddsStore } from "../odds/odds-mysql-store.ts";
@@ -59,7 +65,9 @@ export class LiveConfigurationError extends Error {
 export function liveReadiness(policy: RuntimePolicy, approvals?: OwnerApprovals) {
   const issues: string[] = [];
   if (policy.scope !== "production") issues.push("GOAL_HINT_OPERATION_SCOPE must be production for public provisional publication.");
-  if (policy.capabilities.ai) issues.push("GOAL_HINT_AI_ENABLED must stay false until an AI provider transport is integrated (prompt 012).");
+  if (policy.capabilities.ai) {
+    try { liveAiModel(policy); } catch (error) { issues.push((error as Error).message); }
+  }
   if (policy.capabilities.research) issues.push("GOAL_HINT_RESEARCH_ENABLED must stay false until a licensed research adapter exists (prompt 011).");
   if (policy.choices.competitionIds === null) issues.push("GOAL_HINT_COMPETITION_IDS is required.");
   let verify;
@@ -72,9 +80,9 @@ export function liveReadiness(policy: RuntimePolicy, approvals?: OwnerApprovals)
 
 export type LiveRuntimeOverrides = Readonly<{
   /** Isolated tests only: a synthetic provider transport and owner register. */
-  fetcher?: typeof fetch; approvals?: OwnerApprovals;
+  fetcher?: typeof fetch; aiFetcher?: typeof fetch; approvals?: OwnerApprovals;
 }>;
-/** Composes the fallback-only daily pipeline on one shared database and provider account. */
+/** Composes the pinned primary and provider fallback pipeline on shared durable stores. */
 export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRuntimeOverrides = {}) {
   const verify = liveReadiness(policy, overrides.approvals), refs = liveReferences(policy);
   const fetcher = overrides.fetcher === undefined ? {} : { fetcher: overrides.fetcher };
@@ -84,13 +92,17 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const queue = createMysqlJobQueue(database);
     const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher }) });
     const day: QuotaDay = await quota.refresh();
-    const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit);
+    const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit, policy.capabilities.ai);
     const selection = selectionPolicy(policy, refs, workload), statusEvidenceRef = `${refs.freshness}#status`;
     let results: ResultSyncPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
     const odds = oddsPolicy(policy, refs, workload);
+    const aiModel = policy.capabilities.ai ? liveAiModel(policy) : null;
+    let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results,
-      refreshPacing: workload.pacing, oddsPolicy: odds });
+      refreshPacing: workload.pacing, oddsPolicy: odds,
+      ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true,
+        verifyPrimaryCandidate: (candidate) => ai?.verifyCandidate(candidate) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
@@ -107,24 +119,38 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff });
     const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication });
     const evidence = createEvidenceService({ authority: authorities.evidence, store: createMysqlEvidenceStore(database), research: null,
-      football: { async collect() { throw new Error("Fallback-only refreshes collect no football evidence."); } } });
+      // Live imports finish before analysis; collection saves only the frozen canonical sources.
+      football: { async collect() { throw new Error("Live evidence collection uses stored sources only."); } } });
     const providerFallback = createProviderFallbackAdapter({ adapter, catalog, policy: providerFallbackPolicy(refs),
       authority: authorities.providerFallback, maxJobs: 1000 });
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
       verifyRequest: authorities.verifyFallbackRequest });
-    const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: createMysqlRefreshStore(database, queue),
-      selection: selectionStore, authority: authorities.refresh, configure: (member) => fallbackRefreshPlan(member, refs, workload.pacing),
-      models: { async resolve() { throw new ModelRegistryError("unavailable"); } },
-      predictor: { async predict() { return { status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false }; } },
-      evidence, fallback, lifecycle, publisher, costs: { ai: null, research: null },
+    const refreshStore = createMysqlRefreshStore(database, queue);
+    if (aiModel !== null) ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
+      evidenceAuthority: authorities.evidence, pacing: workload.pacing, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
+      ...(overrides.aiFetcher === undefined ? {} : { fetcher: overrides.aiFetcher }) });
+    const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
+      selection: selectionStore, authority: authorities.refresh,
+      ...(ai === null ? {} : { prepare: createLiveFootballPreparation({ importer, refs, pacing: workload.pacing }) }),
+      configure: async (member) => {
+        if (ai === null) return fallbackRefreshPlan(member, refs, workload.pacing);
+        // A history read outage gives explicit missingness and sends no primary request.
+        const sources = await readLiveFootballSources(database, member.context, liveAiEvidencePolicy(refs), refs).catch(() => []);
+        return ai.configure(member, sources);
+      },
+      models: ai?.models ?? { async resolve() { throw new ModelRegistryError("unavailable"); } },
+      predictor: ai?.predictor ?? { async predict() { return { status: "denied", reason: "unconfigured", requestsDispatched: 0, requestCountUnknown: false }; } },
+      evidence, fallback, lifecycle, publisher, costs: { ai: ai?.costs ?? null, research: null },
       observation: createRefreshObservationCollector({ adapter: adapter.evidence, evidenceRef: statusEvidenceRef, verifyResponse: authorities.verifyStatusResponse }) });
     const settlement = createMarketSettlementService({ database, queue });
     const cache = createMysqlPublicCacheStore(database);
 
-    // Refresh jobs wait (retryably) instead of eating the reserve kept for selection and result checks.
+    // Only remaining outbound calls consume the reserve kept for selection and result checks.
     const refreshDefinition: JobDefinition = Object.freeze({ ...refresh.definition, async handle(payload, context) {
-      if (await quota.remaining() < workload.refreshFloor + REFRESH_REQUESTS_PER_JOB) return { status: "failed", reason: "rate-limited", retryable: true };
-      return refresh.definition.handle(payload, context);
+      if (!await canRunLiveRefresh({ store: refreshStore, jobId: context.lease.jobId, primaryEnabled: ai !== null,
+        floor: workload.refreshFloor, remaining: () => quota.remaining() })) return { status: "failed", reason: "rate-limited", retryable: true };
+      try { return await refresh.definition.handle(payload, context); }
+      finally { ai?.release(context.lease.jobId); }
     } });
     // After repeated incomplete imports, the owner's degradation policy finalizes known coverage as partial.
     const selectionDefinition = defineJob({ type: "daily.selection", handlerVersion: 1, payload: scheduledSelection,
@@ -132,7 +158,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
         await context.checkpoint();
         const runDate = selectionWindow(payload.scheduledFor).runDate;
         // A shortened plan horizon is partial by design; otherwise retry incomplete imports twice first.
-        const degrade = workload.importDays < 7 || context.lease.job.attemptCount >= 3;
+        const degrade = workload.importDays < (selection.windowDays ?? 7) || context.lease.job.attemptCount >= 3;
         try {
           const result = await dailySelection.run(payload.scheduledFor, degrade ? { actor: LIVE_ACTOR, policyRef: selection.degradationPolicyRef!,
             evidenceRef: `${selection.degradationPolicyRef}:${runDate}` } : undefined, context.signal);

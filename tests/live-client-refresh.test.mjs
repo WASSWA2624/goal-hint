@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
+import { parseReportingDate } from '../src/domain/calendar.ts';
 import { fixtureAdvance } from '../src/domain/fixture-reconciliation.ts';
 import { acceptRun, feedRefreshInterval, liveRefreshRules, mergeLiveDetail, startLiveRefresh } from '../src/domain/live-refresh.ts';
 import { initialLoadedFeed, replaceFeedPages } from '../src/domain/feed-pagination.ts';
@@ -163,6 +164,29 @@ test('EAT midnight rolls relative dates and seven-day URLs without changing expl
   const historical = query('date=2026-10-01&page=3&q=Club');
   assert.equal(feedQueryHref(historical, today), feedQueryHref(historical, rolled[0]));
   await c.fire(); assert.equal(reads, 1); stop();
+});
+
+test('a device-day feed rolls at local midnight rather than EAT midnight', async () => {
+  const c = clock(Date.parse('2026-10-10T06:59:55Z')), rolled = []; let reads = 0;
+  const stop = startLiveRefresh({ today, zone: 'America/Los_Angeles', interval: () => 20000,
+    refresh: async () => { reads++; }, rollover: day => rolled.push(day) }, c.env);
+  assert.equal([...c.timers.values()][0].delay, 5000); await c.fire();
+  assert.deepEqual(rolled, ['2026-10-10']); assert.equal(reads, 0);
+  const historical = query('date=2020-02-29&tz=America%2FLos_Angeles&page=3');
+  assert.equal(feedQueryHref(historical, today), feedQueryHref(historical, rolled[0]));
+  await c.fire(); assert.equal(reads, 1); stop();
+});
+
+test('local polling does not roll early at EAT midnight or shorten a DST day', async () => {
+  for (const [at, zone, date, untilMidnight] of [
+    ['2026-10-09T20:59:55Z', 'America/Los_Angeles', today, 10 * 3600000 + 5000],
+    ['2026-11-01T04:00:00Z', 'America/New_York', parseReportingDate('2026-11-01'), 25 * 3600000],
+  ]) {
+    const c = clock(Date.parse(at)), rolled = [];
+    const stop = startLiveRefresh({ today: date, zone, interval: () => untilMidnight + 1000,
+      refresh: async () => {}, rollover: day => rolled.push(day) }, c.env);
+    assert.equal([...c.timers.values()][0].delay, untilMidnight); assert.deepEqual(rolled, []); stop();
+  }
 });
 
 test('equal-version detail refreshes adopt the newer market-implied odds (052) and never touch the revision', () => {

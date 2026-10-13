@@ -6,12 +6,12 @@ import { startLiveRefresh } from "@/domain/live-refresh";
 
 /** `interval` may be a function, read when each wait is armed, so clock-based cadence stays current. */
 export function useLiveRefresh(options: { today: ReportingDate; enabled: boolean; interval: number | (() => number);
-  refresh(): Promise<unknown>; rollover(today: ReportingDate): void }) {
+  zone?: string | null; refresh(): Promise<unknown>; rollover(today: ReportingDate): void }) {
   const latest = useRef(options);
   useEffect(() => { latest.current = options; });
   useEffect(() => {
     if (!options.enabled) return;
-    return startLiveRefresh({ today: options.today, interval: () => {
+    return startLiveRefresh({ today: options.today, zone: options.zone ?? null, interval: () => {
       const { interval } = latest.current;
       return typeof interval === "function" ? interval() : interval;
     },
@@ -30,5 +30,5 @@ export function useLiveRefresh(options: { today: ReportingDate; enabled: boolean
         };
       },
     });
-  }, [options.enabled, options.today]);
+  }, [options.enabled, options.today, options.zone]);
 }

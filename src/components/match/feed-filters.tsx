@@ -397,7 +397,8 @@ type FeedFiltersProps = {
   open: boolean; panelId: string; onToggle: () => void; controls: ReactNode;
 };
 export function FeedFilters(props: FeedFiltersProps) {
-  return <FilterFields key={feedQueryHref(props.query, props.today)} {...props} />;
+  const range = resolveFeedDates(props.query, props.today);
+  return <FilterFields key={`${feedQueryHref(props.query, props.today)}:${range.startDate}:${range.endDate}`} {...props} />;
 }
 function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, open, panelId, onToggle, controls }: FeedFiltersProps) {
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
@@ -411,7 +412,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   const minimum = parseProbabilityValue(probabilityInputs.min), maximum = parseProbabilityValue(probabilityInputs.max);
   const probability = useMemo(() => minimum !== null && maximum !== null && validProbabilityRange({ min: minimum, max: maximum })
     ? { min: minimum, max: maximum } : null, [minimum, maximum]);
-  const zone = query.time?.zone ?? deviceZone;
+  const zone = query.zone ?? query.time?.zone ?? deviceZone;
   const completeDraft = useMemo(() => {
     try {
       if (!probability) return null;

@@ -24,7 +24,9 @@ const SECOND = 1000, MINUTE = 60 * SECOND, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
 export const LIVE_REFRESH_TYPE = "prediction.daily-refresh";
 /** Each fallback-only refresh dispatches one prediction and one fresh status request. */
 export const REFRESH_REQUESTS_PER_JOB = 2;
-const SELECTION_REQUESTS = 14; // Seven dates with one retry each.
+/** The edge day makes seven visitor-local dates available across time zones. */
+export const LIVE_FORECAST_WINDOW_DAYS = 8;
+const SELECTION_REQUESTS = LIVE_FORECAST_WINDOW_DAYS * 2;
 /** Odds stay off below this many spare ordinary requests per provider day. */
 export const ODDS_MINIMUM_SPARE = 200;
 /** Pages per odds date sweep (10 fixtures per page, per the documented contract). */
@@ -44,32 +46,36 @@ export type OddsWorkload = Readonly<{ floor: number; spare: number; reserve: num
 export type LiveWorkload = Readonly<{
   dailyLimit: number; refreshCapacity: number; refreshFloor: number; workers: number; importDays: number;
   pacing: RefreshPacing; refreshLeadMs: number; odds: OddsWorkload;
+  primaryEnabled: boolean; refreshRequestsPerJob: number;
   cadence: NonNullable<ResultSyncPolicy["cadence"]>; unresolved: ResultSyncPolicy["unresolved"]; corrections: ResultSyncPolicy["corrections"];
   maxBatchesPerTick: number;
 }>;
 /** Sizes work from the verified account limit so a plan change needs no code change.
  * A quarter of the day goes to result polling and refresh jobs stop above a floor
  * that keeps tomorrow's selection and result checks possible. */
-export function liveWorkload(dailyLimit: number, secondLimit: number, plan = "", minuteLimit = Number.POSITIVE_INFINITY): LiveWorkload {
+export function liveWorkload(dailyLimit: number, secondLimit: number, plan = "", minuteLimit = Number.POSITIVE_INFINITY,
+  primaryEnabled = false): LiveWorkload {
   const usable = Math.min(dailyLimit, operatingRules.football.requestsPerProviderDay);
   const resultsShare = Math.max(4, Math.floor(usable * 0.25));
   const dateMs = clamp(Math.ceil(DAY / resultsShare / MINUTE) * MINUTE, MINUTE, 2 * HOUR);
   const activeMs = dateMs;
   const reserve = Math.max(SELECTION_REQUESTS, Math.floor(usable * 0.1));
-  const refreshCapacity = clamp(Math.floor((usable - SELECTION_REQUESTS - resultsShare - reserve) / REFRESH_REQUESTS_PER_JOB), 0, 2000);
+  const refreshRequestsPerJob = REFRESH_REQUESTS_PER_JOB + (primaryEnabled ? 2 : 0);
+  const refreshCapacity = clamp(Math.floor((usable - SELECTION_REQUESTS - resultsShare - reserve) / refreshRequestsPerJob), 0, 2000);
   const pacing: RefreshPacing = minuteLimit < 60 ? "slow" : "standard", workers = clamp(Math.floor(secondLimit / 2), 1, 6);
   // Selected fixtures must still be refreshable once the queue reaches them: skip cutoffs closer than the queue's drain time.
-  const refreshLeadMs = clamp(Math.ceil(refreshCapacity / workers) * refreshEnvelopeFor(pacing).timeoutMs, 10 * MINUTE, 2 * HOUR);
-  const importDays = plan.trim().toLowerCase() === "free" ? 2 : 7;
+  const refreshLeadMs = clamp(Math.ceil(refreshCapacity / workers) * refreshEnvelopeFor(pacing, primaryEnabled).timeoutMs, 10 * MINUTE, 2 * HOUR);
+  const importDays = plan.trim().toLowerCase() === "free" ? 2 : LIVE_FORECAST_WINDOW_DAYS;
   // Daily refresh jobs run 21:00-24:00 UTC, at the END of the UTC provider day, so the odds floor protects all of
   // them plus selection, results and the reserve, not just the refresh floor. Odds spend at most the spare above it
   // per provider day (the job gate counts odds' own dispatches). Free and slow plans stay ineligible.
-  const oddsFloor = Math.min(usable, resultsShare + reserve + refreshCapacity * REFRESH_REQUESTS_PER_JOB + SELECTION_REQUESTS);
+  const oddsFloor = Math.min(usable, resultsShare + reserve + refreshCapacity * refreshRequestsPerJob + SELECTION_REQUESTS);
   const odds = Object.freeze({ floor: oddsFloor, spare: usable - oddsFloor, reserve: Math.min(oddsFloor, reserve),
     eligible: usable - oddsFloor >= ODDS_MINIMUM_SPARE && pacing === "standard",
     sweepMs: ODDS_SWEEP_MS, dates: Math.min(7, importDays), maxPages: ODDS_MAX_PAGES });
   return Object.freeze({
     dailyLimit, refreshCapacity, refreshFloor: Math.min(usable, resultsShare + reserve), workers, pacing, refreshLeadMs,
+    primaryEnabled, refreshRequestsPerJob,
     // API-Football's free plan serves date queries only around today (observed coverage-error beyond tomorrow).
     importDays, odds,
     // The 15-second shared live feed costs ~5,760 requests on a busy day; smaller plans observe live status through date sync.
@@ -138,7 +144,10 @@ export function teamCodeBounds(deadlineAt: UtcInstant): ApiFootballBounds {
 export const refreshEnvelope = Object.freeze({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, maxAttempts: 16, timeoutMs: 120_000,
   leaseMs: 30_000, fallbackReserveMs: 60_000, backoff: Object.freeze({ baseMs: MINUTE, maxMs: HOUR }) });
 /** Slow plans give both provider calls time to wait out a full rolling minute, plus publication. */
-export function refreshEnvelopeFor(pacing: RefreshPacing) {
+export function refreshEnvelopeFor(pacing: RefreshPacing, primaryEnabled = false) {
+  if (primaryEnabled) return Object.freeze({ ...refreshEnvelope,
+    timeoutMs: pacing === "slow" ? 8 * MINUTE : 5 * MINUTE,
+    fallbackReserveMs: pacing === "slow" ? 200_000 : refreshEnvelope.fallbackReserveMs });
   return pacing === "slow" ? Object.freeze({ ...refreshEnvelope, timeoutMs: 5 * MINUTE, fallbackReserveMs: 200_000 }) : refreshEnvelope;
 }
 export function selectionPolicy(policy: RuntimePolicy, refs: LiveReferences, workload: LiveWorkload): SelectionPolicy {
@@ -146,11 +155,12 @@ export function selectionPolicy(policy: RuntimePolicy, refs: LiveReferences, wor
   if (competitionIds === null) throw new Error("Missing GOAL_HINT_COMPETITION_IDS.");
   return Object.freeze({ version: 1, evidenceRef: refs.selection, competitionIds, eligibleStatuses: ["scheduled"] as const,
     degradationPolicyRef: refs.degradation, retentionEvidenceRef: refs.retention, leaseMs: 120_000, attemptsPerInvocation: 2,
-    maxFixtures: 10_000, refreshCapacity: workload.refreshCapacity, ...(workload.importDays < 7 ? { importDays: workload.importDays } : {}),
+    maxFixtures: 10_000, windowDays: LIVE_FORECAST_WINDOW_DAYS, refreshCapacity: workload.refreshCapacity,
+    ...(workload.importDays < LIVE_FORECAST_WINDOW_DAYS ? { importDays: workload.importDays } : {}),
     refreshLeadMs: workload.refreshLeadMs,
     importBounds: { priority: "daily-inputs" as const, deadlineMs: 10 * MINUTE, timeoutMs: 30 * SECOND, maxRequests: 2, maxPages: 1,
       maxRows: 5000, maxResponseBytes: 40_000_000, retry: { maxAttempts: 6, baseDelayMs: 2 * SECOND, maxDelayMs: 10 * SECOND }, cacheMaxAgeMs: 0 },
-    refresh: { ...refreshEnvelopeFor(workload.pacing), payload: { policyRef: refs.refresh } } });
+    refresh: { ...refreshEnvelopeFor(workload.pacing, workload.primaryEnabled), payload: { policyRef: refs.refresh } } });
 }
 export const selectionTriggerBounds = Object.freeze({ maxAttempts: 16, timeoutMs: 45 * MINUTE, leaseMs: MINUTE, fallbackReserveMs: 0,
   backoff: Object.freeze({ baseMs: MINUTE, maxMs: HOUR }), expiresAfterMs: 2 * DAY }) satisfies
@@ -171,7 +181,7 @@ export function lifecyclePolicy(refs: LiveReferences): LifecyclePolicy {
 }
 export function publicationPolicy(refs: LiveReferences): PublicationPolicy {
   return Object.freeze({ version: 1, evidenceRef: refs.freshness, maxObservationAgeMs: 2 * MINUTE, sources: {
-    ai: { maxAgeMs: 6 * HOUR, basis: "generated", unknownGeneration: "reject", unknownUpdate: "allow-flagged" },
+    ai: { maxAgeMs: 6 * HOUR, basis: "retrieved", unknownGeneration: "allow-flagged", unknownUpdate: "allow-flagged" },
     "api-football": { maxAgeMs: HOUR, basis: "retrieved", unknownGeneration: "allow-flagged", unknownUpdate: "allow-flagged" } } } as const);
 }
 export function evidencePolicy(refs: LiveReferences): EvidencePolicy {

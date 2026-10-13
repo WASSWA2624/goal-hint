@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { ReportingDate } from "../../domain/calendar.ts";
+import type { PredictionWindowDays, ReportingDate } from "../../domain/calendar.ts";
 import type { ApiFootballBounds } from "../football/api-football-contract.ts";
 import type { CatalogImportRequest } from "../football/catalog-contract.ts";
 import type { JobEnvelope } from "../jobs/job-contract.ts";
@@ -19,9 +19,11 @@ export type SelectionPolicy = Readonly<{
   version: 1; evidenceRef: string; competitionIds: readonly number[]; eligibleStatuses: readonly ["scheduled"];
   degradationPolicyRef: string | null; retentionEvidenceRef: string; leaseMs: number;
   attemptsPerInvocation: number; maxFixtures: number;
+  /** Immutable operational horizon; omitted preserves the original seven-date contract. */
+  windowDays?: PredictionWindowDays;
   /** Nearest-kickoff refresh budget; later eligible fixtures are recorded as deferred exclusions. */
   refreshCapacity?: number;
-  /** Dates the provider plan can serve, from the run date; omitted imports all seven. */
+  /** Dates the provider plan can serve, from the run date; omitted imports the complete horizon. */
   importDays?: number;
   /** Budgeted runs skip fixtures whose publication cutoff is closer than this, so queued refreshes can still finish. */
   refreshLeadMs?: number;
@@ -38,7 +40,10 @@ export type CycleSelectionEligibility = Readonly<{
   id: string; fixtureId: string; previousCycleId: string; previousVersion: number;
   kickoffAt: number; state: "postponed" | "void"; actor: string; evidenceRef: string;
 }>;
-export type SelectionLease = Readonly<{ runId: string; ownerId: string; fence: number }>;
+export type SelectionLease = Readonly<{ runId: string; ownerId: string; fence: number;
+  /** Rejoining a committed run renews with its original sealed lease policy. */
+  leaseMs?: number;
+}>;
 export type SelectionImport = Readonly<{ id: string; request: CatalogImportRequest; finished: boolean }>;
 export type SelectionCoverage = Readonly<{
   date: string; status: string; importId: string | null; fixtureIds: readonly string[];

@@ -29,6 +29,8 @@ export type PredictionWindow = InstantWindow & Readonly<{
   lastDate: ReportingDate;
   endDateExclusive: ReportingDate;
 }>;
+/** Seven public dates, with one optional operational edge day for device-local browsing. */
+export type PredictionWindowDays = 7 | 8;
 
 export type ReportingDateRange = Readonly<{
   startDate: ReportingDate;
@@ -190,9 +192,10 @@ export function getReportingDayBounds(value: ReportingDate): InstantWindow {
   return Object.freeze({ startInclusive: startOfDay(day), endExclusive: startOfDay(day + 1) });
 }
 
-export function createPredictionWindow(runDate: ReportingDate): PredictionWindow {
+export function createPredictionWindow(runDate: ReportingDate, windowDays: PredictionWindowDays = calendarRules.windowDays): PredictionWindow {
+  if (windowDays !== 7 && windowDays !== 8) throw new CalendarValidationError("Prediction horizon must be seven or eight EAT dates.");
   const date = parseReportingDate(runDate);
-  const endDateExclusive = addReportingDays(date, calendarRules.windowDays);
+  const endDateExclusive = addReportingDays(date, windowDays);
   return Object.freeze({
     runDate: date,
     lastDate: addReportingDays(endDateExclusive, -1),
@@ -200,6 +203,17 @@ export function createPredictionWindow(runDate: ReportingDate): PredictionWindow
     startInclusive: startOfDay(dateDay(date)),
     endExclusive: startOfDay(dateDay(endDateExclusive)),
   });
+}
+
+/** Stored bounds authorize only the two reviewed horizons, aligned to EAT civil midnights. */
+export function predictionWindowDays(window: InstantWindow): PredictionWindowDays {
+  const start = utcInstantFromEpochMilliseconds(window.startInclusive), end = utcInstantFromEpochMilliseconds(window.endExclusive);
+  const date = getReportingDate(start);
+  for (const days of [7, 8] as const) {
+    const expected = createPredictionWindow(date, days);
+    if (start === expected.startInclusive && end === expected.endExclusive) return days;
+  }
+  throw new CalendarValidationError("Prediction bounds do not match a reviewed EAT horizon.");
 }
 
 export function isInWindow(value: UtcInstant, window: InstantWindow): boolean {
@@ -262,7 +276,7 @@ export function isEligibleForPrediction(
   currentWindow: PredictionWindow,
   isOriginalManifestMember: boolean,
 ): boolean {
-  return isOriginalManifestMember === true &&
+  return isOriginalManifestMember === true && predictionWindowDays(originalWindow) === predictionWindowDays(currentWindow) &&
     isInWindow(scheduledKickoff, originalWindow) && isInWindow(scheduledKickoff, currentWindow);
 }
 
@@ -270,7 +284,7 @@ export function isTemporallyEligibleForPublication(
   publishedAt: UtcInstant,
   input: PublicationInput,
 ): boolean {
-  const currentWindow = createPredictionWindow(getReportingDate(publishedAt));
+  const currentWindow = createPredictionWindow(getReportingDate(publishedAt), predictionWindowDays(input.originalWindow));
   return isEligibleForPrediction(
     input.scheduledKickoff, input.originalWindow, currentWindow, input.isOriginalManifestMember,
   ) && isBeforePublicationCutoff(publishedAt, input.scheduledKickoff, input.earlierCloseAt);

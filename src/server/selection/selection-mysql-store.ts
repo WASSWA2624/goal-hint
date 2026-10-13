@@ -1,8 +1,8 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { addReportingDays, createPredictionWindow, getPublicationDeadline, isInWindow, parseReportingDate,
-  utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { addReportingDays, createPredictionWindow, getPublicationDeadline, isInWindow, parseReportingDate, predictionWindowDays,
+  utcInstantFromEpochMilliseconds, type PredictionWindowDays } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseCatalogImportRequest } from "../football/catalog-input.ts";
@@ -13,8 +13,8 @@ import { createMysqlPredictionHistoryStore } from "../predictions/history-mysql-
 import { DailySelectionError, selectionFail, type CycleSelectionEligibility, type DegradedSelectionAction,
   type SelectionAuthority, type SelectionCoverage, type SelectionEntry, type SelectionImport,
   type SelectionLease, type SelectionManifest, type SelectionPolicy } from "./selection-contract.ts";
-import { parseCycleSelectionEligibility, parseSelection } from "./selection-input.ts";
-import { storedSelectionManifest } from "./selection-read.ts";
+import { parseCycleSelectionEligibility, parseSelection, parseSelectionPolicy } from "./selection-input.ts";
+import { selectionRunWindow, storedSelectionManifest } from "./selection-read.ts";
 
 type Transaction = Prisma.TransactionClient;
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -44,10 +44,10 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
     }, { isolationLevel: "ReadCommitted", timeout: 60_000 }); }
     catch { if (failure) throw failure; return selectionFail("unavailable"); }
   }
-  async function coverage(tx: Transaction, runId: string, runDate: string): Promise<SelectionCoverage[]> {
+  async function coverage(tx: Transaction, runId: string, runDate: string, days: PredictionWindowDays): Promise<SelectionCoverage[]> {
     const attempts = await tx.dailyRunImport.findMany({ where: { runId }, orderBy: { attempt: "desc" } });
     const result: SelectionCoverage[] = [];
-    for (let offset = 0; offset < 7; offset++) {
+    for (let offset = 0; offset < days; offset++) {
       const date = addReportingDays(parseReportingDate(runDate), offset);
       const latest = attempts.find((row) => row.eatDate.toISOString().slice(0, 10) === date);
       const imported = latest ? await tx.footballImport.findUnique({ where: { id: latest.id } }) : null;
@@ -69,19 +69,29 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
       if (!row) return null;
       const manifest = await storedSelectionManifest(tx, row);
       return freezeEvidence({ manifest, total: row.totalJobs, completed: row.completedJobs,
-        terminal: row.terminalJobs, coverage: manifest?.coverage ?? await coverage(tx, row.id, row.eatDate.toISOString().slice(0, 10)) });
+        terminal: row.terminalJobs, coverage: manifest?.coverage ?? await coverage(tx, row.id, row.eatDate.toISOString().slice(0, 10),
+          predictionWindowDays(selectionRunWindow(row))) });
     });
   }
   return Object.freeze({
     inspect,
     async acquire(runDate: string, policy: SelectionPolicy, ownerId: string): Promise<SelectionLease | null> {
       parseSelection(jobHash, ownerId);
-      const window = createPredictionWindow(parseReportingDate(runDate));
+      const window = createPredictionWindow(parseReportingDate(runDate), policy.windowDays ?? 7);
       const run = await history.createRun(runDate, window.startInclusive);
       return transact(async (tx) => {
         const row = await lockRun(tx, run.id), now = await serverNow(tx), hash = evidenceFingerprint(policy);
-        if (row.selectionHash !== null && (row.selectionHash !== hash || evidenceFingerprint(row.selectionJson) !== hash)) return selectionFail("conflicting-request");
+        if (row.selectionHash !== null && evidenceFingerprint(row.selectionJson) !== row.selectionHash) return selectionFail("unavailable");
+        if (row.selectionHash !== null && row.selectionHash !== hash && row.committedAt === null) return selectionFail("conflicting-request");
+        if (row.selectionHash !== null) selectionRunWindow(row);
         if (row.leaseExpiresAt !== null && row.leaseExpiresAt.getTime() > now) return null;
+        if (row.committedAt !== null) {
+          if (!await storedSelectionManifest(tx, row)) return selectionFail("unavailable");
+          const original = parseSelectionPolicy(row.selectionJson);
+          await tx.dailyRun.update({ where: { id: row.id }, data: {
+            ownerId, fence: { increment: 1 }, leaseExpiresAt: new Date(now + original.leaseMs) } });
+          return freezeEvidence({ runId: row.id, ownerId, fence: row.fence + 1, leaseMs: original.leaseMs });
+        }
         await tx.dailyRun.update({ where: { id: row.id }, data: { selectionHash: hash, selectionJson: json(policy),
           windowStart: new Date(window.startInclusive), windowEnd: new Date(window.endExclusive),
           ownerId, fence: { increment: 1 }, leaseExpiresAt: new Date(now + policy.leaseMs) } });
@@ -107,7 +117,7 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         const { row, now } = await assertOwned(tx, lease);
         if (row.committedAt !== null) return selectionFail("conflicting-request");
         const eatDate = new Date(`${parseReportingDate(date)}T00:00:00Z`);
-        const window = createPredictionWindow(parseReportingDate(row.eatDate.toISOString().slice(0, 10)));
+        const window = selectionRunWindow(row);
         if (date < window.runDate || date >= window.endDateExclusive || row.selectionHash !== evidenceFingerprint(policy)) return selectionFail("invalid-request");
         const previous = await tx.dailyRunImport.findFirst({ where: { runId: row.id, eatDate }, orderBy: { attempt: "desc" } });
         if (previous) {
@@ -165,8 +175,8 @@ export function createMysqlDailySelectionStore(database: DatabaseRuntime, queue:
         const { row, now } = await assertOwned(tx, lease), known = await storedSelectionManifest(tx, row);
         if (known) return known;
         if (row.selectionHash !== evidenceFingerprint(policy)) return selectionFail("conflicting-request");
-        const runDate = row.eatDate.toISOString().slice(0, 10), window = createPredictionWindow(parseReportingDate(runDate));
-        const dates = await coverage(tx, row.id, runDate), partial = dates.some((date) => date.status !== "complete");
+        const runDate = row.eatDate.toISOString().slice(0, 10), window = selectionRunWindow(row);
+        const dates = await coverage(tx, row.id, runDate, policy.windowDays ?? 7), partial = dates.some((date) => date.status !== "complete");
         if (partial && degradedAction === null) return selectionFail("incomplete-import");
         const ids = [...new Set(dates.flatMap((date) => date.fixtureIds))].sort();
         if (ids.length > policy.maxFixtures) return selectionFail("capacity-exceeded");

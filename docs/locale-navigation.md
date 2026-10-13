@@ -9,8 +9,9 @@ provider and requires no visitor credentials, tokens or cookies.
 | Address | Contract |
 | --- | --- |
 | `/` | Permanent 308 redirect to `/en`, independent of browser language. |
-| `/en` | The Today view of the shared feed; no decorative hero. |
-| `/en/predictions/YYYY-MM-DD` | One EAT reporting day, including historical dates. |
+| `/en` | The Today view of the shared feed; hydration adopts the device's browsing day. |
+| `/en?tz=America%2FLos_Angeles` | Today in the named browsing zone, using its actual UTC day boundaries. |
+| `/en/predictions/YYYY-MM-DD` | One named EAT reporting day; `tz` selects that same calendar date in a browsing zone. |
 | `/en/predictions/YYYY-MM-DD?status=finished` | The same feed restricted to finished fixtures. |
 | `/en/slips` | Automatic slip builder with its own selection criteria. |
 | `/en/help` | App usage, forecast guidance and prediction results. |
@@ -23,7 +24,9 @@ locale-prefixed builder destination independently of feed dates and statuses;
 Slip builder is an app section alongside Matches, Live and Results. `feedDefaults`, owned
 by `src/domain/feed-query.ts` and re-exported by navigation, defines
 Today as day offset **0**, status **all**, and Results as day offset **−1**,
-status **finished**. Both use `getFeedEntry` and `feedHref`; `/en/results` is
+status **finished**. Server fallback links use `getFeedEntry` and `feedHref`;
+after hydration `deviceFeedEntryHref` keeps Today/Live relative in the device
+zone and opens Results on the device's previous calendar date. `/en/results` is
 intentionally not an independent application or route. The finished filter is a
 language-neutral group for regulation, extra-time and penalty finals; actual
 query mapping belongs to 028/032. It does not imply a settled prediction.
@@ -41,10 +44,14 @@ canonical slug; 035 owns identity lookup and changed-slug redirects.
 The request-scoped `getShellInstant` uses `connection()` and React `cache` to read
 one current instant after a request arrives. `getShellDate` and feed reads use
 that same instant. Shared calendar functions resolve
-that instant to `Africa/Kampala`; a build cannot freeze the Today link. Every
-new server request uses the current EAT day. Live rollover in an already open
-tab belongs to 037. Links disable speculative prefetch while date-dependent
-navigation is interim.
+that instant to `Africa/Kampala` when no browsing zone is supplied; a build cannot
+freeze the Today link. A shared `tz` resolves the browsing date from the same
+instant. The common browser clock updates navigation at local midnight and on
+focus, visibility or device-zone changes. An unzoned relative feed entry replaces
+its URL with the device zone and loads the corresponding full local-day window;
+explicit historical dates and applied zones remain stable. Open-tab feed rollover
+uses the applied zone's midnight. Forecast runs and schedules retain EAT. Links
+disable speculative prefetch while date-dependent navigation is interim.
 
 ## Locale and message organization
 

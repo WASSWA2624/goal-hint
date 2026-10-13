@@ -1,17 +1,23 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { getDateInTimeZone, getDayBoundsInTimeZone } from "@/domain/device-calendar";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "./messages";
 
 let timeZone: string = publicPolicy.reportingTimeZone;
+type DeviceCalendar = Readonly<{ zone: string; today: ReportingDate }>;
+let calendar: DeviceCalendar | null = null;
 const listeners = new Set<() => void>();
 let stop: (() => void) | null = null;
 
 function refreshTimeZone() {
   const next = Intl.DateTimeFormat().resolvedOptions().timeZone || publicPolicy.reportingTimeZone;
-  if (next === timeZone) return;
+  const today = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), next);
+  if (next === timeZone && calendar?.today === today) return;
   timeZone = next;
+  calendar = Object.freeze({ zone: next, today });
   listeners.forEach((listener) => listener());
 }
 
@@ -20,14 +26,21 @@ function subscribe(listener: () => void) {
   listeners.add(listener);
   if (!stop) {
     refreshTimeZone();
-    const visible = () => { if (document.visibilityState === "visible") refreshTimeZone(); };
-    window.addEventListener("focus", refreshTimeZone);
+    let timer: number;
+    const visible = () => {
+      if (document.visibilityState === "visible") refreshTimeZone();
+      window.clearTimeout(timer);
+      const now = utcInstantFromEpochMilliseconds(Date.now());
+      const midnight = getDayBoundsInTimeZone(getDateInTimeZone(now, timeZone), timeZone).endExclusive;
+      timer = window.setTimeout(visible, Math.min(60_000, Math.max(1, midnight - now)));
+    };
+    window.addEventListener("focus", visible);
     document.addEventListener("visibilitychange", visible);
-    const timer = window.setInterval(visible, 60_000);
+    visible();
     stop = () => {
-      window.removeEventListener("focus", refreshTimeZone);
+      window.removeEventListener("focus", visible);
       document.removeEventListener("visibilitychange", visible);
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
   }
   return () => {
@@ -41,6 +54,11 @@ const serverSnapshot = () => publicPolicy.reportingTimeZone;
 
 export function useDeviceTimeZone() {
   return useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+}
+
+/** Null during SSR/hydration; one shared clock then follows the device's civil day. */
+export function useDeviceCalendar() {
+  return useSyncExternalStore(subscribe, () => calendar, () => null);
 }
 
 /** SSR and hydration share a stable zone; mounted displays follow the device. */

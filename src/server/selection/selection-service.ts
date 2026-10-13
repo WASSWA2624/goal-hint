@@ -23,7 +23,7 @@ export function createDailySelectionService(options: Readonly<{
   }
   return Object.freeze({
     async run(scheduledFor: number, input?: DegradedSelectionAction, signal?: AbortSignal) {
-      const window = selectionWindow(scheduledFor);
+      const window = selectionWindow(scheduledFor, policy.windowDays ?? 7);
       let action: DegradedSelectionAction | null = null;
       authorize();
       if (input !== undefined) {
@@ -35,22 +35,23 @@ export function createDailySelectionService(options: Readonly<{
       }
       const lease = await options.store.acquire(window.runDate, policy, randomBytes(32).toString("hex"));
       if (!lease) return { status: "busy" as const };
+      const leaseMs = lease.leaseMs ?? policy.leaseMs;
       let lost = false, renewal = Promise.resolve();
       const timer = setInterval(() => {
         renewal = renewal.then(async () => {
-          if (!lost) try { await options.store.renew(lease, policy.leaseMs); } catch { lost = true; }
+          if (!lost) try { await options.store.renew(lease, leaseMs); } catch { lost = true; }
         });
-      }, Math.max(100, Math.floor(policy.leaseMs / 3)));
+      }, Math.max(100, Math.floor(leaseMs / 3)));
       const checkpoint = async () => {
         await renewal;
         if (lost || signal?.aborted) return selectionFail("lost-lease");
-        authorize(); await options.store.renew(lease, policy.leaseMs);
+        authorize(); await options.store.renew(lease, leaseMs);
       };
       try {
         const previous = await options.store.inspect(lease.runId);
         if (!previous?.manifest) {
           // Dates beyond a plan's horizon are never requested and remain explicit missing coverage.
-          for (let offset = 0; offset < (policy.importDays ?? 7); offset++) {
+          for (let offset = 0; offset < (policy.importDays ?? policy.windowDays ?? 7); offset++) {
             const date = addReportingDays(window.runDate, offset);
             for (let attempt = 0; attempt < policy.attemptsPerInvocation; attempt++) {
               await checkpoint();

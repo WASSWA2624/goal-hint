@@ -1,7 +1,8 @@
 import { validKickoffTime, type KickoffTimeFilter } from "./kickoff-time.ts";
 import {
-  addReportingDays, parseReportingDate, validateReportingDateRange, type ReportingDate,
+  addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type ReportingDate, type ReportingDateRange,
 } from "./calendar.ts";
+import { getDateInTimeZone, getDayBoundsInTimeZone, validTimeZone } from "./device-calendar.ts";
 import { isMarketFamily, type MarketFamily } from "./markets.ts";
 import { formatOddsRange, oddsRules, parseOddsRange, type OddsRange } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
@@ -29,6 +30,8 @@ export type FeedQuery = Readonly<{
   locale: Locale;
   dates: DateSelection;
   search: string;
+  /** Browsing calendar zone; independent of whether a kickoff-time constraint is active. */
+  zone?: string | null;
   /** Local kickoff minutes and IANA device zone; absent means all times. */
   time?: KickoffTimeFilter | null;
   /** Canonical competition IDs, sorted; empty means every league. */
@@ -153,16 +156,32 @@ export function isAnyProbability(range: ProbabilityRange): boolean {
   return range.min === anyProbability.min && range.max === anyProbability.max;
 }
 
-export function resolveFeedDates(query: Pick<FeedQuery, "dates">, today: ReportingDate) {
+type FeedCalendarQuery = Partial<Pick<FeedQuery, "zone" | "time">>;
+export function getFeedToday(query: FeedCalendarQuery, asOf: number): ReportingDate {
+  const zone = query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone;
+  if (!validTimeZone(zone)) fail();
+  return getDateInTimeZone(utcInstantFromEpochMilliseconds(asOf), zone);
+}
+
+/** `today` is the caller's browsing date; server callers may supply one captured instant instead. */
+export function resolveFeedDates(query: Pick<FeedQuery, "dates"> & FeedCalendarQuery, today: ReportingDate, asOf?: number): ReportingDateRange {
+  const zone = query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone;
+  if (!validTimeZone(zone)) fail();
+  const localToday = asOf === undefined ? today : getFeedToday(query, asOf);
   const dates = query.dates;
+  let range: ReportingDateRange;
   if (dates.kind === "date" || dates.kind === "range") {
     const from = dates.kind === "date" ? dates.date : dates.from;
-    return validateReportingDateRange(from, dates.kind === "range" ? dates.to : from, feedQueryRules.maximumDays);
+    range = validateReportingDateRange(from, dates.kind === "range" ? dates.to : from, feedQueryRules.maximumDays);
+  } else {
+    const preset = presetDays[dates.kind];
+    if (!preset) fail();
+    const from = addReportingDays(parseReportingDate(localToday), preset.offset);
+    range = validateReportingDateRange(from, addReportingDays(from, preset.days - 1), feedQueryRules.maximumDays);
   }
-  const preset = presetDays[dates.kind];
-  if (!preset) fail();
-  const from = addReportingDays(parseReportingDate(today), preset.offset);
-  return validateReportingDateRange(from, addReportingDays(from, preset.days - 1), feedQueryRules.maximumDays);
+  if (zone === publicPolicy.reportingTimeZone) return range;
+  const start = getDayBoundsInTimeZone(range.startDate, zone), end = getDayBoundsInTimeZone(range.endDate, zone);
+  return { ...range, window: { startInclusive: start.startInclusive, endExclusive: end.endExclusive } };
 }
 
 /** True for the slider's two extremes (1.01 and 1000.00): no bound at all, so the canonical form is null. */
@@ -180,7 +199,7 @@ function oddsRange(value: string | undefined, enabled: boolean): OddsRange | nul
 
 /** Shared by pages, future public endpoints and browser URL controls. No clock reads.
  * `providerOdds` defaults to publicPolicy.features.providerOdds; only isolated tests override it. */
-export function parseFeedQuery(input: FeedParameters, context: { today: ReportingDate; locale?: string; routeDate?: string; providerOdds?: boolean }): FeedQuery {
+export function parseFeedQuery(input: FeedParameters, context: { today: ReportingDate; asOf?: number; locale?: string; routeDate?: string; providerOdds?: boolean }): FeedQuery {
   const values = parameters(input);
   const get = (key: string) => values.get(key);
   const date = get("date");
@@ -203,11 +222,12 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
       dates = { kind: (when ?? "today") as FeedDatePreset };
     }
   }
-  resolveFeedDates({ dates }, context.today);
   const timeFrom = get("timeFrom"), timeTo = get("timeTo"), zone = get("tz");
-  const time = timeFrom === undefined && timeTo === undefined && zone === undefined ? null
+  if (zone !== undefined && !validTimeZone(zone)) fail();
+  const time = (timeFrom === undefined || timeFrom === "") && (timeTo === undefined || timeTo === "") ? null
     : { from: timeFrom ?? "", to: timeTo ?? timeFrom ?? "", zone: zone ?? "" };
   if (time && !validKickoffTime(time)) fail();
+  resolveFeedDates({ dates, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}) }, context.today, context.asOf);
   const rawSearch = get("q") ?? "";
   if (rawSearch.length > feedQueryRules.maximumSearchLength || /[\u0000-\u001f\u007f]/u.test(rawSearch)) fail();
   const search = rawSearch.normalize("NFC").trim().replace(/\s+/gu, " ");
@@ -221,7 +241,8 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
   const by = get("sort") ?? "kickoff", direction = get("dir");
   if (by !== "kickoff" && by !== "probability" || direction !== undefined && direction !== "asc" && direction !== "desc") fail();
   return {
-    locale: resolveLocale(context.locale), dates, search, ...(time ? { time } : {}), leagues, countries, status: parseFeedStatus(get("status")), markets,
+    locale: resolveLocale(context.locale), dates, search, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}),
+    leagues, countries, status: parseFeedStatus(get("status")), markets,
     probability: probabilityRange(get("prob")), odds: oddsRange(get("odds"), context.providerOdds ?? publicPolicy.features.providerOdds), picks,
     sort: { by, direction: direction ?? defaultSortDirection[by] },
     page: integer(get("page"), 1, feedQueryRules.maximumPage),
@@ -244,6 +265,10 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   if (query.time) {
     if (!validKickoffTime(query.time)) fail();
     result.set("timeFrom", query.time.from); result.set("timeTo", query.time.to); result.set("tz", query.time.zone);
+  }
+  if (query.zone !== undefined && query.zone !== null) {
+    if (!validTimeZone(query.zone) || query.time && query.time.zone !== query.zone) fail();
+    result.set("tz", query.zone);
   }
   if (query.search) result.set("q", query.search);
   const leagues = [...new Set(query.leagues)].sort(), countries = [...new Set(query.countries.map((item) => item.normalize("NFC")))].sort();
@@ -271,7 +296,8 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
       checked.locale !== query.locale || !sameList(checked.leagues, leagues) || !sameList(checked.countries, countries) ||
       checked.status !== query.status || !sameList(checked.markets, markets) ||
       checked.probability.min !== query.probability.min || checked.probability.max !== query.probability.max ||
-      checked.odds?.min !== odds?.min || checked.odds?.max !== odds?.max || checked.picks !== query.picks) fail();
+      checked.odds?.min !== odds?.min || checked.odds?.max !== odds?.max || checked.picks !== query.picks ||
+      checked.zone !== (query.zone ?? query.time?.zone)) fail();
   return result;
 }
 
@@ -287,7 +313,7 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
   return search ? `${path}?${search}` : path;
 }
 
-/** Data/list identity excludes page position, and includes resolved EAT dates and locale. */
+/** Data/list identity excludes page position and includes resolved browsing dates, zone and locale. */
 export function feedQueryKey(query: FeedQuery, today: ReportingDate): string {
   const range = resolveFeedDates(query, today);
   const resolved: FeedQuery = { ...query, page: 1, dates: range.dayCount === 1

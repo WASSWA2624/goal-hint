@@ -17,7 +17,8 @@ type Denial = Extract<CostDecision, { status: "denied" }>;
 type Context = { period: CostPeriodPolicy; now: UtcInstant };
 export type CostSummary = Readonly<CostTotals & {
   status: "summary"; accountId: string; category: CostCategory; periodId: string; capUsdPicos: bigint;
-  openingChargedUsdPicos: bigint; remainingUsdPicos: bigint; overageBlocked: boolean;
+  openingChargedUsdPicos: bigint; remainingUsdPicos: bigint | null; overageBlocked: boolean;
+  billingMode?: "capped" | "usage-based";
 }>;
 export type CostJobSummary = Readonly<CostTotals & {
   status: "summary"; accountId: string; category: CostCategory; jobId: string; costCapUsdPicos: bigint;
@@ -57,7 +58,8 @@ function timeDenial(job: CostJobPolicy, now: UtcInstant, timeoutMs: number, char
 }
 function capacityDenial(attempt: CostAttempt, job: CostJobPolicy, ctx: Context,
   periodTotals: CostTotals, jobTotals: CostTotals): Denial | null {
-  if (ctx.period.openingChargedUsdPicos + periodTotals.liabilityUsdPicos + attempt.maximumCostUsdPicos > ctx.period.capUsdPicos) {
+  if (ctx.period.billingMode !== "usage-based" &&
+    ctx.period.openingChargedUsdPicos + periodTotals.liabilityUsdPicos + attempt.maximumCostUsdPicos > ctx.period.capUsdPicos) {
     return denied("budget-exhausted");
   }
   if (jobTotals.liabilityUsdPicos + attempt.maximumCostUsdPicos > job.costCapUsdPicos) return denied("job-budget-exhausted");
@@ -158,7 +160,7 @@ export function createCostService(options: Readonly<{
     return attempt;
   }
   async function validateReservation(tx: CostTransaction, attempt: CostAttempt, job: CostJobPolicy, ctx: Context): Promise<Denial | null> {
-    if ((await tx.totals()).hasOverage) return denied("budget-exhausted");
+    if (ctx.period.billingMode !== "usage-based" && (await tx.totals()).hasOverage) return denied("budget-exhausted");
     const periodTotals = await tx.totals({ periodId: ctx.period.periodId });
     const jobTotals = await tx.totals({ jobId: job.jobId });
     const capacity = capacityDenial(attempt, job, ctx, periodTotals, jobTotals);
@@ -265,13 +267,20 @@ export function createCostService(options: Readonly<{
         if (ctx.now >= permit.launchBefore || attempt.periodId !== ctx.period.periodId) return denied("dispatch-expired");
         const job = await tx.job(attempt.request.jobId);
         if (!job) return denied("unknown-job");
-        const time = timeDenial(job, ctx.now, attempt.request.timeoutMs);
+        // Totals already include this reservation. Recheck after any concurrent
+        // receipt, without counting the reserved request a second time.
+        const jobTotals = await tx.totals({ jobId: job.jobId });
+        if (jobTotals.liabilityUsdPicos > job.costCapUsdPicos) return denied("job-budget-exhausted");
+        if (jobTotals.requests > BigInt(job.requestLimit)) return denied("request-limit");
+        if (jobTotals.inputTokens > BigInt(job.inputTokenLimit) || jobTotals.outputTokens > BigInt(job.outputTokenLimit)) return denied("token-limit");
+        if (jobTotals.billedUnits > BigInt(job.billedUnitLimit)) return denied("billed-unit-limit");
+        const time = timeDenial(job, ctx.now, attempt.request.timeoutMs, jobTotals.elapsedMs - BigInt(attempt.request.timeoutMs));
         if (time) return time;
         if (ctx.now + attempt.request.timeoutMs > ctx.period.endsAt || ctx.now + attempt.request.timeoutMs > attempt.rate.endsAt) return denied("period-inactive");
         if (!verified(() => authority.verifyJob(job)) || !verified(() => authority.verifyRate(attempt.rate))
           || !verified(() => authority.verifyRequest(attempt.request, job, ctx.period, attempt.rate))) return denied("unverified-policy");
         // A concurrently reconciled overage also invalidates an earlier permit.
-        if ((await tx.totals()).hasOverage) return denied("budget-exhausted");
+        if (ctx.period.billingMode !== "usage-based" && (await tx.totals()).hasOverage) return denied("budget-exhausted");
         attempt.state = "dispatched";
         attempt.dispatchedAt = ctx.now;
         await tx.saveAttempt(attempt);
@@ -356,8 +365,10 @@ export function createCostService(options: Readonly<{
         const liabilityUsdPicos = value.liabilityUsdPicos + period.openingChargedUsdPicos;
         return Object.freeze({ status: "summary" as const, accountId, category, periodId: period.periodId,
           capUsdPicos: period.capUsdPicos, openingChargedUsdPicos: period.openingChargedUsdPicos,
-          ...value, liabilityUsdPicos, remainingUsdPicos: max(period.capUsdPicos - liabilityUsdPicos),
-          overageBlocked: (await tx.totals()).hasOverage });
+          ...value, liabilityUsdPicos,
+          ...(period.billingMode ? { billingMode: period.billingMode } : {}),
+          remainingUsdPicos: period.billingMode === "usage-based" ? null : max(period.capUsdPicos - liabilityUsdPicos),
+          overageBlocked: period.billingMode !== "usage-based" && (await tx.totals()).hasOverage });
       });
     },
     async jobSummary(jobId: string): Promise<CostJobSummary | Denial> {

@@ -134,7 +134,7 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_DATABASE_ACCESS_REF",
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES", "GOAL_HINT_DEPLOYMENT_ENVIRONMENT",
     "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
-    "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED",
+    "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
   ]);
   documentedKeys.delete("NODE_ENV");
   assert.deepEqual(Object.keys(env).sort(), [...documentedKeys].sort());
@@ -149,8 +149,10 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, ...unresolvedChoices } = policy.choices;
-  assertUnresolved(unresolvedChoices);
+  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, budgets, ...unresolvedChoices } = policy.choices;
+  const { aiBillingMode, ...unresolvedBudgets } = budgets;
+  assert.equal(aiBillingMode, "capped");
+  assertUnresolved({ ...unresolvedChoices, budgets: unresolvedBudgets });
   // Odds imports default off, with no bookmaker or display-rights reference assumed (052).
   assert.deepEqual(odds, { enabled: false, bookmakerId: null, rightsRef: null });
   // Team codes are on by default; the live runner's spare-quota gate still keeps them off on Free and slow plans.
@@ -396,6 +398,30 @@ test("separate AI and research caps must be positive and approved for paid calls
     policyError(() => parseRuntimePolicy({ ...env, [field]: undefined }), [field]);
   }
   policyError(() => parseRuntimePolicy({ ...env, GOAL_HINT_BUDGET_APPROVAL_REF: undefined }), ["GOAL_HINT_BUDGET_APPROVAL_REF"]);
+});
+
+test("usage-based AI has no monthly ceiling while request bounds and authorization remain required", () => {
+  const env = { ...syntheticProduction, GOAL_HINT_AI_BILLING_MODE: "usage-based",
+    GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: undefined };
+  const policy = parseRuntimePolicy(env);
+  assert.equal(policy.choices.budgets.aiBillingMode, "usage-based");
+  assert.equal(policy.choices.budgets.aiMonthlyUsdCents, null);
+  assert.doesNotThrow(() => assertOperationAllowed(policy, "ai", verifySyntheticEvidence));
+  assert.doesNotThrow(() => assertOperationAllowed(policy, "publication", verifySyntheticEvidence));
+  for (const field of ["AI_API_KEY", "GOAL_HINT_AI_PROVIDER", "GOAL_HINT_AI_MODEL", "GOAL_HINT_JOB_TOKEN_LIMIT",
+    "GOAL_HINT_JOB_TIMEOUT_SECONDS", "GOAL_HINT_JOB_REQUEST_LIMIT", "GOAL_HINT_BUDGET_APPROVAL_REF"]) {
+    policyError(() => parseRuntimePolicy({ ...env, [field]: undefined }), [field]);
+  }
+  policyError(() => parseRuntimePolicy({ ...env, GOAL_HINT_AI_BILLING_MODE: "unknown" }), ["GOAL_HINT_AI_BILLING_MODE"]);
+  policyError(() => assertOperationAllowed(policy, "ai", () => false), ["GOAL_HINT_BUDGET_APPROVAL_REF"]);
+  policyError(() => parseRuntimePolicy({ ...env, ...syntheticResearch, GOAL_HINT_RESEARCH_MONTHLY_BUDGET_USD_CENTS: undefined }),
+    ["GOAL_HINT_RESEARCH_MONTHLY_BUDGET_USD_CENTS"]);
+});
+
+test("usage-based AI does not inherit an obsolete capped shadow ceiling", () => {
+  assert.doesNotThrow(() => parseRuntimePolicy({ ...syntheticShadow, GOAL_HINT_AI_BILLING_MODE: "usage-based",
+    GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: "1", GOAL_HINT_SHADOW_BUDGET_USD_CENTS: "100" }));
+  assert.equal(parseRuntimePolicy({}).choices.budgets.aiBillingMode, "capped");
 });
 
 test("private shadow can collect quality evidence with bounded approved prerequisites", () => {

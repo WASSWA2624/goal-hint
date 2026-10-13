@@ -8,6 +8,7 @@ import { FeedFilterActions, FeedFilters, type FeedFilterDraftStatus } from "@/co
 import { FeedFilterToolbar, FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
 import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
+import { deviceFeedQuery } from "@/domain/device-feed";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { MatchCard } from "@/components/match/match-card";
@@ -23,6 +24,7 @@ import type { MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { feedReturnStorageKey } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
+import { useDeviceCalendar } from "@/i18n/use-messages";
 import type { FeedPageResult } from "@/server/matches/feed-page";
 import { FeedStateProvider } from "@/state/provider";
 import { media } from "@/styles/theme";
@@ -49,7 +51,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const { view, phase, error, root, retry, refresh } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
   const { data, records } = view;
   // Read when each wait is armed, so the kickoff window always uses the current clock.
-  useLiveRefresh({ today, enabled, interval: () => feedRefreshInterval(data, records, Date.now()), refresh,
+  useLiveRefresh({ today, zone: query.zone ?? query.time?.zone ?? null, enabled, interval: () => feedRefreshInterval(data, records, Date.now()), refresh,
     rollover: (day) => {
       if (isFeedDatePreset(query.dates.kind) && query.page !== 1) {
         router.replace(feedQueryHref({ ...query, page: 1 }, day), { scroll: false });
@@ -78,6 +80,13 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
+  const device = useDeviceCalendar();
+  const deviceQuery = device ? deviceFeedQuery(query, device.zone) : null;
+  const deviceHref = deviceQuery && device ? feedQueryHref(deviceQuery, device.today) : null;
+  useEffect(() => {
+    if (deviceHref) startTransition(() => router.replace(deviceHref, { scroll: false }));
+  }, [deviceHref, router]);
+  const changingDay = deviceHref !== null;
   // The body toggle reveals fields without hiding search, actions or the applied summary.
   const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId();
   const filtersFormId = useId();
@@ -106,7 +115,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     });
   }, [failed, href, pending, router, today]);
   const toggleFilters = useCallback(() => setFiltersOpen((open) => !open), []);
-  const announcement = pending ? messages.text("feed.filters.loading") : result.error
+  const announcement = pending || changingDay ? messages.text("feed.filters.loading") : result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
     : paginationStatus?.href === href ? paginationStatus.message
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? messages.plural("feed.matchCount", result.data.total)
@@ -120,7 +129,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     {controls}
     {range.endDate > createPredictionWindow(today).lastDate && <FeedNote>{messages.text("feed.sevenDayAvailability")}</FeedNote>}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
-    <Results $gap="md" aria-busy={pending} data-feed-results>
+    <Results $gap="md" aria-busy={pending || changingDay} data-feed-results>
       {!visible && <ResultsToolbar query={query} total={null} first={0} last={0} />}
       {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
         description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}
@@ -133,7 +142,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />
       </Stack>}
       {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate}
-        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} />}
+        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !changingDay && !result.error} onStatus={onPaginationStatus} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;
@@ -142,7 +151,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
 export function FeedSurface(props: Parameters<typeof FeedSurfaceContent>[0]) {
   // Cards render from server props and the store reads only the draft, so the bootstrap skips
   // validating the page's records again during hydration.
-  return <FeedStateProvider key={props.query.locale} initial={{ query: props.query, today: props.today, data: null }}>
+  return <FeedStateProvider key={`${props.query.locale}:${props.query.zone ?? props.query.time?.zone ?? "reporting"}`} initial={{ query: props.query, today: props.today, data: null }}>
     <FeedSurfaceContent {...props} />
   </FeedStateProvider>;
 }

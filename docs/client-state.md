@@ -21,8 +21,9 @@ and nothing reads bootstrapped records, so hydration skips re-validating them.
 The match page passes it too. A loaded page can have `records: []` and is
 **ready**. Bootstrap position must equal `query.page`.
 
-The filter provider persists across query changes, keyed by reporting day and
-locale. Applied server query props explicitly dispatch `queryApplied`, preserving
+The filter provider persists across query changes within one locale and browsing
+zone. A zone change creates a fresh store so a device day before the EAT bootstrap
+does not become a backwards reporting-calendar event. Applied server query props explicitly dispatch `queryApplied`, preserving
 mounted controls and keyboard focus. The surrounding client surface retains the
 last successful response across failed filter navigations, with its own query.
 Prompt 034 keeps accepted whole-record pages in `useFeedPagination`, scoped to
@@ -37,8 +38,9 @@ at the root.
 
 `src/domain/feed-query.ts` owns `FeedQuery`, `feedDefaults`, parsing,
 serialization, route generation and canonical list identity. It uses the shared
-calendar and market domain. All operations take an explicit EAT `today`; none
-read a clock. The pages already use this parser and return 404 for invalid
+calendar and market domain. Operations take the selected calendar's explicit
+`today`; a supplied captured `asOf` resolves it in `query.zone`, and no domain
+helper reads a clock. The pages already use this parser and return 404 for invalid
 parameters. Later endpoints should use the same parser with their own public
 validation response, rather than accepting a more permissive query.
 
@@ -46,6 +48,7 @@ validation response, rather than accepting a more permissive query.
 | --- | --- |
 | Date | `/en` defaults to relative `today`; `when=today`, `tomorrow`, or `next-7-days` retains that relative intent. |
 | Explicit date | `date=YYYY-MM-DD` is accepted at the feed root; canonical href is `/en/predictions/YYYY-MM-DD`. |
+| Browsing zone | `tz` accepts an IANA timezone independently of time bounds; relative dates and complete-day UTC boundaries use that zone. Clear preserves it. Unzoned explicit dates retain EAT boundaries. |
 | Range | `from` + `to` at the root, or `to` with the dated route. Inclusive, ordered, maximum seven days, including historical ranges. |
 | Search | `q`, maximum 120 UTF-16 code units before normalization; NFC, trimmed, collapsed whitespace, no ASCII control characters. Empty is omitted. |
 | League | `league`, canonical identifier text, 1–128 ASCII letters/digits/underscore/hyphen with an alphanumeric first character; absent or empty means null. No display-name lookup. |

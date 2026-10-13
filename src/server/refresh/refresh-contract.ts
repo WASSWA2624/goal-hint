@@ -38,7 +38,7 @@ export type RefreshPlan = Readonly<{
   impliedExtension?: ImpliedMarketExtensionInput;
 }>;
 export type RefreshIntent = Readonly<{ member: RefreshMember; plan: RefreshPlan; pin: ModelPin | null }>;
-export type RefreshPhase = "evidence" | "ai" | "fallback" | "observation";
+export type RefreshPhase = "preparation" | "evidence" | "evidence-empty" | "ai" | "fallback" | "observation";
 export type RefreshOutcome = Readonly<{
   jobId: string; runId: string; fixtureId: string; cycleId: string; at: number;
   outcome: "published" | "retained-previous" | "unavailable" | "skipped" | "failed";

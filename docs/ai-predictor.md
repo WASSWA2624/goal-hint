@@ -5,13 +5,20 @@ pinned model configuration into validated probability candidates. These are
 private candidates for later fallback and publication work; this layer creates
 no prediction revisions, cycle locks, scheduler or public endpoint.
 
-**No actual AI provider, model or calibration configuration has been selected.**
-The provider bridge is a local integration contract, and no provider-specific
-HTTP transport, verified current structured-output API or actual rate selection
-is implemented. The required live integration is incomplete. Prompt 012 remains
-unchecked in [the development tracker](../dev-tracker.md). Synthetic model names,
-permissions, receipts and forecast outputs used in tests establish local
-contract behavior only.
+The owner selected **OpenAI primary with API-Football fallback**, using
+usage-based billing without an application monthly spending cap. The reviewed
+default is `gpt-6.1-sol`, through the Responses API. Its concrete transport and
+live runner binding are implemented. Activation still requires the private key,
+the exact owner approval references and a counted smoke check; synthetic tests
+make no paid provider calls. Forecasts remain provisional, with no evaluated
+calibration or accuracy claim.
+
+Prepared private runner choices keep AI disabled until the key is installed.
+They name OpenAI, `gpt-6.1-sol`, usage-based billing, 100,000 total job tokens and
+a 300-second configured job limit; no monthly AI cap is supplied. The owner
+reference for calibration records an explicitly provisional **none** policy.
+It does not claim fitted calibration, evaluated forecasts or known training
+windows.
 
 Read [the decision register](implementation-decisions.md) for OP-09–11 and
 OP-13–15: provider/account/model selection, actual pricing, separate budgets,
@@ -32,12 +39,59 @@ licensed news adapter and approved evidence rules from 011 also remain pending.
 | `predictor-output.ts` | `validatePredictorOutput` | Exact identity, original clocks, genuine citations, semantic grounding and shared market validation. |
 | `predictor-calibration.ts` | `applyPredictorCalibration` | Explicit evaluated transformation hooks and provisional/evaluation labels. |
 | `predictor-service.ts` | `createPredictorService(...).predict` | One bounded pinned invocation, current authority checks and fallback-ready candidate/denial results. |
+| `openai-transport.ts` | `createOpenAiBinding` | One bounded Responses POST, strict schema, authentic usage/clock receipts and no tools or implicit retries. |
 
 All modules above live under `src/server/predictor/` and are server-only. They
 reuse [fixture evidence](fixture-evidence.md), the shared regulation market
 domain and [research/AI cost control](research-cost-control.md). Permission and
 artifact verifiers are trusted synchronous server code; asynchronous approvals
 do not authorize work. Source text and model output cannot supply those verifiers.
+
+## Live OpenAI binding
+
+`src/server/live/live-ai-model.ts`, `live-ai-plan.ts`, `live-ai-evidence.ts` and
+`live-ai.ts` compose the transport with the existing immutable model registry,
+cost ledger, evidence store and refresh workflow. `GOAL_HINT_AI_ENABLED=false`
+keeps the original fallback path and requires no AI key. When enabled, the
+runner checks `GOAL_HINT_AI_PROVIDER=openai`, `GOAL_HINT_AI_MODEL=gpt-6.1-sol`,
+`AI_API_KEY`, a calibration configuration reference, explicit request/token/time
+limits and owner approval for `${GOAL_HINT_EVIDENCE_POLICY_REF}#openai-transmission`.
+An unreviewed model is rejected until its contract and prices are reviewed.
+
+The binding posts to `https://api.openai.com/v1/responses` with `store:false`,
+no tools, Standard service tier, low reasoning effort and strict
+`text.format` JSON schema. The contract and prices were reviewed on 13 October
+2026 against the [official model card](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
+and [Structured Outputs guide](https://developers.openai.com/api/docs/guides/structured-outputs).
+Standard short-context rates are $2 per million ordinary input tokens, $0.10
+for cached reads, $2.50 for cache writes and $10 for output, including reasoning
+tokens. Request bytes plus framing form a conservative token reservation;
+usage receipts establish measured amounts. Missing or inconsistent usage stays
+unknown with conservative liability. Measured cost is separate from an invoice.
+
+`GOAL_HINT_AI_BILLING_MODE=usage-based` uses a zero-cap sentinel only for the AI
+monthly ledger partition. It preserves durable accounting and per-request,
+per-job, token, time and fallback-reserve limits. Capped mode retains an explicit
+monthly budget. Accounting months use UTC and account identity survives key
+rotation. Model/rate changes require a reviewed immutable configuration.
+
+Each new refresh first imports bounded team history, then captures its immutable
+analysis cutoff. Primary input contains up to five verified regulation results
+per team, derived recent form, scheduled kickoff gaps and canonical home/away
+assignment. Original retrieval/update clocks are retained. At least three
+history matches per team plus form, venue and rest are required. Ready-made
+provider predictions and odds are excluded. Injuries, lineups, news, advanced
+statistics and actual recovery remain unknown; no news adapter is enabled.
+Reasons display exact cited factual summaries, preserving the model's accepted
+probabilities. The transport never treats request creation as generation time;
+unknown completion time remains flagged under the reviewed retrieval-age policy.
+
+Preparation is recorded once before the pinned intent. An interrupted import
+is not repeated on job restart. A safely recoverable primary evidence outage can
+save a distinct empty snapshot with explicit missingness and proceed to
+fallback. Authorization, identity, clock and conflicting-request failures remain
+failures. API-Football fallback can supply match result and derived double
+chance; it cannot invent total-goals or BTTS distributions when AI fails.
 
 ## Immutable model identity and pins
 
@@ -331,11 +385,9 @@ tests exercise immutable replay, independent clients, native constraints and
 least-privilege behavior. These tests make no AI or research provider call and
 establish no subscription, rights, model quality or production readiness.
 
-Before a live trial, select and implement the actual adapter using current
-official structured-output and rate documentation; approve the exact model,
-calibration/evaluation configuration, source transmission rights and all
-account/budget/bounds/freshness records. Run a bounded accounted integration
-smoke check only when those inputs and credentials exist. Record actual results
+Before a live trial, supply the private key and approve the exact provisional
+model, source transmission and account/bounds/freshness records. Run a bounded
+accounted integration smoke check only when those inputs exist. Record actual results
 in [development progress](development-progress.md); leave live acceptance and
 012's tracker checkbox pending until its required implementation and checks are
 complete.

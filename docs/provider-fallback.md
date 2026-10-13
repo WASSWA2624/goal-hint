@@ -12,9 +12,11 @@ zero dispatched requests; every fallback coverage, pre-match, freshness and
 rights requirement is untested. OP-07, OP-08 and OP-11 in the
 [decision register](implementation-decisions.md) still require source-specific
 freshness, unknown-time handling, permitted retention/reuse and job allowances.
-The actual AI provider/model and calibration selection remain pending under
-OP-15. Synthetic scenarios cannot resolve these operating choices or qualify an
-account, source mapping or permission.
+The owner has selected OpenAI primary (`gpt-6.1-sol`) with usage-based billing
+and API-Football fallback; the concrete [live AI binding](ai-predictor.md#live-openai-binding)
+is implemented. Its private key and counted activation check remain required.
+Calibration stays explicitly unevaluated/provisional. Synthetic scenarios
+cannot qualify an account, source mapping or permission.
 
 ## Market support and source evidence
 
@@ -132,6 +134,15 @@ Retain every valid AI source group. Attempt fallback for missing or invalid
 families, or AI failure, timeout, insufficient evidence or exhausted budget,
 while current eligibility, permissions, time and quota permit it. Missing news
 alone does not force fallback when the evidence threshold is satisfied.
+
+The live refresh first freezes verified canonical football history after its
+bounded preparation imports. Recoverable evidence storage/collection failure
+uses a separate stored empty snapshot and an explicit primary denial before
+fallback. Model lookup outages, timeout, refusal, invalid output, missing
+evidence and cost denials dispatch no additional AI attempt. Revoked approval,
+changed fixture identity, conflicting requests or clock regression cannot use
+this recovery path. Every fallback still needs the existing football allowance
+and fresh status observation before atomic publication.
 
 Recheck AI age using its original pinned `outputTiming` policy. A previously
 validated AI forecast that has expired cannot survive because its probabilities

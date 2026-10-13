@@ -1,9 +1,9 @@
 import "server-only";
 
 import { z } from "zod";
-import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
-import { addReportingDays, createPredictionWindow, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate } from "../../domain/calendar.ts";
-import { feedQueryKey, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
+import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
+import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate } from "../../domain/calendar.ts";
+import { feedQueryKey, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
 import { matchFeedRules, matchFeedResponseSchema, type MatchFeedResponse } from "../../domain/match-feed.ts";
 import { createMessages, type TextKey } from "../../i18n/messages.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -13,16 +13,16 @@ import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
-import { feedSql, storedFeedCoverage, storedFeedRun } from "./feed-read.ts";
+import { feedSql, storedFeedCoverage, storedFeedRunContext } from "./feed-read.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
 
 export function parseMatchFeedQuery(input: FeedParameters, today: ReportingDate,
-  context: Readonly<{ locale?: string; routeDate?: string; providerOdds?: boolean }> = {}) {
+  context: Readonly<{ locale?: string; routeDate?: string; providerOdds?: boolean; asOf?: number }> = {}) {
   try {
     if (input instanceof URLSearchParams && Buffer.byteLength(input.toString(), "utf8") > matchFeedRules.maximumQueryBytes) throw new Error();
-    const query = parseFeedQuery(input, { ...context, today }), range = resolveFeedDates(query, today);
+    const query = parseFeedQuery(input, { ...context, today }), range = resolveFeedDates(query, today, context.asOf);
     if (new Date(range.window.startInclusive).getUTCFullYear() < 1000) throw new Error();
     return query;
   } catch { throw new MatchFeedError("invalid-query"); }
@@ -45,13 +45,13 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   return Object.freeze({ async query(input: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}): Promise<MatchFeedResponse> {
-    const asOf = clock.now(), today = getReportingDate(asOf), query = parseMatchFeedQuery(input, today, { ...context, providerOdds });
-    const range = resolveFeedDates(query, today), window = createPredictionWindow(today), messages = createMessages(query.locale);
-    const localDays = query.time ? kickoffTimeWindows(range, { ...query.time, from: "00:00", to: "23:59" }) : null;
+    const asOf = clock.now(), reportingToday = getReportingDate(asOf);
+    const query = parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf });
+    const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
+    const messages = createMessages(query.locale);
     // Provider receipts and invalidations are keyed by EAT dates, which can straddle local dates.
-    const sourceRange = localDays?.length ? validateReportingDateRange(
-      getReportingDate(utcInstantFromEpochMilliseconds(localDays[0]!.start)),
-      getReportingDate(utcInstantFromEpochMilliseconds(localDays[localDays.length - 1]!.end - 1)), feedQueryRules.maximumDays + 2) : range;
+    const sourceRange = validateReportingDateRange(getReportingDate(range.window.startInclusive),
+      getReportingDate(utcInstantFromEpochMilliseconds(range.window.endExclusive - 1)), feedQueryRules.maximumDays + 2);
     try {
       if (query.search) await limiter.consume();
       const read = () => database.transaction(async (tx) => {
@@ -75,7 +75,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} WHERE ${sql.where}
           ORDER BY ${sql.order} LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`);
         const dates = await storedFeedCoverage(tx, sourceRange), partial = dates.some((date) => !date.authoritative);
-        const run = await storedFeedRun(tx, today, range);
+        const { run, window } = await storedFeedRunContext(tx, reportingToday, range);
         if (run?.phase === "updating") run.message = messages.text("feed.updating");
         const records = [];
         for (const { id } of rows) {
@@ -99,7 +99,8 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
-        query: { ...query, projection: 10, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
+        query: { ...query, projection: 11, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

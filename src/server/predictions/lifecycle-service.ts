@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createPredictionWindow, getPublicationDeadline, getReportingDate, isInWindow, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { createPredictionWindow, getPublicationDeadline, getReportingDate, isInWindow, predictionWindowDays, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { CatalogMutationCoordinator } from "../football/catalog-mysql-store.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
@@ -17,6 +17,7 @@ import { storedLifecycleReceipt } from "./lifecycle-read.ts";
 import { recordPublicationBarrier } from "./publication-barrier.ts";
 import { statusShowsPlay } from "./publication-eligibility.ts";
 import { storedPublicationBarrier } from "./publication-read.ts";
+import { selectionRunWindow, storedSelectionManifest } from "../selection/selection-read.ts";
 
 type Transaction = Prisma.TransactionClient;
 type Cutoff = ReturnType<typeof createCutoffLockingService>;
@@ -203,9 +204,21 @@ export function createScheduleLifecycleService(options: Readonly<{
       return database.transaction(async (tx) => {
         const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id: fixtureId }, include: { activeCycle: true, lifecycleState: true } });
         const now = await serverNow(tx), kickoff = fixture.kickoff?.getTime();
+        let window = createPredictionWindow(getReportingDate(now)), outsideOriginal = false;
+        if (fixture.activeCycle?.state === "open" && kickoff !== undefined) {
+          const member = await tx.runFixture.findFirst({ where: { fixtureId, cycleId: fixture.activeCycle.id },
+            orderBy: { run: { sequence: "desc" } }, include: { run: true } });
+          if (member) {
+            const manifest = await storedSelectionManifest(tx, member.run), original = selectionRunWindow(member.run);
+            if (!manifest?.entries.some((entry) => entry.fixtureId === fixtureId && entry.cycleId === fixture.activeCycle!.id))
+              return lifecycleFail("unavailable");
+            window = createPredictionWindow(getReportingDate(now), predictionWindowDays(original));
+            outsideOriginal = !isInWindow(utcInstantFromEpochMilliseconds(kickoff), original);
+          }
+        }
         const reason = fixture.lifecycleState?.issue ?? (fixture.status !== "scheduled" ? "status-ineligible"
           : fixture.activeCycle?.state !== "open" ? "closed-cycle" : kickoff === undefined ||
-            !isInWindow(utcInstantFromEpochMilliseconds(kickoff), createPredictionWindow(getReportingDate(now))) ? "outside-window"
+            outsideOriginal || !isInWindow(utcInstantFromEpochMilliseconds(kickoff), window) ? "outside-window"
             : fixture.activeCycle.cutoffAt.getTime() <= now ? "cutoff-passed" : null);
         return freezeEvidence({ eligible: reason === null, reason, trackResult: true as const, fixtureVersion: fixture.dataVersion });
       });
