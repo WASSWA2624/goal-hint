@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadMatchDetailPage, matchDetailMetadata, parseMatchDetailPageInput } from '../src/server/matches/detail-page.ts';
-import { detailAnalysis, detailMarket } from '../src/server/matches/detail-presentation.ts';
+import { detailAnalysis, detailMarket } from '../src/domain/detail-presentation.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 
 const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', clock = { now: () => 1234 };
