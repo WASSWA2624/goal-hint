@@ -7,6 +7,7 @@ import { toUtcIsoString } from "@/domain/calendar";
 import { countryCode } from "@/domain/country-code";
 import { countryFlagAsset } from "@/domain/country-flag";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
+import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
@@ -41,7 +42,7 @@ const pulse = keyframes`0%, 100% { opacity: 1; } 50% { opacity: 0.35; }`;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
 const tileRadius = "0px";
 /** Phone ticket: league and kickoff across the top, the match on the left, the pick on a stub on the right. */
-const stubWidth = "6.125rem";
+const stubWidth = "7.75rem";
 const settledOutcome = (outcome: OutcomeTone) => outcome === "correct" || outcome === "incorrect" || outcome === "void";
 const Card = styled.article`
   position: relative;
@@ -141,16 +142,6 @@ const LeagueLogo = styled.img`
   block-size: 12px;
   object-fit: contain;
   ${table} { inline-size: 16px; block-size: 16px; }
-`;
-/** Tile-only copy of the selected odds; the pick keeps the accessible one. */
-const TileOdds = styled.span`
-  display: none;
-  ${tile} {
-    display: inline;
-    flex: none;
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    &::after { content: "·"; margin-inline-start: 6px; }
-  }
 `;
 const When = styled.time`
   display: flex;
@@ -331,22 +322,22 @@ const LiveDot = styled.span`
   ${tile} { background: currentColor; animation: none; }
 `;
 
-/** Tile: the stub. Market and chance on top, the pick underneath; a settled pick takes its outcome colour. */
-const Pick = styled.div<{ $family: MarketFamily; $outcome: OutcomeTone; $available: boolean }>`
+/** Quiet prediction stub: market code, bold pick and its own odds, then the probability meter. */
+const Pick = styled.div<{ $family: MarketFamily; $available: boolean }>`
   ${tile} {
-    --gh-pick-ink: ${({ theme, $family, $outcome }) => settledOutcome($outcome) ? theme.color.text : theme.color.market[$family].text};
     grid-area: pick;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "tag value" "pick pick";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "tag result" "pick pick" "value value";
     align-content: center;
     align-items: center;
-    gap: 3px 4px;
+    gap: 3px 6px;
     min-inline-size: 0;
-    padding: 5px 7px 5px 8px;
-    background: ${({ theme, $family, $outcome, $available }) => !$available ? theme.color.surfaceMuted
-      : settledOutcome($outcome) ? theme.color.outcome[$outcome].background : theme.color.market[$family].soft};
-    border-inline-start: 1.5px dashed color-mix(in srgb, ${({ theme }) => theme.color.mutedText} 55%, transparent);
+    margin-block: 5px;
+    padding-inline: 7px 8px;
+    color: ${({ theme }) => theme.color.text};
+    background: ${({ theme }) => theme.color.surface};
+    border-inline-start: 3px solid ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.border};
   }
   ${table} { display: grid; grid-column: 7 / span 4; grid-template-columns: subgrid; align-items: center; }
 `;
@@ -368,15 +359,12 @@ const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
   ${tile} {
     grid-area: tag;
     justify-self: start;
-    [data-pick-state="settled"] > &, [data-pick-state="none"] > & { display: none; }
+    [data-pick-state="none"] > & { display: none; }
     > [data-pick-value] {
-      padding: 1px 4px;
       color: ${({ theme, $family }) => theme.color.market[$family].text};
-      background: ${({ theme }) => theme.color.surface};
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, ${({ theme, $family }) => theme.color.market[$family].solid} 45%, transparent);
       font-size: ${({ theme }) => theme.typography.scale.micro};
-      font-weight: ${({ theme }) => theme.typography.weight.heavy};
-      line-height: 1.4;
+      font-weight: ${({ theme }) => theme.typography.weight.medium};
+      line-height: 1.1;
       white-space: nowrap;
     }
   }
@@ -384,9 +372,8 @@ const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
     justify-self: start;
     padding: 2px 8px;
     color: ${({ theme, $family }) => theme.color.market[$family].text};
-    background: linear-gradient(135deg, ${({ theme, $family }) => theme.color.market[$family].soft} 0%, ${({ theme }) => theme.color.surface} 100%);
-    box-shadow: inset 3px 0 0 ${({ theme, $family }) => theme.color.market[$family].solid},
-      inset 0 0 0 1px color-mix(in srgb, ${({ theme, $family }) => theme.color.market[$family].solid} 38%, transparent);
+    background: ${({ theme, $family }) => theme.color.market[$family].soft};
+    border-inline-start: 3px solid ${({ theme, $family }) => theme.color.market[$family].solid};
     font-size: 0.75rem;
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
@@ -397,60 +384,54 @@ const Prediction = styled.span<{ $available: boolean }>`
 `;
 const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean }>`
   grid-column: 2;
+  color: ${({ theme, $available }) => $available ? theme.color.text : theme.color.mutedText};
+  > [data-pick-value] {
+    max-inline-size: 100%;
+    font-size: 0.8125rem;
+    font-weight: ${({ theme }) => theme.typography.weight.heavy};
+    line-height: 1.25;
+  }
   ${tile} {
     grid-area: pick;
     display: grid;
     gap: 2px;
-    > [data-pick-value] {
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      font-size: 0.71875rem;
-      font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    }
-    > b { font-size: 0.71875rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+    > b { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
     /* No pick: "No pick" and a short reason fill the stub. */
     [data-pick-state="none"] & {
-      grid-area: 1 / 1 / 3 / 3;
+      grid-area: 1 / 1 / 4 / 3;
       color: ${({ theme }) => theme.color.mutedText};
       > [data-pick-value] { font-size: ${({ theme }) => theme.typography.scale.micro}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
     }
   }
   ${table} {
     display: flex;
-    flex-direction: column;
     align-items: flex-start;
     min-inline-size: 0;
     > [data-pick-value] {
       max-inline-size: 100%;
-      padding: ${({ $available }) => $available ? "2px 8px" : "2px 0"};
-      font-size: 0.75rem;
-      font-weight: ${({ theme }) => theme.typography.weight.bold};
-      color: ${({ theme, $available }) => $available ? theme.color.onBrand : theme.color.mutedText};
-      background: ${({ theme, $family, $available }) => $available ? theme.color.market[$family].gradient : "transparent"};
+      padding: 4px 7px;
+      background: ${({ theme }) => theme.color.surface};
+      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+      border-inline-start: 3px solid ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.border};
     }
   }
 `;
 const Price = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.625rem;
-  font-weight: ${({ theme }) => theme.typography.weight.body};
-  line-height: 1.3;
-  max-inline-size: 100%;
-  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  text-overflow: ellipsis;
-  ${tile} { display: none; }
-  ${table} { margin-block-start: 3px; }
 `;
 const Probability = styled(PickCell)`
   grid-column: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   ${tile} {
     grid-area: value;
-    justify-content: flex-end;
     [data-pick-state="none"] & { display: none; }
   }
-  ${table} { display: inline-flex; align-items: center; gap: 8px; }
 `;
 const Percent = styled.span`
   font-size: 0.8125rem;
@@ -458,24 +439,19 @@ const Percent = styled.span`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   ${tile} {
-    color: var(--gh-pick-ink);
-    font-size: 1rem;
-    font-weight: ${({ theme }) => theme.typography.weight.heavy};
+    font-size: ${({ theme }) => theme.typography.scale.micro};
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
     line-height: 1;
-    letter-spacing: -0.01em;
   }
-  ${table} { min-inline-size: 2.5rem; }
 `;
 const Bar = styled.span<{ $family: MarketFamily }>`
-  display: none;
-  ${wideTable} {
-    display: block;
-    flex: 1;
-    block-size: 6px;
-    background: ${({ theme }) => theme.color.surfaceMuted};
-    overflow: hidden;
-    > span { display: block; block-size: 100%; background: ${({ theme, $family }) => theme.color.market[$family].gradient}; }
-  }
+  display: block;
+  flex: 1;
+  min-inline-size: 12px;
+  block-size: 6px;
+  background: ${({ theme }) => theme.color.surfaceMuted};
+  overflow: hidden;
+  > span { display: block; block-size: 100%; background: ${({ theme, $family }) => theme.color.market[$family].solid}; }
 `;
 const Result = styled(PickCell)<{ $outcome: OutcomeTone }>`
   grid-column: 4;
@@ -483,21 +459,26 @@ const Result = styled(PickCell)<{ $outcome: OutcomeTone }>`
   font-size: 0.75rem;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   > svg { display: none; }
-  /* Tile: a solid Won, Lost or Void tag in place of the market once the pick is settled. */
+  /* Settled outcomes remain explicit beside the market code without tinting the prediction. */
   ${tile} {
-    grid-area: tag;
-    justify-self: start;
+    grid-area: result;
+    justify-self: end;
     gap: 2px;
     min-block-size: 1.125rem;
     padding: 0 4px 0 2px;
-    color: ${({ theme }) => theme.color.surface};
-    background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
+    color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
+    background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
     font-size: 0.65625rem;
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
     line-height: 1;
     white-space: nowrap;
     > svg { display: block; flex: none; font-size: 0.75rem; }
     &[data-result-badge="pending"], &[data-result-badge="unavailable"] { display: none; }
+  }
+  ${table} {
+    justify-self: start;
+    padding: 3px 6px;
+    background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
   }
 `;
 
@@ -672,7 +653,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const locale = resolveLocale(requestedLocale);
   const messages = useMessages(locale);
   const titleId = `gh-match-${useId()}`;
-  const eligible = markets && markets.length > 0 ? markets : [selectedFamily ?? "match-result"];
+  const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
   const away = fixture.awayTeam.name?.trim() || messages.text("match.awayUnknown");
@@ -725,7 +706,6 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
         </CountryDetails>
         <CompetitionLogo key={fixture.competition.logoUrl} url={fixture.competition.logoUrl} /><LeagueName title={competition}>{competition}</LeagueName>
         {country && <VisuallyHidden>, {country}</VisuallyHidden>}</League>
-      {price && <TileOdds aria-hidden="true">{messages.text("details.odds")} {price.price}</TileOdds>}
       {fixture.kickoffAt === null ? <When as="p"><KickoffDetails>{messages.text("match.kickoffUnknown")}</KickoffDetails></When>
         : <When dateTime={toUtcIsoString(fixture.kickoffAt)} title={messages.reportingInstant(fixture.kickoffAt)}>
           <KickoffDetails>
@@ -740,7 +720,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
       <MatchState fixture={fixture} home={home} away={away} lead={lead} messages={messages} />
       <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null} />
     </Teams>
-    <Pick $family={shownFamily} $outcome={outcome} $available={prediction !== null} data-pick-state={pickState}>
+    <Pick $family={shownFamily} $available={prediction !== null} data-pick-state={pickState}>
       <MarketName $family={shownFamily} aria-hidden="true">
         <span data-pick-value="" data-mobile-only="">{messages.text(`market.code.${shownFamily}`)}</span>
         <span data-pick-value="" data-desktop-only="">{family}</span>
@@ -748,18 +728,19 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
       <Prediction $available={prediction !== null} data-prediction={selection ?? "none"} data-outcome={outcome} title={details ?? reason ?? undefined}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <>
-            <span data-pick-value="" data-desktop-only="">{messages.text(`market.pick.${selection}`)}</span>
-            <span data-pick-value="" data-mobile-only="">{messages.text(`market.pickPlain.${selection}`)}</span>
+            <span data-pick-value=""><span data-pick-selection="">{messages.text(shownFamily === "total-goals"
+              ? `market.pickPlain.${selection}` : `market.pick.${selection}`)}</span>{" "}
+              <Price data-pick-odds="" data-selected-odds={price ? "" : undefined}>({price?.price ?? "—"})</Price>
+            </span>
           </> : <>
             <b data-mobile-only="">{messages.text("match.noPick")}</b>
             <span data-pick-value="" data-mobile-only="">{messages.text(`match.noPickReason.short.${missing!}`)}</span>
-            <span data-pick-value="" data-desktop-only="">{messages.text("outcome.unavailable")}</span>
+            <span data-pick-value="" data-desktop-only="">{messages.text("match.noPick")}</span>
           </>}
-          {price && <Price data-selected-odds="">{messages.text("details.odds")} {price.price}</Price>}
         </PickShort>
         <Probability aria-hidden="true">
+          {prediction && <Bar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></Bar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
-          {prediction && <Bar $family={shownFamily}><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></Bar>}
         </Probability>
         {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: messages.text(`market.selection.${selection}`),
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
@@ -770,7 +751,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
         {settledOutcome(outcome) && resultIcon[outcome as keyof typeof resultIcon]}
         <span data-pick-value="">{outcome === "unavailable" ? "—" : messages.text(outcome === "correct" ? "match.result.won" : outcome === "incorrect" ? "match.result.lost" : `outcome.${outcome}`)}</span>
       </Result>
-      {price && <VisuallyHidden>{messages.text("details.odds")}: {price.price}</VisuallyHidden>}
+      {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
     {notes.length > 0 && <Notes id={`${titleId}-notes`}>{notes.map((note, index) => <Note key={index}><NoticeIcon /><span>{note}</span></Note>)}</Notes>}
     <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>

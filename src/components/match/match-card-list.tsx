@@ -14,8 +14,8 @@ const Board = styled.div`
     overflow: hidden;
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: ${({ theme }) => theme.border.cardRadius};
-    box-shadow: ${({ theme }) => theme.shadow.card};
+    border-radius: 0;
+    box-shadow: none;
   }
 `;
 /** Decorative column labels; every row repeats its meaning in accessible text. */

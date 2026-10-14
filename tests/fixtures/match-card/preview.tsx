@@ -32,6 +32,10 @@ export function CardPreview({ examples, boundary, equal }: {
             selectedFamily={index === 0 ? family : selectedFamily} eagerLogos={index < 2} />
         </Stack></li>;
       })}
+      <li><Stack $gap="sm">
+        <MutedText>Example: Any market chooses the highest probability without borrowing another pick&apos;s odds</MutedText>
+        <MatchCard fixture={{ ...examples[0]!.fixture, fixtureId: "card-any" }} analysisSlug="example-home-v-example-away" />
+      </Stack></li>
     </MatchCardList>
     <section id="example-rounding"><Stack $gap="sm">
       <SectionHeading>Example: complete-group probability rounding</SectionHeading>

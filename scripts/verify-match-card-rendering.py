@@ -14,7 +14,7 @@ def verify(origin, directory):
     (directory / "initial.html").write_text(html, encoding="utf-8")
     visible = visible_html(html)
     articles = re.findall(r'<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>([\s\S]*?)</article>', visible)
-    assert len(articles) == 12
+    assert len(articles) == 13
     by_id = dict(articles)
     assert 0 <= html.find("data-styled=") < html.find("<main")
     for _, article in articles:
@@ -27,6 +27,12 @@ def verify(origin, directory):
         match(r"prediction: [^<]+, estimated probability|prediction unavailable", article)
         match(r'data-outcome="(?:correct|incorrect|pending|void|unavailable)"', article)
         no_match(r"\s(?:\$[\w-]+|tone|variant|loaded)=", article)
+        if 'data-prediction="none"' in article:
+            no_match(r"data-pick-odds=|data-probability-meter=", article)
+        else:
+            assert article.count('data-pick-odds=""') == 1, "One inline price after the shown prediction"
+            assert article.count('data-probability-meter=""') == 1, "One decorative meter for the shown probability"
+            no_match(r"Odds", re.search(r"<header\b[^>]*>([\s\S]*?)</header>", article).group(1))
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
         match(f'data-outcome="{status}"', by_id[card])
@@ -38,17 +44,25 @@ def verify(origin, directory):
     for card in ["card-unavailable", "card-missing-family"]:
         match(r'data-result-badge="unavailable"[^>]*>[\s\S]*?<span data-pick-value[^>]*>—</span></span>', by_id[card])
         no_match(r'data-pick-value[^>]*>(?:0%|Pending)</span>', by_id[card])
-        match(r'data-pick-value[^>]*>Unavailable</span>', by_id[card])
+        match(r'data-pick-value[^>]*>No pick</span>', by_id[card])
         match(r'data-pick-state="none"', by_id[card])
         match(r'<b data-mobile-only=""[^>]*>No pick</b>', by_id[card])
     for card, state in [("card-correct", "settled"), ("card-incorrect", "settled"), ("card-void", "settled"), ("card-pending", "open")]:
         match(f'data-pick-state="{state}"', by_id[card])
-    match(r'data-mobile-only=""[^>]*>Home win</span>', by_id["card-correct"])
+    match(r'data-pick-selection=""[^>]*>1</span>', by_id["card-correct"])
     match(r'data-mobile-only=""[^>]*>1X2</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
-    match(r'data-selected-odds[^>]*>Odds 1\.85</span>', by_id["card-correct"])
+    match(r'data-selected-odds[^>]*>\(1\.85\)</span>', by_id["card-correct"])
+    match("Odds: 1.85", by_id["card-correct"])
     no_match(r"Odds 2\.10", by_id["card-correct"])
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])
+    match(r'data-pick-odds[^>]*>\(—\)</span>', by_id["card-incorrect"])
+    match("Odds: Unavailable", by_id["card-incorrect"])
+    match(r'data-pick-selection=""[^>]*>Under 2\.5</span>', by_id["card-long"])
+    match(r'data-selected-odds[^>]*>\(9999\.99\)</span>', by_id["card-long"])
+    match(r'<article[^>]*data-fixture-id="card-any"[^>]*data-market="double-chance"', visible)
+    match("Double chance prediction: Home or draw, estimated probability 82%", by_id["card-any"])
+    no_match(r"data-selected-odds=|Odds: 1\.85|Odds: 2\.10", by_id["card-any"])
     no_match(r"Final score:|Live score:|data-live-minute=", by_id["card-delayed"])
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
     match(r'data-live-minute="67"[\s\S]*?<span aria-hidden="true">67′</span>', by_id["card-pending"])

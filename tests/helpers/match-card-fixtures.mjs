@@ -49,7 +49,9 @@ export function cardExamples() {
     { label: "Example: unknown values and missing logos", fixture: cardFixture({ fixtureId: "card-unknown", homeTeam: { id: "unknown-home", name: null },
       awayTeam: { id: "unknown-away", name: null }, competition: { id: "unknown-league", name: null, country: null },
       kickoffAt: null, forecast: null, score: null, status: "unknown" }) },
-    { label: "Example: long names", fixture: cardFixture({ fixtureId: "card-long", homeTeam: { id: "long-home", name: "Example International Football Club With A Very Long Name " + "UnbrokenHomeIdentifier".repeat(9) },
+    { label: "Example: long names and a maximum-length pick price", selectedFamily: "total-goals", fixture: cardFixture({ fixtureId: "card-long", prices: [
+      { family: "total-goals", selection: "under-2.5", price: "9999.99", basis: "bookmaker", retrievedAt: now, providerUpdatedAt: null },
+    ], homeTeam: { id: "long-home", name: "Example International Football Club With A Very Long Name " + "UnbrokenHomeIdentifier".repeat(9) },
       awayTeam: { id: "long-away", name: "Example Association Sporting Club With A Very Long Name " + "UnbrokenAwayIdentifier".repeat(9) },
       competition: { id: "long-league", name: "Example International Competition " + "LongCompetitionIdentifier".repeat(7), country: null } }) },
     { label: "Example: broken and throttled remote logos", fixture: broken },
