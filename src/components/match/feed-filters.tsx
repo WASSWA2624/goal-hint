@@ -59,7 +59,7 @@ const Panel = styled.form`
 `;
 const SearchRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
   gap: 6px;
   min-inline-size: 0;
@@ -87,6 +87,27 @@ const SearchField = styled.label`
     padding-inline: 10px;
     > input { min-block-size: 2.625rem; font-size: 16px; }
   }
+`;
+/** Runs the typed search; Enter in the field does the same. */
+const SearchButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-block-size: 2.75rem;
+  padding-inline: 14px;
+  color: ${({ theme }) => theme.color.onBrand};
+  background: ${({ theme }) => theme.gradient.action};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
+  border-radius: 0;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  white-space: nowrap;
+  cursor: pointer;
+  > svg { flex: none; font-size: 1rem; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandHover}; border-color: ${({ theme }) => theme.color.brandHover}; } }
+  ${focusRing}
 `;
 /** The match count, sort menu and Filters button share one phone row; the sort label shortens before anything wraps. */
 const PhoneToolbar = styled.div`
@@ -711,6 +732,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, t
           placeholder={messages.text("feed.search.placeholder")} aria-label={messages.text("feed.filters.search")}
           onChange={(event) => edit({ ...draft, search: event.target.value })} />
       </SearchField>
+      <SearchButton type="submit"><SearchIcon aria-hidden="true" />{messages.text("feed.search.submit")}</SearchButton>
     </SearchRow>
     {query.status !== "live" && <DayStrip query={query} today={today} onApply={onApply} />}
     <PhoneToolbar data-phone-filter-toolbar>

@@ -30,7 +30,7 @@ def verify(origin, directory):
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
         match(f'data-outcome="{status}"', by_id[card])
-    for card, status, label in [("card-correct", "correct", "Win"), ("card-incorrect", "incorrect", "Loss"),
+    for card, status, label in [("card-correct", "correct", "Won"), ("card-incorrect", "incorrect", "Lost"),
         ("card-pending", "pending", "Pending")]:
         article = by_id[card]
         assert article.count(f'data-result-badge="{status}"') == 1
@@ -39,9 +39,11 @@ def verify(origin, directory):
         match(r'data-result-badge="unavailable"[^>]*>[\s\S]*?<span data-pick-value[^>]*>—</span></span>', by_id[card])
         no_match(r'data-pick-value[^>]*>(?:0%|Pending)</span>', by_id[card])
         match(r'data-pick-value[^>]*>Unavailable</span>', by_id[card])
-    for _, article in articles:
-        for caption in ["Market", "Pick", "Prob.", "Result"]:
-            match(rf'<span[^>]*>{caption}</span>', article)
+        match(r'data-pick-state="none"', by_id[card])
+        match(r'<b data-mobile-only=""[^>]*>No pick</b>', by_id[card])
+    for card, state in [("card-correct", "settled"), ("card-incorrect", "settled"), ("card-void", "settled"), ("card-pending", "open")]:
+        match(f'data-pick-state="{state}"', by_id[card])
+    match(r'data-mobile-only=""[^>]*>Home win</span>', by_id["card-correct"])
     match(r'data-mobile-only=""[^>]*>1X2</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-selected-odds[^>]*>Odds 1\.85</span>', by_id["card-correct"])
@@ -49,7 +51,7 @@ def verify(origin, directory):
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])
     no_match(r"Final score:|Live score:|data-live-minute=", by_id["card-delayed"])
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
-    match(r'data-match-status="live"[^>]*>67′</span>', by_id["card-pending"])
+    match(r'data-live-minute="67"[\s\S]*?<span aria-hidden="true">67′</span>', by_id["card-pending"])
     no_match(r">(?:vs|VS)<", by_id["card-pending"])
     checks = {
         "card-correct": ["Final score: Example Home FC 2, Example Away FC 1", "Match result prediction: Home win, estimated probability 54%", ">FT<", "AI prediction"],

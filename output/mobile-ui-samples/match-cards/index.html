@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goal Hint Match Cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --bg:#E8EEF1;--paper:#F6F9FA;--ink:#102A3A;--muted:#4A6070;--line:#C8D5DD;--accent:#007F7A;--accent-ink:#00645F;--accent-soft:#DDF1EE;--device:#0E1A22;--device-edge:#2A3A45;
+  --f-ui:"Manrope",Arial,sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E151A;--paper:#141D23;--ink:#E9F0F3;--muted:#A6B5BF;--line:#2B3B46;--accent:#53D5C6;--accent-ink:#53D5C6;--accent-soft:#183C3B;--device:#05090C;--device-edge:#33444F;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0E151A;--paper:#141D23;--ink:#E9F0F3;--muted:#A6B5BF;--line:#2B3B46;--accent:#53D5C6;--accent-ink:#53D5C6;--accent-soft:#183C3B;--device:#05090C;--device-edge:#33444F;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.55;padding-inline:16px}
+.wrap{max-width:1160px;margin:0 auto;padding-block:48px 96px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+h1{font-size:clamp(30px,5.2vw,52px);line-height:1.05;letter-spacing:-.025em;font-weight:800;margin:0 0 14px;text-wrap:balance;max-width:16ch}
+.lede{max-width:62ch;color:var(--muted);font-size:16.5px;margin:0 0 28px}
+.intro-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:28px}
+.box{background:var(--paper);border:1px solid var(--line);padding:18px 20px}
+.box h3{margin:0 0 10px;font-size:12px;font-family:var(--f-mono);font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.covers{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.covers li{font-size:13px;font-weight:600;padding:3px 9px;border:1px solid var(--line);background:var(--bg)}
+.rules{margin:0;padding:0 0 0 18px;font-size:14px;color:var(--muted);display:grid;gap:6px}
+.rec-box{border-color:var(--accent);background:var(--accent-soft)}
+.rec-box p{margin:0;font-size:15px}
+.rec-box a{color:var(--accent-ink);font-weight:800}
+.index{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);background:var(--paper);margin:0;padding:0;list-style:none}
+.index li{border-right:1px solid var(--line);border-bottom:1px solid var(--line);margin:0 -1px -1px 0}
+.index a{display:flex;gap:10px;align-items:baseline;padding:12px 14px;color:var(--ink);text-decoration:none;font-weight:700;font-size:14px}
+.index a span{font-family:var(--f-mono);font-weight:500;color:var(--accent-ink);font-size:13px;min-width:1.6em}
+.index a:hover{background:var(--accent-soft)}
+.index a:focus-visible,.rec-box a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.design{display:grid;grid-template-columns:minmax(0,290px) minmax(0,1fr);gap:36px;padding-block:52px;border-top:1px solid var(--line);scroll-margin-top:12px}
+.design:first-of-type{margin-top:44px}
+.num{display:flex;align-items:center;gap:10px;font-family:var(--f-mono);font-size:44px;line-height:1;color:var(--accent-ink);font-weight:500}
+.rec{font-style:normal;font-family:var(--f-ui);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 8px;background:var(--accent);color:var(--paper)}
+.design h2{font-size:26px;letter-spacing:-.015em;margin:12px 0 8px;line-height:1.15}
+.idea{margin:0 0 16px;font-size:16px;font-weight:600}
+.how{margin:0 0 18px;padding:0;list-style:none;display:grid;gap:8px;color:var(--muted);font-size:14.5px}
+.how li{padding-left:16px;position:relative}
+.how li::before{content:"";position:absolute;left:0;top:.62em;width:6px;height:6px;background:var(--accent)}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0 0 16px;border:1px solid var(--line);background:var(--paper)}
+.facts div{display:flex;flex-direction:column;justify-content:space-between;padding:10px 10px 9px;border-left:1px solid var(--line)}
+.facts div:first-child{border-left:0}
+.facts dt{font-size:11px;color:var(--muted);line-height:1.25;margin-bottom:4px}
+.facts dd{margin:0;font-family:var(--f-mono);font-size:15px;font-weight:500;font-variant-numeric:tabular-nums}
+.trade{margin:0;font-size:14px;color:var(--muted)}
+.trade b{display:block;color:var(--ink);font-size:12px;font-family:var(--f-mono);font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.phones{display:flex;flex-wrap:wrap;gap:28px;min-width:0}
+figure{margin:0;display:grid;gap:12px;justify-items:center}
+figcaption{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+@media (max-width:1000px){.design{grid-template-columns:minmax(0,1fr);gap:24px}.info{max-width:62ch}.intro-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.rec-box{grid-column:1/-1}}
+@media (max-width:760px){.intro-grid{grid-template-columns:minmax(0,1fr)}.index{grid-template-columns:repeat(2,minmax(0,1fr))}.phones{justify-content:center}}
+
+/* ---------- device + app chrome ---------- */
+.device{width:336px;padding:8px;background:var(--device);border-radius:46px;box-shadow:inset 0 0 0 1.5px var(--device-edge),0 30px 50px -30px rgba(11,31,51,.55)}
+@media (max-width:372px){.device{zoom:.86}}
+.screen{position:relative;width:320px;height:680px;border-radius:38px;overflow:hidden;background:var(--a-page);color:var(--a-text);font-family:var(--f-ui);font-size:12px;line-height:1.3;display:flex;flex-direction:column;text-align:left}
+.lt{--a-page:#CEDBE3;--a-surface:#FFFFFF;--a-soft:#EAF0F2;--a-text:#102A3A;--a-muted:#486071;--a-border:#C5D4DE;--a-brand:#007F7A;--a-brand-ink:#00645F;--a-on-mkt:#FFFFFF;
+  --a-head:#102A3A;--a-head-ctl:#1D3B4A;--a-head-text:#FFFFFF;--a-head-accent:#39D5CA;--a-head-line:#102A3A;
+  --mr-s:#00824A;--mr-f:#DBF9E7;--mr-t:#00603B;--dc-s:#7C3AED;--dc-f:#EFE9FF;--dc-t:#5B21B6;--tg-s:#2563EB;--tg-f:#E3EDFF;--tg-t:#1E40AF;--bt-s:#C2410C;--bt-f:#FFEADB;--bt-t:#9A3412;
+  --ok-t:#007754;--ok-f:#E5F4EC;--ko-t:#9C2328;--ko-f:#FFF0F1;--vd-t:#515C6B;--vd-f:#F0F3F6;--lv-s:#DC2626;--lv-t:#C81E1E;--lv-f:#FEE2E2;--am-t:#92400E;--am-f:#FEF0C7;--ring:rgba(16,42,58,.16)}
+.dk{--a-page:#141C22;--a-surface:#1E2932;--a-soft:#18232B;--a-text:#F2F7F8;--a-muted:#B1BEC8;--a-border:#3C505E;--a-brand:#53D5C6;--a-brand-ink:#53D5C6;--a-on-mkt:#102A3A;
+  --a-head:#10181D;--a-head-ctl:#1B2A34;--a-head-text:#F2F7F8;--a-head-accent:#53D5C6;--a-head-line:#3C505E;
+  --mr-s:#70DEA4;--mr-f:#1C342B;--mr-t:#70DEA4;--dc-s:#C6AEFF;--dc-f:#322B45;--dc-t:#C6AEFF;--tg-s:#9EC5FF;--tg-f:#233449;--tg-t:#9EC5FF;--bt-s:#FFBA8F;--bt-f:#3D2D25;--bt-t:#FFBA8F;
+  --ok-t:#70DEA4;--ok-f:#1C342B;--ko-t:#FF9C9C;--ko-f:#3B252C;--vd-t:#B1BEC8;--vd-f:#28343D;--lv-s:#FF9C9C;--lv-t:#FF9C9C;--lv-f:#3B252C;--am-t:#F6C453;--am-f:#322A1E;--ring:rgba(242,247,248,.22);color-scheme:dark}
+.i{width:18px;height:18px;flex:none}
+.sb{height:30px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 24px 5px 30px;background:var(--a-head);color:var(--a-head-text);font-size:12.5px;font-weight:700}
+.sb-r{display:flex;gap:6px;align-items:center}
+.ab{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 12px;background:var(--a-head);color:var(--a-head-text);border-bottom:1px solid var(--a-head-line)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:18px;letter-spacing:-.01em}
+.mark{width:24px;height:24px}
+.mark circle{fill:var(--a-head-accent)}
+.mark path{fill:none;stroke:var(--a-head);stroke-width:2.7;stroke-linecap:round}
+.ab-btn{width:34px;height:34px;display:grid;place-items:center;background:var(--a-head-ctl)}
+.main{position:relative;flex:1;min-height:0;overflow:hidden;padding:0 8px 8px;display:flex;flex-direction:column;gap:6px}
+.tb{flex:none;height:62px;padding-bottom:12px;display:grid;grid-template-columns:repeat(5,1fr);background:var(--a-surface);border-top:1px solid var(--a-border);position:relative}
+.tb::after{content:"";position:absolute;left:50%;bottom:5px;width:110px;height:4px;border-radius:2px;background:var(--a-text);opacity:.85;transform:translateX(-50%)}
+.tb span{display:grid;justify-items:center;align-content:center;gap:2px;font-size:10px;font-weight:600;color:var(--a-muted);border-top:2px solid transparent;margin-top:-1px}
+.tb span.on{color:var(--a-brand-ink);border-top-color:var(--a-brand)}
+.tb .i{width:20px;height:20px}
+.dh{flex:none;display:flex;align-items:baseline;gap:6px;height:30px;padding-top:9px;font-size:12px;color:var(--a-muted);font-weight:600}
+.dh b{color:var(--a-text);font-weight:800;font-size:13px}
+.dh .dz{margin-left:auto;font-size:11px}
+
+/* ---------- shared card atoms ---------- */
+.m-mr{--ms:var(--mr-s);--mf:var(--mr-f);--mt:var(--mr-t)}
+.m-dc{--ms:var(--dc-s);--mf:var(--dc-f);--mt:var(--dc-t)}
+.m-tg{--ms:var(--tg-s);--mf:var(--tg-f);--mt:var(--tg-t)}
+.m-bt{--ms:var(--bt-s);--mf:var(--bt-f);--mt:var(--bt-t)}
+.m-none{--ms:var(--a-border);--mf:var(--a-soft);--mt:var(--a-muted)}
+.c{flex:none;position:relative;background:var(--a-surface);border:1px solid var(--a-border);min-width:0}
+.nm{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.mut{color:var(--a-muted)!important}
+.fl{width:15px;height:10px;flex:none;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,.14)}
+.fl.gl{width:12px;height:12px;box-shadow:none;color:var(--a-muted)}
+.f-eng{background:linear-gradient(90deg,transparent 42%,#CE1124 42% 58%,transparent 58%),linear-gradient(transparent 36%,#CE1124 36% 64%,transparent 64%),#fff}
+.f-esp{background:linear-gradient(#AA151B 25%,#F1BF00 25% 75%,#AA151B 75%)}
+.f-ita{background:linear-gradient(90deg,#009246 33.3%,#fff 33.3% 66.6%,#CE2B37 66.6%)}
+.f-ger{background:linear-gradient(#000 33.3%,#DD0000 33.3% 66.6%,#FFCE00 66.6%)}
+.f-fra{background:linear-gradient(90deg,#002395 33.3%,#fff 33.3% 66.6%,#ED2939 66.6%)}
+.f-ned{background:linear-gradient(#AE1C28 33.3%,#fff 33.3% 66.6%,#21468B 66.6%)}
+.f-uga{background:linear-gradient(#000 16.6%,#FCDC04 16.6% 33.3%,#D90000 33.3% 50%,#000 50% 66.6%,#FCDC04 66.6% 83.3%,#D90000 83.3%)}
+.cr{flex:none;display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--c1);color:var(--c2);font-style:normal;font-size:8.5px;font-weight:800;line-height:1;box-shadow:inset 0 0 0 1px var(--ring)}
+.chip{flex:none;display:inline-block;padding:1px 4px;background:var(--mf);color:var(--mt);font-size:10px;font-weight:800;line-height:1.4;white-space:nowrap}
+.st{flex:none;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.st-up{color:var(--a-text)}
+.st-live{color:var(--lv-t)}
+.st-done{color:var(--a-muted)}
+.st-halt{color:var(--am-t);font-weight:700}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--lv-s);box-shadow:0 0 0 2px var(--lv-f)}
+.od{flex:none;font-size:10.5px;font-weight:600;color:var(--a-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.rs{flex:none;display:inline-flex;align-items:center;gap:2px;padding:1px 5px 1px 3px;font-size:10.5px;font-weight:800;line-height:1.35;white-space:nowrap}
+.rs .ic{width:11px;height:11px}
+.rs-won{color:var(--ok-t);background:var(--ok-f)}
+.rs-lost{color:var(--ko-t);background:var(--ko-f)}
+.rs-void{color:var(--vd-t);background:var(--vd-f)}
+.nt{grid-column:1/-1;display:flex;align-items:center;gap:4px;margin:0;padding:2px 8px;font-size:10.5px;font-weight:700;color:var(--am-t);background:var(--am-f)}
+.nt .ic{width:11px;height:11px;flex:none}
+.lo{color:var(--a-muted)}
+.lo .nm{font-weight:600}
+.pc{font-weight:800;font-variant-numeric:tabular-nums}
+
+/* one-line team rows: home keeps up to half, away takes the rest */
+.tn{flex:0 1 auto}
+.tn:first-child{flex:none;max-width:calc(50% - 18px)}
+
+/* 1 · Scoreline Stack */
+.c1{display:grid;grid-template-columns:40px minmax(0,1fr) 96px;grid-template-areas:". lg ex" "st h p1" "st a p2";align-items:center;padding:5px 8px 5px 0}
+.c1>.nt{margin:4px -8px -5px 0}
+.c1-st{grid-area:st;justify-self:center}
+.c1-st .st{flex-direction:column;gap:2px;font-size:11.5px}
+.c1-st .st-halt{font-size:10px}
+.c1-lg{grid-area:lg;display:flex;align-items:center;gap:5px;height:15px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c1-ex{grid-area:ex;justify-self:end;display:flex}
+.c1-t{display:flex;align-items:center;gap:6px;height:18px;padding-right:9px;font-size:12.5px;font-weight:700}
+.c1-t.h{grid-area:h;margin-top:2px}
+.c1-t.a{grid-area:a}
+.c1-t .nm{flex:1}
+.c1-t .g{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.c1 .p1,.c1 .p2,.c1 .p0{align-self:stretch;display:flex;align-items:center;border-left:1px solid var(--a-border);padding-left:9px;min-width:0}
+.c1 .p1{grid-area:p1;margin-top:2px;font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c1 .p2{grid-area:p2;justify-content:space-between;gap:4px}
+.c1 .pc{font-size:13px}
+.c1 .p0{grid-row:2/4;grid-column:3;margin-top:2px;flex-direction:column;align-items:flex-start;justify-content:center;font-size:10.5px;line-height:1.25;color:var(--a-muted)}
+.c1 .p0 b{font-size:11.5px;color:var(--a-text)}
+
+/* 2 · Face-off */
+.c2{padding:5px 8px 0}
+.c2>.nt{margin:0 -8px}
+.c2-hd{display:flex;align-items:center;gap:5px;height:15px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c2-hd .nm{flex:1}
+.c2-vs{display:grid;grid-template-columns:minmax(0,1fr) 58px minmax(0,1fr);align-items:center;height:32px}
+.c2-tm{display:flex;align-items:center;gap:6px;min-width:0;font-size:12.5px;font-weight:700}
+.c2-tm.h{justify-content:flex-end}
+.c2-mid{display:grid;justify-items:center;gap:1px;line-height:1.1}
+.c2-mid .sc{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.c2-mid .tm{font-size:13.5px;font-weight:800;font-variant-numeric:tabular-nums}
+.c2-mid .vs{font-size:12px;color:var(--a-muted)}
+.c2-mid .st{font-size:10px}
+.c2-mid .dot{width:5px;height:5px}
+.c2-pk{display:flex;align-items:center;gap:6px;height:25px;margin:0 -8px;padding:0 8px;border-top:1px solid var(--a-border)}
+.c2-pk .pt{flex:1;font-size:12px;font-weight:700}
+.c2-pk .pc{font-size:13px}
+
+/* 3 · Chance First */
+.c3{display:grid;grid-template-columns:52px minmax(0,1fr)}
+.c3-b{display:grid;align-content:center;justify-items:center;gap:2px;background:var(--mf);color:var(--mt)}
+.c3-b b{font-size:17px;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.c3-b span{font-size:10px;font-weight:800;line-height:1}
+.c3-r{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:5px 8px;min-width:0}
+.c3-l1{display:flex;align-items:center;gap:5px;height:15px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c3-l1 .nm{flex:1}
+.c3-l2{display:flex;align-items:center;gap:6px;height:18px;font-size:12.5px;font-weight:700}
+.c3-l2 .tn{display:flex;align-items:center;gap:5px;min-width:0}
+.c3-l2 .sc{flex:none;padding:0 5px;background:var(--a-soft);font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums}
+.c3-l2 .vs{flex:none;font-style:normal;color:var(--a-muted);font-weight:600;font-size:11.5px}
+.c3-l3{display:flex;align-items:center;gap:6px;height:16px;font-size:12px}
+.c3-l3 .pt{flex:1;font-weight:800;color:var(--mt)}
+.c3>.nt{grid-column:1/-1}
+
+/* 4 · Plain Words */
+.c4{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;padding:5px 10px 5px}
+.c4>.nt{margin:3px -10px -5px}
+.c4-l1{display:flex;align-items:center;gap:8px;height:18px;font-size:13px;font-weight:800}
+.c4-l1 .tms{flex:1}
+.c4-l1 .tms i{font-style:normal;font-weight:600;color:var(--a-muted);font-size:12px}
+.c4-l1 .sc{padding:0 3px;font-variant-numeric:tabular-nums}
+.c4-l2{display:flex;align-items:center;gap:5px;height:15px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c4-l2 .nm{flex:1}
+.c4-l3{display:flex;align-items:center;gap:7px;height:19px;margin-top:2px;padding-top:3px;border-top:1px dotted var(--a-border);font-size:12px}
+.c4-l3 .sq{flex:none;width:8px;height:8px;background:var(--ms)}
+.c4-l3 .sen{flex:1;font-weight:700}
+.c4-l3 .sen em{font-style:normal;font-weight:600;color:var(--a-muted);margin-right:2px}
+.c4-l3 .sen b{font-weight:800}
+
+/* 5 · Ticket */
+.c5{display:grid;grid-template-columns:minmax(0,1fr) 84px;overflow:hidden;--stub:var(--mf)}
+.c5.r-won{--stub:var(--ok-f)}.c5.r-lost{--stub:var(--ko-f)}.c5.r-void{--stub:var(--vd-f)}
+.c5-m{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;padding:5px 10px 5px 8px;min-width:0}
+.c5-hd{display:flex;align-items:center;gap:5px;height:15px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c5-hd .nm{flex:1}
+.c5-t{display:flex;align-items:center;gap:6px;height:18px;font-size:12.5px;font-weight:700}
+.c5-t .nm{flex:1}
+.c5-t .g{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.c5-s{position:relative;display:grid;align-content:center;justify-items:center;gap:2px;padding:5px 4px;background:var(--stub);border-left:1.5px dashed color-mix(in srgb,var(--a-muted) 55%,transparent);text-align:center;min-width:0}
+.c5-s::before,.c5-s::after{content:"";position:absolute;left:-7px;width:12px;height:12px;border-radius:50%;background:var(--a-page);box-shadow:inset 0 0 0 1px var(--a-border)}
+.c5-s::before{top:-7px}.c5-s::after{bottom:-7px}
+.c5-s .s1{display:flex;align-items:center;gap:4px;min-height:15px}
+.c5-s .rs{background:var(--a-surface)}
+.c5-s .pc{font-size:17px;line-height:1;color:var(--a-text)}
+.c5-s .pt{max-width:100%;font-size:10.5px;font-weight:800;color:var(--a-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c5-s .pw{white-space:normal;line-height:1.2;font-weight:600}
+.c5>.nt{grid-column:1/-1}
+
+/* 6 · Fill Bar */
+.c6{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:5px 8px 7px}
+.c6>.nt{margin:4px -8px -7px}
+.c6-hd{display:flex;align-items:center;gap:5px;height:15px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c6-hd .nm{flex:1}
+.c6-hd .od{margin-right:4px}
+.c6-vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;height:23px;font-size:12.5px;font-weight:700}
+.c6-vs .h,.c6-vs .a{display:flex;align-items:center;gap:6px;min-width:0}
+.c6-vs .a{justify-content:flex-end}
+.c6-vs .sc{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.c6-vs .vs{font-style:normal;color:var(--a-muted);font-weight:600}
+.c6-bar{position:relative;display:flex;align-items:center;gap:6px;height:25px;padding:0 6px 3px 8px;background:var(--mf);font-size:12px}
+.c6-bar::before{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:color-mix(in srgb,var(--ms) 22%,transparent)}
+.c6-bar::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:var(--p,0);background:var(--ms)}
+.c6-bar .code{flex:none;font-size:10px;font-weight:800;color:var(--mt)}
+.c6-bar .pt{flex:1;font-weight:700}
+.c6-bar>b{font-size:13px;font-weight:800;color:var(--mt);font-variant-numeric:tabular-nums}
+.c6-bar.none{padding-bottom:0}
+
+/* 7 · Timeline */
+.tl{flex:none;background:var(--a-surface);border:1px solid var(--a-border)}
+.c7{position:relative;display:grid;grid-template-columns:54px minmax(0,1fr)}
+.c7::before{content:"";position:absolute;left:53px;top:0;bottom:0;width:1px;background:var(--a-border)}
+.c7-tm{display:grid;align-content:start;justify-items:end;gap:1px;padding:6px 12px 0 0;font-variant-numeric:tabular-nums}
+.c7-tm b{font-size:12px;font-weight:800}
+.c7-tm small{font-size:10.5px;font-weight:800;color:var(--a-muted)}
+.c7-tm small.live{color:var(--lv-t)}
+.c7-tm small.halt{color:var(--am-t);font-weight:700}
+.nd{position:absolute;left:49px;top:9px;width:9px;height:9px;border-radius:50%;background:var(--a-surface);box-shadow:inset 0 0 0 1.5px var(--a-muted);display:grid;place-items:center}
+.nd-live,.nd-ht{background:var(--lv-s);box-shadow:0 0 0 3px var(--lv-f)}
+.nd-ft,.nd-aet{background:var(--a-muted);box-shadow:none}
+.nd-pp{box-shadow:inset 0 0 0 1.5px var(--am-t)}
+.nd-won,.nd-lost,.nd-void{left:47px;top:7px;width:13px;height:13px;box-shadow:none;color:var(--a-surface)}
+.nd-won{background:var(--ok-t)}.nd-lost{background:var(--ko-t)}.nd-void{background:var(--vd-t)}
+.nd .ic{width:9px;height:9px;stroke-width:3.2}
+.c7-r{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;padding:5px 8px 6px 12px;min-width:0;border-bottom:1px solid var(--a-border)}
+.c7:last-child .c7-r{border-bottom:0}
+.c7-r>.nt{margin:2px 0 0;padding:2px 6px}
+.c7-l1{display:flex;align-items:center;gap:5px;height:14px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c7-l2{display:flex;align-items:center;gap:6px;height:18px;font-size:12.5px;font-weight:700}
+.c7-l2 .tn{display:flex;align-items:center;gap:5px;min-width:0}
+.c7-l2 .sc{flex:none;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.c7-l2 .vs{flex:none;font-style:normal;color:var(--a-muted);font-weight:600;font-size:11.5px}
+.c7-l3{display:flex;align-items:center;gap:6px;height:17px;font-size:12px}
+.c7-l3 .pt{flex:1;font-weight:700}
+.c7-l3 .pc{font-size:12.5px}
+
+/* 8 · Pick Header */
+.c8-band{display:flex;align-items:center;gap:6px;height:24px;padding:0 6px 0 8px;background:var(--mf);color:var(--mt);font-size:12px}
+.c8-band .code{flex:none;padding-right:6px;font-size:10px;font-weight:800;border-right:1px solid color-mix(in srgb,var(--mt) 35%,transparent);line-height:1.3}
+.c8-band .pt{flex:1;font-weight:800;color:var(--a-text)}
+.c8-band>b{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.c8-band .rs{background:var(--a-surface)}
+.m-none .c8-band{color:var(--a-muted);font-weight:600}
+.c8-b{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;padding:4px 8px 5px}
+.c8-b>.nt{margin:3px -8px -5px}
+.c8-l1{display:flex;align-items:center;gap:6px;height:19px;font-size:12.5px;font-weight:700}
+.c8-l1 .tn{display:flex;align-items:center;gap:5px;min-width:0}
+.c8-l1 .sc{flex:none;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.c8-l1 .vs{flex:none;font-style:normal;color:var(--a-muted);font-weight:600;font-size:11.5px}
+.c8-l1 .st{margin-left:auto;padding-left:6px}
+.c8-l2{display:flex;align-items:center;gap:5px;height:15px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c8-l2 .nm{flex:1}
+
+/* 9 · Two-Up */
+.g2{flex:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.c9{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;padding:5px 7px 0;min-width:0}
+.c9-hd{display:flex;align-items:center;gap:4px;height:15px;margin-bottom:2px;font-size:10.5px;font-weight:600;color:var(--a-muted)}
+.c9-hd .nm{flex:1}
+.c9-hd .st{font-size:10.5px}
+.c9-t{display:flex;align-items:center;gap:5px;height:18px;font-size:12px;font-weight:700}
+.c9-t .nm{flex:1}
+.c9-t .g{font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums}
+.c9-pk{display:grid;gap:0;margin:3px -7px 0;padding:3px 7px 4px;border-top:1px solid var(--a-border);min-width:0}
+.c9-pk .r1{display:flex;align-items:center;gap:5px;height:16px;font-size:11.5px;font-weight:800;min-width:0}
+.c9-pk .r2{display:flex;align-items:center;justify-content:space-between;gap:4px;height:17px;min-width:0}
+.c9-pk .r2 .nm{font-size:10.5px}
+.c9-pk .pc{font-size:13px}
+.c9>.nt{margin:0 -7px;padding:2px 7px}
+
+/* 10 · Market Board */
+.c10{display:grid;grid-template-columns:minmax(0,1fr);gap:2px;padding:5px 8px 7px}
+.c10>.nt{margin:4px -8px -7px}
+.c10-hd{display:flex;align-items:center;gap:6px;height:15px;font-size:11px;font-weight:600;color:var(--a-muted)}
+.c10-hd .nm{flex:1}
+.c10-vs{display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);align-items:center;height:24px}
+.c10-tm{display:flex;align-items:center;gap:6px;min-width:0;font-size:12.5px;font-weight:700}
+.c10-tm.h{justify-content:flex-end}
+.c10-mid{display:grid;justify-items:center}
+.c10-mid .sc{font-size:14.5px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.c10-mid .tm{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.c10-mid .vs{font-style:normal;color:var(--a-muted);font-weight:600}
+.c10-bd{display:grid;grid-template-columns:auto repeat(var(--n),minmax(0,1fr));gap:3px;height:24px}
+.c10-bd .code{display:grid;place-items:center;padding:0 6px;background:var(--mf);color:var(--mt);font-size:10px;font-weight:800;white-space:nowrap}
+.c10-bd .o{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:0 7px;background:var(--a-soft);color:var(--a-muted);font-size:11px;font-weight:600;white-space:nowrap}
+.c10-bd .o b{color:var(--a-text);font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+.c10-bd .o.on{background:var(--ms);color:var(--a-on-mkt);font-weight:700}
+.c10-bd .o.on b{color:inherit}
+.c10-bd.void .o.on{background:var(--a-soft);color:var(--a-muted);box-shadow:inset 0 0 0 1.5px var(--a-muted)}
+.c10-bd.void .o.on b{color:var(--a-muted)}
+.c10-bd.none{display:flex;align-items:center;padding:0 8px;background:var(--a-soft);color:var(--a-muted);font-size:11.5px;font-weight:600}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol><symbol id="i-ball" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="m12 8 3.4 2.5-1.3 4h-4.2l-1.3-4zM12 8V3.5M15.4 10.5l4.2-1.4M14.1 14.5l2.6 3.6M9.9 14.5l-2.6 3.6M8.6 10.5 4.4 9.1"/></symbol><symbol id="i-live" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8M5.2 5.2a9.6 9.6 0 0 0 0 13.6M18.8 5.2a9.6 9.6 0 0 1 0 13.6"/></symbol><symbol id="i-results" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/></symbol><symbol id="i-slip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 3.5h13v17l-2.6-1.6-2.2 1.6-2.2-1.6-2.2 1.6-2.2-1.6-1.6 1.6z"/><path d="M9 8.5h6M9 12.5h6"/></symbol><symbol id="i-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5.5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="18.5" r="1"/></symbol><symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.4 5.2 3.4 8.5s-1 6.1-3.4 8.5M12 3.5C9.6 5.9 8.6 8.7 8.6 12s1 6.1 3.4 8.5"/></symbol><symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol><symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol><symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h12"/></symbol><symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.4"/></symbol></svg>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Goal Hint · Matches feed · Phone width 320 px</p>
+    <h1>Mobile match cards, ten ways</h1>
+    <p class="lede">Ten compact designs for the match card on phones. Each design shows the same 14 matches: today's list in light mode and yesterday's results in dark mode, so you can see every state. All ten keep the brand's square corners and market colours. Pick one by number and I will build it.</p>
+    <div class="intro-grid">
+      <div class="box"><h3>Every card shows</h3><ul class="covers"><li>League and flag</li><li>Kickoff time</li><li>Live minute, HT, FT</li><li>Postponed and other states</li><li>Teams and crests</li><li>Score</li><li>Market</li><li>Pick</li><li>Chance</li><li>Odds, when imported</li><li>Won, Lost or Void</li><li>Why there is no pick</li><li>Notes such as limited news</li></ul></div>
+      <div class="box"><h3>Shared rules</h3><ul class="rules"><li>One day header carries the date and time zone, so cards show only the time.</li><li>Won, Lost or Void appears only once the pick is settled.</li><li>A settled score is the 90-minute score; AET or Pens says more was played.</li><li>The whole card opens the match details.</li></ul></div>
+      <div class="box rec-box"><h3>My pick</h3><p><a href="#d5">5 · Ticket.</a> The pick has its own stub: a big chance, a plain pick, and green or red once settled. Teams get their own lines, so no name in the sample was trimmed, and 7 cards fit per screen. Runner-up: <a href="#d1">1 · Scoreline Stack</a>, the familiar live-score layout.</p></div>
+    </div>
+    <ol class="index"><li><a href="#d1"><span>1</span>Scoreline Stack</a></li><li><a href="#d2"><span>2</span>Face-off</a></li><li><a href="#d3"><span>3</span>Chance First</a></li><li><a href="#d4"><span>4</span>Plain Words</a></li><li><a href="#d5"><span>5</span>Ticket</a></li><li><a href="#d6"><span>6</span>Fill Bar</a></li><li><a href="#d7"><span>7</span>Timeline</a></li><li><a href="#d8"><span>8</span>Pick Header</a></li><li><a href="#d9"><span>9</span>Two-Up</a></li><li><a href="#d10"><span>10</span>Market Board</a></li></ol>
+  </header>
+  <main>
+<section class="design" id="d1" aria-labelledby="h1">
+  <div class="info">
+    <div class="num"><span>1</span></div>
+    <h2 id="h1">Scoreline Stack</h2>
+    <p class="idea">Reads like a live-score app. Time on the left, teams on their own lines, the pick in its own column.</p>
+    <ul class="how"><li>Each team has its own line with its goals, so most names fit whole.</li><li>The pick column holds the pick, its chance and the market colour.</li><li>Odds, or the result once settled, sit top right.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>64 px</dd></div><div><dt>Cards per screen</dt><dd>7</dd></div><div><dt>Names trimmed, of 28</dt><dd>2</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>The pick column says Home or Away instead of the team name, to stay narrow.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c1 m-mr">
+<span class="c1-st"><span class="st st-live"><i class="dot"></i>63′</span></span>
+<span class="c1-lg"><i class="fl f-eng"></i><span class="nm">Premier League</span></span>
+<span class="c1-ex"><span class="od">Odds 1.72</span></span>
+<span class="c1-t h"><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i><span class="nm">Arsenal</span><b class="g">1</b></span>
+<span class="c1-t a"><i class="cr" style="--c1:#034694;--c2:#fff">C</i><span class="nm">Chelsea</span><b class="g">0</b></span>
+<span class="p1">Home win</span><span class="p2"><span class="chip">1X2</span><b class="pc">58%</b></span></article><article class="c c1 m-tg">
+<span class="c1-st"><span class="st st-live"><i class="dot"></i>HT</span></span>
+<span class="c1-lg"><i class="fl f-esp"></i><span class="nm">LaLiga</span></span>
+<span class="c1-ex"></span>
+<span class="c1-t h"><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i><span class="nm">Real Betis</span><b class="g">1</b></span>
+<span class="c1-t a"><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i><span class="nm">Sevilla</span><b class="g">1</b></span>
+<span class="p1">Over 2.5</span><span class="p2"><span class="chip">O/U 2.5</span><b class="pc">61%</b></span></article><article class="c c1 m-dc">
+<span class="c1-st"><span class="st st-up">18:00</span></span>
+<span class="c1-lg"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span></span>
+<span class="c1-ex"><span class="od">Odds 1.28</span></span>
+<span class="c1-t h"><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i><span class="nm">KCCA</span></span>
+<span class="c1-t a"><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i><span class="nm">Vipers SC</span></span>
+<span class="p1">Home or draw</span><span class="p2"><span class="chip">DC</span><b class="pc">80%</b></span></article><article class="c c1 m-bt">
+<span class="c1-st"><span class="st st-up">19:30</span></span>
+<span class="c1-lg"><i class="fl f-ita"></i><span class="nm">Serie A</span></span>
+<span class="c1-ex"></span>
+<span class="c1-t h"><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i><span class="nm">Inter</span></span>
+<span class="c1-t a"><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i><span class="nm">AC Milan</span></span>
+<span class="p1">Both score</span><span class="p2"><span class="chip">BTTS</span><b class="pc">57%</b></span><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></article><article class="c c1 m-mr">
+<span class="c1-st"><span class="st st-up">21:00</span></span>
+<span class="c1-lg"><i class="fl f-ger"></i><span class="nm">Bundesliga</span></span>
+<span class="c1-ex"></span>
+<span class="c1-t h"><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i><span class="nm">Borussia Mönchengladbach</span></span>
+<span class="c1-t a"><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i><span class="nm">Eintracht Frankfurt</span></span>
+<span class="p1">Away win</span><span class="p2"><span class="chip">1X2</span><b class="pc">47%</b></span></article><article class="c c1 m-none">
+<span class="c1-st"><span class="st st-up">22:00</span></span>
+<span class="c1-lg"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></span>
+<span class="c1-ex"></span>
+<span class="c1-t h"><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i><span class="nm">Lens</span></span>
+<span class="c1-t a"><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i><span class="nm">Lille</span></span>
+<span class="p0"><b>No pick</b>Awaiting prediction</span></article><article class="c c1 m-tg">
+<span class="c1-st"><span class="st st-up">22:00</span></span>
+<span class="c1-lg"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></span>
+<span class="c1-ex"></span>
+<span class="c1-t h"><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i><span class="nm">Feyenoord</span></span>
+<span class="c1-t a"><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i><span class="nm">AZ Alkmaar</span></span>
+<span class="p1">Under 2.5</span><span class="p2"><span class="chip">O/U 2.5</span><b class="pc">55%</b></span></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c1 m-mr">
+<span class="c1-st"><span class="st st-done">FT</span></span>
+<span class="c1-lg"><i class="fl f-eng"></i><span class="nm">Premier League</span></span>
+<span class="c1-ex"><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span>
+<span class="c1-t h"><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i><span class="nm">Liverpool</span><b class="g">2</b></span>
+<span class="c1-t a lo"><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i><span class="nm">Manchester City</span><b class="g">1</b></span>
+<span class="p1">Home win</span><span class="p2"><span class="chip">1X2</span><b class="pc">49%</b></span></article><article class="c c1 m-tg">
+<span class="c1-st"><span class="st st-done">FT</span></span>
+<span class="c1-lg"><i class="fl f-esp"></i><span class="nm">LaLiga</span></span>
+<span class="c1-ex"><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></span>
+<span class="c1-t h"><i class="cr" style="--c1:#A50044;--c2:#fff">B</i><span class="nm">Barcelona</span><b class="g">0</b></span>
+<span class="c1-t a"><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i><span class="nm">Girona</span><b class="g">0</b></span>
+<span class="p1">Over 2.5</span><span class="p2"><span class="chip">O/U 2.5</span><b class="pc">68%</b></span></article><article class="c c1 m-dc">
+<span class="c1-st"><span class="st st-done">AET</span></span>
+<span class="c1-lg"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span></span>
+<span class="c1-ex"><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span>
+<span class="c1-t h"><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i><span class="nm">Boca Juniors</span><b class="g">1</b></span>
+<span class="c1-t a"><i class="cr" style="--c1:#fff;--c2:#E30613">R</i><span class="nm">River Plate</span><b class="g">1</b></span>
+<span class="p1">Home or draw</span><span class="p2"><span class="chip">DC</span><b class="pc">74%</b></span></article><article class="c c1 m-mr">
+<span class="c1-st"><span class="st st-halt">Postp.</span></span>
+<span class="c1-lg"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span></span>
+<span class="c1-ex"><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></span>
+<span class="c1-t h"><i class="cr" style="--c1:#D21034;--c2:#fff">E</i><span class="nm">Express FC</span></span>
+<span class="c1-t a"><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i><span class="nm">SC Villa</span></span>
+<span class="p1 mut">Home win</span><span class="p2"><span class="chip">1X2</span><b class="pc">51%</b></span></article><article class="c c1 m-bt">
+<span class="c1-st"><span class="st st-done">FT</span></span>
+<span class="c1-lg"><i class="fl f-ita"></i><span class="nm">Serie A</span></span>
+<span class="c1-ex"><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span>
+<span class="c1-t h"><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i><span class="nm">Napoli</span><b class="g">2</b></span>
+<span class="c1-t a"><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i><span class="nm">Roma</span><b class="g">2</b></span>
+<span class="p1">Both score</span><span class="p2"><span class="chip">BTTS</span><b class="pc">59%</b></span></article><article class="c c1 m-none">
+<span class="c1-st"><span class="st st-done">FT</span></span>
+<span class="c1-lg"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></span>
+<span class="c1-ex"></span>
+<span class="c1-t h"><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i><span class="nm">Ajax</span><b class="g">3</b></span>
+<span class="c1-t a lo"><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i><span class="nm">PSV</span><b class="g">1</b></span>
+<span class="p0"><b>No pick</b>No prediction locked</span></article><article class="c c1 m-tg">
+<span class="c1-st"><span class="st st-done">FT</span></span>
+<span class="c1-lg"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></span>
+<span class="c1-ex"><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span>
+<span class="c1-t h"><i class="cr" style="--c1:#004170;--c2:#fff">P</i><span class="nm">Paris Saint-Germain</span><b class="g">2</b></span>
+<span class="c1-t a lo"><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i><span class="nm">Marseille</span><b class="g">0</b></span>
+<span class="p1">Under 2.5</span><span class="p2"><span class="chip">O/U 2.5</span><b class="pc">54%</b></span></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d2" aria-labelledby="h2">
+  <div class="info">
+    <div class="num"><span>2</span></div>
+    <h2 id="h2">Face-off</h2>
+    <p class="idea">Today's card, tightened. One face-off line, one pick line, no column captions.</p>
+    <ul class="how"><li>Kickoff time sits where the score will be, then becomes the score.</li><li>The live minute, HT or FT sits under the score.</li><li>One pick line: market, the pick by team name, chance and result.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>78 px</dd></div><div><dt>Cards per screen</dt><dd>5½</dd></div><div><dt>Names trimmed, of 28</dt><dd>4</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>Two long team names share one line and get trimmed.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c2 m-mr">
+<div class="c2-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 1.72</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Arsenal</span><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i></span><span class="c2-mid"><b class="sc">1 – 0</b><span class="st st-live"><i class="dot"></i>63′</span></span><span class="c2-tm a"><i class="cr" style="--c1:#034694;--c2:#fff">C</i><span class="nm">Chelsea</span></span></div>
+<div class="c2-pk"><span class="chip">1X2</span><span class="nm pt">Arsenal win</span><b class="pc">58%</b></div></article><article class="c c2 m-tg">
+<div class="c2-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Real Betis</span><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i></span><span class="c2-mid"><b class="sc">1 – 1</b><span class="st st-live"><i class="dot"></i>HT</span></span><span class="c2-tm a"><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i><span class="nm">Sevilla</span></span></div>
+<div class="c2-pk"><span class="chip">O/U 2.5</span><span class="nm pt">Over 2.5 goals</span><b class="pc">61%</b></div></article><article class="c c2 m-dc">
+<div class="c2-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="od">Odds 1.28</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">KCCA</span><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i></span><span class="c2-mid"><b class="tm">18:00</b></span><span class="c2-tm a"><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i><span class="nm">Vipers SC</span></span></div>
+<div class="c2-pk"><span class="chip">DC</span><span class="nm pt">KCCA or draw</span><b class="pc">80%</b></div></article><article class="c c2 m-bt">
+<div class="c2-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Inter</span><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i></span><span class="c2-mid"><b class="tm">19:30</b></span><span class="c2-tm a"><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i><span class="nm">AC Milan</span></span></div>
+<div class="c2-pk"><span class="chip">BTTS</span><span class="nm pt">Both teams score</span><b class="pc">57%</b></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></article><article class="c c2 m-mr">
+<div class="c2-hd"><i class="fl f-ger"></i><span class="nm">Bundesliga</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Borussia Mönchengladbach</span><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i></span><span class="c2-mid"><b class="tm">21:00</b></span><span class="c2-tm a"><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i><span class="nm">Eintracht Frankfurt</span></span></div>
+<div class="c2-pk"><span class="chip">1X2</span><span class="nm pt">Eintracht Frankfurt win</span><b class="pc">47%</b></div></article><article class="c c2 m-none">
+<div class="c2-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Lens</span><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i></span><span class="c2-mid"><b class="tm">22:00</b></span><span class="c2-tm a"><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i><span class="nm">Lille</span></span></div>
+<div class="c2-pk"><span class="nm mut">No pick · Awaiting prediction</span></div></article><article class="c c2 m-tg">
+<div class="c2-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Feyenoord</span><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i></span><span class="c2-mid"><b class="tm">22:00</b></span><span class="c2-tm a"><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i><span class="nm">AZ Alkmaar</span></span></div>
+<div class="c2-pk"><span class="chip">O/U 2.5</span><span class="nm pt">Under 2.5 goals</span><b class="pc">55%</b></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c2 m-mr">
+<div class="c2-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 2.05</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Liverpool</span><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i></span><span class="c2-mid"><b class="sc">2 – 1</b><span class="st st-done">FT</span></span><span class="c2-tm a lo"><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i><span class="nm">Manchester City</span></span></div>
+<div class="c2-pk"><span class="chip">1X2</span><span class="nm pt">Liverpool win</span><b class="pc">49%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></article><article class="c c2 m-tg">
+<div class="c2-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Barcelona</span><i class="cr" style="--c1:#A50044;--c2:#fff">B</i></span><span class="c2-mid"><b class="sc">0 – 0</b><span class="st st-done">FT</span></span><span class="c2-tm a"><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i><span class="nm">Girona</span></span></div>
+<div class="c2-pk"><span class="chip">O/U 2.5</span><span class="nm pt">Over 2.5 goals</span><b class="pc">68%</b><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></div></article><article class="c c2 m-dc">
+<div class="c2-hd"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Boca Juniors</span><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i></span><span class="c2-mid"><b class="sc">1 – 1</b><span class="st st-done">AET</span></span><span class="c2-tm a"><i class="cr" style="--c1:#fff;--c2:#E30613">R</i><span class="nm">River Plate</span></span></div>
+<div class="c2-pk"><span class="chip">DC</span><span class="nm pt">Boca Juniors or draw</span><b class="pc">74%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></article><article class="c c2 m-mr">
+<div class="c2-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Express FC</span><i class="cr" style="--c1:#D21034;--c2:#fff">E</i></span><span class="c2-mid"><b class="vs">v</b><span class="st st-halt">Postp.</span></span><span class="c2-tm a"><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i><span class="nm">SC Villa</span></span></div>
+<div class="c2-pk"><span class="chip">1X2</span><span class="nm pt mut">Express FC win</span><b class="pc">51%</b><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></div></article><article class="c c2 m-bt">
+<div class="c2-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Napoli</span><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i></span><span class="c2-mid"><b class="sc">2 – 2</b><span class="st st-done">FT</span></span><span class="c2-tm a"><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i><span class="nm">Roma</span></span></div>
+<div class="c2-pk"><span class="chip">BTTS</span><span class="nm pt">Both teams score</span><b class="pc">59%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></article><article class="c c2 m-none">
+<div class="c2-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Ajax</span><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i></span><span class="c2-mid"><b class="sc">3 – 1</b><span class="st st-done">FT</span></span><span class="c2-tm a lo"><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i><span class="nm">PSV</span></span></div>
+<div class="c2-pk"><span class="nm mut">No pick · No prediction locked</span></div></article><article class="c c2 m-tg">
+<div class="c2-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div>
+<div class="c2-vs"><span class="c2-tm h"><span class="nm">Paris Saint-Germain</span><i class="cr" style="--c1:#004170;--c2:#fff">P</i></span><span class="c2-mid"><b class="sc">2 – 0</b><span class="st st-done">FT</span></span><span class="c2-tm a lo"><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i><span class="nm">Marseille</span></span></div>
+<div class="c2-pk"><span class="chip">O/U 2.5</span><span class="nm pt">Under 2.5 goals</span><b class="pc">54%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d3" aria-labelledby="h3">
+  <div class="info">
+    <div class="num"><span>3</span></div>
+    <h2 id="h3">Chance First</h2>
+    <p class="idea">The chance is the first thing you see, in a block coloured by market.</p>
+    <ul class="how"><li>A coloured block on the left holds the chance and the market.</li><li>Three slim lines: league and status, teams and score, the pick.</li><li>Odds and the result close the pick line.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>64 px</dd></div><div><dt>Cards per screen</dt><dd>7</dd></div><div><dt>Names trimmed, of 28</dt><dd>4</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>Team names share one line and may be trimmed.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c3 m-mr"><div class="c3-b"><b>58%</b><span>1X2</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="st st-live"><i class="dot"></i>63′</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i><span class="nm">Arsenal</span></span><b class="sc">1–0</b><span class="tn"><i class="cr" style="--c1:#034694;--c2:#fff">C</i><span class="nm">Chelsea</span></span></div>
+<div class="c3-l3"><span class="nm pt">Arsenal win</span><span class="od">Odds 1.72</span></div></div></article><article class="c c3 m-tg"><div class="c3-b"><b>61%</b><span>O/U 2.5</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-live"><i class="dot"></i>HT</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i><span class="nm">Real Betis</span></span><b class="sc">1–1</b><span class="tn"><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i><span class="nm">Sevilla</span></span></div>
+<div class="c3-l3"><span class="nm pt">Over 2.5 goals</span></div></div></article><article class="c c3 m-dc"><div class="c3-b"><b>80%</b><span>DC</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="st st-up">18:00</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i><span class="nm">KCCA</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i><span class="nm">Vipers SC</span></span></div>
+<div class="c3-l3"><span class="nm pt">KCCA or draw</span><span class="od">Odds 1.28</span></div></div></article><article class="c c3 m-bt"><div class="c3-b"><b>57%</b><span>BTTS</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-up">19:30</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i><span class="nm">Inter</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i><span class="nm">AC Milan</span></span></div>
+<div class="c3-l3"><span class="nm pt">Both teams score</span></div></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></article><article class="c c3 m-mr"><div class="c3-b"><b>47%</b><span>1X2</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-ger"></i><span class="nm">Bundesliga</span><span class="st st-up">21:00</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i><span class="nm">Borussia Mönchengladbach</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i><span class="nm">Eintracht Frankfurt</span></span></div>
+<div class="c3-l3"><span class="nm pt">Eintracht Frankfurt win</span></div></div></article><article class="c c3 m-none"><div class="c3-b"><b>—</b><span>No pick</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-up">22:00</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i><span class="nm">Lens</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i><span class="nm">Lille</span></span></div>
+<div class="c3-l3"><span class="nm mut">Awaiting prediction</span></div></div></article><article class="c c3 m-tg"><div class="c3-b"><b>55%</b><span>O/U 2.5</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-up">22:00</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i><span class="nm">Feyenoord</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i><span class="nm">AZ Alkmaar</span></span></div>
+<div class="c3-l3"><span class="nm pt">Under 2.5 goals</span></div></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c3 m-mr"><div class="c3-b"><b>49%</b><span>1X2</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="st st-done">FT</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i><span class="nm">Liverpool</span></span><b class="sc">2–1</b><span class="tn lo"><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i><span class="nm">Manchester City</span></span></div>
+<div class="c3-l3"><span class="nm pt">Liverpool win</span><span class="od">Odds 2.05</span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></div></article><article class="c c3 m-tg"><div class="c3-b"><b>68%</b><span>O/U 2.5</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-done">FT</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#A50044;--c2:#fff">B</i><span class="nm">Barcelona</span></span><b class="sc">0–0</b><span class="tn"><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i><span class="nm">Girona</span></span></div>
+<div class="c3-l3"><span class="nm pt">Over 2.5 goals</span><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></div></div></article><article class="c c3 m-dc"><div class="c3-b"><b>74%</b><span>DC</span></div><div class="c3-r">
+<div class="c3-l1"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span><span class="st st-done">AET</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i><span class="nm">Boca Juniors</span></span><b class="sc">1–1</b><span class="tn"><i class="cr" style="--c1:#fff;--c2:#E30613">R</i><span class="nm">River Plate</span></span></div>
+<div class="c3-l3"><span class="nm pt">Boca Juniors or draw</span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></div></article><article class="c c3 m-mr"><div class="c3-b"><b>51%</b><span>1X2</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="st st-halt">Postponed</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#D21034;--c2:#fff">E</i><span class="nm">Express FC</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i><span class="nm">SC Villa</span></span></div>
+<div class="c3-l3"><span class="nm pt mut">Express FC win</span><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></div></div></article><article class="c c3 m-bt"><div class="c3-b"><b>59%</b><span>BTTS</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-done">FT</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i><span class="nm">Napoli</span></span><b class="sc">2–2</b><span class="tn"><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i><span class="nm">Roma</span></span></div>
+<div class="c3-l3"><span class="nm pt">Both teams score</span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></div></article><article class="c c3 m-none"><div class="c3-b"><b>—</b><span>No pick</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-done">FT</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i><span class="nm">Ajax</span></span><b class="sc">3–1</b><span class="tn lo"><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i><span class="nm">PSV</span></span></div>
+<div class="c3-l3"><span class="nm mut">No prediction locked</span></div></div></article><article class="c c3 m-tg"><div class="c3-b"><b>54%</b><span>O/U 2.5</span></div><div class="c3-r">
+<div class="c3-l1"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-done">FT</span></div>
+<div class="c3-l2"><span class="tn"><i class="cr" style="--c1:#004170;--c2:#fff">P</i><span class="nm">Paris Saint-Germain</span></span><b class="sc">2–0</b><span class="tn lo"><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i><span class="nm">Marseille</span></span></div>
+<div class="c3-l3"><span class="nm pt">Under 2.5 goals</span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d4" aria-labelledby="h4">
+  <div class="info">
+    <div class="num"><span>4</span></div>
+    <h2 id="h4">Plain Words</h2>
+    <p class="idea">No codes and no boxes. The pick is a short sentence anyone can read.</p>
+    <ul class="how"><li>Teams and score read as one line: Arsenal 1–0 Chelsea.</li><li>The pick reads as words: Arsenal to win, 58%.</li><li>The result says Correct, Wrong or Void.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>67 px</dd></div><div><dt>Cards per screen</dt><dd>6½</dd></div><div><dt>Names trimmed, of 28</dt><dd>1</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>No market badge; a small colour square tells markets apart.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c4 m-mr">
+<div class="c4-l1"><span class="nm tms">Arsenal <b class="sc">1–0</b> Chelsea</span><span class="st st-live"><i class="dot"></i>63′</span></div>
+<div class="c4-l2"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 1.72</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Arsenal to win · <b>58%</b></span></div></article><article class="c c4 m-tg">
+<div class="c4-l1"><span class="nm tms">Real Betis <b class="sc">1–1</b> Sevilla</span><span class="st st-live"><i class="dot"></i>HT</span></div>
+<div class="c4-l2"><i class="fl f-esp"></i><span class="nm">LaLiga</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Over 2.5 goals · <b>61%</b></span></div></article><article class="c c4 m-dc">
+<div class="c4-l1"><span class="nm tms">KCCA <i>v</i> Vipers SC</span><span class="st st-up">18:00</span></div>
+<div class="c4-l2"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="od">Odds 1.28</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> KCCA to win or draw · <b>80%</b></span></div></article><article class="c c4 m-bt">
+<div class="c4-l1"><span class="nm tms">Inter <i>v</i> AC Milan</span><span class="st st-up">19:30</span></div>
+<div class="c4-l2"><i class="fl f-ita"></i><span class="nm">Serie A</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Both teams to score · <b>57%</b></span></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></article><article class="c c4 m-mr">
+<div class="c4-l1"><span class="nm tms">Borussia Mönchengladbach <i>v</i> Eintracht Frankfurt</span><span class="st st-up">21:00</span></div>
+<div class="c4-l2"><i class="fl f-ger"></i><span class="nm">Bundesliga</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Eintracht Frankfurt to win · <b>47%</b></span></div></article><article class="c c4 m-none">
+<div class="c4-l1"><span class="nm tms">Lens <i>v</i> Lille</span><span class="st st-up">22:00</span></div>
+<div class="c4-l2"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen mut">No pick yet · Awaiting prediction</span></div></article><article class="c c4 m-tg">
+<div class="c4-l1"><span class="nm tms">Feyenoord <i>v</i> AZ Alkmaar</span><span class="st st-up">22:00</span></div>
+<div class="c4-l2"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Under 2.5 goals · <b>55%</b></span></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c4 m-mr">
+<div class="c4-l1"><span class="nm tms">Liverpool <b class="sc">2–1</b> Manchester City</span><span class="st st-done">FT</span></div>
+<div class="c4-l2"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 2.05</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Liverpool to win · <b>49%</b></span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Correct</span></div></article><article class="c c4 m-tg">
+<div class="c4-l1"><span class="nm tms">Barcelona <b class="sc">0–0</b> Girona</span><span class="st st-done">FT</span></div>
+<div class="c4-l2"><i class="fl f-esp"></i><span class="nm">LaLiga</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Over 2.5 goals · <b>68%</b></span><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Wrong</span></div></article><article class="c c4 m-dc">
+<div class="c4-l1"><span class="nm tms">Boca Juniors <b class="sc">1–1</b> River Plate</span><span class="st st-done">AET</span></div>
+<div class="c4-l2"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Boca Juniors to win or draw · <b>74%</b></span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Correct</span></div></article><article class="c c4 m-mr">
+<div class="c4-l1"><span class="nm tms">Express FC <i>v</i> SC Villa</span><span class="st st-halt">Postponed</span></div>
+<div class="c4-l2"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen mut"><em>Pick</em> Express FC to win · <b>51%</b></span><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></div></article><article class="c c4 m-bt">
+<div class="c4-l1"><span class="nm tms">Napoli <b class="sc">2–2</b> Roma</span><span class="st st-done">FT</span></div>
+<div class="c4-l2"><i class="fl f-ita"></i><span class="nm">Serie A</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Both teams to score · <b>59%</b></span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Correct</span></div></article><article class="c c4 m-none">
+<div class="c4-l1"><span class="nm tms">Ajax <b class="sc">3–1</b> PSV</span><span class="st st-done">FT</span></div>
+<div class="c4-l2"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen mut">No pick yet · No prediction locked</span></div></article><article class="c c4 m-tg">
+<div class="c4-l1"><span class="nm tms">Paris Saint-Germain <b class="sc">2–0</b> Marseille</span><span class="st st-done">FT</span></div>
+<div class="c4-l2"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div>
+<div class="c4-l3"><i class="sq"></i><span class="nm sen"><em>Pick</em> Under 2.5 goals · <b>54%</b></span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Correct</span></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d5" aria-labelledby="h5">
+  <div class="info">
+    <div class="num"><span>5</span><em class="rec">Recommended</em></div>
+    <h2 id="h5">Ticket</h2>
+    <p class="idea">The match on the left, the pick on a torn-off stub.</p>
+    <ul class="how"><li>A perforated stub holds the market, the chance and the pick.</li><li>Once settled, the stub turns green, red or grey and says Won, Lost or Void.</li><li>Teams have their own lines, so long names stay whole.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>64 px</dd></div><div><dt>Cards per screen</dt><dd>7</dd></div><div><dt>Names trimmed, of 28</dt><dd>0</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>The stub is narrow, so picks say Home or Away.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c5 m-mr"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="st st-live"><i class="dot"></i>63′</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i><span class="nm">Arsenal</span><b class="g">1</b></div>
+<div class="c5-t"><i class="cr" style="--c1:#034694;--c2:#fff">C</i><span class="nm">Chelsea</span><b class="g">0</b></div>
+</div><div class="c5-s"><span class="s1"><span class="chip">1X2</span><span class="od">@1.72</span></span><b class="pc">58%</b><span class="pt">Home win</span></div></article><article class="c c5 m-tg"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-live"><i class="dot"></i>HT</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i><span class="nm">Real Betis</span><b class="g">1</b></div>
+<div class="c5-t"><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i><span class="nm">Sevilla</span><b class="g">1</b></div>
+</div><div class="c5-s"><span class="s1"><span class="chip">O/U 2.5</span></span><b class="pc">61%</b><span class="pt">Over 2.5</span></div></article><article class="c c5 m-dc"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="st st-up">18:00</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i><span class="nm">KCCA</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i><span class="nm">Vipers SC</span></div>
+</div><div class="c5-s"><span class="s1"><span class="chip">DC</span><span class="od">@1.28</span></span><b class="pc">80%</b><span class="pt">Home or draw</span></div></article><article class="c c5 m-bt"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-up">19:30</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i><span class="nm">Inter</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i><span class="nm">AC Milan</span></div>
+</div><div class="c5-s"><span class="s1"><span class="chip">BTTS</span></span><b class="pc">57%</b><span class="pt">Both score</span></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></article><article class="c c5 m-mr"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-ger"></i><span class="nm">Bundesliga</span><span class="st st-up">21:00</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i><span class="nm">Borussia Mönchengladbach</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i><span class="nm">Eintracht Frankfurt</span></div>
+</div><div class="c5-s"><span class="s1"><span class="chip">1X2</span></span><b class="pc">47%</b><span class="pt">Away win</span></div></article><article class="c c5 m-none"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-up">22:00</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i><span class="nm">Lens</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i><span class="nm">Lille</span></div>
+</div><div class="c5-s"><span class="s1"></span><b class="pc mut">—</b><span class="pt pw mut">Awaiting prediction</span></div></article><article class="c c5 m-tg"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-up">22:00</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i><span class="nm">Feyenoord</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i><span class="nm">AZ Alkmaar</span></div>
+</div><div class="c5-s"><span class="s1"><span class="chip">O/U 2.5</span></span><b class="pc">55%</b><span class="pt">Under 2.5</span></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c5 m-mr r-won"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="st st-done">FT</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i><span class="nm">Liverpool</span><b class="g">2</b></div>
+<div class="c5-t lo"><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i><span class="nm">Manchester City</span><b class="g">1</b></div>
+</div><div class="c5-s"><span class="s1"><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span><b class="pc">49%</b><span class="pt">Home win</span></div></article><article class="c c5 m-tg r-lost"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-done">FT</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#A50044;--c2:#fff">B</i><span class="nm">Barcelona</span><b class="g">0</b></div>
+<div class="c5-t"><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i><span class="nm">Girona</span><b class="g">0</b></div>
+</div><div class="c5-s"><span class="s1"><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></span><b class="pc">68%</b><span class="pt">Over 2.5</span></div></article><article class="c c5 m-dc r-won"><div class="c5-m">
+<div class="c5-hd"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span><span class="st st-done">AET</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i><span class="nm">Boca Juniors</span><b class="g">1</b></div>
+<div class="c5-t"><i class="cr" style="--c1:#fff;--c2:#E30613">R</i><span class="nm">River Plate</span><b class="g">1</b></div>
+</div><div class="c5-s"><span class="s1"><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span><b class="pc">74%</b><span class="pt">Home or draw</span></div></article><article class="c c5 m-mr r-void"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="st st-halt">Postponed</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#D21034;--c2:#fff">E</i><span class="nm">Express FC</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i><span class="nm">SC Villa</span></div>
+</div><div class="c5-s"><span class="s1"><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></span><b class="pc">51%</b><span class="pt">Home win</span></div></article><article class="c c5 m-bt r-won"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-done">FT</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i><span class="nm">Napoli</span><b class="g">2</b></div>
+<div class="c5-t"><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i><span class="nm">Roma</span><b class="g">2</b></div>
+</div><div class="c5-s"><span class="s1"><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span><b class="pc">59%</b><span class="pt">Both score</span></div></article><article class="c c5 m-none"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-done">FT</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i><span class="nm">Ajax</span><b class="g">3</b></div>
+<div class="c5-t lo"><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i><span class="nm">PSV</span><b class="g">1</b></div>
+</div><div class="c5-s"><span class="s1"></span><b class="pc mut">—</b><span class="pt pw mut">No prediction locked</span></div></article><article class="c c5 m-tg r-won"><div class="c5-m">
+<div class="c5-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-done">FT</span></div>
+<div class="c5-t"><i class="cr" style="--c1:#004170;--c2:#fff">P</i><span class="nm">Paris Saint-Germain</span><b class="g">2</b></div>
+<div class="c5-t lo"><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i><span class="nm">Marseille</span><b class="g">0</b></div>
+</div><div class="c5-s"><span class="s1"><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span><b class="pc">54%</b><span class="pt">Under 2.5</span></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d6" aria-labelledby="h6">
+  <div class="info">
+    <div class="num"><span>6</span></div>
+    <h2 id="h6">Fill Bar</h2>
+    <p class="idea">The pick line doubles as a meter. The fuller the line, the likelier the pick.</p>
+    <ul class="how"><li>League and status on top, the face-off in the middle.</li><li>The pick line fills to its chance in the market colour.</li><li>Result sits at the end of the pick line.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>80 px</dd></div><div><dt>Cards per screen</dt><dd>5½</dd></div><div><dt>Names trimmed, of 28</dt><dd>3</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>Two long names share one line and get trimmed.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c6 m-mr">
+<div class="c6-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 1.72</span><span class="st st-live"><i class="dot"></i>63′</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i><span class="nm">Arsenal</span></span><b class="sc">1 – 0</b><span class="a"><span class="nm">Chelsea</span><i class="cr" style="--c1:#034694;--c2:#fff">C</i></span></div>
+<div class="c6-bar" style="--p:58%"><span class="code">1X2</span><span class="nm pt">Arsenal win</span><b>58%</b></div></article><article class="c c6 m-tg">
+<div class="c6-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-live"><i class="dot"></i>HT</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i><span class="nm">Real Betis</span></span><b class="sc">1 – 1</b><span class="a"><span class="nm">Sevilla</span><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i></span></div>
+<div class="c6-bar" style="--p:61%"><span class="code">O/U 2.5</span><span class="nm pt">Over 2.5 goals</span><b>61%</b></div></article><article class="c c6 m-dc">
+<div class="c6-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="od">Odds 1.28</span><span class="st st-up">18:00</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i><span class="nm">KCCA</span></span><i class="vs">v</i><span class="a"><span class="nm">Vipers SC</span><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i></span></div>
+<div class="c6-bar" style="--p:80%"><span class="code">DC</span><span class="nm pt">KCCA or draw</span><b>80%</b></div></article><article class="c c6 m-bt">
+<div class="c6-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-up">19:30</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i><span class="nm">Inter</span></span><i class="vs">v</i><span class="a"><span class="nm">AC Milan</span><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i></span></div>
+<div class="c6-bar" style="--p:57%"><span class="code">BTTS</span><span class="nm pt">Both teams score</span><b>57%</b></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></article><article class="c c6 m-mr">
+<div class="c6-hd"><i class="fl f-ger"></i><span class="nm">Bundesliga</span><span class="st st-up">21:00</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i><span class="nm">Borussia Mönchengladbach</span></span><i class="vs">v</i><span class="a"><span class="nm">Eintracht Frankfurt</span><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i></span></div>
+<div class="c6-bar" style="--p:47%"><span class="code">1X2</span><span class="nm pt">Eintracht Frankfurt win</span><b>47%</b></div></article><article class="c c6 m-none">
+<div class="c6-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-up">22:00</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i><span class="nm">Lens</span></span><i class="vs">v</i><span class="a"><span class="nm">Lille</span><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i></span></div>
+<div class="c6-bar none"><span class="nm mut">No pick · Awaiting prediction</span></div></article><article class="c c6 m-tg">
+<div class="c6-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-up">22:00</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i><span class="nm">Feyenoord</span></span><i class="vs">v</i><span class="a"><span class="nm">AZ Alkmaar</span><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i></span></div>
+<div class="c6-bar" style="--p:55%"><span class="code">O/U 2.5</span><span class="nm pt">Under 2.5 goals</span><b>55%</b></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c6 m-mr">
+<div class="c6-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 2.05</span><span class="st st-done">FT</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i><span class="nm">Liverpool</span></span><b class="sc">2 – 1</b><span class="a lo"><span class="nm">Manchester City</span><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i></span></div>
+<div class="c6-bar" style="--p:49%"><span class="code">1X2</span><span class="nm pt">Liverpool win</span><b>49%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></article><article class="c c6 m-tg">
+<div class="c6-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-done">FT</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#A50044;--c2:#fff">B</i><span class="nm">Barcelona</span></span><b class="sc">0 – 0</b><span class="a"><span class="nm">Girona</span><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i></span></div>
+<div class="c6-bar" style="--p:68%"><span class="code">O/U 2.5</span><span class="nm pt">Over 2.5 goals</span><b>68%</b><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></div></article><article class="c c6 m-dc">
+<div class="c6-hd"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span><span class="st st-done">AET</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i><span class="nm">Boca Juniors</span></span><b class="sc">1 – 1</b><span class="a"><span class="nm">River Plate</span><i class="cr" style="--c1:#fff;--c2:#E30613">R</i></span></div>
+<div class="c6-bar" style="--p:74%"><span class="code">DC</span><span class="nm pt">Boca Juniors or draw</span><b>74%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></article><article class="c c6 m-mr">
+<div class="c6-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="st st-halt">Postponed</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#D21034;--c2:#fff">E</i><span class="nm">Express FC</span></span><i class="vs">v</i><span class="a"><span class="nm">SC Villa</span><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i></span></div>
+<div class="c6-bar" style="--p:51%"><span class="code">1X2</span><span class="nm pt mut">Express FC win</span><b>51%</b><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></div></article><article class="c c6 m-bt">
+<div class="c6-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-done">FT</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i><span class="nm">Napoli</span></span><b class="sc">2 – 2</b><span class="a"><span class="nm">Roma</span><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i></span></div>
+<div class="c6-bar" style="--p:59%"><span class="code">BTTS</span><span class="nm pt">Both teams score</span><b>59%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></article><article class="c c6 m-none">
+<div class="c6-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-done">FT</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i><span class="nm">Ajax</span></span><b class="sc">3 – 1</b><span class="a lo"><span class="nm">PSV</span><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i></span></div>
+<div class="c6-bar none"><span class="nm mut">No pick · No prediction locked</span></div></article><article class="c c6 m-tg">
+<div class="c6-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-done">FT</span></div>
+<div class="c6-vs"><span class="h"><i class="cr" style="--c1:#004170;--c2:#fff">P</i><span class="nm">Paris Saint-Germain</span></span><b class="sc">2 – 0</b><span class="a lo"><span class="nm">Marseille</span><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i></span></div>
+<div class="c6-bar" style="--p:54%"><span class="code">O/U 2.5</span><span class="nm pt">Under 2.5 goals</span><b>54%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d7" aria-labelledby="h7">
+  <div class="info">
+    <div class="num"><span>7</span></div>
+    <h2 id="h7">Timeline</h2>
+    <p class="idea">Matches hang on a time rail, like an agenda. No boxes, just hairlines.</p>
+    <ul class="how"><li>Kickoff time always shows, with the live minute or FT under it.</li><li>The dot on the rail shows the state: hollow, live, tick, cross.</li><li>Each row: league, teams and score, the pick.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>67 px</dd></div><div><dt>Cards per screen</dt><dd>7</dd></div><div><dt>Names trimmed, of 28</dt><dd>5</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>The time rail uses 54 px of width, so names trim a little sooner.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><div class="tl"><article class="c7 m-mr"><div class="c7-tm"><b>17:00</b><small class="live">63′</small></div><i class="nd nd-live"></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-eng"></i><span class="nm">Premier League</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i><span class="nm">Arsenal</span></span><b class="sc">1–0</b><span class="tn"><i class="cr" style="--c1:#034694;--c2:#fff">C</i><span class="nm">Chelsea</span></span></div>
+<div class="c7-l3"><span class="chip">1X2</span><span class="nm pt">Arsenal win</span><span class="od">@ 1.72</span><b class="pc">58%</b></div></div></article><article class="c7 m-tg"><div class="c7-tm"><b>17:30</b><small class="live">HT</small></div><i class="nd nd-ht"></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-esp"></i><span class="nm">LaLiga</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i><span class="nm">Real Betis</span></span><b class="sc">1–1</b><span class="tn"><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i><span class="nm">Sevilla</span></span></div>
+<div class="c7-l3"><span class="chip">O/U 2.5</span><span class="nm pt">Over 2.5 goals</span><b class="pc">61%</b></div></div></article><article class="c7 m-dc"><div class="c7-tm"><b>18:00</b></div><i class="nd nd-up"></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i><span class="nm">KCCA</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i><span class="nm">Vipers SC</span></span></div>
+<div class="c7-l3"><span class="chip">DC</span><span class="nm pt">KCCA or draw</span><span class="od">@ 1.28</span><b class="pc">80%</b></div></div></article><article class="c7 m-bt"><div class="c7-tm"><b>19:30</b></div><i class="nd nd-up"></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-ita"></i><span class="nm">Serie A</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i><span class="nm">Inter</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i><span class="nm">AC Milan</span></span></div>
+<div class="c7-l3"><span class="chip">BTTS</span><span class="nm pt">Both teams score</span><b class="pc">57%</b></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></div></article><article class="c7 m-mr"><div class="c7-tm"><b>21:00</b></div><i class="nd nd-up"></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-ger"></i><span class="nm">Bundesliga</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i><span class="nm">Borussia Mönchengladbach</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i><span class="nm">Eintracht Frankfurt</span></span></div>
+<div class="c7-l3"><span class="chip">1X2</span><span class="nm pt">Eintracht Frankfurt win</span><b class="pc">47%</b></div></div></article><article class="c7 m-none"><div class="c7-tm"><b>22:00</b></div><i class="nd nd-up"></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i><span class="nm">Lens</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i><span class="nm">Lille</span></span></div>
+<div class="c7-l3"><span class="nm mut">No pick · Awaiting prediction</span></div></div></article><article class="c7 m-tg"><div class="c7-tm"><b>22:00</b></div><i class="nd nd-up"></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i><span class="nm">Feyenoord</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i><span class="nm">AZ Alkmaar</span></span></div>
+<div class="c7-l3"><span class="chip">O/U 2.5</span><span class="nm pt">Under 2.5 goals</span><b class="pc">55%</b></div></div></article></div></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><div class="tl"><article class="c7 m-mr"><div class="c7-tm"><b>19:30</b><small>FT</small></div><i class="nd nd-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-eng"></i><span class="nm">Premier League</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i><span class="nm">Liverpool</span></span><b class="sc">2–1</b><span class="tn lo"><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i><span class="nm">Manchester City</span></span></div>
+<div class="c7-l3"><span class="chip">1X2</span><span class="nm pt">Liverpool win</span><span class="od">@ 2.05</span><b class="pc">49%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></div></article><article class="c7 m-tg"><div class="c7-tm"><b>20:00</b><small>FT</small></div><i class="nd nd-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-esp"></i><span class="nm">LaLiga</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#A50044;--c2:#fff">B</i><span class="nm">Barcelona</span></span><b class="sc">0–0</b><span class="tn"><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i><span class="nm">Girona</span></span></div>
+<div class="c7-l3"><span class="chip">O/U 2.5</span><span class="nm pt">Over 2.5 goals</span><b class="pc">68%</b><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></div></div></article><article class="c7 m-dc"><div class="c7-tm"><b>20:30</b><small>AET</small></div><i class="nd nd-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></i><div class="c7-r">
+<div class="c7-l1"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i><span class="nm">Boca Juniors</span></span><b class="sc">1–1</b><span class="tn"><i class="cr" style="--c1:#fff;--c2:#E30613">R</i><span class="nm">River Plate</span></span></div>
+<div class="c7-l3"><span class="chip">DC</span><span class="nm pt">Boca Juniors or draw</span><b class="pc">74%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></div></article><article class="c7 m-mr"><div class="c7-tm"><b>21:00</b><small class="halt">Postp.</small></div><i class="nd nd-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#D21034;--c2:#fff">E</i><span class="nm">Express FC</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i><span class="nm">SC Villa</span></span></div>
+<div class="c7-l3"><span class="chip">1X2</span><span class="nm pt mut">Express FC win</span><b class="pc">51%</b><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></div></div></article><article class="c7 m-bt"><div class="c7-tm"><b>21:45</b><small>FT</small></div><i class="nd nd-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-ita"></i><span class="nm">Serie A</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i><span class="nm">Napoli</span></span><b class="sc">2–2</b><span class="tn"><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i><span class="nm">Roma</span></span></div>
+<div class="c7-l3"><span class="chip">BTTS</span><span class="nm pt">Both teams score</span><b class="pc">59%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></div></article><article class="c7 m-none"><div class="c7-tm"><b>21:45</b><small>FT</small></div><i class="nd nd-ft"></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i><span class="nm">Ajax</span></span><b class="sc">3–1</b><span class="tn lo"><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i><span class="nm">PSV</span></span></div>
+<div class="c7-l3"><span class="nm mut">No pick · No prediction locked</span></div></div></article><article class="c7 m-tg"><div class="c7-tm"><b>22:00</b><small>FT</small></div><i class="nd nd-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></i><div class="c7-r">
+<div class="c7-l1"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div>
+<div class="c7-l2"><span class="tn"><i class="cr" style="--c1:#004170;--c2:#fff">P</i><span class="nm">Paris Saint-Germain</span></span><b class="sc">2–0</b><span class="tn lo"><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i><span class="nm">Marseille</span></span></div>
+<div class="c7-l3"><span class="chip">O/U 2.5</span><span class="nm pt">Under 2.5 goals</span><b class="pc">54%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div></div></article></div></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d8" aria-labelledby="h8">
+  <div class="info">
+    <div class="num"><span>8</span></div>
+    <h2 id="h8">Pick Header</h2>
+    <p class="idea">The pick leads each card in a coloured band. The match sits under it.</p>
+    <ul class="how"><li>The band shows market, pick and chance in the market colour.</li><li>Once settled, Won, Lost or Void closes the band.</li><li>Under it: teams and score, then league and odds.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>69 px</dd></div><div><dt>Cards per screen</dt><dd>6½</dd></div><div><dt>Names trimmed, of 28</dt><dd>3</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>The match comes second in the reading order.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c8 m-mr"><div class="c8-band"><span class="code">1X2</span><span class="nm pt">Arsenal win</span><b>58%</b></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i><span class="nm">Arsenal</span></span><b class="sc">1–0</b><span class="tn"><i class="cr" style="--c1:#034694;--c2:#fff">C</i><span class="nm">Chelsea</span></span><span class="st st-live"><i class="dot"></i>63′</span></div>
+<div class="c8-l2"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 1.72</span></div></div></article><article class="c c8 m-tg"><div class="c8-band"><span class="code">O/U 2.5</span><span class="nm pt">Over 2.5 goals</span><b>61%</b></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i><span class="nm">Real Betis</span></span><b class="sc">1–1</b><span class="tn"><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i><span class="nm">Sevilla</span></span><span class="st st-live"><i class="dot"></i>HT</span></div>
+<div class="c8-l2"><i class="fl f-esp"></i><span class="nm">LaLiga</span></div></div></article><article class="c c8 m-dc"><div class="c8-band"><span class="code">DC</span><span class="nm pt">KCCA or draw</span><b>80%</b></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i><span class="nm">KCCA</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i><span class="nm">Vipers SC</span></span><span class="st st-up">18:00</span></div>
+<div class="c8-l2"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="od">Odds 1.28</span></div></div></article><article class="c c8 m-bt"><div class="c8-band"><span class="code">BTTS</span><span class="nm pt">Both teams score</span><b>57%</b></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i><span class="nm">Inter</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i><span class="nm">AC Milan</span></span><span class="st st-up">19:30</span></div>
+<div class="c8-l2"><i class="fl f-ita"></i><span class="nm">Serie A</span></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></div></article><article class="c c8 m-mr"><div class="c8-band"><span class="code">1X2</span><span class="nm pt">Eintracht Frankfurt win</span><b>47%</b></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i><span class="nm">Borussia Mönchengladbach</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i><span class="nm">Eintracht Frankfurt</span></span><span class="st st-up">21:00</span></div>
+<div class="c8-l2"><i class="fl f-ger"></i><span class="nm">Bundesliga</span></div></div></article><article class="c c8 m-none"><div class="c8-band"><span class="nm">No pick · Awaiting prediction</span></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i><span class="nm">Lens</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i><span class="nm">Lille</span></span><span class="st st-up">22:00</span></div>
+<div class="c8-l2"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div></div></article><article class="c c8 m-tg"><div class="c8-band"><span class="code">O/U 2.5</span><span class="nm pt">Under 2.5 goals</span><b>55%</b></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i><span class="nm">Feyenoord</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i><span class="nm">AZ Alkmaar</span></span><span class="st st-up">22:00</span></div>
+<div class="c8-l2"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c8 m-mr"><div class="c8-band"><span class="code">1X2</span><span class="nm pt">Liverpool win</span><b>49%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i><span class="nm">Liverpool</span></span><b class="sc">2–1</b><span class="tn lo"><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i><span class="nm">Manchester City</span></span><span class="st st-done">FT</span></div>
+<div class="c8-l2"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 2.05</span></div></div></article><article class="c c8 m-tg"><div class="c8-band"><span class="code">O/U 2.5</span><span class="nm pt">Over 2.5 goals</span><b>68%</b><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#A50044;--c2:#fff">B</i><span class="nm">Barcelona</span></span><b class="sc">0–0</b><span class="tn"><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i><span class="nm">Girona</span></span><span class="st st-done">FT</span></div>
+<div class="c8-l2"><i class="fl f-esp"></i><span class="nm">LaLiga</span></div></div></article><article class="c c8 m-dc"><div class="c8-band"><span class="code">DC</span><span class="nm pt">Boca Juniors or draw</span><b>74%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i><span class="nm">Boca Juniors</span></span><b class="sc">1–1</b><span class="tn"><i class="cr" style="--c1:#fff;--c2:#E30613">R</i><span class="nm">River Plate</span></span><span class="st st-done">AET</span></div>
+<div class="c8-l2"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span></div></div></article><article class="c c8 m-mr"><div class="c8-band"><span class="code">1X2</span><span class="nm pt mut">Express FC win</span><b>51%</b><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#D21034;--c2:#fff">E</i><span class="nm">Express FC</span></span><i class="vs">v</i><span class="tn"><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i><span class="nm">SC Villa</span></span><span class="st st-halt">Postponed</span></div>
+<div class="c8-l2"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span></div></div></article><article class="c c8 m-bt"><div class="c8-band"><span class="code">BTTS</span><span class="nm pt">Both teams score</span><b>59%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i><span class="nm">Napoli</span></span><b class="sc">2–2</b><span class="tn"><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i><span class="nm">Roma</span></span><span class="st st-done">FT</span></div>
+<div class="c8-l2"><i class="fl f-ita"></i><span class="nm">Serie A</span></div></div></article><article class="c c8 m-none"><div class="c8-band"><span class="nm">No pick · No prediction locked</span></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i><span class="nm">Ajax</span></span><b class="sc">3–1</b><span class="tn lo"><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i><span class="nm">PSV</span></span><span class="st st-done">FT</span></div>
+<div class="c8-l2"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div></div></article><article class="c c8 m-tg"><div class="c8-band"><span class="code">O/U 2.5</span><span class="nm pt">Under 2.5 goals</span><b>54%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div><div class="c8-b">
+<div class="c8-l1"><span class="tn"><i class="cr" style="--c1:#004170;--c2:#fff">P</i><span class="nm">Paris Saint-Germain</span></span><b class="sc">2–0</b><span class="tn lo"><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i><span class="nm">Marseille</span></span><span class="st st-done">FT</span></div>
+<div class="c8-l2"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d9" aria-labelledby="h9">
+  <div class="info">
+    <div class="num"><span>9</span></div>
+    <h2 id="h9">Two-Up</h2>
+    <p class="idea">Two tiles per row, so about twice as many matches fit on a screen.</p>
+    <ul class="how"><li>Each tile: league and status, both teams with goals, the pick.</li><li>The pick sits in its own band at the foot of the tile.</li><li>Result or odds sit beside the chance.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>103 px</dd></div><div><dt>Cards per screen</dt><dd>9</dd></div><div><dt>Names trimmed, of 28</dt><dd>2</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>Tiles are tall and the reading order zigzags, so scanning by kickoff time is harder.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><div class="g2"><article class="c c9 m-mr">
+<div class="c9-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="st st-live"><i class="dot"></i>63′</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i><span class="nm">Arsenal</span><b class="g">1</b></div>
+<div class="c9-t"><i class="cr" style="--c1:#034694;--c2:#fff">C</i><span class="nm">Chelsea</span><b class="g">0</b></div>
+<div class="c9-pk"><span class="r1"><span class="chip">1X2</span><span class="nm">Home win</span></span><span class="r2"><b class="pc">58%</b><span class="od">@ 1.72</span></span></div></article><article class="c c9 m-tg">
+<div class="c9-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-live"><i class="dot"></i>HT</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i><span class="nm">Real Betis</span><b class="g">1</b></div>
+<div class="c9-t"><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i><span class="nm">Sevilla</span><b class="g">1</b></div>
+<div class="c9-pk"><span class="r1"><span class="chip">O/U 2.5</span><span class="nm">Over 2.5</span></span><span class="r2"><b class="pc">61%</b></span></div></article><article class="c c9 m-dc">
+<div class="c9-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="st st-up">18:00</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i><span class="nm">KCCA</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i><span class="nm">Vipers SC</span></div>
+<div class="c9-pk"><span class="r1"><span class="chip">DC</span><span class="nm">Home or draw</span></span><span class="r2"><b class="pc">80%</b><span class="od">@ 1.28</span></span></div></article><article class="c c9 m-bt">
+<div class="c9-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-up">19:30</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i><span class="nm">Inter</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i><span class="nm">AC Milan</span></div>
+<div class="c9-pk"><span class="r1"><span class="chip">BTTS</span><span class="nm">Both score</span></span><span class="r2"><b class="pc">57%</b></span></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news</p></article><article class="c c9 m-mr">
+<div class="c9-hd"><i class="fl f-ger"></i><span class="nm">Bundesliga</span><span class="st st-up">21:00</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i><span class="nm">Borussia Mönchengladbach</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i><span class="nm">Eintracht Frankfurt</span></div>
+<div class="c9-pk"><span class="r1"><span class="chip">1X2</span><span class="nm">Away win</span></span><span class="r2"><b class="pc">47%</b></span></div></article><article class="c c9 m-none">
+<div class="c9-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-up">22:00</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i><span class="nm">Lens</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i><span class="nm">Lille</span></div>
+<div class="c9-pk"><span class="r1 mut"><b>No pick</b></span><span class="r2"><span class="nm mut">Awaiting prediction</span></span></div></article><article class="c c9 m-tg">
+<div class="c9-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-up">22:00</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i><span class="nm">Feyenoord</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i><span class="nm">AZ Alkmaar</span></div>
+<div class="c9-pk"><span class="r1"><span class="chip">O/U 2.5</span><span class="nm">Under 2.5</span></span><span class="r2"><b class="pc">55%</b></span></div></article></div></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><div class="g2"><article class="c c9 m-mr">
+<div class="c9-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="st st-done">FT</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i><span class="nm">Liverpool</span><b class="g">2</b></div>
+<div class="c9-t lo"><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i><span class="nm">Manchester City</span><b class="g">1</b></div>
+<div class="c9-pk"><span class="r1"><span class="chip">1X2</span><span class="nm">Home win</span></span><span class="r2"><b class="pc">49%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span></div></article><article class="c c9 m-tg">
+<div class="c9-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-done">FT</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#A50044;--c2:#fff">B</i><span class="nm">Barcelona</span><b class="g">0</b></div>
+<div class="c9-t"><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i><span class="nm">Girona</span><b class="g">0</b></div>
+<div class="c9-pk"><span class="r1"><span class="chip">O/U 2.5</span><span class="nm">Over 2.5</span></span><span class="r2"><b class="pc">68%</b><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></span></div></article><article class="c c9 m-dc">
+<div class="c9-hd"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span><span class="st st-done">AET</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i><span class="nm">Boca Juniors</span><b class="g">1</b></div>
+<div class="c9-t"><i class="cr" style="--c1:#fff;--c2:#E30613">R</i><span class="nm">River Plate</span><b class="g">1</b></div>
+<div class="c9-pk"><span class="r1"><span class="chip">DC</span><span class="nm">Home or draw</span></span><span class="r2"><b class="pc">74%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span></div></article><article class="c c9 m-mr">
+<div class="c9-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="st st-halt">Postp.</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#D21034;--c2:#fff">E</i><span class="nm">Express FC</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i><span class="nm">SC Villa</span></div>
+<div class="c9-pk"><span class="r1"><span class="chip">1X2</span><span class="nm mut">Home win</span></span><span class="r2"><b class="pc">51%</b><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></span></div></article><article class="c c9 m-bt">
+<div class="c9-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-done">FT</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i><span class="nm">Napoli</span><b class="g">2</b></div>
+<div class="c9-t"><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i><span class="nm">Roma</span><b class="g">2</b></div>
+<div class="c9-pk"><span class="r1"><span class="chip">BTTS</span><span class="nm">Both score</span></span><span class="r2"><b class="pc">59%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span></div></article><article class="c c9 m-none">
+<div class="c9-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-done">FT</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i><span class="nm">Ajax</span><b class="g">3</b></div>
+<div class="c9-t lo"><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i><span class="nm">PSV</span><b class="g">1</b></div>
+<div class="c9-pk"><span class="r1 mut"><b>No pick</b></span><span class="r2"><span class="nm mut">No prediction locked</span></span></div></article><article class="c c9 m-tg">
+<div class="c9-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-done">FT</span></div>
+<div class="c9-t"><i class="cr" style="--c1:#004170;--c2:#fff">P</i><span class="nm">Paris Saint-Germain</span><b class="g">2</b></div>
+<div class="c9-t lo"><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i><span class="nm">Marseille</span><b class="g">0</b></div>
+<div class="c9-pk"><span class="r1"><span class="chip">O/U 2.5</span><span class="nm">Under 2.5</span></span><span class="r2"><b class="pc">54%</b><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></span></div></article></div></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+<section class="design" id="d10" aria-labelledby="h10">
+  <div class="info">
+    <div class="num"><span>10</span></div>
+    <h2 id="h10">Market Board</h2>
+    <p class="idea">Shows every outcome with its chance. The pick is the filled box.</p>
+    <ul class="how"><li>Three boxes for 1X2 and double chance, two for goals and both-teams-score.</li><li>The filled box is the pick; the others show what else could happen.</li><li>Status, odds and the result sit on the league line.</li></ul>
+    <dl class="facts"><div><dt>Card height</dt><dd>80 px</dd></div><div><dt>Cards per screen</dt><dd>5½</dd></div><div><dt>Names trimmed, of 28</dt><dd>4</dd></div></dl>
+    <p class="trade"><b>Trade-off</b>The tallest card here; double chance uses the 1X, X2 and 12 codes.</p>
+  </div>
+  <div class="phones">
+    <figure><div class="device"><div class="screen lt"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Today</b><span>Wed 14 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c10 m-mr">
+<div class="c10-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 1.72</span><span class="st st-live"><i class="dot"></i>63′</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Arsenal</span><i class="cr" style="--c1:#DB0007;--c2:#fff">A</i></span><span class="c10-mid"><b class="sc">1 – 0</b></span><span class="c10-tm a"><i class="cr" style="--c1:#034694;--c2:#fff">C</i><span class="nm">Chelsea</span></span></div>
+<div class="c10-bd" style="--n:3"><span class="code">1X2</span><span class="o on">Home<b>58%</b></span><span class="o">Draw<b>24%</b></span><span class="o">Away<b>18%</b></span></div></article><article class="c c10 m-tg">
+<div class="c10-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-live"><i class="dot"></i>HT</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Real Betis</span><i class="cr" style="--c1:#0BB363;--c2:#fff">B</i></span><span class="c10-mid"><b class="sc">1 – 1</b></span><span class="c10-tm a"><i class="cr" style="--c1:#fff;--c2:#D7001F">S</i><span class="nm">Sevilla</span></span></div>
+<div class="c10-bd" style="--n:2"><span class="code">O/U 2.5</span><span class="o on">Over<b>61%</b></span><span class="o">Under<b>39%</b></span></div></article><article class="c c10 m-dc">
+<div class="c10-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="od">Odds 1.28</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">KCCA</span><i class="cr" style="--c1:#F4C300;--c2:#14213D">K</i></span><span class="c10-mid"><b class="tm">18:00</b></span><span class="c10-tm a"><i class="cr" style="--c1:#5B2A86;--c2:#fff">V</i><span class="nm">Vipers SC</span></span></div>
+<div class="c10-bd" style="--n:3"><span class="code">DC</span><span class="o on">1X<b>80%</b></span><span class="o">X2<b>50%</b></span><span class="o">12<b>70%</b></span></div></article><article class="c c10 m-bt">
+<div class="c10-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Inter</span><i class="cr" style="--c1:#0068A8;--c2:#fff">I</i></span><span class="c10-mid"><b class="tm">19:30</b></span><span class="c10-tm a"><i class="cr" style="--c1:#C8102E;--c2:#fff">M</i><span class="nm">AC Milan</span></span></div>
+<div class="c10-bd" style="--n:2"><span class="code">BTTS</span><span class="o on">Yes<b>57%</b></span><span class="o">No<b>43%</b></span></div><p class="nt"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>Limited news coverage</p></article><article class="c c10 m-mr">
+<div class="c10-hd"><i class="fl f-ger"></i><span class="nm">Bundesliga</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Borussia Mönchengladbach</span><i class="cr" style="--c1:#1A1A1A;--c2:#fff">B</i></span><span class="c10-mid"><b class="tm">21:00</b></span><span class="c10-tm a"><i class="cr" style="--c1:#E1000F;--c2:#fff">E</i><span class="nm">Eintracht Frankfurt</span></span></div>
+<div class="c10-bd" style="--n:3"><span class="code">1X2</span><span class="o">Home<b>29%</b></span><span class="o">Draw<b>24%</b></span><span class="o on">Away<b>47%</b></span></div></article><article class="c c10 m-none">
+<div class="c10-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Lens</span><i class="cr" style="--c1:#FFD100;--c2:#C8001A">L</i></span><span class="c10-mid"><b class="tm">22:00</b></span><span class="c10-tm a"><i class="cr" style="--c1:#E01E13;--c2:#fff">L</i><span class="nm">Lille</span></span></div>
+<div class="c10-bd none"><span class="nm">No pick · Awaiting prediction</span></div></article><article class="c c10 m-tg">
+<div class="c10-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Feyenoord</span><i class="cr" style="--c1:#E3000B;--c2:#fff">F</i></span><span class="c10-mid"><b class="tm">22:00</b></span><span class="c10-tm a"><i class="cr" style="--c1:#B5001C;--c2:#fff">A</i><span class="nm">AZ Alkmaar</span></span></div>
+<div class="c10-bd" style="--n:2"><span class="code">O/U 2.5</span><span class="o">Over<b>45%</b></span><span class="o on">Under<b>55%</b></span></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Today · light</figcaption></figure>
+    <figure><div class="device"><div class="screen dk"><div class="sb"><span>9:41</span><span class="sb-r"><svg width="16" height="10" viewBox="0 0 16 10" fill="currentColor"><rect x="0" y="6.5" width="2.8" height="3.5"/><rect x="4.4" y="4.5" width="2.8" height="5.5"/><rect x="8.8" y="2.3" width="2.8" height="7.7"/><rect x="13.2" y="0" width="2.8" height="10"/></svg><svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="2.5" fill="none" stroke="currentColor" opacity=".5"/><rect x="2" y="2" width="14" height="7" rx="1.2" fill="currentColor"/><rect x="20.6" y="3.5" width="1.6" height="4" rx=".8" fill="currentColor" opacity=".5"/></svg></span></div><div class="ab"><span class="brand"><svg class="mark" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M17.3 8.4A6.2 6.2 0 1 0 18.2 13h-5.6"/></svg>Goal Hint</span><span class="ab-btn"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span></div><div class="main"><div class="dh"><b>Yesterday</b><span>Tue 13 Oct</span><span class="dz">7 matches · EAT</span></div><article class="c c10 m-mr">
+<div class="c10-hd"><i class="fl f-eng"></i><span class="nm">Premier League</span><span class="od">Odds 2.05</span><span class="st st-done">FT</span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Liverpool</span><i class="cr" style="--c1:#C8102E;--c2:#fff">L</i></span><span class="c10-mid"><b class="sc">2 – 1</b></span><span class="c10-tm a lo"><i class="cr" style="--c1:#6CABDD;--c2:#0B2545">M</i><span class="nm">Manchester City</span></span></div>
+<div class="c10-bd" style="--n:3"><span class="code">1X2</span><span class="o on">Home<b>49%</b></span><span class="o">Draw<b>25%</b></span><span class="o">Away<b>26%</b></span></div></article><article class="c c10 m-tg">
+<div class="c10-hd"><i class="fl f-esp"></i><span class="nm">LaLiga</span><span class="st st-done">FT</span><span class="rs rs-lost"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>Lost</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Barcelona</span><i class="cr" style="--c1:#A50044;--c2:#fff">B</i></span><span class="c10-mid"><b class="sc">0 – 0</b></span><span class="c10-tm a"><i class="cr" style="--c1:#CE1126;--c2:#fff">G</i><span class="nm">Girona</span></span></div>
+<div class="c10-bd" style="--n:2"><span class="code">O/U 2.5</span><span class="o on">Over<b>68%</b></span><span class="o">Under<b>32%</b></span></div></article><article class="c c10 m-dc">
+<div class="c10-hd"><svg class="fl gl" aria-hidden="true"><use href="#i-globe"/></svg><span class="nm">Copa Libertadores</span><span class="st st-done">AET</span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Boca Juniors</span><i class="cr" style="--c1:#103F79;--c2:#F3B229">B</i></span><span class="c10-mid"><b class="sc">1 – 1</b></span><span class="c10-tm a"><i class="cr" style="--c1:#fff;--c2:#E30613">R</i><span class="nm">River Plate</span></span></div>
+<div class="c10-bd" style="--n:3"><span class="code">DC</span><span class="o on">1X<b>74%</b></span><span class="o">X2<b>60%</b></span><span class="o">12<b>66%</b></span></div></article><article class="c c10 m-mr">
+<div class="c10-hd"><i class="fl f-uga"></i><span class="nm">Uganda Premier League</span><span class="st st-halt">Postponed</span><span class="rs rs-void"><svg class="ic" aria-hidden="true"><use href="#i-minus"/></svg>Void</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Express FC</span><i class="cr" style="--c1:#D21034;--c2:#fff">E</i></span><span class="c10-mid"><i class="vs">v</i></span><span class="c10-tm a"><i class="cr" style="--c1:#0047AB;--c2:#fff">V</i><span class="nm">SC Villa</span></span></div>
+<div class="c10-bd void" style="--n:3"><span class="code">1X2</span><span class="o on">Home<b>51%</b></span><span class="o">Draw<b>27%</b></span><span class="o">Away<b>22%</b></span></div></article><article class="c c10 m-bt">
+<div class="c10-hd"><i class="fl f-ita"></i><span class="nm">Serie A</span><span class="st st-done">FT</span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Napoli</span><i class="cr" style="--c1:#12A0D7;--c2:#fff">N</i></span><span class="c10-mid"><b class="sc">2 – 2</b></span><span class="c10-tm a"><i class="cr" style="--c1:#8E1F2F;--c2:#F0BC42">R</i><span class="nm">Roma</span></span></div>
+<div class="c10-bd" style="--n:2"><span class="code">BTTS</span><span class="o on">Yes<b>59%</b></span><span class="o">No<b>41%</b></span></div></article><article class="c c10 m-none">
+<div class="c10-hd"><i class="fl f-ned"></i><span class="nm">Eredivisie</span><span class="st st-done">FT</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Ajax</span><i class="cr" style="--c1:#fff;--c2:#D2122E">A</i></span><span class="c10-mid"><b class="sc">3 – 1</b></span><span class="c10-tm a lo"><i class="cr" style="--c1:#ED1C24;--c2:#fff">P</i><span class="nm">PSV</span></span></div>
+<div class="c10-bd none"><span class="nm">No pick · No prediction locked</span></div></article><article class="c c10 m-tg">
+<div class="c10-hd"><i class="fl f-fra"></i><span class="nm">Ligue 1</span><span class="st st-done">FT</span><span class="rs rs-won"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Won</span></div>
+<div class="c10-vs"><span class="c10-tm h"><span class="nm">Paris Saint-Germain</span><i class="cr" style="--c1:#004170;--c2:#fff">P</i></span><span class="c10-mid"><b class="sc">2 – 0</b></span><span class="c10-tm a lo"><i class="cr" style="--c1:#2FAEE0;--c2:#fff">M</i><span class="nm">Marseille</span></span></div>
+<div class="c10-bd" style="--n:2"><span class="code">O/U 2.5</span><span class="o">Over<b>46%</b></span><span class="o on">Under<b>54%</b></span></div></article></div><nav class="tb"><span class="on"><svg class="i" aria-hidden="true"><use href="#i-ball"/></svg>Matches</span><span><svg class="i" aria-hidden="true"><use href="#i-live"/></svg>Live</span><span><svg class="i" aria-hidden="true"><use href="#i-results"/></svg>Results</span><span><svg class="i" aria-hidden="true"><use href="#i-slip"/></svg>Slip builder</span><span><svg class="i" aria-hidden="true"><use href="#i-more"/></svg>More</span></nav></div></div><figcaption>Results · dark</figcaption></figure>
+  </div>
+</section>
+  </main>
+</div>
+</body>
+</html>

@@ -85,7 +85,7 @@ const Strip = styled.nav`
   min-inline-size: 0;
   ${media.desktop} { display: none; }
 `;
-/** Whole cells fill the strip: three, five or seven (44px or wider), so the selected day can sit exactly in the middle. */
+/** Whole cells fill the strip: three, five or seven (48px or wider, so a Day-Month label fits), so the selected day can sit exactly in the middle. */
 const Days = styled.ul`
   position: relative;
   container-type: inline-size;
@@ -102,8 +102,8 @@ const Days = styled.ul`
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
   > li { flex: none; inline-size: calc((100cqi - 8px) / 3); scroll-snap-align: center; }
-  @container (min-width: 236px) { > li { inline-size: calc((100cqi - 16px) / 5); } }
-  @container (min-width: 332px) { > li { inline-size: calc((100cqi - 24px) / 7); } }
+  @container (min-width: 256px) { > li { inline-size: calc((100cqi - 16px) / 5); } }
+  @container (min-width: 360px) { > li { inline-size: calc((100cqi - 24px) / 7); } }
 `;
 const dayCell = css`
   display: grid;
@@ -116,7 +116,7 @@ const dayCell = css`
   line-height: 1.1;
   text-decoration: none;
   cursor: pointer;
-  > small { font-size: 0.625rem; font-weight: 600; }
+  > small { font-size: 0.625rem; font-weight: 600; white-space: nowrap; }
 `;
 const Day = styled(Link)`
   ${dayCell}
@@ -125,8 +125,8 @@ const Day = styled(Link)`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   > small { color: ${({ theme }) => theme.color.mutedText}; }
-  /* The first of each month names its month, so a long scroll keeps its bearings. */
-  > small[data-month] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  /* Every day names its weekday and month; today's label is teal. */
+  > small[data-today] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   > b { font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
   &[data-selected] {
@@ -239,7 +239,7 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     </Scroll>
     <Days ref={list} onScroll={extend}>
       {days.map((date) => {
-        const parts = messages.reportingDayParts(date), first = parts.day === "1" && date !== today;
+        const parts = messages.reportingDayParts(date);
         return <li key={date} data-date={date}>
           <Day href={feedQueryHref({ ...query, dates: selection(date), page: 1 }, today)} prefetch={false} scroll={false}
             aria-current={range.dayCount === 1 && date === range.startDate ? "date" : undefined} data-selected={date === selected || undefined}
@@ -248,7 +248,7 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
               setChosen(date); center(date, smooth());
               onApply({ ...query, dates: selection(date), page: 1 });
             })}>
-            <small data-month={first || undefined}>{date === today ? messages.text("feed.date.today") : first ? parts.month : parts.weekday}</small>
+            <small data-today={date === today || undefined}>{messages.text("feed.date.dayMonth", { weekday: parts.weekday, month: parts.month })}</small>
             <b>{parts.day}</b>
           </Day>
         </li>;
