@@ -37,7 +37,7 @@ function restoreTarget(container: HTMLElement, target: FocusTarget) {
   next.focus({ preventScroll: true });
 }
 
-/** The server renders three destinations and native More; hydration fills the measured space. */
+/** The server leaves phone room for More; hydration fills the measured space. */
 export function ResponsiveNavigation({ destinations: serverDestinations, current, moreLabel, mobile = false }: {
   destinations: readonly NavigationDestination[]; current?: NavigationLocation; moreLabel: string; mobile?: boolean;
 }) {
@@ -49,7 +49,7 @@ export function ResponsiveNavigation({ destinations: serverDestinations, current
     return { ...destination, href: deviceFeedEntryHref(key, device.today, device.zone, locale) };
   }) : serverDestinations, [device, serverDestinations]);
   const root = useRef<HTMLDivElement>(null), measurements = useRef<HTMLDivElement>(null), list = useRef<HTMLUListElement>(null);
-  const [count, setCount] = useState(Math.min(minimumPrimaryDestinations, destinations.length));
+  const [count, setCount] = useState(Math.min(mobile ? 1 : minimumPrimaryDestinations, destinations.length));
   const pendingFocus = useRef<{ target: FocusTarget; previous: Element | null } | null>(null);
   const lastFocus = useRef<FocusTarget | null>(null);
   const visible = destinations.slice(0, count), overflow = destinations.slice(count);

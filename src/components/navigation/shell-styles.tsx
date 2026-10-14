@@ -9,6 +9,7 @@ import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
 
 const desktop = media.desktop;
+const mobileTabHeight = "3.5rem";
 const focusRing = css`
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
@@ -184,16 +185,16 @@ const tabLink = css`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  min-block-size: 2.625rem;
-  padding: 3px 4px;
+  gap: 3px;
+  min-block-size: ${mobileTabHeight};
+  padding: 6px 8px;
   color: ${({ theme }) => theme.header.text};
-  font-size: 0.625rem;
+  font-size: 0.75rem;
   line-height: 1.25;
   text-align: center;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
-  > svg { flex: none; font-size: 1.125rem; }
+  > svg { flex: none; font-size: 1.5rem; }
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
   &[aria-current="page"] {
     color: ${({ theme }) => theme.header.accent};
@@ -213,7 +214,7 @@ const tabLink = css`
 `;
 export const TabMeasure = styled.span<{ $tone?: AccentName }>`
   ${tabLink}
-  flex: none; min-inline-size: 2.75rem; inline-size: max-content;
+  flex: none; min-inline-size: 3.5rem; inline-size: max-content;
   > span { white-space: nowrap; }
 `;
 
@@ -270,7 +271,9 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   min-inline-size: min(12rem, calc(100vw - 16px));
   max-inline-size: calc(100vw - 16px);
   ${({ $mobile }) => $mobile && css`inline-size: min(16rem, calc(100vw - 16px));`}
-  max-block-size: calc(100dvh - 4rem - env(safe-area-inset-bottom));
+  max-block-size: ${({ $mobile }) => $mobile
+    ? `calc(100dvh - ${mobileTabHeight} - 9px - env(safe-area-inset-bottom))`
+    : "calc(100dvh - 4rem - env(safe-area-inset-bottom))"};
   overflow-y: auto;
   margin: 0;
   padding: ${({ theme }) => theme.space.xs};
@@ -296,6 +299,13 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
     &[aria-current="page"] { color: ${({ theme }) => theme.color.brand}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
     ${focusRing}
   }
+  ${({ $mobile }) => $mobile && css`
+    a {
+      min-block-size: 2.75rem;
+      font-size: 0.875rem;
+      > svg { inline-size: 1.375rem; block-size: 1.375rem; }
+    }
+  `}
 `;
 
 /**
@@ -364,12 +374,12 @@ export const TabList = styled.ul`
   padding: 0;
   list-style: none;
 `;
-/** A distinct 42px bar keeps the generated primary destinations and More available. */
+/** Generous phone targets keep primary destinations and More easy to tap. */
 export const TabLink = styled(Link)<{ $tone: AccentName }>`${tabLink}`;
 
-/** A quiet surface with compact links; its bottom clearance matches the slim phone tab bar. */
+/** Footer clearance matches the phone tab targets, border and safe area. */
 export const Footer = styled.footer`
-  padding-block: 10px calc(10px + 2.625rem + env(safe-area-inset-bottom));
+  padding-block: 10px calc(10px + ${mobileTabHeight} + 1px + env(safe-area-inset-bottom));
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surface};
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};

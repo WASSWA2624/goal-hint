@@ -90,18 +90,20 @@ def assert_navigation(visible: str, *, primary: str, mobile: str | None, footer:
 
 
 def assert_navigation_overflow(visible: str, *, primary: list[str], overflow: list[str], footer: list[str]) -> None:
-    """Both bars expose three primary links and the remaining destinations once in More."""
+    """Desktop starts with three links; phones start with one and keep every other destination in More."""
     assert len(primary) == 3 and len(set(primary + overflow)) == len(primary + overflow), "Distinct navigation destinations"
     parser = _NavigationParser()
     parser.feed(visible)
     for label in ["Main navigation", "App sections"]:
+        expected_primary = primary[:1] if label == "App sections" else primary
+        expected_overflow = primary[1:] + overflow if label == "App sections" else overflow
         landmarks = parser.structures.get(label, [])
         assert len(landmarks) == 1, f"One {label} landmark"
         structure = landmarks[0]
         direct = [link for link in structure["links"] if not link["overflow"]]
         hidden = [link for link in structure["links"] if link["overflow"]]
-        assert [link["attributes"].get("href") for link in direct] == primary, f"{label}: exactly three primary destinations"
-        assert [link["attributes"].get("href") for link in hidden] == overflow, f"{label}: remaining destinations occur once inside More"
+        assert [link["attributes"].get("href") for link in direct] == expected_primary, f"{label}: expected initial primary destinations"
+        assert [link["attributes"].get("href") for link in hidden] == expected_overflow, f"{label}: remaining destinations occur once inside More"
         assert len(structure["menus"]) == 1, f"{label}: one native More menu"
         menu = structure["menus"][0]
         assert "open" not in menu["attributes"], f"{label}: More starts closed"

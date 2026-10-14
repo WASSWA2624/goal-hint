@@ -42,16 +42,14 @@ const Results = styled(FeedStack)`
 const PreviousNote = styled(FeedNote)`${media.desktop} { color: inherit; }`;
 
 /** Memoized with stable callbacks, so header and filter state changes skip the list. */
-const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus, onTotal }: {
+const FeedResults = memo(function FeedResults({ data: initial, query, today, enabled, onStatus }: {
   data: MatchFeedResponse; query: FeedQuery; today: ReportingDate; enabled: boolean;
-  onStatus: (href: string, message: string) => void; onTotal: (source: MatchFeedResponse, total: number) => void;
+  onStatus: (href: string, message: string) => void;
 }) {
   const messages = createMessages(query.locale);
   const router = useRouter();
   const { view, phase, error, root, retry, refresh } = useFeedPagination({ data: initial, query, today, enabled, onStatus });
   const { data, records } = view;
-  // Phones show the count in the filter row, outside this list; live refreshes can change it.
-  useEffect(() => { onTotal(initial, data.total); }, [data.total, initial, onTotal]);
   // Read when each wait is armed, so the kickoff window always uses the current clock.
   useLiveRefresh({ today, zone: query.zone ?? query.time?.zone ?? null, enabled, interval: () => feedRefreshInterval(data, records, Date.now()), refresh,
     rollover: (day) => {
@@ -97,12 +95,9 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     [filterStatus, filtersFormId, query.locale]);
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
   const onPaginationStatus = useCallback((href: string, message: string) => { setPaginationStatus({ href, message }); }, []);
-  const [shownTotal, setShownTotal] = useState<{ source: MatchFeedResponse; total: number } | null>(null);
-  const onTotal = useCallback((source: MatchFeedResponse, total: number) => { setShownTotal({ source, total }); }, []);
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
   if (result.data && previous?.data !== result.data) setPrevious({ query, today, data: result.data });
   const visible = result.data ? { query, today, data: result.data } : previous;
-  const total = visible ? shownTotal?.source === visible.data ? shownTotal.total : visible.data.total : null;
   const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
   const href = feedQueryHref(query, today), leagues = result.data?.leagues ?? previous?.data.leagues ?? noLeagues;
   useEffect(() => {
@@ -126,7 +121,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     : messages.text(`feed.state.${result.data.state}`);
   return <FeedStack $gap="sm">
     <FeedHeader query={query} today={today} onApply={apply} />
-    <FeedFilters query={query} today={today} leagues={leagues} onApply={apply} total={total}
+    <FeedFilters query={query} today={today} leagues={leagues} onApply={apply}
       open={filtersOpen} panelId={filtersId} onOpenChange={setFiltersOpen} formId={filtersFormId} onDraftStatus={setFilterStatus}
       controls={<FeedFilterToolbar query={query} onApply={apply} actions={filterActions}
         summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
@@ -146,8 +141,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />
       </Stack>}
       {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate}
-        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !changingDay && !result.error} onStatus={onPaginationStatus}
-        onTotal={onTotal} />}
+        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !changingDay && !result.error} onStatus={onPaginationStatus} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;

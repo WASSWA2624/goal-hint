@@ -6,6 +6,36 @@ import {
 } from "../src/domain/navigation.ts";
 import { getLocaleRedirect, isSupportedLocale, resolveLocale } from "../src/i18n/locales.ts";
 import { createMessages } from "../src/i18n/messages.ts";
+import { fitNavigationItems } from "../src/components/navigation/navigation-fit.ts";
+
+test("mobile navigation moves destinations into More instead of squeezing three primary links", () => {
+  const dimensions = { widths: [60, 60, 60, 60, 60], moreWidth: 60, equalColumns: true };
+  for (const [availableWidth, expected] of [[300, 5], [240, 3], [180, 2], [120, 1], [60, 0], [0, 0]]) {
+    assert.equal(fitNavigationItems({ ...dimensions, availableWidth }), expected, `${availableWidth}px`);
+  }
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 239.75 }), 3);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 239.74 }), 2);
+  assert.equal(fitNavigationItems({ ...dimensions, equalColumns: false, availableWidth: 120 }), 3);
+});
+
+test("mobile navigation reserves bold More width only when the current destination overflows", () => {
+  const dimensions = { widths: [60, 60, 60, 60, 60], moreWidth: 60, activeMoreWidth: 80, equalColumns: true, availableWidth: 240 };
+  assert.equal(fitNavigationItems({ ...dimensions, currentIndex: 4 }), 2);
+  assert.equal(fitNavigationItems({ ...dimensions, currentIndex: 2 }), 3);
+  assert.equal(fitNavigationItems({ ...dimensions, currentIndex: 4, availableWidth: 80 }), 0);
+});
+
+test("mobile navigation accounts for the widest label and gaps and handles short destination lists", () => {
+  const dimensions = { widths: [72, 56, 64, 96], moreWidth: 56, gap: 8, equalColumns: true };
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 232 }), 2);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 231 }), 1);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 408 }), 4);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 407 }), 3);
+  assert.equal(fitNavigationItems({ ...dimensions, widths: [], availableWidth: 0 }), 0);
+  assert.equal(fitNavigationItems({ ...dimensions, widths: [72], availableWidth: 72 }), 1);
+  assert.equal(fitNavigationItems({ ...dimensions, widths: [72], availableWidth: 56 }), 0);
+  assert.equal(fitNavigationItems({ ...dimensions, widths: [72, 56], availableWidth: 152 }), 2);
+});
 
 test("English is the only published locale and all other message/link locales fall back", () => {
   assert.equal(isSupportedLocale("en"), true);

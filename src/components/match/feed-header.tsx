@@ -138,8 +138,12 @@ const ResultCount = styled.p`
   line-height: 1.2;
   text-align: end;
   font-variant-numeric: tabular-nums;
-  /* Phones show the count beside sort and Filters instead. */
-  ${media.belowDesktop} { display: none; }
+  > [data-phone-count] { display: none; }
+  ${media.belowDesktop} {
+    font-size: 0.75rem;
+    > [data-desktop-count] { display: none; }
+    > [data-phone-count] { display: inline; }
+  }
 `;
 const SelectWrap = styled.span`
   position: relative;
@@ -193,8 +197,10 @@ export function FeedFilterToolbar({ query, onApply, actions, summary }: {
   </FilterToolbar>;
 }
 
-/** Phones show the count in the filter row; here only the hidden heading remains, so the bar takes no space. */
-const ResultsBar = styled(Toolbar)`${media.belowDesktop} { display: contents; }`;
+/** The mobile count follows the filters and aligns with their right edge. */
+const ResultsBar = styled(Toolbar)`
+  ${media.belowDesktop} { display: flex; justify-content: flex-end; padding-inline: 6px; }
+`;
 
 /** Counts follow the successful result projection, including pagination and live refresh. */
 export function ResultsToolbar({ query, total, first, last }: {
@@ -207,6 +213,9 @@ export function ResultsToolbar({ query, total, first, last }: {
       {total !== null && <p>{messages.text("feed.results.showing", { shown: total === 0 ? "0"
         : `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>}
     </Count>
-    {total !== null && <ResultCount data-match-count>{messages.plural("feed.results.count", total)}</ResultCount>}
+    {total !== null && <ResultCount data-match-count>
+      <span data-desktop-count>{messages.plural("feed.results.count", total)}</span>
+      <span data-phone-count>{messages.text("feed.results.showingCount", { count: messages.plural("feed.results.count", total) })}</span>
+    </ResultCount>}
   </ResultsBar>;
 }

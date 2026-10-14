@@ -109,8 +109,9 @@ const SearchButton = styled.button`
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandHover}; border-color: ${({ theme }) => theme.color.brandHover}; } }
   ${focusRing}
 `;
-/** The match count, sort menu and Filters button share one phone row; the sort label shortens before anything wraps. */
+/** Sort, Clear and Filters share one phone row; labels adapt to the available width. */
 const PhoneToolbar = styled.div`
+  container-type: inline-size;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -118,21 +119,11 @@ const PhoneToolbar = styled.div`
   min-inline-size: 0;
   ${desktop} { display: none; }
 `;
-const PhoneCount = styled.p`
-  flex: none;
-  margin: 0;
-  margin-inline-end: auto;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.75rem;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  font-variant-numeric: tabular-nums;
-`;
 const SortField = styled.span`
   position: relative;
   display: inline-flex;
-  flex: 0 1 auto;
-  min-inline-size: 5.5rem;
+  flex: 1;
+  min-inline-size: 0;
   > svg {
     position: absolute;
     z-index: 1;
@@ -143,6 +134,7 @@ const SortField = styled.span`
     font-size: 0.9375rem;
     pointer-events: none;
   }
+  @container (max-width: 18rem) { > svg { display: none; } }
 `;
 const PhoneSort = styled(CompactSelect)`
   flex: 1;
@@ -152,6 +144,7 @@ const PhoneSort = styled(CompactSelect)`
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   > svg { inset-inline-end: 7px; }
+  @container (max-width: 18rem) { padding-inline-start: 8px; }
 `;
 /** Opens the filter sheet; the badge counts applied filters. */
 const FilterToggle = styled.button`
@@ -188,6 +181,11 @@ const FilterToggle = styled.button`
   }
   ${controlFeedback}
   ${focusRing}
+  @container (max-width: 14rem) {
+    min-inline-size: 2.75rem;
+    padding-inline: 6px;
+    > span { display: none; }
+  }
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
 
@@ -530,6 +528,12 @@ const OutlineButton = styled(QuietButton)`
     ${buttonBorder}
   }
 `;
+const PhoneClear = styled(OutlineButton)`
+  flex: none;
+  min-inline-size: 2.75rem;
+  min-block-size: 2.75rem;
+  padding-inline: 6px;
+`;
 const FilterActions = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -585,14 +589,14 @@ function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, mess
 
 type FeedFiltersProps = {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (query: FeedQuery) => void;
-  formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void; total: number | null;
+  formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void;
   open: boolean; panelId: string; onOpenChange: (open: boolean) => void; controls: ReactNode;
 };
 export function FeedFilters(props: FeedFiltersProps) {
   const range = resolveFeedDates(props.query, props.today);
   return <FilterFields key={`${feedQueryHref(props.query, props.today)}:${range.startDate}:${range.endDate}`} {...props} />;
 }
-function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, total, open, panelId, onOpenChange, controls }: FeedFiltersProps) {
+function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, open, panelId, onOpenChange, controls }: FeedFiltersProps) {
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
   useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   const draft = valid(storedDraft, today) ? storedDraft : query;
@@ -736,7 +740,6 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, t
     </SearchRow>
     {query.status !== "live" && <DayStrip query={query} today={today} onApply={onApply} />}
     <PhoneToolbar data-phone-filter-toolbar>
-      {total !== null && <PhoneCount>{messages.plural("feed.results.count", total)}</PhoneCount>}
       <SortField>
         <SortIcon />
         <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => {
@@ -744,6 +747,9 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, t
           if (sort) onApply({ ...query, sort, page: 1 });
         }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
       </SortField>
+      <PhoneClear type="reset" aria-label={messages.text("feed.filters.clear")} title={messages.text("feed.filters.clear")}>
+        {messages.text("feed.filters.clearAll")}
+      </PhoneClear>
       <FilterToggle ref={filterToggle} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={panelId}
         aria-label={count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel}
         onClick={() => onOpenChange(true)}>
