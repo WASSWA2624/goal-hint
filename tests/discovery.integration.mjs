@@ -27,9 +27,11 @@ test('discovery reads genuine stored identity, historical scope and material cha
     assert.equal((await p.publisher.publish(state.input, state.lease)).refresh.outcome, 'published');
     await p.queue.acknowledge(state.lease);
     const discovery = createDiscoveryReader(p.a, [39]);
-    assert.deepEqual(await discovery.inventory(), { matches: 35, dates: 1 });
+    // 35 stored fixtures share the day, but only the one with a published forecast is an indexable match page.
+    assert.deepEqual(await discovery.inventory(), { matches: 1, dates: 1 });
     const initial = await discovery.matches(0);
-    assert.equal(initial.length, 35); assert.deepEqual(await discovery.matches(1), []);
+    assert.equal(initial.length, 1); assert.deepEqual(await discovery.matches(1), []);
+    assert.ok(initial[0].path.includes(state.fixture.id));
     assert.deepEqual(await discovery.dates(0), [{ path: '/en/predictions/2026-10-09' }]);
     assert.deepEqual(await discovery.dates(1), []);
     await assert.rejects(discovery.matches(-1), RangeError);

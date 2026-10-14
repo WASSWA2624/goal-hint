@@ -30,7 +30,7 @@ def prepare(args):
             logfile=directory / "database.log", env=environment(SEO_PAGE_CAPTURE=str(capture)), timeout=300)
         match(r"\bskipped 0\b", result.stdout, "Real MySQL acceptance may not be skipped.")
     cases = captured_cases(directory)
-    assert cases["inventory"]["matches"] == 35
+    assert cases["inventory"]["matches"] == 1  # only the fixture with a published forecast
     assert cases["details"][cases["publishedId"]]["current"]["data"]["snapshot"]
     relative = os.path.relpath(ROOT / "next.config", directory).replace(os.sep, "/")
     # Reuse the application's real image policy and framework configuration.
@@ -151,15 +151,17 @@ def verify(origin, cases, *, staging):
     sitemap = anonymous("/sitemap.xml").text
     matches = anonymous("/matches/sitemap/0.xml").text
     dates = anonymous("/archive/sitemap/0.xml").text
+    index_response = anonymous("/sitemap-index.xml")
+    assert index_response.status == 200 and "<sitemapindex" in index_response.text
     if staging:
         no_match("Sitemap:", robots)
-        assert locations(anonymous("/sitemap-index.xml").text) == []
+        assert locations(index_response.text) == []
         assert locations(sitemap) == []
         assert locations(matches) == []
         assert locations(dates) == []
     else:
         match(r"Sitemap: https://goalhint\.com/sitemap-index\.xml", robots)
-        index = locations(anonymous("/sitemap-index.xml").text)
+        index = locations(index_response.text)
         assert index == [fixed + "/sitemap.xml", fixed + "/matches/sitemap/0.xml", fixed + "/archive/sitemap/0.xml"]
         assert locations(sitemap) == [fixed + "/en", fixed + "/en/help", fixed + "/en/contact"]
         assert locations(matches) == [fixed + row["path"] for row in cases["matches"]]
