@@ -42,6 +42,16 @@ test('search and social attribution redirects to a clean landing URL without cha
   assert.equal(fallback.headers.get('x-robots-tag'), 'noindex, follow');
 });
 
+test('analytics retains its private robots policy on responses and attribution redirects', () => {
+  for (const policy of [approved, { deployment: 'staging', index: false }]) {
+    const proxy = createDiscoveryProxy(() => policy);
+    for (const path of ['/analytics', '/analytics?period=last-7', '/analytics?utm_source=shared']) {
+      const response = proxy(new NextRequest(`https://goalhint.com${path}`));
+      assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow', path);
+    }
+  }
+});
+
 test('indexing needs an explicit production runtime and verified release; missing or preview configuration fails closed', () => {
   for (const deployment of [undefined, '', 'development', 'staging', 'preview', 'Production', 'production']) {
     for (const runtime of ['development', 'test', 'production']) for (const releaseVerified of [false, true]) {

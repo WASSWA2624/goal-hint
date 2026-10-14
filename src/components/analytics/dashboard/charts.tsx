@@ -126,10 +126,10 @@ export function TrendChart({ points, format, axisFormat = format, name, comparis
           {point.previous !== undefined && <circle cx={x(active)} cy={y(point.previous)} r={4} fill={colors.comparison} stroke={colors.surface} strokeWidth={2} />}
           <circle cx={x(active)} cy={y(point.value)} r={4.5} fill={colors.series[0]} stroke={colors.surface} strokeWidth={2} />
         </g>}
-        <rect x={pad.left} y={pad.top} width={plotWidth} height={plotHeight} fill="transparent" tabIndex={0}
+        <ChartFocus x={pad.left} y={pad.top} width={plotWidth} height={plotHeight} fill="transparent" tabIndex={0}
           aria-label={point ? `${point.label}: ${format(point.value)}` : `${name}: focus and use the arrow keys`}
           onPointerMove={locate} onPointerDown={locate} onPointerLeave={() => setActive(null)} onFocus={() => setActive((index) => index ?? points.length - 1)}
-          onBlur={() => setActive(null)} onKeyDown={onKey} style={{ outline: "none", touchAction: "pan-y" }} />
+          onBlur={() => setActive(null)} onKeyDown={onKey} style={{ touchAction: "pan-y" }} />
       </svg>
       {point && active !== null && <Tooltip style={{ left: Math.min(Math.max(x(active), 80), width - 80), top: pad.top }} role="status">
         <TooltipLabel>{point.label}</TooltipLabel>
@@ -257,6 +257,12 @@ export const ChartFrame = styled.div`
   inline-size: 100%;
   min-inline-size: 0;
   svg { display: block; overflow: visible; font-family: inherit; font-variant-numeric: tabular-nums; }
+`;
+const ChartFocus = styled.rect`
+  &:focus-visible {
+    outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
+    outline-offset: 2px;
+  }
 `;
 const Legend = styled.div<{ $stacked?: boolean }>`
   display: flex;

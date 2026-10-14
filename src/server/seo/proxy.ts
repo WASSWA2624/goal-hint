@@ -1,5 +1,6 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server.js";
+import { analyticsRules } from "../../domain/analytics.ts";
 import { getLocaleRedirect } from "../../i18n/locales.ts";
 import { getDiscoveryPolicy } from "./policy.ts";
 
@@ -40,7 +41,8 @@ export function createDiscoveryProxy(policy = getDiscoveryPolicy) {
     }
     if (fragment) destination.hash = fragment;
     const response = pathname || attribution ? NextResponse.redirect(destination, pathname ? 307 : 308) : NextResponse.next();
-    if (!policy().index) response.headers.set("X-Robots-Tag", "noindex, follow");
+    if (request.nextUrl.pathname === analyticsRules.dashboardPath) response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    else if (!policy().index) response.headers.set("X-Robots-Tag", "noindex, follow");
     return response;
   };
 }

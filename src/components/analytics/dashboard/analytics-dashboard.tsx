@@ -7,6 +7,8 @@ import { analyticsFilterKeys, analyticsFilterLabels, analyticsRules, comparisonM
 import { analyticsPresets, bucketLabel, formatRange, presetRange, rangeDays, type AnalyticsPreset } from "@/domain/analytics-range";
 import { analyticsDatasets, formatDuration } from "@/domain/analytics-datasets";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
+import { SkipLink } from "@/components/navigation/shell-styles";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from "./charts";
 import { DataTable } from "./data-table";
 import { Brand, BrandImage, Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, HeaderButton, LiveList, LivePill, Main,
@@ -211,6 +213,7 @@ export function AnalyticsDashboard({ username, today, developmentCredentials }: 
 
   return (
     <Shell>
+      <SkipLink href="#main-content">Skip to analytics</SkipLink>
       <TopBar>
         <TopBarContent>
           <Brand href="/en"><BrandImage src="/brand/goal-hint-logo-inverse.svg" alt="Goal Hint" width={112} height={26} /><span>Analytics</span></Brand>
@@ -221,7 +224,7 @@ export function AnalyticsDashboard({ username, today, developmentCredentials }: 
           </TopActions>
         </TopBarContent>
       </TopBar>
-      <Main id="main-content">
+      <Main id="main-content" tabIndex={-1}>
         <PageTitle>
           <h1>Visitor analytics</h1>
           <p>{formatRange(selection)} · East Africa Time{report ? ` · updated ${new Date(report.generatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
@@ -232,6 +235,7 @@ export function AnalyticsDashboard({ username, today, developmentCredentials }: 
         <FilterControls selection={selection} compare={compare} filters={filters} today={today} report={report}
           onSelection={setSelection} onCompare={setCompare} onAddFilter={addFilter} onRemoveFilter={removeFilter}
           exportHref={exportHref("summary")} />
+        <VisuallyHidden role="status">{load.status === "loading" ? "Loading analytics." : busy ? "Updating analytics." : load.status === "ready" ? "Analytics loaded." : ""}</VisuallyHidden>
         {load.status === "error" && <Notice $tone="error" role="alert">
           {load.message ?? "Analytics data is unavailable."}
           <ToolButton type="button" onClick={() => setAttempt((value) => value + 1)}>Retry</ToolButton>
@@ -429,7 +433,8 @@ function BreakdownSection({ section, report, busy, exportHref, onFilter }: {
   const valueKey = dataset.filterValue;
   function onKey(event: KeyboardEvent<HTMLDivElement>) {
     const index = section.tabs.indexOf(selected);
-    const next = event.key === "ArrowRight" ? index + 1 : event.key === "ArrowLeft" ? index - 1 : null;
+    const next = event.key === "ArrowRight" ? index + 1 : event.key === "ArrowLeft" ? index - 1
+      : event.key === "Home" ? 0 : event.key === "End" ? section.tabs.length - 1 : null;
     if (next === null) return;
     event.preventDefault();
     const target = section.tabs[(next + section.tabs.length) % section.tabs.length]!;
@@ -446,7 +451,7 @@ function BreakdownSection({ section, report, busy, exportHref, onFilter }: {
           {analyticsDatasets[key].title} <Count>{report.breakdowns[key].length >= analyticsRules.topRows ? `${analyticsRules.topRows}+` : report.breakdowns[key].length}</Count>
         </Tab>)}
       </Tabs>
-      <div role="tabpanel" id={`${section.id}-panel`} aria-labelledby={`${section.id}-tab-${selected}`}>
+      <div role="tabpanel" id={`${section.id}-panel`} aria-labelledby={`${section.id}-tab-${selected}`} tabIndex={0}>
         <DataTable key={selected} id={`${section.id}-${selected}`} dataset={dataset} rows={report.breakdowns[selected]} exportHref={exportHref(selected)}
           onFilter={filter && valueKey ? (row: BreakdownRow) => {
             const value = row[valueKey];

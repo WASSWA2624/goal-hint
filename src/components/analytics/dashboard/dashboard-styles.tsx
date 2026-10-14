@@ -88,6 +88,7 @@ export const HeaderButton = styled.button`
 `;
 export const Main = styled.main`
   display: grid;
+  scroll-margin-block-start: 4rem;
   gap: 16px;
   max-inline-size: ${({ theme }) => theme.layout.wideMaxWidth};
   margin-inline: auto;
