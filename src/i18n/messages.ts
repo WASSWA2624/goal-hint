@@ -5,7 +5,7 @@ import { en } from "./messages/en.ts";
 
 type Formatters = { numbers: Intl.NumberFormat; plurals: Intl.PluralRules; dates: Intl.DateTimeFormat; instants: Intl.DateTimeFormat;
   days: Intl.DateTimeFormat; instantDays: Intl.DateTimeFormat; times: Intl.DateTimeFormat; mediumDates: Intl.DateTimeFormat;
-  zones: Intl.DateTimeFormat };
+  spans: Intl.DateTimeFormat; months: Intl.DateTimeFormat; zones: Intl.DateTimeFormat };
 // Immutable formatters are shared by locale and display zone; no visitor records are cached.
 const formattersByLocale = new Map<string, Formatters>();
 function formatters(language: string, timeZone: string): Formatters {
@@ -24,6 +24,8 @@ function formatters(language: string, timeZone: string): Formatters {
     instantDays: new Intl.DateTimeFormat(language, { ...dayOptions, timeZone }),
     times: new Intl.DateTimeFormat(language, { ...instantOptions, hour: "2-digit", minute: "2-digit" }),
     mediumDates: new Intl.DateTimeFormat(language, { ...dateOptions, weekday: "short", month: "short", day: "numeric" }),
+    spans: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", month: "short", day: "numeric" }),
+    months: new Intl.DateTimeFormat(language, { timeZone: publicPolicy.reportingTimeZone, calendar: "gregory", month: "long", year: "numeric" }),
     zones: new Intl.DateTimeFormat(language, { ...instantOptions, timeZoneName: "short" }),
   };
   formattersByLocale.set(key, created);
@@ -79,7 +81,7 @@ export function createMessages(locale?: string, translations?: Partial<MessageCa
 }
 
 function buildMessages(language: string, translations: Partial<MessageCatalog>, timeZone: string) {
-  const { numbers, plurals, dates, instants, days, instantDays, times, mediumDates, zones } = formatters(language, timeZone);
+  const { numbers, plurals, dates, instants, days, instantDays, times, mediumDates, spans, months, zones } = formatters(language, timeZone);
   const zoneName = (value: UtcInstant): string => timeZone === publicPolicy.reportingTimeZone ? "EAT"
     : zones.formatToParts(value).find((part) => part.type === "timeZoneName")!.value;
 
@@ -101,6 +103,21 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
     /** Weekday, month and day of an EAT reporting date, for narrow date controls. */
     reportingDateShort(value: ReportingDate): string {
       return days.format(getReportingDayBounds(value).startInclusive);
+    },
+    /** Short weekday, short month and day of month of an EAT reporting date, for one-day date buttons. */
+    reportingDayParts(value: ReportingDate): { weekday: string; month: string; day: string } {
+      const parts = days.formatToParts(getReportingDayBounds(value).startInclusive);
+      const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "";
+      return { weekday: part("weekday"), month: part("month"), day: part("day") };
+    },
+    /** Month and year of an EAT reporting date, for calendar headings. */
+    reportingMonth(value: ReportingDate): string {
+      return months.format(getReportingDayBounds(value).startInclusive);
+    },
+    /** Month and day of one EAT reporting date or an inclusive range, such as "Oct 14 – 20". */
+    reportingDateSpan(from: ReportingDate, to: ReportingDate): string {
+      const start = getReportingDayBounds(from).startInclusive;
+      return from === to ? spans.format(start) : spans.formatRange(start, getReportingDayBounds(to).startInclusive);
     },
     /** Compact EAT reporting date with weekday and year, for date controls. */
     reportingDateMedium(value: ReportingDate): string {

@@ -3,10 +3,11 @@
 The feed uses shared labeled native fields and a per-provider Redux draft;
 URLs and stored server projections remain authoritative. A persistent search
 bar sits in the page body on every screen size. Phones and tablets use the
-Quiet stack layout: full-width search, then a Match dates summary beside a
-labelled Filters button. Both buttons open the same complete filter section;
-Match dates also focuses its first date input. Desktop always shows the search
-bar and all filter fields, without a collapse toggle.
+Day Strip layout: full-width search; a day strip with earlier/later scroll
+buttons and a Calendar button; then one row with the match count, the Sort
+menu and a Filters button. Filters opens a bottom sheet holding every other
+filter. Desktop always shows the search bar and all filter fields, without a
+sheet or day strip.
 Search and filter edits share one draft and remain unsubmitted until Enter in
 the search bar or the single Apply action submits the complete draft. Both
 submission paths normalize NFC/whitespace, validate all fields and reset page
@@ -25,23 +26,41 @@ Empty "all" options parse as empty lists and are omitted from canonical URLs. Re
 Repeated single-value keys, unknown keys (including the removed `sortMarket`)
 and other malformed parameters remain invalid.
 
-From date, To date, From time and To time share the filter section with Markets,
-Leagues, Countries and Probability. Below 64rem, the body Filters button opens
-or collapses this complete section, which starts collapsed. Escape also closes
-the section without applying its draft and returns focus to its opening
-button. Clicking outside does not close it.
+From date, To date, From time and To time share the filter fields with Markets,
+Leagues, Countries and Probability. Below 64rem these fields live in a modal
+bottom sheet (`role="dialog"`) above the tab bar, opened by the Filters button.
+The sheet lists, in order: Match dates, Kickoff time, Markets, Leagues,
+Countries, Probability and the Odds explanation, with Clear and Apply filters
+pinned at its foot. Opening it moves focus into the sheet, keeps Tab inside
+it and stops the page behind from scrolling. The close button, Escape or a tap
+on the backdrop discards unapplied filter edits (typed search text stays) and
+returns focus to Filters. Apply and Clear close the sheet. Widening to desktop
+closes it. The sheet is a fixed element inside the form, so no ancestor of the
+form may be a CSS size container.
 At desktop widths all fields remain visible. The common range controls are
 rendered once, so the initial HTML contains exactly two date and two time
-inputs, including when the mobile section is collapsed. Mobile labels sit
-above compact square native controls with 16px values. Dates and times are paired;
-the date pair stacks below 361px, and both pairs stack when their container or
-larger text needs more room. The action row can also wrap for larger text.
-Match dates and Kickoff time headings, optional
-time guidance and the browsing zone are visible. The expanded editor uses
-tight padding and spacing and scrolls naturally with the page. Desktop keeps
-its compact fields. There are no date popovers, date steppers, time mode menus
-or separate range Apply buttons. Focused controls and invalid values retain
-visible feedback.
+inputs, including when the mobile sheet is closed. Mobile labels sit
+above square native controls with 16px values and 44px targets. Dates and
+times are paired; the date pair stacks below 361px, and both pairs stack when
+their container or larger text needs more room. Match dates and Kickoff time
+headings, optional time guidance and the browsing zone are visible. Desktop
+keeps its compact fields. There are no time mode menus or separate range Apply
+buttons. Focused controls and invalid values retain visible feedback.
+
+The phone day strip has no first or last day: it starts centred on the
+selected day (or the first day of a range) and adds 30 days whenever either
+end comes within a screen of view, keeping the visible days in place. It shows
+three, five or seven whole days, depending on width, so the selected day sits
+exactly in the middle; it scrolls by touch, and the earlier/later buttons
+scroll it by a page of days without selecting anything. Tapping a day applies
+it at once, highlights it immediately and centres it. Today reads Today, and
+the first of each month shows its month name. Day links are canonical URLs
+(`when=today`/`when=tomorrow` presets, otherwise a dated route) that keep the
+applied filters. The Calendar button opens a month calendar in a bottom sheet:
+the first tap picks a day, a later tap within 31 days ends a range, and Apply
+dates applies one day or the range, keeping the other applied filters. While a
+multi-day range is applied, no day is highlighted and the Calendar button is
+filled and shows the range. The strip is absent for live matches.
 
 Equal date endpoints select one day; different endpoints select an inclusive
 range of up to 31 days. Equal time endpoints select one kickoff minute; different
@@ -92,45 +111,36 @@ incomplete or invalid drafts prevent Apply. The filter
 row contains no sliders. Odds controls remain disabled with their explanation
 until provider odds display is enabled.
 
-Expanded mobile filters use one compact labeled summary button per Markets, Leagues and
-Countries field, without scrolling suggestion chips or a duplicate menu. One
-selection shows its name; multiple selections show their count. Empty league
-and country selections show All leagues and Any. Each summary opens the same
-complete checklist, and selected values missing from a refreshed option list
-remain removable. At least one market must stay selected. Probability uses the
-same directly editable minimum/maximum fields as desktop. Mobile retains the muted Odds unavailable explanation.
+In the mobile sheet, Markets are four toggle buttons (`aria-pressed`) in each
+market's card colour; the last selected market cannot be turned off. Leagues
+and Countries each use one labeled summary button whose complete, searchable
+checklist opens in place inside the sheet. One selection shows its name;
+multiple selections show their count. Empty league and country selections show
+All leagues and Any country. Selected values missing from a refreshed option
+list remain removable. Probability uses the same directly editable
+minimum/maximum fields as desktop. Mobile retains the muted Odds unavailable
+explanation.
 
-Persistent actions sit below the filter options and outside the mobile
-collapsible section. Mobile fits the labelled Sort by menu beside Clear and
-Apply filters when there is room. Controls wrap onto full-width rows when
-the container or larger text needs more space. Sorting retains its existing
-immediate navigation behavior. The actions align right on desktop. When the
-mobile fields are collapsed, the actions follow the date/filter toolbar. A compact
-summary shows the applied date or range,
-markets, leagues and countries, plus applied search, time and probability
-constraints when present. These chips describe the query that has been
-applied, rather than unsent edits. On desktop the summary chips sit at the far
-left of the same row as Sort, Clear and Apply on the right. On mobile the
-summary stays underneath the action row as readable text under Showing.
-A Changes ready to apply notice distinguishes valid unsent edits from those
-applied selections. Mobile fields expand between the date/filter toolbar and
-the action row; search,
-sorting, Clear and Apply stay available in both states. Desktop fields always
-remain between search and the action row.
-On phones and tablets, the date summary, Filters, Clear and Apply always retain
-visible backgrounds and solid 1px borders, with square corners and button targets
-of at least 44px. Labelled entry fields retain comfortable combined tap areas.
-Probability uses full minimum/maximum labels above its fields;
-the unavailable-odds explanation stays visible in the editor.
-The applied match count sits with the results below the toolbar and summary and updates
-with the displayed projection. It is omitted when no successful projection is available. Draft
-edits make no count-preview requests. Apply filters submits the complete
+On desktop, Sort, Clear and Apply sit right-aligned below the filter fields,
+with a compact summary of the applied date or range, markets, leagues and
+countries (plus search, time and probability constraints when present) at the
+far left of the same row. On phones the row below the day strip holds the
+applied match count, the Sort menu and Filters; the sort label shortens
+before the row would wrap. Sorting retains its immediate navigation behavior.
+Filters badges the number of applied filters. The applied summary appears on
+phones under Showing only when a filter or search is applied. These describe
+the applied query, rather than unsent edits. In the sheet, a Changes ready to
+apply notice distinguishes valid unsent edits. Phone controls retain visible
+backgrounds and solid 1px borders, with square corners and button targets of
+at least 44px. The phone match count updates with the displayed projection,
+including live refreshes; desktop shows it with the results. It is omitted when
+no successful projection is available. Draft edits make no count-preview
+requests. Apply filters submits the complete
 search, date, time and filter draft. Clear resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
 match result and kickoff ascending order, and resets page to one. It retains
-the applied date/range, status entry and page size. There are no separate per-
-filter action rows or duplicate mobile Apply controls. An empty-result message
-appears below this action row. The sort menu includes
+the applied date/range, status entry and page size. Each screen size shows one
+Clear and one Apply. An empty-result message appears with the results. The sort menu includes
 both kickoff directions and both probability directions, without a separate
 reverse-order button.
 
@@ -156,12 +166,9 @@ On phones and tablets the feed's brand bar contains the home logo and theme
 control. Desktop retains the page title and quick date presets, with the theme
 control at the far right of the shell header; feed pages
 omit the shell search so there is one body search bar on every device. The
-mobile Filters button has a visible label and a chevron pointing down
-when collapsed and up when expanded. Its accessible name and title state
-Show advanced filters or Hide advanced filters. It sets
-`aria-expanded`/`aria-controls` on the complete collapsible filter section and
-badges active choices. Search remains visible
-when mobile filters close. The feed uses one semantic h1: it stays visually
+mobile Filters button has a visible label, `aria-haspopup="dialog"`,
+`aria-expanded`/`aria-controls` for the sheet, and an accessible name that
+includes the active filter count. The feed uses one semantic h1: it stays visually
 hidden on phones and tablets to conserve space and visible on desktop. Only the
 brand bar stays sticky. The subtitle
 remains absent.

@@ -16,10 +16,10 @@ export const RangeFieldset = styled.fieldset`
 `;
 
 export const RangeLegend = styled.legend`
-  margin-block-end: 4px;
+  margin-block-end: 6px;
   padding: 0;
-  font-size: 0.75rem;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  font-size: 0.8125rem;
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
   line-height: 1.35;
   ${media.desktop} { display: none; }
 `;
@@ -86,8 +86,8 @@ export const RangeFields = styled.div`
     input {
       flex: none;
       max-inline-size: 100%;
-      min-block-size: 2.25rem;
-      padding: 4px 6px;
+      min-block-size: 2.75rem;
+      padding: 4px 8px;
       background: ${({ theme }) => theme.color.surface};
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
       font-size: 16px;

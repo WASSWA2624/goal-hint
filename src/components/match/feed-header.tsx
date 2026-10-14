@@ -10,8 +10,7 @@ import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-q
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets } from "./feed-dates";
-import { FeedDraftStatus } from "./feed-controls";
-import { CompactSelect, focusRing } from "./filter-parts";
+import { focusRing } from "./filter-parts";
 
 const desktop = media.desktop;
 const HeaderContent = styled.div`
@@ -91,12 +90,12 @@ const Toolbar = styled.div`
     display: block;
   }
 `;
-/** Desktop shares one row; compact screens keep the summary below the actions. */
+/** Desktop shares one row; phones show only an active-filter summary here, and nothing by default. */
 const FilterToolbar = styled(Toolbar)`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  > [data-active-filter-summary] { grid-row: 2; }
+  ${media.belowDesktop} { &:has(> [data-quiet]) { display: none; } }
   ${desktop} {
     grid-template-columns: minmax(0, 1fr) auto;
     > [data-active-filter-summary] { grid-column: 1; grid-row: 1; }
@@ -125,10 +124,7 @@ const SortGroup = styled.div`
   align-items: center;
   gap: 8px;
   ${desktop} { margin-inline-start: auto; justify-content: flex-end; }
-  ${media.belowDesktop} {
-    align-items: flex-end;
-    gap: 6px;
-  }
+  ${media.belowDesktop} { display: none; }
 `;
 const DesktopSortLabel = styled.label`
   display: none;
@@ -142,6 +138,8 @@ const ResultCount = styled.p`
   line-height: 1.2;
   text-align: end;
   font-variant-numeric: tabular-nums;
+  /* Phones show the count beside sort and Filters instead. */
+  ${media.belowDesktop} { display: none; }
 `;
 const SelectWrap = styled.span`
   position: relative;
@@ -162,63 +160,29 @@ const SelectWrap = styled.span`
   }
   > svg { position: absolute; inset-inline-end: 7px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
 `;
-/** One native sort menu includes both field and direction. */
-const PhoneOrder = styled.label`
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 8rem;
-  gap: 2px;
-  min-inline-size: 0;
-  max-inline-size: 100%;
-  > span:first-child { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; line-height: 1.2; }
-  ${desktop} { display: none; }
-`;
-const PhoneSort = styled(CompactSelect)`
-  min-block-size: 2.75rem;
-  padding-block: 6px;
-  padding-inline: 7px 22px;
-  border-color: ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
-  font-size: 0.8125rem;
-  inline-size: 100%;
-  > span { flex: 1; }
-  > span > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.2; }
-  > select {
-    > option { font-size: inherit; }
-    /* iOS presents its own picker; keep its input large enough to avoid focus zoom. */
-    font-size: 1rem;
-  }
-  > svg { inset-inline-end: 7px; }
-`;
-const sortOptions: readonly FeedSort[] = [
+export const feedSortOptions: readonly FeedSort[] = [
   { by: "probability", direction: "desc" }, { by: "probability", direction: "asc" },
   { by: "kickoff", direction: "asc" }, { by: "kickoff", direction: "desc" },
 ];
 
 /** One independent sort menu retains the established immediate sort behavior. */
-export function FeedFilterToolbar({ query, onApply, actions, summary, changed = false }: {
-  query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode; changed?: boolean;
+export function FeedFilterToolbar({ query, onApply, actions, summary }: {
+  query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode;
 }) {
   const messages = createMessages(query.locale);
   const sortKey = `${query.sort.by}-${query.sort.direction}`;
   const choose = (sort: FeedSort) => onApply({ ...query, sort, page: 1 });
   const chooseKey = (key: string) => {
-    const selected = sortOptions.find((sort) => `${sort.by}-${sort.direction}` === key);
+    const selected = feedSortOptions.find((sort) => `${sort.by}-${sort.direction}` === key);
     if (selected) choose(selected);
   };
   return <FilterToolbar>
     {summary}
     <SortGroup>
-      <FeedDraftStatus locale={query.locale} changed={changed} />
-      <PhoneOrder>
-        <span>{messages.text("feed.sort.label")}</span>
-        <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => chooseKey(event.target.value)}
-          options={sortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
-      </PhoneOrder>
       <DesktopSortLabel htmlFor="feed-sort-desktop">{messages.text("feed.sort.label")}</DesktopSortLabel>
       <SelectWrap>
         <select id="feed-sort-desktop" value={sortKey} onChange={(event) => chooseKey(event.target.value)}>
-          {sortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
+          {feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
             {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
           </option>)}
         </select>

@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
-import { formatProbabilityValue, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
+import { formatProbabilityValue, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import type { ReportingDate } from "@/domain/calendar";
 import { formatOddsRange } from "@/domain/odds";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -74,7 +74,7 @@ export function FeedDraftStatus({ locale, changed }: { locale: FeedQuery["locale
   </PendingChanges>;
 }
 
-/** Applied choices remain readable when the editable filter fields are collapsed. */
+/** Applied choices remain readable when the editable filter fields are closed; phones show them only when filters are active. */
 export function FeedActiveFilterSummary({ query, today, leagues }: {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"];
 }) {
@@ -104,7 +104,7 @@ export function FeedActiveFilterSummary({ query, today, leagues }: {
   }
   if (query.odds) entries.push({ label: `${messages.text("feed.filters.oddsLabel")}: ${formatOddsRange(query.odds)}`, title: messages.text("feed.filters.oddsLabel") });
   if (query.search) entries.push({ label: `${messages.text("feed.search.submit")}: ${query.search}`, title: query.search });
-  return <AppliedSummary data-active-filter-summary>
+  return <AppliedSummary data-active-filter-summary data-quiet={panelFilterCount(query) === 0 && !query.search || undefined}>
     <SummaryLabel>{messages.text("feed.filters.showing")}</SummaryLabel>
     <SummaryList aria-label={messages.text("feed.filters.activeSummary")}>
       {entries.map((entry, index) => <li key={index} title={entry.title}>{entry.label}</li>)}

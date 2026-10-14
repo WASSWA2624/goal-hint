@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
-import { CalendarIcon, ChevronDownIcon, InfoIcon, ResetIcon, FilterIcon, SearchIcon, SlidersIcon } from "@/components/ui/icons";
+import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SearchIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { validKickoffTime } from "@/domain/kickoff-time";
@@ -21,9 +21,12 @@ import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
+import { FeedDraftStatus } from "./feed-controls";
+import { feedSortOptions } from "./feed-header";
 import { FeedTimeFilter } from "./feed-time";
-import { DateRangePicker } from "./feed-dates";
-import { ChipText, controlFeedback, FilterChip, focusRing, IconButton, OptionLogo, OptionPicker } from "./filter-parts";
+import { DateRangePicker, DayStrip } from "./feed-dates";
+import { ChipText, CompactSelect, controlFeedback, FilterChip, focusRing, OptionLogo, OptionPicker } from "./filter-parts";
+import { keepFocusInSheet, SheetClose, SheetHeader, SheetScrim, sheetFrame, usePhoneSheet } from "./sheet-parts";
 
 type Messages = ReturnType<typeof createMessages>;
 const desktop = media.desktop;
@@ -44,12 +47,15 @@ function toggledMarkets(query: FeedQuery, family: MarketFamily): FeedQuery | nul
   return { ...query, markets: canonicalMarkets(has ? query.markets.filter((item) => item !== family) : [...query.markets, family]), page: 1 };
 }
 
-/** One form owns search and the entire draft; persistent actions use native form association. */
+/**
+ * One form owns search and the entire draft; persistent actions use native form association.
+ * It is not a size container: that would make it the containing block of the fixed phone sheet.
+ */
 const Panel = styled.form`
   display: grid;
   gap: 4px;
   min-inline-size: 0;
-  ${media.belowDesktop} { gap: 6px; padding-inline: 6px; container: feed-controls / inline-size; }
+  ${media.belowDesktop} { gap: 8px; padding-inline: 6px; }
 `;
 const SearchRow = styled.div`
   display: grid;
@@ -78,129 +84,219 @@ const SearchField = styled.label`
   }
   ${media.belowDesktop} {
     min-block-size: 2.75rem;
-    padding-inline: 8px;
+    padding-inline: 10px;
     > input { min-block-size: 2.625rem; font-size: 16px; }
   }
 `;
+/** The match count, sort menu and Filters button share one phone row; the sort label shortens before anything wraps. */
 const PhoneToolbar = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
-  min-inline-size: 0;
-  @container feed-controls (max-width: 16rem) { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  ${desktop} { display: none; }
-`;
-const DateSummary = styled.button`
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   min-inline-size: 0;
+  ${desktop} { display: none; }
+`;
+const PhoneCount = styled.p`
+  flex: none;
+  margin: 0;
+  margin-inline-end: auto;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: 0.75rem;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  font-variant-numeric: tabular-nums;
+`;
+const SortField = styled.span`
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-inline-size: 5.5rem;
+  > svg {
+    position: absolute;
+    z-index: 1;
+    inset-inline-start: 8px;
+    inset-block-start: 50%;
+    transform: translateY(-50%);
+    color: ${({ theme }) => theme.color.mutedText};
+    font-size: 0.9375rem;
+    pointer-events: none;
+  }
+`;
+const PhoneSort = styled(CompactSelect)`
+  flex: 1;
   min-block-size: 2.75rem;
-  padding: 5px 8px;
-  text-align: start;
+  padding-inline: 28px 24px;
+  border-color: ${({ theme }) => theme.color.controlBorder};
+  font-size: 0.8125rem;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  > svg { inset-inline-end: 7px; }
+`;
+/** Opens the filter sheet; the badge counts applied filters. */
+const FilterToggle = styled.button`
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-block-size: 2.75rem;
+  padding-inline: 8px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   ${buttonBorder}
   border-radius: 0;
   font: inherit;
-  cursor: pointer;
-  > svg { flex: none; color: ${({ theme }) => theme.color.brand}; font-size: 1rem; }
-  > span { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; font-size: 0.8125rem; line-height: 1.25; }
-  small { display: block; margin-block-end: 1px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
-  @container feed-controls (max-width: 16rem) { > svg:last-of-type { display: none; } }
-  ${controlFeedback}
-  ${focusRing}
-`;
-/** A labelled disclosure explains the panel; its chevron and accessible name reflect its state. */
-const FilterToggle = styled(IconButton)`
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  inline-size: auto;
-  block-size: auto;
-  min-block-size: 2.75rem;
-  padding-inline: 8px;
   font-size: 0.8125rem;
-  background: ${({ theme }) => theme.color.surface};
-  ${buttonBorder}
-  border-radius: 0;
-  > span { text-align: start; line-height: 1.4; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  > svg { flex: none; font-size: 0.875rem; }
-  ${desktop} { display: none; }
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  cursor: pointer;
+  > svg { flex: none; font-size: 1rem; }
+  > b {
+    min-inline-size: 1.25rem;
+    padding: 1px 5px;
+    color: ${({ theme }) => theme.color.onBrand};
+    background: ${({ theme }) => theme.color.brand};
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
   &[aria-expanded="true"] {
-    color: ${({ theme }) => theme.color.brand};
+    color: ${({ theme }) => theme.color.accent.teal.text};
     background: ${({ theme }) => theme.color.brandSoft};
     border-color: ${({ theme }) => theme.color.brand};
   }
-  &[aria-expanded="true"] > svg:last-of-type { transform: rotate(180deg); }
-  > b {
-    min-inline-size: 20px;
-    padding: 2px 5px;
-    background: ${({ theme }) => theme.color.brandSoft};
-    color: ${({ theme }) => theme.color.accent.teal.text};
-    font-size: 0.75rem; line-height: 1.4; font-variant-numeric: tabular-nums;
-  }
-  &[aria-expanded="true"] > b { color: inherit; }
-  @container feed-controls (max-width: 16rem) { > svg { display: none; } }
+  ${controlFeedback}
+  ${focusRing}
 `;
-/** Raised above the cards' full-row links, so the date and option popovers that overlap them stay usable. */
-const PhoneOnly = styled.div`
-  position: relative;
-  z-index: 2;
-  display: grid;
-  gap: 6px;
-  min-inline-size: 0;
-  container: phone-filters / inline-size;
-  ${desktop} { display: none; }
-`;
-/** Option fields reuse the existing compact checklists. */
-const PhoneMore = styled.div`
-  display: grid;
-  gap: 6px;
-  min-inline-size: 0;
-  &[hidden] { display: none; }
-`;
-const DesktopOnly = styled.div`display: none; ${desktop} { display: block; }`;
+const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
 
-/** Desktop fields are always visible; only mobile fields follow the body toggle. */
+/**
+ * Desktop fields stay in the page. Phones show the same fields, rendered once, in a bottom sheet
+ * above the tab bar; closing it without Apply discards the unapplied edits.
+ */
 const FilterFieldsGroup = styled.div<{ $open: boolean }>`
-  position: relative;
-  z-index: 2;
-  display: ${({ $open }) => $open ? "grid" : "none"};
-  gap: 8px;
   min-inline-size: 0;
-  padding: 8px;
   container: feed-filter-fields / inline-size;
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  ${desktop} { display: grid; gap: 2px; padding: 4px 8px; border-block-start: 3px solid ${({ theme }) => theme.color.brand}; }
+  ${media.belowDesktop} {
+    ${sheetFrame}
+    display: ${({ $open }) => $open ? "flex" : "none"};
+  }
+  ${desktop} {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    padding: 4px 8px;
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-start: 3px solid ${({ theme }) => theme.color.brand};
+  }
 `;
-/** Date and time inputs remain direct controls within the expanded filter group. */
-const RangeRow = styled.div`
+/** Desktop keeps dates and times side by side above the filter row; phones stack sections and scroll. */
+const SheetBody = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  gap: 8px;
-  ${desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-block-end: 2px; }
+  gap: 2px 10px;
+  min-inline-size: 0;
+  ${media.belowDesktop} {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    min-block-size: 0;
+    padding: 14px 16px 18px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 `;
-/** One labelled trigger per filter replaces clipped suggestion chips and their duplicate menus. */
+const SheetFooter = styled.div`
+  display: none;
+  ${media.belowDesktop} {
+    display: grid;
+    flex: none;
+    gap: 6px;
+    padding: 10px 16px;
+    background: ${({ theme }) => theme.color.surface};
+    border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  }
+`;
+const PhoneSection = styled.div`
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  ${desktop} { display: none; }
+`;
+const SectionLabel = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8125rem;
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  line-height: 1.35;
+  > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+`;
+/** Market toggles carry each family's card colour, so a choice matches the picks it produces. */
+const MarketToggles = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  @container feed-filter-fields (max-width: 18rem) { grid-template-columns: minmax(0, 1fr); }
+`;
+const MarketToggle = styled.button<{ $family: MarketFamily }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  min-block-size: 2.75rem;
+  padding: 6px 10px;
+  color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.color.surface};
+  ${buttonBorder}
+  border-radius: 0;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  line-height: 1.25;
+  text-align: start;
+  cursor: pointer;
+  &::before {
+    content: "";
+    flex: none;
+    inline-size: 0.75rem;
+    block-size: 0.75rem;
+    border: 2px solid ${({ theme, $family }) => theme.color.market[$family].solid};
+  }
+  > span { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; }
+  > svg { flex: none; font-size: 1rem; }
+  &[aria-pressed="true"] {
+    color: ${({ theme, $family }) => theme.color.market[$family].text};
+    background: ${({ theme, $family }) => theme.color.market[$family].soft};
+    border-color: ${({ theme, $family }) => theme.color.market[$family].solid};
+    &::before { background: ${({ theme, $family }) => theme.color.market[$family].solid}; }
+  }
+  &[aria-disabled="true"] { cursor: not-allowed; }
+  ${focusRing}
+`;
+/** One labelled trigger per list; its checklist opens in place inside the sheet. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
-  > button { min-block-size: 2.75rem; padding: 6px 8px; border-color: ${({ theme }) => theme.color.controlBorder}; font-size: 0.75rem; }
+  > button { min-block-size: 2.75rem; padding: 6px 10px; border-color: ${({ theme }) => theme.color.controlBorder}; font-size: 0.8125rem; }
   [data-picker-label] { flex: 0 1 auto; min-inline-size: 0; overflow-wrap: anywhere; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; overflow-wrap: anywhere; }
-  @container phone-filters (max-width: 14rem) {
+  @container feed-filter-fields (max-width: 14rem) {
     > button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 6px; }
     [data-picker-label] { grid-column: 1; grid-row: 1; }
     [data-picker-value] { grid-column: 1; grid-row: 2; justify-content: flex-start; text-align: start; }
     > button > svg { grid-column: 2; grid-row: 1 / span 2; }
   }
   > [role="group"] {
+    position: static;
     grid-template-columns: minmax(0, 1fr);
     max-inline-size: 100%;
     inline-size: 100%;
+    margin-block-start: 6px;
     border-radius: 0;
     box-shadow: none;
     padding: 8px;
@@ -210,15 +306,6 @@ const PhonePicker = styled(OptionPicker)`
     label > span { overflow-wrap: anywhere; }
   }
 `;
-/** The phone probability control grows naturally with larger text. */
-const BottomRow = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: 6px 8px;
-  margin-block-start: 4px;
-  @container phone-filters (max-width: 16rem) { grid-template-columns: minmax(0, 1fr); }
-`;
 const ProbabilityGroup = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -227,7 +314,7 @@ const ProbabilityGroup = styled.div`
   gap: 4px;
   min-inline-size: 0;
   font-size: 0.8125rem;
-  > span { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  > span { font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
 `;
 const ProbabilityInputs = styled.div`
   display: flex;
@@ -263,13 +350,13 @@ const ProbabilityInputs = styled.div`
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
-    @container phone-filters (max-width: 13rem) { grid-template-columns: minmax(0, 1fr); }
+    @container feed-filter-fields (max-width: 13rem) { grid-template-columns: minmax(0, 1fr); }
     > label { display: grid; gap: 2px; padding: 0; border: 0; white-space: normal; font-size: 0.75rem; }
     > [data-range-separator] { display: none; }
     input {
       inline-size: 100%;
-      min-block-size: 2.25rem;
-      padding: 4px 6px;
+      min-block-size: 2.75rem;
+      padding: 4px 8px;
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
       font-size: 16px;
       &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.accent.red.text}; }
@@ -283,6 +370,7 @@ const ProbabilityInputs = styled.div`
 const ProbabilityError = styled.p`
   color: ${({ theme }) => theme.color.accent.red.text};
   font-size: 0.75rem;
+  ${desktop} { grid-column: 1 / -1; order: 2; }
 `;
 const QuietButton = styled.button`
   display: inline-flex;
@@ -476,27 +564,21 @@ function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, mess
 
 type FeedFiltersProps = {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (query: FeedQuery) => void;
-  formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void;
-  open: boolean; panelId: string; onToggle: () => void; controls: ReactNode;
+  formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void; total: number | null;
+  open: boolean; panelId: string; onOpenChange: (open: boolean) => void; controls: ReactNode;
 };
 export function FeedFilters(props: FeedFiltersProps) {
   const range = resolveFeedDates(props.query, props.today);
   return <FilterFields key={`${feedQueryHref(props.query, props.today)}:${range.startDate}:${range.endDate}`} {...props} />;
 }
-function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, open, panelId, onToggle, controls }: FeedFiltersProps) {
+function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, total, open, panelId, onOpenChange, controls }: FeedFiltersProps) {
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
   useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   const draft = valid(storedDraft, today) ? storedDraft : query;
   const range = resolveFeedDates(query, today), deviceZone = useDeviceTimeZone();
-  const filterToggle = useRef<HTMLButtonElement>(null);
-  const filterOpener = useRef<HTMLButtonElement>(null);
-  const form = useRef<HTMLFormElement>(null), focusDateAfterOpen = useRef(false);
-  useEffect(() => {
-    if (open && focusDateAfterOpen.current) {
-      form.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
-      focusDateAfterOpen.current = false;
-    }
-  }, [open]);
+  const filterToggle = useRef<HTMLButtonElement>(null), sheet = useRef<HTMLDivElement>(null);
+  // Desktop always shows the fields in the page, so the sheet only exists below the desktop width.
+  usePhoneSheet(open, sheet, () => onOpenChange(false));
   const [dateInputs, setDateInputs] = useState({ from: String(range.startDate), to: String(range.endDate) });
   const [timeInputs, setTimeInputs] = useState({ from: query.time?.from ?? "", to: query.time?.to ?? "" });
   const [probabilityInputs, setProbabilityInputs] = useState({ min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max) });
@@ -532,6 +614,15 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     dispatch(draftChanged(applied));
     onApply(applied);
   };
+  /** Closing without Apply restores the applied filters; typed search text stays in the field. */
+  const closeSheet = () => {
+    setDateInputs({ from: range.startDate, to: range.endDate });
+    setTimeInputs({ from: query.time?.from ?? "", to: query.time?.to ?? "" });
+    setProbabilityInputs({ min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max) });
+    dispatch(draftChanged({ ...query, search: draft.search, page: 1 }));
+    onOpenChange(false);
+    filterToggle.current?.focus();
+  };
   const phone = draft;
   const reset = resetFeedFilters(query);
   const draftValid = completeDraft !== null;
@@ -540,7 +631,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
       !== serializeFeedQuery({ ...query, search: "", page: 1 }, today).toString();
   useEffect(() => { onDraftStatus({ valid: draftValid, changed }); }, [changed, draftValid, onDraftStatus]);
 
-  function phonePicker(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
+  function phonePicker(kind: "leagues" | "countries", options: FilterOption[]) {
     const label = messages.text(`feed.filters.${kind}`), selected: readonly string[] = phone[kind];
     // Selections absent from a refreshed option list remain available to remove.
     const missing = selected.filter((value) => !options.some((option) => option.value === value))
@@ -553,11 +644,8 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         {kind === "countries" && selected.length === 1 && <OptionLogo key={selected[0]} url={countryFlagAsset(selected[0])} />}
         {summary}
       </span></>}
-      searchable={kind !== "markets"} onToggle={(value) => {
-        const next = kind === "markets" ? toggledMarkets(phone, value as MarketFamily)
-          : { ...phone, [kind]: toggled(selected, value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) };
-        if (next) edit(next);
-      }} findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")} />;
+      onToggle={(value) => edit({ ...phone, [kind]: toggled(selected, value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) })}
+      findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")} />;
   }
 
   function multiField(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
@@ -593,33 +681,27 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   }
 
   const oddsLabel = messages.text("feed.filters.oddsLabel"), probabilityLabel = messages.text("feed.filters.probabilityLabel");
-  const probabilityErrorId = `${formId}-probability-error`;
+  const probabilityErrorId = `${formId}-probability-error`, titleId = `${panelId}-title`, marketsId = `${panelId}-markets`;
   const probabilityFields = <ProbabilityRangeInputs values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
     onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
-  const count = panelFilterCount(query);
-  let dateSummary = messages.text("feed.date.choose");
-  try {
-    const from = parseReportingDate(dateInputs.from), to = parseReportingDate(dateInputs.to);
-    dateSummary = from === to ? messages.reportingDateShort(from)
-      : `${messages.reportingDateShort(from)} – ${messages.reportingDateShort(to)}`;
-  } catch { /* Incomplete dates keep an honest label while remaining editable. */ }
-  const toggleLabel = messages.text(open ? "feed.filters.hideAdvanced" : "feed.filters.showAdvanced");
+  const count = panelFilterCount(query), filtersLabel = messages.text("feed.filters.toggle");
+  const sortKey = `${query.sort.by}-${query.sort.direction}`;
   const [action, parameters = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
-  return <Panel ref={form} id={formId} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
-    const opener = filterOpener.current ?? filterToggle.current;
-    if (event.key === "Escape" && open && !event.defaultPrevented && opener?.getClientRects().length) {
-      event.preventDefault(); onToggle(); opener.focus();
-    }
+  return <Panel id={formId} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
+    if (event.key === "Escape" && open && !event.defaultPrevented) { event.preventDefault(); closeSheet(); }
   }} onReset={(event) => {
     event.preventDefault();
     setDateInputs({ from: range.startDate, to: range.endDate });
     setTimeInputs({ from: "", to: "" });
     setProbabilityInputs({ min: formatProbabilityValue(reset.probability.min), max: formatProbabilityValue(reset.probability.max) });
+    onOpenChange(false);
     apply(reset);
   }} onSubmit={(event) => {
     event.preventDefault();
-    if (completeDraft) apply(applyFeedDraft(completeDraft, today));
+    if (!completeDraft) return;
+    onOpenChange(false);
+    apply(applyFeedDraft(completeDraft, today));
   }}>
     {[...new URLSearchParams(parameters)].map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
     <SearchRow data-feed-search>
@@ -630,64 +712,85 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
           onChange={(event) => edit({ ...draft, search: event.target.value })} />
       </SearchField>
     </SearchRow>
+    {query.status !== "live" && <DayStrip query={query} today={today} onApply={onApply} />}
     <PhoneToolbar data-phone-filter-toolbar>
-      <DateSummary type="button" aria-controls={panelId} aria-expanded={open} onClick={(event) => {
-        filterOpener.current = event.currentTarget;
-        if (open) form.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
-        else { focusDateAfterOpen.current = true; onToggle(); }
-      }}>
-        <CalendarIcon /><span><small>{messages.text("feed.date.title")}</small>{dateSummary}</span><ChevronDownIcon />
-      </DateSummary>
-      <FilterToggle ref={filterToggle} type="button" aria-expanded={open} aria-controls={panelId}
-        title={toggleLabel}
-        aria-label={count > 0 ? `${toggleLabel}, ${messages.plural("feed.filters.activeCount", count)}` : toggleLabel} onClick={(event) => {
-          filterOpener.current = event.currentTarget; onToggle();
-        }}>
-        <SlidersIcon /><span>{messages.text("feed.filters.toggle")}</span><ChevronDownIcon />
-        {count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
+      {total !== null && <PhoneCount>{messages.plural("feed.results.count", total)}</PhoneCount>}
+      <SortField>
+        <SortIcon />
+        <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => {
+          const sort = feedSortOptions.find((option) => `${option.by}-${option.direction}` === event.target.value);
+          if (sort) onApply({ ...query, sort, page: 1 });
+        }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
+      </SortField>
+      <FilterToggle ref={filterToggle} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={panelId}
+        aria-label={count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel}
+        onClick={() => onOpenChange(true)}>
+        <SlidersIcon /><span>{filtersLabel}</span>{count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
       </FilterToggle>
     </PhoneToolbar>
-    <FilterFieldsGroup id={panelId} $open={open}>
-    <RangeRow>
-      <DateRangePicker query={query} today={today} {...dateInputs} onChange={(from, to) => setDateInputs({ from, to })} />
-      <FeedTimeFilter query={query} {...timeInputs} onChange={(from, to) => setTimeInputs({ from, to })} />
-    </RangeRow>
-    <PhoneOnly>
-      <PhoneMore>
-        {phonePicker("markets", marketList)}
-        {phonePicker("leagues", leagueList)}
-        {phonePicker("countries", countryList)}
-        <BottomRow>
+    {open && <SheetScrim aria-hidden="true" onClick={closeSheet} />}
+    <FilterFieldsGroup ref={sheet} id={panelId} $open={open} onKeyDown={(event) => { if (open) keepFocusInSheet(event); }} tabIndex={open ? -1 : undefined}
+      role={open ? "dialog" : undefined} aria-modal={open || undefined} aria-labelledby={open ? titleId : undefined}>
+      <SheetHeader>
+        <h2 id={titleId}>{filtersLabel}</h2>
+        <SheetClose type="button" aria-label={messages.text("feed.filters.close")} title={messages.text("feed.filters.close")} onClick={closeSheet}>
+          <CloseIcon />
+        </SheetClose>
+      </SheetHeader>
+      <SheetBody>
+        <DateRangePicker query={query} today={today} {...dateInputs} onChange={(from, to) => setDateInputs({ from, to })} />
+        <FeedTimeFilter query={query} {...timeInputs} onChange={(from, to) => setTimeInputs({ from, to })} />
+        <PhoneSection role="group" aria-labelledby={marketsId}>
+          <SectionLabel><span id={marketsId}>{messages.text("feed.filters.markets")}</span><small>{messages.text("feed.filters.marketsHint")}</small></SectionLabel>
+          <MarketToggles>
+            {publicPolicy.markets.map((family) => {
+              const pressed = draft.markets.includes(family), next = toggledMarkets(draft, family);
+              return <MarketToggle key={family} type="button" $family={family} aria-pressed={pressed} aria-disabled={next === null || undefined}
+                title={next === null ? messages.text("feed.filters.oneMarket") : undefined} onClick={() => { if (next) edit(next); }}>
+                <span>{messages.text(`market.family.${family}`)}</span>{pressed && <CheckIcon />}
+              </MarketToggle>;
+            })}
+          </MarketToggles>
+        </PhoneSection>
+        <PhoneSection>
+          {phonePicker("leagues", leagueList)}
+          {phonePicker("countries", countryList)}
+        </PhoneSection>
+        <PhoneSection>
           <ProbabilityGroup role="group" aria-label={probabilityLabel}>
             <span>{messages.text("feed.filters.predictionProbability")}</span>{probabilityFields}
           </ProbabilityGroup>
           <ProbabilityHelp>{messages.text("feed.filters.probabilityExplanation")}</ProbabilityHelp>
-        </BottomRow>
-        <OddsNote><InfoIcon /><span>{messages.text("feed.filters.oddsUnavailable")}<br />{messages.text("feed.filters.oddsPending")}</span></OddsNote>
-      </PhoneMore>
-    </PhoneOnly>
-
-    <DesktopOnly>
-      <DesktopGrid>
-        {multiField("leagues", leagueList)}
-        {multiField("countries", countryList)}
-        {multiField("markets", marketList)}
-        <Field $accent="amber" $disabled role="group" aria-labelledby="filters-odds" title={messages.text("feed.filters.oddsPending")}>
-          <FieldName id="filters-odds" $accent="amber">{oddsLabel}</FieldName>
-          <NumberPair $disabled>
-            <input disabled value="1.01" readOnly aria-label={messages.text("feed.filters.minimum", { label: oddsLabel })} />–
-            <input disabled value="20.00" readOnly aria-label={messages.text("feed.filters.maximum", { label: oddsLabel })} />
-          </NumberPair>
-          <VisuallyHidden>{messages.text("feed.filters.oddsPending")}</VisuallyHidden>
-        </Field>
-        <Field $accent="pink" role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
-          <FieldName id="filters-probability" $accent="pink">{probabilityLabel}</FieldName>
-          {probabilityFields}%
-          <VisuallyHidden>{messages.text("feed.filters.probabilityHelp")}</VisuallyHidden>
-        </Field>
-      </DesktopGrid>
-    </DesktopOnly>
-    {probability === null && <ProbabilityError id={probabilityErrorId}>{messages.text("feed.filters.probabilityInvalid")}</ProbabilityError>}
+        </PhoneSection>
+        {probability === null && <ProbabilityError id={probabilityErrorId}>{messages.text("feed.filters.probabilityInvalid")}</ProbabilityError>}
+        <PhoneSection>
+          <OddsNote><InfoIcon /><span>{messages.text("feed.filters.oddsUnavailable")}<br />{messages.text("feed.filters.oddsPending")}</span></OddsNote>
+        </PhoneSection>
+        <DesktopOnly>
+          <DesktopGrid>
+            {multiField("leagues", leagueList)}
+            {multiField("countries", countryList)}
+            {multiField("markets", marketList)}
+            <Field $accent="amber" $disabled role="group" aria-labelledby="filters-odds" title={messages.text("feed.filters.oddsPending")}>
+              <FieldName id="filters-odds" $accent="amber">{oddsLabel}</FieldName>
+              <NumberPair $disabled>
+                <input disabled value="1.01" readOnly aria-label={messages.text("feed.filters.minimum", { label: oddsLabel })} />–
+                <input disabled value="20.00" readOnly aria-label={messages.text("feed.filters.maximum", { label: oddsLabel })} />
+              </NumberPair>
+              <VisuallyHidden>{messages.text("feed.filters.oddsPending")}</VisuallyHidden>
+            </Field>
+            <Field $accent="pink" role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
+              <FieldName id="filters-probability" $accent="pink">{probabilityLabel}</FieldName>
+              {probabilityFields}%
+              <VisuallyHidden>{messages.text("feed.filters.probabilityHelp")}</VisuallyHidden>
+            </Field>
+          </DesktopGrid>
+        </DesktopOnly>
+      </SheetBody>
+      <SheetFooter>
+        <FeedDraftStatus locale={query.locale} changed={changed && draftValid} />
+        <FeedFilterActions formId={formId} locale={query.locale} status={{ valid: draftValid, changed }} />
+      </SheetFooter>
     </FilterFieldsGroup>
     {controls}
   </Panel>;
