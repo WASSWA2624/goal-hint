@@ -327,8 +327,8 @@ const Pick = styled.div<{ $family: MarketFamily; $available: boolean }>`
   ${tile} {
     grid-area: pick;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "tag result" "pick pick" "value value";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "tag" "pick" "value" "result";
     align-content: center;
     align-items: center;
     gap: 3px 6px;
@@ -338,6 +338,7 @@ const Pick = styled.div<{ $family: MarketFamily; $available: boolean }>`
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border-inline-start: 3px solid ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.border};
+    &[data-pick-state="none"] { grid-template-areas: "pick"; }
   }
   ${table} { display: grid; grid-column: 7 / span 4; grid-template-columns: subgrid; align-items: center; }
 `;
@@ -398,7 +399,6 @@ const PickShort = styled(PickCell)<{ $family: MarketFamily; $available: boolean 
     > b { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
     /* No pick: "No pick" and a short reason fill the stub. */
     [data-pick-state="none"] & {
-      grid-area: 1 / 1 / 4 / 3;
       color: ${({ theme }) => theme.color.mutedText};
       > [data-pick-value] { font-size: ${({ theme }) => theme.typography.scale.micro}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
     }
@@ -454,31 +454,31 @@ const Bar = styled.span<{ $family: MarketFamily }>`
   > span { display: block; block-size: 100%; background: ${({ theme, $family }) => theme.color.market[$family].solid}; }
 `;
 const Result = styled(PickCell)<{ $outcome: OutcomeTone }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   grid-column: 4;
   color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
-  font-size: 0.75rem;
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  > svg { display: none; }
-  /* Settled outcomes remain explicit beside the market code without tinting the prediction. */
+  background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme, $outcome }) => theme.color.outcome[$outcome].border};
+  border-radius: 0;
+  font-size: 0.8125rem;
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  line-height: 1.2;
+  > svg { display: block; flex: none; font-size: 0.8125rem; }
+  /* Every valid prediction outcome has its own prominent row below the mobile pick and meter. */
   ${tile} {
     grid-area: result;
-    justify-self: end;
-    gap: 2px;
-    min-block-size: 1.125rem;
-    padding: 0 4px 0 2px;
-    color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
-    background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
-    font-size: 0.65625rem;
-    font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    line-height: 1;
+    justify-self: stretch;
+    min-block-size: 1.625rem;
+    padding: 3px 6px;
     white-space: nowrap;
-    > svg { display: block; flex: none; font-size: 0.75rem; }
-    &[data-result-badge="pending"], &[data-result-badge="unavailable"] { display: none; }
+    &[data-result-badge="unavailable"] { display: none; }
   }
   ${table} {
     justify-self: start;
     padding: 3px 6px;
-    background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
   }
 `;
 
@@ -729,8 +729,8 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <>
             <span data-pick-value=""><span data-pick-selection="">{messages.text(shownFamily === "total-goals"
-              ? `market.pickPlain.${selection}` : `market.pick.${selection}`)}</span>{" "}
-              <Price data-pick-odds="" data-selected-odds={price ? "" : undefined}>({price?.price ?? "—"})</Price>
+              ? `market.pickPlain.${selection}` : `market.pick.${selection}`)}</span>
+              {price && <>{" "}<Price data-pick-odds="" data-selected-odds="">({price.price})</Price></>}
             </span>
           </> : <>
             <b data-mobile-only="">{messages.text("match.noPick")}</b>

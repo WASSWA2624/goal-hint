@@ -30,13 +30,14 @@ def verify(origin, directory):
         if 'data-prediction="none"' in article:
             no_match(r"data-pick-odds=|data-probability-meter=", article)
         else:
-            assert article.count('data-pick-odds=""') == 1, "One inline price after the shown prediction"
+            assert article.count('data-pick-odds=""') <= 1, "An available price appears once after the shown prediction"
             assert article.count('data-probability-meter=""') == 1, "One decorative meter for the shown probability"
             no_match(r"Odds", re.search(r"<header\b[^>]*>([\s\S]*?)</header>", article).group(1))
+        no_match(r"\(—\)", article)
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
         match(f'data-outcome="{status}"', by_id[card])
-    for card, status, label in [("card-correct", "correct", "Won"), ("card-incorrect", "incorrect", "Lost"),
+    for card, status, label in [("card-correct", "correct", "Win"), ("card-incorrect", "incorrect", "Loss"),
         ("card-pending", "pending", "Pending")]:
         article = by_id[card]
         assert article.count(f'data-result-badge="{status}"') == 1
@@ -56,7 +57,7 @@ def verify(origin, directory):
     match("Odds: 1.85", by_id["card-correct"])
     no_match(r"Odds 2\.10", by_id["card-correct"])
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])
-    match(r'data-pick-odds[^>]*>\(—\)</span>', by_id["card-incorrect"])
+    no_match(r"data-pick-odds=", by_id["card-incorrect"])
     match("Odds: Unavailable", by_id["card-incorrect"])
     match(r'data-pick-selection=""[^>]*>Under 2\.5</span>', by_id["card-long"])
     match(r'data-selected-odds[^>]*>\(9999\.99\)</span>', by_id["card-long"])
