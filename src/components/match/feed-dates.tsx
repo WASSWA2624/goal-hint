@@ -85,7 +85,7 @@ const Strip = styled.nav`
   min-inline-size: 0;
   ${media.desktop} { display: none; }
 `;
-/** Whole cells fill the strip: three, five or seven (48px or wider, so a Day-Month label fits), so the selected day can sit exactly in the middle. */
+/** Whole cells fill the strip: one, three, five or seven, keeping day-month labels at least 48px wide. */
 const Days = styled.ul`
   position: relative;
   container-type: inline-size;
@@ -101,7 +101,8 @@ const Days = styled.ul`
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
-  > li { flex: none; inline-size: calc((100cqi - 8px) / 3); scroll-snap-align: center; }
+  > li { flex: none; inline-size: 100cqi; scroll-snap-align: center; }
+  @container (min-width: 152px) { > li { inline-size: calc((100cqi - 8px) / 3); } }
   @container (min-width: 256px) { > li { inline-size: calc((100cqi - 16px) / 5); } }
   @container (min-width: 360px) { > li { inline-size: calc((100cqi - 24px) / 7); } }
 `;
@@ -224,6 +225,22 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     if (!list.current?.clientWidth) return;
     centerAfter.current = anchor; extend();
   }, [anchor, extend]);
+  useLayoutEffect(() => {
+    const strip = list.current;
+    if (!strip) return;
+    let width = strip.clientWidth;
+    const observer = new ResizeObserver(() => {
+      const nextWidth = strip.clientWidth;
+      if (nextWidth === width) return;
+      width = nextWidth;
+      if (!width) return;
+      // Cell sizes change with the strip width; retain the selected day rather than its old pixel offset.
+      center(selected ?? anchor, "auto");
+      extend();
+    });
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [anchor, center, extend, selected]);
   /** Scrolls by whole days: a page of them, keeping one day from the previous view. */
   const page = (direction: -1 | 1) => {
     const strip = list.current, cell = strip?.firstElementChild as HTMLElement | null;
