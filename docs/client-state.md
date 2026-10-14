@@ -53,7 +53,7 @@ validation response, rather than accepting a more permissive query.
 | Search | `q`, maximum 120 UTF-16 code units before normalization; NFC, trimmed, collapsed whitespace, no ASCII control characters. Empty is omitted. |
 | League | `league`, canonical identifier text, 1–128 ASCII letters/digits/underscore/hyphen with an alphanumeric first character; absent or empty means null. No display-name lookup. |
 | Status | `all` default; `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. Finished groups played finals; provider mapping/query implementation belongs to 028. |
-| Market | `match-result` default, `double-chance`, `total-goals`, `both-teams-to-score`. |
+| Market | Any by default: all supported families (`match-result`, `double-chance`, `total-goals`, `both-teams-to-score`), showing each fixture's highest-probability available pick. |
 | Sort | `kickoff` default, or `probability` requiring an explicit `market`. In state, probability sort carries that market. Optional inbound `sortMarket` must agree; serialization omits this redundant alias. |
 | Position | `page` default 1, maximum 10,000; `pageSize` default 30, maximum 100. Canonical positive decimal integers only. |
 

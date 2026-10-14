@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { activeFeedFilterCount, feedQueryHref, feedQueryKey, FeedQueryError, isAnyOdds, panelFilterCount, parseFeedQuery, resolveFeedDates,
+import { activeFeedFilterCount, defaultMarkets, feedQueryHref, feedQueryKey, FeedQueryError, isAnyMarkets, isAnyOdds, panelFilterCount, parseFeedQuery, resolveFeedDates,
   serializeFeedQuery, formatProbabilityValue, parseProbabilityValue, probabilityFraction, validProbabilityRange } from "../src/domain/feed-query.ts";
 import { publicPolicy } from "../src/domain/public-policy.ts";
 import { query, today } from "./helpers/client-state-fixtures.mjs";
@@ -16,10 +16,25 @@ test("URL queries round trip with one canonical order and explicit EAT context",
     const date = url.pathname.split("/")[3];
     assert.deepEqual(query(url.searchParams.toString(), date ? { routeDate: date } : {}), parsed);
   }
-  assert.equal(serializeFeedQuery(query("page=1&status=all&market=match-result&prob=0-100&picks=all&sort=kickoff&dir=asc&when=today"), today).toString(), "");
+  assert.equal(serializeFeedQuery(query(`page=1&status=all&market=${defaultMarkets.join(",")}&prob=0-100&picks=all&sort=kickoff&dir=asc&when=today`), today).toString(), "");
   assert.equal(serializeFeedQuery(query("q=+Cafe%CC%81+++FC+"), today).toString(), "q=Caf%C3%A9+FC");
   assert.equal(feedQueryHref(query("from=2020-02-29&to=2020-03-06&status=finished"), today),
     "/en/predictions/2020-02-29?to=2020-03-06&status=finished");
+});
+
+test("default markets are Any; explicit single-family filters remain distinct and all-family URLs canonicalize to home", () => {
+  const defaults = query();
+  assert.deepEqual(defaults.dates, { kind: "today" });
+  assert.deepEqual(defaults.markets, publicPolicy.markets);
+  assert.equal(defaults.time, undefined); assert.deepEqual(defaults.leagues, []); assert.deepEqual(defaults.countries, []);
+  assert.deepEqual(defaults.probability, { min: 0, max: 100 }); assert.equal(defaults.odds, null);
+  assert.equal(isAnyMarkets(defaults.markets), true);
+  assert.equal(isAnyMarkets([...defaultMarkets].reverse()), true);
+  assert.equal(isAnyMarkets(["match-result"]), false);
+  assert.equal(feedQueryHref(query(`market=${defaultMarkets.join(",")}`), today), "/en");
+  assert.equal(feedQueryHref(query("market=match-result"), today), "/en?market=match-result");
+  assert.equal(panelFilterCount(defaults), 0); assert.equal(panelFilterCount(query("market=match-result")), 1);
+  assert.notEqual(feedQueryKey(defaults, today), feedQueryKey(query("market=match-result"), today));
 });
 
 test("list filters are deduplicated, sorted and in policy order, so equivalent URLs share a key", () => {
@@ -160,7 +175,7 @@ test("odds= (052) round trips with two places, inclusive bounds and omitted extr
   assert.equal(activeFeedFilterCount(on("odds=1.50-3.00")), 1);
   assert.equal(activeFeedFilterCount(on("odds=1.01-1000.00")), 0);
   assert.equal(panelFilterCount(on("prob=50-100&odds=1.50-3.00")), 2);
-  assert.equal(panelFilterCount({ leagues: [], countries: [], markets: ["match-result"], probability: { min: 0, max: 100 } }), 0);
+  assert.equal(panelFilterCount({ leagues: [], countries: [], markets: [...defaultMarkets], probability: { min: 0, max: 100 } }), 0);
   for (const input of ["odds=1.5-3.00", "odds=01.50-3.00", "odds=3.00-1.50", "odds=1.00-2.00", "odds=1.50", "odds=", "odds=1,50-3,00",
     "odds=1.50-3.00&odds=1.50-3.00", "odds=1.50-1000.01", "odds=1.505-3.00", "odds=+1.50-3.00", "odds=1.50 - 3.00", "odds=0.50-3.00",
     "odds=10000.00-10000.00", "odds=9999.99-9999.99", "odds=1.50-3.00-4.00", "odds=1.50-3", "odds=1e2-3.00", "odds=%EF%BC%91.50-3.00"]) {

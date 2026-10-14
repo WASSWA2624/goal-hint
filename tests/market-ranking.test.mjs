@@ -19,6 +19,20 @@ test("a higher unrounded forecast probability always beats better odds, even whe
   assert.equal(bestPublishedFamily(items, [price("total-goals", "over-2.5", "9.99")], families), "match-result", "a missing price never discards a more probable forecast");
 });
 
+test("the Any default selects the highest-probability available family and keeps its own price", () => {
+  const query = parseFeedQuery({}, { today: parseReportingDate("2026-10-14") });
+  const items = [...tied, pick("double-chance", "home-or-draw", 0.82), pick("both-teams-to-score", "yes", 0.71)];
+  const prices = [price("match-result", "home-win", "9.99"), price("double-chance", "home-or-draw", "1.30")];
+  const family = bestCardFamily({ forecast: { markets: items }, prices }, query.markets);
+  assert.equal(family, "double-chance");
+  assert.equal(prices.find((entry) => entry.family === family)?.price, "1.30");
+  assert.equal(bestCardFamily({ forecast: { markets: items.filter((entry) => entry.market.family !== family) }, prices }, query.markets), "both-teams-to-score");
+  const sql = feedSql(query, validateReportingDateRange("2026-10-14", "2026-10-14", 31), [39], true);
+  assert.match(sql.joins.sql, /ORDER BY b.selectedProbability DESC, bp.displayHundredths DESC/u);
+  assert.match(sql.joins.sql, /op.marketKey=m.family\s+AND op.selection=m.selection/u);
+  assert.doesNotMatch(sql.where.sql, /op.displayHundredths BETWEEN/u);
+});
+
 test("only exact probability ties use the highest available price for the published family and selection", () => {
   assert.equal(bestPublishedFamily(tied, prices, families), "total-goals");
   assert.equal(bestPublishedFamily(tied, [prices[1]], families), "total-goals", "an available price beats no price on a tie");

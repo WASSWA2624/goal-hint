@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyFeedDraft, resetFeedFilters } from '../src/domain/feed-controls.ts';
-import { feedQueryHref, parseFeedQuery } from '../src/domain/feed-query.ts';
+import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters } from '../src/domain/feed-controls.ts';
+import { defaultMarkets, feedQueryHref, panelFilterCount, parseFeedQuery } from '../src/domain/feed-query.ts';
 import { makeStore } from '../src/state/store.ts';
 import { draftChanged } from '../src/state/feed.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
@@ -30,18 +30,32 @@ test('native GET controls and canonical URLs produce the same applied query', ()
   assert.throws(() => applyFeedDraft({ ...query, markets: [] }, today));
   assert.throws(() => applyFeedDraft({ ...query, probability: { min: 80, max: 20 } }, today));
 });
-test('Reset preserves dates, status entry and page size with consistent defaults', () => {
+test('Clear filters resets every date selection to Today and Any, retaining the navigation section and page size', () => {
   for (const dates of [{ date: today }, { from: today, to: '2026-10-15' }, { when: 'tomorrow' }, { when: 'next-30-days' }]) {
     const query = parseFeedQuery({ ...dates, q: 'team', league: 'league-a,league-b', country: 'Spain', status: 'live', market: 'total-goals,both-teams-to-score',
-      prob: '60-100', picks: 'only', sort: 'probability', dir: 'asc', page: '3', pageSize: '40' }, { today });
+      prob: '60-100', timeFrom: '12:00', timeTo: '18:00', tz: 'Africa/Kampala', picks: 'only', sort: 'probability', dir: 'asc', page: '3', pageSize: '40' }, { today });
     const reset = resetFeedFilters(query);
-    assert.deepEqual(reset.dates, query.dates); assert.equal(reset.pageSize, 40); assert.equal(reset.page, 1);
+    assert.deepEqual(reset.dates, { kind: 'today' }); assert.equal(reset.pageSize, 40); assert.equal(reset.page, 1);
+    assert.equal(reset.time, undefined); assert.equal(reset.zone, query.zone);
     assert.equal(reset.search, ''); assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
     assert.equal(reset.status, 'live', 'Live and Results are navigation sections, not filters');
-    assert.deepEqual(reset.markets, ['match-result']); assert.deepEqual(reset.probability, { min: 0, max: 100 }); assert.equal(reset.picks, 'all');
+    assert.deepEqual(reset.markets, defaultMarkets); assert.deepEqual(reset.probability, { min: 0, max: 100 }); assert.equal(reset.picks, 'all');
     assert.deepEqual(reset.sort, { by: 'kickoff', direction: 'asc' });
     assert.equal(reset.odds, null);
+    assert.equal(panelFilterCount(reset), 0);
+    assert.deepEqual(applyFeedDraft(reset, today), reset);
   }
+});
+
+test('Any probability inputs accept open bounds while incomplete or invalid numeric drafts cannot apply', () => {
+  for (const [values, expected] of [
+    [{ min: '', max: '' }, { min: 0, max: 100 }],
+    [{ min: '58.2', max: '' }, { min: 58.2, max: 100 }],
+    [{ min: '', max: '58.2' }, { min: 0, max: 58.2 }],
+    [{ min: '58.2', max: '58.2' }, { min: 58.2, max: 58.2 }],
+  ]) assert.deepEqual(parseProbabilityInputs(values), expected);
+  for (const values of [{ min: '1.', max: '' }, { min: '.', max: '' }, { min: '', max: '100.1' },
+    { min: '80', max: '20' }, { min: 'NaN', max: '' }]) assert.equal(parseProbabilityInputs(values), null);
 });
 test('Reset clears odds bounds (052); Apply never carries them while provider odds are off', () => {
   const query = parseFeedQuery({ odds: '1.50-3.00', prob: '60-100' }, { today, providerOdds: true });

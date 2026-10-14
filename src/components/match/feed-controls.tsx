@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
-import { formatProbabilityValue, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
+import { formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import type { ReportingDate } from "@/domain/calendar";
 import { formatOddsRange } from "@/domain/odds";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -91,7 +91,7 @@ export function FeedActiveFilterSummary({ query, today, leagues }: {
       : `${messages.reportingDateShort(range.startDate)} – ${messages.reportingDateShort(range.endDate)}`,
       title: range.dayCount === 1 ? messages.reportingDate(range.startDate)
         : `${messages.reportingDate(range.startDate)} – ${messages.reportingDate(range.endDate)}` },
-    selection(messages.text("feed.filters.markets"), marketNames, ""),
+    selection(messages.text("feed.filters.markets"), isAnyMarkets(query.markets) ? [] : marketNames, messages.text("feed.filters.any")),
     selection(messages.text("feed.filters.leagues"), leagueNames, messages.text("feed.filters.allLeagues")),
     selection(messages.text("feed.filters.countries"), query.countries, messages.text("feed.filters.anyCountry")),
   ];
@@ -117,7 +117,8 @@ export function FeedAppliedSummary({ query, leagues }: { query: FeedQuery; leagu
   const messages = createMessages(query.locale);
   const leagueNames = query.leagues.map((id) => leagues.find((item) => item.id === id)?.name ?? id);
   return <FeedNote data-applied-filters>
-    {messages.text("feed.filters.applied")}: {query.markets.map((family) => messages.text(`market.family.${family}`)).join(", ")}
+    {messages.text("feed.filters.applied")}: {isAnyMarkets(query.markets) ? messages.text("feed.filters.any")
+      : query.markets.map((family) => messages.text(`market.family.${family}`)).join(", ")}
     {" · "}{messages.text(`feed.status.${query.status}`)}
     {" · "}{messages.text(`feed.sort.${query.sort.by}-${query.sort.direction}`)}
     {leagueNames.length > 0 && <> · {leagueNames.join(", ")}</>}

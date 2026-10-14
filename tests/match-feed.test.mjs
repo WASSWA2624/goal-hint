@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate } from '../src/domain/calendar.ts';
-import { maximumCompetitionScope } from '../src/domain/feed-query.ts';
+import { defaultMarkets, maximumCompetitionScope } from '../src/domain/feed-query.ts';
 import { matchFeedErrorSchema, matchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { parseMatchFeedQuery, createMatchFeedService } from '../src/server/matches/feed-service.ts';
@@ -37,7 +37,7 @@ for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'f
 }
 test('public parsing preserves shared URL defaults, historical dates and SSR route context', () => {
   const defaults = parseMatchFeedQuery(new URLSearchParams(), today);
-  assert.equal(defaults.pageSize, 30); assert.equal(defaults.page, 1); assert.deepEqual(defaults.markets, ['match-result']);
+  assert.equal(defaults.pageSize, 30); assert.equal(defaults.page, 1); assert.deepEqual(defaults.markets, defaultMarkets);
   assert.deepEqual(defaults.sort, { by: 'kickoff', direction: 'asc' }); assert.deepEqual(defaults.probability, { min: 0, max: 100 });
   assert.equal(parseMatchFeedQuery(new URLSearchParams('from=2026-10-09&to=2026-11-08'), today).dates.kind, 'range');
   assert.equal(parseMatchFeedQuery(new URLSearchParams('date=1000-01-02'), today).dates.date, '1000-01-02');

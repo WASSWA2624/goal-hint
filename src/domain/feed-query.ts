@@ -56,7 +56,8 @@ export const maximumCompetitionScope = 2000;
 export type FeedParameters = URLSearchParams | Readonly<Record<string, string | string[] | undefined>>;
 export const feedQueryRules = Object.freeze({ maximumDays: 31, maximumSearchLength: 120, pageSize: 30, maximumPageSize: 100,
   maximumPage: 10_000, maximumLeagues: 50, maximumCountries: 50 });
-export const defaultMarkets: readonly MarketFamily[] = Object.freeze(["match-result"]);
+/** Any market: each fixture shows its highest-probability available pick across all supported families. */
+export const defaultMarkets: readonly MarketFamily[] = publicPolicy.markets;
 export const anyProbability: ProbabilityRange = Object.freeze({ min: 0, max: 100 });
 export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ kickoff: "asc", probability: "desc" });
 export const feedDefaults = Object.freeze({
@@ -253,6 +254,10 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
 const sameList = (left: readonly string[], right: readonly string[]) =>
   left.length === right.length && left.every((item, index) => item === right[index]);
 
+export function isAnyMarkets(markets: readonly MarketFamily[]): boolean {
+  return sameList(canonicalMarkets(markets), defaultMarkets);
+}
+
 /** Canonical parameter order and omitted defaults make equivalent URLs share a key. */
 export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLSearchParams {
   if (![...feedDatePresets, "date", "range"].includes(query.dates.kind) || !["kickoff", "probability"].includes(query.sort.by) ||
@@ -276,7 +281,7 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   if (countries.length > 0) result.set("country", countries.join(","));
   if (query.status !== feedDefaults.today.status) result.set("status", query.status);
   const markets = canonicalMarkets(query.markets);
-  if (!sameList(markets, defaultMarkets)) result.set("market", markets.join(","));
+  if (!isAnyMarkets(markets)) result.set("market", markets.join(","));
   if (!isAnyProbability(query.probability)) result.set("prob", `${formatProbabilityValue(query.probability.min)}-${formatProbabilityValue(query.probability.max)}`);
   const requested = query.odds ?? null;
   if (requested !== null && (![requested.min, requested.max].every((value) => Number.isSafeInteger(value) &&
@@ -325,7 +330,7 @@ export function feedQueryKey(query: FeedQuery, today: ReportingDate): string {
 /** Choices made inside the filter panel itself: leagues, countries, markets, probability and odds. */
 export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability"> & Partial<Pick<FeedQuery, "odds" | "time">>): number {
   return query.leagues.length + query.countries.length +
-    Number(!sameList(canonicalMarkets(query.markets), defaultMarkets)) + Number(!isAnyProbability(query.probability)) +
+    Number(!isAnyMarkets(query.markets)) + Number(!isAnyProbability(query.probability)) +
     Number(!isAnyOdds(query.odds ?? null)) + Number(Boolean(query.time));
 }
 

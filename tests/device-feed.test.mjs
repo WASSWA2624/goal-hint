@@ -32,10 +32,10 @@ test("device navigation selects today/live and yesterday's results in the same b
     "/en/predictions/2026-12-31?tz=Asia%2FKathmandu&status=finished");
 });
 
-test("Clear removes optional time bounds but preserves the device day and chosen dates", () => {
+test("Clear filters returns to Today in the device zone and removes optional time bounds", () => {
   const original = query("date=2020-02-29&tz=America%2FLos_Angeles&timeFrom=12:00&timeTo=13:00&q=Club");
   const cleared = resetFeedFilters(original);
   assert.equal(cleared.zone, zone); assert.equal(cleared.time, undefined);
-  assert.deepEqual(cleared.dates, original.dates);
-  assert.equal(feedQueryHref(cleared, today), "/en/predictions/2020-02-29?tz=America%2FLos_Angeles");
+  assert.deepEqual(cleared.dates, { kind: "today" });
+  assert.equal(feedQueryHref(cleared, today), "/en?tz=America%2FLos_Angeles");
 });

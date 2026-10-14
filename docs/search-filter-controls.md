@@ -30,7 +30,7 @@ From date, To date, From time and To time share the filter fields with Markets,
 Leagues, Countries and Probability. Below 64rem these fields live in a modal
 bottom sheet (`role="dialog"`) above the tab bar, opened by the Filters button.
 The sheet lists, in order: Match dates, Kickoff time, Markets, Leagues,
-Countries, Probability and the Odds explanation, with Clear and Apply filters
+Countries, Probability and the Odds explanation, with Clear filters and Apply filters
 pinned at its foot. Opening it moves focus into the sheet, keeps Tab inside
 it and stops the page behind from scrolling. The close button, Escape or a tap
 on the backdrop discards unapplied filter edits (typed search text stays) and
@@ -68,8 +68,8 @@ endpoints select an inclusive minute range. Both time inputs empty mean no time
 filter. A missing endpoint, reversed range or invalid date/time remains editable
 and disables the shared Apply action. Browsing `tz` is independent of optional
 time bounds: dates select complete local days, including DST boundaries, and
-blank time fields keep that zone. Clear removes time bounds while retaining
-the applied dates and browsing zone. An unzoned relative entry adopts the device
+blank time fields keep that zone. Clear filters removes time bounds, returns the
+date to Today and retains the browsing zone. An unzoned relative entry adopts the device
 zone after hydration; explicit named dates and shared applied zones remain
 stable. Unzoned explicit dates retain their EAT boundaries. New time selections
 use the applied browsing zone, or the device zone when none is applied; its IANA
@@ -91,8 +91,11 @@ or failed flags leave the readable country name in place.
 The feed filters and orders by each fixture's shown pick: the most likely
 available pick among the selected markets, with exact probability ties broken
 by fresh odds for the same published family/selection, then policy order. The same rule
-picks the market shown on the card (`bestCardFamily`). Default order is kickoff
-ascending, then fixture ID. `dir=desc` reverses kickoff order. Probability order
+picks the market shown on the card (`bestCardFamily`). Markets defaults to Any,
+which includes every supported family. Probability and Odds default to Any,
+applying no bounds. Odds, when available, belong to the shown pick rather than
+another market's higher price. Default order is kickoff ascending, then fixture ID.
+`dir=desc` reverses kickoff order. Probability order
 is descending by default (`dir=asc` reverses it), with missing picks last and
 kickoff/ID ties. The probability range (`prob`) accepts integer or decimal
 percentages in 0–100 and keeps only fixtures whose shown pick's unrounded
@@ -107,7 +110,7 @@ checklists, searchable for leagues and countries. Each chip's `href` is the
 canonical URL with that value toggled and page reset, preserving ordinary link
 behavior. Probability uses compact minimum/maximum fields accepting plain
 decimal numbers from 0 through 100; the minimum cannot exceed the maximum, and
-incomplete or invalid drafts prevent Apply. The filter
+blank endpoints mean Any; incomplete numeric or invalid drafts prevent Apply filters. The filter
 row contains no sliders. Odds controls remain disabled with their explanation
 until provider odds display is enabled.
 
@@ -116,7 +119,7 @@ market's card colour; the last selected market cannot be turned off. Leagues
 and Countries each use one labeled summary button whose complete, searchable
 checklist opens in place inside the sheet. One selection shows its name;
 multiple selections show their count. Empty league and country selections show
-All leagues and Any country. Selected values missing from a refreshed option
+Any. When every market is selected, its summary also shows Any. Selected values missing from a refreshed option
 list remain removable. Probability uses the same directly editable
 minimum/maximum fields as desktop. Mobile retains the muted Odds unavailable
 explanation.
@@ -136,11 +139,12 @@ at least 44px. The phone match count updates with the displayed projection,
 including live refreshes; desktop shows it with the results. It is omitted when
 no successful projection is available. Draft edits make no count-preview
 requests. Apply filters submits the complete
-search, date, time and filter draft. Clear resets
+search, date, time and filter draft. Clear filters resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
-match result and kickoff ascending order, and resets page to one. It retains
-the applied date/range, status entry and page size. Each screen size shows one
-Clear and one Apply. An empty-result message appears with the results. The sort menu includes
+Today, all supported markets and kickoff ascending order, and resets page to one.
+It retains the browsing zone, status entry and page size. The button labels are
+Clear filters and Apply filters, each in two rows on mobile and one row on desktop.
+An empty-result message appears with the results. The sort menu includes
 both kickoff directions and both probability directions, without a separate
 reverse-order button.
 
