@@ -40,7 +40,7 @@ form may be a CSS size container.
 At desktop widths all fields remain visible. The common range controls are
 rendered once, so the initial HTML contains exactly two date and two time
 inputs, including when the mobile sheet is closed. Mobile labels sit
-above square native controls with 16px values and 44px targets. Dates and
+above square 40px native fields with 16px values. Dates and
 times are paired; the date pair stacks below 361px, and both pairs stack when
 their container or larger text needs more room. Match dates and Kickoff time
 headings, optional time guidance and the browsing zone are visible. Desktop

@@ -109,14 +109,14 @@ const dayCell = css`
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 1px;
-  min-block-size: 3.125rem;
+  gap: 0;
+  min-block-size: 2.75rem;
   border-radius: 0;
   font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+  line-height: 1.1;
   text-decoration: none;
   cursor: pointer;
-  > small { font-size: 0.6875rem; font-weight: 600; }
+  > small { font-size: 0.625rem; font-weight: 600; }
 `;
 const Day = styled(Link)`
   ${dayCell}
@@ -127,7 +127,7 @@ const Day = styled(Link)`
   > small { color: ${({ theme }) => theme.color.mutedText}; }
   /* The first of each month names its month, so a long scroll keeps its bearings. */
   > small[data-month] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  > b { font-size: 1rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  > b { font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
   &[data-selected] {
     color: ${({ theme }) => theme.color.onBrand};
@@ -157,7 +157,7 @@ const CalendarButton = styled.button`
   flex: none;
   min-inline-size: 3.5rem;
   max-inline-size: 7.5rem;
-  padding: 4px 6px;
+  padding: 2px 6px;
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} dashed ${({ theme }) => theme.color.controlBorder};

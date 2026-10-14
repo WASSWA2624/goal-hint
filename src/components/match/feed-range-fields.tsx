@@ -16,7 +16,7 @@ export const RangeFieldset = styled.fieldset`
 `;
 
 export const RangeLegend = styled.legend`
-  margin-block-end: 6px;
+  margin-block-end: 4px;
   padding: 0;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
@@ -86,7 +86,7 @@ export const RangeFields = styled.div`
     input {
       flex: none;
       max-inline-size: 100%;
-      min-block-size: 2.75rem;
+      min-block-size: 2.5rem;
       padding: 4px 8px;
       background: ${({ theme }) => theme.color.surface};
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};

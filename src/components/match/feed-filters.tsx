@@ -55,7 +55,7 @@ const Panel = styled.form`
   display: grid;
   gap: 4px;
   min-inline-size: 0;
-  ${media.belowDesktop} { gap: 8px; padding-inline: 6px; }
+  ${media.belowDesktop} { gap: 6px; padding-inline: 6px; }
 `;
 const SearchRow = styled.div`
   display: grid;
@@ -203,9 +203,9 @@ const SheetBody = styled.div`
     flex: 1 1 auto;
     flex-direction: column;
     align-items: stretch;
-    gap: 18px;
+    gap: 12px;
     min-block-size: 0;
-    padding: 14px 16px 18px;
+    padding: 10px 14px 12px;
     overflow-y: auto;
     overscroll-behavior: contain;
   }
@@ -215,15 +215,15 @@ const SheetFooter = styled.div`
   ${media.belowDesktop} {
     display: grid;
     flex: none;
-    gap: 6px;
-    padding: 10px 16px;
+    gap: 4px;
+    padding: 8px 14px;
     background: ${({ theme }) => theme.color.surface};
     border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   }
 `;
 const PhoneSection = styled.div`
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-inline-size: 0;
   ${desktop} { display: none; }
 `;
@@ -234,7 +234,7 @@ const SectionLabel = styled.div`
   gap: 8px;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
-  line-height: 1.35;
+  line-height: 1.3;
   > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 /** Market toggles carry each family's card colour, so a choice matches the picks it produces. */
@@ -355,7 +355,7 @@ const ProbabilityInputs = styled.div`
     > [data-range-separator] { display: none; }
     input {
       inline-size: 100%;
-      min-block-size: 2.75rem;
+      min-block-size: 2.5rem;
       padding: 4px 8px;
       border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
       font-size: 16px;
@@ -396,8 +396,8 @@ const OddsNote = styled.p`
   display: flex;
   align-items: start;
   gap: 7px;
-  margin-block-start: 4px;
-  padding-block-start: 6px;
+  margin-block-start: 0;
+  padding-block-start: 8px;
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   color: ${({ theme }) => theme.color.mutedText};
   font-size: 0.75rem;

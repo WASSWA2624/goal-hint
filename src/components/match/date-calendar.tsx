@@ -34,9 +34,9 @@ const Frame = styled.div`
 `;
 const Body = styled.div`
   display: grid;
-  gap: 10px;
+  gap: 6px;
   min-block-size: 0;
-  padding: 12px 16px 14px;
+  padding: 8px 14px 10px;
   overflow-y: auto;
   overscroll-behavior: contain;
 `;
@@ -50,8 +50,8 @@ const MonthBar = styled.div`
 const BarButton = styled.button`
   display: inline-grid;
   place-items: center;
-  min-inline-size: 2.75rem;
-  min-block-size: 2.75rem;
+  min-inline-size: 2.5rem;
+  min-block-size: 2.5rem;
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
@@ -81,7 +81,7 @@ const Grid = styled.div`
 `;
 const DayButton = styled.button`
   min-inline-size: 0;
-  min-block-size: 2.75rem;
+  min-block-size: 2.5rem;
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: transparent;
@@ -118,7 +118,7 @@ const Footer = styled.div`
   display: flex;
   flex: none;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   > button {
     min-block-size: 2.75rem;

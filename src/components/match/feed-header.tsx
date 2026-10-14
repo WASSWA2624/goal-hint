@@ -193,17 +193,20 @@ export function FeedFilterToolbar({ query, onApply, actions, summary }: {
   </FilterToolbar>;
 }
 
+/** Phones show the count in the filter row; here only the hidden heading remains, so the bar takes no space. */
+const ResultsBar = styled(Toolbar)`${media.belowDesktop} { display: contents; }`;
+
 /** Counts follow the successful result projection, including pagination and live refresh. */
 export function ResultsToolbar({ query, total, first, last }: {
   query: FeedQuery; total: number | null; first: number; last: number;
 }) {
   const messages = createMessages(query.locale);
-  return <Toolbar>
+  return <ResultsBar>
     <Count>
       <h2>{messages.text("feed.results.title")}</h2>
       {total !== null && <p>{messages.text("feed.results.showing", { shown: total === 0 ? "0"
         : `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>}
     </Count>
     {total !== null && <ResultCount data-match-count>{messages.plural("feed.results.count", total)}</ResultCount>}
-  </Toolbar>;
+  </ResultsBar>;
 }

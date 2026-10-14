@@ -43,7 +43,7 @@ export const SheetHeader = styled.div`
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 4px 4px 4px 16px;
+    padding: 2px 2px 2px 14px;
     border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     > h2 { margin: 0; font-size: 1rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.3; }
   }
