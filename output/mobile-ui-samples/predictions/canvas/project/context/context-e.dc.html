@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Match Context — Option E</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+.dir-e .gh-screen > *{flex:none}                     /* page content keeps its natural height; the screen clips */
+.dir-e .gh-group > li > .gh-row{border-bottom:0}     /* rows sit in <li>: the group draws its own inset dividers */
+.e-block{margin-top:16px}                            /* E airy density: 16 px between blocks */
+.e-sub{margin-top:8px}                               /* a team name sits 8 px above its rows */
+.dir-e .e-span2{grid-column:1 / -1}                  /* long facts take the full row of the 2-column grid */
+.dir-e .e-pill{min-width:52px;text-align:center}     /* "Last" and "Next" pills share one width so the fixtures align */
+.e-nw{white-space:nowrap}                            /* keep the team name in "Rest before kickoff (team)" on one line */
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 390px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">E · context · C1 Open facts</figcaption>
+    <div class="gh-phone dir-e">
+      <header class="gh-topbar">
+        <div class="gh-topbar__start"><a class="gh-icon-btn" href="/feed/feed-e.dc.html" aria-label="Back to matches"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a></div>
+        <p class="gh-topbar__title">Match details</p>
+        <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Search matches" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+      </header>
+      <main class="gh-screen">
+        <div class="gh-titleblock acc-amber">
+          <span class="gh-ibadge gh-ibadge--32"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10c0-2 4-4 9-4s9 2 9 4v6c0 2-4 4-9 4s-9-2-9-4v-6Z"/><path d="M3 10c0 2 4 4 9 4s9-2 9-4"/></svg></span>
+          <h1 class="gh-titleblock__title">Match Context</h1>
+          <span class="gh-ticks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="is-on"></i><i></i><i></i></span>
+        </div>
+        <dl class="gh-kv gh-kv--grid2 gh-pad">
+          <div class="gh-kv__row"><dt>Competition</dt><dd><span class="gh-complogo" aria-hidden="true"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 6h2.5a1.5 1.5 0 0 1 1.5 1.5V8a4 4 0 0 1-4 4M7 6H4.5A1.5 1.5 0 0 0 3 7.5V8a4 4 0 0 0 4 4"/></svg></span>Serie A</dd></div>
+          <div class="gh-kv__row"><dt>Country</dt><dd>Brazil</dd></div>
+          <div class="gh-kv__row"><dt>Round</dt><dd>Regular Season - 30</dd></div>
+          <div class="gh-kv__row"><dt>Status</dt><dd>Finished</dd></div>
+          <div class="gh-kv__row e-span2"><dt>Kickoff</dt><dd><time datetime="2026-10-13T03:00+03:00">Oct 13, 2026, 03:00 EAT</time></dd></div>
+        </dl>
+        <hr class="gh-divider e-block">
+        <dl class="gh-kv gh-kv--grid2 gh-pad e-block">
+          <div class="gh-kv__row"><dt>Rest before kickoff <span class="e-nw">(RB Bragantino)</span></dt><dd>5.1 days</dd></div>
+          <div class="gh-kv__row"><dt>Rest before kickoff <span class="e-nw">(Cruzeiro)</span></dt><dd>5.9 days</dd></div>
+        </dl>
+        <p class="gh-note gh-pad e-block">Rest is derived from each team's last stored verified result; earlier fixtures the provider has not imported are not counted.</p>
+        <section class="e-block" aria-labelledby="c1-schedule">
+          <h2 class="gh-h3 gh-pad" id="c1-schedule">Surrounding fixtures</h2>
+          <h3 class="gh-subhead gh-hstack gh-pad e-block" id="c1-home"><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span>RB Bragantino</h3>
+          <ul class="gh-group e-sub" aria-labelledby="c1-home">
+            <li><a class="gh-row" href="#"><span class="gh-pill acc-teal e-pill">Last</span><span class="gh-row__main"><span class="gh-row__title">RB Bragantino 2–0 Fortaleza</span><time class="gh-row__sub" datetime="2026-10-08">Thu, Oct 8</time></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>
+            <li><a class="gh-row" href="#"><span class="gh-pill acc-violet e-pill">Next</span><span class="gh-row__main"><span class="gh-row__title gh-hstack"><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span>RB Bragantino – São Paulo</span><time class="gh-row__sub" datetime="2026-10-18">Sun, Oct 18</time></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></li>
+          </ul>
+          <h3 class="gh-subhead gh-hstack gh-pad e-block" id="c1-away"><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span>Cruzeiro</h3>
+          <ul class="gh-group e-sub" aria-labelledby="c1-away">
+            <li><a class="gh-row" href="#"><span class="gh-pill acc-teal e-pill">Last</span><span class="gh-row__main"><span class="gh-row__title">Cruzeiro 2–0 Internacional</span><time class="gh-row__sub" datetime="2026-10-07">Wed, Oct 7</time></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>
+            <li><a class="gh-row" href="#"><span class="gh-pill acc-violet e-pill">Next</span><span class="gh-row__main"><span class="gh-row__title gh-hstack"><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span>Cruzeiro – Corinthians</span><time class="gh-row__sub" datetime="2026-10-17">Sat, Oct 17</time></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></li>
+          </ul>
+        </section>
+        <dl class="gh-kv gh-kv--grid2 gh-pad e-block">
+          <div class="gh-kv__row"><dt>Venue</dt><dd class="gh-mute">Not available</dd></div>
+          <div class="gh-kv__row"><dt>Weather</dt><dd class="gh-mute">Not available</dd></div>
+          <div class="gh-kv__row"><dt>Standings</dt><dd class="gh-mute">Not available</dd></div>
+        </dl>
+        <p class="gh-note gh-pad e-block">Venue, weather and standings are not collected yet, so none are shown.</p>
+      </main>
+      <nav class="gh-dock" aria-label="Location in match details">
+        <a class="gh-dock__btn gh-dock__btn--up" href="/detail/detail-e.dc.html" aria-label="Match details"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>Match details</a>
+        <a class="gh-dock__btn" href="/injuries/injuries-e.dc.html" aria-label="Injuries &amp; Suspensions"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="gh-dock__label">Injuries &amp; Suspensions</span></a>
+        <a class="gh-dock__btn gh-dock__btn--next" href="/referee/referee-e.dc.html" aria-label="Referee"><span class="gh-dock__label">Referee</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      </nav>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="/feed/feed-e.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+      </nav>
+    </div>
+  </figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Predictions feed — Option D</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+/* D control row: the search takes the free width; the icon-only Filters button is a 46 px square-ish target. */
+.dir-d .d-ctrl .gh-search{flex:1 1 auto}
+.dir-d .d-ctrl .gh-btn{padding-inline:12px}
+/* Space between control row, column header and the card list. */
+.dir-d .d-list{margin-top:12px}
+/* Column rebalance (header + cards together): the kit's 66 px Result column is narrower than the
+   "Pending" badge with its clock icon (76 px), and the teams column clipped "RB Bragantino".
+   Side padding 10 -> 8 and name gaps 8 -> 6 give the teams column back its room; the header
+   padding follows the card edge (8 + 1 px border). Market 44 · Pick 28 · Prob. 40 · Result 76. */
+.dir-d .gh-match{padding-inline:8px}
+.dir-d .gh-listhead{padding-inline:9px}
+.dir-d .gh-match__line{gap:6px}
+.dir-d .gh-listhead,.dir-d .gh-match__grid{grid-template-columns:minmax(0,1fr) 44px 28px 40px 76px}
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 390px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">D · feed · F1 Today</figcaption>
+    <div class="gh-phone dir-d">
+      <header class="gh-topbar">
+        <div class="gh-topbar__start"><a class="gh-logo" href="/feed/feed-d.dc.html" aria-label="Goal Hint home"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M16.5 9.5A5 5 0 1 0 17 13h-5"/></svg>Goal Hint</a></div>
+        <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+      </header>
+      <nav class="gh-tabs" aria-label="Match dates">
+        <a class="gh-icon-btn" href="#" aria-label="Previous day"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
+        <div class="gh-tabs__list">
+          <a class="gh-tabs__tab" href="/feed/feed-d.dc.html" aria-current="page">Today</a>
+          <a class="gh-tabs__tab" href="#">Tomorrow</a>
+          <a class="gh-tabs__tab" href="#">Next 3 days</a>
+          <a class="gh-tabs__tab" href="#">Next 7 days</a>
+          <a class="gh-tabs__tab" href="#">Next 30 days</a>
+        </div>
+        <a class="gh-icon-btn" href="#" aria-label="Next day"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      </nav>
+      <main class="gh-screen" id="main-content">
+        <div class="gh-titlerow"><h1 class="gh-h1">Today's Matches</h1><span class="gh-count">294 matches</span></div>
+        <form class="gh-hstack gh-pad d-ctrl" method="get" action="#" role="search" aria-label="Search and filter matches">
+          <label class="gh-search" for="d-feed-q"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="d-feed-q" type="search" name="q" maxlength="120" placeholder="Search teams or leagues" aria-label="Search matches"></label>
+          <a class="gh-btn gh-btn--secondary" href="/filters/filters-d.dc.html" aria-label="Filters"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z"/></svg></a>
+          <span class="gh-selchip"><select name="sort" aria-label="Sort by"><option selected>Highest chance</option><option>Lowest chance</option><option>Earliest first</option><option>Latest first</option></select><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+        </form>
+        <h2 class="gh-sr">Predicted Matches</h2>
+        <div class="gh-pad d-list">
+          <div class="gh-listhead" aria-hidden="true"><span></span><span>Market</span><span>Pick</span><span>Prob.</span><span>Result</span></div>
+          <ul class="gh-stack" style="--gap:6px" aria-label="Matches in the selected dates">
+            <li><a class="gh-match" href="/detail/detail-d.dc.html"><span class="gh-sr">View analysis for RB Bragantino v Cruzeiro.</span>
+              <span class="gh-match__top"><span class="gh-match__meta"><b>03:00</b> EAT · <span class="gh-flag"></span>BRA · <span class="gh-truncate">Serie A</span></span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span>
+              <span class="gh-match__grid mkt-1x2">
+                <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span><span class="gh-match__name">RB Bragantino</span><b class="gh-match__goals">4</b></span><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span><span class="gh-match__name">Cruzeiro</span><b class="gh-match__goals">2</b></span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Market</span><span class="gh-code">1X2</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Pick: RB Bragantino win</span><span aria-hidden="true">1</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Probability</span>56%</span>
+                <span class="gh-match__cell"><span class="gh-sr">Result</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Win</span></span>
+              </span>
+            </a></li>
+            <li><a class="gh-match" href="#"><span class="gh-sr">View analysis for Kanchanaburi v Police Tero.</span>
+              <span class="gh-match__top"><span class="gh-match__meta"><b>14:30</b> EAT · <span class="gh-flag"></span>THA · <span class="gh-truncate">Thai League 2</span></span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span>
+              <span class="gh-match__grid mkt-1x2">
+                <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">KA</span><span class="gh-match__name">Kanchanaburi</span><b class="gh-match__goals">1</b></span><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">PT</span><span class="gh-match__name">Police Tero</span><b class="gh-match__goals">0</b></span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Market</span><span class="gh-code">1X2</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Pick: Kanchanaburi win</span><span aria-hidden="true">1</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Probability</span>45%</span>
+                <span class="gh-match__cell"><span class="gh-sr">Result</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Win</span></span>
+              </span>
+            </a></li>
+            <li><a class="gh-match" href="#"><span class="gh-sr">View analysis for Tripoli SC v Al Akhaa Al Ahli.</span>
+              <span class="gh-match__top"><span class="gh-match__meta"><b>15:00</b> EAT · <span class="gh-flag"></span>LBN · <span class="gh-truncate">Premier League</span></span><span class="gh-badge gh-badge--live"><span class="gh-sr">Live </span>–</span></span>
+              <span class="gh-match__grid mkt-1x2">
+                <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">TS</span><span class="gh-match__name">Tripoli SC</span><b class="gh-match__goals is-live">2</b></span><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">AA</span><span class="gh-match__name">Al Akhaa Al Ahli</span><b class="gh-match__goals is-live">0</b></span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Market</span><span class="gh-code">1X2</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Pick: Tripoli SC win</span><span aria-hidden="true">1</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Probability</span>45%</span>
+                <span class="gh-match__cell"><span class="gh-sr">Result</span><span class="gh-badge gh-badge--pending"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pending</span></span>
+              </span>
+            </a></li>
+            <li><a class="gh-match" href="#"><span class="gh-sr">View analysis for Ballkani v Drita.</span>
+              <span class="gh-match__top"><span class="gh-match__meta"><b>15:00</b> EAT · <span class="gh-flag"></span>KVX · <span class="gh-truncate">Superliga</span></span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span>
+              <span class="gh-match__grid mkt-1x2">
+                <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">BA</span><span class="gh-match__name">Ballkani</span><b class="gh-match__goals">0</b></span><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">DR</span><span class="gh-match__name">Drita</span><b class="gh-match__goals">1</b></span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Market</span><span class="gh-code">1X2</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Pick: Ballkani win</span><span aria-hidden="true">1</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Probability</span>45%</span>
+                <span class="gh-match__cell"><span class="gh-sr">Result</span><span class="gh-badge gh-badge--incorrect"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>Loss</span></span>
+              </span>
+            </a></li>
+            <li><a class="gh-match" href="#"><span class="gh-sr">View analysis for ZOB Ahan v Sepahan FC.</span>
+              <span class="gh-match__top"><span class="gh-match__meta"><b>15:30</b> EAT · <span class="gh-flag"></span>IRN · <span class="gh-truncate">Persian Gulf Pro League</span></span><span class="gh-badge gh-badge--live"><span class="gh-sr">Live </span>90+3′</span></span>
+              <span class="gh-match__grid mkt-1x2">
+                <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">ZA</span><span class="gh-match__name">ZOB Ahan</span><b class="gh-match__goals is-live">1</b></span><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">SF</span><span class="gh-match__name">Sepahan FC</span><b class="gh-match__goals is-live">2</b></span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Market</span><span class="gh-code">1X2</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Pick: Draw</span><span aria-hidden="true">X</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Probability</span>45%</span>
+                <span class="gh-match__cell"><span class="gh-sr">Result</span><span class="gh-badge gh-badge--pending"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pending</span></span>
+              </span>
+            </a></li>
+            <li><a class="gh-match" href="#"><span class="gh-sr">View analysis for Zimbabwe W v Malawi W.</span>
+              <span class="gh-match__top"><span class="gh-match__meta"><b>16:00</b> EAT · <svg class="gh-ico gh-ico--16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z"/></svg>INT · <span class="gh-truncate">Olympics Women - Qualification CAF</span></span><span class="gh-badge gh-badge--live"><span class="gh-sr">Live </span>67′</span></span>
+              <span class="gh-match__grid mkt-1x2">
+                <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">ZW</span><span class="gh-match__name">Zimbabwe W</span><b class="gh-match__goals is-live">0</b></span><span class="gh-match__line"><span class="gh-crest gh-crest--20" aria-hidden="true">MW</span><span class="gh-match__name">Malawi W</span><b class="gh-match__goals is-live">4</b></span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Market</span><span class="gh-code">1X2</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Pick: Draw</span><span aria-hidden="true">X</span></span>
+                <span class="gh-match__cell"><span class="gh-sr">Probability</span>45%</span>
+                <span class="gh-match__cell"><span class="gh-sr">Result</span><span class="gh-badge gh-badge--pending"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pending</span></span>
+              </span>
+            </a></li>
+          </ul>
+        </div>
+      </main>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="/feed/feed-d.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+      </nav>
+    </div>
+  </figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

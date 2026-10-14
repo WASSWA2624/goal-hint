@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Prediction snapshot — Option C</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+/* C app bar is 56px (directions.md §6 component table); the kit's shared .gh-topbar is 52px. */
+.dir-c .gh-topbar{height:56px}
+.dir-c .gh-screen > *{flex:none}
+/* Grouped-list rhythm: 16px of page above the first group, 24px between groups. */
+.c-first{margin-top:16px}
+.c-gap{margin-top:24px}
+/* Rows inside a group use inset dividers only (no own bottom rule). */
+.dir-c .gh-group > .gh-kv__row{border-bottom:0}
+.c-kvin .gh-kv__row{position:relative;border-bottom:0}
+.c-kvin .gh-kv__row + .gh-kv__row::before{content:"";position:absolute;top:0;left:16px;right:0;height:1px;background:var(--gh-border)}
+/* Market group title: family icon badge in the family hue + full market name. */
+.c-mtitle{display:flex;align-items:center;gap:8px}
+.c-mtitle .gh-ibadge{margin-block:-3px}
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 390px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">C · snapshot · SN1 Snapshot top</figcaption>
+    <div class="gh-phone dir-c">
+      <header class="gh-topbar">
+        <a class="gh-icon-btn" href="/history/history-c.dc.html" aria-label="Back to list"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
+        <div class="gh-topbar__titles"><span class="gh-topbar__parent">Prediction History</span><h1 class="gh-topbar__page">Publication 2<span class="gh-topbar__meta">Historical prediction snapshot</span></h1></div>
+      </header>
+      <main class="gh-screen">
+        <dl class="gh-kv gh-kv--split gh-group c-first">
+          <div class="gh-kv__row"><dt>Status</dt><dd><span class="gh-badge">Historical publication</span></dd></div>
+          <div class="gh-kv__row"><dt>Cycle 1</dt><dd>Revision 2 within this cycle</dd></div>
+          <div class="gh-kv__row"><dt>Published</dt><dd><time datetime="2026-10-11T09:05+03:00">Oct 11, 2026, 09:05 EAT</time></dd></div>
+        </dl>
+        <p class="gh-group-foot">This is a read-only publication inspection. The primary match summary above retains the applicable current or locked prediction. Missing markets remain unavailable in this snapshot.</p>
+        <div class="gh-group c-gap">
+          <details class="gh-disclosure">
+            <summary><span>Cycle 1 · Closed</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+            <div class="gh-disclosure__body">
+              <p>Kickoff: <time datetime="2026-10-13T03:00+03:00">Oct 13, 2026, 03:00 EAT</time></p>
+              <p>Publication cutoff: <time datetime="2026-10-13T02:55+03:00">Oct 13, 2026, 02:55 EAT</time></p>
+              <p>Cycle opened: <time datetime="2026-10-06T03:00+03:00">Oct 6, 2026, 03:00 EAT</time></p>
+              <p>Cycle closed: <time datetime="2026-10-13T02:55+03:00">Oct 13, 2026, 02:55 EAT</time></p>
+              <p>Prediction locked: <time datetime="2026-10-13T02:55+03:00">Oct 13, 2026, 02:55 EAT</time></p>
+            </div>
+          </details>
+        </div>
+        <section class="mkt-1x2" aria-labelledby="sn1-m1">
+          <h2 class="gh-group-title c-mtitle" id="sn1-m1"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg></span>Match result (1X2)</h2>
+          <div class="gh-group">
+            <dl class="gh-kv gh-kv--split c-kvin">
+              <div class="gh-kv__row"><dt>Prediction</dt><dd><span class="gh-pill">RB Bragantino win</span></dd></div>
+              <div class="gh-kv__row"><dt>Estimated probability</dt><dd><span class="gh-prob gh-prob--hue">52%</span></dd></div>
+              <div class="gh-kv__row"><dt>Prediction source</dt><dd>AI prediction</dd></div>
+              <div class="gh-kv__row"><dt>Published</dt><dd><time datetime="2026-10-11T09:05+03:00">Oct 11, 2026, 09:05 EAT</time></dd></div>
+            </dl>
+            <details class="gh-disclosure">
+              <summary><span>Alternative selections</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+              <div class="gh-disclosure__body">
+                <p>Draw · Estimated probability: 25%</p>
+                <p>Cruzeiro win · Estimated probability: 23%</p>
+              </div>
+            </details>
+            <details class="gh-disclosure">
+              <summary><span>Source attribution and timing</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+              <div class="gh-disclosure__body">
+                <p>Source generated: <time datetime="2026-10-11T08:58+03:00">Oct 11, 2026, 08:58 EAT</time></p>
+                <p>Source retrieved: <time datetime="2026-10-11T08:40+03:00">Oct 11, 2026, 08:40 EAT</time></p>
+                <p>Source last updated: Unknown</p>
+                <p>ge</p>
+              </div>
+            </details>
+          </div>
+          <p class="gh-group-foot">This historical selection is excluded from headline settlement and performance counts.</p>
+        </section>
+        <section class="mkt-dc" aria-labelledby="sn1-m2">
+          <h2 class="gh-group-title c-mtitle" id="sn1-m2"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/></svg></span>Double chance</h2>
+          <div class="gh-group">
+            <dl class="gh-kv gh-kv--split c-kvin">
+              <div class="gh-kv__row"><dt>Prediction</dt><dd><span class="gh-pill">RB Bragantino or draw</span></dd></div>
+              <div class="gh-kv__row"><dt>Estimated probability</dt><dd><span class="gh-prob gh-prob--hue">77%</span></dd></div>
+            </dl>
+          </div>
+        </section>
+      </main>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="/feed/feed-c.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+      </nav>
+    </div>
+  </figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

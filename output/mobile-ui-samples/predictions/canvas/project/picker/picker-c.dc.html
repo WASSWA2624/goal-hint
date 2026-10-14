@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Filter checklist — Option C</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+/* C app bar is 56 px (directions.md §6; kit .gh-topbar default is A's 52 px). */
+.dir-c .gh-topbar{height:56px}
+/* C option-page rows: 64 px two-line (name / country), count right, check box at the end (§6 picker P1).
+   The kit row keeps its DOM order (input + .gh-check) so its :checked styling still applies; order moves the box last. */
+.dir-c .gh-check-row{min-height:64px;padding-block:8px}
+.dir-c .gh-check-row > .gh-check{order:2}
+/* 24 px between groups (§6 grouped list). */
+.dir-c .c-mt24{margin-top:24px}
+.dir-c .gh-screen > *{flex:none}
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 390px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">C · picker · P1 Leagues</figcaption>
+    <div class="gh-phone dir-c">
+      <header class="gh-topbar">
+        <a class="gh-icon-btn" href="/filters/filters-c.dc.html" aria-label="Filters and order"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
+        <div class="gh-topbar__titles"><span class="gh-topbar__parent">Filters and order</span><h1 class="gh-topbar__page">Leagues<span class="gh-topbar__meta">2 selected</span></h1></div>
+      </header>
+      <div class="gh-toolbar">
+        <label class="gh-search" for="c-find"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="c-find" type="search" placeholder="Find Leagues" aria-label="Find Leagues"></label>
+      </div>
+      <main class="gh-screen">
+        <div role="group" aria-label="Leagues: 2 selected">
+          <h2 class="gh-group-title" id="c-sel">2 selected</h2>
+          <div class="gh-group" role="group" aria-labelledby="c-sel">
+            <label class="gh-check-row" for="c-lg-s1"><input id="c-lg-s1" type="checkbox" checked><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Olympics Women - Qualification CAF<span class="gh-check-row__detail">World</span></span><span class="gh-check-row__count" aria-hidden="true">13</span></label>
+            <label class="gh-check-row" for="c-lg-s2"><input id="c-lg-s2" type="checkbox" checked><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Ligue 2<span class="gh-check-row__detail">Algeria</span></span><span class="gh-check-row__count" aria-hidden="true">12</span></label>
+          </div>
+          <div class="gh-group c-mt24">
+            <label class="gh-check-row" for="c-lg-1"><input id="c-lg-1" type="checkbox"><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Challenge Cup<span class="gh-check-row__detail">Scotland</span></span><span class="gh-check-row__count" aria-hidden="true">20</span></label>
+            <label class="gh-check-row" for="c-lg-2"><input id="c-lg-2" type="checkbox"><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">World Cup - Women - Qualification Europe<span class="gh-check-row__detail">World</span></span><span class="gh-check-row__count" aria-hidden="true">16</span></label>
+            <label class="gh-check-row" for="c-lg-3"><input id="c-lg-3" type="checkbox"><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Friendlies Women<span class="gh-check-row__detail">World</span></span><span class="gh-check-row__count" aria-hidden="true">14</span></label>
+            <label class="gh-check-row" for="c-lg-4"><input id="c-lg-4" type="checkbox" checked><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Olympics Women - Qualification CAF<span class="gh-check-row__detail">World</span></span><span class="gh-check-row__count" aria-hidden="true">13</span></label>
+            <label class="gh-check-row" for="c-lg-5"><input id="c-lg-5" type="checkbox" checked><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Ligue 2<span class="gh-check-row__detail">Algeria</span></span><span class="gh-check-row__count" aria-hidden="true">12</span></label>
+            <label class="gh-check-row" for="c-lg-6"><input id="c-lg-6" type="checkbox"><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">National League Cup<span class="gh-check-row__detail">England</span></span><span class="gh-check-row__count" aria-hidden="true">12</span></label>
+            <label class="gh-check-row" for="c-lg-7"><input id="c-lg-7" type="checkbox"><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Non League Premier - Northern<span class="gh-check-row__detail">England</span></span><span class="gh-check-row__count" aria-hidden="true">11</span></label>
+          </div>
+        </div>
+      </main>
+      <div class="gh-footbar">
+        <a class="gh-btn gh-btn--primary" href="/feed/feed-c.dc.html" aria-label="Apply filters"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z"/></svg>Apply</a>
+      </div>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="/feed/feed-c.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+      </nav>
+    </div>
+  </figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

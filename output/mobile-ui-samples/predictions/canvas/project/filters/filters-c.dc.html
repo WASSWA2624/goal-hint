@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Advanced filters — Option C</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+/* C app bar is 56 px (directions.md §6; kit .gh-topbar default is A's 52 px). */
+.dir-c .gh-topbar{height:56px}
+/* C rows are 56 px; the kit radio row defaults to 48 px. */
+.dir-c .gh-radio-row{min-height:56px}
+.dir-c .gh-screen > *{flex:none}
+/* Two-line rows are 64 px in C; kit .dir-c .gh-row would cap them at 56. */
+.dir-c .gh-row--tall{min-height:64px}
+/* Space above the first group and between groups (§6 grouped list: groups 24 px apart). */
+.dir-c .c-mt16{margin-top:16px}
+.dir-c .c-mt24{margin-top:24px}
+/* Inline field row inside a group (Time range, Probability). */
+.dir-c .c-fields{grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding:12px 16px}
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 390px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">C · filters · S1 Draft</figcaption>
+    <div class="gh-phone dir-c">
+      <header class="gh-topbar">
+        <a class="gh-icon-btn" href="/feed/feed-c.dc.html" aria-label="Back to matches"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
+        <div class="gh-topbar__titles"><span class="gh-topbar__parent">Matches</span><h1 class="gh-topbar__page">Filters and order</h1></div>
+        <button class="gh-btn gh-btn--ghost" type="button"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg>Clear</button>
+      </header>
+      <main class="gh-screen">
+        <form method="get" action="#" aria-label="Search and filter matches">
+          <div class="gh-group c-mt16">
+            <a class="gh-row" href="#" aria-label="Date range: Tue, Oct 13 – Thu, Oct 15"><span class="gh-row__main"><span class="gh-row__title">Date range</span></span><span class="gh-row__end"><span class="gh-dot" aria-hidden="true"></span>Tue, Oct 13 – Thu, Oct 15</span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+          </div>
+          <fieldset>
+            <legend class="gh-group-title">Time range</legend>
+            <div class="gh-group">
+              <div class="gh-fields c-fields">
+                <span class="gh-input"><label class="gh-field__label" for="c-tf">From time</label><input id="c-tf" type="text" inputmode="numeric" value="12:00" aria-describedby="c-zone"></span>
+                <span class="gh-input"><label class="gh-field__label" for="c-tt">To time</label><input id="c-tt" type="text" inputmode="numeric" value="20:00" aria-describedby="c-zone"></span>
+              </div>
+            </div>
+            <p class="gh-group-foot" id="c-zone">Africa/Kampala</p>
+          </fieldset>
+          <div class="gh-group c-mt24">
+            <a class="gh-row" href="/picker/picker-c.dc.html" aria-label="Markets: 2 selected"><span class="gh-row__main"><span class="gh-row__title">Markets</span></span><span class="gh-row__end"><span class="gh-dot" aria-hidden="true"></span>2 selected</span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+            <a class="gh-row" href="/picker/picker-c.dc.html" aria-label="Leagues: All leagues"><span class="gh-row__main"><span class="gh-row__title">Leagues</span></span><span class="gh-row__end">All leagues</span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+            <a class="gh-row" href="/picker/picker-c.dc.html" aria-label="Countries: 2 selected"><span class="gh-row__main"><span class="gh-row__title">Countries</span></span><span class="gh-row__end"><span class="gh-dot" aria-hidden="true"></span>2 selected</span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+          </div>
+          <fieldset>
+            <legend class="gh-group-title">Probability</legend>
+            <div class="gh-group">
+              <div class="gh-fields c-fields">
+                <span class="gh-input"><label class="gh-field__label" for="c-pmin">Min</label><input id="c-pmin" type="text" inputmode="decimal" value="50" aria-label="Minimum Probability" aria-describedby="c-phelp"><span class="gh-input__suffix" aria-hidden="true">%</span></span>
+                <span class="gh-input"><label class="gh-field__label" for="c-pmax">Max</label><input id="c-pmax" type="text" inputmode="decimal" value="100" aria-label="Maximum Probability" aria-describedby="c-phelp"><span class="gh-input__suffix" aria-hidden="true">%</span></span>
+              </div>
+            </div>
+            <p class="gh-group-foot" id="c-phelp">Applies to each match's shown pick: the most likely pick among the selected markets.</p>
+          </fieldset>
+          <div class="gh-group c-mt24">
+            <div class="gh-row gh-row--tall gh-row--disabled"><span class="gh-row__main"><span class="gh-row__title">Odds unavailable</span><span class="gh-row__sub">Odds filtering starts once bookmaker odds are imported.</span></span></div>
+          </div>
+          <fieldset>
+            <legend class="gh-group-title">Order</legend>
+            <div class="gh-group">
+              <label class="gh-radio-row" for="c-ord-1"><input id="c-ord-1" type="radio" name="c-order" checked><span>Highest chance</span><svg class="gh-ico gh-radio-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></label>
+              <label class="gh-radio-row" for="c-ord-2"><input id="c-ord-2" type="radio" name="c-order"><span>Lowest chance</span><svg class="gh-ico gh-radio-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></label>
+              <label class="gh-radio-row" for="c-ord-3"><input id="c-ord-3" type="radio" name="c-order"><span>Earliest first</span><svg class="gh-ico gh-radio-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></label>
+              <label class="gh-radio-row" for="c-ord-4"><input id="c-ord-4" type="radio" name="c-order"><span>Latest first</span><svg class="gh-ico gh-radio-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></label>
+            </div>
+          </fieldset>
+        </form>
+      </main>
+      <div class="gh-footbar">
+        <a class="gh-btn gh-btn--primary" href="/feed/feed-c.dc.html" aria-label="Apply filters"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z"/></svg>Apply</a>
+      </div>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="/feed/feed-c.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+      </nav>
+    </div>
+  </figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

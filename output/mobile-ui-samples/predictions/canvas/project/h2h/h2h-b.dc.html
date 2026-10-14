@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Head to Head — Option B</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+/* Overview behind the scrim: tile grid (D2 scroll position). */
+.dir-b .b-under{padding-top:8px}
+/* Meeting row title: crest · teams + score · crest on one line. */
+.dir-b .b-meet{display:flex;align-items:center;gap:6px}
+.dir-b .b-list{border-top:1px solid var(--gh-border)}
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 804px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">B · h2h · H1 Open</figcaption>
+    <div class="gh-phone dir-b">
+<header class="gh-topbar" inert="">
+  <div class="gh-topbar__start"><a class="gh-icon-btn" href="/feed/feed-b.dc.html" aria-label="Back to matches"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a></div>
+  <p class="gh-topbar__title">Match details</p>
+  <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Search matches" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+</header>
+<main class="gh-screen" inert="">
+  <div class="gh-tiles gh-pad b-under">
+    <a class="gh-tile acc-orange" href="/stats/stats-b.dc.html"><span class="gh-tile__head"><span class="gh-ibadge"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h7M4 12h11M4 17h5M13 7h7M17 12h3M11 17h9"/></svg></span><span class="gh-tile__title">Team Comparison</span></span><span class="gh-tile__meta">Last 10</span><span class="gh-tile__preview">Win probability 56% · 21%</span></a>
+    <a class="gh-tile acc-violet" href="/h2h/h2h-b.dc.html"><span class="gh-tile__head"><span class="gh-ibadge"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2.5 19a5.5 5.5 0 0 1 11 0M10.5 19a5.5 5.5 0 0 1 11 0"/></svg></span><span class="gh-tile__title">Head to Head</span></span><span class="gh-tile__meta">7 meetings</span><span class="gh-form" role="img" aria-label="Head-to-head results for RB Bragantino, oldest first: Draw, Win, Loss, Draw, Win"><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i><i class="gh-form__l gh-form__l--l">L</i><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i></span></a>
+  </div>
+</main>
+<nav class="gh-tabbar" aria-label="App sections" inert="">
+  <a class="gh-tab" href="/feed/feed-b.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+  <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+</nav>
+<div class="gh-scrim"></div>
+<section class="gh-sheet gh-sheet--full" role="dialog" aria-modal="true" aria-labelledby="b-h2h-title">
+  <span class="gh-sheet__grab" aria-hidden="true"></span>
+  <div class="gh-sheet__head">
+    <span class="gh-ibadge acc-violet"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2.5 19a5.5 5.5 0 0 1 11 0M10.5 19a5.5 5.5 0 0 1 11 0"/></svg></span>
+    <div class="gh-sheet__titles"><h2 class="gh-sheet__title" id="b-h2h-title">Head to Head</h2><span class="gh-sheet__sub-label">7 meetings</span></div>
+    <a class="gh-icon-btn" href="/detail/detail-b.dc.html" aria-label="Collapse Head to Head"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+  </div>
+  <div class="gh-sheet__sub">
+    <div class="gh-field"><label class="gh-field__label" for="b-h2h-venue">Venue</label><span class="gh-select"><select id="b-h2h-venue"><option selected>All venues</option><option>At RB Bragantino</option><option>At Cruzeiro</option></select><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span></div>
+  </div>
+  <div class="gh-sheet__body gh-sheet__body--flush">
+    <dl class="gh-kv gh-kv--grid2 gh-block">
+      <div class="gh-kv__row"><dt>Meetings</dt><dd>7</dd></div>
+      <div class="gh-kv__row"><dt>RB Bragantino wins</dt><dd>3</dd></div>
+      <div class="gh-kv__row"><dt>Draws</dt><dd>2</dd></div>
+      <div class="gh-kv__row"><dt>Cruzeiro wins</dt><dd>2</dd></div>
+      <div class="gh-kv__row"><dt>Average goals</dt><dd>2.3</dd></div>
+      <div class="gh-kv__row"><dt>Both teams scored</dt><dd>57%</dd></div>
+      <div class="gh-kv__row"><dt>Over 2.5 goals</dt><dd>43%</dd></div>
+    </dl>
+    <div class="b-list">
+      <a class="gh-row" href="/h2h/h2h-b.dc.html"><span class="gh-row__main"><span class="gh-row__sub">May 17, 2026</span><span class="gh-row__title b-meet"><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span><span class="gh-truncate">Cruzeiro <b>1–2</b> RB Bragantino</span><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span></span></span><span class="gh-form__l gh-form__l--w" role="img" aria-label="Result: Win">W</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__sub">Oct 26, 2025</span><span class="gh-row__title b-meet"><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span><span class="gh-truncate">RB Bragantino <b>2–2</b> Cruzeiro</span><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span></span></span><span class="gh-form__l gh-form__l--d" role="img" aria-label="Result: Draw">D</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__sub">Jun 1, 2025</span><span class="gh-row__title b-meet"><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span><span class="gh-truncate">Cruzeiro <b>2–0</b> RB Bragantino</span><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span></span></span><span class="gh-form__l gh-form__l--l" role="img" aria-label="Result: Loss">L</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__sub">Nov 10, 2024</span><span class="gh-row__title b-meet"><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span><span class="gh-truncate">RB Bragantino <b>1–0</b> Cruzeiro</span><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span></span></span><span class="gh-form__l gh-form__l--w" role="img" aria-label="Result: Win">W</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__sub">Jul 7, 2024</span><span class="gh-row__title b-meet"><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span><span class="gh-truncate">Cruzeiro <b>1–1</b> RB Bragantino</span><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span></span></span><span class="gh-form__l gh-form__l--d" role="img" aria-label="Result: Draw">D</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__sub">Sep 17, 2023</span><span class="gh-row__title b-meet"><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span><span class="gh-truncate">RB Bragantino <b>2–1</b> Cruzeiro</span><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span></span></span><span class="gh-form__l gh-form__l--w" role="img" aria-label="Result: Win">W</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__sub">May 6, 2023</span><span class="gh-row__title b-meet"><span class="gh-crest gh-crest--20" aria-hidden="true">CR</span><span class="gh-truncate">Cruzeiro <b>1–0</b> RB Bragantino</span><span class="gh-crest gh-crest--20" aria-hidden="true">RB</span></span></span><span class="gh-form__l gh-form__l--l" role="img" aria-label="Result: Loss">L</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+    </div>
+    <div class="gh-block"><p class="gh-note">Meetings come from stored verified results only; older meetings the provider has not imported are not included.</p></div>
+  </div>
+</section>
+    </div>
+  </figure>
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">B · h2h · H2 Record panel</figcaption>
+    <div class="gh-phone dir-b">
+<header class="gh-topbar" inert="">
+  <div class="gh-topbar__start"><a class="gh-icon-btn" href="/feed/feed-b.dc.html" aria-label="Back to matches"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a></div>
+  <p class="gh-topbar__title">Match details</p>
+  <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Search matches" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+</header>
+<main class="gh-screen" inert="">
+  <div class="gh-tiles gh-pad b-under">
+    <a class="gh-tile acc-orange" href="/stats/stats-b.dc.html"><span class="gh-tile__head"><span class="gh-ibadge"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h7M4 12h11M4 17h5M13 7h7M17 12h3M11 17h9"/></svg></span><span class="gh-tile__title">Team Comparison</span></span><span class="gh-tile__meta">Last 10</span><span class="gh-tile__preview">Win probability 56% · 21%</span></a>
+    <a class="gh-tile acc-violet" href="/h2h/h2h-b.dc.html"><span class="gh-tile__head"><span class="gh-ibadge"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2.5 19a5.5 5.5 0 0 1 11 0M10.5 19a5.5 5.5 0 0 1 11 0"/></svg></span><span class="gh-tile__title">Head to Head</span></span><span class="gh-tile__meta">7 meetings</span><span class="gh-form" role="img" aria-label="Head-to-head results for RB Bragantino, oldest first: Draw, Win, Loss, Draw, Win"><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i><i class="gh-form__l gh-form__l--l">L</i><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i></span></a>
+  </div>
+</main>
+<nav class="gh-tabbar" aria-label="App sections" inert="">
+  <a class="gh-tab" href="/feed/feed-b.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+  <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+</nav>
+<div class="gh-scrim"></div>
+<section class="gh-sheet gh-sheet--full" role="dialog" aria-modal="true" aria-labelledby="b-rec-title">
+  <span class="gh-sheet__grab" aria-hidden="true"></span>
+  <div class="gh-sheet__head gh-sheet__head--back">
+    <a class="gh-icon-btn" href="/h2h/h2h-b.dc.html" aria-label="Back to list"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
+    <div class="gh-sheet__titles"><h2 class="gh-sheet__title" id="b-rec-title">Cruzeiro v RB Bragantino</h2><span class="gh-sheet__sub-label">Head to Head</span></div>
+    <a class="gh-icon-btn" href="/detail/detail-b.dc.html" aria-label="Collapse Head to Head"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+  </div>
+  <div class="gh-sheet__body">
+    <dl class="gh-kv">
+      <div class="gh-kv__row"><dt>Date</dt><dd><time datetime="2026-05-17T22:00+03:00">May 17, 2026, 22:00 EAT</time></dd></div>
+      <div class="gh-kv__row"><dt>Competition</dt><dd>Serie A</dd></div>
+      <div class="gh-kv__row"><dt>Score</dt><dd>Cruzeiro 1 – 2 RB Bragantino</dd></div>
+      <div class="gh-kv__row"><dt>Status</dt><dd>Finished</dd></div>
+    </dl>
+    <p class="gh-note">Verified regulation-time score, including stoppage time and excluding extra time and penalties.</p>
+  </div>
+  <div class="gh-footbar">
+    <a class="gh-btn gh-btn--secondary gh-btn--block" href="/detail/detail-b.dc.html">Open this match's page<svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+  </div>
+</section>
+    </div>
+  </figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

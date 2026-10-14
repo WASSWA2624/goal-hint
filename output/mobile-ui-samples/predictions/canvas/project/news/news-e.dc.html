@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>News &amp; Insights — Option E</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+.dir-e .gh-screen > *{flex:none}                     /* page content keeps its natural height; the screen clips */
+.dir-e .gh-group > li > .gh-row{border-bottom:0}     /* rows sit in <li>: the group draws its own inset dividers */
+.e-block{margin-top:16px}                            /* E airy density: 16 px between blocks */
+.e-item .gh-titleblock__title{font-size:20px}        /* E item page title is 20/800 (directions.md §8 "Item page") */
+.e-act{min-height:48px}                              /* item page: one 48 px action button */
+.dir-e .e-footer-end{margin-top:auto}                /* short page: footer sits at the viewport end */
+/* News row: 2-line title, then the type pill beside "publisher · time" (that text wraps beside the pill). */
+.dir-e .e-news{padding-block:12px}
+.e-news__meta{display:flex;align-items:flex-start;gap:8px;margin-top:4px}
+.e-news__meta > .gh-pill{flex:none}
+.e-news__meta > .gh-row__sub{padding-top:4px}
+.e-news__meta time{white-space:nowrap}               /* a long publisher line breaks before the time, never inside it */
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 804px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">E · news · N1 Open list</figcaption>
+    <div class="gh-phone dir-e">
+      <header class="gh-topbar">
+        <div class="gh-topbar__start"><a class="gh-icon-btn" href="/feed/feed-e.dc.html" aria-label="Back to matches"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a></div>
+        <p class="gh-topbar__title">Match details</p>
+        <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Search matches" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+      </header>
+      <main class="gh-screen">
+        <div class="gh-titleblock acc-blue">
+          <span class="gh-ibadge gh-ibadge--32"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11v16H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-4 0M8 8h5M8 12h5M8 16h3"/></svg></span>
+          <h1 class="gh-titleblock__title">News &amp; Insights</h1><span class="gh-titleblock__meta">6 items</span>
+          <span class="gh-ticks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i class="is-on"></i><i></i><i></i><i></i><i></i></span>
+        </div>
+        <div class="gh-pad" role="group" aria-labelledby="n1-type"><span class="gh-group-label" id="n1-type">News type</span>
+          <div class="gh-seg"><button class="gh-seg__opt" type="button" aria-pressed="true">All</button><button class="gh-seg__opt" type="button" aria-pressed="false">Report</button><button class="gh-seg__opt" type="button" aria-pressed="false">Analysis</button></div>
+        </div>
+        <ul class="gh-group e-block" aria-label="News &amp; Insights">
+          <li><a class="gh-row e-news" href="#"><span class="gh-row__main"><span class="gh-row__title gh-clamp2">Bragantino expect Pitta to lead the line against Cruzeiro</span><span class="e-news__meta"><span class="gh-pill acc-blue">Report</span><span class="gh-row__sub">ge · <time datetime="2026-10-12T07:30+03:00">Oct 12, 2026, 07:30 EAT</time></span></span></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>
+          <li><a class="gh-row e-news" href="/news/news-e.dc.html"><span class="gh-row__main"><span class="gh-row__title gh-clamp2">Cruzeiro travel without Villalba after knee injury</span><span class="e-news__meta"><span class="gh-pill acc-blue">Report</span><span class="gh-row__sub">Lance! · <time datetime="2026-10-11T22:40+03:00">Oct 11, 2026, 22:40 EAT</time></span></span></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>
+          <li><a class="gh-row e-news" href="#"><span class="gh-row__main"><span class="gh-row__title gh-clamp2">Cruzeiro name full squad for Bragantino trip</span><span class="e-news__meta"><span class="gh-pill acc-blue">Report</span><span class="gh-row__sub">ESPN Brasil · <time datetime="2026-10-11T15:10+03:00">Oct 11, 2026, 15:10 EAT</time></span></span></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>
+          <li><a class="gh-row e-news" href="#"><span class="gh-row__main"><span class="gh-row__title gh-clamp2">RB Bragantino have lost one of their last ten stored home league results.</span><span class="e-news__meta"><span class="gh-pill acc-violet">Analysis</span><span class="gh-row__sub">Goal Hint analysis · <time datetime="2026-10-12T09:12+03:00">Oct 12, 2026, 09:12 EAT</time></span></span></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>
+          <li><a class="gh-row e-news" href="#"><span class="gh-row__main"><span class="gh-row__title gh-clamp2">Cruzeiro scored in each of their last five stored away results.</span><span class="e-news__meta"><span class="gh-pill acc-violet">Analysis</span><span class="gh-row__sub">Goal Hint analysis · <time datetime="2026-10-12T09:12+03:00">Oct 12, 2026, 09:12 EAT</time></span></span></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>
+          <li><a class="gh-row e-news" href="#"><span class="gh-row__main"><span class="gh-row__title gh-clamp2">Team news after the evidence cutoff could change the starting line-ups.</span><span class="e-news__meta"><span class="gh-pill acc-violet">Analysis</span><span class="gh-row__sub">Goal Hint analysis · <time datetime="2026-10-12T09:12+03:00">Oct 12, 2026, 09:12 EAT</time></span></span></span><svg class="gh-ico gh-row__chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>
+        </ul>
+        <p class="gh-note gh-pad e-block">Reports are permitted sources from the prediction evidence; analysis items are Goal Hint's generated explanations.</p>
+      </main>
+      <nav class="gh-dock" aria-label="Location in match details">
+        <a class="gh-dock__btn gh-dock__btn--up" href="/detail/detail-e.dc.html" aria-label="Match details"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>Match details</a>
+        <a class="gh-dock__btn" href="/players/players-e.dc.html" aria-label="Players"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="gh-dock__label">Players</span></a>
+        <a class="gh-dock__btn gh-dock__btn--next" href="/injuries/injuries-e.dc.html" aria-label="Injuries &amp; Suspensions"><span class="gh-dock__label">Injuries &amp; Suspensions</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      </nav>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="/feed/feed-e.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+      </nav>
+    </div>
+  </figure>
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">E · news · N2 News item</figcaption>
+    <div class="gh-phone dir-e">
+      <header class="gh-topbar">
+        <div class="gh-topbar__start"><a class="gh-icon-btn" href="/feed/feed-e.dc.html" aria-label="Back to matches"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a></div>
+        <p class="gh-topbar__title">Match details</p>
+        <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Search matches" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+      </header>
+      <main class="gh-screen">
+        <div class="gh-titleblock acc-blue e-item">
+          <span class="gh-ibadge gh-ibadge--32"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11v16H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-4 0M8 8h5M8 12h5M8 16h3"/></svg></span>
+          <h1 class="gh-titleblock__title">Cruzeiro travel without Villalba after knee injury</h1><span class="gh-titleblock__meta">News &amp; Insights</span>
+        </div>
+        <p class="gh-pad"><span class="gh-pill acc-blue">Report</span></p>
+        <dl class="gh-kv gh-pad e-block">
+          <div class="gh-kv__row"><dt>Publisher</dt><dd>Lance!</dd></div>
+          <div class="gh-kv__row"><dt>Source published</dt><dd><time datetime="2026-10-11T22:40+03:00">Oct 11, 2026, 22:40 EAT</time></dd></div>
+          <div class="gh-kv__row"><dt>Source retrieved</dt><dd><time datetime="2026-10-12T08:41+03:00">Oct 12, 2026, 08:41 EAT</time></dd></div>
+        </dl>
+        <div class="gh-pad e-block">
+          <ul class="gh-bullets">
+            <li>Lucas Villalba is reported out with a knee injury.</li>
+            <li>Walace is listed as doubtful with a muscle injury.</li>
+          </ul>
+        </div>
+        <p class="gh-note gh-pad e-block">Summary of a permitted source; open the original report for the full article.</p>
+        <div class="gh-pad e-block"><a class="gh-btn gh-btn--secondary gh-btn--block e-act" href="#" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Read the original report<svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a></div>
+        <footer class="gh-footer e-footer-end e-block">
+          <p class="gh-footer__brand"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M16.5 9.5A5 5 0 1 0 17 13h-5"/></svg>© 2026 Goal Hint</p>
+          <nav aria-label="Information"><a href="#">Help</a><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Contact</a></nav>
+          <p>Estimated probabilities, not guarantees. No betting advice.</p>
+        </footer>
+      </main>
+      <nav class="gh-dock" aria-label="Location in match details">
+        <a class="gh-dock__btn gh-dock__btn--up" href="/news/news-e.dc.html" aria-label="Back to list"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>Back to list</a>
+        <a class="gh-dock__btn" href="#" aria-label="Bragantino expect Pitta to lead the line against Cruzeiro"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="gh-dock__label">Bragantino expect Pitta to lead the line against Cruzeiro</span></a>
+        <a class="gh-dock__btn gh-dock__btn--next" href="#" aria-label="Cruzeiro name full squad for Bragantino trip"><span class="gh-dock__label">Cruzeiro name full squad for Bragantino trip</span><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      </nav>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="/feed/feed-e.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+      </nav>
+    </div>
+  </figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

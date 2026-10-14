@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GoalHint Kit Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="project/kit.css">
+<style>
+  /* Preview page layout only (not part of the kit). */
+  body { margin: 0; background: var(--gh-header); color: var(--gh-text); font-family: var(--gh-font); }
+  .wrap { display: flex; align-items: flex-start; gap: 32px; padding: 20px 24px; }
+  .col { width: 390px; flex: none; }
+  .col__head { margin: 0 0 2px; font-size: 20px; font-weight: 800; }
+  .col__sub { margin: 0 0 10px; font-size: 13px; color: var(--gh-muted); }
+  .spec { height: auto !important; overflow: visible !important; padding-bottom: 12px; }
+  .cap { padding: 10px 16px 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gh-brand); }
+  .ov { position: relative; overflow: hidden; display: flex; flex-direction: column; }
+  .base { padding: 12px 16px; display: grid; gap: 8px; }
+</style>
+</head>
+<body>
+<!-- Icon sprite: the app's own 24px stroke icons (directions.md §2.6). Reference with <svg class="gh-ico"><use href="#i-name"/></svg>. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+  <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+  <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></symbol>
+  <symbol id="i-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></symbol>
+  <symbol id="i-results" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></symbol>
+  <symbol id="i-slip" viewBox="0 0 24 24"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5M12 16.5h.01"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/></symbol>
+  <symbol id="i-document" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h8"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><path d="m3 6 9 7 9-7"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M17 6h2.5a1.5 1.5 0 0 1 1.5 1.5V8a4 4 0 0 1-4 4M7 6H4.5A1.5 1.5 0 0 0 3 7.5V8a4 4 0 0 0 4 4"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-cross" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-void" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m6.5 17.5 11-11"/></symbol>
+  <symbol id="i-notice" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5h.01"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8L12 3Z"/></symbol>
+  <symbol id="i-m-1x2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></symbol>
+  <symbol id="i-m-dc" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/></symbol>
+  <symbol id="i-m-ou" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 4.5h-5L8 10l4-3Z"/></symbol>
+  <symbol id="i-m-btts" viewBox="0 0 24 24"><circle cx="7" cy="12" r="4"/><circle cx="17" cy="12" r="4"/><path d="M11 12h2"/></symbol>
+  <symbol id="i-s-markets" viewBox="0 0 24 24"><path d="M5 20v-6M10 20V9M15 20v-8M20 20V4"/></symbol>
+  <symbol id="i-s-stats" viewBox="0 0 24 24"><path d="M4 7h7M4 12h11M4 17h5M13 7h7M17 12h3M11 17h9"/></symbol>
+  <symbol id="i-s-h2h" viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="16" cy="8" r="3"/><path d="M2.5 19a5.5 5.5 0 0 1 11 0M10.5 19a5.5 5.5 0 0 1 11 0"/></symbol>
+  <symbol id="i-s-form" viewBox="0 0 24 24"><path d="M3 17l5-5 4 3 6-7 3 3"/><path d="M18 8h3v3"/></symbol>
+  <symbol id="i-s-lineups" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M12 4v16"/><circle cx="12" cy="12" r="2.5"/><path d="M3 9h3v6H3M21 9h-3v6h3"/></symbol>
+  <symbol id="i-s-players" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-s-news" viewBox="0 0 24 24"><path d="M5 4h11v16H6a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-4 0M8 8h5M8 12h5M8 16h3"/></symbol>
+  <symbol id="i-s-injuries" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-s-context" viewBox="0 0 24 24"><path d="M3 10c0-2 4-4 9-4s9 2 9 4v6c0 2-4 4-9 4s-9-2-9-4v-6Z"/><path d="M3 10c0 2 4 4 9 4s9-2 9-4"/></symbol>
+  <symbol id="i-s-referee" viewBox="0 0 24 24"><path d="M3 10h9l4-3h5v4l-3 2v2a5 5 0 1 1-10 0v-1H3z"/><circle cx="13" cy="15" r="1"/></symbol>
+  <symbol id="i-s-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol>
+  <symbol id="i-logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M16.5 9.5A5 5 0 1 0 17 13h-5"/></symbol>
+</svg>
+
+<div class="wrap">
+
+<!-- ======================================================= A ============ -->
+<section class="col">
+  <h2 class="col__head">A · Refined Accordion</h2>
+  <p class="col__sub">In place · sticky headers · criteria accordion · chips</p>
+  <div class="gh-phone dir-a spec">
+    <p class="cap">Top bar · feed</p>
+    <header class="gh-topbar">
+      <div class="gh-topbar__start"><a class="gh-logo" href="#" aria-label="Goal Hint home"><svg class="gh-ico"><use href="#i-logo"/></svg>Goal Hint</a></div>
+      <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico"><use href="#i-sun"/></svg></button></div>
+    </header>
+    <p class="cap">Toolbar (sticky) · Filters expanded</p>
+    <div class="gh-toolbar">
+      <label class="gh-search"><svg class="gh-ico"><use href="#i-search"/></svg><input type="search" placeholder="Search teams or leagues" aria-label="Search matches"></label>
+      <button class="gh-btn gh-btn--secondary" type="button" aria-expanded="true" aria-label="Filters, 5 active"><svg class="gh-ico"><use href="#i-filter"/></svg>Filters<span class="gh-num">5</span></button>
+    </div>
+    <p class="cap">Title · date stepper · removable chips</p>
+    <div class="gh-titlerow"><h1 class="gh-h1">Today's Matches</h1><span class="gh-count">294 matches · Highest chance</span></div>
+    <div class="gh-stepper gh-pad">
+      <a class="gh-icon-btn gh-icon-btn--boxed" href="#" aria-label="Previous day"><svg class="gh-ico"><use href="#i-chev-left"/></svg></a>
+      <button class="gh-btn gh-btn--secondary gh-stepper__date" type="button"><svg class="gh-ico"><use href="#i-calendar"/></svg>Tue, Oct 13</button>
+      <a class="gh-icon-btn gh-icon-btn--boxed" href="#" aria-label="Next day"><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+    </div>
+    <div class="gh-chips gh-pad" style="margin-top:10px" role="group" aria-label="Applied filters">
+      <a class="gh-chip gh-chip--remove" href="#" aria-label="Remove Markets: 2 selected">Markets: 2 selected<svg class="gh-ico"><use href="#i-close"/></svg></a>
+      <a class="gh-chip gh-chip--remove" href="#" aria-label="Remove 50% - 100%">50% - 100%<svg class="gh-ico"><use href="#i-close"/></svg></a>
+    </div>
+    <p class="cap">Feed card · finished / live / no pick</p>
+    <div class="gh-stack gh-pad" style="--gap:8px">
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for RB Bragantino v Cruzeiro.</span>
+        <span class="gh-match__top"><span class="gh-match__when">Tue, Oct 13 <b>03:00</b> EAT</span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span>
+        <span class="gh-match__league"><span class="gh-match__cc"><span class="gh-flag"></span>BRA</span><span class="gh-match__comp">Serie A<svg class="gh-ico"><use href="#i-trophy"/></svg></span></span>
+        <span class="gh-match__teams"><span class="gh-match__team gh-match__team--home"><span class="gh-match__name">RB Bragantino</span><span class="gh-crest gh-crest--24">RB</span></span><span class="gh-match__score">4 – 2</span><span class="gh-match__team"><span class="gh-crest gh-crest--24">CR</span><span class="gh-match__name">Cruzeiro</span></span></span>
+        <span class="gh-match__pick mkt-1x2"><span class="gh-code">1X2</span><span class="gh-match__sel">RB Bragantino win</span><span class="gh-prob">56%</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Win</span></span>
+      </a>
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for Sporting San Miguelito v Tauro FC.</span>
+        <span class="gh-match__top"><span class="gh-match__when">Tue, Oct 13</span><span class="gh-badge gh-badge--warn">Postponed</span></span>
+        <span class="gh-match__league"><span class="gh-match__cc"><span class="gh-flag"></span>PAN</span><span class="gh-match__comp">Liga Panameña de Fútbol<svg class="gh-ico"><use href="#i-trophy"/></svg></span></span>
+        <span class="gh-match__teams"><span class="gh-match__team gh-match__team--home"><span class="gh-match__name">Sporting San Miguelito</span><span class="gh-crest gh-crest--24">SS</span></span><span class="gh-match__vs">VS</span><span class="gh-match__team"><span class="gh-crest gh-crest--24">TF</span><span class="gh-match__name">Tauro FC</span></span></span>
+        <span class="gh-match__pick mkt-1x2 is-empty"><span class="gh-code">1X2</span><span class="gh-match__sel">— Not predicted</span><span class="gh-prob gh-mute">—</span></span>
+      </a>
+    </div>
+    <p class="cap">Filter panel · criteria accordion + footbar</p>
+    <div class="gh-pad">
+      <div class="gh-criteria">
+        <button class="gh-criteria__row" type="button" aria-expanded="false"><span class="gh-criteria__title">Date range</span><span class="gh-criteria__value"><span class="gh-dot"></span>Tue, Oct 13 – Thu, Oct 15</span><svg class="gh-ico"><use href="#i-chev-down"/></svg></button>
+        <button class="gh-criteria__row" type="button" aria-expanded="true"><span class="gh-criteria__title">Time range</span><span class="gh-criteria__value"><span class="gh-dot"></span>12:00–20:00</span><svg class="gh-ico"><use href="#i-chev-up"/></svg></button>
+        <div class="gh-criteria__body">
+          <div class="gh-fields">
+            <label class="gh-field"><span class="gh-field__label">From time</span><span class="gh-input"><input value="12:00"><svg class="gh-ico"><use href="#i-clock"/></svg></span></label>
+            <label class="gh-field"><span class="gh-field__label">To time</span><span class="gh-input"><input value="20:00"><svg class="gh-ico"><use href="#i-clock"/></svg></span></label>
+          </div>
+          <p class="gh-field__hint">Africa/Kampala</p>
+        </div>
+        <div class="gh-criteria__static"><b>Odds unavailable</b>Odds filtering starts once bookmaker odds are imported.</div>
+      </div>
+    </div>
+    <div class="gh-footbar" style="margin-top:8px">
+      <button class="gh-btn gh-btn--secondary" type="button"><svg class="gh-ico"><use href="#i-reset"/></svg>Clear</button>
+      <button class="gh-btn gh-btn--primary" type="button" aria-label="Apply filters"><svg class="gh-ico"><use href="#i-filter"/></svg>Apply</button>
+    </div>
+    <p class="cap">Top bar · details</p>
+    <header class="gh-topbar">
+      <div class="gh-topbar__start"><a class="gh-icon-btn" href="#" aria-label="Back to matches"><svg class="gh-ico"><use href="#i-chev-left"/></svg></a></div>
+      <p class="gh-topbar__title">Match details</p>
+      <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Search matches" aria-expanded="false"><svg class="gh-ico"><use href="#i-search"/></svg></button><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico"><use href="#i-sun"/></svg></button></div>
+    </header>
+    <p class="cap">Banner + top pick</p>
+    <div class="gh-pad">
+      <section class="gh-banner" aria-label="RB Bragantino v Cruzeiro">
+        <div class="gh-banner__top">
+          <div class="gh-banner__comp"><span class="gh-complogo"><svg class="gh-ico"><use href="#i-trophy"/></svg></span><div><p class="gh-banner__name">Serie A</p><p class="gh-banner__sub">Regular Season - 30 · Brazil</p></div></div>
+          <div class="gh-banner__when"><span>Tue, Oct 13</span><b>03:00 EAT</b></div>
+        </div>
+        <div class="gh-banner__teams">
+          <div class="gh-banner__team"><span class="gh-crest gh-crest--40">RB</span><span class="gh-banner__team-name">RB Bragantino</span><span class="gh-form" role="img" aria-label="Last five results for RB Bragantino, oldest first: Win, Loss, Win, Draw, Win"><i class="gh-form__l gh-form__l--w">W</i><i class="gh-form__l gh-form__l--l">L</i><i class="gh-form__l gh-form__l--w">W</i><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i></span></div>
+          <div class="gh-banner__mid"><span class="gh-banner__score">4 – 2</span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></div>
+          <div class="gh-banner__team"><span class="gh-crest gh-crest--40">CR</span><span class="gh-banner__team-name">Cruzeiro</span><span class="gh-form" role="img" aria-label="Last five results for Cruzeiro, oldest first: Win, Loss, Draw, Draw, Win"><i class="gh-form__l gh-form__l--w">W</i><i class="gh-form__l gh-form__l--l">L</i><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i></span></div>
+        </div>
+        <button class="gh-toppick mkt-dc" type="button" aria-label="Open top pick: Double chance, RB Bragantino or draw, estimated probability 79%">
+          <span class="gh-toppick__label"><svg class="gh-ico gh-ico--fill"><use href="#i-star"/></svg>Top pick</span>
+          <span class="gh-toppick__pick">Double chance – RB Bragantino or draw</span>
+          <span class="gh-toppick__meta">Odds: — · AI prediction</span>
+          <span class="gh-toppick__fig"><span class="gh-prob">79%</span><span class="gh-toppick__cap">Estimated probability</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Correct</span></span>
+        </button>
+      </section>
+    </div>
+    <p class="cap">Market row (featured: hue star)</p>
+    <div class="gh-card" style="margin:0 16px">
+      <button class="gh-mrow mkt-dc" type="button" aria-label="Open Double chance details: RB Bragantino or draw, estimated probability 79%">
+        <span class="gh-ibadge"><svg class="gh-ico"><use href="#i-m-dc"/></svg></span>
+        <span class="gh-mrow__name">Double chance<span class="gh-tag"><svg class="gh-ico gh-ico--14 gh-ico--fill"><use href="#i-star"/></svg><span class="gh-sr">Top pick</span></span></span>
+        <span class="gh-mrow__line"><span class="gh-pill">RB Bragantino or draw</span><span class="gh-prob">79%</span><span>Odds —</span></span>
+        <span class="gh-mrow__end"><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Correct</span></span>
+        <svg class="gh-ico"><use href="#i-chev-right"/></svg>
+      </button>
+    </div>
+    <p class="cap">Section card (closed)</p>
+    <section class="gh-card acc-violet" style="margin:0 16px">
+      <h2><button class="gh-section-head" type="button" aria-expanded="false"><span class="gh-ibadge"><svg class="gh-ico"><use href="#i-s-h2h"/></svg></span><span class="gh-section-head__text"><span class="gh-section-head__title">Head to Head</span><span class="gh-section-head__meta">7 meetings</span></span><svg class="gh-ico"><use href="#i-chev-down"/></svg></button></h2>
+      <div class="gh-hstack gh-pad" style="padding-bottom:6px"><span class="gh-note">Last 5 meetings</span><span class="gh-form" role="img" aria-label="Head-to-head results for RB Bragantino, oldest first: Draw, Win, Loss, Draw, Win"><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i><i class="gh-form__l gh-form__l--l">L</i><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i></span></div>
+      <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__sub">May 17, 2026</span><span class="gh-row__title">Cruzeiro 1–2 RB Bragantino</span></span><span class="gh-form__l gh-form__l--w">W</span><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+      <a class="gh-btn gh-btn--ghost gh-btn--block gh-btn--start" href="#" style="padding-left:16px">View full head to head history<svg class="gh-ico"><use href="#i-arrow-right"/></svg></a>
+    </section>
+    <p class="cap">Open section · sticky header · chips · stat bar</p>
+    <section class="gh-card gh-card--open acc-orange" style="margin:0 16px">
+      <div class="gh-section-head gh-section-head--sticky"><span class="gh-ibadge"><svg class="gh-ico"><use href="#i-s-stats"/></svg></span><span class="gh-section-head__text"><h2 class="gh-section-head__title">Team Comparison</h2></span><button class="gh-icon-btn" type="button" aria-label="Collapse Team Comparison"><svg class="gh-ico"><use href="#i-chev-up"/></svg></button></div>
+      <div class="gh-block" role="group" aria-label="Results window"><span class="gh-group-label">Results window</span>
+        <div class="gh-chips"><button class="gh-chip" type="button" aria-pressed="true"><svg class="gh-ico"><use href="#i-check"/></svg>Last 5</button><button class="gh-chip" type="button" aria-pressed="false">Last 10</button><button class="gh-chip" type="button" aria-pressed="false">All stored</button></div>
+      </div>
+      <button class="gh-stat-bar" type="button" aria-label="Open match-by-match breakdown: Points per game, RB Bragantino 2.0, Cruzeiro 1.6">
+        <span class="gh-stat-bar__h">2.0</span><span class="gh-stat-bar__label">Points per game</span><span class="gh-stat-bar__a">1.6</span>
+        <span class="gh-stat-bar__bars"><i><b style="--w:100%"></b></i><i><b style="--w:80%"></b></i></span>
+        <svg class="gh-ico"><use href="#i-chev-right"/></svg>
+      </button>
+    </section>
+    <p class="cap">Item level · back row + facts</p>
+    <div class="gh-backrow">
+      <a class="gh-btn gh-btn--ghost" href="#"><svg class="gh-ico"><use href="#i-chev-left"/></svg>Back to list</a>
+      <h4 class="gh-backrow__title">Walace</h4>
+      <button class="gh-icon-btn" type="button" aria-label="Collapse Players"><svg class="gh-ico"><use href="#i-chev-up"/></svg></button>
+    </div>
+    <dl class="gh-kv gh-kv--grid2 gh-block">
+      <div class="gh-kv__row"><dt>Team</dt><dd>Cruzeiro</dd></div>
+      <div class="gh-kv__row"><dt>Shirt number</dt><dd>5</dd></div>
+      <div class="gh-kv__row"><dt>Lineup role</dt><dd>Substitute</dd></div>
+      <div class="gh-kv__row"><dt>Availability</dt><dd><span class="gh-badge gh-badge--warn">Doubtful</span>Questionable · Muscle Injury</dd></div>
+    </dl>
+  </div>
+</section>
+
+<!-- ======================================================= B ============ -->
+<section class="col">
+  <h2 class="col__head">B · Sheet Stack</h2>
+  <p class="col__sub">Stable bases · one bottom sheet · launcher tiles</p>
+  <div class="gh-phone dir-b spec">
+    <p class="cap">Title block · date button opens "Match dates"</p>
+    <div class="gh-titlerow">
+      <h1 class="gh-h1">Today's Matches</h1>
+      <div class="gh-hstack" style="margin-top:6px">
+        <button class="gh-btn gh-btn--secondary" type="button" aria-label="Match dates: Tue, Oct 13"><svg class="gh-ico"><use href="#i-calendar"/></svg>Tue, Oct 13<svg class="gh-ico"><use href="#i-chev-down"/></svg></button>
+        <span class="gh-count">294 matches · Highest chance</span>
+      </div>
+    </div>
+    <p class="cap">Feed card · template (hue block)</p>
+    <div class="gh-stack gh-pad" style="--gap:10px">
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for RB Bragantino v Cruzeiro.</span>
+        <span class="gh-match__top"><span class="gh-match__cc"><span class="gh-flag"></span>BRA · <span class="gh-match__comp">Serie A</span></span><span class="gh-match__right"><span><b>03:00</b> EAT</span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span></span>
+        <span class="gh-match__teams"><span class="gh-match__team gh-match__team--home"><span class="gh-match__name">RB Bragantino</span><span class="gh-crest gh-crest--24">RB</span></span><span class="gh-match__score">4 – 2</span><span class="gh-match__team"><span class="gh-crest gh-crest--24">CR</span><span class="gh-match__name">Cruzeiro</span></span></span>
+        <span class="gh-match__pick mkt-1x2"><span class="gh-match__picktext"><span class="gh-code">1X2</span><span class="gh-match__sel">RB Bragantino win</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Win</span></span><span class="gh-match__block"><span class="gh-prob">56%</span></span></span>
+      </a>
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for Tripoli SC v Al Akhaa Al Ahli.</span>
+        <span class="gh-match__top"><span class="gh-match__cc"><span class="gh-flag"></span>LBN · <span class="gh-match__comp">Premier League</span></span><span class="gh-match__right"><span><b>15:00</b> EAT</span><span class="gh-badge gh-badge--live">–</span></span></span>
+        <span class="gh-match__teams"><span class="gh-match__team gh-match__team--home"><span class="gh-match__name">Tripoli SC</span><span class="gh-crest gh-crest--24">TS</span></span><span class="gh-match__score is-live">2 – 0</span><span class="gh-match__team"><span class="gh-crest gh-crest--24">AA</span><span class="gh-match__name">Al Akhaa Al Ahli</span></span></span>
+        <span class="gh-match__pick mkt-1x2"><span class="gh-match__picktext"><span class="gh-code">1X2</span><span class="gh-match__sel">Tripoli SC win</span><span class="gh-badge gh-badge--pending"><svg class="gh-ico"><use href="#i-clock"/></svg>Pending</span></span><span class="gh-match__block"><span class="gh-prob">45%</span></span></span>
+      </a>
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for Athletic Club v Londrina.</span>
+        <span class="gh-match__top"><span class="gh-match__cc"><span class="gh-flag"></span>BRA · <span class="gh-match__comp">Serie B</span></span><span class="gh-match__right"><span>Wed, Oct 14 <b>01:30</b> EAT</span><span class="gh-badge">Upcoming</span></span></span>
+        <span class="gh-match__teams"><span class="gh-match__team gh-match__team--home"><span class="gh-match__name">Athletic Club</span><span class="gh-crest gh-crest--24">AC</span></span><span class="gh-match__vs">VS</span><span class="gh-match__team"><span class="gh-crest gh-crest--24">LO</span><span class="gh-match__name">Londrina</span></span></span>
+        <span class="gh-match__pick mkt-1x2 is-empty"><span class="gh-match__picktext"><span class="gh-code">1X2</span><span class="gh-match__sel">Not predicted</span></span><span class="gh-match__block"><span class="gh-prob">—</span></span></span>
+      </a>
+    </div>
+    <p class="cap">Sheet · Filters and order (half shown)</p>
+    <div class="ov" style="height:560px">
+      <div class="base"><span class="gh-count">294 matches · Highest chance</span></div>
+      <div class="gh-scrim"></div>
+      <div class="gh-sheet" style="height:520px" role="dialog" aria-modal="true" aria-label="Filters and order">
+        <span class="gh-sheet__grab" aria-hidden="true"></span>
+        <div class="gh-sheet__head">
+          <div class="gh-sheet__titles"><h2 class="gh-sheet__title">Filters and order</h2><span class="gh-sheet__sub-label">Today's Matches</span></div>
+          <button class="gh-icon-btn" type="button" aria-label="Close filters"><svg class="gh-ico"><use href="#i-close"/></svg></button>
+        </div>
+        <div class="gh-sheet__body gh-sheet__body--flush">
+          <div class="gh-block" style="display:grid; gap:8px">
+            <fieldset><legend class="gh-group-label">Time range</legend>
+              <div class="gh-fields">
+                <label class="gh-field"><span class="gh-field__label">From time</span><span class="gh-input"><input value="12:00"></span></label>
+                <label class="gh-field"><span class="gh-field__label">To time</span><span class="gh-input"><input value="20:00"></span></label>
+              </div>
+            </fieldset>
+            <p class="gh-field__hint">Africa/Kampala</p>
+          </div>
+          <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__title">Markets</span></span><span class="gh-row__end"><span class="gh-dot"></span>2 selected</span><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+          <a class="gh-row" href="#"><span class="gh-row__main"><span class="gh-row__title">Leagues</span></span><span class="gh-row__end">All leagues</span><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+          <p class="gh-group-title" style="padding-top:14px">Order</p>
+          <label class="gh-radio-row"><input type="radio" name="b-order" checked><span>Highest chance</span><svg class="gh-ico gh-radio-mark"><use href="#i-check"/></svg></label>
+          <label class="gh-radio-row"><input type="radio" name="b-order"><span>Earliest first</span><svg class="gh-ico gh-radio-mark"><use href="#i-check"/></svg></label>
+        </div>
+        <div class="gh-footbar">
+          <button class="gh-btn gh-btn--secondary" type="button">Clear</button>
+          <button class="gh-btn gh-btn--primary" type="button" aria-label="Apply filters">Apply</button>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Sheet head · pushed step · labelled selects sub-header</p>
+    <div style="background:var(--gh-surface); border-top:2px solid var(--gh-brand)">
+      <div class="gh-sheet__head gh-sheet__head--back">
+        <button class="gh-icon-btn" type="button" aria-label="Back to list"><svg class="gh-ico"><use href="#i-chev-left"/></svg></button>
+        <div class="gh-sheet__titles"><h2 class="gh-sheet__title">Points per game</h2><span class="gh-sheet__sub-label">Team Comparison</span></div>
+        <button class="gh-icon-btn" type="button" aria-label="Collapse Team Comparison"><svg class="gh-ico"><use href="#i-close"/></svg></button>
+      </div>
+      <div class="gh-sheet__sub">
+        <div class="gh-fields">
+          <label class="gh-field"><span class="gh-field__label">Results window</span><span class="gh-select"><select><option>Last 5</option><option>Last 10</option><option>All stored</option></select><svg class="gh-ico"><use href="#i-chev-down"/></svg></span></label>
+          <label class="gh-field"><span class="gh-field__label">Venue</span><span class="gh-select"><select><option>All venues</option><option>Home games</option><option>Away games</option></select><svg class="gh-ico"><use href="#i-chev-down"/></svg></span></label>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Markets sheet · market step · family switcher</p>
+    <div style="background:var(--gh-surface); border-top:2px solid var(--gh-brand)">
+      <div class="gh-sheet__head gh-sheet__head--back mkt-1x2">
+        <button class="gh-icon-btn" type="button" aria-label="Back to all markets"><svg class="gh-ico"><use href="#i-chev-left"/></svg></button>
+        <span class="gh-ibadge"><svg class="gh-ico"><use href="#i-m-1x2"/></svg></span>
+        <div class="gh-sheet__titles"><h2 class="gh-sheet__title">Match result (1X2)</h2><span class="gh-sheet__sub-label">All Markets &amp; Odds</span></div>
+        <button class="gh-icon-btn" type="button" aria-label="Collapse All Markets &amp; Odds"><svg class="gh-ico"><use href="#i-close"/></svg></button>
+      </div>
+      <div class="gh-sheet__sub">
+        <div class="gh-seg" role="group" aria-label="Markets">
+          <button class="gh-seg__opt mkt-1x2" type="button" aria-pressed="true" aria-label="Match result (1X2)">1X2</button>
+          <button class="gh-seg__opt mkt-dc" type="button" aria-pressed="false" aria-label="Double chance">DC</button>
+          <button class="gh-seg__opt mkt-ou" type="button" aria-pressed="false" aria-label="Over/Under 2.5 goals">O/U 2.5</button>
+          <button class="gh-seg__opt mkt-btts" type="button" aria-pressed="false" aria-label="Both teams to score">BTTS</button>
+        </div>
+      </div>
+      <div class="gh-block mkt-1x2" style="display:grid; gap:8px">
+        <div class="gh-outcome gh-outcome--pick"><span>RB Bragantino win · predicted</span><span class="gh-bar"><b style="--w:56%"></b></span><span class="gh-outcome__pct">56%</span></div>
+        <div class="gh-outcome"><span>Draw</span><span class="gh-bar"><b style="--w:23%"></b></span><span class="gh-outcome__pct">23%</span></div>
+      </div>
+    </div>
+    <p class="cap">Launcher tiles (equal height)</p>
+    <div class="gh-tiles gh-pad">
+      <button class="gh-tile acc-orange" type="button"><span class="gh-tile__head"><span class="gh-ibadge"><svg class="gh-ico"><use href="#i-s-stats"/></svg></span><span class="gh-tile__title">Team Comparison</span></span><span class="gh-tile__meta">Last 10</span><span class="gh-tile__preview">Win probability 56% · 21%</span></button>
+      <button class="gh-tile acc-violet" type="button"><span class="gh-tile__head"><span class="gh-ibadge"><svg class="gh-ico"><use href="#i-s-h2h"/></svg></span><span class="gh-tile__title">Head to Head</span></span><span class="gh-tile__meta">7 meetings</span><span class="gh-form"><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i><i class="gh-form__l gh-form__l--l">L</i><i class="gh-form__l gh-form__l--d">D</i><i class="gh-form__l gh-form__l--w">W</i></span></button>
+      <button class="gh-tile acc-red" type="button"><span class="gh-tile__head"><span class="gh-ibadge"><svg class="gh-ico"><use href="#i-s-injuries"/></svg></span><span class="gh-tile__title">Injuries &amp; Suspensions</span></span><span class="gh-tile__meta">4 absences</span><span class="gh-tile__preview gh-truncate">H. Mosquera · Out</span></button>
+      <button class="gh-tile acc-violet" type="button"><span class="gh-tile__head"><span class="gh-ibadge"><svg class="gh-ico"><use href="#i-s-referee"/></svg></span><span class="gh-tile__title">Referee</span></span><span class="gh-tile__meta">Not available</span></button>
+    </div>
+    <p class="cap">Item step footer (one action)</p>
+    <div class="gh-footbar"><a class="gh-btn gh-btn--secondary gh-btn--block" href="#">Open this match's page<svg class="gh-ico"><use href="#i-arrow-right"/></svg></a></div>
+    <p class="cap">Tab bar</p>
+    <nav class="gh-tabbar" aria-label="App sections">
+      <a class="gh-tab" href="#" aria-current="page"><svg class="gh-ico"><use href="#i-home"/></svg>Matches</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-live"/></svg>Live</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-results"/></svg>Results</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-slip"/></svg>Slip builder</a>
+      <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico"><use href="#i-more"/></svg>More</button>
+    </nav>
+  </div>
+</section>
+
+<!-- ======================================================= C ============ -->
+<section class="col">
+  <h2 class="col__head">C · Page Stack</h2>
+  <p class="col__sub">Full pages · app-bar back · grouped rows · scoreboard</p>
+  <div class="gh-phone dir-c spec">
+    <p class="cap">App bar (root) + sticky date stepper</p>
+    <header class="gh-topbar">
+      <div class="gh-topbar__start"><a class="gh-logo" href="#" aria-label="Goal Hint home"><svg class="gh-ico"><use href="#i-logo"/></svg>Goal Hint</a></div>
+      <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico"><use href="#i-sun"/></svg></button></div>
+    </header>
+    <div class="gh-stepper gh-stepper--bar">
+      <a class="gh-icon-btn gh-icon-btn--boxed" href="#" aria-label="Previous day"><svg class="gh-ico"><use href="#i-chev-left"/></svg></a>
+      <a class="gh-btn gh-btn--secondary gh-stepper__date" href="#" aria-label="Date range: Tue, Oct 13"><svg class="gh-ico"><use href="#i-calendar"/></svg>Tue, Oct 13</a>
+      <a class="gh-icon-btn gh-icon-btn--boxed" href="#" aria-label="Next day"><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+    </div>
+    <p class="cap">Large title · search · Filters summary row</p>
+    <div class="gh-titlerow" style="padding-top:8px"><h1 class="gh-h1 gh-h1--lg">Today's Matches</h1><span class="gh-count">294 matches</span></div>
+    <div class="gh-pad"><label class="gh-search"><svg class="gh-ico"><use href="#i-search"/></svg><input type="search" placeholder="Search teams or leagues" aria-label="Search matches"></label></div>
+    <div class="gh-group" style="margin-top:12px">
+      <a class="gh-row gh-row--tall" href="#" aria-label="Filters, 5 active"><svg class="gh-ico"><use href="#i-filter"/></svg><span class="gh-row__main"><span class="gh-row__title">Filters and order</span><span class="gh-row__sub">5 active</span></span><span class="gh-num">5</span><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+    </div>
+    <p class="gh-group-title">Applied</p>
+    <div class="gh-group">
+      <div class="gh-row"><span class="gh-row__main"><span class="gh-row__title">Countries: 2 selected</span></span><a class="gh-icon-btn" href="#" aria-label="Remove Countries: 2 selected"><svg class="gh-ico"><use href="#i-close"/></svg></a></div>
+      <div class="gh-row"><span class="gh-row__main"><span class="gh-row__title">50% - 100%</span></span><a class="gh-icon-btn" href="#" aria-label="Remove 50% - 100%"><svg class="gh-ico"><use href="#i-close"/></svg></a></div>
+    </div>
+    <p class="cap">Scoreboard rows (edge to edge)</p>
+    <div class="gh-group">
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for RB Bragantino v Cruzeiro.</span>
+        <span class="gh-match__time">03:00<span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span>
+        <span class="gh-match__body"><span class="gh-match__league"><span class="gh-flag"></span>BRA · Serie A</span>
+          <span class="gh-match__line"><span class="gh-crest gh-crest--20">RB</span><span class="gh-match__name">RB Bragantino</span><b class="gh-match__goals">4</b></span>
+          <span class="gh-match__line"><span class="gh-crest gh-crest--20">CR</span><span class="gh-match__name">Cruzeiro</span><b class="gh-match__goals">2</b></span></span>
+        <span class="gh-match__pick mkt-1x2"><span class="gh-match__pickrow"><span class="gh-code">1X2</span><span class="gh-prob">56%</span></span><span class="gh-match__sel">RB Bragantino win</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Win</span></span>
+      </a>
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for Zimbabwe W v Malawi W.</span>
+        <span class="gh-match__time">16:00<span class="gh-badge gh-badge--live">67′</span></span>
+        <span class="gh-match__body"><span class="gh-match__league"><svg class="gh-ico gh-ico--14"><use href="#i-globe"/></svg>INT · Olympics Women - Qualification CAF</span>
+          <span class="gh-match__line"><span class="gh-crest gh-crest--20">ZW</span><span class="gh-match__name">Zimbabwe W</span><b class="gh-match__goals is-live">0</b></span>
+          <span class="gh-match__line"><span class="gh-crest gh-crest--20">MW</span><span class="gh-match__name">Malawi W</span><b class="gh-match__goals is-live">4</b></span></span>
+        <span class="gh-match__pick mkt-1x2"><span class="gh-match__pickrow"><span class="gh-code">1X2</span><span class="gh-prob">45%</span></span><span class="gh-match__sel">Draw</span><span class="gh-badge gh-badge--pending"><svg class="gh-ico"><use href="#i-clock"/></svg>Pending</span></span>
+      </a>
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for Athletic Club v Londrina.</span>
+        <span class="gh-match__time">01:30<span class="gh-badge">Upcoming</span></span>
+        <span class="gh-match__body"><span class="gh-match__league"><span class="gh-flag"></span>BRA · Serie B</span>
+          <span class="gh-match__line"><span class="gh-crest gh-crest--20">AC</span><span class="gh-match__name">Athletic Club</span></span>
+          <span class="gh-match__line"><span class="gh-crest gh-crest--20">LO</span><span class="gh-match__name">Londrina</span></span></span>
+        <span class="gh-match__pick mkt-1x2 is-empty"><span class="gh-match__pickrow"><span class="gh-code">1X2</span><span class="gh-prob gh-mute">—</span></span><span class="gh-match__sel">Not predicted</span></span>
+      </a>
+    </div>
+    <p class="cap">App bar · back + parent over title + meta</p>
+    <header class="gh-topbar">
+      <a class="gh-icon-btn" href="#" aria-label="Match details"><svg class="gh-ico"><use href="#i-chev-left"/></svg></a>
+      <div class="gh-topbar__titles"><span class="gh-topbar__parent">Match details</span><h1 class="gh-topbar__page">Head to Head<span class="gh-topbar__meta">7 meetings</span></h1></div>
+    </header>
+    <p class="cap">Grouped facts (split) + select row</p>
+    <dl class="gh-kv gh-kv--split gh-group">
+      <div class="gh-kv__row"><dt>Meetings</dt><dd>7</dd></div>
+      <div class="gh-kv__row"><dt>RB Bragantino wins</dt><dd>3</dd></div>
+      <div class="gh-kv__row"><dt>Average goals</dt><dd>2.3</dd></div>
+    </dl>
+    <div class="gh-group" style="margin-top:24px">
+      <label class="gh-row gh-row--select"><span class="gh-row__main"><span class="gh-row__title">Venue</span></span><select><option>All venues</option><option>At RB Bragantino</option><option>At Cruzeiro</option></select><svg class="gh-ico"><use href="#i-chev-down"/></svg></label>
+    </div>
+    <p class="cap">Hub index rows (Match details)</p>
+    <div class="gh-group">
+      <a class="gh-row gh-row--tall acc-orange" href="#"><span class="gh-ibadge"><svg class="gh-ico"><use href="#i-s-stats"/></svg></span><span class="gh-row__main"><span class="gh-row__title">Team Comparison</span><span class="gh-row__sub">Win probability 56% · 21%</span></span><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+      <a class="gh-row gh-row--tall acc-teal" href="#"><span class="gh-ibadge"><svg class="gh-ico"><use href="#i-s-history"/></svg></span><span class="gh-row__main"><span class="gh-row__title">Prediction History</span><span class="gh-row__sub">Latest revision published Oct 12, 2026, 09:12 EAT</span></span><span class="gh-row__end">3 revisions</span><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+    </div>
+    <p class="cap">Option page rows (Leagues · Markets) + compact pager</p>
+    <p class="gh-group-title">2 selected</p>
+    <div class="gh-group">
+      <label class="gh-check-row"><input type="checkbox" checked><span class="gh-check"><svg class="gh-ico"><use href="#i-check"/></svg></span><span class="gh-check-row__main">Ligue 2<span class="gh-check-row__detail">Algeria</span></span><span class="gh-check-row__count">12</span></label>
+    </div>
+    <div class="gh-group" style="margin-top:24px">
+      <label class="gh-check-row mkt-1x2"><input type="checkbox" checked aria-describedby="c-onemarket"><span class="gh-check"><svg class="gh-ico"><use href="#i-check"/></svg></span><span class="gh-check-row__main">Match result</span><span class="gh-code">1X2</span></label>
+    </div>
+    <p class="gh-group-foot gh-note--alert" id="c-onemarket" role="alert"><svg class="gh-ico"><use href="#i-notice"/></svg>Keep at least one market selected.</p>
+    <div class="gh-group" style="margin-top:24px">
+      <nav class="gh-pager gh-pager--compact gh-row" aria-label="Pages">
+        <span class="gh-btn gh-btn--ghost" aria-disabled="true"><svg class="gh-ico"><use href="#i-chev-left"/></svg>Previous page</span>
+        <span class="gh-pager__pos">Page 1 of 3</span>
+        <a class="gh-btn gh-btn--ghost" href="#">Next page<svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+      </nav>
+    </div>
+    <p class="gh-group-foot">Season statistics, ratings, portraits and player markets are not collected yet, so none are shown.</p>
+    <p class="cap">Tab bar + More popover (shared, all directions)</p>
+    <div class="ov" style="height:300px; justify-content:flex-end">
+      <div class="gh-popover gh-more-menu">
+        <a class="gh-menu-item" href="#"><svg class="gh-ico"><use href="#i-help"/></svg>Help</a>
+        <a class="gh-menu-item" href="#"><svg class="gh-ico"><use href="#i-shield"/></svg>Privacy</a>
+        <a class="gh-menu-item" href="#"><svg class="gh-ico"><use href="#i-document"/></svg>Terms</a>
+        <a class="gh-menu-item" href="#"><svg class="gh-ico"><use href="#i-mail"/></svg>Contact</a>
+      </div>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="#" aria-current="page"><svg class="gh-ico"><use href="#i-home"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-live"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-results"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-slip"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="true"><svg class="gh-ico"><use href="#i-more"/></svg>More</button>
+      </nav>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= D ============ -->
+<section class="col">
+  <h2 class="col__head">D · Tabbed Hub</h2>
+  <p class="col__sub">Flat tabs · tables · select chips · More list</p>
+  <div class="gh-phone dir-d spec">
+    <p class="cap">Top bar + date tabs (sticky)</p>
+    <header class="gh-topbar">
+      <div class="gh-topbar__start"><a class="gh-logo" href="#" aria-label="Goal Hint home"><svg class="gh-ico"><use href="#i-logo"/></svg>Goal Hint</a></div>
+      <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico"><use href="#i-sun"/></svg></button></div>
+    </header>
+    <nav class="gh-tabs" aria-label="Match dates">
+      <a class="gh-icon-btn" href="#" aria-label="Previous day"><svg class="gh-ico"><use href="#i-chev-left"/></svg></a>
+      <div class="gh-tabs__list"><a class="gh-tabs__tab" href="#" aria-current="page">Today</a><a class="gh-tabs__tab" href="#">Tomorrow</a><a class="gh-tabs__tab" href="#">Next 3 days</a><a class="gh-tabs__tab" href="#">Next 7 days</a><a class="gh-tabs__tab" href="#">Next 30 days</a></div>
+      <a class="gh-icon-btn" href="#" aria-label="Next day"><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+    </nav>
+    <p class="cap">Title · control row (sort applies at once)</p>
+    <div class="gh-titlerow"><h1 class="gh-h1">Today's Matches</h1><span class="gh-count">294 matches</span></div>
+    <div class="gh-hstack gh-pad">
+      <label class="gh-search" style="flex:1"><svg class="gh-ico"><use href="#i-search"/></svg><input type="search" placeholder="Search teams or leagues" aria-label="Search matches"></label>
+      <button class="gh-btn gh-btn--secondary" type="button" aria-label="Filters" style="padding:0 12px"><svg class="gh-ico"><use href="#i-filter"/></svg></button>
+      <span class="gh-selchip"><select aria-label="Sort by"><option>Highest chance</option><option>Lowest chance</option><option>Earliest first</option><option>Latest first</option></select><svg class="gh-ico"><use href="#i-chev-down"/></svg></span>
+    </div>
+    <p class="cap">List header + table cards</p>
+    <div class="gh-pad">
+      <div class="gh-listhead" aria-hidden="true"><span></span><span>Market</span><span>Pick</span><span>Prob.</span><span>Result</span></div>
+      <div class="gh-stack" style="--gap:6px">
+        <a class="gh-match" href="#"><span class="gh-sr">View analysis for RB Bragantino v Cruzeiro.</span>
+          <span class="gh-match__top"><span class="gh-match__meta"><b>03:00</b> EAT · <span class="gh-flag"></span>BRA · Serie A</span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span>
+          <span class="gh-match__grid mkt-1x2">
+            <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20">RB</span><span class="gh-match__name">RB Bragantino</span><b class="gh-match__goals">4</b></span><span class="gh-match__line"><span class="gh-crest gh-crest--20">CR</span><span class="gh-match__name">Cruzeiro</span><b class="gh-match__goals">2</b></span></span>
+            <span class="gh-match__cell"><span class="gh-code">1X2</span></span><span class="gh-match__cell">1</span><span class="gh-match__cell">56%</span><span class="gh-match__cell"><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Win</span></span>
+          </span>
+        </a>
+        <a class="gh-match" href="#"><span class="gh-sr">View analysis for Ballkani v Drita.</span>
+          <span class="gh-match__top"><span class="gh-match__meta"><b>15:00</b> EAT · <span class="gh-flag"></span>KVX · Superliga</span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span>
+          <span class="gh-match__grid mkt-1x2">
+            <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20">BA</span><span class="gh-match__name">Ballkani</span><b class="gh-match__goals">0</b></span><span class="gh-match__line"><span class="gh-crest gh-crest--20">DR</span><span class="gh-match__name">Drita</span><b class="gh-match__goals">1</b></span></span>
+            <span class="gh-match__cell"><span class="gh-code">1X2</span></span><span class="gh-match__cell">1</span><span class="gh-match__cell">45%</span><span class="gh-match__cell"><span class="gh-badge gh-badge--incorrect"><svg class="gh-ico"><use href="#i-cross"/></svg>Loss</span></span>
+          </span>
+        </a>
+        <a class="gh-match" href="#"><span class="gh-sr">View analysis for Sporting San Miguelito v Tauro FC.</span>
+          <span class="gh-match__top"><span class="gh-match__meta">Tue, Oct 13 · <span class="gh-flag"></span>PAN · Liga Panameña de Fútbol</span><span class="gh-badge gh-badge--warn">Postponed</span></span>
+          <span class="gh-match__grid mkt-1x2">
+            <span class="gh-match__body"><span class="gh-match__line"><span class="gh-crest gh-crest--20">SS</span><span class="gh-match__name">Sporting San Miguelito</span></span><span class="gh-match__line"><span class="gh-crest gh-crest--20">TF</span><span class="gh-match__name">Tauro FC</span></span><span class="gh-match__reason">Not predicted</span></span>
+            <span class="gh-match__cell"><span class="gh-code">1X2</span></span><span class="gh-match__cell gh-mute">—</span><span class="gh-match__cell gh-mute">—</span><span class="gh-match__cell gh-mute">—</span>
+          </span>
+        </a>
+      </div>
+    </div>
+    <p class="cap">Filter panel head + filter tabs (dots)</p>
+    <div class="gh-layer__head">
+      <div class="gh-sheet__titles"><h2 class="gh-sheet__title">Filters and order</h2><span class="gh-sheet__sub-label">Today's Matches</span></div>
+      <button class="gh-icon-btn" type="button" aria-label="Close filters"><svg class="gh-ico"><use href="#i-close"/></svg></button>
+    </div>
+    <nav class="gh-tabs" aria-label="Filters and order">
+      <div class="gh-tabs__list"><a class="gh-tabs__tab" href="#">Date range<span class="gh-dot gh-dot--error"></span></a><a class="gh-tabs__tab" href="#">Time range<span class="gh-dot"></span></a><a class="gh-tabs__tab" href="#" aria-current="true">Markets<span class="gh-dot"></span></a><a class="gh-tabs__tab" href="#">Leagues</a></div>
+    </nav>
+    <p class="cap">Details · condensed bar + section tabs + views list</p>
+    <div class="ov" style="height:430px">
+      <header class="gh-topbar">
+        <div class="gh-topbar__start"><a class="gh-icon-btn" href="#" aria-label="Back to matches"><svg class="gh-ico"><use href="#i-chev-left"/></svg></a></div>
+        <p class="gh-topbar__title gh-topbar__title--score">RB Bragantino 4 – 2 Cruzeiro</p>
+        <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Search matches"><svg class="gh-ico"><use href="#i-search"/></svg></button><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico"><use href="#i-sun"/></svg></button></div>
+      </header>
+      <nav class="gh-tabs" aria-label="Match details">
+        <div class="gh-tabs__list"><a class="gh-tabs__tab" href="#">Markets</a><a class="gh-tabs__tab acc-orange" href="#" aria-current="page">Team Comparison</a><a class="gh-tabs__tab" href="#">Head to Head</a></div>
+        <button class="gh-tabs__more" type="button" aria-expanded="true" aria-label="Location in match details"><svg class="gh-ico gh-ico--22"><use href="#i-chev-up"/></svg></button>
+      </nav>
+      <div class="gh-popover" style="top:101px; right:0; width:300px">
+        <a class="gh-menu-item acc-orange" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-markets"/></svg></span>Markets<span class="gh-menu-item__meta">4 of 4 published</span></a>
+        <a class="gh-menu-item acc-orange" href="#" aria-current="page"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-stats"/></svg></span>Team Comparison</a>
+        <a class="gh-menu-item acc-violet" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-h2h"/></svg></span>Head to Head<span class="gh-menu-item__meta">7 meetings</span></a>
+        <a class="gh-menu-item acc-emerald" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-lineups"/></svg></span>Lineups<span class="gh-menu-item__meta">Confirmed</span></a>
+        <a class="gh-menu-item acc-blue" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-players"/></svg></span>Players<span class="gh-menu-item__meta">38 players</span></a>
+        <a class="gh-menu-item acc-teal" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-history"/></svg></span>Prediction History<span class="gh-menu-item__meta">3 revisions</span></a>
+      </div>
+    </div>
+    <p class="cap">Sub-tabs · market table</p>
+    <div class="gh-pad"><div class="gh-seg" role="group" aria-label="Markets"><button class="gh-seg__opt" type="button" aria-pressed="true">All</button><button class="gh-seg__opt mkt-1x2" type="button" aria-pressed="false" aria-label="Match result (1X2)">1X2</button><button class="gh-seg__opt mkt-dc" type="button" aria-pressed="false" aria-label="Double chance">DC</button><button class="gh-seg__opt mkt-ou" type="button" aria-pressed="false" aria-label="Over/Under 2.5 goals">O/U 2.5</button><button class="gh-seg__opt mkt-btts" type="button" aria-pressed="false" aria-label="Both teams to score">BTTS</button></div></div>
+    <div class="gh-mtable__head" aria-hidden="true" style="margin-top:8px"><span>Market</span><span>Our prediction</span><span>Probability</span><span>Odds</span></div>
+    <button class="gh-mtable__row mkt-btts" type="button" aria-label="Open Both teams to score details: Yes, estimated probability 63%">
+      <span class="gh-mtable__market">Both teams to score</span>
+      <span class="gh-mtable__pick"><span class="gh-pill">Yes</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Correct</span></span>
+      <span class="gh-prob">63%</span><span class="gh-mute">—</span>
+    </button>
+    <button class="gh-mtable__row mkt-ou" type="button" aria-label="Open Over/Under 2.5 goals details: Under 2.5, estimated probability 52%">
+      <span class="gh-mtable__market">Over/Under 2.5 goals</span>
+      <span class="gh-mtable__pick"><span class="gh-pill">Under 2.5</span><span class="gh-badge gh-badge--incorrect"><svg class="gh-ico"><use href="#i-cross"/></svg>Incorrect</span></span>
+      <span class="gh-prob">52%</span><span class="gh-mute">—</span>
+    </button>
+    <p class="cap">Select chips (labelled) · back row · facts table</p>
+    <div class="gh-hstack gh-pad" style="align-items:flex-end; --gap:12px">
+      <label class="gh-field"><span class="gh-field__label">Results window</span><span class="gh-selchip"><select><option>Last 5</option><option>Last 10</option><option>All stored</option></select><svg class="gh-ico"><use href="#i-chev-down"/></svg></span></label>
+      <label class="gh-field"><span class="gh-field__label">Venue</span><span class="gh-selchip"><select><option>All venues</option><option>Home games</option><option>Away games</option></select><svg class="gh-ico"><use href="#i-chev-down"/></svg></span></label>
+    </div>
+    <div class="gh-backrow" style="margin-top:12px"><a class="gh-btn gh-btn--ghost" href="#"><svg class="gh-ico"><use href="#i-chev-left"/></svg>Back to list</a><h4 class="gh-backrow__title">Cruzeiro v RB Bragantino</h4></div>
+    <dl class="gh-kv gh-kv--table gh-pad">
+      <div class="gh-kv__row"><dt>Date</dt><dd>May 17, 2026, 22:00 EAT</dd></div>
+      <div class="gh-kv__row"><dt>Score</dt><dd>Cruzeiro 1 – 2 RB Bragantino</dd></div>
+    </dl>
+    <p class="cap">Tab bar</p>
+    <nav class="gh-tabbar" aria-label="App sections">
+      <a class="gh-tab" href="#" aria-current="page"><svg class="gh-ico"><use href="#i-home"/></svg>Matches</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-live"/></svg>Live</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-results"/></svg>Results</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-slip"/></svg>Slip builder</a>
+      <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico"><use href="#i-more"/></svg>More</button>
+    </nav>
+  </div>
+</section>
+
+<!-- ======================================================= E ============ -->
+<section class="col">
+  <h2 class="col__head">E · Thumb Dock</h2>
+  <p class="col__sub">Dock above the tab bar · prev/next · pick-first</p>
+  <div class="gh-phone dir-e spec">
+    <p class="cap">Title · search (top bar scrolls away)</p>
+    <div class="gh-titlerow"><h1 class="gh-h1 gh-h1--lg">Today's Matches</h1><span class="gh-count">294 matches · Highest chance</span></div>
+    <div class="gh-pad"><label class="gh-search"><svg class="gh-ico"><use href="#i-search"/></svg><input type="search" placeholder="Search teams or leagues" aria-label="Search matches"></label></div>
+    <p class="cap">Feed card · pick first</p>
+    <div class="gh-stack gh-pad">
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for RB Bragantino v Cruzeiro.</span>
+        <span class="gh-match__pick mkt-1x2"><span class="gh-code">1X2</span><span class="gh-match__sel">RB Bragantino win</span><span class="gh-prob">56%</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Win</span></span>
+        <span class="gh-match__teams"><span class="gh-match__team gh-match__team--home"><span class="gh-match__name">RB Bragantino</span><span class="gh-crest gh-crest--24">RB</span></span><span class="gh-match__score">4 – 2</span><span class="gh-match__team"><span class="gh-crest gh-crest--24">CR</span><span class="gh-match__name">Cruzeiro</span></span></span>
+        <span class="gh-match__foot"><span class="gh-match__meta"><span class="gh-flag"></span>BRA · Serie A · <b>03:00</b> EAT</span><span class="gh-badge">Ended<span class="gh-badge__sub">FT</span></span></span>
+      </a>
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for Tripoli SC v Al Akhaa Al Ahli.</span>
+        <span class="gh-match__pick mkt-1x2"><span class="gh-code">1X2</span><span class="gh-match__sel">Tripoli SC win</span><span class="gh-prob">45%</span><span class="gh-badge gh-badge--pending"><svg class="gh-ico"><use href="#i-clock"/></svg>Pending</span></span>
+        <span class="gh-match__teams"><span class="gh-match__team gh-match__team--home"><span class="gh-match__name">Tripoli SC</span><span class="gh-crest gh-crest--24">TS</span></span><span class="gh-match__score is-live">2 – 0</span><span class="gh-match__team"><span class="gh-crest gh-crest--24">AA</span><span class="gh-match__name">Al Akhaa Al Ahli</span></span></span>
+        <span class="gh-match__foot"><span class="gh-match__meta"><span class="gh-flag"></span>LBN · Premier League · <b>15:00</b> EAT</span><span class="gh-badge gh-badge--live">–</span></span>
+      </a>
+      <a class="gh-match" href="#"><span class="gh-sr">View analysis for Sporting San Miguelito v Tauro FC.</span>
+        <span class="gh-match__pick mkt-1x2 is-empty"><span class="gh-code">1X2</span><span class="gh-match__sel">Not predicted</span></span>
+        <span class="gh-match__teams"><span class="gh-match__team gh-match__team--home"><span class="gh-match__name">Sporting San Miguelito</span><span class="gh-crest gh-crest--24">SS</span></span><span class="gh-match__vs">VS</span><span class="gh-match__team"><span class="gh-crest gh-crest--24">TF</span><span class="gh-match__name">Tauro FC</span></span></span>
+        <span class="gh-match__foot"><span class="gh-match__meta"><span class="gh-flag"></span>PAN · Liga Panameña de Fútbol</span><span class="gh-badge gh-badge--warn">Postponed</span></span>
+      </a>
+    </div>
+    <p class="cap">Dock · feed / details / form open</p>
+    <nav class="gh-dock gh-dock--feed" aria-label="Match dates">
+      <button class="gh-dock__btn" type="button" aria-label="Filters, 5 active"><svg class="gh-ico"><use href="#i-filter"/></svg>Filters<span class="gh-num">5</span></button>
+      <a class="gh-dock__btn gh-dock__btn--center" href="#" aria-label="Previous day"><svg class="gh-ico"><use href="#i-chev-left"/></svg></a>
+      <button class="gh-dock__btn gh-dock__btn--center" type="button"><svg class="gh-ico"><use href="#i-calendar"/></svg><span class="gh-dock__label">Tue, Oct 13</span></button>
+      <a class="gh-dock__btn gh-dock__btn--center" href="#" aria-label="Next day"><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+    </nav>
+    <div style="height:8px"></div>
+    <nav class="gh-dock" aria-label="Location in match details">
+      <a class="gh-dock__btn gh-dock__btn--up" href="#" aria-label="Match details"><svg class="gh-ico"><use href="#i-chev-left"/></svg>Match details</a>
+      <a class="gh-dock__btn" href="#" aria-label="Team Comparison"><svg class="gh-ico"><use href="#i-chev-left"/></svg><span class="gh-dock__label">Team Comparison</span></a>
+      <a class="gh-dock__btn gh-dock__btn--next" href="#" aria-label="Team Form"><span class="gh-dock__label">Team Form</span><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+    </nav>
+    <div style="height:8px"></div>
+    <div class="gh-dockmsg"><p class="gh-note gh-note--alert" role="alert"><svg class="gh-ico"><use href="#i-notice"/></svg>Choose a range of up to 31 days, with the end on or after the start.</p></div>
+    <div class="gh-dock gh-dock--actions">
+      <button class="gh-btn gh-btn--secondary" type="button">Clear</button>
+      <button class="gh-btn gh-btn--primary" type="button" aria-disabled="true" aria-label="Apply filters">Apply</button>
+    </div>
+    <p class="cap">Page title block · ticks · segmented filters</p>
+    <div class="gh-titleblock acc-violet">
+      <span class="gh-ibadge gh-ibadge--32"><svg class="gh-ico"><use href="#i-s-h2h"/></svg></span>
+      <h1 class="gh-titleblock__title">Head to Head</h1><span class="gh-titleblock__meta">7 meetings</span>
+      <span class="gh-ticks" aria-hidden="true"><i></i><i class="is-on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+    </div>
+    <div class="gh-pad" role="group" aria-label="Venue"><span class="gh-group-label">Venue</span>
+      <div class="gh-seg"><button class="gh-seg__opt" type="button" aria-pressed="true">All venues</button><button class="gh-seg__opt" type="button" aria-pressed="false">At RB Bragantino</button><button class="gh-seg__opt" type="button" aria-pressed="false">At Cruzeiro</button></div>
+    </div>
+    <div class="gh-block" style="display:grid; gap:8px">
+      <span class="gh-split" aria-hidden="true"><i class="gh-split__h" style="flex:3"></i><i class="gh-split__d" style="flex:2"></i><i class="gh-split__a" style="flex:2"></i></span>
+      <span class="gh-legend"><span>RB Bragantino wins 3</span><span>Draws 2</span><span>Cruzeiro wins 2</span></span>
+    </div>
+    <p class="cap">Top pick hero</p>
+    <div class="gh-pad">
+      <button class="gh-toppick gh-toppick--hero mkt-dc" type="button" aria-label="Open top pick: Double chance, RB Bragantino or draw, estimated probability 79%">
+        <span class="gh-toppick__label"><svg class="gh-ico gh-ico--fill"><use href="#i-star"/></svg>Top pick · Double chance</span>
+        <span class="gh-toppick__pick">RB Bragantino or draw</span>
+        <span class="gh-toppick__meta">Odds: — · AI prediction</span>
+        <span class="gh-toppick__fig"><span class="gh-prob">79%</span><span class="gh-toppick__cap">Estimated probability</span><span class="gh-badge gh-badge--correct"><svg class="gh-ico"><use href="#i-check"/></svg>Correct</span></span>
+      </button>
+    </div>
+    <p class="cap">Jump grid (start page)</p>
+    <div class="gh-jump gh-pad">
+      <a class="gh-jump__btn acc-orange" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-stats"/></svg></span><span class="gh-jump__title">Team Comparison</span><span class="gh-jump__meta">Win probability 56% · 21%</span></a>
+      <a class="gh-jump__btn acc-violet" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-h2h"/></svg></span><span class="gh-jump__title">Head to Head</span><span class="gh-jump__meta">7 meetings</span></a>
+      <a class="gh-jump__btn acc-red" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-injuries"/></svg></span><span class="gh-jump__title">Injuries &amp; Suspensions</span><span class="gh-jump__meta">4 absences</span></a>
+      <a class="gh-jump__btn acc-amber" href="#"><span class="gh-ibadge gh-ibadge--24"><svg class="gh-ico"><use href="#i-s-context"/></svg></span><span class="gh-jump__title">Match Context</span><span class="gh-jump__meta">Regular Season - 30</span></a>
+    </div>
+    <p class="cap">Filter form fieldset</p>
+    <fieldset class="gh-block" style="display:grid; gap:12px">
+      <legend class="gh-h2" style="margin-bottom:8px">Date range</legend>
+      <div role="group" aria-label="Quick date ranges"><span class="gh-group-label">Quick date ranges</span>
+        <div class="gh-chips"><a class="gh-chip" href="#">Today</a><a class="gh-chip" href="#">Tomorrow</a><a class="gh-chip" href="#">Next 3 days</a><a class="gh-chip" href="#">Next 7 days</a></div>
+      </div>
+      <div class="gh-fields">
+        <label class="gh-field gh-field--invalid"><span class="gh-field__label">From date</span><span class="gh-input"><input value="15/10/2026" aria-invalid="true"><svg class="gh-ico"><use href="#i-calendar"/></svg></span></label>
+        <label class="gh-field gh-field--invalid"><span class="gh-field__label">To date</span><span class="gh-input"><input value="13/10/2026" aria-invalid="true"><svg class="gh-ico"><use href="#i-calendar"/></svg></span></label>
+      </div>
+    </fieldset>
+    <p class="cap">Keyboard focus ring (shared · .gh-focus on a static board)</p>
+    <div class="gh-hstack gh-pad" style="--gap:12px; padding-block:6px">
+      <button class="gh-btn gh-btn--secondary gh-focus" type="button"><svg class="gh-ico"><use href="#i-reset"/></svg>Clear</button>
+      <button class="gh-btn gh-btn--primary gh-focus" type="button" aria-label="Apply filters">Apply</button>
+      <label class="gh-search gh-focus" style="flex:1"><svg class="gh-ico"><use href="#i-search"/></svg><input type="search" placeholder="Search markets" aria-label="Search markets"></label>
+    </div>
+    <div class="gh-group" style="margin-top:10px"><a class="gh-row gh-focus" href="#"><span class="gh-row__main"><span class="gh-row__title">Leagues</span></span><span class="gh-row__end">All leagues</span><svg class="gh-ico"><use href="#i-chev-right"/></svg></a></div>
+    <p class="cap">Pager · note · empty state (shared, all directions)</p>
+    <nav class="gh-pager" aria-label="Match pages">
+      <span class="gh-pager__slot" aria-disabled="true" aria-label="Previous page"><svg class="gh-ico"><use href="#i-chev-left"/></svg></span>
+      <a class="gh-pager__slot" href="#" aria-current="page" aria-label="Page 1">1</a><a class="gh-pager__slot" href="#" aria-label="Page 2">2</a><a class="gh-pager__slot" href="#" aria-label="Page 3">3</a><a class="gh-pager__slot" href="#" aria-label="Page 4">4</a>
+      <span class="gh-pager__gap" role="img" aria-label="More pages">…</span><a class="gh-pager__slot" href="#" aria-label="Page 10">10</a>
+      <a class="gh-pager__slot" href="#" aria-label="Next page"><svg class="gh-ico"><use href="#i-chev-right"/></svg></a>
+    </nav>
+    <p class="gh-note gh-block">Probabilities are Goal Hint estimates, not bookmaker odds and not guarantees.</p>
+    <div class="gh-empty" style="margin:0 16px"><p class="gh-empty__title">No matches for these filters</p><p class="gh-empty__text">Nothing matches these filters in the available data.</p><button class="gh-btn gh-btn--secondary" type="button"><svg class="gh-ico"><use href="#i-reset"/></svg>Clear</button></div>
+    <p class="cap">Tab bar</p>
+    <nav class="gh-tabbar" aria-label="App sections">
+      <a class="gh-tab" href="#" aria-current="page"><svg class="gh-ico"><use href="#i-home"/></svg>Matches</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-live"/></svg>Live</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-results"/></svg>Results</a>
+      <a class="gh-tab" href="#"><svg class="gh-ico"><use href="#i-slip"/></svg>Slip builder</a>
+      <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico"><use href="#i-more"/></svg>More</button>
+    </nav>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

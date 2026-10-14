@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>All Markets &amp; Odds — Option E</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+.dir-e .gh-screen > *{flex:none}                     /* page content keeps its natural height; the screen clips */
+/* E market row (directions.md §8 M1: 72 px, hue edge, outcome badge). Kit .gh-mrow is 64 px without an edge. */
+.dir-e .gh-mrow{min-height:72px;padding:12px 12px 12px 12px;column-gap:10px;border-left:4px solid var(--hue)}
+.dir-e .e-rows > li:last-child > .gh-mrow{border-bottom:0}   /* card edge closes the list */
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 390px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+<figure class="gh-board">
+  <figcaption class="gh-board__cap">E · markets · M1 Popular list</figcaption>
+  <div class="gh-phone dir-e">
+<header class="gh-topbar">
+  <div class="gh-topbar__start"><a class="gh-icon-btn" href="/feed/feed-e.dc.html" aria-label="Back to matches"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a></div>
+  <p class="gh-topbar__title">Match details</p>
+  <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Search matches" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+</header>
+<main class="gh-screen">
+  <div class="gh-titleblock acc-orange">
+    <span class="gh-ibadge gh-ibadge--32"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-6M10 20V9M15 20v-8M20 20V4"/></svg></span>
+    <h1 class="gh-titleblock__title">All Markets &amp; Odds</h1><span class="gh-titleblock__meta">4 of 4 published</span>
+  </div>
+  <div class="gh-stack gh-pad" style="--gap: 16px">
+    <label class="gh-search" for="e-mq"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="e-mq" type="search" name="mq" maxlength="80" placeholder="Search markets" aria-label="Search markets"></label>
+    <div class="gh-field">
+      <label class="gh-field__label" for="e-mcat">Market categories</label>
+      <span class="gh-select"><select id="e-mcat" name="mcat"><option selected>Popular</option><option>Results</option><option>Goals</option><option>Both teams</option><option>Double chance</option><option>Draw no bet</option><option>Handicaps</option><option>Corners</option><option>Cards</option><option>Halves</option><option>Correct score</option><option>Clean sheets</option><option>Players &amp; specials</option></select><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+    </div>
+    <ul class="gh-card e-rows">
+<li><a class="gh-mrow mkt-1x2" href="/market/market-e.dc.html" aria-label="Open Match result (1X2) details: RB Bragantino win, estimated probability 56%">
+  <span class="gh-ibadge"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg></span>
+  <span class="gh-mrow__name">Match result (1X2)</span>
+  <span class="gh-mrow__line"><span class="gh-pill">RB Bragantino win</span><span class="gh-prob">56%</span><span>Odds —</span></span>
+  <span class="gh-mrow__end"><span class="gh-badge gh-badge--correct"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Correct</span></span>
+  <svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+</a></li>
+<li><a class="gh-mrow mkt-dc" href="/market/market-e.dc.html" aria-label="Open Double chance details: RB Bragantino or draw, estimated probability 79%">
+  <span class="gh-ibadge"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/></svg></span>
+  <span class="gh-mrow__name">Double chance<span class="gh-tag"><svg class="gh-ico gh-ico--14 gh-ico--fill" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-2.9-5.4 2.9 1.1-6L3.2 9.4l6.1-.8L12 3Z"/></svg><span class="gh-sr">Top pick</span></span></span>
+  <span class="gh-mrow__line"><span class="gh-pill">RB Bragantino or draw</span><span class="gh-prob">79%</span><span>Odds —</span></span>
+  <span class="gh-mrow__end"><span class="gh-badge gh-badge--correct"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Correct</span></span>
+  <svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+</a></li>
+<li><a class="gh-mrow mkt-ou" href="/market/market-e.dc.html" aria-label="Open Over/Under 2.5 goals details: Under 2.5, estimated probability 52%">
+  <span class="gh-ibadge"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 4.5h-5L8 10l4-3Z"/></svg></span>
+  <span class="gh-mrow__name">Over/Under 2.5 goals</span>
+  <span class="gh-mrow__line"><span class="gh-pill">Under 2.5</span><span class="gh-prob">52%</span><span>Odds —</span></span>
+  <span class="gh-mrow__end"><span class="gh-badge gh-badge--incorrect"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>Incorrect</span></span>
+  <svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+</a></li>
+<li><a class="gh-mrow mkt-btts" href="/market/market-e.dc.html" aria-label="Open Both teams to score details: Yes, estimated probability 63%">
+  <span class="gh-ibadge"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="4"/><circle cx="17" cy="12" r="4"/><path d="M11 12h2"/></svg></span>
+  <span class="gh-mrow__name">Both teams to score</span>
+  <span class="gh-mrow__line"><span class="gh-pill">Yes</span><span class="gh-prob">63%</span><span>Odds —</span></span>
+  <span class="gh-mrow__end"><span class="gh-badge gh-badge--correct"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Correct</span></span>
+  <svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+</a></li>
+    </ul>
+  </div>
+  <div class="gh-stack gh-block" style="--gap: 6px">
+  <p class="gh-note">Odds show as — because bookmaker odds are not imported yet; no odds comparison, movement or value rating is shown.</p>
+  <p class="gh-note">Probabilities are Goal Hint estimates, not bookmaker odds and not guarantees.</p>
+</div>
+<footer class="gh-footer">
+  <p class="gh-footer__brand"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M16.5 9.5A5 5 0 1 0 17 13h-5"/></svg>© 2026 Goal Hint</p>
+  <nav aria-label="Information"><a href="#">Help</a><a href="#">Privacy</a><a href="#">Terms</a><a href="#">Contact</a></nav>
+  <p>Estimated probabilities, not guarantees. No betting advice.</p>
+</footer>
+</main>
+<nav class="gh-dock" aria-label="Location in match details">
+  <a class="gh-dock__btn gh-dock__btn--up" href="/detail/detail-e.dc.html" aria-label="Match details"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>Match details</a>
+</nav>
+<nav class="gh-tabbar" aria-label="App sections">
+  <a class="gh-tab" href="/feed/feed-e.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+  <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+</nav>
+  </div>
+</figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

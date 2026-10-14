@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Market panel — Option C</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+.dir-c .gh-topbar { height: 56px; }                           /* C app bar is 56 px (directions.md §6); kit default is 52 px */
+.dir-c .gh-screen > * { flex: none; }                            /* page content keeps its natural height; the screen clips */
+.dir-c .c-gap { margin-top: 24px; }                              /* "groups separated by 24 px of page" */
+.dir-c .gh-group > .gh-kv__row { border-bottom: 0; }           /* grouped facts use the group's inset dividers only */
+/* C market hero: hue badge 32 · "Our prediction" pill · 56% · "Estimated probability" · outcome (kit tokens only) */
+.dir-c .c-hero { display: flex; align-items: flex-start; gap: 12px; padding: 16px; background: var(--gh-surface);
+  border-bottom: 1px solid var(--gh-border); border-left: 4px solid var(--hue); }
+.dir-c .c-hero__facts { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+.dir-c .c-hero__facts dt { font-size: 13px; font-weight: 600; color: var(--gh-muted); }
+.dir-c .c-hero__pick { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.dir-c .c-hero__fig { display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 4px; }
+.dir-c .c-hero__fig dt { font-size: 12px; font-weight: 500; }
+.dir-c .c-hero__out { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-top: 12px; border-top: 1px solid var(--gh-border); }
+.dir-c .c-outcome { min-height: 52px; padding: 4px 16px; }     /* outcome rows as group rows */
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 390px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+<figure class="gh-board">
+  <figcaption class="gh-board__cap">C · market · K1 Match result (1X2) top</figcaption>
+  <div class="gh-phone dir-c">
+<header class="gh-topbar">
+  <a class="gh-icon-btn" href="/markets/markets-c.dc.html" aria-label="Back to all markets"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
+  <div class="gh-topbar__titles"><span class="gh-topbar__parent">Markets</span><h1 class="gh-topbar__page">Match result (1X2)</h1></div>
+</header>
+<main class="gh-screen mkt-1x2">
+<section class="c-hero" aria-label="Our prediction">
+  <span class="gh-ibadge gh-ibadge--32"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg></span>
+  <dl class="c-hero__facts">
+    <div class="c-hero__pick"><dt>Our prediction</dt><dd><span class="gh-pill">RB Bragantino win</span></dd></div>
+    <div class="c-hero__fig"><dt>Estimated probability</dt><dd class="gh-prob gh-prob--lg gh-prob--hue">56%</dd></div>
+    <div class="c-hero__out"><dt>Prediction outcome</dt><dd><span class="gh-badge gh-badge--correct"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Correct</span></dd></div>
+  </dl>
+</section>
+<dl class="gh-kv gh-kv--split gh-group c-gap">
+<div class="gh-kv__row"><dt>Odds</dt><dd>—</dd></div>
+</dl>
+<p class="gh-group-foot">Bookmaker odds are not imported yet.</p>
+<h2 class="gh-group-title">All outcomes</h2>
+<ul class="gh-group" aria-label="All outcomes">
+<li class="gh-outcome c-outcome gh-outcome--pick"><span>RB Bragantino win · predicted</span><span class="gh-bar" aria-hidden="true"><b style="--w: 56%"></b></span><span class="gh-outcome__pct">56%</span></li>
+<li class="gh-outcome c-outcome"><span>Draw</span><span class="gh-bar" aria-hidden="true"><b style="--w: 23%"></b></span><span class="gh-outcome__pct">23%</span></li>
+<li class="gh-outcome c-outcome"><span>Cruzeiro win</span><span class="gh-bar" aria-hidden="true"><b style="--w: 21%"></b></span><span class="gh-outcome__pct">21%</span></li>
+</ul>
+<p class="gh-group-foot">These outcomes are mutually exclusive; their probabilities add up to 100% before rounding.</p>
+<h2 class="gh-group-title">Source and timing</h2>
+<dl class="gh-kv gh-kv--split gh-group">
+<div class="gh-kv__row"><dt>Prediction source</dt><dd>AI prediction</dd></div>
+<div class="gh-kv__row"><dt>Published</dt><dd><time datetime="2026-10-12T09:12+03:00">Oct 12, 2026, 09:12 EAT</time></dd></div>
+<div class="gh-kv__row"><dt>Evidence cutoff</dt><dd><time datetime="2026-10-12T08:55+03:00">Oct 12, 2026, 08:55 EAT</time></dd></div>
+<div class="gh-kv__row"><dt>Source retrieved</dt><dd><time datetime="2026-10-12T08:41+03:00">Oct 12, 2026, 08:41 EAT</time></dd></div>
+<div class="gh-kv__row"><dt>Source last updated</dt><dd>Unknown</dd></div>
+<div class="gh-kv__row"><dt>Bookmaker quote source</dt><dd>Not available</dd></div>
+</dl>
+</main>
+<nav class="gh-tabbar" aria-label="App sections">
+  <a class="gh-tab" href="/feed/feed-c.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+  <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+  <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+</nav>
+  </div>
+</figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Advanced filters — Option D</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="../kit.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+body{margin:0}
+/* only tiny screen-specific layout rules here; components come from kit.css */
+/* D control row under the layer (same rules as feed-d). */
+.dir-d .d-ctrl .gh-search{flex:1 1 auto}
+.dir-d .d-ctrl .gh-btn{padding-inline:12px}
+</style>
+</helmet>
+<div class="gh-boardset" style="width: 390px; height: 870px; display: flex; gap: 24px; align-items: flex-start; box-sizing: border-box; background: var(--gh-page);">
+  <figure class="gh-board">
+    <figcaption class="gh-board__cap">D · filters · S1 Draft</figcaption>
+    <div class="gh-phone dir-d">
+      <!-- Feed underneath (covered by the full-screen filter layer). -->
+      <header class="gh-topbar">
+        <div class="gh-topbar__start"><a class="gh-logo" href="/feed/feed-d.dc.html" aria-label="Goal Hint home"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M16.5 9.5A5 5 0 1 0 17 13h-5"/></svg>Goal Hint</a></div>
+        <div class="gh-topbar__end"><button class="gh-icon-btn" type="button" aria-label="Switch to light theme"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
+      </header>
+      <nav class="gh-tabs" aria-label="Match dates">
+        <a class="gh-icon-btn" href="#" aria-label="Previous day"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
+        <div class="gh-tabs__list"><a class="gh-tabs__tab" href="/feed/feed-d.dc.html" aria-current="page">Today</a><a class="gh-tabs__tab" href="#">Tomorrow</a><a class="gh-tabs__tab" href="#">Next 3 days</a><a class="gh-tabs__tab" href="#">Next 7 days</a><a class="gh-tabs__tab" href="#">Next 30 days</a></div>
+        <a class="gh-icon-btn" href="#" aria-label="Next day"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
+      </nav>
+      <main class="gh-screen">
+        <div class="gh-titlerow"><h1 class="gh-h1">Today's Matches</h1><span class="gh-count">294 matches</span></div>
+        <form class="gh-hstack gh-pad d-ctrl" method="get" action="#" role="search" aria-label="Search and filter matches">
+          <label class="gh-search" for="d-s1-q"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="d-s1-q" type="search" name="q" maxlength="120" value="united" placeholder="Search teams or leagues" aria-label="Search matches"></label>
+          <button class="gh-btn gh-btn--secondary" type="button" aria-expanded="true" aria-controls="d-filters" aria-label="Filters, 5 active"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z"/></svg><span class="gh-num" aria-hidden="true">5</span></button>
+          <span class="gh-selchip"><select name="sort" aria-label="Sort by"><option selected>Highest chance</option><option>Lowest chance</option><option>Earliest first</option><option>Latest first</option></select><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+        </form>
+      </main>
+      <nav class="gh-tabbar" aria-label="App sections">
+        <a class="gh-tab" href="/feed/feed-d.dc.html" aria-current="page"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z"/></svg>Matches</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></svg>Live</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.75 2.75L16.5 9.5"/></svg>Results</a>
+        <a class="gh-tab" href="#"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5"/></svg>Slip builder</a>
+        <button class="gh-tab" type="button" aria-expanded="false"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>More</button>
+      </nav>
+
+      <!-- Full-screen filter panel: one tab per filter group; covers the tab bar. -->
+      <div class="gh-layer" id="d-filters" role="dialog" aria-modal="true" aria-labelledby="d-filters-title">
+        <div class="gh-layer__head">
+          <div class="gh-sheet__titles"><h2 class="gh-sheet__title" id="d-filters-title">Filters and order</h2><span class="gh-sheet__sub-label">Today's Matches</span></div>
+          <a class="gh-icon-btn" href="/feed/feed-d.dc.html" aria-label="Close filters"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></a>
+        </div>
+        <nav class="gh-tabs" aria-label="Filters and order">
+          <div class="gh-tabs__list">
+            <a class="gh-tabs__tab" href="#">Date range<span class="gh-sr">: Tue, Oct 13 – Thu, Oct 15</span><span class="gh-dot" aria-hidden="true"></span></a>
+            <a class="gh-tabs__tab" href="#">Time range<span class="gh-sr">: 12:00–20:00</span><span class="gh-dot" aria-hidden="true"></span></a>
+            <a class="gh-tabs__tab" href="/filters/filters-d.dc.html" aria-current="true">Markets<span class="gh-sr">: 2 selected</span><span class="gh-dot" aria-hidden="true"></span></a>
+            <a class="gh-tabs__tab" href="/picker/picker-d.dc.html">Leagues<span class="gh-sr">: All leagues</span></a>
+            <a class="gh-tabs__tab" href="#">Countries<span class="gh-sr">: 2 selected</span><span class="gh-dot" aria-hidden="true"></span></a>
+            <a class="gh-tabs__tab" href="#">Probability<span class="gh-sr">: 50% - 100%</span><span class="gh-dot" aria-hidden="true"></span></a>
+          </div>
+        </nav>
+        <div class="gh-layer__body">
+          <fieldset>
+            <legend class="gh-sr">Markets</legend>
+            <p class="gh-group-title">2 selected</p>
+            <div class="gh-group">
+              <label class="gh-check-row mkt-1x2" for="d-m-1x2"><input id="d-m-1x2" type="checkbox" name="market" value="match-result" checked><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Match result</span><span class="gh-code" aria-hidden="true">1X2</span></label>
+              <label class="gh-check-row mkt-dc" for="d-m-dc"><input id="d-m-dc" type="checkbox" name="market" value="double-chance"><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Double chance</span><span class="gh-code" aria-hidden="true">DC</span></label>
+              <label class="gh-check-row mkt-ou" for="d-m-ou"><input id="d-m-ou" type="checkbox" name="market" value="total-goals" checked><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Total goals (2.5)</span><span class="gh-code" aria-hidden="true">O/U 2.5</span></label>
+              <label class="gh-check-row mkt-btts" for="d-m-btts"><input id="d-m-btts" type="checkbox" name="market" value="both-teams-to-score"><span class="gh-check"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="gh-check-row__main">Both teams to score</span><span class="gh-code" aria-hidden="true">BTTS</span></label>
+            </div>
+          </fieldset>
+        </div>
+        <div class="gh-footbar">
+          <a class="gh-btn gh-btn--secondary" href="/feed/feed-d.dc.html"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg>Clear</a>
+          <a class="gh-btn gh-btn--primary" href="/feed/feed-d.dc.html" aria-label="Apply filters"><svg class="gh-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z"/></svg>Apply</a>
+        </div>
+      </div>
+    </div>
+  </figure>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":870}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
