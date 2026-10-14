@@ -101,10 +101,17 @@ neutralised; percentages as 0–100, durations in seconds).
 
 ## Setup
 
-1. **Schema.** `npm run db:deploy` applies the migration. On production MariaDB, where `db:deploy`
-   is blocked by the earlier MySQL-only `DROP CHECK` migration, run the idempotent
-   `prisma/mariadb/20261014131920_first_party_analytics.sql` instead (phpMyAdmin → Import, or
-   `mariadb hossuney_goalhint_db < file` on the server); it also records the migration as applied. The application role needs
+1. **Schema.** On MySQL, `npm run db:deploy` applies the migrations. On production
+   MariaDB, inspect pending migrations and use reviewed MariaDB SQL where needed;
+   earlier MySQL-only `DROP CHECK` statements cannot be replayed directly. The
+   `prisma/mariadb/20261014131920_first_party_analytics.sql` overlay creates the seven
+   analytics tables and records the original migration, but `IF NOT EXISTS` does
+   not validate existing tables or their engines. Also apply corrective migration
+   `20261014161000_transactional_storage` and verify every `Analytics*` table uses
+   **InnoDB**: this host's MyISAM default does not support the collector and login
+   transactions. Preserve already applied migration SQL and checksums. See the
+   [MariaDB deployment procedure](../deploy/how-to-deploy.md#database-updates-on-mariadb)
+   for backup, incremental validation and recovery. The application role needs
    `SELECT, INSERT, UPDATE, DELETE` on the seven `Analytics*` tables (the local
    `application-grants.sql` has section F; a cPanel database-level grant covers them).
 2. **Settings** (all in `.env.example`):

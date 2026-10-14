@@ -6,10 +6,13 @@
 | SSH | `hossuney@66.29.132.57:21098`, key `~/.ssh/goalhint_deploy` |
 | App | `~/goal-hint` → active release in `~/goal-hint-releases/` (last 3 kept) |
 | Secrets | `~/goal-hint-private/` (`.env.production.local`, `.goal-hint/owner-approvals.json`) |
-| Database | MariaDB 11.4, `localhost:3306/hossuney_goalhint_db` |
+| Database | MariaDB 11.4.13, `localhost:3306/hossuney_goalhint_db` |
 
-> **Database is off.** The migrations and the live runner use MySQL-only SQL that
-> MariaDB rejects. Don't migrate or enable the database until the MariaDB port is merged.
+> **Production database is enabled.** The 14 October 2026 audit confirmed required
+> TLS, configured analytics credentials and completed migration history. This
+> host uses MariaDB, while the committed Prisma migrations target MySQL. Review
+> each pending migration for MariaDB compatibility and verify the actual schema
+> before applying it; do not replay the entire migration history.
 
 ## One-time setup
 
@@ -64,71 +67,69 @@ python scripts/deploy-cpanel.py --config-push   # checks them, uploads them, res
 - Any `NEXT_PUBLIC_*` setting, or a `GOAL_HINT_*` name not in `.env.example`, makes
   every page return 500. Never set `PORT`, `HOSTNAME` or `DEBUG`.
 
-## Database (after the MariaDB port)
+## Database updates on MariaDB
 
-**One-time**, in cPanel → **MySQL Databases**:
-- **App user `hossuney_goalhint_db`:**
-  - set a new password;
-  - under **Privileged Users**, untick **ALL PRIVILEGES** and tick only `SELECT`,
-    `INSERT`, `UPDATE` and `DELETE`.
-- **Migration user:** create one, e.g. `hossuney_goalhint_mig`, with **ALL
-  PRIVILEGES**. Never delete it: the database triggers run as this user.
+The application already connects to production. Its private configuration and
+approval register are copied into every release. Keep existing values unless
+changing a reviewed deployment setting; deploying a web bundle does not migrate
+the database.
 
-**Migrate** (for each schema change):
-1. Stop the live runner, then back up: cPanel → **Backup → Download a MySQL Database
-   Backup**.
-2. Open a tunnel and leave it running:
-   ```powershell
-   ssh -i $HOME\.ssh\goalhint_deploy -p 21098 -N -L 3317:127.0.0.1:3306 hossuney@66.29.132.57
-   ```
-3. In a second PowerShell 7 window, run:
-   ```powershell
-   $pw = [uri]::EscapeDataString((Read-Host 'Migration password' -MaskInput))
-   $env:MIGRATION_DATABASE_URL = "mysql://hossuney_goalhint_mig:$pw@127.0.0.1:3317/hossuney_goalhint_db"
-   $env:DATABASE_URL = $env:MIGRATION_DATABASE_URL   # required by the policy check; not used to connect
-   $env:GOAL_HINT_DATABASE_ENABLED = 'true'; $env:GOAL_HINT_DATABASE_TLS_MODE = 'disabled'   # SSH encrypts the tunnel
-   fnm exec --using=24.18.1 npm.cmd run db:status
-   fnm exec --using=24.18.1 npm.cmd run db:deploy
-   Remove-Item Env:MIGRATION_DATABASE_URL, Env:DATABASE_URL, Env:GOAL_HINT_DATABASE_ENABLED, Env:GOAL_HINT_DATABASE_TLS_MODE; Remove-Variable pw
-   ```
-4. Deploy the app that needs the new schema.
+Use a separate schema-scoped migration account for DDL and keep its credentials
+out of the application environment. The audit found that the existing application
+account has database-level `ALL PRIVILEGES`, broader than the documented DML-only
+role. Review and test narrower grants separately, including privileges needed by
+trigger definers, before changing them. Do not delete a trigger-definer account
+while its triggers remain in use.
 
-If a migration fails:
-1. In phpMyAdmin, open the database → **Structure → Check all → Drop**, with foreign key
-   checks off.
-2. Restore the backup as the migration user over SSH. phpMyAdmin can't import its
-   triggers.
-   ```powershell
-   scp -i $HOME\.ssh\goalhint_deploy -P 21098 <backup>.sql.gz hossuney@66.29.132.57:goal-hint-private/
-   ssh -i $HOME\.ssh\goalhint_deploy -p 21098 hossuney@66.29.132.57
-   gunzip -c ~/goal-hint-private/<backup>.sql.gz | mariadb -h 127.0.0.1 -u hossuney_goalhint_mig -p hossuney_goalhint_db
-   ```
-   Run the second command, then type the third in the SSH session it opens.
+For each schema change:
 
-**Enable** (once `db:status` reports the schema is up to date):
-1. Create `deploy/.goal-hint/owner-approvals.json`. The two references must equal the
-   settings in step 2.
-   ```json
-   {"version": 1, "owner": "<name>", "approvals": [
-     {"requirement": "database-access", "reference": "goalhint-prod-db", "approvedAt": "2026-10-12", "decision": "<what you approved>"},
-     {"requirement": "budget-approval", "reference": "goalhint-prod-budget", "approvedAt": "2026-10-12", "decision": "<what you approved>"}]}
-   ```
-2. Replace the contents of `deploy/.env.production.local` with these lines (run
-   `--config-pull` first). Percent-encode the password, and leave
-   `GOAL_HINT_DATABASE_TLS_CA_FILE` unset.
-   ```dotenv
-   GOAL_HINT_DATABASE_ENABLED=true
-   DATABASE_URL=mysql://hossuney_goalhint_db:<PASSWORD>@localhost:3306/hossuney_goalhint_db
-   GOAL_HINT_DATABASE_CONNECTION_MODE=direct
-   GOAL_HINT_DATABASE_POOL_LIMIT=3
-   GOAL_HINT_DATABASE_TLS_MODE=required
-   GOAL_HINT_DATABASE_ACCESS_REF=goalhint-prod-db
-   GOAL_HINT_INFRASTRUCTURE_MONTHLY_BUDGET_USD_CENTS=<cents>
-   GOAL_HINT_BUDGET_APPROVAL_REF=goalhint-prod-budget
-   GOAL_HINT_COMPETITION_IDS=<ids from .env.local>
-   ```
-3. Run `python scripts/deploy-cpanel.py --config-push`. It reports `/api/matches`: 200
-   means the database is in use, and 503 means it's off or refused.
+1. Confirm `SELECT VERSION(), DATABASE(), CURRENT_USER()` identifies the intended
+   target and role. Inspect `_prisma_migrations`: completed records have
+   `finished_at` set and `rolled_back_at` unset. Compare original SQL checksums,
+   allowing only verified line-ending differences. Investigate unfinished records
+   before executing more DDL.
+2. Pause writers for changes that rebuild or lock tables. Take a private backup
+   including triggers, record its checksum and verify restoration to a separate
+   target. Keep backups outside the public document root.
+3. Review only the pending migration. MariaDB uses `DROP CONSTRAINT` where MySQL
+   uses `DROP CHECK`. Reviewed scripts in `prisma/mariadb/` cover the goal-market
+   extension, eight-date manifest and analytics migrations. Preserve applied SQL
+   and checksums; create a new migration for corrections. Check for partially
+   created objects before using an overlay.
+4. Apply the reviewed SQL with the migration role. Record the original migration's
+   checksum in `_prisma_migrations` only after all statements and verification
+   succeed. The extension and manifest overlays cannot be replayed blindly;
+   analytics `CREATE TABLE IF NOT EXISTS` does not validate existing tables.
+5. Verify columns, indexes, foreign keys, check clauses and enforcement, trigger
+   definitions and storage engines. All application tables must use InnoDB;
+   explicitly specify it when creating tables because this host's default can be
+   MyISAM. `db:verify` checks representable Prisma schema drift; `db:status` checks
+   migration history. Custom checks/triggers need separate inspection.
+   `db:health` checks connectivity.
+6. Deploy the compatible app, resume writers and verify `/api/matches` returns 200.
+   For analytics changes, check `/analytics`, sign-in, authenticated reports, live
+   data and CSV export over HTTPS. The deploy script's root-page check alone is
+   insufficient.
+
+On 14 October 2026, a private backup was taken before the corrective migration
+`20261014161000_transactional_storage` converted the seven analytics tables and
+`OperationsMonitorState` from MyISAM to InnoDB. Prisma's history table was converted
+as separate maintenance. All 81 tables now use InnoDB, and 26 migrations are
+recorded as completed. Keep that backup until the release and recovery checks are
+accepted.
+
+If a migration fails, stop further attempts and retain its history and diagnostics.
+MariaDB DDL can commit individual statements, so inspect what actually changed
+before preparing a forward repair. Do not mark a failed migration applied simply
+to clear the error. Application rollback switches releases and keeps database
+schema and data. Restore a verified backup through an explicit recovery plan that
+accounts for newer writes; never drop all production tables as routine recovery.
+
+Retain enabled database access, direct connection mode, bounded pool size, verified
+TLS and matching access/budget approvals. Use `.env.example` and the
+[database runbook](../docs/database.md) for setting names. Preserve the configured
+analytics secret, username and password hash; changing the secret changes visitor
+keys. See [analytics setup](../docs/analytics.md).
 
 **Content:** matches appear once the live runner (`npm run live`) writes them. Shared
 hosting stops long-running processes, so run it on your computer:
