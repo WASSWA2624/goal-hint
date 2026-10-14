@@ -19,6 +19,8 @@ export const ChevronDownIcon = (props: IconProps) => <Icon {...props}><path d="m
 export const ChevronLeftIcon = (props: IconProps) => <Icon {...props}><path d="m15 6-6 6 6 6" /></Icon>;
 export const ChevronRightIcon = (props: IconProps) => <Icon {...props}><path d="m9 6 6 6-6 6" /></Icon>;
 export const ArrowRightIcon = (props: IconProps) => <Icon {...props}><path d="M5 12h14M13 6l6 6-6 6" /></Icon>;
+export const CalendarIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="5" width="18" height="16" /><path d="M7 3v4M17 3v4M3 11h18" /></Icon>;
+export const SlidersIcon = (props: IconProps) => <Icon {...props}><path d="M4 7h4M12 7h8M4 17h8M16 17h4M8 4v6M16 14v6" /></Icon>;
 export const FilterIcon = (props: IconProps) => <Icon {...props}><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z" /></Icon>;
 export const ResetIcon = (props: IconProps) => <Icon {...props}><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" /></Icon>;
 export const InfoIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5h.01" /></Icon>;

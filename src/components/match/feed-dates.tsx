@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId } from "react";
 import styled from "styled-components";
-import { RangeFields, RangeFieldset, RangeHelp } from "./feed-range-fields";
+import { RangeFields, RangeFieldset, RangeHelp, RangeLegend } from "./feed-range-fields";
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { feedDateNavigation } from "@/domain/feed-date-navigation";
 import { feedQueryRules, resolveFeedDates, type DateSelection, type FeedDatePreset, type FeedQuery } from "@/domain/feed-query";
@@ -28,7 +28,8 @@ export function DateRangePicker({ query, today, from, to, onChange }: {
   } catch { /* Incomplete or invalid endpoints stay editable without changing the applied query. */ }
   const invalid = dates === null;
   return <RangeFieldset aria-label={messages.text("feed.date.range")}>
-    <RangeFields>
+    <RangeLegend>{messages.text("feed.date.title")}</RangeLegend>
+    <RangeFields data-range="dates">
       <label><span>{messages.text("feed.date.from")}</span><input type="date" value={from}
         aria-describedby={invalid ? `${id}-error` : undefined} aria-invalid={invalid || undefined}
         onChange={(event) => onChange(event.target.value, to)} /></label>

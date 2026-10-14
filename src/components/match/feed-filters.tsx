@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
-import { ChevronDownIcon, ResetIcon, FilterIcon, SearchIcon } from "@/components/ui/icons";
+import { CalendarIcon, ChevronDownIcon, InfoIcon, ResetIcon, FilterIcon, SearchIcon, SlidersIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { validKickoffTime } from "@/domain/kickoff-time";
@@ -49,14 +49,14 @@ const Panel = styled.form`
   display: grid;
   gap: 4px;
   min-inline-size: 0;
+  ${media.belowDesktop} { gap: 6px; padding-inline: 6px; container: feed-controls / inline-size; }
 `;
 const SearchRow = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 6px;
   min-inline-size: 0;
-  ${desktop} { grid-template-columns: minmax(0, 1fr); }
 `;
 const SearchField = styled.label`
   display: flex;
@@ -76,6 +76,40 @@ const SearchField = styled.label`
     &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
     ${focusRing}
   }
+  ${media.belowDesktop} {
+    min-block-size: 2.75rem;
+    padding-inline: 8px;
+    > input { min-block-size: 2.625rem; font-size: 16px; }
+  }
+`;
+const PhoneToolbar = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  min-inline-size: 0;
+  @container feed-controls (max-width: 16rem) { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  ${desktop} { display: none; }
+`;
+const DateSummary = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+  min-block-size: 2.75rem;
+  padding: 5px 8px;
+  text-align: start;
+  color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.color.surface};
+  ${buttonBorder}
+  border-radius: 0;
+  font: inherit;
+  cursor: pointer;
+  > svg { flex: none; color: ${({ theme }) => theme.color.brand}; font-size: 1rem; }
+  > span { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; font-size: 0.8125rem; line-height: 1.25; }
+  small { display: block; margin-block-end: 1px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; }
+  @container feed-controls (max-width: 16rem) { > svg:last-of-type { display: none; } }
+  ${controlFeedback}
+  ${focusRing}
 `;
 /** A labelled disclosure explains the panel; its chevron and accessible name reflect its state. */
 const FilterToggle = styled(IconButton)`
@@ -85,33 +119,38 @@ const FilterToggle = styled(IconButton)`
   justify-content: center;
   gap: 6px;
   inline-size: auto;
-  block-size: 2.75rem;
+  block-size: auto;
+  min-block-size: 2.75rem;
   padding-inline: 8px;
   font-size: 0.8125rem;
   background: ${({ theme }) => theme.color.surface};
   ${buttonBorder}
   border-radius: 0;
-  > span { max-inline-size: 4rem; text-align: start; line-height: 1.1; }
+  > span { text-align: start; line-height: 1.4; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > svg { flex: none; font-size: 0.875rem; }
   ${desktop} { display: none; }
   &[aria-expanded="true"] {
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.brand};
+    color: ${({ theme }) => theme.color.brand};
+    background: ${({ theme }) => theme.color.brandSoft};
+    border-color: ${({ theme }) => theme.color.brand};
   }
-  &[aria-expanded="true"] > svg { transform: rotate(180deg); }
+  &[aria-expanded="true"] > svg:last-of-type { transform: rotate(180deg); }
   > b {
-    position: absolute; inset-block-start: 1px; inset-inline-end: 2px;
+    min-inline-size: 20px;
+    padding: 2px 5px;
+    background: ${({ theme }) => theme.color.brandSoft};
     color: ${({ theme }) => theme.color.accent.teal.text};
-    font-size: 0.625rem; line-height: 1; font-variant-numeric: tabular-nums;
+    font-size: 0.75rem; line-height: 1.4; font-variant-numeric: tabular-nums;
   }
   &[aria-expanded="true"] > b { color: inherit; }
+  @container feed-controls (max-width: 16rem) { > svg { display: none; } }
 `;
 /** Raised above the cards' full-row links, so the date and option popovers that overlap them stay usable. */
 const PhoneOnly = styled.div`
   position: relative;
   z-index: 2;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-inline-size: 0;
   container: phone-filters / inline-size;
   ${desktop} { display: none; }
@@ -119,7 +158,7 @@ const PhoneOnly = styled.div`
 /** Option fields reuse the existing compact checklists. */
 const PhoneMore = styled.div`
   display: grid;
-  gap: 2px;
+  gap: 6px;
   min-inline-size: 0;
   &[hidden] { display: none; }
 `;
@@ -130,36 +169,45 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
   position: relative;
   z-index: 2;
   display: ${({ $open }) => $open ? "grid" : "none"};
-  gap: 2px;
+  gap: 8px;
   min-inline-size: 0;
-  padding: 2px 4px;
+  padding: 8px;
   container: feed-filter-fields / inline-size;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  ${desktop} { display: grid; padding: 4px 8px; border-block-start: 3px solid ${({ theme }) => theme.color.brand}; }
+  ${desktop} { display: grid; gap: 2px; padding: 4px 8px; border-block-start: 3px solid ${({ theme }) => theme.color.brand}; }
 `;
 /** Date and time inputs remain direct controls within the expanded filter group. */
 const RangeRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 2px;
+  gap: 8px;
   ${desktop} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-block-end: 2px; }
 `;
 /** One labelled trigger per filter replaces clipped suggestion chips and their duplicate menus. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
-  > button { min-block-size: 1.875rem; padding: 0 6px; font-size: 0.875rem; }
-  [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; }
+  > button { min-block-size: 2.75rem; padding: 6px 8px; border-color: ${({ theme }) => theme.color.controlBorder}; font-size: 0.75rem; }
+  [data-picker-label] { flex: 0 1 auto; min-inline-size: 0; overflow-wrap: anywhere; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; overflow-wrap: anywhere; }
+  @container phone-filters (max-width: 14rem) {
+    > button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 6px; }
+    [data-picker-label] { grid-column: 1; grid-row: 1; }
+    [data-picker-value] { grid-column: 1; grid-row: 2; justify-content: flex-start; text-align: start; }
+    > button > svg { grid-column: 2; grid-row: 1 / span 2; }
+  }
   > [role="group"] {
     grid-template-columns: minmax(0, 1fr);
     max-inline-size: 100%;
+    inline-size: 100%;
     border-radius: 0;
     box-shadow: none;
-    padding: 4px;
-    gap: 4px;
-    > input { min-inline-size: 0; min-block-size: 2rem; border-radius: 0; font-size: 1rem; }
-    label { min-block-size: 2rem; border-radius: 0; font-size: 0.875rem; }
+    padding: 8px;
+    gap: 8px;
+    > input { min-inline-size: 0; min-block-size: 2.75rem; border-radius: 0; font-size: 16px; }
+    label { min-block-size: 2.75rem; border-radius: 0; font-size: 0.875rem; }
+    label > span { overflow-wrap: anywhere; }
   }
 `;
 /** The phone probability control grows naturally with larger text. */
@@ -168,16 +216,17 @@ const BottomRow = styled.div`
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 6px 8px;
+  margin-block-start: 4px;
   @container phone-filters (max-width: 16rem) { grid-template-columns: minmax(0, 1fr); }
 `;
 const ProbabilityGroup = styled.div`
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
   min-inline-size: 0;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   > span { font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
 const ProbabilityInputs = styled.div`
@@ -211,8 +260,20 @@ const ProbabilityInputs = styled.div`
   }
   > label:has([aria-invalid="true"]) { border-color: ${({ theme }) => theme.color.accent.red.text}; }
   ${media.belowDesktop} {
-    > label { flex: 1; }
-    input { flex: 1; inline-size: 100%; min-block-size: 1.75rem; }
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    @container phone-filters (max-width: 13rem) { grid-template-columns: minmax(0, 1fr); }
+    > label { display: grid; gap: 2px; padding: 0; border: 0; white-space: normal; font-size: 0.75rem; }
+    > [data-range-separator] { display: none; }
+    input {
+      inline-size: 100%;
+      min-block-size: 2.25rem;
+      padding: 4px 6px;
+      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+      font-size: 16px;
+      &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.accent.red.text}; }
+    }
   }
   ${desktop} {
     [data-bound-label] { display: none; }
@@ -244,9 +305,22 @@ const QuietButton = styled.button`
   ${focusRing}
 `;
 const OddsNote = styled.p`
+  display: flex;
+  align-items: start;
+  gap: 7px;
+  margin-block-start: 4px;
+  padding-block-start: 6px;
+  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   color: ${({ theme }) => theme.color.mutedText};
-  font-size: 0.8125rem;
-  line-height: 1.25;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  > svg { flex: none; margin-block-start: 2px; font-size: 0.875rem; }
+`;
+const ProbabilityHelp = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: 0.75rem;
+  line-height: 1.5;
 `;
 
 /** Five compact desktop fields share one row; numeric bounds need no sliders. */
@@ -352,25 +426,34 @@ const FilterActions = styled.div`
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+  [data-desktop-icon] { display: inline-flex; }
+  [data-phone-label] { display: none; }
   ${media.belowDesktop} {
-    flex-wrap: nowrap;
-    gap: 4px;
-    > button { min-block-size: 2.5rem; gap: 4px; padding-inline: 8px; font-size: 0.875rem; }
+    flex-wrap: wrap;
+    inline-size: auto;
+    max-inline-size: 100%;
+    min-inline-size: 0;
+    flex: 1 1 auto;
+    gap: 6px;
+    > button { min-block-size: 2.75rem; padding-inline: 8px; font-size: 0.8125rem; white-space: normal; }
+    > button[type="submit"] { flex: 1; min-inline-size: min(100%, 5rem); }
     > button > svg { font-size: 0.875rem; }
+    [data-desktop-icon], [data-desktop-label] { display: none; }
+    [data-phone-label] { display: inline-flex; }
   }
-  @media (max-width: 350px) { > button > svg { display: none; } }
 `;
 
-export type FeedFilterDraftStatus = Readonly<{ valid: boolean }>;
+export type FeedFilterDraftStatus = Readonly<{ valid: boolean; changed: boolean }>;
 /** Native form association keeps one action row beside sorting, outside the filter fields. */
 export function FeedFilterActions({ formId, locale, status }: {
   formId: string; locale: FeedQuery["locale"]; status: FeedFilterDraftStatus;
 }) {
   const messages = createMessages(locale);
   return <FilterActions data-filter-actions>
-    <OutlineButton type="reset" form={formId}><ResetIcon />{messages.text("feed.filters.clearAll")}</OutlineButton>
+    <OutlineButton type="reset" form={formId}><span data-desktop-icon><ResetIcon /></span>{messages.text("feed.filters.clearAll")}</OutlineButton>
     <ApplyButton type="submit" form={formId} disabled={!status.valid} aria-label={messages.text("feed.filters.applyPlain")}>
-      <FilterIcon />{messages.text("feed.filters.apply")}
+      <span data-desktop-icon><FilterIcon /></span><span data-desktop-label>{messages.text("feed.filters.apply")}</span>
+      <span data-phone-label>{messages.text("feed.filters.applyPlain")}</span>
     </ApplyButton>
   </FilterActions>;
 }
@@ -382,12 +465,12 @@ function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, mess
 }) {
   return <ProbabilityInputs>
     {(["min", "max"] as const).map((bound) => <Fragment key={bound}><label>
-      <span data-bound-label>{messages.text(`feed.filters.${bound}`)}</span>
+      <span data-bound-label>{messages.text(bound === "min" ? "feed.filters.minimumPercent" : "feed.filters.maximumPercent")}</span>
       <input type="text" inputMode="decimal" autoComplete="off" value={values[bound]}
         aria-label={messages.text(bound === "min" ? "feed.filters.minimum" : "feed.filters.maximum", { label: messages.text("feed.filters.probabilityLabel") })}
         aria-invalid={invalid} aria-describedby={invalid ? descriptionId : undefined}
         onChange={(event) => { if (/^\d*(?:\.\d*)?$/u.test(event.target.value)) onChange(bound, event.target.value); }} />
-    </label>{bound === "min" && <span aria-hidden="true">–</span>}</Fragment>)}
+    </label>{bound === "min" && <span data-range-separator aria-hidden="true">–</span>}</Fragment>)}
   </ProbabilityInputs>;
 }
 
@@ -406,6 +489,14 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   const draft = valid(storedDraft, today) ? storedDraft : query;
   const range = resolveFeedDates(query, today), deviceZone = useDeviceTimeZone();
   const filterToggle = useRef<HTMLButtonElement>(null);
+  const filterOpener = useRef<HTMLButtonElement>(null);
+  const form = useRef<HTMLFormElement>(null), focusDateAfterOpen = useRef(false);
+  useEffect(() => {
+    if (open && focusDateAfterOpen.current) {
+      form.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
+      focusDateAfterOpen.current = false;
+    }
+  }, [open]);
   const [dateInputs, setDateInputs] = useState({ from: String(range.startDate), to: String(range.endDate) });
   const [timeInputs, setTimeInputs] = useState({ from: query.time?.from ?? "", to: query.time?.to ?? "" });
   const [probabilityInputs, setProbabilityInputs] = useState({ min: formatProbabilityValue(query.probability.min), max: formatProbabilityValue(query.probability.max) });
@@ -444,14 +535,17 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   const phone = draft;
   const reset = resetFeedFilters(query);
   const draftValid = completeDraft !== null;
-  useEffect(() => { onDraftStatus({ valid: draftValid }); }, [draftValid, onDraftStatus]);
+  const changed = completeDraft === null || draft.search !== query.search
+    || serializeFeedQuery({ ...completeDraft, search: "", page: 1 }, today).toString()
+      !== serializeFeedQuery({ ...query, search: "", page: 1 }, today).toString();
+  useEffect(() => { onDraftStatus({ valid: draftValid, changed }); }, [changed, draftValid, onDraftStatus]);
 
   function phonePicker(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
     const label = messages.text(`feed.filters.${kind}`), selected: readonly string[] = phone[kind];
     // Selections absent from a refreshed option list remain available to remove.
     const missing = selected.filter((value) => !options.some((option) => option.value === value))
       .map((value): FilterOption => ({ value, label: value, detail: null, logoUrl: kind === "countries" ? countryFlagAsset(value) : null, fixtures: 0 }));
-    const summary = selected.length === 0 ? messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.any")
+    const summary = selected.length === 0 ? messages.text(kind === "leagues" ? "feed.filters.allLeagues" : "feed.filters.anyCountry")
       : selected.length === 1 ? options.find((option) => option.value === selected[0])?.label ?? selected[0]!
       : messages.text("feed.filters.selectedCount", { count: messages.number(selected.length) });
     return <PhonePicker title={`${label}: ${summary}`} options={[...options, ...missing]} selected={selected}
@@ -504,11 +598,18 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
   const count = panelFilterCount(query);
+  let dateSummary = messages.text("feed.date.choose");
+  try {
+    const from = parseReportingDate(dateInputs.from), to = parseReportingDate(dateInputs.to);
+    dateSummary = from === to ? messages.reportingDateShort(from)
+      : `${messages.reportingDateShort(from)} – ${messages.reportingDateShort(to)}`;
+  } catch { /* Incomplete dates keep an honest label while remaining editable. */ }
   const toggleLabel = messages.text(open ? "feed.filters.hideAdvanced" : "feed.filters.showAdvanced");
   const [action, parameters = ""] = feedQueryHref({ ...query, search: "", page: 1 }, today).split("?");
-  return <Panel id={formId} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
-    if (event.key === "Escape" && open && !event.defaultPrevented && filterToggle.current?.getClientRects().length) {
-      event.preventDefault(); onToggle(); filterToggle.current?.focus();
+  return <Panel ref={form} id={formId} action={action} method="get" aria-label={messages.text("feed.filters.form")} onKeyDown={(event) => {
+    const opener = filterOpener.current ?? filterToggle.current;
+    if (event.key === "Escape" && open && !event.defaultPrevented && opener?.getClientRects().length) {
+      event.preventDefault(); onToggle(); opener.focus();
     }
   }} onReset={(event) => {
     event.preventDefault();
@@ -528,13 +629,24 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
           placeholder={messages.text("feed.search.placeholder")} aria-label={messages.text("feed.filters.search")}
           onChange={(event) => edit({ ...draft, search: event.target.value })} />
       </SearchField>
+    </SearchRow>
+    <PhoneToolbar data-phone-filter-toolbar>
+      <DateSummary type="button" aria-controls={panelId} aria-expanded={open} onClick={(event) => {
+        filterOpener.current = event.currentTarget;
+        if (open) form.current?.querySelector<HTMLInputElement>('input[type="date"]')?.focus();
+        else { focusDateAfterOpen.current = true; onToggle(); }
+      }}>
+        <CalendarIcon /><span><small>{messages.text("feed.date.title")}</small>{dateSummary}</span><ChevronDownIcon />
+      </DateSummary>
       <FilterToggle ref={filterToggle} type="button" aria-expanded={open} aria-controls={panelId}
         title={toggleLabel}
-        aria-label={count > 0 ? `${toggleLabel}, ${messages.plural("feed.filters.activeCount", count)}` : toggleLabel} onClick={onToggle}>
-        <span>{messages.text("feed.filters.advanced")}</span><ChevronDownIcon />
+        aria-label={count > 0 ? `${toggleLabel}, ${messages.plural("feed.filters.activeCount", count)}` : toggleLabel} onClick={(event) => {
+          filterOpener.current = event.currentTarget; onToggle();
+        }}>
+        <SlidersIcon /><span>{messages.text("feed.filters.toggle")}</span><ChevronDownIcon />
         {count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
       </FilterToggle>
-    </SearchRow>
+    </PhoneToolbar>
     <FilterFieldsGroup id={panelId} $open={open}>
     <RangeRow>
       <DateRangePicker query={query} today={today} {...dateInputs} onChange={(from, to) => setDateInputs({ from, to })} />
@@ -547,10 +659,11 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         {phonePicker("countries", countryList)}
         <BottomRow>
           <ProbabilityGroup role="group" aria-label={probabilityLabel}>
-            <span>{messages.text("match.columns.probabilityShort")}</span>{probabilityFields}%
+            <span>{messages.text("feed.filters.predictionProbability")}</span>{probabilityFields}
           </ProbabilityGroup>
+          <ProbabilityHelp>{messages.text("feed.filters.probabilityExplanation")}</ProbabilityHelp>
         </BottomRow>
-        <OddsNote title={messages.text("feed.filters.oddsPending")}>{messages.text("feed.filters.oddsUnavailable")}<VisuallyHidden>. {messages.text("feed.filters.oddsPending")}</VisuallyHidden></OddsNote>
+        <OddsNote><InfoIcon /><span>{messages.text("feed.filters.oddsUnavailable")}<br />{messages.text("feed.filters.oddsPending")}</span></OddsNote>
       </PhoneMore>
     </PhoneOnly>
 

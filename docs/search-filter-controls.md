@@ -2,9 +2,11 @@
 
 The feed uses shared labeled native fields and a per-provider Redux draft;
 URLs and stored server projections remain authoritative. A persistent search
-bar sits in the page body on every screen size. A labelled Advanced filters
-button beside it opens the filter fields on phones and tablets; desktop always shows the
-search bar and all filter fields, without a collapse toggle.
+bar sits in the page body on every screen size. Phones and tablets use the
+Quiet stack layout: full-width search, then a Match dates summary beside a
+labelled Filters button. Both buttons open the same complete filter section;
+Match dates also focuses its first date input. Desktop always shows the search
+bar and all filter fields, without a collapse toggle.
 Search and filter edits share one draft and remain unsubmitted until Enter in
 the search bar or the single Apply action submits the complete draft. Both
 submission paths normalize NFC/whitespace, validate all fields and reset page
@@ -24,19 +26,22 @@ Repeated single-value keys, unknown keys (including the removed `sortMarket`)
 and other malformed parameters remain invalid.
 
 From date, To date, From time and To time share the filter section with Markets,
-Leagues, Countries and Probability. Below 64rem, the body Advanced filters button opens
+Leagues, Countries and Probability. Below 64rem, the body Filters button opens
 or collapses this complete section, which starts collapsed. Escape also closes
-the section without applying its draft. Clicking outside does not close it.
+the section without applying its draft and returns focus to its opening
+button. Clicking outside does not close it.
 At desktop widths all fields remain visible. The common range controls are
 rendered once, so the initial HTML contains exactly two date and two time
-inputs, including when the mobile section is collapsed. Each full label sits
-inside its square control, above the native value in narrower layouts and to
-its left in wider layouts. The date pair and time pair each occupy one phone row and are
-directly editable when expanded. Compact padding preserves readable text and
-lets the expanded controls scroll naturally with the page on smaller screens.
-There are no visible group headings, date popovers, date steppers, time mode
-menus or separate range Apply buttons. The fieldsets retain accessible group
-names; focused controls and invalid values retain visible feedback.
+inputs, including when the mobile section is collapsed. Mobile labels sit
+above compact square native controls with 16px values. Dates and times are paired;
+the date pair stacks below 361px, and both pairs stack when their container or
+larger text needs more room. The action row can also wrap for larger text.
+Match dates and Kickoff time headings, optional
+time guidance and the browsing zone are visible. The expanded editor uses
+tight padding and spacing and scrolls naturally with the page. Desktop keeps
+its compact fields. There are no date popovers, date steppers, time mode menus
+or separate range Apply buttons. Focused controls and invalid values retain
+visible feedback.
 
 Equal date endpoints select one day; different endpoints select an inclusive
 range of up to 31 days. Equal time endpoints select one kickoff minute; different
@@ -95,19 +100,28 @@ complete checklist, and selected values missing from a refreshed option list
 remain removable. At least one market must stay selected. Probability uses the
 same directly editable minimum/maximum fields as desktop. Mobile retains the muted Odds unavailable explanation.
 
-One persistent action row sits below the filter options and outside the mobile
-collapsible section. Sort by appears first, followed by Clear and Apply filters.
-The actions align right on desktop; mobile keeps Sort on the left. When the
-mobile fields are collapsed, this row follows the search bar directly. A compact
+Persistent actions sit below the filter options and outside the mobile
+collapsible section. Mobile fits the labelled Sort by menu beside Clear and
+Apply filters when there is room. Controls wrap onto full-width rows when
+the container or larger text needs more space. Sorting retains its existing
+immediate navigation behavior. The actions align right on desktop. When the
+mobile fields are collapsed, the actions follow the date/filter toolbar. A compact
 summary shows the applied date or range,
 markets, leagues and countries, plus applied search, time and probability
 constraints when present. These chips describe the query that has been
 applied, rather than unsent edits. On desktop the summary chips sit at the far
 left of the same row as Sort, Clear and Apply on the right. On mobile the
-summary stays underneath the action row. Mobile fields expand between search and the action row; search,
+summary stays underneath the action row as readable text under Showing.
+A Changes ready to apply notice distinguishes valid unsent edits from those
+applied selections. Mobile fields expand between the date/filter toolbar and
+the action row; search,
 sorting, Clear and Apply stay available in both states. Desktop fields always
 remain between search and the action row.
-On phones and tablets, Advanced filters, Clear and Apply always retain visible backgrounds and solid 1px borders, with square corners.
+On phones and tablets, the date summary, Filters, Clear and Apply always retain
+visible backgrounds and solid 1px borders, with square corners and button targets
+of at least 44px. Labelled entry fields retain comfortable combined tap areas.
+Probability uses full minimum/maximum labels above its fields;
+the unavailable-odds explanation stays visible in the editor.
 The applied match count sits with the results below the toolbar and summary and updates
 with the displayed projection. It is omitted when no successful projection is available. Draft
 edits make no count-preview requests. Apply filters submits the complete
@@ -142,13 +156,14 @@ On phones and tablets the feed's brand bar contains the home logo and theme
 control. Desktop retains the page title and quick date presets, with the theme
 control at the far right of the shell header; feed pages
 omit the shell search so there is one body search bar on every device. The
-mobile Advanced filters button has a visible label and a chevron pointing down
+mobile Filters button has a visible label and a chevron pointing down
 when collapsed and up when expanded. Its accessible name and title state
 Show advanced filters or Hide advanced filters. It sets
 `aria-expanded`/`aria-controls` on the complete collapsible filter section and
 badges active choices. Search remains visible
-when mobile filters close. The feed uses one semantic h1: it is visually hidden on
-phones and tablets and visible as the page title on desktop. The subtitle
+when mobile filters close. The feed uses one semantic h1: it stays visually
+hidden on phones and tablets to conserve space and visible on desktop. Only the
+brand bar stays sticky. The subtitle
 remains absent.
 
 Acceptance uses owned MySQL storage with synthetic inputs, an isolated production

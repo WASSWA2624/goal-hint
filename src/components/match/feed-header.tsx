@@ -10,6 +10,7 @@ import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-q
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets } from "./feed-dates";
+import { FeedDraftStatus } from "./feed-controls";
 import { CompactSelect, focusRing } from "./filter-parts";
 
 const desktop = media.desktop;
@@ -17,13 +18,15 @@ const HeaderContent = styled.div`
   display: grid;
   gap: 6px;
   min-inline-size: 0;
-  ${media.belowDesktop} {
-    position: sticky;
-    inset-block-start: 8px;
-    z-index: 30;
-  }
+  ${media.belowDesktop} { display: contents; }
 `;
-/** One semantic page title: visible on desktop, visually hidden on smaller screens. */
+const BrandContainer = styled.div`
+  position: sticky;
+  inset-block-start: 8px;
+  z-index: 30;
+  ${desktop} { display: contents; }
+`;
+/** One semantic title remains accessible on mobile and visible on desktop. */
 const PageHeading = styled(VisuallyHidden)`
   ${desktop} {
     position: static;
@@ -44,7 +47,7 @@ const Row = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px 24px;
-  ${media.belowDesktop} { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  ${media.belowDesktop} { display: contents; }
 `;
 const DesktopActions = styled.div`
   display: none;
@@ -65,10 +68,11 @@ export function FeedHeader({ query, today, onApply }: {
   query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void;
 }) {
   const messages = createMessages(query.locale);
+  const heading = feedHeading(query, today, messages);
   return <HeaderContent>
     <Row>
-      <AppBrandBar locale={query.locale} />
-      <PageHeading as="h1">{feedHeading(query, today, messages)}</PageHeading>
+      <BrandContainer><AppBrandBar locale={query.locale} /></BrandContainer>
+      <PageHeading as="h1">{heading}</PageHeading>
       <DesktopActions>
         <DatePresets query={query} today={today} onApply={onApply} />
       </DesktopActions>
@@ -114,7 +118,6 @@ const Count = styled.div`
     white-space: nowrap;
   }
 `;
-const DesktopText = styled.span`display: none; ${desktop} { display: inline; }`;
 const SortGroup = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -122,12 +125,16 @@ const SortGroup = styled.div`
   align-items: center;
   gap: 8px;
   ${desktop} { margin-inline-start: auto; justify-content: flex-end; }
-  > label { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: inline; } }
   ${media.belowDesktop} {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 4px;
+    align-items: flex-end;
+    gap: 6px;
   }
+`;
+const DesktopSortLabel = styled.label`
+  display: none;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: 0.875rem;
+  ${desktop} { display: inline; }
 `;
 const ResultCount = styled.p`
   color: ${({ theme }) => theme.color.mutedText};
@@ -156,26 +163,30 @@ const SelectWrap = styled.span`
   > svg { position: absolute; inset-inline-end: 7px; inset-block-start: 50%; transform: translateY(-50%); pointer-events: none; }
 `;
 /** One native sort menu includes both field and direction. */
-const PhoneOrder = styled.div`
-  display: inline-flex;
+const PhoneOrder = styled.label`
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 8rem;
+  gap: 2px;
   min-inline-size: 0;
-  inline-size: 100%;
+  max-inline-size: 100%;
+  > span:first-child { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; line-height: 1.2; }
   ${desktop} { display: none; }
 `;
 const PhoneSort = styled(CompactSelect)`
-  min-block-size: 2.5rem;
-  padding-block: 3px;
+  min-block-size: 2.75rem;
+  padding-block: 6px;
   padding-inline: 7px 22px;
+  border-color: ${({ theme }) => theme.color.controlBorder};
   border-radius: 0;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   inline-size: 100%;
   > span { flex: 1; }
   > span > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.2; }
   > select {
-    font-size: inherit;
     > option { font-size: inherit; }
     /* iOS presents its own picker; keep its input large enough to avoid focus zoom. */
-    @supports (-webkit-touch-callout: none) { font-size: 16px; }
+    font-size: 1rem;
   }
   > svg { inset-inline-end: 7px; }
 `;
@@ -185,8 +196,8 @@ const sortOptions: readonly FeedSort[] = [
 ];
 
 /** One independent sort menu retains the established immediate sort behavior. */
-export function FeedFilterToolbar({ query, onApply, actions, summary }: {
-  query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode;
+export function FeedFilterToolbar({ query, onApply, actions, summary, changed = false }: {
+  query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode; changed?: boolean;
 }) {
   const messages = createMessages(query.locale);
   const sortKey = `${query.sort.by}-${query.sort.direction}`;
@@ -198,11 +209,13 @@ export function FeedFilterToolbar({ query, onApply, actions, summary }: {
   return <FilterToolbar>
     {summary}
     <SortGroup>
+      <FeedDraftStatus locale={query.locale} changed={changed} />
       <PhoneOrder>
+        <span>{messages.text("feed.sort.label")}</span>
         <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => chooseKey(event.target.value)}
           options={sortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
       </PhoneOrder>
-      <label htmlFor="feed-sort-desktop"><DesktopText>{messages.text("feed.sort.label")}</DesktopText></label>
+      <DesktopSortLabel htmlFor="feed-sort-desktop">{messages.text("feed.sort.label")}</DesktopSortLabel>
       <SelectWrap>
         <select id="feed-sort-desktop" value={sortKey} onChange={(event) => chooseKey(event.target.value)}>
           {sortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>

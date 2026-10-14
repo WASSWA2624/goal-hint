@@ -17,24 +17,62 @@ export const FeedNote = styled(MutedText)`
 `;
 
 const SummaryList = styled.ul`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
   min-inline-size: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: 0.75rem;
+  line-height: 1.4;
   > li {
+    display: inline;
     max-inline-size: 100%;
-    padding: 2px 6px;
-    color: ${({ theme }) => theme.color.mutedText};
-    background: ${({ theme }) => theme.color.brandSoft};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    font-size: 0.8125rem;
-    line-height: 1.4;
     overflow-wrap: anywhere;
+    &:not(:last-child)::after { content: " · "; }
+  }
+  ${media.desktop} {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 0.8125rem;
+    > li {
+      display: block;
+      padding: 2px 6px;
+      background: ${({ theme }) => theme.color.brandSoft};
+      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+      line-height: 1.4;
+      &:not(:last-child)::after { content: none; }
+    }
   }
 `;
+const AppliedSummary = styled.div`
+  min-inline-size: 0;
+  margin: 0;
+  padding-block-start: 6px;
+  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  ${media.desktop} { margin: 0; padding: 0; border: 0; }
+`;
+const SummaryLabel = styled.strong`
+  display: block;
+  margin-block-end: 2px;
+  font-size: 0.75rem;
+  ${media.desktop} { display: none; }
+`;
+const PendingChanges = styled.p`
+  flex: 1 0 100%;
+  margin: 0;
+  color: ${({ theme }) => theme.color.brand};
+  font-size: 0.75rem;
+  line-height: 1.4;
+  ${media.desktop} { display: none; }
+`;
+
+/** A visible draft notice distinguishes unapplied edits from the displayed matches. */
+export function FeedDraftStatus({ locale, changed }: { locale: FeedQuery["locale"]; changed: boolean }) {
+  return <PendingChanges role="status" aria-live="polite" hidden={!changed}>
+    {changed && createMessages(locale).text("feed.filters.changesReady")}
+  </PendingChanges>;
+}
 
 /** Applied choices remain readable when the editable filter fields are collapsed. */
 export function FeedActiveFilterSummary({ query, today, leagues }: {
@@ -66,9 +104,12 @@ export function FeedActiveFilterSummary({ query, today, leagues }: {
   }
   if (query.odds) entries.push({ label: `${messages.text("feed.filters.oddsLabel")}: ${formatOddsRange(query.odds)}`, title: messages.text("feed.filters.oddsLabel") });
   if (query.search) entries.push({ label: `${messages.text("feed.search.submit")}: ${query.search}`, title: query.search });
-  return <SummaryList aria-label={messages.text("feed.filters.activeSummary")} data-active-filter-summary>
-    {entries.map((entry, index) => <li key={index} title={entry.title}>{entry.label}</li>)}
-  </SummaryList>;
+  return <AppliedSummary data-active-filter-summary>
+    <SummaryLabel>{messages.text("feed.filters.showing")}</SummaryLabel>
+    <SummaryList aria-label={messages.text("feed.filters.activeSummary")}>
+      {entries.map((entry, index) => <li key={index} title={entry.title}>{entry.label}</li>)}
+    </SummaryList>
+  </AppliedSummary>;
 }
 
 /** Plain-text summary of an applied query, shown beside a retained earlier result. */

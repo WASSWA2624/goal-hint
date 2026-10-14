@@ -90,7 +90,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   // The body toggle reveals fields without hiding search, actions or the applied summary.
   const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId();
   const filtersFormId = useId();
-  const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true });
+  const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true, changed: false });
   const filterActions = useMemo(() => <FeedFilterActions formId={filtersFormId} locale={query.locale} status={filterStatus} />,
     [filterStatus, filtersFormId, query.locale]);
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
@@ -124,7 +124,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     <FeedHeader query={query} today={today} onApply={apply} />
     <FeedFilters query={query} today={today} leagues={leagues} onApply={apply}
       open={filtersOpen} panelId={filtersId} onToggle={toggleFilters} formId={filtersFormId} onDraftStatus={setFilterStatus}
-      controls={<FeedFilterToolbar query={query} onApply={apply} actions={filterActions}
+      controls={<FeedFilterToolbar query={query} onApply={apply} actions={filterActions} changed={filterStatus.changed && filterStatus.valid}
         summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
     {controls}
     {range.endDate > createPredictionWindow(today).lastDate && <FeedNote>{messages.text("feed.sevenDayAvailability")}</FeedNote>}
