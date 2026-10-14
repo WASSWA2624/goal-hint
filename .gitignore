@@ -6,6 +6,7 @@ deploy/*.zip
 coverage/
 output/playwright/
 .playwright-cli/
+.playwright-mcp/
 .tmp/
 *.ghb
 src/server/generated/
