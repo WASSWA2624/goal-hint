@@ -1,0 +1,66 @@
+{
+  "prompt": "Use case: ui-mockup. Edit the referenced board into a MOBILE-ONLY portrait design image. Extract and re-render the RIGHT-HAND mobile screen and discard the desktop screen entirely. Keep the SAME design direction, color palette, spacing, type hierarchy and mobile structure from the input. Preserve the top Goal Hint navy brand bar, square search field and teal Search button, Oct 13 / Oct 14 SELECTED / Oct 15 compact day strip, Earliest first / Clear / Filters, count and seven compact ticket cards with two stacked teams and slim right prediction stub, fixed bottom Matches / Live / Results / More. Preserve the sample picks, probabilities and No pick third card exactly. Refine readability and ensure all control/card/button corners are perfectly square, no radius. Show the ENTIRE mobile viewport at approximately 390x844 proportions but high resolution in the portrait raster. No phone bezel, no perspective, no desktop, no decoration. Add only a SMALL outside top caption \"{NUMBER} · {TITLE}\" and a tiny bottom caption \"Design proposal · Illustrative data\"; UI takes almost all of canvas. No excessive outer margins. Native smartphone-screen mockup, very crisp text, compact professional and elegant. Do not add features or reflow teams horizontally. Keep the fixed navigation below the seventh visible ticket so the card text is readable.",
+  "directions": [
+    {
+      "number": "01",
+      "title": "Refined Original",
+      "slug": "refined-original",
+      "direction": "Closest to the current application: keep its pale blue-gray page, navy header and white surfaces. Improve typographic alignment, reduce noisy border contrast, use 1px rules and slight teal highlights. Retain desktop original two-row filters and mobile two-line team tickets. Elegant precise polish with minimal structural change."
+    },
+    {
+      "number": "02",
+      "title": "Crisp White",
+      "slug": "crisp-white",
+      "direction": "Use a near-white #F8FAFC page with crisp white table and filters, navy brand and table bars unchanged. Restrained light gray alternating rows, subtle cool borders and emerald pick badges. Mobile has white tickets on near-white background and a darker top bar. The distinctive change is a bright elegant white workspace."
+    },
+    {
+      "number": "03",
+      "title": "Teal Precision",
+      "slug": "teal-precision",
+      "direction": "Keep the original pale blue-gray page. Use slender precise teal 1px top rules on filters and table, thin teal outline for selected date cell and teal action area. Navy table heading is solid flat. Right mobile prediction stub uses an extremely pale teal tint, bold emerald pick, tiny straight probability meter. Analytical polished compact layout."
+    },
+    {
+      "number": "04",
+      "title": "Editorial Navy",
+      "slug": "editorial-navy",
+      "direction": "Preserve structure. Give the page disciplined editorial typography: medium compact title, strongest dark navy team labels, quiet gray meta text and generous clear baselines within dense rows. Use white surfaces and pale blue-gray page. Slightly taller slim navy table heading with small uppercase labels. Mobile card meta strip in pale slate, bold dark navy stacked teams, outlined white prediction stub. No serif or magazine hero."
+    },
+    {
+      "number": "05",
+      "title": "Soft Slate",
+      "slug": "soft-slate",
+      "direction": "Use muted cool slate #E7EDF1 page and white surfaces, #CBD5DC fine borders, softened light gray card metadata strips. Deep navy brand bar. Reduce visual saturation in controls and rows, keeping teal primary actions and emerald pick semantic accents. Slightly smaller square badges and quieter alternating table rows. Mobile slate background separates white ticket cards."
+    },
+    {
+      "number": "06",
+      "title": "Compact Ledger",
+      "slug": "compact-ledger",
+      "direction": "The most compact professional variation: desktop rows slightly shorter around 36px, tabular numerical columns, dates on one line where possible, thin horizontal grid rules, small 1X2 and pick cells, solid navy header. Use original palette. On mobile tickets around 74px high, two aligned team lines and precise fixed-width prediction stub, 5px gaps. Keep text readable and no missing filters. Strong ledger-like alignment."
+    },
+    {
+      "number": "07",
+      "title": "Quiet Prediction",
+      "slug": "quiet-prediction",
+      "direction": "Preserve original layout and density. Prediction emphasis uses white square chips with a slim emerald LEFT rule and bold navy pick digits; slim emerald straight probability bar paired with readable percent. Reduce colored fills, pastel emerald Market labels remain. Mobile prediction stub white with a subtle emerald 2px top rule, clear 1X2 / pick / probability vertical hierarchy. Clean restrained color with prominent prediction values."
+    },
+    {
+      "number": "08",
+      "title": "Framed Workspace",
+      "slug": "framed-workspace",
+      "direction": "Keep existing sequence but visually unite desktop search, full filter controls, summaries, count and table within ONE square white workspace panel on pale blue-gray page. Fine horizontal dividers separate sections, no rounded nesting. Brand bar and page heading remain outside. Mobile has one unified white feed surface with thin dividers between compact ticket rows, maintaining two stacked team names and slim dashed prediction stub. Distinct by unified grouping, not new architecture."
+    },
+    {
+      "number": "09",
+      "title": "Delicate Teal Wash",
+      "slug": "delicate-teal-wash",
+      "direction": "An elegant very pale teal page #EDF6F4 and almost-white filter surface, white table rows, deep navy branding. Selected day cell uses a subtle pale teal fill with square thin teal outline. Fine desaturated teal separators. Mobile right stubs use barely visible mint tints; emerald picks and teal actions. Keep all treatments very light and avoid gradients."
+    },
+    {
+      "number": "10",
+      "title": "Evening Charcoal",
+      "slug": "evening-charcoal",
+      "direction": "Use existing dark theme as the only dark variation: page #141C22, surfaces #1E2932, brand/table bar #101820, primary text #F1F5F7, muted #A3B4BF, borders #35434C, teal accents #53D5C6. Flat charcoal, subtle alternating row fills, no glow. Predictions use muted emerald square badges and pale mint readable text. Mobile same compact ticket format, darker slim meta strips and dark prediction stub. Elegant calm dark palette, full desktop controls preserved."
+    }
+  ],
+  "referenceFolder": "D:/coding/apps/nextjs/goal-hint/output/home-page-designs"
+}
