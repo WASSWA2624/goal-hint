@@ -7,6 +7,7 @@ import { informationHref } from "@/domain/navigation";
 import { privacyNotice } from "@/domain/privacy-notice";
 import { createContentMessages, type ContentTextKey } from "@/i18n/content-messages";
 import { publicCacheRules } from "@/server/cache/public-cache";
+import { AnalyticsChoices } from "@/components/analytics/analytics-tracker";
 import { InformationNotice } from "./information-notice";
 import { ContentsNav } from "./information-styles";
 
@@ -17,7 +18,7 @@ export function PrivacyContent({ locale }: { locale: string }) {
   const values = { entries: messages.number(restorationRules.maximumEntries), minutes: messages.number(restorationRules.maximumAgeMilliseconds / 60_000),
     seconds: messages.number(publicCacheRules.mutableMs / 1000), hours: messages.number(publicCacheRules.immutableMs / 3_600_000) };
   const paragraphs = { access: ["body"], requests: ["body", "logs"], search: ["body", "counter", "refresh"], storage: [],
-    tracking: ["body", "scope"], images: ["body", "recipients"], football: ["body", "permissions"], retention: ["body", "expiry"],
+    tracking: ["body", "data", "minimization", "scope"], images: ["body", "recipients"], football: ["body", "permissions"], retention: ["body", "expiry"],
     choices: ["body", "contact", "correspondence", "correspondenceRetention", "correspondenceScope"], release: ["body"] } as const;
   return <Stack $gap="xl" data-privacy-status={privacyNotice.publication} data-privacy-release-ready={privacyNotice.releaseReady}>
     <InformationNotice locale={locale} kind="privacy" reviewedOn={privacyNotice.reviewedOn} />
@@ -34,6 +35,7 @@ export function PrivacyContent({ locale }: { locale: string }) {
         <BodyText>{messages.text("privacy.storage.memory")}</BodyText>
       </>}
       {id === "release" && <ul>{privacyNotice.blockers.map((blocker) => <li key={blocker}><BodyText>{messages.text(`privacy.blocker.${blocker}`)}</BodyText></li>)}</ul>}
+      {id === "tracking" && <AnalyticsChoices />}
       {id === "choices" && <TextLink href={informationHref("contact", locale)} prefetch={false}>{messages.text("contact.link")}</TextLink>}
     </Stack>)}
     <TextLink href={informationHref("help", locale)} prefetch={false}>{messages.text("privacy.help")}</TextLink>

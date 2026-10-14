@@ -1404,3 +1404,113 @@ model FixtureOddsPrice {
   @@id([fixtureId, marketKey, selection])
   @@index([snapshotId, fixtureId])
 }
+
+// Consent-gated first-party analytics (docs/analytics.md). Visitor keys are HMACs of a random browser value;
+// no IP address, raw user agent, query string or form input is stored. Rows expire by the retention setting.
+model AnalyticsVisitor {
+  id           String   @id @db.Char(64)
+  firstSeenAt  DateTime @db.DateTime(3)
+  lastSeenAt   DateTime @db.DateTime(3)
+  sessionCount Int      @db.UnsignedInt
+
+  @@index([lastSeenAt])
+}
+
+// One visit: attributes come from its first page view; counters advance with later events.
+model AnalyticsSession {
+  id             String   @id @db.Char(36)
+  visitorId      String   @db.Char(64)
+  startedAt      DateTime @db.DateTime(3)
+  lastSeenAt     DateTime @db.DateTime(3)
+  isNewVisitor   Boolean
+  visitNumber    Int      @db.UnsignedInt
+  entryPath      String   @db.VarChar(512)
+  entryRoute     String   @db.VarChar(128)
+  exitPath       String   @db.VarChar(512)
+  exitRoute      String   @db.VarChar(128)
+  pageviews      Int      @db.UnsignedInt
+  interactions   Int      @db.UnsignedInt
+  engagedMs      Int      @db.UnsignedInt
+  converted      Boolean
+  channel        String   @db.VarChar(24)
+  referrerHost   String?  @db.VarChar(255)
+  utmSource      String?  @db.VarChar(100)
+  utmMedium      String?  @db.VarChar(100)
+  utmCampaign    String?  @db.VarChar(100)
+  utmTerm        String?  @db.VarChar(100)
+  utmContent     String?  @db.VarChar(100)
+  deviceType     String   @db.VarChar(16)
+  browser        String   @db.VarChar(32)
+  browserVersion String?  @db.VarChar(16)
+  os             String   @db.VarChar(32)
+  osVersion      String?  @db.VarChar(16)
+  country        String?  @db.Char(2)
+  city           String?  @db.VarChar(96)
+  geoSource      String   @db.VarChar(16)
+  language       String?  @db.VarChar(16)
+  screen         String?  @db.VarChar(16)
+
+  @@index([startedAt])
+  @@index([lastSeenAt])
+  @@index([visitorId, startedAt])
+}
+
+model AnalyticsPageview {
+  id           String   @id @db.Char(36)
+  sessionId    String   @db.Char(36)
+  visitorId    String   @db.Char(64)
+  occurredAt   DateTime @db.DateTime(3)
+  sequence     Int      @db.UnsignedInt
+  path         String   @db.VarChar(512)
+  route        String   @db.VarChar(128)
+  title        String?  @db.VarChar(200)
+  previousPath String?  @db.VarChar(512)
+  engagedMs    Int      @db.UnsignedInt
+
+  @@index([occurredAt])
+  @@index([sessionId, sequence])
+}
+
+// Clicks, outbound links, downloads, searches, custom events and deduplicated goal conversions.
+model AnalyticsEvent {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  sessionId  String   @db.Char(36)
+  visitorId  String   @db.Char(64)
+  pageviewId String?  @db.Char(36)
+  occurredAt DateTime @db.DateTime(3)
+  type       String   @db.VarChar(16)
+  name       String   @db.VarChar(160)
+  path       String   @db.VarChar(512)
+  target     String?  @db.VarChar(512)
+
+  @@index([occurredAt, type])
+  @@index([sessionId, type])
+}
+
+// Dashboard sign-ins: only a SHA-256 of each random session token is stored.
+model AnalyticsAdminSession {
+  tokenHash  String   @id @db.Char(64)
+  username   String   @db.VarChar(64)
+  createdAt  DateTime @db.DateTime(3)
+  lastSeenAt DateTime @db.DateTime(3)
+  expiresAt  DateTime @db.DateTime(3)
+
+  @@index([expiresAt])
+}
+
+// Failed sign-in counters keyed by HMACs of the client address or username; never the raw values.
+model AnalyticsLoginThrottle {
+  key             String    @id @db.Char(64)
+  failures        Int       @db.UnsignedInt
+  windowStartedAt DateTime  @db.DateTime(3)
+  lockedUntil     DateTime? @db.DateTime(3)
+
+  @@index([windowStartedAt])
+}
+
+// Owner-adjustable analytics settings, such as the retention period and the last purge time.
+model AnalyticsSetting {
+  key       String   @id @db.VarChar(64)
+  value     String   @db.VarChar(256)
+  updatedAt DateTime @db.DateTime(3)
+}

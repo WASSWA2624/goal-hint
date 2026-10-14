@@ -85,6 +85,9 @@
     "test:contact:html": "python scripts/verify-contact-rendering.py",
     "test:seo": "node --conditions=react-server --test tests/discovery.test.mjs tests/metadata-recovery.test.mjs tests/discovery.integration.mjs",
     "test:seo:rendering": "python scripts/verify-seo-rendering.py",
+    "analytics:hash-password": "node --conditions=react-server src/workers/analytics.ts hash-password",
+    "analytics:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/analytics.ts purge",
+    "test:analytics": "node --conditions=react-server --test tests/analytics.test.mjs tests/analytics.integration.mjs",
     "test:scripts": "python -m unittest discover -s tests -p \"*_test.py\"",
     "test:scripts:integration": "python tests/scripts_integration.py"
   },

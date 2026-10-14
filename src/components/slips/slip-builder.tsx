@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { TextInput, type TextInputProps } from "@/components/ui/controls";
 import { ChoicePicker } from "@/components/ui/choice-picker";
@@ -78,7 +79,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       for (const field of slipInputFields) {
         if (parameters.get(field) === "") next.set(field, "");
       }
-      next.set("build", "1"); setError(null);
+      next.set("build", "1"); setError(null); trackEvent("slip_build");
       const href = `${action}?${next}`;
       startTransition(() => {
         if (`${window.location.pathname}${window.location.search}` === href) router.refresh();

@@ -9,6 +9,9 @@ history, live refresh, stored-data APIs, and private football processing workers
 Visitors read published data; public requests never trigger provider imports.
 Public search indexing remains disabled until the recorded launch requirements
 are satisfied; see [SEO and discovery](docs/seo-discovery.md).
+Consent-gated first-party visitor analytics and the private `/analytics` dashboard
+are described in [analytics](docs/analytics.md) (development sign-in: `admin`/`admin`;
+production requires its own hashed credentials).
 
 - [App specification](app-write-up.md): scope, user experience, prediction rules, architecture and launch requirements.
 - [Development prompts](dev-plan/000-index.md): run numbered feature prompts in order to implement the application.

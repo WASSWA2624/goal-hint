@@ -135,6 +135,8 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES", "GOAL_HINT_DEPLOYMENT_ENVIRONMENT",
     "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
     "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
+    "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_ADMIN_USERNAME",
+    "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
   ]);
   documentedKeys.delete("NODE_ENV");
   assert.deepEqual(Object.keys(env).sort(), [...documentedKeys].sort());
@@ -149,7 +151,9 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, budgets, ...unresolvedChoices } = policy.choices;
+  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, budgets, analytics, ...unresolvedChoices } = policy.choices;
+  // Consent-gated analytics is on by default but has no credentials, secret or retention override until configured.
+  assert.deepEqual(analytics, { enabled: true, adminUsername: null, retentionDays: null, geoSource: "timezone" });
   const { aiBillingMode, ...unresolvedBudgets } = budgets;
   assert.equal(aiBillingMode, "capped");
   assertUnresolved({ ...unresolvedChoices, budgets: unresolvedBudgets });

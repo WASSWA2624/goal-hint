@@ -8,17 +8,37 @@ import { getDiscoveryPolicy } from "./policy.ts";
 const attributionKeys = new Set(["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
   "utm_source_platform", "utm_creative_format", "utm_marketing_tactic", "gclid", "dclid", "gbraid", "wbraid", "fbclid", "msclkid"]);
 
+const clickNetworks: Readonly<Record<string, "google" | "microsoft" | "meta">> = Object.freeze({
+  gclid: "google", dclid: "google", gbraid: "google", wbraid: "google", msclkid: "microsoft", fbclid: "meta" });
+
+/**
+ * Campaign tags ride to consenting analytics in the redirect's fragment (`#gh_attr=…`), which browsers never
+ * send to a server. Click identifiers are reduced to their ad network; the identifier itself is dropped.
+ */
+function attributionFragment(parameters: URLSearchParams): string {
+  const kept = new URLSearchParams();
+  for (const [key, value] of parameters) {
+    const name = key.toLowerCase();
+    if (name.startsWith("utm_") && ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"].includes(name)
+      && !kept.has(name) && value.trim()) kept.set(name, value.trim().slice(0, 100));
+    else if (clickNetworks[name] && !kept.has("click")) kept.set("click", clickNetworks[name]);
+  }
+  return kept.size > 0 ? `gh_attr=${encodeURIComponent(kept.toString())}` : "";
+}
+
 export function createDiscoveryProxy(policy = getDiscoveryPolicy) {
   return (request: NextRequest) => {
     const pathname = getLocaleRedirect(request.nextUrl.pathname);
     const destination = request.nextUrl.clone();
     if (pathname) destination.pathname = pathname;
     let attribution = false;
+    const fragment = attributionFragment(destination.searchParams);
     for (const key of [...destination.searchParams.keys()]) {
       if (!attributionKeys.has(key.toLowerCase())) continue;
       destination.searchParams.delete(key);
       attribution = true;
     }
+    if (fragment) destination.hash = fragment;
     const response = pathname || attribution ? NextResponse.redirect(destination, pathname ? 307 : 308) : NextResponse.next();
     if (!policy().index) response.headers.set("X-Robots-Tag", "noindex, follow");
     return response;

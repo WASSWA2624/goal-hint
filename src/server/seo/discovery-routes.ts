@@ -32,7 +32,8 @@ export function createDiscoveryRoutes({ policy = getDiscoveryPolicy, reader = re
   }
   return {
     async robots(): Promise<MetadataRoute.Robots> {
-      const rules = { userAgent: "*", allow: "/", disallow: "/api/" };
+      // The private analytics dashboard is never crawled; it also answers noindex and requires sign-in.
+      const rules = { userAgent: "*", allow: "/", disallow: ["/api/", "/analytics"] };
       if (!policy().index) return { rules };
       // One index URL covers every shard, so Search Console needs a single submission.
       return { rules, sitemap: canonicalUrl("/sitemap-index.xml") };

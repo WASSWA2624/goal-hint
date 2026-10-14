@@ -177,6 +177,13 @@ const environmentSchema = z.object({
   GOAL_HINT_PIPELINE_INTEGRITY_REF: text.describe("Record passing quota, publication, cutoff, settlement and recovery prerequisites (020–027/047)."),
   GOAL_HINT_QUALITY_QUALIFICATION_REF: text.describe("Record measured prospective sample, baseline, calibration and coverage qualification (014/047)."),
   GOAL_HINT_RELEASE_APPROVAL_REF: text.describe("Record production release approval, including legal, operational and recovery readiness (048/049)."),
+  GOAL_HINT_ANALYTICS_ENABLED: enabledByDefault.describe("Use true or false (default true); consent-gated first-party analytics also needs the database capability."),
+  GOAL_HINT_ANALYTICS_SECRET: optional(z.string().min(32).regex(/^\S+$/)).describe("Supply at least 32 random characters without whitespace; required in production to key visitor and sign-in hashes."),
+  GOAL_HINT_ANALYTICS_ADMIN_USERNAME: optional(z.string().trim().min(3).max(64).regex(/^[A-Za-z0-9._@-]+$/)).describe("Use 3-64 letters, digits or . _ @ -; required in production for the analytics dashboard."),
+  GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH: optional(z.string().regex(/^scrypt:\d+:\d+:\d+:[A-Za-z0-9_-]{16,}:[A-Za-z0-9_-]{32,}$/)).describe("Supply the scrypt hash printed by `npm run analytics:hash-password`; never a plain password."),
+  GOAL_HINT_ANALYTICS_RETENTION_DAYS: optional(integer.pipe(z.int().min(1).max(1_095))).describe("Use whole days from 1 to 1095; the dashboard can override it. Defaults to 395 (13 months)."),
+  GOAL_HINT_ANALYTICS_GEO_SOURCE: optional(z.enum(["timezone", "cloudflare", "vercel"])).transform((value) => value ?? "timezone")
+    .describe("Use timezone (default), cloudflare or vercel; edge headers are trusted only when the site is served through that edge."),
   GOAL_HINT_ADS_ENABLED: disabledFeature.describe("Advertising is disabled at launch; approval and consent requirements remain unresolved."),
   GOAL_HINT_DARK_MODE_ENABLED: disabledFeature.describe("Dark mode is disabled at launch."),
   GOAL_HINT_EXACT_SCORES_ENABLED: disabledFeature.describe("Exact scores are excluded until explicit approval and score-distribution validation."),
@@ -216,6 +223,8 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       footballKey: secret(settings.API_FOOTBALL_KEY),
       aiKey: secret(settings.AI_API_KEY),
       researchKey: secret(settings.RESEARCH_API_KEY),
+      analyticsSecret: secret(settings.GOAL_HINT_ANALYTICS_SECRET),
+      analyticsPasswordHash: secret(settings.GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH),
     },
     choices: {
       database: {
@@ -260,6 +269,12 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       pipelineIntegrityRef: settings.GOAL_HINT_PIPELINE_INTEGRITY_REF,
       qualityQualificationRef: settings.GOAL_HINT_QUALITY_QUALIFICATION_REF,
       releaseApprovalRef: settings.GOAL_HINT_RELEASE_APPROVAL_REF,
+      analytics: {
+        enabled: settings.GOAL_HINT_ANALYTICS_ENABLED,
+        adminUsername: settings.GOAL_HINT_ANALYTICS_ADMIN_USERNAME,
+        retentionDays: settings.GOAL_HINT_ANALYTICS_RETENTION_DAYS,
+        geoSource: settings.GOAL_HINT_ANALYTICS_GEO_SOURCE,
+      },
     },
   });
 }

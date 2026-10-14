@@ -22,7 +22,7 @@ def main() -> None:
                 "Unnecessary identity documents will be deleted promptly",
                 "documented dispute or legal obligation, with each exception reviewed every ninety days",
                 "correspondence under the operator's control, including sent replies and saved attachments",
-                "visitor analytics, advertising and affiliate promotions disabled at launch",
+                "first-party analytics only if you allow it in the consent banner", "never stores your IP address",
                 "your browser requests them directly from the remote image host",
                 "Current responses can be reused for up to 5 seconds.*up to 6 hours",
                 "At most 20 navigation records.*older than 30 minutes"],
