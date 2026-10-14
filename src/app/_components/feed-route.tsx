@@ -3,7 +3,10 @@ import "server-only";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { getReportingDate, type UtcInstant } from "@/domain/calendar";
-import { feedDiscovery, serializeStructuredData, websiteStructuredData } from "@/domain/discovery";
+import { breadcrumbStructuredData, feedDiscovery, homeStructuredData, serializeStructuredData } from "@/domain/discovery";
+import { homeHref } from "@/domain/navigation";
+import { publicPolicy } from "@/domain/public-policy";
+import { createMessages } from "@/i18n/messages";
 import { getFeedToday, serializeFeedQuery } from "@/domain/feed-query";
 import { parseMatchFeedQuery } from "@/server/matches/feed-service";
 import { loadMatchFeedPage } from "@/server/matches/feed-page";
@@ -40,9 +43,13 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
     },
     async Page(props: Props) {
       const { query, today, result } = await resolve(props), discovery = feedDiscovery(query, today);
+      const messages = createMessages(query.locale);
+      // Identity on the plain home page; a breadcrumb on each unfiltered dated collection.
+      const structured = !discovery.eligible ? null : !dated && discovery.home ? homeStructuredData()
+        : dated ? breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
+          { name: messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) }]) : null;
       return <>
-        {!dated && discovery.home && discovery.eligible && <script type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: serializeStructuredData(websiteStructuredData()) }} />}
+        {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
         <MatchFeedPage query={query} today={today} result={result} />
       </>;
     },

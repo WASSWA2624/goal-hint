@@ -1,6 +1,6 @@
 import "server-only";
 import type { MetadataRoute } from "next";
-import { canonicalUrl, discoveryRules, sitemapPage } from "../../domain/discovery.ts";
+import { canonicalUrl, discoveryRules, sitemapIndexXml, sitemapPage } from "../../domain/discovery.ts";
 import { informationPages } from "../../domain/navigation.ts";
 import { getDiscoveryPolicy } from "./policy.ts";
 import { informationPublicationReady } from "./metadata.ts";
@@ -24,14 +24,22 @@ export function createDiscoveryRoutes({ policy = getDiscoveryPolicy, reader = re
     if (page > 0 && rows.length === 0) return missing();
     return rows.map(row => ({ url: canonicalUrl(row.path), ...(row.lastModified ? { lastModified: row.lastModified } : {}) }));
   }
+  /** Every populated map: static pages first, then each bounded match and archive shard. */
+  async function maps() {
+    const inventory = await reader().inventory();
+    return [canonicalUrl("/sitemap.xml"), ...(["matches", "dates"] as const).flatMap(kind => inventory[kind] ? pages(inventory[kind]).map(({ id }) =>
+      canonicalUrl(`/${kind === "matches" ? "matches" : "archive"}/sitemap/${id}.xml`)) : [])];
+  }
   return {
     async robots(): Promise<MetadataRoute.Robots> {
       const rules = { userAgent: "*", allow: "/", disallow: "/api/" };
       if (!policy().index) return { rules };
-      const inventory = await reader().inventory();
-      return { rules, sitemap: [canonicalUrl("/sitemap.xml"),
-        ...(["matches", "dates"] as const).flatMap(kind => inventory[kind] ? pages(inventory[kind]).map(({ id }) =>
-          canonicalUrl(`/${kind === "matches" ? "matches" : "archive"}/sitemap/${id}.xml`)) : [])] };
+      // One index URL covers every shard, so Search Console needs a single submission.
+      return { rules, sitemap: canonicalUrl("/sitemap-index.xml") };
+    },
+    /** XML body of `/sitemap-index.xml`; empty before release so no prelaunch URL is advertised. */
+    async sitemapIndex(): Promise<string> {
+      return sitemapIndexXml(policy().index ? await maps() : []);
     },
     async sitemap(): Promise<MetadataRoute.Sitemap> {
       if (!policy().index) return [];

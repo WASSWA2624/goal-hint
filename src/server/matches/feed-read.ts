@@ -22,7 +22,7 @@ export function publicFixtureCohortScope(range: ReportingDateRange, competitionI
   return Prisma.sql`${publicFixtureScope(competitionIds)} AND f.kickoff>=${new Date(range.window.startInclusive)} AND f.kickoff<${new Date(range.window.endExclusive)}`;
 }
 /** Displayed revision for the applicable cycle: current while open, locked when closed, latest retained when void. */
-const displayedSet = Prisma.sql`CASE
+export const displayedSet = Prisma.sql`CASE
       WHEN c.state='open' THEN c.currentSetId WHEN c.state='closed' THEN c.lockedSetId
       WHEN c.state='void' THEN COALESCE(c.lockedSetId,c.currentSetId,
         (SELECT p.id FROM PredictionSet p WHERE p.cycleId=c.id ORDER BY p.cycleRevision DESC LIMIT 1)) END`;

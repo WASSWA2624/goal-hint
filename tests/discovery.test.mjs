@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalUrl, feedDiscovery, resolveDiscoveryPolicy, serializeStructuredData, sitemapPage, websiteStructuredData } from '../src/domain/discovery.ts';
+import { breadcrumbStructuredData, canonicalUrl, feedDiscovery, homeStructuredData, matchPageIndexable, resolveDiscoveryPolicy, serializeStructuredData, sitemapIndexXml, sitemapPage, websiteStructuredData } from '../src/domain/discovery.ts';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
 import { feedMetadata, createInformationMetadata } from '../src/server/seo/metadata.ts';
-import { matchDetailMetadata } from '../src/server/matches/detail-page.ts';
+import { matchDetailMetadata, matchStructuredData } from '../src/server/matches/detail-page.ts';
+import { feedHeading } from '../src/domain/feed-presentation.ts';
+import { createMessages } from '../src/i18n/messages.ts';
+import { cardFixture } from './helpers/match-card-fixtures.mjs';
 import { createDiscoveryRoutes } from '../src/server/seo/discovery-routes.ts';
 import { getDiscoveryPolicy } from '../src/server/seo/policy.ts';
 import { createDiscoveryProxy } from '../src/server/seo/proxy.ts';
@@ -77,10 +80,10 @@ test('page metadata has independent social fields, real canonical pagination and
   for (const result of [{ data: null, error: 'unavailable' }, { data: { records: [], state: 'page-out-of-range' }, error: null }]) {
     assert.equal(feedMetadata(query({ page: '2' }), today, result, approved).robots.index, false);
   }
-  const fixture = { data: { fixture: { homeTeam: { name: 'Home' }, awayTeam: { name: 'Away' } },
+  const fixture = { data: { fixture: { homeTeam: { name: 'Home' }, awayTeam: { name: 'Away' }, forecast: null },
     route: { path: '/en/matches/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/home-vs-away' }, snapshot: null }, error: null };
   const known = matchDetailMetadata(fixture, 'en', false, approved);
-  assert.equal(known.robots.index, true, 'Known unavailable forecast pages remain valid fixture pages.');
+  assert.equal(known.robots.index, false, 'A fixture without a published forecast is a thin page: valid, but noindex.');
   assert.match(known.title, /Goal Hint$/);
   const history = matchDetailMetadata(fixture, 'en', true, approved);
   assert.equal(history.robots.index, false); assert.equal(history.alternates.canonical, known.alternates.canonical);
@@ -100,6 +103,7 @@ test('disabled discovery never reads a database and robots allows noindex varian
   await assert.rejects(routes.matches({ id: Promise.resolve('1') }), RangeError);
   assert.deepEqual(await routes.matchIds(), [{ id: 0 }]);
   assert.deepEqual(await routes.robots(), { rules: { userAgent: '*', allow: '/', disallow: '/api/' } });
+  assert.doesNotMatch(await routes.sitemapIndex(), /<loc>/, 'The prelaunch index advertises no URL.');
 });
 
 test('sitemap shards preserve stored lastmod, advertise each bounded shard and propagate reader failures', async () => {
@@ -112,8 +116,12 @@ test('sitemap shards preserve stored lastmod, advertise each bounded shard and p
   assert.deepEqual(await routes.matchIds(), [{ id: 0 }, { id: 1 }, { id: 2 }]);
   assert.equal((await routes.matches({ id: Promise.resolve('2') }))[0].lastModified, stamp);
   assert.deepEqual(await routes.dates({ id: Promise.resolve('0') }), [{ url: 'https://goalhint.com/en/predictions/2026-10-09' }]);
-  const robots = await routes.robots(); assert.equal(robots.sitemap.length, 5);
-  assert.ok(robots.sitemap.includes('https://goalhint.com/matches/sitemap/2.xml'));
+  const robots = await routes.robots(); assert.equal(robots.sitemap, 'https://goalhint.com/sitemap-index.xml');
+  const index = await routes.sitemapIndex();
+  assert.deepEqual([...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]), ['https://goalhint.com/sitemap.xml',
+    'https://goalhint.com/matches/sitemap/0.xml', 'https://goalhint.com/matches/sitemap/1.xml', 'https://goalhint.com/matches/sitemap/2.xml',
+    'https://goalhint.com/archive/sitemap/0.xml']);
+  assert.match(index, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<sitemapindex xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
   const urls = (await routes.sitemap()).map(row => row.url);
   assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/help', 'https://goalhint.com/en/contact']);
   for (const id of ['-1', '01', '1.xml', '9999999999', 'x']) {
@@ -124,7 +132,8 @@ test('sitemap shards preserve stored lastmod, advertise each bounded shard and p
   await assert.rejects(routes.matches({ id: Promise.resolve('999999999') }), RangeError);
   assert.deepEqual(reads, [2], 'Invalid shard IDs cannot cause a large-offset database read.');
   const failed = createDiscoveryRoutes({ policy: () => approved, reader: () => ({ inventory: async () => { throw new Error('reader failed'); } }) });
-  await assert.rejects(failed.robots(), /reader failed/);
+  await assert.rejects(failed.sitemapIndex(), /reader failed/);
+  assert.equal((await failed.robots()).sitemap, 'https://goalhint.com/sitemap-index.xml', 'robots.txt no longer depends on a database read.');
 });
 
 test('supported WebSite structured data is minimal and safe inside an HTML script element', () => {
@@ -133,4 +142,69 @@ test('supported WebSite structured data is minimal and safe inside an HTML scrip
   const hostile = { ...value, name: '</script><script>unsafe()</script>' };
   const serialized = serializeStructuredData(hostile);
   assert.doesNotMatch(serialized, /</); assert.deepEqual(JSON.parse(serialized), hostile);
+});
+
+test('the home page stays indexable on an empty or uncovered day; dated archives and failed reads do not', () => {
+  for (const state of ['no-fixtures', 'data-unavailable']) {
+    const empty = { data: { records: [], state }, error: null };
+    assert.equal(feedMetadata(query({}), today, empty, approved).robots.index, true, state);
+    assert.equal(feedMetadata(query({ date: '2026-10-08' }), today, empty, approved).robots.index, false, state);
+  }
+  assert.equal(feedMetadata(query({}), today, { data: null, error: 'unavailable' }, approved).robots.index, false);
+  assert.equal(feedMetadata(query({}), today, { data: { records: [], state: 'no-fixtures' }, error: null },
+    { deployment: 'staging', index: false }).robots.index, false, 'The release gate still applies to the home page.');
+});
+
+test('match pages with a published forecast are indexable and lead their snippet with the stored pick', () => {
+  const forecast = cardFixture();
+  assert.equal(matchPageIndexable(forecast), true);
+  assert.equal(matchPageIndexable({ forecast: null }), false);
+  assert.equal(matchPageIndexable({ forecast: { markets: [] } }), false);
+  const data = { fixture: forecast, route: { path: '/en/matches/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/example-home-fc-vs-example-away-fc' } };
+  const metadata = matchDetailMetadata({ data, error: null }, 'en', false, approved);
+  assert.equal(metadata.robots.index, true);
+  assert.match(metadata.description, /^Example Home FC v Example Away FC, .+ \(EAT\)\. Match result \(1X2\) estimate: Example Home FC win, 54%\. /);
+  assert.match(metadata.description, /Not a guarantee\.$/);
+  assert.equal(metadata.openGraph.description, metadata.description);
+  assert.equal(matchDetailMetadata({ data, error: null }, 'en', true, approved).robots.index, false, 'Revision variants stay noindex.');
+  assert.equal(matchDetailMetadata({ data, error: null }, 'en', false, { deployment: 'staging', index: false }).robots.index, false);
+  const totals = cardFixture();
+  totals.forecast.markets = totals.forecast.markets.filter(item => item.market.family === 'total-goals');
+  assert.match(matchDetailMetadata({ data: { ...data, fixture: totals }, error: null }, 'en', false, approved).description,
+    /Over\/Under 2\.5 goals estimate: Under 2\.5, 70%/);
+  const undated = cardFixture({ kickoffAt: null });
+  assert.equal(matchDetailMetadata({ data: { ...data, fixture: undated }, error: null }, 'en', false, approved).description,
+    'Stored predictions, sources and regulation-time results for Example Home FC v Example Away FC.');
+});
+
+test('home identity and breadcrumb structured data use canonical URLs and visible names only', () => {
+  const home = homeStructuredData();
+  assert.equal(home['@context'], 'https://schema.org');
+  const [organization, website] = home['@graph'];
+  assert.deepEqual(organization, { '@type': 'Organization', '@id': 'https://goalhint.com/en#organization', name: 'Goal Hint',
+    url: 'https://goalhint.com/en', logo: 'https://goalhint.com/brand/goal-hint-app-icon-512.png' });
+  assert.equal(website['@type'], 'WebSite'); assert.equal(website.url, 'https://goalhint.com/en');
+  assert.deepEqual(website.publisher, { '@id': organization['@id'] });
+  assert.throws(() => breadcrumbStructuredData([{ name: 'Only' }]), RangeError);
+  assert.throws(() => breadcrumbStructuredData([{ name: 'Home', path: 'https://evil.example/' }, { name: 'Here' }]), RangeError);
+  const fixture = cardFixture();
+  const crumbs = matchStructuredData({ fixture }, 'en');
+  assert.equal(crumbs['@type'], 'BreadcrumbList');
+  assert.deepEqual(crumbs.itemListElement.map(item => item.position), [1, 2, 3]);
+  assert.deepEqual(crumbs.itemListElement[0], { '@type': 'ListItem', position: 1, name: 'Goal Hint', item: 'https://goalhint.com/en' });
+  assert.match(crumbs.itemListElement[1].item, /^https:\/\/goalhint\.com\/en\/predictions\/\d{4}-\d{2}-\d{2}$/);
+  assert.match(crumbs.itemListElement[1].name, /^Predictions for /);
+  assert.deepEqual(crumbs.itemListElement[2], { '@type': 'ListItem', position: 3, name: 'Example Home FC v Example Away FC' });
+  assert.equal(matchStructuredData({ fixture: { ...fixture, kickoffAt: null } }, 'en').itemListElement.length, 2);
+  assert.doesNotMatch(serializeStructuredData(matchStructuredData({ fixture: { ...fixture,
+    homeTeam: { ...fixture.homeTeam, name: '</script><script>x()</script>' } } }, 'en')), /</);
+});
+
+test('the sitemap index escapes locations and the dated feed heading names its day', () => {
+  assert.match(sitemapIndexXml(['https://goalhint.com/a?b=1&c=<2>']), /<loc>https:\/\/goalhint\.com\/a\?b=1&amp;c=&lt;2&gt;<\/loc>/);
+  assert.equal(sitemapIndexXml([]), '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</sitemapindex>\n');
+  const messages = createMessages('en');
+  assert.equal(feedHeading(query({}), today, messages), "Today's Matches");
+  assert.equal(feedHeading(query({ date: '2026-10-08' }), today, messages), 'Football Predictions · Thu, Oct 8, 2026');
+  assert.equal(feedHeading(query({ when: 'next-7-days' }), today, messages), 'Football Predictions');
 });

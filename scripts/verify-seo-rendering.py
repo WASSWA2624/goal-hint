@@ -106,8 +106,9 @@ def verify(origin, cases, *, staging):
         checks += 1
     match(r"<title>Goal Hint \| Daily Football Predictions</title>", home)
     structured = json.loads(match(r'<script type="application/ld\+json">([^<]+)</script>', home).group(1))
-    assert structured["@type"] == "WebSite"
-    assert structured["url"] == fixed + "/en"
+    graph = {node["@type"]: node for node in structured["@graph"]}
+    assert graph["WebSite"]["url"] == fixed + "/en" and graph["Organization"]["url"] == fixed + "/en"
+    assert graph["WebSite"]["publisher"] == {"@id": graph["Organization"]["@id"]}
     checks += 1
     archive = "/en/predictions/2026-10-09"
     first = page(archive, archive, not staging)
@@ -152,11 +153,14 @@ def verify(origin, cases, *, staging):
     dates = anonymous("/archive/sitemap/0.xml").text
     if staging:
         no_match("Sitemap:", robots)
+        assert locations(anonymous("/sitemap-index.xml").text) == []
         assert locations(sitemap) == []
         assert locations(matches) == []
         assert locations(dates) == []
     else:
-        match(r"Sitemap: https://goalhint\.com/matches/sitemap/0\.xml", robots)
+        match(r"Sitemap: https://goalhint\.com/sitemap-index\.xml", robots)
+        index = locations(anonymous("/sitemap-index.xml").text)
+        assert index == [fixed + "/sitemap.xml", fixed + "/matches/sitemap/0.xml", fixed + "/archive/sitemap/0.xml"]
         assert locations(sitemap) == [fixed + "/en", fixed + "/en/help", fixed + "/en/contact"]
         assert locations(matches) == [fixed + row["path"] for row in cases["matches"]]
         assert locations(dates) == [fixed + archive]

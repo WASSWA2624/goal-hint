@@ -33,9 +33,38 @@ export function sitemapPage(id: string): number {
   return Number(id);
 }
 
+/** A sitemap index of absolute canonical locations, so Search Console needs one submission. */
+export function sitemapIndexXml(locations: readonly string[]): string {
+  const escape = (value: string) => value.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
+    locations.map((location) => `<sitemap>\n<loc>${escape(location)}</loc>\n</sitemap>\n`).join("")}</sitemapindex>\n`;
+}
+
+/** A match page earns indexing only with a published forecast; empty fixture shells stay noindex and out of sitemaps. */
+export function matchPageIndexable(fixture: { forecast: { markets: readonly unknown[] } | null }): boolean {
+  return (fixture.forecast?.markets.length ?? 0) > 0;
+}
+
 export function websiteStructuredData() {
   return { "@context": "https://schema.org", "@type": "WebSite", name: publicPolicy.name,
     url: canonicalUrl("/en"), inLanguage: "en" };
+}
+
+/** Home-page identity: the WebSite plus the Organization that publishes it, with a crawlable square logo. */
+export function homeStructuredData() {
+  const { "@context": context, ...website } = websiteStructuredData(), organization = `${canonicalUrl("/en")}#organization`;
+  return { "@context": context, "@graph": [
+    { "@type": "Organization", "@id": organization, name: publicPolicy.name, url: canonicalUrl("/en"),
+      logo: canonicalUrl("/brand/goal-hint-app-icon-512.png") },
+    { ...website, "@id": `${canonicalUrl("/en")}#website`, publisher: { "@id": organization } },
+  ] };
+}
+
+/** Breadcrumbs follow the visible path: home, the EAT day's collection, then the current page (no URL). */
+export function breadcrumbStructuredData(items: readonly Readonly<{ name: string; path?: string }>[]) {
+  if (items.length < 2) throw new RangeError("Breadcrumbs need at least two levels.");
+  return { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: items.map((item, index) => ({
+    "@type": "ListItem", position: index + 1, name: item.name, ...(item.path ? { item: canonicalUrl(item.path) } : {}) })) };
 }
 export function serializeStructuredData(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");

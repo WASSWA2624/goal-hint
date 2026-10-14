@@ -6,7 +6,8 @@ import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import type { ReportingDate } from "@/domain/calendar";
-import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
+import type { FeedQuery, FeedSort } from "@/domain/feed-query";
+import { feedHeading } from "@/domain/feed-presentation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets } from "./feed-dates";
@@ -53,14 +54,6 @@ const DesktopActions = styled.div`
   ${desktop} { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-inline-start: auto; }
 `;
 
-export function feedHeading(query: FeedQuery, today: ReportingDate, messages: ReturnType<typeof createMessages>) {
-  const range = resolveFeedDates(query, today);
-  if (query.status === "live") return messages.text("feed.heading.live");
-  if (query.status === "finished") return messages.text("feed.heading.results");
-  if (range.dayCount === 1 && range.startDate === today) return messages.text("feed.heading.today");
-  if (query.dates.kind === "tomorrow") return messages.text("feed.heading.tomorrow");
-  return messages.text("feed.heading.other");
-}
 
 /** The brand bar carries page-level controls; search and filters belong in the body. */
 export function FeedHeader({ query, today, onApply }: {

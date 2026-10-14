@@ -3,6 +3,9 @@ import type { MatchFeedResponse } from "./match-feed.ts";
 import type { MarketFamily } from "./markets.ts";
 import { bestPublishedFamily } from "./market-ranking.ts";
 import { countryFlagAsset } from "./country-flag.ts";
+import type { ReportingDate } from "./calendar.ts";
+import { resolveFeedDates, type FeedQuery } from "./feed-query.ts";
+import type { createMessages } from "../i18n/messages.ts";
 
 /**
  * The shown pick mirrors feed SQL: highest unrounded probability, then exact fresh public odds,
@@ -70,4 +73,16 @@ export function countryOptions(leagues: MatchFeedResponse["leagues"]): FilterOpt
   for (const league of leagues) if (league.country) totals.set(league.country, (totals.get(league.country) ?? 0) + league.fixtures);
   return [...totals].map(([country, fixtures]) => ({ value: country, label: country, detail: null, logoUrl: countryFlagAsset(country), fixtures }))
     .sort((a, b) => b.fixtures - a.fixtures || a.label.localeCompare(b.label));
+}
+
+/** The feed's one H1: live/results views, today/tomorrow, a named single day, else the generic collection. */
+export function feedHeading(query: FeedQuery, today: ReportingDate, messages: ReturnType<typeof createMessages>) {
+  const range = resolveFeedDates(query, today);
+  if (query.status === "live") return messages.text("feed.heading.live");
+  if (query.status === "finished") return messages.text("feed.heading.results");
+  if (range.dayCount === 1 && range.startDate === today) return messages.text("feed.heading.today");
+  if (query.dates.kind === "tomorrow") return messages.text("feed.heading.tomorrow");
+  // A single archived or upcoming day names its date, matching the page title's topic.
+  if (range.dayCount === 1) return messages.text("feed.heading.dated", { date: messages.reportingDateMedium(range.startDate) });
+  return messages.text("feed.heading.other");
 }

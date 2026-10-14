@@ -9,7 +9,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { getDatabase } from "../database/client.ts";
 import { getRuntimePolicy } from "../config/runtime-policy.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { publicFixtureScope } from "../matches/feed-read.ts";
+import { displayedSet, publicFixtureScope } from "../matches/feed-read.ts";
 
 export type DiscoveryEntry = Readonly<{ path: string; lastModified?: Date }>;
 export type DiscoveryReader = Readonly<{
@@ -19,6 +19,8 @@ export type DiscoveryReader = Readonly<{
 }>;
 const joins = Prisma.sql`FROM FootballFixture f JOIN FootballSeason s ON s.id=f.seasonId
   JOIN FootballCompetition l ON l.id=s.competitionId LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id`;
+/** Same rule as `matchPageIndexable`: the displayed revision publishes at least one available market. */
+const published = Prisma.sql`EXISTS (SELECT 1 FROM MarketPrediction pm WHERE pm.setId=${displayedSet} AND pm.available=TRUE)`;
 
 export function createDiscoveryReader(database: DatabaseRuntime, competitionIds: readonly number[]): DiscoveryReader {
   const ids = z.array(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).min(1).max(maximumCompetitionScope).parse(competitionIds);
@@ -32,7 +34,7 @@ export function createDiscoveryReader(database: DatabaseRuntime, competitionIds:
     async inventory() {
       return database.transaction(async tx => {
         const [row] = await tx.$queryRaw<{ matches: bigint; dates: bigint }[]>(Prisma.sql`
-          SELECT COUNT(*) AS matches, COUNT(DISTINCT CASE WHEN f.kickoff IS NOT NULL THEN f.eatDate END) AS dates ${joins} WHERE ${scope}`);
+          SELECT COUNT(CASE WHEN ${published} THEN 1 END) AS matches, COUNT(DISTINCT CASE WHEN f.kickoff IS NOT NULL THEN f.eatDate END) AS dates ${joins} WHERE ${scope}`);
         const matches = Number(row!.matches), dates = Number(row!.dates);
         if (!Number.isSafeInteger(matches) || !Number.isSafeInteger(dates)) throw new RangeError("Discovery inventory is too large.");
         return { matches, dates };
@@ -46,7 +48,7 @@ export function createDiscoveryReader(database: DatabaseRuntime, competitionIds:
             GREATEST(f.createdAt, COALESCE((SELECT MAX(fa.observedAt) FROM FootballFixtureAudit fa WHERE fa.fixtureId=f.id), f.createdAt),
               COALESCE((SELECT MAX(e.at) FROM PredictionChangeEvent e WHERE e.fixtureId=f.id), f.createdAt)) AS modified
           ${joins} JOIN FootballTeam h ON h.id=f.homeTeamId JOIN FootballTeam a ON a.id=f.awayTeamId
-          WHERE ${scope} ORDER BY f.id LIMIT ${size} OFFSET ${start}`);
+          WHERE ${scope} AND ${published} ORDER BY f.id LIMIT ${size} OFFSET ${start}`);
         return rows.map(row => ({ path: matchHref(row.id, canonicalMatchSlug(row.home, row.away)), lastModified: row.modified }));
       }, { isolationLevel: "RepeatableRead" });
     },

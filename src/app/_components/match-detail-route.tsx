@@ -3,7 +3,8 @@ import "server-only";
 import { cache } from "react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getReportingDate } from "@/domain/calendar";
-import { loadMatchDetailPage, matchDetailMetadata, matchDetailPageParameters, parseMatchDetailPageInput } from "@/server/matches/detail-page";
+import { loadMatchDetailPage, matchDetailMetadata, matchDetailPageParameters, matchStructuredData, parseMatchDetailPageInput } from "@/server/matches/detail-page";
+import { serializeStructuredData } from "@/domain/discovery";
 import { readPublicMatchDetail } from "@/server/matches/public-detail";
 import { readPublicMatchInsights } from "@/server/matches/public-insights";
 import { insightsPreview, type InsightsPreview } from "@/domain/match-insights";
@@ -60,9 +61,13 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       if (result.data && (route.slug !== result.data.route.slug || route.fixtureId !== result.data.route.fixtureId)) {
         permanentRedirect(`${result.data.route.path}${viewQuery ? `?${viewQuery}` : ""}${query ? "#revision-history" : ""}`);
       }
-      return <MatchDetailPage result={result} today={today} locale={route.locale} preview={preview}
-        historyResult={historyResult} historyQuery={query}
-        retryHref={`/en/matches/${encodeURIComponent(route.fixtureId)}/${encodeURIComponent(route.slug)}`} />;
+      return <>
+        {result.data && !query && <script type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeStructuredData(matchStructuredData(result.data, route.locale)) }} />}
+        <MatchDetailPage result={result} today={today} locale={route.locale} preview={preview}
+          historyResult={historyResult} historyQuery={query}
+          retryHref={`/en/matches/${encodeURIComponent(route.fixtureId)}/${encodeURIComponent(route.slug)}`} />
+      </>;
     },
   };
 }

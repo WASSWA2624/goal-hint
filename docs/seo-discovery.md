@@ -40,24 +40,37 @@ or slow insights query cannot hold up the canonical/title metadata.
 Search, league/status/market/probability-order filters, nondefault page sizes and
 multiday collections receive `noindex, follow`. Their normalized canonical retains
 the actual query rather than claiming to be an equivalent unfiltered page.
-Empty, failed or out-of-range feed content is not made indexable. Information
+Empty, failed or out-of-range dated archives are not made indexable. The plain
+home page `/en` is the exception: once its stored read succeeds it stays indexable
+on a quiet or uncovered day, because flipping the site's entry point to noindex
+makes Google drop it and recrawl it slowly; failed reads still receive noindex.
+Match pages are indexable only when the displayed revision publishes at least
+one market (`matchPageIndexable`). Fixtures without a published forecast remain
+valid 200 pages with noindex, since every section would read "Not available".
+Their description leads with the stored match-result pick and probability (or
+the first published family) instead of a generic sentence. Information
 page query variants also receive noindex. Revision/history variants canonicalize
 to the fixture's main detail page and receive noindex. `robots.txt` allows these
 HTML URLs to be read; only `/api/` is disallowed.
 
 Fixture IDs remain the identity authority. Existing permanent redirects update
 stale slugs, retaining revision parameters and the revision-history target. Known
-fixtures with unavailable forecasts remain valid pages; unknown fixture IDs and
+fixtures with unavailable forecasts remain valid (noindex) pages; unknown fixture IDs and
 invalid dates return actual 404 responses. Ordinary archive, previous/next page
 and detail anchors work without JavaScript. English `lang` and locale fallback
 remain in place, without a language selector or untranslated alternate URLs.
+Only real language tags (checked with `Intl.DisplayNames`) fall back to `/en`;
+short non-language paths such as `/faq` or `/app` return 404 instead of a soft
+redirect to the home page. With one published language no hreflang is emitted.
 
 ## Stored sitemap discovery
 
 Native dynamic Next metadata routes expose `/sitemap.xml`, match shards at
 `/matches/sitemap/N.xml`, archive shards at `/archive/sitemap/N.xml`, and
-`/robots.txt`. Robots lists every populated shard; no unsupported sitemap-index
-serialization or fixed recent-day window is introduced.
+`/robots.txt`. Next.js does not index `generateSitemaps` shards, so
+`/sitemap-index.xml` (a route handler) lists `/sitemap.xml` and every populated
+shard; robots names only that index, so Search Console needs one submission and
+robots.txt no longer reads the database. No fixed recent-day window is introduced.
 
 `createDiscoveryReader` uses the same public fixture predicate as the feed:
 configured API-Football competitions plus retained closed/void historical
@@ -72,7 +85,8 @@ the latest fixture creation, material fixture audit or public prediction-change
 event. Retrieval-only sync timestamps and the current request clock are excluded.
 Date archives require an actual stored kickoff/EAT day. They advertise page one;
 ordinary links expose subsequent pages, each with its own canonical. Search,
-filters, revisions, guessed empty dates and unknown fixtures never enter the XML.
+filters, revisions, guessed empty dates and unknown fixtures and fixtures
+without a published forecast never enter the XML.
 Static pages and date archives omit lastmod because no reliable consolidated
 content-change stamp exists. No daily fabricated timestamp substitutes for it.
 
@@ -157,10 +171,13 @@ records. Then record the applicable release evidence and verify production HTML,
 robots and sitemaps before enabling discovery. Flipping readiness booleans alone
 would leave the visible prelaunch notices and unresolved operational facts intact.
 
-The only structured data is the supported `WebSite` identity on the plain home
-page, matching the visible brand, English locale and canonical home URL. JSON-LD
-escapes `<` before embedding. No operator, rating, sports-event claims, search
-action, ranking or rich-result promise is invented.
+The plain home page carries a `@graph` of `Organization` (name, canonical URL,
+512 px square logo) and the `WebSite` it publishes. Unfiltered dated archives and
+canonical match pages carry a `BreadcrumbList` (home → EAT-day collection →
+match) built from canonical URLs and visible names. JSON-LD escapes `<` before
+embedding. `SportsEvent` is deliberately omitted: no venue is stored on the
+metadata path and Google's event validation requires `location`, so it would
+only add Search Console errors. No rating, search action or ranking is invented.
 
 ## Verification and evidence
 

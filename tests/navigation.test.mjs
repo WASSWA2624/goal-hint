@@ -56,6 +56,8 @@ test("unpublished locale redirects preserve route identity and do not rewrite ar
     ["/eng/contact", "/en/contact"],
     ["/en", null], ["/en/terms", null], ["/", null], ["/_next/static/a.js", null],
     ["/privacy", null], ["/france/privacy", null], ["//fr/contact", null],
+    // Short non-language segments 404 instead of soft-redirecting to the home page.
+    ["/faq", null], ["/app/privacy", null], ["/tos", null], ["/abc-xyz", null],
   ]) assert.equal(getLocaleRedirect(input), expected, input);
 });
 

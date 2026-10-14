@@ -28,7 +28,9 @@ export function feedMetadata(query: FeedQuery, today: ReportingDate, result: Fee
   const values = { date: messages.reportingDate(discovery.range.startDate), page: messages.number(query.page) };
   const title = discovery.home ? messages.text("metadata.homeTitle") : messages.text("metadata.archiveTitle", values);
   const pageTitle = query.page === 1 ? title : messages.text("metadata.paginationTitle", { title: title.replace(/ \| Goal Hint$/u, ""), page: values.page });
-  const populated = result.data !== null && result.data.records.length > 0 && result.data.state !== "page-out-of-range";
+  // The home page is the site's entry point: a quiet or uncovered day must not flip it to noindex (Google drops
+  // noindex pages and recrawls them slowly). Dated archives still need stored matches; failed reads stay noindex.
+  const populated = result.data !== null && (discovery.home || result.data.records.length > 0 && result.data.state !== "page-out-of-range");
   return pageMetadata({ title: pageTitle, description: discovery.home ? messages.text("metadata.description")
     : messages.text("metadata.archiveDescription", values), path: discovery.path, index: policy.index && discovery.eligible && populated });
 }
