@@ -101,7 +101,10 @@ neutralised; percentages as 0–100, durations in seconds).
 
 ## Setup
 
-1. **Schema.** `npm run db:deploy` applies the migration. The application role needs
+1. **Schema.** `npm run db:deploy` applies the migration. On production MariaDB, where `db:deploy`
+   is blocked by the earlier MySQL-only `DROP CHECK` migration, run the idempotent
+   `prisma/mariadb/20261014131920_first_party_analytics.sql` instead (phpMyAdmin → Import, or
+   `mariadb hossuney_goalhint_db < file` on the server); it also records the migration as applied. The application role needs
    `SELECT, INSERT, UPDATE, DELETE` on the seven `Analytics*` tables (the local
    `application-grants.sql` has section F; a cPanel database-level grant covers them).
 2. **Settings** (all in `.env.example`):
@@ -138,4 +141,6 @@ neutralised; percentages as 0–100, durations in seconds).
 - Browser check (14 Oct 2026, dev server): consent banner → page views, engaged time,
   clicks, search and conversions stored; dashboard sign-in error and success; all
   panels 343 px wide at a 375 px viewport with no horizontal scroll.
-- Not yet verified on MariaDB 11.4; the SQL avoids MySQL-only syntax.
+- MariaDB (local XAMPP 10.4.32, throwaway database): the production apply script ran twice
+  (idempotent, one `_prisma_migrations` row) and collection, hourly/daily/weekly reports,
+  live counts, sign-in lockout and purge all worked. Production runs MariaDB 11.4.
