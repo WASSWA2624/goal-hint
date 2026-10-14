@@ -116,8 +116,12 @@ function buildMessages(language: string, translations: Partial<MessageCatalog>, 
     },
     /** Month and day of one EAT reporting date or an inclusive range, such as "Oct 14 – 20". */
     reportingDateSpan(from: ReportingDate, to: ReportingDate): string {
-      const start = getReportingDayBounds(from).startInclusive;
-      return from === to ? spans.format(start) : spans.formatRange(start, getReportingDayBounds(to).startInclusive);
+      const start = spans.format(getReportingDayBounds(from).startInclusive);
+      if (from === to) return start;
+      // formatRange spacing differs between the server's and browsers' ICU data, which breaks hydration; join it here.
+      const end = getReportingDayBounds(to).startInclusive;
+      return fillMessage(translations["feed.date.rangeLabel"] ?? en["feed.date.rangeLabel"], { from: start,
+        to: from.slice(0, 7) === to.slice(0, 7) ? spans.formatToParts(end).find((part) => part.type === "day")?.value ?? "" : spans.format(end) });
     },
     /** Compact EAT reporting date with weekday and year, for date controls. */
     reportingDateMedium(value: ReportingDate): string {
