@@ -205,8 +205,13 @@ def remote(command: str, *args: str, timeout: int = 300) -> str:
 
 
 def scp(local: Path, destination: str) -> None:
-    result = subprocess.run([tool("scp"), *SSH_OPTIONS, "-P", PORT, "-q", str(local), f"{USER}@{HOST}:{destination}"],
-                            capture_output=True, text=True, timeout=600)
+    # Budget for a slow uplink (8 KB/s): a 14 MB bundle takes over ten minutes at 20 KB/s.
+    timeout = max(600, local.stat().st_size // 8_000)
+    try:
+        result = subprocess.run([tool("scp"), *SSH_OPTIONS, "-P", PORT, "-q", str(local), f"{USER}@{HOST}:{destination}"],
+                                capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise CommandError(f"Upload timed out after {timeout}s; nothing was activated.") from None
     if result.returncode:
         raise CommandError(f"Upload failed:\n{result.stderr.strip()}")
 
