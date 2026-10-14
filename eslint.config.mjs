@@ -15,7 +15,7 @@ const workerImports = {
 export default defineConfig([
   ...nextVitals,
   ...nextTypescript,
-  globalIgnores([".next/**", "out/**", "build/**", ".tmp/**", "output/playwright/**", ".playwright-cli/**", "src/server/generated/**", "next-env.d.ts"]),
+  globalIgnores([".next/**", "out/**", "build/**", ".tmp/**", "output/playwright/**", ".playwright-cli/**", "src/server/generated/**", "next-env.d.ts", "chrome-filters/**"]),
   {
     files: ["src/{components,domain,i18n,state,styles}/**/*.{ts,tsx}"],
     rules: {

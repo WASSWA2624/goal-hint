@@ -21,3 +21,4 @@ npm-debug.log*
 Thumbs.db
 .goal-hint/
 deploy/deploy-credentials.md
+chrome-filters/
