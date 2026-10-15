@@ -194,3 +194,9 @@ no pre-consent identifier, persisted decline, and zero page errors. The mobile
 header screenshot also confirms the original inline SVG renders at its reserved
 geometry. The real hosted image probe converted **90,381 bytes** to **1,350 bytes**
 in **0.338 s**, including provider retrieval, using the tested system codec.
+
+Cross-platform artifact inspection caught Turbopack folding `process.platform`
+to the Windows build host and removing the Linux decoder branch. The codec now
+queries `node:os.platform()` at runtime. Packaging refuses a compiled server
+without the Linux codec path. The incompatible intermediate bundle was never
+deployed. This additional check protects future Windows-to-Linux releases.

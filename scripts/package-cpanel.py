@@ -88,6 +88,9 @@ def main():
         shutil.copytree(built, standalone, symlinks=False)
         shutil.copytree(source / ".next/static", standalone / ".next/static", dirs_exist_ok=True)
         shutil.copytree(source / "public", standalone / "public", dirs_exist_ok=True)
+        if not any("/usr/bin/convert" in chunk.read_text(encoding="utf-8")
+                   for chunk in (standalone / ".next/server/chunks").glob("*.js")):
+            raise CommandError("The Linux badge codec is missing from the compiled server; refusing an incompatible release.")
         # Windows codecs cannot run on Linux. Hosted badges use the verified
         # system ImageMagick codec; Sharp remains available for local tooling.
         for prune in ("node_modules/sharp", "node_modules/@img"):
