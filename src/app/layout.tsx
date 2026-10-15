@@ -6,7 +6,7 @@ import { StyleProvider } from "@/styles/provider";
 import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
 import { MetadataRecovery } from "@/components/navigation/metadata-recovery";
-import { AnalyticsTracker } from "@/components/analytics/analytics-tracker";
+import { AnalyticsProvider } from "@/server/analytics/analytics-provider";
 
 // Latin WOFF2 subset of the variable source TTF (see docs/brand-styling.md); other scripts use the fallback.
 const manrope = localFont({
@@ -41,7 +41,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang={publicPolicy.defaultLocale} className={manrope.variable}>
       <body>
         <Suspense fallback={null}><MetadataRecovery /></Suspense>
-        <StyleProvider>{children}<Suspense fallback={null}><AnalyticsTracker /></Suspense></StyleProvider>
+        <StyleProvider>{children}<Suspense fallback={null}><AnalyticsProvider /></Suspense></StyleProvider>
       </body>
     </html>
   );

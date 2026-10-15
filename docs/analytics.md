@@ -19,7 +19,11 @@ tracking cookie.
 
 - **Consent first.** Nothing is stored in the browser or sent before the visitor
   chooses *Allow analytics*. *Decline* is as prominent as *Allow*. The banner only
-  appears when the server is actually collecting (`GET /api/analytics/collect`).
+  appears when the server is actually collecting. `AnalyticsProvider` resolves
+  that boolean from the same services as `GET /api/analytics/collect` and passes
+  it with the page; displaying the banner needs no extra status request.
+  Browser consent, privacy signals and automation exclusions still resolve
+  before the banner appears, and only explicit consent starts collection.
   Visitors can change or withdraw the choice on the Privacy page; withdrawing deletes
   the browser's identifiers at once. The choice is asked again after 12 months.
 - **Browser signals.** Global Privacy Control and Do Not Track count as *declined*,

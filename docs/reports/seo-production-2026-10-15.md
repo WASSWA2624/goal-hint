@@ -167,3 +167,30 @@ the browser fallback. Successful responses additionally set a seven-day public
 browser cache. The final 87 HTML checks pass. Local provider retrieval later
 encountered the bounded eight-second timeout; this is recorded as an upstream
 failure, not a successful image check or an application-score estimate.
+
+## Supplied PageSpeed baseline and consent rendering
+
+The supplied Google run, captured at **2026-10-15 18:29 UTC**, reports
+**86 Performance / 100 Accessibility / 100 Best Practices / 100 SEO**,
+FCP **1.0 s**, LCP **4.0 s**, TBT **80 ms**, CLS **0.007**, Speed Index **3.8 s**.
+Unlike the earlier local audit's logo, its LCP element is the analytics-consent
+paragraph. The breakdown shows 175 ms server response and 3,815 ms element-render
+delay. Its image-delivery audit still reports 603 KiB savings. These Google
+results are the appropriate current baseline; local-network runs are separate.
+
+`AnalyticsProvider` now resolves the same public collector-availability boolean
+on the server and sends it with the page. The browser no longer waits for a
+second `GET /api/analytics/collect` before presenting the consent choice. Local
+consent, GPC, DNT and automation exclusions still resolve before display, and
+nothing is collected before opt-in. A server-disabled collector also prevents
+tracker startup for a previously granted browser. No credentials or analytics
+settings beyond the existing public availability bit reach the client.
+
+All **18 analytics unit checks**, **87 HTML checks** and **17 browser consent
+checks** pass. Browser scenarios cover unset, declined, previously granted with
+collection disabled, disabled collection, GPC, DNT and automation. They verify
+no status/collection request before consent or in disabled/excluded scenarios,
+no pre-consent identifier, persisted decline, and zero page errors. The mobile
+header screenshot also confirms the original inline SVG renders at its reserved
+geometry. The real hosted image probe converted **90,381 bytes** to **1,350 bytes**
+in **0.338 s**, including provider retrieval, using the tested system codec.

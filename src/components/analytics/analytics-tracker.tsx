@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
@@ -15,41 +15,30 @@ export function useConsentState() {
 }
 
 /** Root-level page-view tracking plus the first-visit consent banner. The dashboard itself is never tracked. */
-export function AnalyticsTracker() {
+export function AnalyticsTracker({ available }: { available: boolean }) {
   const pathname = usePathname();
   const query = useSearchParams().get("q") ?? "";
   const consent = useConsentState();
   const excluded = pathname.startsWith(analyticsRules.dashboardPath);
   const last = useRef<string | null>(null);
-  const [available, setAvailable] = useState<boolean | null>(null);
 
   useEffect(() => { rememberLanding(); }, []);
   useEffect(() => {
-    if (consent !== "granted" || excluded) return;
+    if (!available || consent !== "granted" || excluded) return;
     startTracker();
     return () => { stopTracker(); last.current = null; };
-  }, [consent, excluded]);
+  }, [available, consent, excluded]);
   useEffect(() => {
-    if (consent !== "granted" || excluded) return;
+    if (!available || consent !== "granted" || excluded) return;
     // A short timer (not animation frames, which background tabs pause) lets the route's title settle.
     const timer = setTimeout(() => {
       if (last.current !== pathname) { last.current = pathname; trackPageview(pathname, document.title); }
       if (query) trackSearch(query);
     }, 50);
     return () => clearTimeout(timer);
-  }, [consent, excluded, pathname, query]);
+  }, [available, consent, excluded, pathname, query]);
 
-  useEffect(() => {
-    // Ask only where the server is configured to collect; otherwise there is nothing to consent to.
-    if (consent !== "unset" || excluded || available !== null) return;
-    let active = true;
-    fetch(analyticsRules.collectPath, { cache: "no-store" }).then((response) => (response.ok ? response.json() : null))
-      .then((body: { enabled?: unknown } | null) => { if (active) setAvailable(body?.enabled === true); })
-      .catch(() => { if (active) setAvailable(false); });
-    return () => { active = false; };
-  }, [consent, excluded, available]);
-
-  if (consent !== "unset" || excluded || available !== true) return null;
+  if (consent !== "unset" || excluded || !available) return null;
   return <ConsentBanner />;
 }
 
