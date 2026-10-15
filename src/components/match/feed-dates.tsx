@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/navigation-link";
 import dynamic from "next/dynamic";
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import styled, { css } from "styled-components";

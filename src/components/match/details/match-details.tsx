@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/navigation-link";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { CloseIcon, SearchIcon } from "@/components/ui/icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
@@ -49,6 +50,7 @@ const PhoneHeaderGroup = styled.div`
  * past the page gutter and up through the app page's 10px top padding, with white text and icons.
  */
 const PhoneBar = styled.div`
+  position: relative;
   display: grid;
   grid-template-columns: 2rem minmax(0, 1fr) 2rem 2rem;
   align-items: center;
@@ -180,6 +182,7 @@ function PhoneHeader() {
         onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => searchInput.current?.focus()); }}>
         {searching ? <CloseIcon /> : <SearchIcon />}
       </RoundButton>
+      <NavigationProgress label={messages.text("navigation.loading")} />
     </PhoneBar>
     {searching && <SearchForm id="details-search" action={homeHref(locale)} method="get" role="search" aria-label={messages.text("feed.search.open")}>
       <SearchIcon aria-hidden="true" />

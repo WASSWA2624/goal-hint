@@ -4,7 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
-import { analyticsRules } from "@/domain/analytics";
+import { analyticsRules } from "@/domain/analytics-settings";
 import { informationHref } from "@/domain/navigation";
 import { media } from "@/styles/theme";
 import { getConsentState, getServerConsentState, rememberLanding, setConsent, startTracker, stopTracker, subscribeConsent,
@@ -38,13 +38,13 @@ export function AnalyticsTracker({ available }: { available: boolean }) {
     return () => clearTimeout(timer);
   }, [available, consent, excluded, pathname, query]);
 
-  if (consent !== "unset" || excluded || !available) return null;
-  return <ConsentBanner />;
+  if ((consent !== "unset" && consent !== "pending") || excluded || !available) return null;
+  return <ConsentBanner pending={consent === "pending"} />;
 }
 
-function ConsentBanner() {
+function ConsentBanner({ pending }: { pending: boolean }) {
   return (
-    <Banner role="region" aria-labelledby="analytics-consent-title" data-analytics-ignore="">
+    <Banner role="region" aria-labelledby="analytics-consent-title" data-analytics-ignore="" data-consent-pending={pending ? "" : undefined}>
       <Title id="analytics-consent-title">Help us improve Goal Hint</Title>
       <Text>
         With your permission we count page views, time on page, device type and approximate region in our own
@@ -52,8 +52,8 @@ function ConsentBanner() {
         <a href={`${informationHref("privacy")}#privacy-tracking`}>Privacy details</a>
       </Text>
       <Choices>
-        <Button variant="secondary" onClick={() => setConsent("denied")}>Decline</Button>
-        <Button onClick={() => setConsent("granted")}>Allow analytics</Button>
+        <Button variant="secondary" disabled={pending} onClick={() => setConsent("denied")}>Decline</Button>
+        <Button disabled={pending} onClick={() => setConsent("granted")}>Allow analytics</Button>
       </Choices>
     </Banner>
   );

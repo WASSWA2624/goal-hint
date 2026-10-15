@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/navigation-link";
 import { useId } from "react";
 import { PredictionOdds, ProbabilityBar } from "@/components/match/prediction-presentation";
 import { TeamLogo } from "@/components/match/team-logo";

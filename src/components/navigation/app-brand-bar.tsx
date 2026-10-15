@@ -1,15 +1,17 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
+import { NavigationProgress } from "./navigation-progress";
 
 /** Compact app pages share the same full-bleed phone brand bar beneath the desktop-only shell. */
 const Bar = styled.div`
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -43,5 +45,6 @@ export function AppBrandBar({ locale }: { locale: string }) {
       <BrandLogo alt="" variant="inverse" />
     </Home>
     <ThemeToggle />
+    <NavigationProgress label={createMessages(locale).text("navigation.loading")} />
   </Bar>;
 }

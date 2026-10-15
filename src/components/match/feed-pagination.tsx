@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";

@@ -106,7 +106,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const data = result?.data, generated = result?.state === "generated" && data !== null && data !== undefined;
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
 
-  return <SlipStack>
+  return <SlipStack aria-busy={pending}>
     <AppBrandBar locale={locale} />
     <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     <CriteriaPanel aria-labelledby={`${prefix}-criteria`}>

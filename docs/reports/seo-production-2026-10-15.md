@@ -202,3 +202,60 @@ the bundler’s build-host evaluation. A fresh compilation cache is used for
 the final artifact. Packaging refuses a compiled server
 without the Linux codec path. The incompatible intermediate bundle was never
 deployed. This additional check protects future Windows-to-Linux releases.
+
+## Confirmed Google follow-up and the next performance pass
+
+Release `20261015185240-17c36b7` was activated and passed 14 live HTTP/SEO
+checks, eight live feed/browser checks and the consent/browser checks. The live
+badge returned a 1,350-byte WebP with a subsequent cache HIT. Fixture availability
+remained 167, the performance cohort 3,035, with three populated sitemap files.
+
+The owner's [mobile report](https://pagespeed.web.dev/analysis/https-goalhint-com/0zpq0lypbj?form_factor=mobile)
+captured at **19:15 UTC** confirms **91 Performance / 100 Accessibility /
+100 Best Practices / 100 SEO**, FCP **1.0 s**, LCP **3.0 s**, TBT **190 ms**,
+CLS **0.007**, Speed Index **3.3 s**. Image-delivery waste is now **zero bytes**.
+The [desktop report](https://pagespeed.web.dev/analysis/https-goalhint-com/0zpq0lypbj?form_factor=desktop)
+confirms **98 Performance / 100 Accessibility / 96 Best Practices / 100 SEO**,
+FCP **0.3 s**, LCP **0.6 s**, TBT **10 ms**, CLS **0.002**, Speed Index **1.6 s**.
+These are measured Google results, not estimates from local tests. The owner's
+next target is 100 Performance on both devices; it remains unverified.
+
+The remaining mobile LCP element is the consent paragraph, with 2,893 ms of
+render delay. Its text now renders on the server, and a read-only pre-paint
+check exposes it for visitors without a stored choice. Buttons wait for working
+handlers; existing choices, GPC, DNT and automation exclusions suppress it before
+paint. No identifier or request precedes opt-in. Lightweight browser settings
+are separated from the analytics validation schemas. This passes **54 browser
+checks** across ten consent/storage/signal scenarios, including deliberately
+holding every framework script to verify the text paints before hydration.
+
+The desktop console failure was reproduced at `/badges/leagues/396/32.webp`.
+The provider's `.png` URL and PNG Content-Type contain JPEG bytes. Signature and
+dimension validation now accepts bounded PNG/JPEG input and explicitly selects
+the matching decoder, keeping byte, pixel, process and URL restrictions. Six
+image unit checks cover the mislabeled JPEG and malformed/oversized headers.
+
+The requested two-pixel indeterminate bar is shared by desktop and phone headers.
+It uses Next.js [useLinkStatus](https://nextjs.org/docs/app/api-reference/functions/use-link-status)
+and existing busy states, with a transform-only CSS animation while pending.
+It adds no dependency, polling, animation callback or network request. Reduced
+motion uses a static segment. Sixteen browser checks verify layout preservation,
+completion, superseded navigation and reduced motion; 33 feed checks also pass.
+
+Framework legacy-polyfill and unused-JavaScript diagnostics remain visible in
+the supplied report. Their estimated bytes are opportunities, not separate
+Performance score deductions. The 0.6 KiB font stylesheet remains on the critical
+path; production does not enable experimental CSS inlining merely to clear an
+audit. Fresh Google scores must be recorded after the next deployment.
+
+The final source passes all **87 HTML checks**, **54 pre-paint consent browser
+checks**, **16 navigation-progress browser checks** and **33 feed browser checks**,
+including every match link and the last row with JavaScript disabled. TypeScript,
+ESLint and whitespace checks pass. The unit suite passed **1,412 checks** with one
+existing skip and one offline Prisma-generation timeout while builds competed for
+resources; that exact failing check then passed in an isolated retry (23.5 s).
+The production host independently converted the affected league JPEG to a
+154-byte WebP in 0.287 s; the final local route returned HTTP 200, WebP, then a
+cache HIT. No new Google score is inferred from these checks. The final requested
+target is **100 Performance, Accessibility, Best Practices and SEO on mobile
+and desktop**.

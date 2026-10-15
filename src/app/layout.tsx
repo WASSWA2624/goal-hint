@@ -7,6 +7,7 @@ import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
 import { MetadataRecovery } from "@/components/navigation/metadata-recovery";
 import { AnalyticsProvider } from "@/server/analytics/analytics-provider";
+import { consentBootstrapScript, consentInitialStyle } from "@/server/analytics/consent-bootstrap";
 
 // Latin WOFF2 subset of the variable source TTF (see docs/brand-styling.md); other scripts use the fallback.
 const manrope = localFont({
@@ -39,6 +40,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang={publicPolicy.defaultLocale} className={manrope.variable}>
+      <head>
+        <style id="analytics-consent-initial">{consentInitialStyle}</style>
+        <script id="analytics-consent-bootstrap" dangerouslySetInnerHTML={{ __html: consentBootstrapScript() }} />
+      </head>
       <body>
         <Suspense fallback={null}><MetadataRecovery /></Suspense>
         <StyleProvider>{children}<Suspense fallback={null}><AnalyticsProvider /></Suspense></StyleProvider>

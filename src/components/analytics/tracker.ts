@@ -1,12 +1,13 @@
-import { analyticsRules, analyticsStorageKeys, type AnalyticsEventInput, type Attribution, type CollectPayload,
-  type ConsentChoice } from "@/domain/analytics";
+import { analyticsRules, analyticsStorageKeys, type ConsentChoice } from "@/domain/analytics-settings";
+import type { AnalyticsEventInput, Attribution, CollectPayload } from "@/domain/analytics";
+import { hasBrowserPrivacySignal, resolveAnalyticsConsent, type ConsentState } from "@/domain/analytics-consent";
 
 /**
  * Consent-gated first-party tracker. Nothing is stored or sent until the visitor allows analytics.
  * Typed text, query strings and fragments are never collected; see docs/analytics.md.
  */
 
-export type ConsentState = ConsentChoice | "unset" | "signal" | "automation";
+export type { ConsentState } from "@/domain/analytics-consent";
 type StoredConsent = Readonly<{ v: 1; choice: ConsentChoice; at: number }>;
 type StoredSession = Readonly<{ id: string; last: number }>;
 
@@ -37,20 +38,15 @@ export function randomId(): string {
 
 /** Global Privacy Control and Do Not Track count as a refusal without asking. */
 export function hasPrivacySignal(): boolean {
-  const browser = navigator as Navigator & { globalPrivacyControl?: boolean; msDoNotTrack?: string };
-  return browser.globalPrivacyControl === true || browser.doNotTrack === "1" || browser.msDoNotTrack === "1"
-    || (window as Window & { doNotTrack?: string }).doNotTrack === "1";
+  return hasBrowserPrivacySignal(navigator, window as Window & { doNotTrack?: string });
 }
 
 export function getConsentState(): ConsentState {
   if (typeof window === "undefined") return "unset";
-  if (navigator.webdriver === true) return "automation";
-  if (hasPrivacySignal()) return "signal";
-  const stored = memoryConsent ?? readJson<StoredConsent>(analyticsStorageKeys.consent);
-  if (!stored || stored.v !== 1 || (stored.choice !== "granted" && stored.choice !== "denied")) return "unset";
-  return Date.now() - stored.at > analyticsRules.consentMaxAgeMs ? "unset" : stored.choice;
+  return resolveAnalyticsConsent({ stored: memoryConsent ?? readJson<StoredConsent>(analyticsStorageKeys.consent),
+    now: Date.now(), maxAgeMs: analyticsRules.consentMaxAgeMs, automated: navigator.webdriver === true, signal: hasPrivacySignal() });
 }
-/** Server render and hydration show no banner until the browser's stored choice is known. */
+/** Pending markup uses the read-only initial consent check until hydration resolves the store. */
 export const getServerConsentState = (): ConsentState | "pending" => "pending";
 
 export function subscribeConsent(listener: () => void): () => void {

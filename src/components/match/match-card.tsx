@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/navigation-link";
 import { memo, useId, useState, type PointerEvent, type ReactNode } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";

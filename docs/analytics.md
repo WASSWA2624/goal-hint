@@ -24,6 +24,14 @@ tracking cookie.
   it with the page; displaying the banner needs no extra status request.
   Browser consent, privacy signals and automation exclusions still resolve
   before the banner appears, and only explicit consent starts collection.
+  The consent text is server-rendered. A small inline check reads the existing
+  choice and browser signals before paint, so first-time visitors can read it
+  while the application hydrates; its buttons enable once handlers are ready.
+  The check makes no storage writes or requests. Returning choices and privacy
+  signals suppress the prompt before paint. Shared pure consent rules keep this
+  check and the hydrated tracker consistent, including blocked/expired storage.
+  Browser settings are separate from server validation schemas to avoid loading
+  those schemas just to display the consent choice.
   Visitors can change or withdraw the choice on the Privacy page; withdrawing deletes
   the browser's identifiers at once. The choice is asked again after 12 months.
 - **Browser signals.** Global Privacy Control and Do Not Track count as *declined*,

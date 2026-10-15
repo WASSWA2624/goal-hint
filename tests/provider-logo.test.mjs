@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { isOptimizableProviderLogo } from '../src/domain/provider-logo.ts';
 import { providerImageSource } from '../src/components/ui/provider-image.ts';
-import { badgeParameters, resizeBadge, loadProviderBadge } from '../src/server/images/provider-badge.ts';
+import { badgeParameters, badgeInputFormat, resizeBadge, loadProviderBadge } from '../src/server/images/provider-badge.ts';
 
 test('only credential-free provider team and league PNGs qualify for optimization', () => {
   for (const kind of ['teams', 'leagues']) assert.equal(isOptimizableProviderLogo(`https://media.api-sports.io/football/${kind}/33.png`), true);
@@ -24,7 +24,7 @@ test('badges use bounded retina sizes and other approved hosts stay direct', () 
   }
 });
 
-test('badge loader rejects oversized or non-PNG input before decoding', async () => {
+test('badge loader rejects oversized or non-raster input before decoding', async () => {
   const original = globalThis.fetch;
   try {
     globalThis.fetch = async () => new Response('not png', { headers: { 'content-type': 'image/png' } });
@@ -42,4 +42,31 @@ test('the local image codec produces a bounded WebP', async () => {
   assert.equal(metadata.format, 'webp');
   assert.equal(metadata.width, 32);
   assert.equal(metadata.height, 24);
+});
+
+test('a provider JPEG mislabeled as PNG is safely optimized', async () => {
+  const { default: sharp } = await import('sharp');
+  const jpeg = await sharp({ create: { width: 96, height: 128, channels: 3, background: '#049893' } }).jpeg().toBuffer();
+  assert.equal(badgeInputFormat(jpeg), 'jpeg');
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(jpeg, { headers: { 'content-type': 'image/png' } });
+    const output = await loadProviderBadge('https://media.api-sports.io/football/leagues/396.png', 32);
+    const metadata = await sharp(output).metadata();
+    assert.equal(metadata.format, 'webp');
+    assert.equal(metadata.width, 24);
+    assert.equal(metadata.height, 32);
+  } finally { globalThis.fetch = original; }
+});
+
+test('JPEG dimensions and segment bounds are checked before decoding', () => {
+  const frame = Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0, 8, 8, 0, 32, 0, 32, 1]);
+  assert.equal(badgeInputFormat(frame), 'jpeg');
+  const oversized = Buffer.from(frame); oversized.writeUInt16BE(2049, 9);
+  assert.equal(badgeInputFormat(oversized), null);
+  const empty = Buffer.from(frame); empty.writeUInt16BE(0, 7);
+  assert.equal(badgeInputFormat(empty), null);
+  assert.equal(badgeInputFormat(frame.subarray(0, 10)), null);
+  assert.equal(badgeInputFormat(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 1])), null);
+  assert.equal(badgeInputFormat(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>')), null);
 });

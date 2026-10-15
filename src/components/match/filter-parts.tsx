@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/navigation-link";
 import {
   useCallback, useId, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
 } from "react";

@@ -1,6 +1,7 @@
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  "navigation.loading": "Loading page",
   "feed.date.zone": "Match dates: {zone}",
   "feed.date.useLocal": "Use my local dates",
   "feed.date.useReporting": "Use East Africa dates",

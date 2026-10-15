@@ -6,6 +6,7 @@ import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SearchIcon } from "@/components/ui/icons";
 import { ResponsiveNavigation, type NavigationDestination } from "@/components/navigation/responsive-navigation";
+import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { Container, PageMain } from "@/components/ui/layout";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import {
@@ -81,6 +82,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
           </HeaderSearch>}
           <HeaderActions><ThemeToggle /></HeaderActions>
         </HeaderContent>
+        <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
       <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact}>
         <Container $wide={app}>{children}</Container>

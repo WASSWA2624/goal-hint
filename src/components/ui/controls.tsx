@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/navigation-link";
 import { useId, type ComponentPropsWithRef, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
