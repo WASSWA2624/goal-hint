@@ -156,3 +156,14 @@ unit checks** and **6 Python checks** pass after the hosted-codec adjustment;
 TypeScript and source-wide ESLint also pass. Decoder checks cover oversized and
 non-PNG upstream responses and real resized WebP dimensions. Production results
 will be appended after deployment rather than inferred from local timings.
+
+The owner's latest target is **mobile Performance above 90**, referencing
+[the supplied PageSpeed run](https://pagespeed.web.dev/analysis/https-goalhint-com/kw9encp64u?form_factor=mobile).
+The final cache check found Next.js persisted a returned HTTP 503 as a route
+cache HIT, despite `no-store`. Badge fetch failures now reject the render so they
+remain uncached and revalidation can retain a previously successful image.
+Repeated failure requests return HTTP 500 without a cache HIT; initials remain
+the browser fallback. Successful responses additionally set a seven-day public
+browser cache. The final 87 HTML checks pass. Local provider retrieval later
+encountered the bounded eight-second timeout; this is recorded as an upstream
+failure, not a successful image check or an application-score estimate.
