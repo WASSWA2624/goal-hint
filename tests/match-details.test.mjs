@@ -12,7 +12,7 @@ import {
 } from '../src/domain/match-insights.ts';
 import {
   featuredFamily, formLetters, goalTotals, marketCategoryMembers, marketOutcomes, marketRow, parsePlayerKey, pitchRows, playerKey,
-  positionGroup, visibleMarkets,
+  positionGroup, selectedDetailPrice, visibleMarkets,
 } from '../src/domain/match-details.ts';
 import { makeStore } from '../src/state/store.ts';
 import { detailApi } from '../src/state/detail-api.ts';
@@ -135,6 +135,35 @@ test('the featured pick is the highest stored probability; missing markets keep 
   assert.equal(marketRow({ fixture: { unavailableMarkets: [] }, snapshot: null }, 'match-result').reason, 'not-published');
   assert.deepEqual(marketOutcomes({ draw: 0.45, 'home-win': 0.1, 'away-win': 0.45 }, 'match-result').map((entry) => entry.selection), ['home-win', 'draw', 'away-win']);
   assert.equal(marketOutcomes({}, 'both-teams-to-score')[0].probability, null);
+});
+
+test('detail odds match the current or locked publication and exact selection without borrowing historical prices', () => {
+  const item = market('total-goals', 'over-2.5', { 'over-2.5': 0.7, 'under-2.5': 0.3 });
+  const data = detail([item]);
+  data.snapshot.applicability = 'current';
+  data.fixture.cycleId = 'c';
+  data.fixture.forecast = { revisionId: 'r', markets: [item] };
+  data.fixture.prices = [{ family: 'total-goals', selection: 'over-2.5', price: '1.85' }];
+  data.odds = [{ family: 'total-goals', selections: [{ selection: 'under-2.5', price: '2.40' }, { selection: 'over-2.5', price: '1.90' }] }];
+  assert.equal(selectedDetailPrice(data, 'total-goals'), '1.85');
+  data.fixture.prices = [];
+  assert.equal(selectedDetailPrice(data, 'total-goals'), '1.90');
+  data.snapshot.applicability = 'locked';
+  assert.equal(selectedDetailPrice(data, 'total-goals'), '1.90');
+  data.odds[0].selections = [{ selection: 'under-2.5', price: '2.40' }];
+  assert.equal(selectedDetailPrice(data, 'total-goals'), null);
+  data.fixture.prices = [{ family: 'total-goals', selection: 'over-2.5', price: '1.85' }];
+  for (const applicability of ['historical', 'void']) {
+    data.snapshot.applicability = applicability;
+    assert.equal(selectedDetailPrice(data, 'total-goals'), null);
+  }
+  data.snapshot.applicability = 'current';
+  data.fixture.forecast.revisionId = 'other';
+  assert.equal(selectedDetailPrice(data, 'total-goals'), null);
+  data.fixture.forecast.revisionId = 'r';
+  data.fixture.cycleId = 'other';
+  assert.equal(selectedDetailPrice(data, 'total-goals'), null);
+  assert.equal(selectedDetailPrice(detail([]), 'match-result'), null);
 });
 
 test('market categories and search reach every supported family; unsupported categories are honestly empty', () => {

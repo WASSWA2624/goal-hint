@@ -4,6 +4,7 @@ import type { MatchDetailResponse } from "./match-detail.ts";
 import { marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
 import { bestPublishedFamily } from "./market-ranking.ts";
+import { selectedCardPrice } from "./match-card.ts";
 
 /**
  * Pure presentation rules for the match-details screen. Every value is read from the stored
@@ -35,6 +36,18 @@ export function marketRow(data: MatchDetailResponse, family: MarketFamily) {
   const outcome = item && snapshot ? snapshot.outcomes.find((entry) => entry.family === family && entry.selection === item.market.selection &&
     entry.revisionId === snapshot.revisionId && entry.cycleId === snapshot.cycleId) ?? null : null;
   return { family, item, outcome, reason };
+}
+
+/** Current public odds for the exact displayed pick; historical publications never inherit live prices. */
+export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFamily): string | null {
+  const { fixture, snapshot } = data;
+  if (!snapshot || (snapshot.applicability !== "current" && snapshot.applicability !== "locked") ||
+    fixture.forecast?.revisionId !== snapshot.revisionId || fixture.cycleId !== snapshot.cycleId) return null;
+  const item = snapshot.markets.find((entry) => entry.market.family === family);
+  if (!item) return null;
+  const price = selectedCardPrice(fixture, family);
+  return (price?.selection === item.market.selection ? price.price : null) ?? data.odds?.find((group) => group.family === family)
+    ?.selections.find((price) => price.selection === item.market.selection)?.price ?? null;
 }
 
 /** Rank the displayed revision's published picks by unrounded probability, exact fresh odds, then policy order. */

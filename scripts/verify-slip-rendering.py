@@ -136,6 +136,12 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
         for row in rows:
             assert "Synthetic" in row.text and "%" in row.text, f"{path}: real synthetic selection details"
             assert re.search(r"\d+\.\d{2}", row.text), f"{path}: selection price"
+            pick = next(cell for cell in row.nodes("td") if cell.attrs.get("data-column") == "selection")
+            prices = pick.nodes(attr="data-pick-odds")
+            assert len(prices) == 1 and re.fullmatch(r"\(\d+\.\d{2}\)", prices[0].text), f"{path}: own price appears once in brackets beside its pick"
+            assert len(row.nodes(attr="data-pick-odds")) == 1, f"{path}: selection odds are not duplicated in another column"
+            assert {node.attrs["data-team-side"] for node in row.nodes(attr="data-team-side")} == {"home", "away"}, f"{path}: both team names retain separate mobile lines"
+            assert not row.nodes(attr="data-result-badge"), f"{path}: slips do not invent a result absent from their saved selections"
         assert "Average match probability" in document.text, f"{path}: average is identified correctly"
         assert "not the chance that every selection wins" in document.text, f"{path}: mean is distinguished from joint probability"
     else:
@@ -208,6 +214,7 @@ def verify(origin, directory):
     selected = inspect(origin, "/en/slips?" + urlencode(manual), directory, "route-native-manual", "generated", 1, selections_per_slip=1)
     row = selected.nodes("tr", "data-slip-selection")[0]
     assert row.attrs["data-slip-selection"] == "synthetic-slip-7" and "Home win" in row.text and "20.0%" in row.text and "2.00" in row.text, "Manual Home win uses its own 20% probability and 2.00 price, though Away win was the published top pick"
+    assert row.nodes(attr="data-pick-odds")[0].text == "(2.00)" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
     print("Slip rendering verification passed: compact native accordions, draft summaries, validation expansion, 10 isolated states and native GET builds/cutoff/manual alternatives.", flush=True)
 
 

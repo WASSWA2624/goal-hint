@@ -1,24 +1,44 @@
 "use client";
 
-import { memo } from "react";
+import { memo, type ComponentPropsWithoutRef } from "react";
 import styled from "styled-components";
 import { CalendarIcon, ClockIcon } from "@/components/match/match-icons";
-import { featuredFamily, formLetters, marketRow } from "@/domain/match-details";
+import { OutcomeBadge, PredictionOdds, ProbabilityBar } from "@/components/match/prediction-presentation";
+import { featuredFamily, formLetters, marketRow, selectedDetailPrice } from "@/domain/match-details";
 import { noPickReason } from "@/domain/feed-presentation";
 import type { MarketFamily } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
 import { toUtcIsoString } from "@/domain/calendar";
-import { media, type AccentName } from "@/styles/theme";
+import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
 import { BothTeamsIcon, GoalsIcon, ResultIcon, ShieldIcon, StarIcon } from "./details-icons";
-import { Crest, FormLetters, desktop, focusRing, IconBadge, scrollClearance, size, useStableDetails } from "./details-ui";
+import { Crest, FormLetters, desktop, focusRing, IconBadge, scrollClearance, size, useStableDetails, type Messages } from "./details-ui";
 import { marketName, percent, pickLabel } from "./labels";
 
 export const familyIcon: Record<MarketFamily, typeof ResultIcon> = {
   "match-result": ResultIcon, "double-chance": ShieldIcon, "total-goals": GoalsIcon, "both-teams-to-score": BothTeamsIcon,
 };
 export const familyAccent: Record<MarketFamily, AccentName> = {
-  "match-result": "orange", "double-chance": "violet", "total-goals": "blue", "both-teams-to-score": "teal",
+  "match-result": "emerald", "double-chance": "violet", "total-goals": "blue", "both-teams-to-score": "orange",
 };
+
+const Outcome = styled(OutcomeBadge)`
+  ${media.belowDesktop} {
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 0.8125rem;
+  }
+`;
+
+function outcomeLabel(messages: Messages, status: OutcomeTone) {
+  const label = status === "correct" ? "match.result.won" : status === "incorrect" ? "match.result.lost" : `outcome.${status}` as const;
+  return messages.text(label);
+}
+
+export function DetailOutcome({ status, ...props }: Omit<ComponentPropsWithoutRef<"span">, "children"> & { status: OutcomeTone }) {
+  const { messages } = useStableDetails();
+  return <Outcome {...props} data-outcome={status} $outcome={status}>{outcomeLabel(messages, status)}</Outcome>;
+}
 
 const Box = styled.section`
   display: grid;
@@ -112,7 +132,7 @@ const Versus = styled.div`
     padding-inline: 6px;
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surfaceMuted};
-    border-radius: 999px;
+    border-radius: 0;
     font-size: ${size("body")};
     font-variant-numeric: tabular-nums;
   }
@@ -125,7 +145,7 @@ const Versus = styled.div`
     > b[data-score] { font-size: 1.375rem; }
   }
 `;
-const Featured = styled.button<{ $empty: boolean }>`
+const Featured = styled.button<{ $empty: boolean; $family: MarketFamily }>`
   grid-area: pick;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -134,33 +154,28 @@ const Featured = styled.button<{ $empty: boolean }>`
   min-inline-size: 0;
   padding: 8px 10px;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme, $empty }) => $empty ? theme.color.cardHeader : `linear-gradient(135deg, ${theme.color.accent.orange.soft} 0%, ${theme.color.accent.amber.soft} 100%)`};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme, $empty }) => $empty ? theme.color.border : "#FDBA74"};
-  border-radius: ${({ theme }) => theme.border.cardRadius};
+  background: ${({ theme, $empty }) => $empty ? theme.color.cardHeader : theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-inline-start: 3px solid ${({ theme, $empty, $family }) => $empty ? theme.color.border : theme.color.market[$family].solid};
+  border-radius: 0;
   font: inherit;
   text-align: start;
   cursor: ${({ $empty }) => $empty ? "default" : "pointer"};
   ${focusRing}
-  ${media.hover} { &:hover:not(:disabled) { border-color: ${({ theme }) => theme.color.accent.orange.solid}; } }
+  ${media.hover} { &:hover:not(:disabled) { border-color: ${({ theme, $family }) => theme.color.market[$family].solid}; } }
   > div { display: grid; gap: 1px; min-inline-size: 0; }
-  > div > span[data-label] { display: inline-flex; align-items: center; gap: 4px; color: ${({ theme }) => theme.color.accent.orange.text}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  > div > span[data-label] { display: inline-flex; align-items: center; gap: 4px; color: ${({ theme, $family }) => theme.color.market[$family].text}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > div > strong { font-size: ${size("emphasis")}; line-height: 1.2; overflow-wrap: anywhere; ${desktop} { font-size: 1.0625rem; } }
   > div > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
-  /* Phones wrap the probability label so the pick keeps the width. */
+  > span[data-result] { align-self: start; }
   > span[data-probability] {
-    display: grid;
-    justify-items: center;
-    min-inline-size: 5.5rem;
-    padding: 4px 10px;
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.accent.orange.gradient};
-    border-radius: 4px;
-    > b { font-size: ${size("title")}; line-height: 1.1; font-variant-numeric: tabular-nums; }
-    > small { max-inline-size: 4.5rem; font-size: ${size("micro")}; line-height: 1.15; text-align: center; opacity: 0.92; }
-    ${desktop} {
-      > b { font-size: 1.375rem; }
-      > small { max-inline-size: none; line-height: inherit; white-space: nowrap; }
-    }
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: ${({ theme }) => theme.color.text};
+    > b { font-size: ${size("section")}; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("micro")}; line-height: 1.15; }
   }
 `;
 
@@ -172,6 +187,9 @@ export const MatchBanner = memo(function MatchBanner() {
   const { data, preview, messages, home, away, update } = useStableDetails();
   const fixture = data.fixture, context = preview?.sections.context;
   const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
+  const price = featured ? selectedDetailPrice(data, featured) : null;
+  const predictionStatus = row?.item && data.snapshot?.applicability !== "historical"
+    ? row.outcome?.status ?? (data.snapshot?.applicability === "void" ? "void" : "pending") : null;
   const played = fixture.score && (fixture.status === "live" || fixture.status.startsWith("finished") || fixture.status === "awarded");
   const form = (side: "home" | "away") => {
     const team = side === "home" ? fixture.homeTeam : fixture.awayTeam, records = preview?.sections.form[side] ?? [];
@@ -205,16 +223,20 @@ export const MatchBanner = memo(function MatchBanner() {
     </Versus>
     <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager />
       <TeamText $side="away"><strong>{away}</strong>{form("away")}</TeamText></Team>
-    {row?.item ? <Featured type="button" $empty={false} data-featured-pick={featured!}
-      onClick={() => update((current) => ({ ...current, marketsOpen: true, market: featured }))} aria-label={messages.text("details.featuredOpen", {
-        market: marketName(messages, featured!), pick: pickLabel(messages, row.item.market.selection, home, away), probability: percent(messages, row.item.market.selectedProbability) })}>
+    {row?.item ? <Featured type="button" $empty={false} $family={featured!} data-featured-pick={featured!}
+      onClick={() => update((current) => ({ ...current, marketsOpen: true, market: featured }))} aria-label={[messages.text("details.featuredOpen", {
+        market: marketName(messages, featured!), pick: pickLabel(messages, row.item.market.selection, home, away), probability: percent(messages, row.item.market.selectedProbability) }),
+        price ? `${messages.text("details.odds")}: ${price}` : null, predictionStatus ? outcomeLabel(messages, predictionStatus) : null].filter(Boolean).join(". ")}>
       <div>
         <span data-label><StarIcon />{messages.text("details.topPick")}</span>
-        <strong>{messages.text(`market.code.${featured!}`)} – {pickLabel(messages, row.item.market.selection, home, away)}</strong>
-        <small>{messages.text("details.odds")}: — · {messages.text(`market.source.${row.item.source.kind}`)}</small>
+        <strong>{messages.text(`market.code.${featured!}`)} – {pickLabel(messages, row.item.market.selection, home, away)}<PredictionOdds odds={price} /></strong>
+        <small>{messages.text(`market.source.${row.item.source.kind}`)}</small>
       </div>
-      <span data-probability><b>{percent(messages, row.item.market.selectedProbability)}</b><small>{messages.text("details.estimatedProbability")}</small></span>
-    </Featured> : <Featured type="button" $empty disabled data-featured-pick="none">
+      {predictionStatus && <DetailOutcome data-result status={predictionStatus} />}
+      <span data-probability><b>{percent(messages, row.item.market.selectedProbability)}</b>
+        <ProbabilityBar $family={featured!} aria-hidden="true"><span style={{ inlineSize: `${row.item.market.selectedProbability * 100}%` }} /></ProbabilityBar>
+        <small>{messages.text("details.estimatedProbability")}</small></span>
+    </Featured> : <Featured type="button" $empty $family="match-result" disabled data-featured-pick="none">
       <div>
         <span data-label><StarIcon />{messages.text("details.topPick")}</span>
         <strong>{messages.text("details.noPick")}</strong>
@@ -231,7 +253,7 @@ const Tiles = styled.div`
   ${media.tablet} { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   ${desktop} { gap: 10px; }
 `;
-const Tile = styled.button<{ $featured: boolean }>`
+const Tile = styled.button<{ $featured: boolean; $family: MarketFamily }>`
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas: "icon name chevron" "icon pick chevron" "icon value chevron";
@@ -240,21 +262,21 @@ const Tile = styled.button<{ $featured: boolean }>`
   min-inline-size: 0;
   padding: 7px 8px;
   color: ${({ theme }) => theme.color.text};
-  background: ${({ theme, $featured }) => $featured ? theme.color.accent.orange.soft : theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme, $featured }) => $featured ? "#FDBA74" : theme.color.border};
-  border-radius: ${({ theme }) => theme.border.cardRadius};
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-inline-start: 3px solid ${({ theme, $featured, $family }) => $featured ? theme.color.market[$family].solid : theme.color.border};
+  border-radius: 0;
   box-shadow: ${({ theme }) => theme.shadow.card};
   font: inherit;
   text-align: start;
   cursor: pointer;
   ${focusRing}
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.accent.blue.solid}; } }
-  > span:first-child { grid-area: icon; }
+  > span:first-child { grid-area: icon; border-radius: 0; }
   > b { grid-area: name; font-size: ${size("secondary")}; line-height: 1.2; }
-  > span[data-pick] { grid-area: pick; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
+  > span[data-pick] { grid-area: pick; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.3; overflow-wrap: anywhere; }
   > span[data-value] { grid-area: value; display: flex; align-items: baseline; gap: 6px; line-height: 1.2; }
-  > span[data-value] > strong { color: ${({ theme, $featured }) => $featured ? theme.color.accent.orange.text : theme.color.text}; font-size: ${size("section")}; font-variant-numeric: tabular-nums; }
-  > span[data-value] > small { padding: 0 6px; color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted}; border-radius: 4px; font-size: ${size("caption")}; }
+  > span[data-value] > strong { color: ${({ theme }) => theme.color.text}; font-size: ${size("section")}; font-variant-numeric: tabular-nums; }
   > svg:last-child { grid-area: chevron; color: ${({ theme }) => theme.color.mutedText}; }
   ${desktop} {
     padding: 9px 12px;
@@ -273,13 +295,16 @@ export const MarketTiles = memo(function MarketTiles() {
     {publicPolicy.markets.map((family) => {
       const { item } = marketRow(data, family), Icon = familyIcon[family];
       const pick = item ? pickLabel(messages, item.market.selection, home, away) : messages.text("details.notAvailable");
+      const price = selectedDetailPrice(data, family);
       return <div role="listitem" key={family} style={{ display: "grid", minInlineSize: 0 }}>
-        <Tile type="button" $featured={family === featured} data-market-tile={family} onClick={() => update((current) => ({ ...current, marketsOpen: true, market: family }))}
-          aria-label={messages.text("details.tileOpen", { market: marketName(messages, family), pick, probability: percent(messages, item?.market.selectedProbability ?? null) })}>
+        <Tile type="button" $featured={family === featured} $family={family} data-market-tile={family} onClick={() => update((current) => ({ ...current, marketsOpen: true, market: family }))}
+          aria-label={[messages.text("details.tileOpen", { market: marketName(messages, family), pick, probability: percent(messages, item?.market.selectedProbability ?? null) }),
+            price ? `${messages.text("details.odds")}: ${price}` : null].filter(Boolean).join(". ")}>
           <IconBadge $accent={familyAccent[family]}><Icon /></IconBadge>
           <b>{messages.text(`market.code.${family}`)}</b>
-          <span data-pick>{pick}</span>
-          <span data-value><strong>{percent(messages, item?.market.selectedProbability ?? null)}</strong><small title={messages.text("details.oddsMissing")}>—</small></span>
+          <span data-pick>{pick}<PredictionOdds odds={price} /></span>
+          <span data-value><strong>{percent(messages, item?.market.selectedProbability ?? null)}</strong>
+            {item && <ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${item.market.selectedProbability * 100}%` }} /></ProbabilityBar>}</span>
           <svg aria-hidden="true" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2}><path d="m9 6 6 6-6 6" /></svg>
         </Tile>
       </div>;

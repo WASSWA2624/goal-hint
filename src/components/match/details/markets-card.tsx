@@ -3,17 +3,17 @@
 import { memo, useDeferredValue, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { SearchIcon } from "@/components/ui/icons";
-import { OutcomeBadge } from "@/components/match/outcome-badge";
+import { PredictionOdds, ProbabilityBar } from "@/components/match/prediction-presentation";
 import { detailAnalysis } from "@/domain/detail-presentation";
-import { exclusiveFamily, featuredFamily, marketCategoryMembers, marketOutcomes, marketRow, visibleMarkets } from "@/domain/match-details";
+import { exclusiveFamily, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
 import { marketCategories, parseMatchView, type MarketCategory } from "@/domain/match-view";
 import type { MarketFamily } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
 import { toUtcIsoString, type UtcInstant } from "@/domain/calendar";
 import { MarketsIcon, ExternalIcon } from "./details-icons";
-import { familyAccent, familyIcon } from "./match-banner";
+import { DetailOutcome, familyAccent, familyIcon } from "./match-banner";
 import {
-  Bar, Card, CardHeader, ChoiceGroup, Crumbs, Facts, IconBadge, LinkButton, Note, Panel, PanelHeading, Pill, RowButton, RowList,
+  Card, CardHeader, ChoiceGroup, Crumbs, Facts, IconBadge, LinkButton, Note, Panel, PanelHeading, RowButton, RowList,
   desktop, focusRing, size, useDetails, useRevealOnOpen, useStableDetails,
 } from "./details-ui";
 import { useReturnFocus } from "./section-card";
@@ -29,13 +29,13 @@ const Search = styled.label`
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 4px;
+  border-radius: 0;
   &:focus-within { border-color: ${({ theme }) => theme.color.accent.blue.solid}; }
   > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; font: inherit; font-size: ${size("secondary")}; outline: none; }
 `;
 /** Narrow cards drop the probability bar and keep the percentage; wide cards show both. */
-const columns = "minmax(0, 1.4fr) minmax(0, 1fr) 4rem 2.25rem 0.75rem";
-const wideColumns = "minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1.1fr) 2.5rem 0.875rem";
+const columns = "minmax(0, 1.4fr) minmax(0, 1.1fr) 4rem 0.75rem";
+const wideColumns = "minmax(0, 1.35fr) minmax(0, 1.2fr) minmax(0, 1.1fr) 0.875rem";
 const Head = styled.div`
   display: none;
   @container details-card (min-width: 20rem) {
@@ -53,13 +53,13 @@ const Head = styled.div`
   }
 `;
 /** One table row per market from 320px; the narrowest phones use two lines. */
-const MarketRow = styled(RowButton)`
+const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
   grid-template-columns: minmax(0, 1fr) auto 0.875rem;
-  grid-template-areas: "name pick chevron" "bar odds chevron";
+  grid-template-areas: "name pick chevron" "bar bar chevron";
   column-gap: 8px;
   @container details-card (min-width: 20rem) {
     grid-template-columns: ${columns};
-    grid-template-areas: "name pick bar odds chevron";
+    grid-template-areas: "name pick bar chevron";
   }
   @container details-card (min-width: 27rem) { grid-template-columns: ${wideColumns}; }
   > span[data-bar] > span { display: none; }
@@ -67,11 +67,10 @@ const MarketRow = styled(RowButton)`
   @container details-card (min-width: 27rem) { > span[data-bar] > span { display: block; } }
   > span[data-name] { grid-area: name; display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > span[data-name] > span:last-child { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  > span[data-name] > span:first-child { inline-size: 1.375rem; block-size: 1.375rem; font-size: ${size("body")}; }
-  > span[data-pick] { grid-area: pick; }
+  > span[data-name] > span:first-child { inline-size: 1.375rem; block-size: 1.375rem; border-radius: 0; font-size: ${size("body")}; }
+  > span[data-pick] { grid-area: pick; padding: 3px 6px; border: 1px solid ${({ theme }) => theme.color.border}; border-inline-start: 3px solid ${({ theme, $family }) => theme.color.market[$family].solid}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
   > span[data-bar] { grid-area: bar; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
   > span[data-bar] > b { min-inline-size: 2.25rem; }
-  > span[data-odds] { grid-area: odds; justify-self: end; padding: 1px 6px; color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted}; border-radius: 4px; }
   > svg { grid-area: chevron; color: ${({ theme }) => theme.color.mutedText}; }
 `;
 const Outcomes = styled.ul`
@@ -139,16 +138,15 @@ function MarketPanel({ family }: { family: MarketFamily }) {
     <PanelHeading ref={heading} tabIndex={-1}>{marketName(messages, family)}</PanelHeading>
     {item ? <>
       <Facts>
-        <dt>{messages.text("details.prediction")}</dt><dd><Pill $accent="orange">{pickLabel(messages, item.market.selection, home, away)}</Pill></dd>
+        <dt>{messages.text("details.prediction")}</dt><dd><strong>{pickLabel(messages, item.market.selection, home, away)}<PredictionOdds odds={selectedDetailPrice(data, family)} /></strong></dd>
         <dt>{messages.text("details.estimatedProbability")}</dt><dd><b>{percent(messages, item.market.selectedProbability)}</b></dd>
-        <dt>{messages.text("details.odds")}</dt><dd>— <Note as="span">{messages.text("details.oddsMissing")}</Note></dd>
       </Facts>
       <SubHeading>{messages.text("details.allOutcomes")}</SubHeading>
       <Outcomes aria-label={messages.text("details.allOutcomes")}>
         {marketOutcomes(item.market.probabilities as Readonly<Record<string, number>>, family).map(({ selection, probability }) =>
           <li key={selection} data-selected={selection === item.market.selection || undefined}>
             <span>{pickLabel(messages, selection, home, away)}{selection === item.market.selection && <> · {messages.text("details.predicted")}</>}</span>
-            <Bar value={probability ?? 0} $accent={selection === item.market.selection ? "orange" : "blue"} aria-hidden="true" />
+            <ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${(probability ?? 0) * 100}%` }} /></ProbabilityBar>
             <b>{percent(messages, probability)}</b>
           </li>)}
       </Outcomes>
@@ -162,7 +160,7 @@ function MarketPanel({ family }: { family: MarketFamily }) {
         <dt>{messages.text("detail.retrieved")}</dt><dd><Time at={item.timestamps.retrievedAt} /></dd>
         <dt>{messages.text("detail.providerUpdated")}</dt><dd><Time at={item.timestamps.providerUpdatedAt} /></dd>
         <dt>{messages.text("details.bookmakerSource")}</dt><dd>{messages.text("details.notAvailable")}</dd>
-        {data.snapshot!.applicability !== "historical" && <><dt>{messages.text("match.outcome")}</dt><dd><OutcomeBadge status={outcome?.status ?? "pending"} /></dd></>}
+        {data.snapshot!.applicability !== "historical" && <><dt>{messages.text("match.outcome")}</dt><dd><DetailOutcome status={outcome?.status ?? "pending"} /></dd></>}
       </Facts>
       <SubHeading>{messages.text("details.explanation")}</SubHeading>
       {analysis?.state === "available" ? <>
@@ -213,7 +211,7 @@ export const MarketsCard = memo(function MarketsCard() {
   const list = useRef<HTMLUListElement>(null);
   useReturnFocus(list, view.market);
   const [search, setSearch] = useMarketSearch(view.marketSearch), query = useDeferredValue(search);
-  const featured = featuredFamily(data), published = data.snapshot?.markets.length ?? 0;
+  const published = data.snapshot?.markets.length ?? 0;
   const label = (family: MarketFamily) => `${marketName(messages, family)} ${messages.text(`market.code.${family}`)}`;
   const shown = visibleMarkets(view.marketCategory, query, label);
   const categoryLabel = (category: MarketCategory) => messages.text(`details.category.${category}`);
@@ -232,19 +230,20 @@ export const MarketsCard = memo(function MarketsCard() {
           onChange={(category) => update((current) => ({ ...current, marketCategory: category }), "replace")} />}
         <div>
           <Head aria-hidden="true"><span>{messages.text("details.market")}</span><span>{messages.text("details.prediction")}</span>
-            <span>{messages.text("details.probability")}</span><span>{messages.text("details.odds")}</span><span /></Head>
+            <span>{messages.text("details.probability")}</span><span /></Head>
           {shown.length > 0 ? <RowList ref={list}>
             {shown.map((family) => {
               const { item } = marketRow(data, family), Icon = familyIcon[family];
               const pick = item ? pickLabel(messages, item.market.selection, home, away) : messages.text("details.notAvailable");
+              const price = selectedDetailPrice(data, family);
               return <li key={family}>
-                <MarketRow type="button" data-detail-market={family} data-item-key={family} onClick={() => update((current) => ({ ...current, market: family }))}
-                  aria-label={messages.text("details.tileOpen", { market: marketName(messages, family), pick, probability: percent(messages, item?.market.selectedProbability ?? null) })}>
+                <MarketRow type="button" $family={family} data-detail-market={family} data-item-key={family} onClick={() => update((current) => ({ ...current, market: family }))}
+                  aria-label={[messages.text("details.tileOpen", { market: marketName(messages, family), pick, probability: percent(messages, item?.market.selectedProbability ?? null) }),
+                    price ? `${messages.text("details.odds")}: ${price}` : null].filter(Boolean).join(". ")}>
                   <span data-name><IconBadge $accent={familyAccent[family]}><Icon /></IconBadge><span>{marketName(messages, family)}</span></span>
-                  <span data-pick><Pill $accent={!item ? "blue" : family === featured ? "orange" : "blue"} style={item ? undefined : { opacity: 0.7 }}>{pick}</Pill></span>
-                  <span data-bar>{item ? <><b>{percent(messages, item.market.selectedProbability)}</b><Bar value={item.market.selectedProbability} /></>
+                  <span data-pick>{pick}<PredictionOdds odds={price} /></span>
+                  <span data-bar>{item ? <><b>{percent(messages, item.market.selectedProbability)}</b><ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${item.market.selectedProbability * 100}%` }} /></ProbabilityBar></>
                     : <b>—</b>}</span>
-                  <span data-odds title={messages.text("details.oddsMissing")}>—</span>
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2}><path d="m9 6 6 6-6 6" /></svg>
                 </MarketRow>
               </li>;
@@ -254,7 +253,6 @@ export const MarketsCard = memo(function MarketsCard() {
         </div>
         {!query && marketCategoryMembers[view.marketCategory].length === 0 && <Note>{messages.text("details.supportedMarkets")}</Note>}
         <Footer>
-          <Note>{messages.text("details.oddsFooter")}</Note>
           <Note>{messages.text("details.probabilityNotOdds")}</Note>
         </Footer>
       </Body>)}
