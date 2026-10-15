@@ -259,3 +259,41 @@ The production host independently converted the affected league JPEG to a
 cache HIT. No new Google score is inferred from these checks. The final requested
 target is **100 Performance, Accessibility, Best Practices and SEO on mobile
 and desktop**.
+
+## Production deployment of the pre-paint and navigation update
+
+Release **`20261015195207-e97c3bd`** is active, built from clean commit
+`e97c3bdacf1aceda0c9a5e065a446825b3eb2e48`. The complete portable artifact is
+13.2 MiB. Transfer reused unchanged baseline files, then verified all **2,118 file
+hashes** against that complete artifact before the existing codec preflight,
+private-configuration sync, activation and restart. The prior `17c36b7` release
+is retained for rollback; the separate fixture worker was not redeployed.
+
+The exact **14 live HTTP/SEO checks** pass from the production host: 167 fixtures,
+3,035 historical fixtures in the performance cohort and three populated sitemap
+files. Canonicals, index/noindex variants and real 404s remain correct. Live
+HTML contains the embedded brand, first-party badges, consent bootstrap/pending
+markup and loading-bar label. Team 33 returns a 1,350-byte WebP with HIT; the
+affected league 396 now returns **HTTP 200**, a **154-byte WebP**, then HIT.
+Invalid badge kinds/sizes remain HTTP 404. The image checks also pass from the
+local connection. All **16 public JavaScript files** referenced by the page
+return HTTP 200 and match the active files byte-for-byte when fetched from the host.
+
+The local connection subsequently suffered SSL handshake timeouts and extremely
+slow asset transfers. A live-browser diagnostic found pending script downloads,
+no HTTP error responses and no application/console errors; only three scripts
+finished within 45 seconds. A functional check therefore used the real public
+HTML and the exact deployed static files supplied locally, after their separate
+public delivery/hash verification. Holding all 15 framework scripts proved the
+consent text was already visible, with disabled buttons and no identifier or
+stored choice. Hydration and Decline then succeeded without any analytics
+request or browser error. The inline consent check is **779 bytes**. This is a
+functional result, not a performance measurement or substitute for PageSpeed.
+
+Google's audit UI failed locally with a closed connection and a timeout. Its
+server HTML alone did not provide a completed new analysis. A fresh report for
+`https://goalhint.com/en` has been requested. The latest verified Google scores
+therefore remain **91 mobile / 98 desktop Performance** from the preceding
+release, with **100 Accessibility and SEO** on both and **100 mobile / 96 desktop
+Best Practices**. No post-deployment 100 result is claimed. Search Console
+verification steps remain in `docs/reports/seo-audit-2026-10-15.md`.
