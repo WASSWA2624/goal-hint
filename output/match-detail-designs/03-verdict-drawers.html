@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>03 Verdict & Drawers · Goal Hint match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  :root { --page: #E4EBEF; }
+  .band { display: grid; grid-template-columns: 1fr 1fr; height: 3px; }
+  .band i:first-child { background: var(--home); } .band i:last-child { background: var(--away); }
+  .top { background: var(--surface); border-bottom: 1px solid var(--hair); }
+  .ctx { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 9px var(--g) 0; font-size: 12px; color: var(--muted); }
+  .hd { display: grid; grid-template-columns: 1fr 104px 1fr; align-items: start; padding: 8px var(--g) 12px; }
+  .hd .tm { display: grid; justify-items: center; gap: 3px; text-align: center; }
+  .hd .tm b { font-size: 14.5px; } .hd .tm small { color: var(--muted); }
+  .hd .sc { display: grid; justify-items: center; gap: 3px; padding-top: 4px; }
+  .hd .sc strong { font-size: 32px; line-height: 1; font-weight: 800; }
+  .hd .sc span { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 800; color: var(--live); }
+  .hd .sc small { color: var(--muted); }
+  .verdict { margin: 8px 0 0; padding: 12px var(--g) 12px; background: var(--surface); }
+  .eb { display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--teal-d); }
+  .eb span { font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--muted); font-size: 11.5px; }
+  .big { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; margin-top: 6px; }
+  .big h2 { font-size: 22px; line-height: 1.15; font-weight: 800; }
+  .big h2 small { display: block; margin-top: 3px; font-size: 12px; font-weight: 700; color: var(--dc); }
+  .big strong { font-size: 34px; line-height: .95; font-weight: 800; color: var(--text); }
+  .big strong + span { display: block; text-align: right; font-size: 12px; color: var(--muted); }
+  .say { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .say b { color: var(--text); }
+  .tri { display: flex; gap: 2px; height: 26px; margin-top: 10px; }
+  .tri span { display: flex; align-items: center; padding: 0 7px; font-size: 12px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; }
+  .tri .d { background: #8395A2; justify-content: center; } .tri .a { justify-content: flex-end; }
+  .others { margin-top: 10px; border-top: 1px solid var(--hair); }
+  .others div { display: grid; grid-template-columns: 54px 1fr auto auto; align-items: center; gap: 8px; min-height: 34px; border-bottom: 1px solid var(--hair); }
+  .others .c { font-size: 11.5px; font-weight: 800; color: var(--h); }
+  .others b { font-size: 13px; } .others strong { font-size: 13.5px; }
+  .foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+  .drawers { margin-top: 8px; background: var(--surface); }
+  .dr { border-bottom: 1px solid var(--hair); }
+  .dr > summary { display: grid; grid-template-columns: 20px auto 1fr 14px; align-items: center; gap: 10px; min-height: 46px; padding: 0 var(--g); }
+  .dr > summary > .ic:first-child { color: var(--teal); }
+  .dr > summary b { font-size: 13.5px; font-weight: 750; white-space: nowrap; }
+  .dr > summary span { justify-self: end; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
+  .dr > summary > .ic:last-child { color: var(--muted); transition: transform .15s; }
+  .dr[open] > summary { background: var(--soft); }
+  .dr[open] > summary > .ic:last-child { transform: rotate(180deg); }
+  .dr > div { padding: 6px var(--g) 12px; }
+  .mini { display: inline-flex; gap: 2px; } .mini i { width: 7px; height: 12px; } .mini .W { background: var(--win); } .mini .D { background: var(--draw); } .mini .L { background: var(--loss); }
+  .gap { height: 8px; background: var(--page); }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, meter, pend, tick, letters, B } = K;
+const T = K.top(), mr = M.markets[0];
+const mini = (s) => `<span class="mini">${letters(M.form[s]).split("").map((l) => `<i class="${l}"></i>`).join("")}</span>`;
+const dr = (icon, title, preview, body, open = false) => `<details class="dr" ${open ? "open" : ""}><summary>${ic(icon, 18)}<b>${title}</b><span>${preview}</span>${ic("down", 14)}</summary><div>${body}</div></details>`;
+
+K.mount(`${B.bar("Match details")}
+<div class="band"><i></i><i></i></div>
+<section class="top">
+  <p class="ctx">${league(13)} ${M.league.name} · ${M.league.round} · ${M.kickoff.day} ${M.kickoff.time}</p>
+  <div class="hd">
+    <div class="tm">${crest(H, 44)}<b>${H.name}</b><small>Saka 12'</small></div>
+    <div class="sc"><strong>${H.goals} – ${A.goals}</strong><span>${liveDot()} ${M.status.minute}</span><small>HT ${M.status.ht}</small></div>
+    <div class="tm">${crest(A, 44)}<b>${A.name}</b><small>Palmer 34' (pen)</small></div>
+  </div>
+</section>
+
+<section class="verdict">
+  <p class="eb">Our verdict<span>Rev ${M.publication.revision} · ${M.publication.published}</span></p>
+  <div class="big"><h2>${T.pickLabel}<small>${T.name} · odds ${T.odds}</small></h2><div><strong>${T.prob}%</strong><span>chance</span></div></div>
+  <p class="say"><b>Arsenal are favourites</b> at home; a Chelsea win is the least likely result. ${nowLine(T)}</p>
+  <div class="tri" aria-label="Match result chances">
+    <span style="flex:${mr.outcomes[0].p};background:${H.color}">${H.short} ${mr.outcomes[0].p}%</span>
+    <span class="d" style="flex:${mr.outcomes[1].p}">Draw ${mr.outcomes[1].p}%</span>
+    <span class="a" style="flex:${mr.outcomes[2].p};background:${A.color}">${A.short} ${mr.outcomes[2].p}%</span></div>
+  <div class="others">${M.markets.filter((m) => !m.top).map((m) => `<div style="--h:${hue(m.id)}"><span class="c">${m.code}</span><b>${m.pickLabel}</b><strong>${m.prob}%</strong>${tick(m.live.ok)}</div>`).join("")}</div>
+  <p class="foot">${ic("clock", 13)} All picks ${pend()} · ${M.publication.settles}</p>
+</section>
+
+<section class="drawers">
+  ${dr("bulb", "Why we think so", "3 reasons · 1 risk", B.analysis())}
+  ${dr("coins", "Every outcome & odds", "4 markets", M.markets.map((m) => `<p class="k-meta" style="margin:6px 0 2px;font-weight:800;color:${hue(m.id)}">${m.code} · ${m.name}</p>${B.outcomes(m)}`).join("") + `<p class="k-meta" style="margin-top:6px">${M.oddsMeta}</p>`)}
+  ${dr("ball", "Match events", "1–1 · 2 cards · VAR", B.events(), true)}
+  ${dr("chart", "Statistics", "58% possession · xG 1.62–0.88", B.stats())}
+  ${dr("pitch", "Line-ups", `${H.formation} v ${A.formation} · confirmed`, `<div style="margin:0 calc(-1 * var(--g))">${B.pitch()}</div><div style="height:10px"></div>${B.bench()}`)}
+  ${dr("medic", "Missing players", `${M.injuries.home.length} · ${M.injuries.away.length}`, B.injuries())}
+  ${dr("bolt", "Form", `${mini("home")} ${mini("away")}`, B.form() + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px">${B.formList("home")}${B.formList("away")}</div>`)}
+  ${dr("swap", "Head-to-head", `${M.h2h.summary.home} wins · ${M.h2h.summary.draw} draws · ${M.h2h.summary.away}`, B.h2h())}
+  ${dr("list", "Standings", "2nd v 4th", B.table())}
+  ${dr("trophy", "Season stats", "2.1 v 1.9 goals a game", B.season() + `<p class="k-meta" style="margin:10px 0 4px;font-weight:800">Strength comparison · API-Football</p>` + B.compare())}
+  ${dr("users", "Key players", "Saka · Palmer", B.players())}
+  ${dr("cal", "Schedule", `Rest ${M.schedule.rest.home} v ${M.schedule.rest.away}`, B.schedule())}
+  ${dr("stadium", "Match info", `${M.venue.name} · ${M.referee.name}`, B.info())}
+  ${dr("news", "News", `${M.news.length} stories`, B.news())}
+  ${dr("history", "Prediction history", `Rev ${M.publication.revision} · ${M.history.length} versions`, B.history())}
+</section>
+${B.disc()}
+${B.nav()}`);
+</script></body></html>

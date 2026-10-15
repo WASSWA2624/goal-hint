@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>04 Mirror · Goal Hint match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  body { background: var(--surface); }
+  .band { display: grid; grid-template-columns: 1fr 1fr; height: 3px; }
+  .band i:first-child { background: var(--home); } .band i:last-child { background: var(--away); }
+  .hd { display: grid; grid-template-columns: 1fr 104px 1fr; align-items: start; padding: 10px var(--g) 6px; }
+  .hd .tm { display: grid; justify-items: center; gap: 3px; text-align: center; }
+  .hd .tm b { font-size: 14.5px; } .hd .tm small { color: var(--muted); }
+  .hd .sc { display: grid; justify-items: center; gap: 3px; padding-top: 4px; }
+  .hd .sc strong { font-size: 32px; line-height: 1; font-weight: 800; }
+  .hd .sc span { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 800; color: var(--live); }
+  .hd .sc small { color: var(--muted); }
+  .ctx { text-align: center; font-size: 12px; color: var(--muted); padding: 0 var(--g) 10px; display: flex; justify-content: center; gap: 6px; align-items: center; }
+  .split { display: flex; gap: 2px; height: 30px; margin: 0 var(--g); }
+  .split span { display: grid; align-content: center; padding: 0 8px; font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; line-height: 1.05; }
+  .split span small { font-size: 10.5px; font-weight: 700; opacity: .85; }
+  .split .d { background: #8395A2; text-align: center; } .split .a { text-align: right; }
+  .verdict { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 7px var(--g) 10px; font-size: 12.5px; }
+  .verdict b { font-weight: 800; }
+  .ax { display: flex; align-items: center; gap: 10px; padding: 14px var(--g) 6px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .ax::before, .ax::after { content: ""; flex: 1; height: 1px; background: var(--hair); }
+  .ax::before { background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--home) 45%, transparent)); }
+  .ax::after { background: linear-gradient(90deg, color-mix(in srgb, var(--away) 45%, transparent), transparent); }
+  .sec { padding: 0 var(--g) 4px; }
+  .picks { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hair); border: 1px solid var(--hair); }
+  .pk { display: grid; gap: 2px; padding: 8px 10px; background: var(--surface); text-align: center; justify-items: center; }
+  .pk .c { font-size: 11px; font-weight: 800; color: var(--h); letter-spacing: .04em; }
+  .pk b { font-size: 14px; } .pk strong { font-size: 18px; font-weight: 800; line-height: 1.1; }
+  .pk.top { background: color-mix(in srgb, var(--h) 7%, var(--surface)); box-shadow: inset 0 3px 0 var(--h); }
+  .pk .k-meter { width: 70%; }
+  .pk em { font-style: normal; font-size: 11.5px; color: var(--muted); }
+  .mrow { display: grid; grid-template-columns: 1fr 124px 1fr; align-items: center; gap: 8px; min-height: 32px; border-bottom: 1px solid var(--hair); font-size: 12.5px; }
+  .mrow > :first-child { text-align: right; } .mrow > em { font-style: normal; text-align: center; font-size: 11.5px; color: var(--muted); font-weight: 650; }
+  .mrow b { font-weight: 800; }
+  .mrow .k-fm { justify-self: end; } .mrow > :last-child .k-fm, .mrow > .k-fm:last-child { justify-self: start; }
+  .mlu { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1px; background: var(--hair); }
+  .mlu > div { background: var(--surface); }
+  .mlu h4 { padding: 4px 8px; font-size: 12px; font-weight: 800; color: #fff; }
+  .mlu li { display: flex; align-items: center; gap: 6px; min-height: 22px; padding: 0 8px; font-size: 12.5px; }
+  .mlu > div:first-child li { flex-direction: row-reverse; text-align: right; }
+  .mlu > div:first-child h4 { text-align: right; }
+  .mlu li i { font-style: normal; font-weight: 750; color: var(--muted); width: 20px; font-size: 11.5px; }
+  .mlu > div:first-child li i:first-child { text-align: left; }
+  .mlu .coach { padding: 5px 8px; font-size: 12px; border-top: 1px solid var(--hair); }
+  .mlu > div:first-child .coach { text-align: right; }
+  .minj p { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .cmp > div { display: grid; grid-template-columns: 34px 1fr 84px 1fr 34px; align-items: center; gap: 6px; min-height: 24px; font-size: 12px; }
+  .cmp i { display: block; height: 6px; } .cmp i:nth-of-type(1) { justify-self: end; background: var(--home); } .cmp i:nth-of-type(2) { background: var(--away); }
+  .cmp span { text-align: center; color: var(--muted); } .cmp b:last-child { text-align: right; }
+  .k-ev-r { border-bottom: 1px solid var(--hair); }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, meter, pend, tick, form, B } = K;
+const mr = M.markets[0];
+const ax = (t) => `<h2 class="ax">${t}</h2>`;
+const row = (l, c, r) => `<div class="mrow"><span>${l}</span><em>${c}</em><span>${r}</span></div>`;
+const tbl = (n) => M.table.find((r) => r[1] === n);
+const [hT, aT] = [tbl(H.name), tbl(A.name)];
+const lu = (s) => { const l = M.lineups[s], t = K.team(s); return `<div><h4 style="background:${t.color}">${t.name} · ${l.formation}</h4><ol>${l.xi.map(([n, name]) => `<li><i>${n}</i><span>${name}</span></li>`).join("")}</ol>
+  <p class="coach" style="color:var(--muted)">Bench: ${l.bench.slice(0, 4).map((b) => b[1]).join(", ")} +${l.bench.length - 4}</p><p class="coach"><b>${l.coach}</b></p></div>`; };
+
+K.mount(`${B.bar("Match details")}
+<div class="band"><i></i><i></i></div>
+<section class="hd">
+  <div class="tm">${crest(H, 44)}<b>${H.name}</b><small>Saka 12'</small></div>
+  <div class="sc"><strong>${H.goals} – ${A.goals}</strong><span>${liveDot()} ${M.status.minute}</span><small>HT ${M.status.ht}</small></div>
+  <div class="tm">${crest(A, 44)}<b>${A.name}</b><small>Palmer 34' (pen)</small></div>
+</section>
+<p class="ctx">${league(13)} ${M.league.name} · ${M.league.round} · ${M.kickoff.day} ${M.kickoff.time}</p>
+<div class="split" aria-label="Who wins">
+  <span style="flex:${mr.outcomes[0].p};background:${H.color}"><small>${H.short} WIN</small>${mr.outcomes[0].p}%</span>
+  <span class="d" style="flex:${mr.outcomes[1].p}"><small>DRAW</small>${mr.outcomes[1].p}%</span>
+  <span class="a" style="flex:${mr.outcomes[2].p};background:${A.color}"><small>${A.short} WIN</small>${mr.outcomes[2].p}%</span></div>
+<p class="verdict">Our pick: <b>${mr.pickLabel}</b> · odds ${mr.odds} · ${nowLine(mr)}</p>
+
+${ax("Our picks")}
+<div class="sec"><div class="picks">${M.markets.map((m) => `<div class="pk ${m.top ? "top" : ""}" style="--h:${hue(m.id)}"><span class="c">${m.top ? "★ " : ""}${m.code}</span><b>${m.pickLabel}</b><strong>${m.prob}%</strong>${meter(m.prob, hue(m.id))}<em>Odds ${m.odds} · ${m.live.ok ? "✓ " : ""}${m.live.text}</em></div>`).join("")}</div>
+<p class="k-meta" style="text-align:center;padding-top:6px">All ${pend()} · ${M.publication.settles} · Rev ${M.publication.revision}, ${M.publication.published}</p></div>
+
+${ax("Events")}<div class="sec">${B.events()}</div>
+${ax("Statistics")}<div class="sec">${B.stats()}</div>
+${ax("Form")}<div class="sec">${row(form(M.form.home, true), "Last 5", form(M.form.away, true))}${row("<b>4W 1D 0L</b>", "Record", "<b>3W 1D 1L</b>")}</div>
+${ax("Standings")}<div class="sec">${row(`<b>${hT[0]}nd</b> · ${hT[4]} pts`, "Position", `<b>${aT[0]}th</b> · ${aT[4]} pts`)}${row(hT[3], "Goal diff.", aT[3])}${row(hT[5].split("").join(" "), "League form", aT[5].split("").join(" "))}
+  <details class="more" style="padding-top:6px"><summary class="k-meta" style="text-align:center;font-weight:750;color:var(--teal-d)">Full table ▾</summary>${B.table()}</details></div>
+${ax("Head-to-head")}<div class="sec">${row(`<b style="font-size:18px">${M.h2h.summary.home}</b> wins`, `<b style="font-size:18px;color:var(--text)">${M.h2h.summary.draw}</b><br>draws`, `<b style="font-size:18px">${M.h2h.summary.away}</b> wins`)}
+  ${M.h2h.meetings.map(([d, h, sc]) => { const [x, y] = sc.split("–").map(Number), ars = h === H.name ? x : y, che = h === H.name ? y : x;
+    const w = (a, b) => a > b ? "" : ' style="font-weight:600;color:var(--muted)"';
+    return row(`<b${w(ars, che)}>${ars}</b>`, d, `<b${w(che, ars)}>${che}</b>`); }).join("")}
+  <p class="k-meta" style="text-align:center;padding-top:5px">Avg ${M.h2h.summary.goals} goals · BTTS ${M.h2h.summary.btts}</p></div>
+${ax("Season")}<div class="sec">${M.season.map(([l, h, a]) => row(`<b>${h}</b>`, l, `<b>${a}</b>`)).join("")}</div>
+${ax("Strength")}<div class="sec cmp">${M.compare.map(([l, h]) => `<div><b>${h}</b><i style="width:${h}%"></i><span>${l}</span><i style="width:${100 - h}%"></i><b>${100 - h}</b></div>`).join("")}</div>
+${ax("Line-ups")}<div class="sec"><div class="mlu">${lu("home")}${lu("away")}</div></div>
+${ax("Missing")}<div class="sec">${[0, 1, 2].map((i) => { const h = M.injuries.home[i], a = M.injuries.away[i];
+  return row(h ? `<b>${h[0]}</b><br><small style="color:var(--${h[1] === "Out" ? "bad" : "pend"})">${h[1]} · ${h[2]}</small>` : "", "", a ? `<b>${a[0]}</b><br><small style="color:var(--${a[1] === "Out" ? "bad" : "pend"})">${a[1]} · ${a[2]}</small>` : ""); }).join("")}</div>
+${ax("Key players")}<div class="sec">${[0, 1].map((i) => { const h = M.players.home[i], a = M.players.away[i];
+  return row(`<b>${h[0]}</b> <small style="color:var(--muted)">${h[2]}G ${h[3]}A · ${h[4]}</small>`, h[1] + " · " + a[1], `<b>${a[0]}</b> <small style="color:var(--muted)">${a[2]}G ${a[3]}A · ${a[4]}</small>`); }).join("")}</div>
+${ax("Schedule")}<div class="sec">${row(M.schedule.rest.home, "Rest", M.schedule.rest.away)}${row(M.schedule.last.home, "Last", M.schedule.last.away)}${row(M.schedule.next.home, "Next", M.schedule.next.away)}</div>
+${ax("Why this prediction")}<div class="sec">${B.analysis()}</div>
+${ax("Every outcome")}<div class="sec">${M.markets.map((m) => `<p class="k-meta" style="margin:6px 0 2px;font-weight:800;color:${hue(m.id)}">${m.code} · ${m.name}</p>${B.outcomes(m, { implied: false })}`).join("")}</div>
+${ax("Odds")}<div class="sec">${B.odds()}</div>
+${ax("Match info")}<div class="sec">${B.info()}</div>
+${ax("News")}<div class="sec">${B.news()}</div>
+${ax("Prediction history")}<div class="sec">${B.history()}</div>
+${B.disc()}
+${B.nav()}`);
+</script></body></html>

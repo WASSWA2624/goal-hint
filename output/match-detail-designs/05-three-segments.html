@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>05 Three Segments · Goal Hint match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  :root { --page: #E4EBEF; }
+  .bar { border-bottom: 0; }
+  .hero { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 4px var(--g) 4px; color: #fff; background: var(--navy); }
+  .hero .t { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; min-width: 0; }
+  .hero .t.a { justify-content: flex-end; text-align: right; }
+  .hero .sc { display: grid; justify-items: center; }
+  .hero strong { font-size: 26px; line-height: 1; font-weight: 800; }
+  .hero .lv { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; color: #FF9C9C; }
+  .meta { padding: 2px var(--g) 10px; text-align: center; font-size: 11.5px; color: #B6C7D1; background: var(--navy); }
+  .seg { position: sticky; top: var(--bar-h); z-index: 30; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+  html.full .seg { position: static; }
+  .seg button { display: grid; justify-items: center; gap: 1px; padding: 8px 4px 7px; background: var(--soft2); color: var(--muted); box-shadow: inset 0 3px 0 transparent; }
+  .seg button b { display: flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 800; }
+  .seg button small { font-size: 11px; font-weight: 650; }
+  .seg button[aria-selected="true"] { color: var(--text); background: var(--surface); box-shadow: inset 0 3px 0 var(--teal); }
+  .seg button[aria-selected="true"] .ic { color: var(--teal); }
+  .pnl { display: grid; gap: 8px; padding: 8px 0 4px; }
+  .card { padding: 10px var(--g) 12px; background: var(--surface); }
+  .ch { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 13.5px; font-weight: 800; }
+  .ch em { margin-left: auto; font-style: normal; font-size: 11.5px; font-weight: 650; color: var(--muted); }
+  .mk { padding: 10px var(--g) 10px; background: var(--surface); }
+  .mk .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .mk .hd small { font-size: 11.5px; font-weight: 800; color: var(--h); }
+  .mk .hd b { font-size: 13.5px; }
+  .mk .hd .r { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .cells { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+  .cell { position: relative; display: grid; justify-items: center; gap: 1px; padding: 7px 4px 6px; background: var(--soft); border: 1px solid var(--hair); text-align: center; }
+  .cell span { font-size: 11.5px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .cell strong { font-size: 19px; line-height: 1.15; font-weight: 800; color: var(--muted); }
+  .cell em { font-style: normal; font-size: 11.5px; color: var(--muted); }
+  .cell.pick { background: var(--surface); border: 1.5px solid var(--h); box-shadow: inset 0 3px 0 var(--h); }
+  .cell.pick span, .cell.pick strong { color: var(--text); }
+  .cell.pick::after { content: "PICK"; position: absolute; top: -7px; right: 6px; padding: 0 4px; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: #fff; background: var(--h); }
+  .mk .ft { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  .mk .ft .k-meta { text-align: right; }
+  .topnote { display: flex; align-items: center; gap: 8px; padding: 9px var(--g); font-size: 12.5px; background: var(--surface); }
+  .topnote b { font-weight: 800; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .two h5 { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 12px; }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, meter, pend, tick, B } = K;
+const T = K.top();
+const card = (title, note, body) => `<section class="card"><h2 class="ch">${title}${note ? `<em>${note}</em>` : ""}</h2>${body}</section>`;
+const mk = (m) => `<section class="mk" style="--h:${hue(m.id)}"><div class="hd"><small>${m.code}</small><b>${m.name}</b><span class="r">${m.top ? `<small style="color:#B07A00">★ Top pick</small>` : ""}</span></div>
+  <div class="cells">${m.outcomes.map((o) => `<div class="cell ${o.k === m.pick ? "pick" : ""}"><span>${o.label}</span><strong>${o.p}%</strong><em>${o.odds}</em></div>`).join("")}</div>
+  <div class="ft">${nowLine(m)}<span class="k-meta">Bookmakers ${m.outcomes.find((o) => o.k === m.pick).implied}%</span></div></section>`;
+
+const pred = `<div class="pnl" data-panel="pred" data-title="Prediction">
+  <p class="topnote">${ic("star", 14, 'style="color:#D99A00"')}<span>Best pick: <b>${T.pickLabel}</b> · ${T.prob}% · odds ${T.odds}</span><span style="margin-left:auto">${pend()}</span></p>
+  ${M.markets.map(mk).join("")}
+  <p class="k-meta" style="padding:0 var(--g)">${M.publication.settles} · Rev ${M.publication.revision}, published ${M.publication.published} · ${M.oddsMeta}</p>
+  ${card("Why this prediction", M.publication.source, B.analysis())}
+  ${card("Prediction history", M.publication.locks, B.history())}
+</div>`;
+
+const match = `<div class="pnl" data-panel="match" data-title="Match" hidden>
+  ${card("Events", `${M.status.long} · ${M.status.minute}`, B.events())}
+  ${card("Statistics", "Live", B.stats())}
+  ${card("Line-ups", "Confirmed", `<div style="margin:0 calc(-1 * var(--g))">${B.pitch()}</div><div style="height:10px"></div>${B.bench()}`)}
+  ${card("Match info", "", B.info())}
+</div>`;
+
+const teams = `<div class="pnl" data-panel="teams" data-title="Teams" hidden>
+  ${card("Form", "Last 5", B.form() + `<div class="two" style="margin-top:6px"><div>${B.formList("home")}</div><div>${B.formList("away")}</div></div>`)}
+  ${card("Head-to-head", "Last 5 meetings", B.h2h())}
+  ${card("Standings", M.league.name, B.table())}
+  ${card("Season stats", "League", B.season())}
+  ${card("Strength comparison", "API-Football", B.compare())}
+  ${card("Missing players", "", B.injuries())}
+  ${card("Key players", "Season", B.players())}
+  ${card("Schedule", "", B.schedule())}
+  ${card("News", "", B.news())}
+</div>`;
+
+K.mount(`${B.bar(`${M.league.name} · ${M.league.round}`)}
+<section class="hero"><span class="t">${crest(H, 30)}${H.name}</span><span class="sc"><strong>${H.goals} – ${A.goals}</strong><span class="lv">${liveDot()} ${M.status.minute}</span></span><span class="t a">${A.name}${crest(A, 30)}</span></section>
+<p class="meta">HT ${M.status.ht} · Saka 12' · Palmer 34' (pen) · ${M.kickoff.day} ${M.kickoff.time}</p>
+<nav class="seg" role="tablist" data-scrolltop>
+  <button role="tab" data-tab="pred" aria-selected="true"><b>${ic("bulb", 15)}Prediction</b><small>4 picks · best ${T.prob}%</small></button>
+  <button role="tab" data-tab="match" aria-selected="false"><b>${ic("ball", 15)}Match</b><small>Live · line-ups</small></button>
+  <button role="tab" data-tab="teams" aria-selected="false"><b>${ic("users", 15)}Teams</b><small>Form · H2H · table</small></button>
+</nav>
+${pred}${match}${teams}
+${B.disc()}
+${B.nav()}`);
+</script></body></html>

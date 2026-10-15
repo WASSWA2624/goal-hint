@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>01 Ledger · Goal Hint match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  body { background: var(--surface); }
+  .sb { padding: 8px var(--g) 10px; border-bottom: 1px solid var(--line); }
+  .sb .meta { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; color: var(--muted); }
+  .sb .meta span { margin-left: auto; }
+  .teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 6px; margin-top: 8px; }
+  .t { display: grid; justify-items: center; gap: 3px; text-align: center; }
+  .t b { font-size: 14px; } .t small { color: var(--muted); }
+  .sc { display: grid; justify-items: center; gap: 2px; padding-top: 2px; }
+  .sc strong { font-size: 30px; line-height: 1; font-weight: 800; letter-spacing: -.01em; }
+  .lv { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--live); }
+  .sc small { color: var(--muted); }
+
+  .lh { display: flex; align-items: baseline; gap: 8px; padding: 7px var(--g) 6px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--teal-d); background: var(--soft); border-block: 1px solid var(--hair); }
+  .lh em { margin-left: auto; font-style: normal; font-weight: 650; letter-spacing: 0; text-transform: none; font-size: 11.5px; color: var(--muted); }
+  .sec { padding: 4px var(--g) 8px; }
+  .sec + .lh { margin-top: 0; }
+
+  .pk { border-bottom: 1px solid var(--hair); }
+  .pk summary { display: grid; grid-template-columns: 50px minmax(0, 1fr) 56px 36px 14px; align-items: center; gap: 8px; min-height: 46px; padding: 0 var(--g); }
+  .pk .code { font-size: 11.5px; font-weight: 800; color: var(--h); }
+  .pk .pl b { display: flex; align-items: center; gap: 4px; font-size: 13.5px; }
+  .pk .pl b .ic { color: #D99A00; }
+  .pk .pr { display: grid; gap: 3px; } .pk .pr b { font-size: 13.5px; text-align: right; }
+  .pk .od { text-align: right; font-weight: 700; color: var(--muted); }
+  .pk summary > .ic { color: var(--muted); transition: transform .15s; }
+  .pk[open] summary > .ic { transform: rotate(180deg); }
+  .pk.top summary { background: linear-gradient(90deg, var(--h) 0 3px, color-mix(in srgb, var(--h) 6%, var(--surface)) 3px); }
+  .pk .exp { padding: 2px var(--g) 8px 70px; }
+  .pk-head { display: grid; grid-template-columns: 50px minmax(0, 1fr) 56px 36px 14px; gap: 8px; padding: 6px var(--g) 2px; font-size: 11px; font-weight: 700; color: var(--muted); }
+  .pk-head span:nth-child(3), .pk-head span:nth-child(4) { text-align: right; }
+  .pk-foot { display: flex; gap: 6px; align-items: center; padding: 6px var(--g) 8px; font-size: 11.5px; color: var(--muted); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  details.more > summary { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 7px 0 2px; font-size: 12px; font-weight: 750; color: var(--teal-d); }
+  details.more[open] > summary { display: none; }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, meter, B } = K;
+const pick = (m) => `<details class="pk ${m.top ? "top" : ""}" style="--h:${hue(m.id)}"><summary>
+  <span class="code">${m.code}</span><span class="pl"><b>${m.top ? ic("star", 12) : ""}${m.pickLabel}</b>${nowLine(m)}</span>
+  <span class="pr"><b>${m.prob}%</b>${meter(m.prob, hue(m.id))}</span><span class="od">${m.odds}</span>${ic("down", 14)}</summary>
+  <div class="exp">${B.outcomes(m)}</div></details>`;
+const sec = (title, note, body) => `<h2 class="lh">${title}${note ? `<em>${note}</em>` : ""}</h2><div class="sec">${body}</div>`;
+
+K.mount(`${B.bar(`${M.league.name}`)}
+<section class="sb">
+  <p class="meta">${league(14)} ${M.league.round} · ${M.league.country}<span>${M.kickoff.day} · ${M.kickoff.time}</span></p>
+  <div class="teams">
+    <div class="t">${crest(H, 36)}<b>${H.name}</b><small>Saka 12'</small></div>
+    <div class="sc"><strong>${H.goals} – ${A.goals}</strong><span class="lv">${liveDot()} ${M.status.minute}</span><small>HT ${M.status.ht}</small></div>
+    <div class="t">${crest(A, 36)}<b>${A.name}</b><small>Palmer 34' (pen)</small></div>
+  </div>
+</section>
+<h2 class="lh">Our predictions<em>Rev ${M.publication.revision} · ${M.publication.published} · ${M.publication.source}</em></h2>
+<div class="pk-head"><span>Market</span><span>Pick · as it stands</span><span>Chance</span><span>Odds</span><span></span></div>
+${M.markets.map(pick).join("")}
+<p class="pk-foot">${ic("star", 12, 'style="color:#D99A00"')} Highest chance · all picks ${K.pend()} until full time</p>
+${sec("Why this prediction", "", B.analysis())}
+${sec("Match events", `${M.status.long} · ${M.status.minute}`, B.events())}
+${sec("Statistics", "Live", B.stats(6) + `<details class="more"><summary>All 12 statistics ${ic("down", 13)}</summary>${B.stats(12, 6)}</details>`)}
+${sec("Line-ups", "Confirmed", B.lineups() + `<details class="more"><summary>Bench & coaches ${ic("down", 13)}</summary>${B.bench()}</details>`)}
+${sec("Missing players", "", B.injuries())}
+${sec("Form", "Last 5 · newest right", B.form())}
+${sec("Head-to-head", "Last 5 meetings", B.h2h())}
+${sec("Standings", `${M.league.name}`, B.table())}
+${sec("Season stats", "League", B.season())}
+${sec("Strength comparison", "API-Football", B.compare())}
+${sec("Key players", "Season", B.players())}
+${sec("Odds", "", B.odds())}
+${sec("Schedule", "", B.schedule())}
+${sec("Match info", "", B.info())}
+${sec("News", "", B.news())}
+${sec("Prediction history", M.publication.locks, B.history())}
+${B.disc()}
+${B.nav()}`);
+</script></body></html>

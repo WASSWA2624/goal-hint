@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>02 Scoreboard Tabs · Goal Hint match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  :root { --page: #E4EBEF; }
+  .bar { border-bottom: 0; }
+  .hero { padding: 2px var(--g) 12px; color: #fff; background: var(--navy); }
+  .hero .meta { display: flex; justify-content: center; gap: 6px; font-size: 12px; color: #B6C7D1; }
+  .row { display: grid; grid-template-columns: 1fr 96px 1fr; align-items: center; margin-top: 8px; }
+  .tm { display: grid; justify-items: center; gap: 4px; text-align: center; }
+  .tm b { font-size: 14px; }
+  .tm small { font-size: 11.5px; color: #B6C7D1; }
+  .sc { display: grid; justify-items: center; gap: 4px; }
+  .sc strong { font-size: 32px; line-height: 1; font-weight: 800; }
+  .lv { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; font-size: 12px; font-weight: 800; color: #fff; background: var(--live); }
+  .lv .k-live-dot { background: #fff; box-shadow: none; }
+  .sc small { font-size: 11.5px; color: #B6C7D1; }
+  .tabs { position: sticky; top: var(--bar-h); z-index: 30; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .tabs button { flex: none; padding: 12px 12px 10px; font-size: 13px; font-weight: 700; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tabs button[aria-selected="true"] { color: var(--text); border-color: var(--teal); }
+  html.full .tabs { position: static; }
+  .pnl { display: grid; gap: 8px; padding: 8px 0 4px; }
+  .card { padding: 10px var(--g) 12px; background: var(--surface); }
+  .ch { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 13.5px; font-weight: 800; }
+  .ch em { margin-left: auto; font-style: normal; font-size: 11.5px; font-weight: 650; color: var(--muted); }
+  .ch a { margin-left: auto; font-size: 12px; font-weight: 750; color: var(--teal-d); display: inline-flex; align-items: center; }
+  .topk { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 12px; background: var(--surface); box-shadow: inset 3px 0 0 var(--h); border: 1px solid var(--hair); border-left: 0; }
+  .topk small { font-size: 11.5px; font-weight: 750; color: var(--h); text-transform: uppercase; letter-spacing: .05em; }
+  .topk b { font-size: 17px; }
+  .topk .pc { grid-row: 1 / 4; grid-column: 2; display: grid; justify-items: end; align-content: center; }
+  .topk .pc strong { font-size: 26px; line-height: 1; font-weight: 800; }
+  .topk .pc span { font-size: 12px; color: var(--muted); }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 8px; background: var(--hair); border: 1px solid var(--hair); }
+  .mc { display: grid; gap: 3px; padding: 8px 10px; background: var(--surface); }
+  .mc .c { display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; color: var(--h); }
+  .mc b { font-size: 13.5px; }
+  .mc .p { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+  .mc .p strong { font-size: 13px; }
+  .mkt { padding: 10px var(--g) 12px; background: var(--surface); box-shadow: inset 3px 0 0 var(--h); }
+  .mkt .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .mkt .hd b { font-size: 13.5px; } .mkt .hd small { color: var(--h); font-weight: 800; }
+  .mkt .hd .k-pend { margin-left: auto; }
+  .mkt .nl { margin-bottom: 4px; }
+  .lnk { display: flex; align-items: center; justify-content: space-between; padding: 11px var(--g); background: var(--surface); font-weight: 750; }
+  .lnk span { color: var(--muted); font-weight: 650; font-size: 12px; display: inline-flex; gap: 4px; align-items: center; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .two h5 { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 12px; }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, meter, pend, tick, B } = K;
+const T = K.top();
+const card = (title, note, body) => `<section class="card"><h2 class="ch">${title}${note ? `<em>${note}</em>` : ""}</h2>${body}</section>`;
+const tabs = [["overview", "Overview"], ["picks", "Predictions"], ["stats", "Stats"], ["lineups", "Line-ups"], ["table", "Table"], ["h2h", "H2H"], ["info", "Info"]];
+
+const overview = `<div class="pnl" data-panel="overview" data-title="Overview">
+  <section class="card"><h2 class="ch">Our prediction<em>Rev ${M.publication.revision} · ${M.publication.published}</em></h2>
+    <div class="topk" style="--h:${hue(T.id)}"><small>${ic("star", 11, 'style="display:inline;vertical-align:-1px"')} Top pick · ${T.name}</small><b>${T.pickLabel}</b>${nowLine(T)}
+      <div class="pc"><strong>${T.prob}%</strong><span>Odds ${T.odds}</span></div></div>
+    <div class="grid4">${M.markets.filter((m) => !m.top).concat([]).map((m) => `<div class="mc" style="--h:${hue(m.id)}"><span class="c">${m.code}${tick(m.live.ok)}</span><b>${m.short}</b>
+      <span class="p">${meter(m.prob, hue(m.id))}<strong>${m.prob}%</strong></span></div>`).join("")}
+      <div class="mc" style="--h:var(--teal)"><span class="c">ALL PICKS</span><b>${pend()}</b><span class="k-meta">Settle at full time</span></div></div>
+  </section>
+  ${card("Match events", M.status.minute, B.events())}
+  ${card("Key stats", `<a data-tab="stats" href="#">All stats ${ic("right", 13)}</a>`, B.stats(4)).replace("<em><a", "<a").replace("</a></em>", "</a>")}
+  ${card("Form", "Last 5", B.form())}
+  <a class="lnk" href="#" data-tab="lineups">Line-ups & missing players <span>${H.formation} · ${A.formation} ${ic("right", 14)}</span></a>
+  <a class="lnk" href="#" data-tab="info">${M.venue.name} · ${M.referee.name} <span>${ic("right", 14)}</span></a>
+</div>`;
+
+const picks = `<div class="pnl" data-panel="picks" data-title="Predictions" hidden>
+  ${M.markets.map((m) => `<section class="mkt" style="--h:${hue(m.id)}"><div class="hd"><small>${m.code}</small><b>${m.name}</b>${m.top ? `<small style="color:#B07A00">${ic("star", 12, 'style="display:inline;vertical-align:-1px"')} Top</small>` : ""}${pend()}</div>
+    <div class="nl">${nowLine(m)}</div>${B.outcomes(m)}</section>`).join("")}
+  ${card("Why this prediction", M.publication.source, B.analysis())}
+  ${card("Odds", "", B.odds())}
+  ${card("Prediction history", M.publication.locks, B.history())}
+</div>`;
+
+const stats = `<div class="pnl" data-panel="stats" data-title="Stats" hidden>
+  ${card("Match statistics", "Live", B.stats())}
+  ${card("Season stats", "League", B.season())}
+  ${card("Strength comparison", "API-Football", B.compare())}
+</div>`;
+
+const lineups = `<div class="pnl" data-panel="lineups" data-title="Line-ups" hidden>
+  <section class="card" style="padding:0">${B.pitch()}</section>
+  ${card("Substitutes & coaches", "", B.bench())}
+  ${card("Missing players", "", B.injuries())}
+</div>`;
+
+const table = `<div class="pnl" data-panel="table" data-title="Table" hidden>
+  ${card("Standings", M.league.name, B.table())}
+  ${card("Key players", "Season", B.players())}
+  ${card("Schedule", "", B.schedule())}
+</div>`;
+
+const h2h = `<div class="pnl" data-panel="h2h" data-title="H2H" hidden>
+  ${card("Head-to-head", "Last 5 meetings", B.h2h())}
+  ${card("Recent results", "", `<div class="two"><div><h5>${crest(H, 14)}${H.name}</h5>${B.formList("home")}</div><div><h5>${crest(A, 14)}${A.name}</h5>${B.formList("away")}</div></div>`)}
+</div>`;
+
+const info = `<div class="pnl" data-panel="info" data-title="Info" hidden>
+  ${card("Match info", "", B.info())}
+  ${card("News", "", B.news())}
+</div>`;
+
+K.mount(`${B.bar(`${M.league.name} · ${M.league.round}`)}
+<section class="hero">
+  <p class="meta">${M.kickoff.day} · ${M.kickoff.time} ${M.kickoff.tz}</p>
+  <div class="row">
+    <div class="tm">${crest(H, 42)}<b>${H.name}</b><small>Saka 12'</small></div>
+    <div class="sc"><strong>${H.goals} – ${A.goals}</strong><span class="lv">${liveDot()} ${M.status.minute}</span><small>HT ${M.status.ht}</small></div>
+    <div class="tm">${crest(A, 42)}<b>${A.name}</b><small>Palmer 34' (pen)</small></div>
+  </div>
+</section>
+<nav class="tabs" role="tablist" data-scrolltop>${tabs.map(([k, l], i) => `<button role="tab" data-tab="${k}" aria-selected="${i === 0}">${l}</button>`).join("")}</nav>
+${overview}${picks}${stats}${lineups}${table}${h2h}${info}
+${B.disc()}
+${B.nav()}`);
+</script></body></html>

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>10 Evening Rail · Goal Hint match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  :root {
+    color-scheme: dark;
+    --navy: #10181D; --page: #141C22; --surface: #1E2932; --soft: #18232B; --soft2: #18232B;
+    --text: #F2F7F8; --muted: #B1BEC8; --line: #3C505E; --hair: #2C3A44; --quiet: #4A5C68;
+    --teal: #53D5C6; --teal-d: #53D5C6; --teal-soft: #183C3B; --mint: #53D5C6;
+    --mr: #70DEA4; --dc: #C6AEFF; --tg: #9EC5FF; --bt: #FFBA8F;
+    --live: #FF8A8A; --ok: #70DEA4; --ok-s: #1C342B; --pend: #F6C453; --pend-s: #322A1E; --bad: #FF9C9C;
+    --win: #2FA36B; --draw: #5F7280; --loss: #D2554B; --home: #F0454B; --away: #4D86E8;
+  }
+  .bar { border-bottom-color: var(--hair); border-bottom-width: 1px; }
+  .k-now.on { color: #10181D; } .k-ev-sc { color: var(--page); background: var(--text); }
+  .k-pitch { background: repeating-linear-gradient(180deg, #1D3A30 0 45px, #1A352B 45px 90px); }
+  .k-pitch-lines { color: rgba(255,255,255,.22); }
+  .k-pl > i { box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
+  .k-pl em, .k-pl .bd { color: var(--text); }
+  .k-odds-r .o.pick { border-color: var(--text); }
+  .k-var { background: #3C505E; }
+  .hd { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 10px var(--g) 10px; background: var(--surface); }
+  .hd .t { display: grid; justify-items: center; gap: 3px; text-align: center; }
+  .hd .t b { font-size: 13.5px; } .hd .t small { font-size: 11.5px; color: var(--muted); }
+  .hd .sc { display: grid; justify-items: center; gap: 3px; }
+  .hd strong { font-size: 30px; line-height: 1; font-weight: 800; }
+  .hd .lv { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; color: var(--live); }
+  .hd .sc small { color: var(--muted); font-size: 11.5px; }
+  .rail { position: sticky; top: var(--bar-h); z-index: 30; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--hair); border-block: 1px solid var(--hair); }
+  html.full .rail { position: static; }
+  .rc { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1px 4px; padding: 7px 8px 7px; background: var(--soft); box-shadow: inset 0 2px 0 var(--h); text-align: left; }
+  .rc small { font-size: 10.5px; font-weight: 800; color: var(--h); letter-spacing: .03em; }
+  .rc b { grid-column: 1 / -1; font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rc strong { font-size: 17px; font-weight: 800; line-height: 1.1; }
+  .rc .k-now { width: 16px; height: 16px; }
+  .rc.top { background: color-mix(in srgb, var(--h) 12%, var(--soft)); }
+  .tabs { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--surface); border-bottom: 1px solid var(--hair); }
+  .tabs button { display: grid; justify-items: center; gap: 3px; padding: 9px 2px 8px; font-size: 11.5px; font-weight: 750; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tabs button[aria-selected="true"] { color: var(--teal); border-color: var(--teal); }
+  .pnl { display: grid; gap: 6px; padding: 6px 0; }
+  .card { padding: 10px var(--g) 12px; background: var(--surface); }
+  .ch { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; font-size: 13.5px; font-weight: 800; }
+  .ch em { margin-left: auto; font-style: normal; font-size: 11.5px; font-weight: 650; color: var(--muted); }
+  .mk { padding: 10px var(--g); background: var(--surface); box-shadow: inset 3px 0 0 var(--h); }
+  .mk .hd2 { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .mk .hd2 small { font-weight: 800; color: var(--h); } .mk .hd2 b { font-size: 13.5px; } .mk .hd2 .k-nowtxt { margin-left: auto; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, meter, pend, tick, B } = K;
+const card = (title, note, body) => `<section class="card"><h2 class="ch">${title}${note ? `<em>${note}</em>` : ""}</h2>${body}</section>`;
+const tabs = [["pred", "Prediction", "bulb"], ["live", "Live", "live"], ["lu", "Line-ups", "pitch"], ["teams", "Teams", "users"], ["info", "Info", "info"]];
+
+K.mount(`${B.bar(`${M.league.name} · ${M.league.round}`)}
+<section class="hd">
+  <div class="t">${crest(H, 38)}<b>${H.name}</b><small>Saka 12'</small></div>
+  <div class="sc"><strong>${H.goals} – ${A.goals}</strong><span class="lv">${liveDot()} ${M.status.minute}</span><small>HT ${M.status.ht}</small></div>
+  <div class="t">${crest(A, 38)}<b>${A.name}</b><small>Palmer 34' (pen)</small></div>
+</section>
+<div class="rail" aria-label="Our picks">${M.markets.map((m) => `<div class="rc ${m.top ? "top" : ""}" style="--h:${hue(m.id)}"><small>${m.top ? "★ " : ""}${m.code}</small>${tick(m.live.ok)}<b>${m.rail}</b><strong>${m.prob}%</strong><small style="color:var(--muted);font-weight:650;justify-self:end">${m.odds}</small></div>`).join("")}</div>
+<nav class="tabs" role="tablist" data-scrolltop>${tabs.map(([k, l, i]) => `<button role="tab" data-tab="${k}" aria-selected="${k === "live"}">${ic(i, 18)}${l}</button>`).join("")}</nav>
+
+<div class="pnl" data-panel="pred" data-title="Prediction" hidden>
+  ${M.markets.map((m) => `<section class="mk" style="--h:${hue(m.id)}"><div class="hd2"><small>${m.top ? "★ " : ""}${m.code}</small><b>${m.name}</b>${nowLine(m)}</div>${B.outcomes(m)}</section>`).join("")}
+  <p class="k-meta" style="padding:2px var(--g)">${pend()} · ${M.publication.settles} · Rev ${M.publication.revision}, ${M.publication.published}</p>
+  ${card("Why this prediction", M.publication.source, B.analysis())}
+  ${card("Odds", "", B.odds())}
+  ${card("Prediction history", M.publication.locks, B.history())}
+</div>
+<div class="pnl" data-panel="live" data-title="Live">
+  ${card("Events", `${M.status.long} · ${M.status.minute}`, B.events())}
+  ${card("Statistics", "Live", B.stats())}
+</div>
+<div class="pnl" data-panel="lu" data-title="Line-ups" hidden>
+  <section class="card" style="padding:0">${B.pitch()}</section>
+  ${card("Substitutes & coaches", "", B.bench())}
+  ${card("Missing players", "", B.injuries())}
+</div>
+<div class="pnl" data-panel="teams" data-title="Teams" hidden>
+  ${card("Form", "Last 5", B.form() + `<div class="two" style="margin-top:6px">${B.formList("home")}${B.formList("away")}</div>`)}
+  ${card("Head-to-head", "Last 5", B.h2h())}
+  ${card("Standings", M.league.name, B.table())}
+  ${card("Season stats", "League", B.season())}
+  ${card("Strength comparison", "API-Football", B.compare())}
+  ${card("Key players", "Season", B.players())}
+</div>
+<div class="pnl" data-panel="info" data-title="Info" hidden>
+  ${card("Match info", "", B.info())}
+  ${card("Schedule", "", B.schedule())}
+  ${card("News", "", B.news())}
+</div>
+${B.disc()}
+${B.nav()}`);
+</script></body></html>

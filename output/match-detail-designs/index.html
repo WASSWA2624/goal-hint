@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goal Hint · 10 match details proposals</title>
+<style>
+  @font-face { font-family: Manrope; src: url("../../assets/brand/source/fonts/Manrope-wght-latin.woff2") format("woff2"); font-weight: 200 800; }
+  :root { --navy: #102A3A; --teal: #007F7A; --mint: #53D5C6; --line: #C5D4DE; --muted: #486071; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Manrope, system-ui, sans-serif; color: var(--navy); background: #E4EBEF; }
+  header { padding: 22px 28px 18px; color: #fff; background: var(--navy); border-bottom: 2px solid var(--mint); }
+  header p.e { margin: 0 0 6px; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--mint); }
+  h1 { margin: 0 0 6px; font-size: 24px; }
+  header p { margin: 0; max-width: 980px; font-size: 13.5px; line-height: 1.55; color: #D6E2E9; }
+  .cov { margin: 0; padding: 12px 28px; font-size: 12.5px; line-height: 1.6; color: var(--muted); background: #fff; border-bottom: 1px solid var(--line); }
+  .cov b { color: var(--navy); }
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(410px, 1fr)); gap: 18px; padding: 20px 28px 28px; }
+  article { display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); }
+  .lb { display: flex; align-items: baseline; gap: 10px; padding: 11px 12px 4px; }
+  .lb span { font-size: 12px; font-weight: 800; color: var(--teal); }
+  h2 { margin: 0; font-size: 16px; }
+  article > p { margin: 0; padding: 0 12px 10px; min-height: 56px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+  .ph { display: grid; place-items: center; padding: 10px 0; background: #CEDBE3; border-block: 1px solid var(--line); }
+  iframe { display: block; width: 390px; height: 844px; border: 0; background: #fff; }
+  .lk { display: flex; gap: 0; }
+  .lk a { flex: 1; padding: 10px 12px; font-size: 12.5px; font-weight: 750; color: var(--teal); text-decoration: none; border-right: 1px solid var(--line); }
+  .lk a:last-child { border-right: 0; }
+  .lk a:hover { background: #E2F3F1; }
+  footer { padding: 0 28px 28px; font-size: 12px; color: var(--muted); }
+</style></head>
+<body>
+<header><p class="e">Goal Hint · Design review</p><h1>10 mobile match details proposals</h1>
+<p>Every proposal shows the same live sample (Arsenal 1–1 Chelsea, 67') so they can be compared like for like. Each phone below is interactive: scroll it, open drawers, switch tabs. “Full page” shows every tab and drawer opened at once.</p></header>
+<p class="cov"><b>Every proposal carries all of it:</b> score, live clock, half-time, scorers · 4 picks with chance, odds, all outcomes, bookmaker-implied chance, as-it-stands tracking and settlement · top pick · reasons, risk and sources · events (goals, cards, VAR, subs) · 12 live statistics · line-ups with formation, pitch, ratings, bench and coaches · injuries and doubts · form · head-to-head · standings · season team stats · API-Football strength comparison · key players · odds table · rest days, last and next fixtures · venue, capacity, surface, referee · news · prediction revisions · disclaimer.</p>
+<main id="g"></main>
+<footer>Design proposals only, built from illustrative data. No application code was changed. Before kick-off the live parts are replaced by the kick-off time and the pre-match sections move up.</footer>
+<script>
+const D = [
+  ["01", "ledger", "Ledger", "Everything on one scroll as dense, ruled rows. Nothing is hidden, so it is the most complete at a glance, and the longest page."],
+  ["02", "tabs", "Scoreboard Tabs", "Navy scoreboard with seven tabs. Overview answers most visits: top pick, the other three picks, events, key stats and form."],
+  ["03", "verdict-drawers", "Verdict & Drawers", "One big verdict and a three-way result bar first. Everything else sits in one-line drawers that preview what is inside."],
+  ["04", "mirror", "Mirror", "Arsenal always left, Chelsea always right, the topic in the centre. Every comparison on the page reads the same way."],
+  ["05", "three-segments", "Three Segments", "Only three choices: Prediction, Match, Teams. Each market shows all its outcomes as side-by-side cells with odds."],
+  ["06", "bento", "Bento Tiles", "A grid of small tiles, one fact each. Tap any tile to open its full detail in place, right under it."],
+  ["07", "spec-sheet", "Spec Sheet", "A calm typographic document: label left, facts right, line-ups written as text. Numbered sections with a jump index."],
+  ["08", "index-rail", "Index Rail", "One scroll with a sticky chip index that follows you. The four picks sit side by side in one rail."],
+  ["09", "plain-questions", "Plain Questions", "Answers the questions people ask: Who will win? Will there be goals? Each answer comes with its evidence."],
+  ["10", "evening-rail", "Evening Rail", "Dark theme. The four picks stay pinned under the score while you move through five tabs."],
+];
+document.getElementById("g").innerHTML = D.map(([n, s, t, d]) => `<article><div class="lb"><span>${n}</span><h2>${t}</h2></div><p>${d}</p>
+  <div class="ph"><iframe src="${n}-${s}.html" title="${n} ${t}" loading="lazy"></iframe></div>
+  <div class="lk"><a href="${n}-${s}.html" target="_blank">Open</a><a href="${n}-${s}.html?full" target="_blank">Full page</a><a href="shots/${n}-${s}-full.png" target="_blank">Full PNG</a></div></article>`).join("");
+</script>
+</body></html>

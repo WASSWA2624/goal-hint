@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>07 Spec Sheet · Goal Hint match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  body { background: var(--surface); }
+  .mast { padding: 12px var(--g) 10px; border-bottom: 2px solid var(--text); }
+  .eyeb { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .line { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; margin-top: 8px; }
+  .line b { font-size: 21px; font-weight: 800; line-height: 1.1; }
+  .line strong { font-size: 24px; font-weight: 800; line-height: 1; min-width: 20px; text-align: right; }
+  .line small { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 6px; }
+  .stat { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 9px; font-size: 12px; color: var(--muted); }
+  .stat .lv { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; color: var(--live); }
+  .toc { display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); position: sticky; top: var(--bar-h); z-index: 20; background: var(--surface); }
+  html.full .toc { position: static; }
+  .toc a { flex: none; padding: 9px 10px; font-size: 12px; font-weight: 750; color: var(--muted); }
+  .toc a:first-child { color: var(--text); box-shadow: inset 0 -2px 0 var(--teal); }
+  .s { padding: 12px var(--g) 4px; scroll-margin-top: 92px; }
+  .s h2 { display: flex; align-items: baseline; gap: 8px; padding-bottom: 6px; font-size: 15px; font-weight: 800; border-bottom: 1px solid var(--text); }
+  .s h2 i { font-style: normal; font-size: 11.5px; font-weight: 800; color: var(--teal); }
+  .s h2 em { margin-left: auto; font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  dl.sp > div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hair); }
+  dl.sp dt { font-size: 12px; color: var(--muted); padding-top: 1px; }
+  dl.sp dd { font-size: 13px; line-height: 1.4; min-width: 0; }
+  dl.sp dd b { font-weight: 800; }
+  dl.sp dd small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+  dl.sp dd .k-nowtxt { font-size: 11.5px; }
+  .pk dd b .pc { float: right; font-size: 15px; }
+  .pk.best { background: linear-gradient(90deg, var(--h) 0 2px, color-mix(in srgb, var(--h) 5%, transparent) 2px); }
+  .pk.best dt { padding-left: 8px; }
+  .pk dt { color: var(--h) !important; font-weight: 800; }
+  .mb { display: grid; grid-template-columns: 38px 1fr 38px; align-items: center; gap: 8px; }
+  .mb b:last-child { text-align: right; }
+  .mb i { display: flex; gap: 2px; height: 4px; } .mb i u { background: var(--text); } .mb i u + u { background: var(--quiet); }
+  .lt { font-weight: 800; } .lt.W { color: var(--win); } .lt.D { color: var(--draw); } .lt.L { color: var(--loss); }
+  sup { font-size: 9px; }
+  .ev-ic { display: inline-flex; vertical-align: -2px; margin-right: 4px; }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, pend, evIcon, B } = K;
+const T = K.top();
+const sec = (num, id, title, note, rows) => `<section class="s" id="${id}"><h2><i>${num}</i>${title}${note ? `<em>${note}</em>` : ""}</h2><dl class="sp">${rows}</dl></section>`;
+const r = (dt, dd, cls = "", st = "") => `<div class="${cls}" ${st}><dt>${dt}</dt><dd>${dd}</dd></div>`;
+const mb = (h, a, hv, av) => `<span class="mb"><b>${h}</b><i><u style="flex:${hv}"></u><u style="flex:${av}"></u></i><b>${a}</b></span>`;
+const xi = (s) => { const l = M.lineups[s], rows = new Map();
+  l.xi.forEach(([n, name, g, m]) => { const k = +g.split(":")[0]; rows.set(k, [...(rows.get(k) || []), name + (m === "goal" ? ` <span class="ev-ic">${ic("ball", 12)}</span>` : m === "yellow" ? ` <i class="k-card y" style="vertical-align:-1px"></i>` : m === "off" ? " ↓" : "")]); });
+  return [...rows.values()].map((x) => x.join(", ")).join("; ") + "."; };
+const pick = (m) => r(m.code, `<b>${m.pickLabel} <span class="pc">${m.prob}%</span></b><small>${m.outcomes.filter((o) => o.k !== m.pick).map((o) => `${o.label} ${o.p}%`).join(" · ")} · odds ${m.odds}</small>${nowLine(m)}`, `pk ${m.top ? "best" : ""}`, `style="--h:${hue(m.id)}"`);
+const toc = [["s1", "Prediction"], ["s2", "Reasoning"], ["s3", "Events"], ["s4", "Stats"], ["s5", "Line-ups"], ["s6", "Form"], ["s7", "H2H"], ["s8", "Table"], ["s9", "Season"], ["s10", "Odds"], ["s11", "Details"]];
+
+K.mount(`${B.bar("Match details")}
+<header class="mast">
+  <p class="eyeb">${league(13)} ${M.league.name} · ${M.league.round} · ${M.kickoff.day} ${M.kickoff.time}</p>
+  <p class="line">${crest(H, 24)}<b>${H.name}<small>Saka 12'</small></b><strong>${H.goals}</strong></p>
+  <p class="line">${crest(A, 24)}<b>${A.name}<small>Palmer 34' pen</small></b><strong>${A.goals}</strong></p>
+  <p class="stat"><span class="lv">${liveDot()} Live ${M.status.minute}</span><span>HT ${M.status.ht}</span><span>${M.venue.name}</span><span>Ref. ${M.referee.name}</span></p>
+</header>
+<nav class="toc">${toc.map(([id, l]) => `<a href="#" data-jump="${id}" data-offset="92">${l}</a>`).join("")}</nav>
+
+${sec("01", "s1", "Prediction", `Rev ${M.publication.revision} · ${M.publication.published}`, M.markets.map(pick).join("") +
+  r("Status", `${pend()} <small style="display:inline">· ${M.publication.settles}</small>`) + r("Source", `${M.publication.source}<small>Evidence to ${M.publication.cutoff} · ★ best pick has the highest chance</small>`))}
+${sec("02", "s2", "Reasoning", "", M.analysis.reasons.map((x, i) => r(`Reason ${i + 1}`, x)).join("") + r("Watch out", `<span style="color:var(--pend);font-weight:700">${M.analysis.uncertainty}</span>`) + r("Sources", M.analysis.sources.join(", ")))}
+${sec("03", "s3", "Events", `${M.status.long} · ${M.status.minute}`, M.events.map((e) => e.type === "break" ? r("HT", `<b>${e.text}</b>`) :
+  r(e.min, `<span class="ev-ic">${evIcon(e.type)}</span><b>${e.player}</b> <span style="color:var(--muted)">${e.side === "home" ? H.short : A.short}</span>${e.score ? ` · <b>${e.score}</b>` : ""}<small>${e.sub}</small>`)).join(""))}
+${sec("04", "s4", "Statistics", `${H.short} · ${A.short}`, M.stats.map(([l, h, a, hv, av]) => r(l, mb(h, a, hv, av))).join(""))}
+${sec("05", "s5", "Line-ups", "Confirmed", ["home", "away"].map((s) => { const l = M.lineups[s], t = K.team(s);
+  return r(`<b style="color:var(--text)">${t.name}</b><br>${l.formation}`, xi(s) + `<small>Bench: ${l.bench.map(([n, b, m]) => b + (m ? ` (on ${s === "home" ? "63" : "66"}')` : "")).join(", ")}</small><small>Coach: ${l.coach}</small>`); }).join("") +
+  ["home", "away"].map((s) => r(`Missing · ${K.team(s).short}`, M.injuries[s].map(([n, st, w]) => `<b>${n}</b> <span style="color:var(--${st === "Out" ? "bad" : "pend"})">${st.toLowerCase()}</span>, ${w.toLowerCase()}`).join("; "))).join(""))}
+${sec("06", "s6", "Form", "Last 5, newest last", ["home", "away"].map((s) => r(K.team(s).name, `${[...M.form[s]].reverse().map((f) => `<span class="lt ${f[0]}">${f[0]}</span>`).join(" ")}<small>${[...M.form[s]].reverse().map((f) => `${f[1]} ${f[3] === "H" ? "v" : "at"} ${f[2]}`).join(" · ")}</small>`)).join(""))}
+${sec("07", "s7", "Head-to-head", "Last 5", r("Record", `<b>${H.name} ${M.h2h.summary.home}</b> · Draws ${M.h2h.summary.draw} · ${A.name} ${M.h2h.summary.away}<small>Avg ${M.h2h.summary.goals} goals · BTTS ${M.h2h.summary.btts} · Over 2.5 ${M.h2h.summary.over}</small>`) +
+  M.h2h.meetings.map(([d, h, sc, a]) => r(d, `${h} <b>${sc}</b> ${a}`)).join(""))}
+${sec("08", "s8", "Table", M.league.name, M.table.map(([p, n, pl, gd, pts]) => r(`${p}`, `<span style="display:flex;justify-content:space-between"><span ${n === H.name || n === A.name ? 'style="font-weight:800"' : ""}>${n}</span><span style="color:var(--muted)">P${pl} · ${gd} · <b style="color:var(--text)">${pts}</b></span></span>`)).join(""))}
+${sec("09", "s9", "Season & strength", `${H.short} · ${A.short}`, M.season.map(([l, h, a]) => r(l, `<span style="display:flex;justify-content:space-between"><b>${h}</b><b>${a}</b></span>`)).join("") +
+  M.compare.map(([l, h]) => r(`${l} <sup>AF</sup>`, mb(h + "%", 100 - h + "%", h, 100 - h))).join("") +
+  ["home", "away"].map((s) => r(`Key · ${K.team(s).short}`, M.players[s].map(([n, pos, g, a, rt]) => `<b>${n}</b> ${g}G ${a}A, ${rt}`).join(" · "))).join(""))}
+${sec("10", "s10", "Odds", M.oddsMeta, M.markets.map((m) => r(m.code, m.outcomes.map((o) => o.k === m.pick ? `<b style="box-shadow:inset 0 -2px 0 ${hue(m.id)}">${o.k} ${o.odds}</b>` : `<span style="color:var(--muted)">${o.k}</span> ${o.odds}`).join(" &nbsp;·&nbsp; ") + `<small>Bookmakers imply ${m.outcomes.map((o) => `${o.k} ${o.implied}%`).join(" · ")}</small>`)).join(""))}
+${sec("11", "s11", "Details", "", r("Kick-off", `${M.kickoff.day} · ${M.kickoff.time} ${M.kickoff.tz}`) + r("Venue", `${M.venue.name}, ${M.venue.city}<small>${M.venue.capacity} seats · ${M.venue.surface}</small>`) + r("Referee", `${M.referee.name} (${M.referee.country})`) +
+  ["rest", "last", "next"].map((k) => r(k[0].toUpperCase() + k.slice(1), `${H.short}: ${M.schedule[k].home}<small>${A.short}: ${M.schedule[k].away}</small>`)).join("") +
+  M.news.map((x) => r(x.publisher, `<a href="#"><b>${x.title}</b></a><small>${x.kind} · ${x.ago} ago</small>`)).join("") +
+  M.history.map((h) => r(`Rev ${h.rev}`, `${h.when}${h.current ? ' <b style="color:var(--teal)">· current</b>' : ""}<small>${h.note}</small>`)).join(""))}
+${B.disc()}
+${B.nav()}`);
+</script></body></html>

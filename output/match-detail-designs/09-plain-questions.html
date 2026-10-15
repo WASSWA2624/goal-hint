@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>09 Plain Questions · Goal Hint match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  :root { --page: #E9EEF1; }
+  .strip { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 10px var(--g) 4px; background: var(--surface); }
+  .strip .t { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 800; }
+  .strip .t.a { justify-content: flex-end; }
+  .strip strong { font-size: 26px; font-weight: 800; line-height: 1; }
+  .sub { display: flex; justify-content: center; gap: 7px; align-items: center; padding: 2px var(--g) 10px; font-size: 12px; color: var(--muted); background: var(--surface); border-bottom: 1px solid var(--line); }
+  .sub .lv { display: inline-flex; gap: 5px; align-items: center; font-weight: 800; color: var(--live); }
+  .q { margin-top: 8px; padding: 12px var(--g) 12px; background: var(--surface); }
+  .q h2 { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 800; }
+  .q h2 i { display: grid; place-items: center; width: 22px; height: 22px; flex: none; font-style: normal; font-size: 11.5px; color: #fff; background: var(--teal); }
+  .ans { margin: 8px 0 0; padding: 8px 10px; font-size: 14px; background: var(--soft); box-shadow: inset 3px 0 0 var(--h, var(--teal)); }
+  .ans b { font-weight: 800; }
+  .ans small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); }
+  .ans .k-nowtxt { margin-top: 3px; }
+  .tri { display: flex; gap: 2px; height: 22px; margin-top: 8px; }
+  .tri span { display: flex; align-items: center; padding: 0 6px; font-size: 11.5px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; }
+  .tri .d { background: #8395A2; justify-content: center; } .tri .a { justify-content: flex-end; }
+  .ev { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 8px; background: var(--hair); border: 1px solid var(--hair); }
+  .ev div { display: grid; gap: 1px; padding: 7px 9px; background: var(--surface); }
+  .ev span { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .ev b { font-size: 13.5px; font-weight: 800; }
+  .ev small { font-size: 11.5px; color: var(--muted); }
+  .lbl { margin: 10px 0 4px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  details.more > summary { display: flex; align-items: center; gap: 4px; padding-top: 9px; font-size: 12.5px; font-weight: 750; color: var(--teal-d); }
+  details.more[open] > summary .ic { transform: rotate(180deg); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, meter, pend, tick, form, B } = K;
+const [mr, dc, tg, bt] = M.markets;
+let qn = 0;
+const q = (title, body) => `<section class="q"><h2><i>${++qn}</i>${title}</h2>${body}</section>`;
+const more = (label, body) => `<details class="more"><summary>${label} ${ic("down", 13)}</summary>${body}</details>`;
+const ev = (items) => `<div class="ev">${items.map(([l, v, s]) => `<div><span>${l}</span><b>${v}</b>${s ? `<small>${s}</small>` : ""}</div>`).join("")}</div>`;
+
+K.mount(`${B.bar("Match details")}
+<section class="strip"><span class="t">${crest(H, 26)}${H.name}</span><strong>${H.goals}–${A.goals}</strong><span class="t a">${A.name}${crest(A, 26)}</span></section>
+<p class="sub"><span class="lv">${liveDot()} ${M.status.minute}</span>· HT ${M.status.ht} · ${league(13)} ${M.league.name} · ${M.league.round}</p>
+
+${q("Who will win?", `<p class="ans" style="--h:${H.color}"><b>${H.name}</b>, most likely — <b>${mr.prob}%</b><small>Odds ${mr.odds} · ${pend()}</small>${nowLine(mr)}</p>
+  <div class="tri"><span style="flex:${mr.outcomes[0].p};background:${H.color}">${H.short} ${mr.outcomes[0].p}%</span><span class="d" style="flex:${mr.outcomes[1].p}">Draw ${mr.outcomes[1].p}%</span><span class="a" style="flex:${mr.outcomes[2].p};background:${A.color}">${A.short} ${mr.outcomes[2].p}%</span></div>
+  <p class="ans" style="--h:var(--dc)">${ic("star", 13, 'style="display:inline;vertical-align:-2px;color:#D99A00"')} Safer: <b>${dc.pickLabel}</b> — <b>${dc.prob}%</b> <small>Double chance · odds ${dc.odds} · our highest-chance pick</small>${nowLine(dc)}</p>
+  ${ev([["Table", "2nd v 4th", "17 v 14 pts"], ["Form", "4W v 3W", "last 5 games"], ["Head-to-head", "3 · 2 · 0", "wins · draws · wins"], ["Strength", "61% v 39%", "API-Football overall"]])}
+  ${more("Every result outcome", B.outcomes(mr) + B.outcomes(dc))}`)}
+
+${q("Will there be goals?", `<p class="ans" style="--h:var(--tg)">Yes — <b>over 2.5 goals ${tg.prob}%</b> and <b>both teams score ${bt.prob}%</b><small>Odds ${tg.odds} and ${bt.odds}</small>
+    <span style="display:flex;gap:12px;flex-wrap:wrap">${nowLine(tg)}${nowLine(bt)}</span></p>
+  ${ev([["Goals a game", "2.1 v 1.9", "scored, this season"], ["Over 2.5 rate", "57% v 71%", "of league games"], ["Both scored", "43% v 57%", "of league games"], ["Head-to-head", "2.6 goals", "average, last 5"]])}
+  ${more("Every goals outcome", B.outcomes(tg) + B.outcomes(bt))}`)}
+
+${q("Why do we think so?", B.analysis())}
+
+${q("What's happening now?", `<p class="lbl">Events</p>${B.events()}<p class="lbl">Statistics</p>${B.stats(5)}${more("All statistics", B.stats(12, 5))}`)}
+
+${q("Who's playing?", `${B.lineups()}${more("Pitch view, bench & coaches", `<div style="margin:6px calc(-1 * var(--g)) 10px">${B.pitch()}</div>${B.bench()}`)}<p class="lbl">Missing</p>${B.injuries()}`)}
+
+${q("Where do they stand?", `${B.table()}<p class="lbl">Recent results</p>${B.form()}${more("Results list & schedule", `<div class="two">${B.formList("home")}${B.formList("away")}</div><div style="height:8px"></div>${B.schedule()}`)}
+  <p class="lbl">Last meetings</p>${B.h2h()}`)}
+
+${q("How do they compare?", `${B.season()}<p class="lbl">Strength · API-Football</p>${B.compare()}<p class="lbl">Players to watch</p>${B.players()}`)}
+
+${q("What do bookmakers say?", B.odds() + `<p class="k-meta" style="margin-top:4px">Our chances vs bookmakers: ${M.markets.map((m) => `${m.code} ${m.prob}% v ${m.outcomes.find((o) => o.k === m.pick).implied}%`).join(" · ")}</p>`)}
+
+${q("What's the latest news?", B.news())}
+
+${q("Where, when and who's refereeing?", B.info())}
+
+${q("Has our prediction changed?", B.history() + `<p class="k-meta" style="margin-top:6px">${M.publication.locks} · ${M.publication.settles}</p>`)}
+${B.disc()}
+${B.nav()}`);
+</script></body></html>
