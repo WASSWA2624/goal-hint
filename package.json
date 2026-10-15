@@ -92,15 +92,16 @@
     "test:scripts:integration": "python tests/scripts_integration.py"
   },
   "dependencies": {
-    "@reduxjs/toolkit": "2.13.0",
     "@prisma/adapter-mariadb": "7.10.0",
     "@prisma/client": "7.10.0",
+    "@reduxjs/toolkit": "2.13.0",
     "mariadb": "3.5.4",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-redux": "9.3.0",
     "server-only": "0.0.1",
+    "sharp": "0.35.5",
     "styled-components": "6.5.3",
     "zod": "4.6.5"
   },

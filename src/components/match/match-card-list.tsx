@@ -51,6 +51,11 @@ const List = styled.ul`
   min-inline-size: 0;
 
   > li { display: grid; min-inline-size: 0; }
+  ${media.belowDesktop} {
+    /* Keep every match searchable and accessible while deferring offscreen layout.
+     * Remember measured heights as visitors scroll through the list. */
+    > li { content-visibility: auto; contain-intrinsic-block-size: auto 84px; }
+  }
 
   ${media.desktop} {
     grid-template-columns: minmax(0, 1fr);

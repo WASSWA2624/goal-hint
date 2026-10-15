@@ -87,3 +87,72 @@ claimed in advance.
 
 Diagnostic output is kept under ignored `.tmp/seo-production/`; credentials are
 never included in this report.
+
+## Continued mobile performance work
+
+The clean follow-up bundle from `2c0d168` was deployed as
+`20261015172247-2c0d168`; `20261015164543-6868fbf` remains available for rollback.
+All 14 live HTTP checks passed again. Its independent mobile Lighthouse run
+measured **46 Performance / 92 SEO**, LCP **3.6 s**, TBT **2,060 ms** and
+**1,019 KiB** transferred. Badge savings dropped from 2,244 KiB to 603 KiB.
+This is a download/LCP improvement, not a claim that the performance target is met.
+Another trace run reported 28 with an explicit page-load-timeout/incomplete-results
+warning; it is not accepted as a completed measurement. Live browser navigation
+also encountered slow resource delivery. No fresh passing browser result is claimed
+for that release beyond the earlier production and current isolated checks.
+
+The owner's follow-up asks to continue toward Performance 100. Profiling the date
+strip found 5,408 timezone `formatToParts` calls for 32 labels/links, repeated on
+each render. A bounded 512-day cache now shares immutable Kampala day boundaries
+between labels, query validation and prediction windows. The historical timezone
+search still runs for an uncached day. The same probe makes 900 lookups on its
+first pass and 32 on subsequent passes; subsequent runtime fell from 31–47 ms to
+2–3 ms on the local Node runtime. These are component-operation measurements,
+not an inferred Lighthouse score. All 37 calendar/query-related tests pass,
+including the new lookup-budget check. Mobile lists also use CSS content visibility
+with remembered row sizes to defer offscreen layout while retaining the complete
+server HTML. All 87 staging/production HTML acceptance checks pass after these changes.
+
+The follow-up also limits device-timezone subscriptions to kickoff/publication
+labels, so detecting the browser zone does not rerender every badge, probability
+and card structure. The inverse header SVG is embedded from the original brand
+artwork by the existing generator, removing the measured LCP image request.
+The font remains self-hosted with `display: swap`; experimental framework CSS
+inlining was not enabled.
+
+Approved API-Sports team/league PNGs now use a bounded first-party badge route
+through one reusable helper. Five retina sizes are supported; the route accepts
+only known provider kinds/numeric IDs, fetches PNGs without redirects, limits
+input bytes/dimensions and decoder time/memory, and uses Next.js route caching
+with seven-day revalidation. Other approved hosts stay direct. The importer
+remains URL-only and existing media approvals still apply. This follows the
+provider's [logo caching guidance](https://www.api-football.com/news/post/how-to-get-started-with-api-football-the-complete-beginners-guide);
+it does not assert ownership of club marks. Privacy implementation facts were
+updated; the legal-page publication gate remains unchanged.
+
+The original standard Next image optimizer successfully returned a **1,374-byte**
+WebP and cache HIT locally. Its hosted preflight then exposed a CPU constraint:
+native Sharp requires x86-64-v2, and the supported Wasm fallback also failed
+because this host lacks SIMD. No incompatible release was activated. The host's
+ImageMagick 6.9.13-57 successfully encodes WebP, so the final badge route uses
+that system codec on Linux and Sharp for local Windows tooling. Deployment
+verifies conversion before activating the bundle. This avoids an obsolete Sharp
+downgrade or unverified CPU override. Final cached-route checks and live
+measurements are recorded below.
+
+Before this hosting adjustment, all **87 HTML checks**, **33 browser checks** and
+**6 Python checks** passed. The browser checks cover Kampala, Los Angeles,
+Kathmandu, 320px, 390px and desktop layouts, explicit timezone round trips,
+full-list scrolling, keyboard focus and all 30 match links without JavaScript,
+with no page errors. The prior complete unit run passed 1,404 tests with one
+existing skip. Further badge-route tests verify accepted inputs and decoder
+bounds. The header artwork is present in initial HTML without an external
+header-logo source.
+
+The final cached badge route returns a **1,374-byte WebP**, with MISS then HIT;
+the repeat request took **7 ms** locally. Invalid provider kinds, IDs and sizes
+return HTTP 404. All **87 HTML checks**, **33 browser checks**, **21 targeted
+unit checks** and **6 Python checks** pass after the hosted-codec adjustment;
+TypeScript and source-wide ESLint also pass. Decoder checks cover oversized and
+non-PNG upstream responses and real resized WebP dimensions. Production results
+will be appended after deployment rather than inferred from local timings.

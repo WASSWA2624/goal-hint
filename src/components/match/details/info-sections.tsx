@@ -4,6 +4,7 @@ import Link from "next/link";
 import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
+import { providerImageSource } from "@/components/ui/provider-image";
 import type { InsightResult, InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
 import { openItem } from "@/domain/match-view";
@@ -129,7 +130,7 @@ export const ContextSection = memo(function ContextSection() {
     {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <Facts>
         <dt>{messages.text("details.competition")}</dt><dd style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {fixture.competition.logoUrl && <SmallLogo src={fixture.competition.logoUrl} alt="" width={18} height={18} referrerPolicy="no-referrer" />}
+          {fixture.competition.logoUrl && <SmallLogo src={providerImageSource(fixture.competition.logoUrl, 18)} alt="" width={18} height={18} referrerPolicy="no-referrer" />}
           {fixture.competition.name ?? messages.text("match.competitionUnknown")}</dd>
         <dt>{messages.text("details.country")}</dt><dd>{value?.competition.country ?? fixture.competition.country ?? messages.text("details.notAvailable")}</dd>
         <dt>{messages.text("details.round")}</dt><dd>{value?.competition.round ?? messages.text("details.notAvailable")}</dd>

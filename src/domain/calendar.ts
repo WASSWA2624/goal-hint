@@ -99,8 +99,15 @@ function reportingDay(instant: UtcInstant): number {
   return gregorianDay(year, month, day);
 }
 
+// Civil-day boundaries depend only on the named day and this module's fixed zone.
+// Share the historical search across labels, query validation and prediction windows.
+// Bound the cache for long-lived servers and visitors browsing arbitrary dates.
+const dayStarts = new Map<number, UtcInstant>();
+
 /** First instant of a named Kampala day, including historical timezone changes. */
 function startOfDay(day: number): UtcInstant {
+  const cached = dayStarts.get(day);
+  if (cached !== undefined) return cached;
   // Search by local date rather than assuming every Kampala day has 24 hours
   // or that historical offsets equal today's UTC+03:00. Never read host time.
   let lower = day * DAY_MS - DAY_MS;
@@ -114,6 +121,8 @@ function startOfDay(day: number): UtcInstant {
   if (reportingDay(start) !== day) {
     throw new CalendarValidationError("Reporting day does not exist in the reporting timezone.");
   }
+  if (dayStarts.size >= 512) dayStarts.delete(dayStarts.keys().next().value!);
+  dayStarts.set(day, start);
   return start;
 }
 

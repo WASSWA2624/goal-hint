@@ -43,6 +43,14 @@ python scripts/deploy-cpanel.py --build
 This rebuilds `deploy/goal-hint-cpanel.zip`, uploads it with a checksum check,
 activates the new release, restarts the app and checks that the site returns HTTP 200.
 
+The package removes Windows codecs and records the hosted badge codec.
+Before activation, deployment verifies WebP conversion with the host's installed
+`/usr/bin/convert` (ImageMagick). Badge responses use Next.js route caching with
+seven-day revalidation. Local Windows tooling uses the pinned Sharp dependency.
+This host lacks the CPU features required by native Sharp and Wasm SIMD.
+A failed codec check leaves the active release untouched; earlier releases remain
+eligible for rollback.
+
 | `python scripts/deploy-cpanel.py …` | Does |
 | --- | --- |
 | *(no option)* | Deploys the existing zip |

@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import styled from "styled-components";
 import { teamInitials } from "@/domain/match-card";
 import { deferImage } from "@/components/ui/deferred-image";
+import { providerImageSource } from "@/components/ui/provider-image";
 /** Containers may set --gh-logo-size; 32px remains the reserved default. --gh-logo-ring outlines the initials only.
  * `data-team-logo` lets a container's grid place the box. */
 const LogoBox = styled.span<{ $loaded: boolean }>`
@@ -30,21 +31,22 @@ const LogoImage = styled.img<{ $loaded: boolean }>`
   opacity: ${({ $loaded }) => $loaded ? 1 : 0};
 `;
 
-export function TeamLogo({ name, url, eager }: { name: string | null; url: string | undefined; eager: boolean }) {
+export function TeamLogo({ name, url, eager, size = 32 }: { name: string | null; url: string | undefined; eager: boolean; size?: number }) {
+  const source = url ? providerImageSource(url, size) : undefined;
   const [loadedUrl, setLoadedUrl] = useState<string | undefined>();
   const [failedUrl, setFailedUrl] = useState<string | undefined>();
   const loaded = Boolean(url && loadedUrl === url), failed = Boolean(url && failedUrl === url);
   const imageRef = useCallback((element: HTMLImageElement | null) => {
-    if (!element || !url) return;
-    if (!eager) return deferImage(element, url);
+    if (!element || !url || !source) return;
+    if (!eager) return deferImage(element, source);
     if (element.complete) {
       if (element.naturalWidth > 0) setLoadedUrl(url);
       else setFailedUrl(url);
     }
-  }, [eager, url]);
+  }, [eager, source, url]);
   return <LogoBox aria-hidden="true" data-team-logo="" $loaded={loaded}>
     <span hidden={loaded}>{teamInitials(name)}</span>
-    {url && !failed && <LogoImage ref={imageRef} src={eager ? url : undefined} data-logo-src={eager ? undefined : url} alt="" width={32} height={32}
+    {url && !failed && <LogoImage ref={imageRef} src={eager ? source : undefined} data-logo-src={eager ? undefined : source} alt="" width={size} height={size}
       loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "auto" : "low"} decoding="async" referrerPolicy="no-referrer" $loaded={loaded}
       onLoad={() => setLoadedUrl(url)} onError={() => setFailedUrl(url)} />}
   </LogoBox>;

@@ -3,6 +3,7 @@
 import { memo, type ComponentPropsWithoutRef } from "react";
 import styled from "styled-components";
 import { OutcomeBadge } from "@/components/match/prediction-presentation";
+import { providerImageSource } from "@/components/ui/provider-image";
 import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { toUtcIsoString } from "@/domain/calendar";
@@ -157,7 +158,7 @@ export const MatchBanner = memo(function MatchBanner() {
     : messages.text(`match.status.${fixture.status}`);
   return <Box id="current-match-summary" aria-labelledby="match-banner-title">
     <Context>
-      {fixture.competition.logoUrl && <CompetitionLogo src={fixture.competition.logoUrl} alt="" width={16} height={16} referrerPolicy="no-referrer" />}
+      {fixture.competition.logoUrl && <CompetitionLogo src={providerImageSource(fixture.competition.logoUrl, 16)} alt="" width={16} height={16} referrerPolicy="no-referrer" />}
       {[fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ")}{"\u00a0· "}
       {fixture.kickoffAt !== null ? <span><time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time>
         {"\u00a0· "}{messages.reportingTime(fixture.kickoffAt)} {messages.timeZone(fixture.kickoffAt)}</span> : <span>{messages.text("details.kickoffUnknown")}</span>}

@@ -88,6 +88,8 @@ def main():
         shutil.copytree(built, standalone, symlinks=False)
         shutil.copytree(source / ".next/static", standalone / ".next/static", dirs_exist_ok=True)
         shutil.copytree(source / "public", standalone / "public", dirs_exist_ok=True)
+        # Windows codecs cannot run on Linux. Hosted badges use the verified
+        # system ImageMagick codec; Sharp remains available for local tooling.
         for prune in ("node_modules/sharp", "node_modules/@img"):
             target = standalone / prune
             if target.exists():
@@ -109,7 +111,8 @@ import(pathToFileURL(path.join(__dirname, "standalone", "server.js")).href).catc
                    "type": "commonjs", "main": "app.js", "scripts": {"start": "node app.js"}, "engines": {"node": version.split(".")[0] + ".x"}})
         next_version = json.loads((source / "node_modules/next/package.json").read_text(encoding="utf-8"))["version"]
         write_json(bundle / "BUILD_INFO.json", {"name": package["name"], "version": package["version"], "commit": commit,
-                   "uncommittedChanges": dirty, "builtAt": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"), "node": version, "next": next_version})
+                   "uncommittedChanges": dirty, "builtAt": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+                   "node": version, "next": next_version, "badgeCodec": "imagemagick"})
         shutil.copy2(ROOT / "deploy/README.md", bundle / "DEPLOY.md")
         shutil.copy2(ROOT / ".env.example", bundle / ".env.example")
         archive = ROOT / "deploy/goal-hint-cpanel.zip"

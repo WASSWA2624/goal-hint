@@ -119,6 +119,11 @@ await sealBackup(input.node,backupText('Synthetic Node backup.'),{...options,met
         expected = ET.parse(ROOT / "public/brand/goal-hint-mark-primary.svg").getroot()
         paths = lambda root: [element.attrib.get("d") for element in root.iter() if element.tag.endswith("path")]
         self.assertEqual(paths(actual), paths(expected))
+        from urllib.parse import unquote
+        inline = (ROOT / "src/components/ui/brand-inline.ts").read_text(encoding="utf-8")
+        uri = json.loads(inline.split(" = ", 1)[1].strip().removesuffix(";"))
+        self.assertEqual(unquote(uri.removeprefix("data:image/svg+xml,")),
+                         generator.raw_svg((ROOT / "public/brand/goal-hint-logo-inverse.svg").read_text(encoding="utf-8")))
 
 
 if __name__ == "__main__":

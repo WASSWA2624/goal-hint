@@ -215,16 +215,21 @@ fragment, whitespace, controls or backslashes. This structural check does not
 grant media rights: the server catalog/provider approval still decides which
 exact URLs may be projected to visitors.
 
-Logos use native `styled.img` with the exact supplied URL, empty alt text,
-32px width/height attributes and `object-fit: contain`. The container reserves
+Logos use native `styled.img`, empty alt text, size-matched width/height
+attributes and `object-fit: contain`. Approved API-Sports team and league PNGs
+use the shared `providerImageSource` helper and a Next.js cached badge route,
+with bounded provider paths/sizes, no redirects and seven-day revalidation.
+Other approved hosts keep their original URLs. The importer still stores URLs
+only; the cache does not grant additional media rights. The container reserves
 its `--gh-logo-size` square before loading. Default loading uses one shared
 IntersectionObserver with a 120px margin, so offscreen badges retain initials
 without downloading provider PNGs thousands of pixels ahead. Unsupported browsers
 fall back to native lazy loading. The server carries the approved URL in
 `data-logo-src`; the observer sets `src` as the image approaches the viewport.
 Callers may explicitly opt into eager loading
-for known above-the-fold cards. Requests use `no-referrer`. There is no Next
-optimizer, server proxy, binary download, image database column or asset copy.
+for known above-the-fold cards. Requests use `no-referrer`. The application
+cache fetches approved provider originals on demand and serves resized badges;
+there is no image database column or catalog-time binary download.
 
 Initials are derived from Unicode team names and remain beneath the image until
 it loads. Cached images that finish before hydration are recognized through the

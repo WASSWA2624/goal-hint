@@ -1,6 +1,7 @@
 "use client";
 
 import styled from "styled-components";
+import { inverseLogoSource } from "./brand-inline";
 
 type BrandVariant = "primary" | "inverse" | "monochrome" | "monochrome-inverse";
 
@@ -40,7 +41,8 @@ export interface BrandImageProps {
 export function BrandLogo({ alt = "Goal Hint", variant = "primary" }: BrandImageProps) {
   return (
     <LogoSpace>
-      <LogoImage src={`/brand/goal-hint-logo-${variant}.svg`} alt={alt} width={553} height={128} fetchPriority="high" />
+      <LogoImage src={variant === "inverse" ? inverseLogoSource : `/brand/goal-hint-logo-${variant}.svg`}
+        alt={alt} width={553} height={128} fetchPriority="high" />
     </LogoSpace>
   );
 }

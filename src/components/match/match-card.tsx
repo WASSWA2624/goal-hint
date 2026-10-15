@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useId, useState, type PointerEvent } from "react";
+import { memo, useId, useState, type PointerEvent, type ReactNode } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
 import { countryCode } from "@/domain/country-code";
@@ -13,7 +13,7 @@ import { hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedC
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
-import type { Messages } from "@/i18n/messages";
+import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media, type OutcomeTone } from "@/styles/theme";
@@ -21,6 +21,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { CheckIcon, ChevronIcon, CrossIcon, FlagIcon, GlobeIcon, NoticeIcon, TrophyIcon, VoidIcon } from "./match-icons";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
+import { providerImageSource } from "@/components/ui/provider-image";
 import { OutcomeBadge, PredictionOdds, ProbabilityBar } from "./prediction-presentation";
 
 export type MatchCardProps = {
@@ -599,7 +600,7 @@ function CardTeam({ team, side, name, eager, result }: {
 function CompetitionLogo({ url }: { url: string | null | undefined }) {
   const [failed, setFailed] = useState(false);
   return url && !failed && isSafeRemoteImageUrl(url)
-    ? <LeagueLogo src={url} alt="" width={14} height={14} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+    ? <LeagueLogo src={providerImageSource(url, 14)} alt="" width={14} height={14} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
     : <TrophyIcon />;
 }
 
@@ -627,10 +628,36 @@ function showFullNames(event: PointerEvent<HTMLElement>, title: string) {
 
 const resultIcon = { correct: <CheckIcon />, incorrect: <CrossIcon />, void: <VoidIcon /> } as const;
 
+/** Only timestamps subscribe to the device clock; the rest of a card stays unchanged. */
+function CardKickoff({ kickoff, locale }: { kickoff: FixtureSnapshot["kickoffAt"]; locale: string }) {
+  const messages = useMessages(locale);
+  return kickoff === null ? <When as="p"><KickoffDetails>{messages.text("match.kickoffUnknown")}</KickoffDetails></When>
+    : <When dateTime={toUtcIsoString(kickoff)} title={messages.reportingInstant(kickoff)}>
+      <KickoffDetails>
+        <VisuallyHidden>{messages.text("match.kickoff")}: </VisuallyHidden>
+        <span>{messages.reportingDay(kickoff)}</span><Dot aria-hidden="true">·</Dot>
+        <KickoffTime>{messages.reportingTime(kickoff)}<KickoffZone> {messages.timeZone(kickoff)}</KickoffZone></KickoffTime>
+      </KickoffDetails>
+    </When>;
+}
+
+function PredictionCell({ prediction, price, reason, locale, children }: {
+  prediction: ReturnType<typeof selectedCardPrediction>; price: ReturnType<typeof selectedCardPrice>;
+  reason: string | null; locale: string; children: ReactNode;
+}) {
+  const messages = useMessages(locale);
+  const details = prediction && [messages.text(`market.source.${prediction.item.market.source}`),
+    prediction.provisional ? messages.text("match.provisional") : null,
+    `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}`,
+    price ? `${messages.text("details.odds")}: ${price.price}` : null].filter(Boolean).join(" · ");
+  return <Prediction $available={prediction !== null} data-prediction={prediction?.item.market.selection ?? "none"}
+    data-outcome={prediction?.status ?? "unavailable"} title={details ?? reason ?? undefined}>{children}</Prediction>;
+}
+
 function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
-  const messages = useMessages(locale);
+  const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
@@ -649,10 +676,6 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent) })
     : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
-  const details = prediction && [messages.text(`market.source.${prediction.item.market.source}`),
-    prediction.provisional ? messages.text("match.provisional") : null,
-    `${messages.text("match.published")}: ${messages.reportingInstant(prediction.publishedAt)}`,
-    price ? `${messages.text("details.odds")}: ${price.price}` : null].filter(Boolean).join(" · ");
   const notes = [
     fixture.update?.prediction === "updating" && messages.text("match.predictionUpdating"),
     fixture.forecast?.updateDelayed && messages.text("match.updateDelayed"),
@@ -685,14 +708,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
         </CountryDetails>
         <CompetitionLogo key={fixture.competition.logoUrl} url={fixture.competition.logoUrl} /><LeagueName title={competition}>{competition}</LeagueName>
         {country && <VisuallyHidden>, {country}</VisuallyHidden>}</League>
-      {fixture.kickoffAt === null ? <When as="p"><KickoffDetails>{messages.text("match.kickoffUnknown")}</KickoffDetails></When>
-        : <When dateTime={toUtcIsoString(fixture.kickoffAt)} title={messages.reportingInstant(fixture.kickoffAt)}>
-          <KickoffDetails>
-          <VisuallyHidden>{messages.text("match.kickoff")}: </VisuallyHidden>
-          <span>{messages.reportingDay(fixture.kickoffAt)}</span><Dot aria-hidden="true">·</Dot>
-          <KickoffTime>{messages.reportingTime(fixture.kickoffAt)}<KickoffZone> {messages.timeZone(fixture.kickoffAt)}</KickoffZone></KickoffTime>
-          </KickoffDetails>
-        </When>}
+      <CardKickoff kickoff={fixture.kickoffAt} locale={locale} />
     </Meta>
     <Teams>
       <CardTeam team={fixture.homeTeam} side="home" name={home} eager={eagerLogos} result={lead > 0 ? "win" : lead < 0 ? "loss" : null} />
@@ -704,7 +720,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
         <span data-pick-value="" data-mobile-only="">{messages.text(`market.code.${shownFamily}`)}</span>
         <span data-pick-value="" data-desktop-only="">{family}</span>
       </MarketName>
-      <Prediction $available={prediction !== null} data-prediction={selection ?? "none"} data-outcome={outcome} title={details ?? reason ?? undefined}>
+      <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <>
             <span data-pick-value=""><span data-pick-selection="">{messages.text(shownFamily === "total-goals"
@@ -725,7 +741,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
           {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}
         </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>}
-      </Prediction>
+      </PredictionCell>
       <Result aria-hidden="true" $outcome={outcome} data-result-badge={outcome}>
         {settledOutcome(outcome) && resultIcon[outcome as keyof typeof resultIcon]}
         <span data-pick-value="">{outcome === "unavailable" ? "—" : messages.text(outcome === "correct" ? "match.result.won" : outcome === "incorrect" ? "match.result.lost" : `outcome.${outcome}`)}</span>

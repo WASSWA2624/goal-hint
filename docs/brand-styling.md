@@ -107,15 +107,19 @@ the 160px brand minimum with no extra padding, on the 16px page gutter; the
 below, and the artwork adds about 3.5px of its own margin, which together
 exceed a quarter of the displayed mark. `BrandMark` displays a 32px mark with
 8px clear space and loads lazily, so the footer mark is not preloaded; the
-header logo stays eager. Use `alt=""` when
+header logo stays eager. Its inverse SVG is embedded as a data URI generated
+from the same artwork by `scripts/generate-brand.py`, eliminating a separate
+image request for the measured LCP element without changing its appearance.
+Use `alt=""` when
 nearby text already names the brand, and an accessible “Goal Hint home” name
 for a logo-only home link. Inverse assets require a compatible dark surface:
 navy, or the navy-to-teal `theme.header.background` that every header bar uses.
 Its worst case is the #0C4F5E teal stop, where the white wordmark keeps 9.15:1
 and the inverse teal G 5.03:1; `gradient.tableHeader` is for table headers,
 not the logo.
-The primitives load first-party branding only. Later football images must
-remain direct approved remote URLs.
+The primitives load first-party branding only. Approved API-Sports football
+badges use the shared bounded badge cache; other approved image hosts
+remain direct browser requests.
 
 ## Contrast and motion
 

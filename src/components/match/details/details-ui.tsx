@@ -384,7 +384,7 @@ const CrestBox = styled.span<{ $size: number }>`
   flex: none;
 `;
 export function Crest({ name, url, size = 20, eager = false }: { name: string | null; url: string | null | undefined; size?: number; eager?: boolean }) {
-  return <CrestBox $size={size}><TeamLogo name={name} url={url ?? undefined} eager={eager} /></CrestBox>;
+  return <CrestBox $size={size}><TeamLogo name={name} url={url ?? undefined} eager={eager} size={size} /></CrestBox>;
 }
 
 const PagerList = styled.ol`

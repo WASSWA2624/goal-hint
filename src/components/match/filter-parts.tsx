@@ -9,6 +9,7 @@ import { ChevronDownIcon, CloseIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
+import { providerImageSource } from "@/components/ui/provider-image";
 import { isLocalCountryFlagAsset } from "@/domain/country-flag";
 import type { FilterOption } from "@/domain/feed-presentation";
 import { media, type AccentName } from "@/styles/theme";
@@ -75,7 +76,7 @@ const LogoImage = styled.img`
 export function OptionLogo({ url }: { url: string | null }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   if (!url || failedUrl === url || !(isLocalCountryFlagAsset(url) || isSafeRemoteImageUrl(url))) return null;
-  return <LogoImage src={url} alt="" width={18} height={18} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailedUrl(url)} />;
+  return <LogoImage src={providerImageSource(url, 18)} alt="" width={18} height={18} loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={() => setFailedUrl(url)} />;
 }
 
 /** A filter value as a link: selected chips remove themselves, others add themselves. */

@@ -88,9 +88,19 @@ restart() {
   if app_exists; then selector restart --app-root "$app_root" >/dev/null; else mkdir -p "$app/tmp"; touch "$app/tmp/restart.txt"; fi
 }
 
+badge_runtime() {
+  local target="$1" codec
+  codec="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("badgeCodec") or "")' "$target/BUILD_INFO.json")"
+  [ -n "$codec" ] || return 0  # Earlier releases have no cached badges.
+  [ "$codec" = imagemagick ] && [ -x /usr/bin/convert ] || { echo "Badge codec is unavailable." >&2; return 3; }
+  printf 'P3\n1 1\n255\n0 0 0\n' | /usr/bin/convert -limit memory 16MiB -limit map 32MiB -limit disk 0 -limit time 3 ppm:- -strip webp:- >/dev/null
+  echo "Hosted PNG/WebP badge codec verified."
+}
+
 activate() {  # $1 = release stamp. Touching the release keeps `ls -t` in activation order for rollback.
   local target="$releases/$1/goal-hint" f
   complete "$1" || { echo "Release $1 is incomplete." >&2; exit 3; }
+  badge_runtime "$target"
   sync_private "$target/standalone"
   for f in app.js package.json BUILD_INFO.json DEPLOY.md .env.example; do [ ! -e "$target/$f" ] || cp -p "$target/$f" "$app/$f"; done
   ln -sfn "$target/standalone" "$app/standalone.next" && mv -Tf "$app/standalone.next" "$app/standalone"
