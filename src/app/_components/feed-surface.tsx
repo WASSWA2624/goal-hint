@@ -17,7 +17,7 @@ import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { createPredictionWindow, type ReportingDate } from "@/domain/calendar";
+import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
@@ -60,7 +60,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
   const first = feedRowNumber(view.firstPage, data.pageSize, 0);
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
-    <ResultsToolbar query={query} total={data.total} first={first}
+    <ResultsToolbar query={query} today={today} total={data.total} first={first}
       last={first + records.length - 1} />
     {/* Fixtures without the selected market still list; each row states why it has no pick. */}
     {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
@@ -98,7 +98,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
   if (result.data && previous?.data !== result.data) setPrevious({ query, today, data: result.data });
   const visible = result.data ? { query, today, data: result.data } : previous;
-  const messages = createMessages(query.locale), range = resolveFeedDates(query, today);
+  const messages = createMessages(query.locale);
   const href = feedQueryHref(query, today), leagues = result.data?.leagues ?? previous?.data.leagues ?? noLeagues;
   useEffect(() => {
     // Match pages link back to this exact list, filters included.
@@ -126,10 +126,9 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
       controls={<FeedFilterToolbar query={query} onApply={apply} actions={filterActions}
         summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
     {controls}
-    {range.endDate > createPredictionWindow(today).lastDate && <FeedNote>{messages.text("feed.sevenDayAvailability")}</FeedNote>}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     <Results $gap="md" aria-busy={pending || changingDay} data-feed-results>
-      {!visible && <ResultsToolbar query={query} total={null} first={0} last={0} />}
+      {!visible && <ResultsToolbar query={query} today={today} total={null} first={0} last={0} />}
       {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
         description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}
         action={<ButtonLink href={href} prefetch={false} variant="secondary" onClick={(event) => {

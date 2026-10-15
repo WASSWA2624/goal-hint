@@ -5,12 +5,13 @@ import styled from "styled-components";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import type { ReportingDate } from "@/domain/calendar";
-import type { FeedQuery, FeedSort } from "@/domain/feed-query";
+import { createPredictionWindow, type ReportingDate } from "@/domain/calendar";
+import { resolveFeedDates, type FeedQuery, type FeedSort } from "@/domain/feed-query";
 import { feedHeading } from "@/domain/feed-presentation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { DatePresets } from "./feed-dates";
+import { FeedNote } from "./feed-controls";
 import { focusRing } from "./filter-parts";
 
 const desktop = media.desktop;
@@ -96,19 +97,20 @@ const FilterToolbar = styled(Toolbar)`
   }
 `;
 const Count = styled.div`
-  display: grid;
-  gap: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   min-inline-size: 0;
   > h2 { font-size: 0.75rem; ${desktop} { font-size: 1.25rem; } }
-  > p { display: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; ${desktop} { display: block; } }
-  ${media.belowDesktop} {
+  ${desktop} { flex: none; white-space: nowrap; }
+  ${media.belowDesktop} { > h2 {
     position: absolute;
     inline-size: 1px;
     block-size: 1px;
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
-  }
+  } }
 `;
 const SortGroup = styled.div`
   display: flex;
@@ -131,6 +133,7 @@ const ResultCount = styled.p`
   line-height: 1.2;
   text-align: end;
   font-variant-numeric: tabular-nums;
+  ${desktop} { font-size: 0.875rem; }
   > [data-phone-count] { display: none; }
   ${media.belowDesktop} {
     font-size: 0.75rem;
@@ -192,23 +195,31 @@ export function FeedFilterToolbar({ query, onApply, actions, summary }: {
 
 /** The mobile count follows the filters and aligns with their right edge. */
 const ResultsBar = styled(Toolbar)`
+  ${desktop} { flex-wrap: nowrap; gap: 8px 16px; }
   ${media.belowDesktop} { display: flex; justify-content: flex-end; padding-inline: 6px; }
+`;
+const AvailabilityNote = styled(FeedNote)`
+  min-inline-size: 0;
+  margin-inline-start: auto;
+  ${desktop} { font-size: 0.8125rem; line-height: 1.3; text-align: end; white-space: nowrap; }
+  ${media.belowDesktop} { flex-basis: 100%; }
 `;
 
 /** Counts follow the successful result projection, including pagination and live refresh. */
-export function ResultsToolbar({ query, total, first, last }: {
-  query: FeedQuery; total: number | null; first: number; last: number;
+export function ResultsToolbar({ query, today, total, first, last }: {
+  query: FeedQuery; today: ReportingDate; total: number | null; first: number; last: number;
 }) {
   const messages = createMessages(query.locale);
+  const outsidePredictionWindow = resolveFeedDates(query, today).endDate > createPredictionWindow(today).lastDate;
   return <ResultsBar>
     <Count>
       <h2>{messages.text("feed.results.title")}</h2>
-      {total !== null && <p>{messages.text("feed.results.showing", { shown: total === 0 ? "0"
-        : `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</p>}
+      {total !== null && <ResultCount data-match-count>
+        <span data-desktop-count>{messages.text("feed.results.showing", { shown: total === 0 ? "0"
+          : `${messages.number(first)}–${messages.number(last)}`, total: messages.number(total) })}</span>
+        <span data-phone-count>{messages.text("feed.results.showingCount", { count: messages.plural("feed.results.count", total) })}</span>
+      </ResultCount>}
     </Count>
-    {total !== null && <ResultCount data-match-count>
-      <span data-desktop-count>{messages.plural("feed.results.count", total)}</span>
-      <span data-phone-count>{messages.text("feed.results.showingCount", { count: messages.plural("feed.results.count", total) })}</span>
-    </ResultCount>}
+    {outsidePredictionWindow && <AvailabilityNote>{messages.text("feed.sevenDayAvailability")}</AvailabilityNote>}
   </ResultsBar>;
 }
