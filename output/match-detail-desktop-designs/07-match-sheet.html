@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>07 Match Sheet · Goal Hint desktop match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  /* A printed match programme: one sheet of paper, a headline and a one-sentence verdict, then numbered sections
+   * with the label on the left and the facts on the right. Line-ups and absences are written as text. */
+  .lay { display: grid; grid-template-columns: minmax(0, 1fr) 210px; gap: 20px; align-items: start; }
+  .sheet { padding: 34px 48px 18px; background: var(--surface); border: 1px solid var(--line); }
+  .mast { padding-bottom: 20px; border-bottom: 2px solid var(--text); }
+  .mast .kick { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .mast h1 { display: flex; align-items: center; gap: 16px; margin-top: 12px; font-size: 40px; line-height: 1.05; font-weight: 800; letter-spacing: -.01em; }
+  .mast h1 .sc { padding: 0 6px; font-variant-numeric: tabular-nums; }
+  .mast .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 10px; font-size: 13.5px; color: var(--muted); }
+  .mast .sub .lv { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: var(--live); }
+  .lede { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: center; padding: 20px 0 22px; border-bottom: 1px solid var(--line); }
+  .lede p { font-size: 18px; line-height: 1.55; } .lede p b { font-weight: 800; }
+  .lede .num { display: grid; gap: 8px; } .lede .num strong { font-size: 56px; line-height: .9; font-weight: 800; color: var(--teal-d); }
+  .lede .num small { font-size: 12.5px; color: var(--muted); }
+  .sx { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 28px; padding: 20px 0; border-bottom: 1px solid var(--hair); scroll-margin-top: 70px; }
+  .sx > header { display: grid; align-content: start; gap: 3px; }
+  .sx > header i { font-style: normal; font-size: 12px; font-weight: 800; color: var(--teal); }
+  .sx > header h2 { font-size: 15.5px; font-weight: 800; line-height: 1.25; }
+  .sx > header small { font-size: 12px; color: var(--muted); }
+  .sx > div { min-width: 0; }
+  .prose p { font-size: 14px; line-height: 1.7; } .prose p + p { margin-top: 8px; }
+  .prose b { font-weight: 800; } .prose sup { margin-left: 1px; font-size: 10px; font-weight: 800; color: var(--muted); } .prose sup.hi { color: var(--win); }
+  .prose .out { color: var(--bad); font-weight: 750; } .prose .dbt { color: var(--pend); font-weight: 750; }
+  .prose em { font-style: normal; color: var(--muted); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; } .two > * { min-width: 0; }
+  .stack { display: grid; gap: 14px; }
+  .mk > p { margin-bottom: 3px; font-size: 12.5px; font-weight: 750; }
+  .toc { position: sticky; top: 70px; padding: 14px 0; background: var(--surface); border: 1px solid var(--line); }
+  .toc p { padding: 0 16px 8px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .toc a { display: grid; grid-template-columns: 24px 1fr; padding: 3px 16px; font-size: 12.5px; color: var(--muted); border-left: 2px solid transparent; }
+  .toc a i { font-style: normal; font-weight: 800; color: var(--quiet); }
+  .toc a:hover { color: var(--text); } .toc a.on { color: var(--text); font-weight: 750; border-left-color: var(--teal); } .toc a.on i { color: var(--teal); }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, pend, hd, B } = K;
+const T = K.top(), o = K.mr().outcomes;
+const sup = (s, n) => { const r = M.lineups[s].ratings[n]; return r ? `<sup class="${r >= 7.5 ? "hi" : ""}">${r.toFixed(1)}</sup>` : ""; };
+/* The XI written by line, goalkeeper first: "Raya; White, Saliba, …" with each rating raised. */
+const written = (s) => { const l = M.lineups[s], by = new Map();
+  l.xi.forEach((p) => { const r = +p[2].split(":")[0]; by.set(r, [...(by.get(r) || []), p]); });
+  return [...by.entries()].sort((a, b) => a[0] - b[0]).map(([, ps]) => ps.sort((a, b) => +b[2].split(":")[1] - +a[2].split(":")[1])
+    .map(([n, name]) => `${name}${name === l.captain ? " (C)" : ""}${sup(s, name)}`).join(", ")).join("; ");
+};
+const used = (s) => M.lineups[s].bench.filter((b) => b[2]).map(([n, name, , at]) => `${name}${sup(s, name)} on ${at}`).join(", ");
+const unused = (s) => M.lineups[s].bench.filter((b) => !b[2]).map((b) => b[1]).join(", ");
+const S = [["picks", "Picks"], ["outcomes", "Every outcome"], ["why", "Why"], ["events", "Events"], ["stats", "Statistics"], ["lineups", "Line-ups"],
+  ["players", "Player stats"], ["missing", "Missing"], ["form", "Form"], ["h2h", "Head-to-head"], ["table", "Standings"], ["season", "Season"],
+  ["strength", "Strength"], ["key", "Key players"], ["odds", "Odds"], ["schedule", "Schedule"], ["venue", "Venue & referee"], ["news", "News"], ["history", "Revisions"]];
+let k = 0;
+const sx = (id, aside, body) => { const i = S.findIndex((s) => s[0] === id); return `<section class="sx" id="${id}"><header><i>${String(i + 1).padStart(2, "0")}</i><h2>${S[i][1]}</h2>${aside ? `<small>${aside}</small>` : ""}</header><div>${body}</div></section>`; };
+const half = Math.ceil(M.stats.length / 2);
+K.mount(`${B.site()}
+<main class="wrap">
+  ${B.crumb()}
+  <div class="lay">
+    <article class="sheet">
+      <header class="mast">
+        <p class="kick">${league(16)} ${M.league.name} · ${M.league.round} · ${M.kickoff.date} · ${M.kickoff.time} ${M.kickoff.tz}</p>
+        <h1>${crest(H, 40)} ${H.name} <span class="sc">${H.goals}–${A.goals}</span> ${A.name} ${crest(A, 40)}</h1>
+        <p class="sub"><span class="lv">${liveDot()} ${M.status.minute} · ${M.status.long}</span><span>Half-time ${M.status.ht}</span><span>Saka 12' · Palmer 34' (pen)</span><span>${M.venue.name}, ${M.venue.city}</span><span>Referee ${M.referee.name}</span></p>
+      </header>
+      <div class="lede">
+        <p>Our most likely outcome is <b>${T.pickLabel}</b> (${T.name.toLowerCase()}, odds ${T.odds}), ${nowLine(T)} at 1–1. For the result alone we make it <b>Arsenal ${o[0].p}%</b>, draw ${o[1].p}%, Chelsea ${o[2].p}%. Every pick is ${pend()} until full time.</p>
+        <div class="num"><strong>${T.prob}%</strong><small>chance · revision ${M.publication.revision}, published ${M.publication.published}</small>${B.resultBar("thin")}</div>
+      </div>
+      ${sx("picks", "four markets", B.picks())}
+      ${sx("outcomes", "ours · bookmakers · odds", `<div class="two">${M.markets.map((m) => `<div class="mk"><p><span class="k-code" style="--h:${hue(m.id)}">${m.code}</span> ${m.name}</p>${B.outcomes(m)}</div>`).join("")}</div>`)}
+      ${sx("why", "3 reasons · 1 risk", B.analysis())}
+      ${sx("events", "8 events", B.eventList())}
+      ${sx("stats", "all 17", `<div class="two">${B.stats({ narrow: true, rows: M.stats.slice(0, half).map((r) => r[0]) })}${B.stats({ narrow: true, rows: M.stats.slice(half).map((r) => r[0]) })}</div>`)}
+      ${sx("lineups", `${H.formation} v ${A.formation} · ratings raised`, `<div class="prose" data-b="lineups"><p><b>${H.name}</b> <em>(${H.formation})</em> ${written("home")}.</p><p><b>${A.name}</b> <em>(${A.formation})</em> ${written("away")}.</p></div>
+        <div class="prose" data-b="bench" style="margin-top:8px"><p><em>Substitutes used:</em> ${used("home")} (Arsenal); ${used("away")} (Chelsea). <em>Unused:</em> ${unused("home")}; ${unused("away")}.</p><p><em>Coaches:</em> ${M.lineups.home.coach} and ${M.lineups.away.coach}.</p></div>`)}
+      ${sx("players", "this match", `<div class="stack">${B.playerTable("home")}${B.playerTable("away")}</div>`)}
+      ${sx("missing", "injured or doubtful", `<div class="prose" data-b="injuries">${["home", "away"].map((s) => `<p><b>${K.team(s).name}:</b> ${M.injuries[s].map(([n, st, why]) => `${n} <span class="${st === "Out" ? "out" : "dbt"}">${st.toLowerCase()}</span> <em>(${why.toLowerCase()})</em>`).join(", ")}.</p>`).join("")}</div>`)}
+      ${sx("form", "last 5, newest right", `${B.form()}<div class="two" style="margin-top:6px">${B.formList("home")}${B.formList("away")}</div>`)}
+      ${sx("h2h", "last 5 meetings", B.h2h())}
+      ${sx("table", M.league.name, B.table({ rows: 6 }))}
+      ${sx("season", "league games only", `<div class="two">${B.season()}${B.goalMinutes()}</div>`)}
+      ${sx("strength", "API-Football", B.compare())}
+      ${sx("key", "season", B.keyPlayers())}
+      ${sx("odds", M.oddsMeta.split(" · ").slice(0, 2).join(" · "), B.odds())}
+      ${sx("schedule", "rest · last · next", B.schedule())}
+      ${sx("venue", "", B.info())}
+      ${sx("news", `${M.news.length} stories`, B.news())}
+      ${sx("history", `${M.history.length} versions`, B.history())}
+      ${B.disc()}
+    </article>
+    <nav class="toc"><p>Contents</p>${S.map(([id, t], i) => `<a href="#${id}" data-jump="${id}" data-spy="${id}"><i>${String(i + 1).padStart(2, "0")}</i>${t}</a>`).join("")}</nav>
+  </div>
+</main>`);
+</script></body></html>

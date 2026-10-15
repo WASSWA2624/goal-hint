@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>08 Timeline Canvas · Goal Hint desktop match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  /* The match itself is the hero: a 0–90' line with every goal, card, VAR check and substitution placed where it
+   * happened, and under it what each pick still needs. Everything else follows in tidy rows of cards. */
+  .sb { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; padding: 12px 20px; background: var(--surface); border: 1px solid var(--line); border-bottom: 0; }
+  .sb .ctx { display: grid; gap: 2px; font-size: 12.5px; color: var(--muted); } .sb .ctx b { display: flex; gap: 6px; align-items: center; font-size: 13.5px; color: var(--text); }
+  .sb .ctx.r { justify-items: end; text-align: right; }
+  .sb .mid { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; }
+  .sb .tm { display: flex; align-items: center; gap: 10px; font-size: 19px; font-weight: 800; } .sb .tm.h { justify-content: flex-end; }
+  .sb .sc { display: grid; justify-items: center; } .sb .sc strong { font-size: 34px; line-height: 1; font-weight: 800; }
+  .sb .sc span { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 12.5px; font-weight: 800; color: var(--live); } .sb .sc em { font-style: normal; color: var(--muted); font-weight: 650; }
+  .hero { padding: 16px 20px 16px; background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--text); }
+  .hero .k-tl { height: 150px; margin-top: 8px; }
+  .now { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+  .ch { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 10px 12px; background: var(--soft); border-left: 3px solid var(--quiet); }
+  .ch.on { border-left-color: var(--ok); } .ch.top { background: var(--teal-soft); }
+  .ch b { font-size: 14px; } .ch strong { font-size: 20px; line-height: 1; font-weight: 800; grid-row: 1 / 3; grid-column: 2; align-self: center; }
+  .ch .k-nowtxt { grid-column: 1; }
+  .ch small { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); }
+  .tg { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .grid { display: grid; gap: 12px; margin-top: 12px; }
+  .c3 { grid-template-columns: 1fr 1.05fr 1fr; } .c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } .c2 { grid-template-columns: 1fr 1fr; } .c31 { grid-template-columns: 2fr 1fr 1fr; }
+  .card { min-width: 0; padding: 14px 16px 16px; background: var(--surface); border: 1px solid var(--line); display: grid; gap: 14px; align-content: start; }
+  .card > * { min-width: 0; }
+  .vd { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 2px 10px; padding: 10px 12px; background: var(--teal-soft); }
+  .vd .k-lbl { grid-column: 1 / -1; color: var(--teal-d); } .vd b { font-size: 19px; } .vd b small { display: block; font-size: 12px; font-weight: 650; color: var(--muted); } .vd strong { font-size: 32px; line-height: 1; font-weight: 800; }
+  .mk > p { margin-bottom: 2px; font-size: 12px; font-weight: 750; }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, pend, hd, B } = K;
+const T = K.top();
+K.mount(`${B.site()}
+<main class="wrap">
+  ${B.crumb()}
+  <header class="sb">
+    <div class="ctx"><b>${league(16)} ${M.league.name} · ${M.league.round}</b><span>${M.kickoff.day} · ${M.kickoff.time} ${M.kickoff.tz}</span></div>
+    <div class="mid"><div class="tm h">${H.name} ${crest(H, 38)}</div><div class="sc"><strong>${H.goals} – ${A.goals}</strong><span>${liveDot()} ${M.status.minute}<em>· HT ${M.status.ht}</em></span></div><div class="tm">${crest(A, 38)} ${A.name}</div></div>
+    <div class="ctx r"><b>${ic("stadium", 15)} ${M.venue.name}</b><span>Referee ${M.referee.name}</span></div>
+  </header>
+  <section class="hero">
+    ${hd("The match so far", `${M.status.long} · 23 minutes left · hover a marker for details`)}
+    ${B.timeline()}
+    <div class="now" data-b="picks">${M.markets.map((m) => `<div class="ch ${m.live.ok ? "on" : ""} ${m.top ? "top" : ""}" style="--h:${hue(m.id)}"><b><span class="k-code">${m.code}</span> ${m.pickLabel}</b><strong>${m.prob}%</strong>${nowLine(m, true)}<small>odds ${m.odds} · ${m.top ? "our top pick · " : ""}${m.status.toLowerCase()} until full time</small></div>`).join("")}</div>
+    <p class="tg"><span>${ic("clock", 12, 'style="display:inline;vertical-align:-2px"')} ${M.publication.settles} · revision ${M.publication.revision}, ${M.publication.published}</span><button class="k-more" data-toggle="evl" aria-expanded="false" style="margin:0">Every event in order ${ic("down", 12)}</button></p>
+    <div id="evl" hidden style="max-width:760px;margin:8px auto 0">${B.eventList()}</div>
+  </section>
+
+  <div class="grid c3">
+    <section class="card"><div>${hd("Statistics", "all 17")}${B.stats({ narrow: true })}</div></section>
+    <section class="card"><div>${hd("Line-ups", `${H.formation} v ${A.formation}`)}${B.pitch({ h: 540 })}</div><div>${B.bench()}</div></section>
+    <section class="card">
+      <div class="vd"><p class="k-lbl">Top pick</p><b>${T.pickLabel}<small>${T.name} · odds ${T.odds}</small></b><strong>${T.prob}%</strong></div>
+      <div>${hd("Match result chances")}${B.resultBar()}</div>
+      <div>${hd("Every outcome", "ours · market · odds")}${M.markets.map((m) => `<div class="mk" style="margin-bottom:8px"><p><span class="k-code" style="--h:${hue(m.id)}">${m.code}</span> ${m.name}</p>${B.outcomes(m, { head: false })}</div>`).join("")}</div>
+      <div>${hd("Why we think so")}${B.analysis()}</div>
+    </section>
+  </div>
+
+  <div class="grid c4">
+    <section class="card"><div>${hd("Form", "last 5")}${B.form()}</div><div class="grid c2" style="margin:0;gap:12px">${B.formList("home")}${B.formList("away")}</div></section>
+    <section class="card"><div>${hd("Head-to-head")}${B.h2h()}</div></section>
+    <section class="card"><div>${hd("Standings")}${B.table({ compact: true, rows: 6 })}</div></section>
+    <section class="card"><div>${hd("Missing players")}${B.injuries()}</div><div>${hd("Schedule")}${B.schedule()}</div></section>
+  </div>
+
+  <div class="grid c31">
+    <section class="card"><div class="grid c2" style="margin:0;gap:24px"><div>${hd("Season", "league only")}${B.season()}</div><div>${hd("When goals come")}${B.goalMinutes()}<div style="margin-top:14px">${hd("Strength", "API-Football")}${B.compare()}</div></div></div></section>
+    <section class="card"><div>${hd("Key players")}${B.keyPlayers()}</div></section>
+    <section class="card"><div>${hd("Match info")}${B.info()}</div><div>${hd("News")}${B.news()}</div></section>
+  </div>
+
+  <div class="grid c2">
+    <section class="card">${B.playerTable("home")}</section>
+    <section class="card">${B.playerTable("away")}</section>
+  </div>
+
+  <div class="grid c31">
+    <section class="card"><div>${hd("Odds", "open → now · best")}${B.odds()}</div></section>
+    <section class="card"><div>${hd("Prediction history")}${B.history()}</div></section>
+    <section class="card"><div>${hd("All picks", "status")}${B.picks({ names: false, live: "icon" })}</div></section>
+  </div>
+  ${B.disc()}
+</main>`);
+</script></body></html>

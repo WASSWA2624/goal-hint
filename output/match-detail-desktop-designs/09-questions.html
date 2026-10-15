@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>09 Plain Questions · Goal Hint desktop match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  /* The page answers the questions people bring to a match page, in their words. Each card gives the answer in
+   * one bold line, then the evidence. A sticky row of questions jumps straight to any answer. */
+  .hd { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; padding: 14px 20px; background: var(--surface); border: 1px solid var(--line); }
+  .hd .ctx { font-size: 12.5px; color: var(--muted); display: grid; gap: 2px; } .hd .ctx b { display: flex; gap: 6px; align-items: center; color: var(--text); font-size: 13.5px; }
+  .hd .ctx.r { text-align: right; justify-items: end; }
+  .hd .mid { display: flex; align-items: center; gap: 14px; font-size: 20px; font-weight: 800; }
+  .hd .mid strong { padding: 2px 12px; font-size: 30px; line-height: 1.1; color: var(--surface); background: var(--text); }
+  .hd .mid span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--live); }
+  .qi { position: sticky; top: 58px; z-index: 30; display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px; padding: 8px 10px; background: color-mix(in srgb, var(--page) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+  .qi a { padding: 4px 9px; font-size: 12.5px; font-weight: 700; color: var(--muted); background: var(--surface); border: 1px solid var(--line); }
+  .qi a:hover { color: var(--text); border-color: var(--quiet); }
+  .qi a.on { color: var(--surface); background: var(--teal-d); border-color: var(--teal-d); }
+  .qs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .q { min-width: 0; padding: 16px 18px 18px; background: var(--surface); border: 1px solid var(--line); scroll-margin-top: 112px; }
+  .q.w { grid-column: 1 / -1; }
+  .q > h2 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: var(--muted); }
+  .q > h2 i { display: grid; place-items: center; width: 22px; height: 22px; font-style: normal; font-size: 11.5px; font-weight: 800; color: var(--teal-d); background: var(--teal-soft); }
+  .q > p.a { margin: 6px 0 12px; font-size: 21px; line-height: 1.25; font-weight: 800; }
+  .q > p.a small { display: block; margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .q .ev > * + * { margin-top: 12px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; } .two > * { min-width: 0; }
+  .two.w { grid-template-columns: 1.4fr 1fr; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--muted); } .facts b { color: var(--text); }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, pend, hd, B } = K;
+const T = K.top(), mk = M.markets, o = K.mr().outcomes;
+const Q = [];
+const q = (id, short, question, answer, evidence, wide = false) => { Q.push([id, short]);
+  return `<section class="q ${wide ? "w" : ""}" id="${id}"><h2><i>${Q.length}</i>${question}</h2><p class="a">${answer}</p><div class="ev">${evidence}</div></section>`; };
+const body = [
+  q("win", "Who wins?", "Who is going to win?", `${H.name}, ${o[0].p}%<small>Draw ${o[1].p}% · ${A.name} ${o[2].p}% · ${nowLine(mk[0], true)}</small>`, `${B.resultBar()}${B.outcomes(mk[0])}`),
+  q("safe", "Safest pick", "What is the safest pick?", `${T.pickLabel}, ${T.prob}%<small>${T.name} · odds ${T.odds} · ${nowLine(T, true)}</small>`, `${B.outcomes(T)}${B.picks({ names: false, status: false })}<p class="k-meta">All picks ${pend()} · ${M.publication.settles}</p>`),
+  q("goals", "Goals?", "Will there be more than 2 goals?", `Probably, ${mk[2].prob}%<small>${nowLine(mk[2], true)} · odds ${mk[2].odds}</small>`, `${B.outcomes(mk[2])}<p class="facts"><span>Season over 2.5: <b>57%</b> ${H.short} · <b>71%</b> ${A.short}</span><span>Last 5 meetings: <b>avg 2.6 goals</b>, over 2.5 in 3</span></p>`),
+  q("btts", "Both score?", "Will both teams score?", `Yes, ${mk[3].prob}% — and both already have<small>${nowLine(mk[3], true)} · odds ${mk[3].odds}</small>`, `${B.outcomes(mk[3])}<p class="facts"><span>Season both scored: <b>43%</b> ${H.short} · <b>57%</b> ${A.short}</span><span>Last 5 meetings: <b>3 of 5</b></span></p>`),
+  q("why", "Why?", "Why do we think so?", `Arsenal at home, Chelsea short at the back<small>3 reasons and the one thing that could go wrong</small>`, B.analysis()),
+  q("sofar", "So far", "What has happened so far?", `1–1 at ${M.status.minute}<small>Saka 12' · Palmer 34' (pen) · Havertz goal ruled out by VAR at 58'</small>`, B.events()),
+  q("top", "Who's on top?", "Who is on top right now?", `${H.name}<small>58% possession · xG 1.62 to 0.88 · 13 shots to 7</small>`, B.stats({ narrow: true })),
+  q("form", "Form", "Who is in better form?", `${H.name}, unbeaten in 5<small>${H.short} 4W 1D · ${A.short} 3W 1D 1L</small>`, `${B.form()}<div class="two">${B.formList("home")}${B.formList("away")}</div>`),
+  q("xi", "Line-ups", "Who is playing?", `${H.formation} against ${A.formation}<small>Both line-ups confirmed · ${M.lineups.home.coach} v ${M.lineups.away.coach} · ratings live from API-Football</small>`, `<div class="two w">${B.pitchH()}${B.bench()}</div>`, true),
+  q("best", "Best players", "Who is playing best?", `Saka 7.9 and Palmer 7.6<small>Both have scored · Ødegaard 7.4 with the assist</small>`, `<div class="two">${B.playerTable("home")}${B.playerTable("away")}</div>`, true),
+  q("miss", "Missing", "Who is missing?", `Chelsea more: Fofana and Lavia out<small>${H.name} 2 (1 out) · ${A.name} 3 (2 out)</small>`, B.injuries()),
+  q("h2h", "History", "What happens when they meet?", `${H.name} unbeaten in the last 5<small>3 wins, 2 draws · avg 2.6 goals</small>`, B.h2h()),
+  q("table", "Table", "Where do they stand?", `2nd v 4th, 3 points apart<small>${H.name} 17 pts · ${A.name} 14 pts · both in the Champions League places</small>`, B.table({ rows: 6 })),
+  q("season", "Season", "How do they compare this season?", `${H.name} score more and concede less<small>2.1 v 1.9 scored · 0.7 v 1.0 conceded a game</small>`, `${B.season()}${B.goalMinutes()}${B.compare()}`),
+  q("watch", "Who to watch", "Who should I watch?", `Saka and Palmer<small>Saka 4 goals 5 assists · Palmer 6 goals 4 assists</small>`, B.keyPlayers()),
+  q("rest", "Rested?", "Are they rested?", `${H.name} 3 days, ${A.name} 4<small>Both play in Europe next week</small>`, B.schedule()),
+  q("odds", "Bookmakers", "What are bookmakers saying?", `${H.name} favourites at ${o[0].odds}<small>Shortened from ${o[0].open} · our 54% v their 52%</small>`, B.odds()),
+  q("where", "Where & ref", "Where is it, and who referees?", `${M.venue.name}<small>${M.venue.city} · ${M.venue.capacity} · referee ${M.referee.name}</small>`, B.info()),
+  q("news", "News", "What is the latest news?", `${M.news[0].title}<small>${M.news[0].publisher} · ${M.news[0].ago} ago</small>`, B.news()),
+  q("changed", "Changes", "Has our prediction changed?", `Yes, ${M.history.length} versions<small>${M.history[0].note} at ${M.publication.published} · locked at kick-off</small>`, B.history()),
+].join("");
+K.mount(`${B.site()}
+<main class="wrap">
+  ${B.crumb()}
+  <header class="hd">
+    <div class="ctx"><b>${league(16)} ${M.league.name} · ${M.league.round}</b><span>${M.kickoff.day} · ${M.kickoff.time} ${M.kickoff.tz}</span></div>
+    <div class="mid">${H.name} ${crest(H, 36)}<div style="display:grid;justify-items:center;gap:3px"><strong>${H.goals}–${A.goals}</strong><span>${liveDot()} ${M.status.minute} · HT ${M.status.ht}</span></div>${crest(A, 36)} ${A.name}</div>
+    <div class="ctx r"><b>${ic("target", 15)} ${T.pickLabel} · ${T.prob}%</b><span>Our top pick · ${nowLine(T)}</span></div>
+  </header>
+  <nav class="qi">${Q.map(([id, s]) => `<a href="#${id}" data-jump="${id}" data-offset="112" data-spy="${id}">${s}</a>`).join("")}</nav>
+  <div class="qs">${body}</div>
+  ${B.disc()}
+</main>`);
+</script></body></html>

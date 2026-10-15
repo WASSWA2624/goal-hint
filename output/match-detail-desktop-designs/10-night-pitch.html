@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" class="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>10 Night Pitch · Goal Hint desktop match details</title>
+<link rel="stylesheet" href="kit/base.css">
+<style>
+  /* Evening match centre in the dark theme. The pitch with both line-ups is the hero, the picks stay beside it,
+   * and eight tabs underneath hold everything else, one screen each. */
+  .hb { position: relative; display: grid; grid-template-columns: 1fr 330px 1fr; align-items: center; padding: 16px 24px; background:
+    radial-gradient(60% 140% at 0% 50%, color-mix(in srgb, var(--home) 22%, transparent), transparent 70%),
+    radial-gradient(60% 140% at 100% 50%, color-mix(in srgb, var(--away) 30%, transparent), transparent 70%), var(--surface); border: 1px solid var(--line); }
+  .hb .tm { display: flex; align-items: center; gap: 14px; font-size: 24px; font-weight: 800; } .hb .tm.h { justify-content: flex-end; text-align: right; }
+  .hb .tm small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .hb .mid { display: grid; justify-items: center; gap: 3px; text-align: center; }
+  .hb .mid p { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .hb .mid strong { font-size: 46px; line-height: 1; font-weight: 800; }
+  .hb .mid span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--live); } .hb .mid span em { font-style: normal; color: var(--muted); font-weight: 650; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; margin-top: 12px; }
+  .card { min-width: 0; background: var(--surface); border: 1px solid var(--line); }
+  .pitchc { padding: 12px 14px 14px; } .pitchc .meta { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .rail { display: grid; align-content: start; gap: 10px; padding: 14px 16px; }
+  .rail .k-lbl { display: flex; justify-content: space-between; color: var(--teal); } .rail .k-lbl span { letter-spacing: 0; text-transform: none; font-weight: 650; color: var(--muted); font-size: 11.5px; }
+  .tp { padding: 12px; background: var(--teal-soft); border-left: 3px solid var(--teal); }
+  .tp p { display: flex; justify-content: space-between; align-items: end; } .tp b { font-size: 21px; line-height: 1.15; } .tp strong { font-size: 40px; line-height: .95; font-weight: 800; }
+  .tp small { display: flex; justify-content: space-between; margin-top: 5px; font-size: 12px; color: var(--muted); }
+  .pr { display: grid; grid-template-columns: 54px 1fr auto 18px; align-items: center; gap: 8px; min-height: 36px; border-bottom: 1px solid var(--hair); font-size: 13.5px; }
+  .pr strong { font-size: 15px; }
+  .rail .foot { font-size: 12px; color: var(--muted); }
+  .tabs { display: flex; gap: 2px; margin-top: 12px; padding: 0 10px; background: var(--surface); border: 1px solid var(--line); border-bottom: 0; }
+  .tabs button { padding: 12px 12px 10px; font-size: 13.5px; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--mint); }
+  .panel { padding: 16px 20px 20px; background: var(--surface); border: 1px solid var(--line); }
+  .panel + .panel { margin-top: 12px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; } .two > * { min-width: 0; }
+  .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 28px; } .three > * { min-width: 0; }
+  .stack > * + * { margin-top: 16px; }
+  .mk > p { margin-bottom: 3px; font-size: 12.5px; font-weight: 750; }
+  .k-tl .tk.ht { background: var(--surface); }
+</style></head>
+<body><div id="app"></div>
+<script src="kit/data.js"></script><script src="kit/kit.js"></script>
+<script>
+const { M, H, A, ic, crest, league, hue, liveDot, nowLine, pend, tick, hd, B } = K;
+const T = K.top(), half = Math.ceil(M.stats.length / 2);
+const tabs = [["ev", "Events"], ["st", "Statistics"], ["pl", "Players"], ["pr", "Prediction"], ["tm", "Teams"], ["ts", "Table & season"], ["od", "Odds"], ["in", "Info & news"]];
+const panel = (id, body) => `<section class="panel" data-panel="${id}" data-title="${tabs.find((t) => t[0] === id)[1]}" ${id === "ev" ? "" : "hidden"}>${body}</section>`;
+K.mount(`${B.site()}
+<main class="wrap">
+  ${B.crumb()}
+  <header class="hb">
+    <div class="tm h"><div>${H.name}<small>Saka 12'</small></div>${crest(H, 56)}</div>
+    <div class="mid"><p>${league(14)} ${M.league.name} · ${M.league.round} · ${M.kickoff.day} ${M.kickoff.time}</p><strong>${H.goals} – ${A.goals}</strong><span>${liveDot()} ${M.status.minute} <em>· HT ${M.status.ht}</em></span></div>
+    <div class="tm">${crest(A, 56)}<div>${A.name}<small>Palmer 34' (pen)</small></div></div>
+  </header>
+
+  <div class="hero">
+    <section class="card pitchc">${hd("Line-ups", `${H.formation} v ${A.formation} · live ratings`)}${B.pitchH({ h: 380 })}
+      <p class="meta"><span>Coach ${M.lineups.home.coach} · ${H.short} attack →</span><span>← ${A.short} attack · Coach ${M.lineups.away.coach}</span></p></section>
+    <aside class="card rail" data-b="picks">
+      <p class="k-lbl">Our picks<span>Rev ${M.publication.revision} · ${M.publication.published}</span></p>
+      <div class="tp"><p><b>${T.pickLabel}</b><strong>${T.prob}%</strong></p><small><span>Top pick · ${T.name} · odds ${T.odds}</span>${nowLine(T)}</small></div>
+      <div>${M.markets.filter((m) => !m.top).map((m) => `<div class="pr" style="--h:${hue(m.id)}"><span class="k-code">${m.code}</span><span>${m.pickLabel}</span><strong>${m.prob}%</strong>${tick(m.live.ok)}</div>`).join("")}</div>
+      <div>${hd("Match result chances")}${B.resultBar()}</div>
+      <p class="foot">${ic("clock", 12, 'style="display:inline;vertical-align:-2px"')} All ${pend()} · ${M.publication.settles}</p>
+    </aside>
+  </div>
+
+  <nav class="tabs" role="tablist">${tabs.map(([id, t], i) => `<button role="tab" data-tab="${id}" aria-selected="${i === 0}">${t}</button>`).join("")}</nav>
+  ${panel("ev", `${hd("Timeline", "hover a marker for details")}${B.timeline()}<div style="margin-top:14px">${B.events()}</div>`)}
+  ${panel("st", `<div class="two">${B.stats({ rows: M.stats.slice(0, half).map((r) => r[0]) })}${B.stats({ rows: M.stats.slice(half).map((r) => r[0]) })}</div>`)}
+  ${panel("pl", `<div class="two">${B.playerTable("home")}${B.playerTable("away")}</div><div class="two" style="margin-top:18px"><div>${hd("Substitutes & coaches")}${B.bench()}</div><div>${hd("Missing players")}${B.injuries()}</div></div>`)}
+  ${panel("pr", `<div class="two"><div class="stack"><div class="two" style="gap:18px">${M.markets.map((m) => `<div class="mk"><p><span class="k-code" style="--h:${hue(m.id)}">${m.code}</span> ${m.name}</p>${B.outcomes(m)}</div>`).join("")}</div><div>${hd("All picks")}${B.picks()}</div></div>
+    <div class="stack"><div>${hd("Why we think so")}${B.analysis()}</div><div>${hd("Prediction history")}${B.history()}</div></div></div>`)}
+  ${panel("tm", `<div class="three"><div>${hd("Form", "last 5")}${B.form()}<div class="two" style="gap:14px;margin-top:6px">${B.formList("home")}${B.formList("away")}</div></div><div>${hd("Head-to-head")}${B.h2h()}</div><div>${hd("Key players")}${B.keyPlayers()}</div></div>`)}
+  ${panel("ts", `<div class="two"><div>${hd("Standings", `${M.league.name} · ${M.league.season}`)}${B.table({ window: false })}</div><div class="stack"><div>${hd("Season")}${B.season()}</div><div>${hd("When goals come")}${B.goalMinutes()}</div><div>${hd("Strength", "API-Football")}${B.compare()}</div></div></div>`)}
+  ${panel("od", `<div style="max-width:860px">${B.odds()}</div>`)}
+  ${panel("in", `<div class="three"><div>${hd("Match info")}${B.info()}</div><div>${hd("Schedule")}${B.schedule()}</div><div>${hd("News")}${B.news()}</div></div>`)}
+  ${B.disc()}
+</main>`);
+</script></body></html>
