@@ -197,6 +197,8 @@ in **0.338 s**, including provider retrieval, using the tested system codec.
 
 Cross-platform artifact inspection caught Turbopack folding `process.platform`
 to the Windows build host and removing the Linux decoder branch. The codec now
-queries `node:os.platform()` at runtime. Packaging refuses a compiled server
+uses Node’s runtime built-in lookup to query the operating system, outside
+the bundler’s build-host evaluation. A fresh compilation cache is used for
+the final artifact. Packaging refuses a compiled server
 without the Linux codec path. The incompatible intermediate bundle was never
 deployed. This additional check protects future Windows-to-Linux releases.

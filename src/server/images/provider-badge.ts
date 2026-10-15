@@ -1,6 +1,5 @@
 import "server-only";
 import { execFile } from "node:child_process";
-import { platform } from "node:os";
 
 const maximumBytes = 1024 * 1024;
 
@@ -32,8 +31,9 @@ export async function loadProviderBadge(source: string, width: number): Promise<
 }
 
 export async function resizeBadge(input: Buffer, width: number): Promise<Buffer> {
-  // A runtime query is essential: Turbopack folds process.platform on the build host.
-  if (platform() !== "linux") {
+  // Keep this runtime query opaque to the cross-platform bundler's OS folding.
+  const runtimeOS = globalThis.process.getBuiltinModule("os") as typeof import("node:os");
+  if (runtimeOS.platform() !== "linux") {
     const { default: sharp } = await import("sharp");
     return sharp(input, { limitInputPixels: 2048 * 2048 }).resize(width, width, { fit: "inside", withoutEnlargement: true }).webp({ quality: 75 }).toBuffer();
   }
