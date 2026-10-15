@@ -11,7 +11,7 @@ import { DetailOutcome } from "./match-banner";
 import { Note, Standing, desktop, focusRing, size, useStableDetails, type Messages } from "./details-ui";
 import { marketName, percent, pickLabel } from "./labels";
 
-/** Phones only: the verdict sits between the scoreboard and the market rows; desktop keeps the banner pick. */
+/** Between the scoreboard and the market rows: full bleed on phones, a framed card on desktop. */
 const Box = styled.section`
   display: grid;
   gap: 9px;
@@ -19,7 +19,12 @@ const Box = styled.section`
   margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
   padding: 12px ${({ theme }) => theme.layout.gutter} 14px;
   background: ${({ theme }) => theme.color.surface};
-  ${desktop} { display: none; }
+  ${desktop} {
+    gap: 11px;
+    margin-inline: 0;
+    padding: 14px 18px 16px;
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  }
 `;
 const Eyebrow = styled.div`
   display: flex;
@@ -43,10 +48,10 @@ const Pick = styled.button<{ $family: MarketFamily }>`
   cursor: pointer;
   ${focusRing}
   > span[data-pick] { display: grid; gap: 3px; min-inline-size: 0; }
-  > span[data-pick] > strong { font-size: 1.375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.15; overflow-wrap: anywhere; }
+  > span[data-pick] > strong { font-size: 1.375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.15; overflow-wrap: anywhere; ${desktop} { font-size: 1.5rem; } }
   > span[data-pick] > small { color: ${({ theme, $family }) => theme.color.market[$family].text}; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > span[data-chance] { display: grid; justify-items: end; }
-  > span[data-chance] > b { font-size: 2.125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 0.95; font-variant-numeric: tabular-nums; }
+  > span[data-chance] > b { font-size: 2.125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 0.95; font-variant-numeric: tabular-nums; ${desktop} { font-size: 2.5rem; } }
   > span[data-chance] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; }
   ${media.hover} { &:hover > span[data-pick] > strong { color: ${({ theme }) => theme.color.link}; } }
 `;
@@ -104,7 +109,7 @@ export const Verdict = memo(function Verdict() {
   const fixture = data.fixture, snapshot = data.snapshot;
   const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
   const outlook = resultOutlook(data);
-  if (!featured || !row?.item) return <Box aria-labelledby="verdict-title">
+  if (!featured || !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2></Eyebrow>
     <strong>{messages.text("details.noPick")}</strong>
     <Note>{messages.text(`match.noPickReason.${noPickReason(fixture)}`)}</Note>
@@ -114,7 +119,7 @@ export const Verdict = memo(function Verdict() {
   const settled = snapshot?.applicability === "historical" ? null : row.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
   const sentence = outlook ? outlookText(messages, outlook, home, away) : null;
   const sides = { "home-win": ["home", fixture.homeTeam.code ?? home], draw: ["draw", messages.text("details.pick.draw")], "away-win": ["away", fixture.awayTeam.code ?? away] } as const;
-  return <Box aria-labelledby="verdict-title" data-verdict={featured}>
+  return <Box aria-labelledby="verdict-title" data-verdict={featured} data-featured-pick={featured}>
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2>
       {snapshot && <span>{messages.text("details.publishedAt", { time: messages.reportingInstant(snapshot.publishedAt) })}</span>}</Eyebrow>
     <Pick type="button" $family={featured} onClick={() => update((current) => ({ ...current, marketsOpen: true, market: featured }))}

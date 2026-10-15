@@ -76,7 +76,7 @@ const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
   > span[data-bar] > b { min-inline-size: 2.25rem; }
   > svg { grid-area: chevron; color: ${({ theme }) => theme.color.mutedText}; }
   > span[data-code] { display: none; grid-area: code; color: ${({ theme, $family }) => theme.color.market[$family].text}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
-  > span[data-pick] > span[data-standing] { margin-inline-start: 6px; vertical-align: -0.2em; }
+  > span[data-pick] > :is([data-standing], [data-outcome]) { margin-inline-start: 6px; vertical-align: -0.2em; }
   /* Doubled class: these phone rules outrank the card-width container queries above. */
   ${media.belowDesktop} {
     && {
@@ -127,18 +127,14 @@ const SubHeading = styled.h5`
   letter-spacing: 0.04em;
   color: ${({ theme }) => theme.color.mutedText};
 `;
-/** On wide desktops the card stretches beside three rows; the notes then sit at its foot. */
 const Body = styled.div`
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 8px;
   min-inline-size: 0;
-  block-size: 100%;
 `;
 const Footer = styled.div`
   display: grid;
   gap: 2px;
-  margin-block-start: auto;
   padding-block-start: 6px;
   border-block-start: ${({ theme }) => theme.border.width} dashed ${({ theme }) => theme.color.border};
 `;
@@ -248,9 +244,8 @@ export const MarketsCard = memo(function MarketsCard() {
   const label = (family: MarketFamily) => `${marketName(messages, family)} ${messages.text(`market.code.${family}`)}`;
   const shown = visibleMarkets(view.marketCategory, query, label);
   const categoryLabel = (category: MarketCategory) => messages.text(`details.category.${category}`);
-  return <Card data-section="markets" data-open={view.marketsOpen || undefined} $accent="orange" aria-labelledby="section-markets-title"
-    style={{ gridTemplateRows: "auto 1fr" }}>
-    <CardHeader icon={<MarketsIcon />} accent="orange" title={messages.text("details.allMarkets")} open={view.marketsOpen} controls="section-markets"
+  return <Card data-section="markets" data-open={view.marketsOpen || undefined} aria-labelledby="section-markets-title">
+    <CardHeader icon={<MarketsIcon />} title={messages.text("details.allMarkets")} open={view.marketsOpen} controls="section-markets"
       meta={messages.text("details.publishedCount", { count: messages.number(published), total: messages.number(publicPolicy.markets.length) })}
       onToggle={() => update((current) => ({ ...current, marketsOpen: !current.marketsOpen, market: current.marketsOpen ? null : current.market }))}
       headingId="section-markets-title" />
@@ -296,6 +291,5 @@ export const MarketsCard = memo(function MarketsCard() {
         </Footer>
       </Body>)}
     </div>
-    {!view.marketsOpen && <LinkButton type="button" data-view-all onClick={() => update((current) => ({ ...current, marketsOpen: true }))}>{messages.text("details.showMarkets")}</LinkButton>}
   </Card>;
 });

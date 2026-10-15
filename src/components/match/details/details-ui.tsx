@@ -52,34 +52,27 @@ export const scrollClearance = css`
 `;
 
 /**
- * Compact card; open sections widen to the full content width. Below desktop every card is a drawer: one
- * full-width row (icon, title, one-line summary, chevron) in a ruled list; opening it reveals the section.
+ * A section drawer: one ruled row (icon, title, one-line summary, chevron) in a list; opening it reveals the
+ * section beneath the row. Phones run the list full bleed; desktop frames it in the page column.
  */
-export const Card = styled.section<{ $open?: boolean; $accent?: AccentName }>`
+export const Card = styled.section`
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: 8px;
   min-inline-size: 0;
-  padding: 9px 8px 10px;
+  padding: 0 ${({ theme }) => theme.layout.gutter};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme, $open, $accent = "blue" }) => $open ? theme.color.accent[$accent].solid : theme.color.border};
-  border-radius: ${({ theme }) => theme.border.cardRadius};
-  box-shadow: ${({ theme, $open }) => $open ? theme.shadow.cardHover : theme.shadow.card};
+  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   container: details-card / inline-size;
   ${scrollClearance}
-  ${media.belowDesktop} {
-    gap: 0;
-    padding: 0 ${({ theme }) => theme.layout.gutter};
-    border: 0;
-    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 0;
-    box-shadow: none;
-    &[data-open] { padding-block-end: 12px; }
-    > button[data-view-all] { display: none; }
+  &[data-open] { padding-block-end: 12px; }
+  /* Server-rendered open by the desktop default: phones show the row alone until they hydrate and close it. */
+  ${media.belowDesktop} { &[data-open-by-default] { padding-block-end: 0; > div[id] { display: none; } } }
+  ${desktop} {
+    padding-inline: 18px;
+    &[data-open] { padding-block-end: 16px; }
   }
-  ${desktop} { padding: 11px 14px 12px; gap: 10px; }
 `;
 
 const HeadRow = styled.div`
@@ -89,13 +82,16 @@ const HeadRow = styled.div`
   min-inline-size: 0;
   > h2 { flex: 1; min-inline-size: 0; margin: 0; font-size: inherit; }
 `;
-/** Two-up phone cards leave the title about 6rem: titles wrap between words, in balanced lines. */
+/**
+ * Drawer row: plain teal icon, title, summary and a chevron that points down to open. Phones push the summary
+ * to the end of the row; desktop gives the title its own column so every summary starts at the same line.
+ */
 const HeadButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   inline-size: 100%;
-  min-block-size: 1.875rem;
+  min-block-size: 2.875rem;
   padding: 0;
   color: ${({ theme }) => theme.color.text};
   background: none;
@@ -104,31 +100,23 @@ const HeadButton = styled.button`
   text-align: start;
   cursor: pointer;
   ${focusRing}
-  > span[data-title] {
-    min-inline-size: 0;
-    font-size: ${size("body")};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    line-height: 1.15;
-    ${media.belowDesktop} { overflow-wrap: normal; text-wrap: balance; }
-    ${desktop} { font-size: 1rem; line-height: 1.2; }
-  }
-  > small { min-inline-size: 0; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; white-space: nowrap; text-overflow: ellipsis; ${desktop} { font-size: ${size("secondary")}; } }
+  > span[data-icon] { display: inline-grid; flex: none; place-items: center; inline-size: 1.25rem; block-size: 1.25rem; color: ${({ theme }) => theme.color.brand}; font-size: 1.125rem; }
+  > span[data-title] { flex: none; min-inline-size: 0; font-size: ${size("emphasis")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; line-height: 1.15; white-space: nowrap; }
+  > small { min-inline-size: 0; margin-inline-start: auto; overflow: hidden; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; text-align: end; white-space: nowrap; text-overflow: ellipsis; }
   @container details-card (max-width: 16rem) { > small { display: none; } }
-  > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; transition: transform 160ms ease; }
-  &[aria-expanded="true"] > svg:last-child { transform: rotate(90deg); color: ${({ theme }) => theme.color.accent.blue.solid}; }
+  > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.9375rem; transform: rotate(90deg); transition: transform 160ms ease; }
+  > small + svg:last-child { margin-inline-start: 0; }
+  &[aria-expanded="true"] > svg:last-child { transform: rotate(-90deg); color: ${({ theme }) => theme.color.accent.blue.solid}; }
   ${media.hover} { &:hover > span[data-title] { color: ${({ theme }) => theme.color.accent.blue.text}; } }
-  /* Drawer row: plain teal icon, title, the summary pushed to the end, and a chevron that points down to open. */
-  ${media.belowDesktop} {
-    gap: 10px;
-    min-block-size: 2.875rem;
-    > span:first-child { inline-size: 1.25rem; color: ${({ theme }) => theme.color.brand}; background: none; font-size: 1.125rem; }
-    > span[data-title] { flex: none; font-size: ${size("emphasis")}; text-wrap: nowrap; }
-    > small { margin-inline-start: auto; font-size: ${size("secondary")}; text-align: end; }
-    > small + svg:last-child { margin-inline-start: 0; }
-    > svg:last-child { font-size: 0.9375rem; transform: rotate(90deg); }
-    &[aria-expanded="true"] > svg:last-child { transform: rotate(-90deg); }
+  ${desktop} {
+    display: grid;
+    grid-template-columns: 1.25rem minmax(10rem, 13.5rem) minmax(0, 1fr) 1rem;
+    gap: 12px;
+    min-block-size: 3rem;
+    > span[data-title] { font-size: 0.9375rem; }
+    > small { grid-column: 3; margin: 0; font-size: ${size("body")}; text-align: start; }
+    > svg:last-child { grid-column: 4; justify-self: end; }
   }
-  ${desktop} { gap: 8px; > svg:last-child { font-size: 0.9375rem; } }
   @media (prefers-reduced-motion: reduce) { > svg:last-child { transition: none; } }
 `;
 export const IconBadge = styled.span<{ $accent: AccentName }>`
@@ -145,32 +133,19 @@ export const IconBadge = styled.span<{ $accent: AccentName }>`
 `;
 
 /** The section heading is a disclosure button; extra header controls sit beside it, never inside. */
-export function CardHeader({ icon, accent, title, meta, open, controls, onToggle, headingId, buttonRef, children }: {
-  icon: ReactNode; accent: AccentName; title: string; meta?: ReactNode; open: boolean; controls: string; onToggle: () => void;
+export function CardHeader({ icon, title, meta, open, controls, onToggle, headingId, buttonRef, children }: {
+  icon: ReactNode; title: string; meta?: ReactNode; open: boolean; controls: string; onToggle: () => void;
   headingId: string; buttonRef?: Ref<HTMLButtonElement>; children?: ReactNode;
 }) {
   return <HeadRow>
     <h2 id={headingId}>
       <HeadButton ref={buttonRef} type="button" aria-expanded={open} aria-controls={controls} onClick={onToggle}>
-        <IconBadge $accent={accent}>{icon}</IconBadge><span data-title>{title}</span>{meta && <small>{meta}</small>}<ChevronRightIcon />
+        <span data-icon aria-hidden="true">{icon}</span><span data-title>{title}</span>{meta && <small>{meta}</small>}<ChevronRightIcon />
       </HeadButton>
     </h2>
     {children}
   </HeadRow>;
 }
-
-/** Clicking anywhere on a preview opens its section; keyboard users use the heading or View all buttons. */
-export const PreviewArea = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  min-inline-size: 0;
-  cursor: pointer;
-  border-radius: 3px;
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
-  /* A closed drawer is its one-line header; the summary there replaces the preview. */
-  ${media.belowDesktop} { display: none; }
-`;
 
 /** Text-like action; its arrow icon flows with the last line of wrapped text. */
 export const LinkButton = styled.button`
@@ -200,8 +175,8 @@ export const Breadcrumb = styled.nav`
   > ol > li + li::before { content: "/"; color: ${({ theme }) => theme.color.border}; }
   button { padding: 0; color: ${({ theme }) => theme.color.accent.blue.solid}; background: none; border: 0; font: inherit; cursor: pointer; ${focusRing} }
   [aria-current] { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
-  /* An open drawer already names its section, so phones show the trail only inside an item. */
-  ${media.belowDesktop} { &[data-shallow] { display: none; } }
+  /* An open drawer already names its section, so the trail shows only inside an item. */
+  &[data-shallow] { display: none; }
   ${desktop} { font-size: ${size("secondary")}; }
 `;
 export function Crumbs({ items, shallow = false }: { items: readonly { label: string; onSelect?: () => void }[]; shallow?: boolean }) {

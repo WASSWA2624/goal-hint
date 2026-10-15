@@ -1,43 +1,48 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
-import { ArrowRightIcon } from "@/components/ui/icons";
+import { createContext, useContext, useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { openSection, type MatchSection } from "@/domain/match-view";
 import type { AccentName } from "@/styles/theme";
-import { Card, CardHeader, Crumbs, HiddenHeading, LinkButton, Panel, PanelHeading, PreviewArea, useDetails, useRevealOnOpen, useStableDetails } from "./details-ui";
+import { Card, CardHeader, Crumbs, HiddenHeading, LinkButton, Panel, PanelHeading, useDetails, useRevealOnOpen, useStableDetails } from "./details-ui";
 
 /**
- * Overview card → opened section → item. The preview stays compact; opening reveals the complete
- * section inside the same card (full width), with breadcrumbs and an explicit collapse action.
+ * One section's disclosure, owned by the match page: whether it is open, whether it is open only because desktop
+ * opens every section by default (phones hide those until they hydrate), a counter that grows each time the
+ * reader opens the section or arrives at it from a link (each increase scrolls to it and focuses it), and the
+ * header's toggle.
  */
-export function SectionCard({ section, icon, accent, title, meta, preview, viewAll, itemLabel, children }: {
-  section: MatchSection; icon: ReactNode; accent: AccentName; title: string; meta?: ReactNode;
-  preview: ReactNode; viewAll: string; itemLabel?: string | null; children: ReactNode;
+export type SectionDisclosure = Readonly<{ open: boolean; byDefault: boolean; reveal: number; toggle: () => void }>;
+const DisclosureContext = createContext<SectionDisclosure | null>(null);
+export const DisclosureProvider = DisclosureContext.Provider;
+function useDisclosure(): SectionDisclosure {
+  const value = useContext(DisclosureContext);
+  if (!value) throw new Error("Section disclosure is missing.");
+  return value;
+}
+
+/**
+ * Drawer row → section → item. A closed row shows only the section's one-line summary; an open one shows the
+ * complete section beneath the row, with breadcrumbs inside an item and an explicit collapse action.
+ */
+export function SectionCard({ section, icon, title, meta, itemLabel, children }: {
+  section: MatchSection; icon: ReactNode; title: string; meta?: ReactNode; itemLabel?: string | null; children: ReactNode;
 }) {
   const { view, update, messages } = useDetails();
-  const open = view.section === section;
+  const { open, byDefault, reveal, toggle } = useDisclosure();
   const panelId = `section-${section}`, headingId = `${panelId}-title`;
   const button = useRef<HTMLButtonElement>(null);
-  // An item opened straight from the preview focuses itself instead of the section heading.
-  const heading = useRevealOnOpen<HTMLHeadingElement>(open && view.item === null, section, "card");
+  // An item opened from a deep link focuses itself instead of the section heading.
+  const heading = useRevealOnOpen<HTMLHeadingElement>(open && reveal > 0 && view.item === null, `${section}:${reveal}`, "card");
   const wasOpen = useRef(open);
   useEffect(() => {
-    // Collapsing (not switching to another section) returns focus to this card's heading.
-    if (wasOpen.current && !open && view.section === null) button.current?.focus();
+    // Collapsing from inside the panel (its collapse link disappears with it) returns focus to the heading.
+    if (wasOpen.current && !open && (document.activeElement === null || document.activeElement === document.body)) button.current?.focus();
     wasOpen.current = open;
-  }, [open, view.section]);
-  const toggle = () => update((current) => openSection(current, current.section === section ? null : section));
+  }, [open]);
   const closeItem = () => update((current) => ({ ...current, item: null }));
-  return <Card data-section={section} data-open={open || undefined} $open={open} $accent={accent} aria-labelledby={headingId}>
-    <CardHeader icon={icon} accent={accent} title={title} meta={meta} open={open} controls={panelId} onToggle={toggle}
+  return <Card data-section={section} data-open={open || undefined} data-open-by-default={byDefault || undefined} aria-labelledby={headingId}>
+    <CardHeader icon={icon} title={title} meta={meta} open={open} controls={panelId} onToggle={toggle}
       headingId={headingId} buttonRef={button} />
-    {!open && <>
-      <PreviewArea data-preview onClick={(event) => {
-        // Rows inside a preview open their own item; only clicks on plain content open the section.
-        if (!(event.target as Element).closest("a, button, input, select, textarea")) toggle();
-      }}>{preview}</PreviewArea>
-      <LinkButton type="button" onClick={toggle} aria-controls={panelId} aria-expanded={false} data-view-all>{viewAll}<ArrowRightIcon /></LinkButton>
-    </>}
     <div id={panelId} hidden={!open}>
       {open && <Panel>
         <Crumbs shallow={!itemLabel} items={[{ label: messages.text("details.title"), onSelect: () => update((current) => openSection(current, null)) },

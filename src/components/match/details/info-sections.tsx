@@ -8,10 +8,9 @@ import type { InsightResult, InsightSections } from "@/domain/match-insights";
 import { pageOf } from "@/domain/match-insight-presentation";
 import { openItem } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
-import { media } from "@/styles/theme";
 import { ContextIcon, ExternalIcon, HistoryIcon, NewsIcon, RefereeIcon } from "./details-icons";
 import {
-  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, focusRing, size, useDetails, useStableDetails,
+  ChoiceGroup, Crest, Facts, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong, desktop, focusRing, size, useDetails, useStableDetails,
 } from "./details-ui";
 import { ItemPanel, SectionCard, useReturnFocus } from "./section-card";
 import { RecordPanel } from "./team-sections";
@@ -28,10 +27,6 @@ const NewsRow = styled(RowButton)`
   > span[data-text] > b { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   > span[data-text] > small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; }
 `;
-const PreviewNews = styled(RowList)`
-  > li:nth-child(n + 2) { display: none; }
-  @container details-card (min-width: 17rem) { > li:nth-child(n + 2) { display: list-item; } }
-`;
 const SmallLogo = styled.img`flex: none; inline-size: 18px; block-size: 18px; object-fit: contain;`;
 const ExternalLink = styled.a`
   display: inline-flex;
@@ -44,24 +39,23 @@ const ExternalLink = styled.a`
   ${focusRing}
 `;
 /**
- * The locked revision history inside the phone and tablet card: no second box inside the card, and
- * sub-headings, gaps and nested panels sized for a card rather than a page. Desktop is unchanged.
+ * The locked revision history inside its drawer: no second box inside the drawer, and sub-headings, gaps and
+ * nested panels sized for a drawer rather than a page.
  */
 const HistoryBody = styled.div`
   min-inline-size: 0;
-  ${media.belowDesktop} {
-    font-size: ${size("body")};
-    line-height: 1.45;
-    > #revision-history { padding: 0; background: none; border: 0; }
-    > #revision-history > summary { min-block-size: 1.75rem; padding-block: 4px; }
-    > #revision-history > div { gap: 12px; }
-    & :is(h2, h3) { font-size: ${size("emphasis")}; line-height: 1.25; }
-    & section { padding: 10px; }
-    & ol { gap: 10px; }
-    & li > div { gap: 4px; }
-    /* Text links (not the Retry and Older buttons) keep a 28px target. */
-    & li a, > #revision-history > div > a { min-block-size: 1.75rem; }
-  }
+  font-size: ${size("body")};
+  line-height: 1.45;
+  > #revision-history { padding: 0; background: none; border: 0; }
+  > #revision-history > summary { min-block-size: 1.75rem; padding-block: 4px; }
+  > #revision-history > div { gap: 12px; }
+  & :is(h2, h3) { font-size: ${size("emphasis")}; line-height: 1.25; }
+  & section { padding: 10px; }
+  & ol { gap: 10px; }
+  & li > div { gap: 4px; }
+  /* Text links (not the Retry and Older buttons) keep a 28px target. */
+  & li a, > #revision-history > div > a { min-block-size: 1.75rem; }
+  ${desktop} { & :is(h2, h3) { font-size: 0.9375rem; } }
 `;
 
 function NewsRows({ items }: { items: readonly NewsItem[] }) {
@@ -86,11 +80,8 @@ export const NewsSection = memo(function NewsSection() {
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
   const limited = news.data?.limitedNews ?? preview?.sections.news.limitedNews ?? false;
-  return <SectionCard section="news" icon={<NewsIcon />} accent="blue" title={messages.text("details.section.news")}
-    meta={total ? messages.plural("details.itemCount", total) : null} viewAll={messages.text("details.viewAll.news")}
-    itemLabel={selected?.title.slice(0, 60) ?? null}
-    preview={(preview?.sections.news.items.length ?? 0) > 0
-      ? <PreviewNews><NewsRows items={preview!.sections.news.items} /></PreviewNews> : <Note>{messages.text("details.newsNone")}</Note>}>
+  return <SectionCard section="news" icon={<NewsIcon />} title={messages.text("details.section.news")}
+    meta={total ? messages.plural("details.itemCount", total) : preview ? messages.text("details.summary.noNews") : null} itemLabel={selected?.title.slice(0, 60) ?? null}>
     <SectionState loading={news.loading} error={news.error} onRetry={news.retry} />
     {selected ? <ItemPanel itemKey={selected.id} title={selected.title}>
       <Pill $accent={selected.kind === "analysis" ? "violet" : "blue"}>{messages.text(`details.newsKind.${selected.kind}`)}</Pill>
@@ -132,13 +123,8 @@ export const ContextSection = memo(function ContextSection() {
   useReturnFocus(list, view.item);
   const rest = (days: number | null) => days === null ? messages.text("details.notAvailable") : messages.text("details.restDays", { days: messages.number(days, { maximumFractionDigits: 1 }) });
   const kickoff = fixture.kickoffAt;
-  return <SectionCard section="context" icon={<ContextIcon />} accent="amber" title={messages.text("details.section.context")}
-    meta={value?.competition.round ?? null} viewAll={messages.text("details.viewAll.context")} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}
-    preview={<Facts>
-      <dt>{messages.text("details.competition")}</dt><dd>{[fixture.competition.name, value?.competition.round].filter(Boolean).join(" · ") || messages.text("match.competitionUnknown")}</dd>
-      <dt>{messages.text("details.venue")}</dt><dd>{messages.text("details.notAvailable")}</dd>
-      <dt>{messages.text("details.weather")}</dt><dd>{messages.text("details.notAvailable")}</dd>
-    </Facts>}>
+  return <SectionCard section="context" icon={<ContextIcon />} title={messages.text("details.section.context")}
+    meta={value?.competition.round ?? null} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}>
     <SectionState loading={context.loading} error={context.error} onRetry={context.retry} />
     {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <Facts>
@@ -183,9 +169,8 @@ export const ContextSection = memo(function ContextSection() {
 
 export const RefereeSection = memo(function RefereeSection() {
   const { messages } = useStableDetails();
-  return <SectionCard section="referee" icon={<RefereeIcon />} accent="violet" title={messages.text("details.section.referee")}
-    meta={messages.text("details.notAvailable")} viewAll={messages.text("details.viewAll.referee")}
-    preview={<Facts><dt>{messages.text("details.official")}</dt><dd>{messages.text("details.notAvailable")}</dd></Facts>}>
+  return <SectionCard section="referee" icon={<RefereeIcon />} title={messages.text("details.section.referee")}
+    meta={messages.text("details.notAvailable")}>
     <Facts>
       <dt>{messages.text("details.official")}</dt><dd>{messages.text("details.notAvailable")}</dd>
       <dt>{messages.text("details.refereeStats")}</dt><dd>{messages.text("details.notAvailable")}</dd>
@@ -197,12 +182,9 @@ export const RefereeSection = memo(function RefereeSection() {
 /** The existing locked revision history, opened inside this match view. */
 export const HistorySection = memo(function HistorySection() {
   const { data, messages, history } = useStableDetails();
-  const latest = data.history.revisions.entries[0] ?? null, count = data.history.revisions.entries.length;
-  return <SectionCard section="history" icon={<HistoryIcon />} accent="teal" title={messages.text("details.section.history")}
-    meta={count ? messages.plural("details.revisionCount", count) + (data.history.revisions.next ? "+" : "") : null} viewAll={messages.text("details.viewAll.history")}
-    preview={latest ? <Note>{messages.text("details.latestRevision")}{" "}
-      <time dateTime={toUtcIsoString(latest.publishedAt)}>{messages.reportingInstant(latest.publishedAt)}</time></Note>
-      : <Note>{messages.text("details.noRevisions")}</Note>}>
+  const count = data.history.revisions.entries.length;
+  return <SectionCard section="history" icon={<HistoryIcon />} title={messages.text("details.section.history")}
+    meta={count ? messages.plural("details.revisionCount", count) + (data.history.revisions.next ? "+" : "") : messages.text("details.summary.noRevisions")}>
     <HistoryBody>{history ?? <Note>{messages.text("details.noRevisions")}</Note>}</HistoryBody>
   </SectionCard>;
 });

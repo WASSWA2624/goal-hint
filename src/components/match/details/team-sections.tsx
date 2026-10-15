@@ -4,7 +4,7 @@ import Link from "next/link";
 import { memo, useRef } from "react";
 import styled from "styled-components";
 import { toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import { formLetters, goalTotals, marketRow } from "@/domain/match-details";
+import { formLetters } from "@/domain/match-details";
 import type { InsightResult } from "@/domain/match-insights";
 import {
   comparisonMetrics, formRecords, headToHead, pageOf, perMatchValue, resultFor, teamComparison,
@@ -12,7 +12,6 @@ import {
 } from "@/domain/match-insight-presentation";
 import { formWindows, openItem, type FormWindow, type MatchSection, type VenueFocus } from "@/domain/match-view";
 import { matchHref } from "@/domain/navigation";
-import { media } from "@/styles/theme";
 import { CompareIcon, FormIcon, HeadToHeadIcon } from "./details-icons";
 import {
   Bar, ChoiceGroup, Crest, Facts, FormLetters, MiniForm, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong,
@@ -67,23 +66,6 @@ const CompareRows = styled.div`
   span[data-label] { grid-area: label; color: ${({ theme }) => theme.color.mutedText}; text-align: center; }
   span[data-home-bar] { grid-area: hb; } span[data-away-bar] { grid-area: ab; }
 `;
-
-function Comparison({ home, away, limit }: { home: readonly InsightResult[]; away: readonly InsightResult[]; limit?: number }) {
-  const { data, messages } = useStableDetails();
-  const { rows } = teamComparison(home, away, data.fixture.homeTeam.id, data.fixture.awayTeam.id);
-  return <CompareRows>
-    {rows.slice(0, limit).map((row) => {
-      const scale = row.kind === "rate" ? 1 : Math.max(row.home ?? 0, row.away ?? 0, 0.0001);
-      return <div key={row.metric}>
-        <b data-home>{metricText(messages, row.kind, row.home)}</b>
-        <span data-home-bar><Bar value={(row.home ?? 0) / scale} $reverse aria-hidden="true" /></span>
-        <span data-label>{messages.text(`details.metric.${row.metric}`)}</span>
-        <span data-away-bar><Bar value={(row.away ?? 0) / scale} $accent="blue" aria-hidden="true" /></span>
-        <b data-away>{metricText(messages, row.kind, row.away)}</b>
-      </div>;
-    })}
-  </CompareRows>;
-}
 
 function Teams() {
   const { data, home, away } = useStableDetails();
@@ -162,29 +144,17 @@ export const StatsSection = memo(function StatsSection() {
   const previewForm = preview?.sections.form ?? { home: [], away: [] };
   const all = form.data ?? previewForm;
   const homeRecords = formRecords(all.home, homeId, view.venue, view.window), awayRecords = formRecords(all.away, awayId, view.venue, view.window);
-  const result = marketRow(data, "match-result").item;
   const metric = comparisonMetrics.find((entry) => entry === view.item) ?? null;
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
   const evidence = stats.data?.evidence ?? preview?.sections.stats.evidence ?? [];
   const sample = (records: readonly InsightResult[]) => messages.plural("details.sampleResults", records.length);
   const points = teamComparison(previewForm.home.slice(0, 10), previewForm.away.slice(0, 10), homeId, awayId).rows.find((row) => row.metric === "pointsPerGame");
-  return <SectionCard section="stats" icon={<CompareIcon />} accent="orange" title={messages.text("details.section.stats")}
+  return <SectionCard section="stats" icon={<CompareIcon />} title={messages.text("details.section.stats")}
     meta={points && points.home !== null && points.away !== null ? messages.text("details.pointsPerGame", {
-      home: metricText(messages, "average", points.home), away: metricText(messages, "average", points.away) }) : null}
-    viewAll={messages.text("details.viewAll.stats")} itemLabel={metric ? messages.text(`details.metric.${metric}`) : null}
-    preview={<>
-      <Teams />
-      {result && <TeamsRow>
-        <span><Strong>{percent(messages, (result.market.probabilities as Record<string, number>)["home-win"] ?? null)}</Strong></span>
-        <Note as="span">{messages.text("details.winProbability")}</Note>
-        <span><Strong>{percent(messages, (result.market.probabilities as Record<string, number>)["away-win"] ?? null)}</Strong></span>
-      </TeamsRow>}
-      {previewForm.home.length + previewForm.away.length > 0 ? <>
-        <Comparison home={previewForm.home.slice(0, 10)} away={previewForm.away.slice(0, 10)} limit={4} />
-        <Note>{messages.text("details.comparisonSample", { home: sample(previewForm.home.slice(0, 10)), away: sample(previewForm.away.slice(0, 10)) })}</Note>
-      </> : <Note>{messages.text("details.noStoredResults")}</Note>}
-    </>}>
+      home: metricText(messages, "average", points.home), away: metricText(messages, "average", points.away) })
+      : preview && previewForm.home.length + previewForm.away.length === 0 ? messages.text("details.summary.noResults") : null}
+    itemLabel={metric ? messages.text(`details.metric.${metric}`) : null}>
     <SectionState loading={form.loading || stats.loading} error={form.error || stats.error} onRetry={() => { form.retry(); stats.retry(); }} />
     {metric ? <ItemPanel itemKey={metric} title={messages.text(`details.metric.${metric}`)}>
       <Note>{messages.text(`details.metricHelp.${metricKind(metric)}`)}</Note>
@@ -226,39 +196,6 @@ export const StatsSection = memo(function StatsSection() {
   </SectionCard>;
 });
 
-const Spark = styled.svg`
-  inline-size: 100%;
-  max-inline-size: 7rem;
-  block-size: 1.5rem;
-  overflow: visible;
-  color: ${({ theme }) => theme.color.accent.orange.solid};
-`;
-/** Goals scored per match, oldest to newest, from stored results only. */
-function Sparkline({ series }: { series: readonly number[] }) {
-  if (series.length < 2) return null;
-  const max = Math.max(1, ...series), step = 100 / (series.length - 1);
-  const points = series.map((value, index) => `${(index * step).toFixed(1)},${(22 - (value / max) * 20).toFixed(1)}`).join(" ");
-  return <Spark viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true">
-    <polyline points={points} fill="none" stroke="currentColor" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-  </Spark>;
-}
-/** Two-up phone cards stack the teams: full names, five letters on one line, no sparkline. */
-const FormTeams = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  > div { display: grid; gap: 4px; min-inline-size: 0; }
-  > div > span:first-child { display: flex; align-items: center; gap: 6px; min-inline-size: 0; font-size: ${size("secondary")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; white-space: nowrap; }
-  > div > span:first-child > span[data-name] { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
-  ${media.belowDesktop} {
-    @container details-card (max-width: 17rem) {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 6px;
-      > div > svg { display: none; }
-    }
-  }
-`;
-
 export const FormSection = memo(function FormSection() {
   const { data, preview, messages, home, away, view, update, fixtureId } = useDetails();
   const open = view.section === "form";
@@ -269,21 +206,12 @@ export const FormSection = memo(function FormSection() {
   const record = view.item ? [...all.home, ...all.away].find((entry) => entry.fixtureId === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
-  const previewTeam = (side: "home" | "away") => {
-    const records = (preview?.sections.form[side] ?? []).slice(0, 5), totals = goalTotals(records, team(side).id);
-    return <div key={side}>
-      <span><Crest name={team(side).name} url={team(side).logoUrl} /><span data-name>{side === "home" ? home : away}</span></span>
-      <FormLetters letters={formLetters(records, team(side).id, 5)} label={messages.text("details.lastFive", { team: side === "home" ? home : away })} />
-      <Sparkline series={goalTotals((preview?.sections.form[side] ?? []).slice(0, 10), team(side).id).series} />
-      {records.length > 0 && <Note>{messages.text("details.goalsLine", { scored: messages.number(totals.scored), conceded: messages.number(totals.conceded) })}</Note>}
-    </div>;
-  };
   const ticks = (side: "home" | "away") => <MiniForm letters={formLetters((preview?.sections.form[side] ?? []).slice(0, 5), team(side).id, 5)}
     label={messages.text("details.lastFive", { team: side === "home" ? home : away })} />;
-  return <SectionCard section="form" icon={<FormIcon />} accent="emerald" title={messages.text("details.section.form")}
-    meta={(preview?.sections.form.home.length ?? 0) + (preview?.sections.form.away.length ?? 0) > 0 ? <>{ticks("home")} {ticks("away")}</> : null}
-    viewAll={messages.text("details.viewAll.form")} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}
-    preview={<FormTeams>{previewTeam("home")}{previewTeam("away")}</FormTeams>}>
+  return <SectionCard section="form" icon={<FormIcon />} title={messages.text("details.section.form")}
+    meta={(preview?.sections.form.home.length ?? 0) + (preview?.sections.form.away.length ?? 0) > 0 ? <>{ticks("home")} {ticks("away")}</>
+      : preview ? messages.text("details.summary.noResults") : null}
+    itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}>
     <SectionState loading={form.loading} error={form.error} onRetry={form.retry} />
     {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar>
@@ -308,21 +236,6 @@ export const FormSection = memo(function FormSection() {
   </SectionCard>;
 });
 
-/** In a narrow card the letters move under the label instead of squeezing it. */
-const H2HSummary = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px 6px;
-  font-size: ${size("secondary")};
-  > span { color: ${({ theme }) => theme.color.mutedText}; }
-`;
-const PreviewRows = styled.div`
-  display: none;
-  @container details-card (min-width: 17rem) { display: block; }
-`;
-
 export const H2HSection = memo(function H2HSection() {
   const { data, preview, messages, home, away, view, update, fixtureId } = useDetails();
   const open = view.section === "h2h";
@@ -337,15 +250,9 @@ export const H2HSection = memo(function H2HSection() {
   const record = view.item ? meetings.find((entry) => entry.fixtureId === view.item) ?? null : null;
   const list = useRef<HTMLDivElement>(null);
   useReturnFocus(list, view.item);
-  const previewMeetings = (preview?.sections.h2h.meetings ?? []).slice(0, 5);
-  return <SectionCard section="h2h" icon={<HeadToHeadIcon />} accent="violet" title={messages.text("details.section.h2h")}
-    meta={total ? messages.plural("details.meetings", total) : null}
-    viewAll={messages.text("details.viewAll.h2h")} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}
-    preview={previewMeetings.length ? <>
-      <H2HSummary><span>{messages.text("details.lastMeetings", { count: messages.number(previewMeetings.length) })}</span>
-        <FormLetters letters={formLetters(previewMeetings, homeId, 5)} label={messages.text("details.h2hFor", { team: home })} /></H2HSummary>
-      <PreviewRows><ResultRows records={previewMeetings} perspective={homeId} section="h2h" /></PreviewRows>
-    </> : <Note>{messages.text("details.noMeetings")}</Note>}>
+  return <SectionCard section="h2h" icon={<HeadToHeadIcon />} title={messages.text("details.section.h2h")}
+    meta={total ? messages.plural("details.meetings", total) : preview ? messages.text("details.summary.noMeetings") : null}
+    itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}>
     <SectionState loading={h2h.loading} error={h2h.error} onRetry={h2h.retry} />
     {record ? <RecordPanel record={record} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <Facts>

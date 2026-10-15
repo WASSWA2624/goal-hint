@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import type { InsightSections, InsightsPreview } from "@/domain/match-insights";
 import { previewHoldsSection } from "@/domain/match-insight-presentation";
 import { parseMatchView, serializeMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
 import { useDetailDispatch, useDetailSelector } from "@/state/detail-hooks";
 import { detailApi } from "@/state/detail-api";
+import { media } from "@/styles/theme";
 
 export type ViewNavigation = "push" | "replace";
 export type ViewUpdate = (change: (current: MatchView) => MatchView, mode?: ViewNavigation) => void;
@@ -32,13 +33,29 @@ export function useMatchView() {
   return { view, go, update };
 }
 
+const desktopQuery = media.desktop.replace(/^@media\s+/u, "");
+function subscribeDesktop(change: () => void) {
+  const list = window.matchMedia(desktopQuery);
+  list.addEventListener("change", change);
+  return () => list.removeEventListener("change", change);
+}
+/**
+ * Desktop opens every section by default; phones keep one-line drawers. The server renders the desktop default
+ * and phones close the sections as soon as they hydrate (CSS hides them until then).
+ */
+export function useOpenByDefault(): boolean {
+  return useSyncExternalStore(subscribeDesktop, () => window.matchMedia(desktopQuery).matches, () => true);
+}
+const subscribeNothing = () => () => {};
+
 /** A complete preview older than this is refetched when its section opens. */
 const previewReuseMs = 5 * 60_000;
 
 /**
  * One complete section, fetched on first expansion through the shared cached endpoint. Simultaneous
  * consumers share one request; the preview stays visible while loading or after a failure. When the
- * page's recent preview already holds the whole collection, no request is made.
+ * page's recent preview already holds the whole collection, no request is made. Nothing is requested while the
+ * page hydrates, so sections that phones close right after hydration never fetch.
  */
 export function useInsightSection<S extends MatchSection>(id: string, section: S, enabled: boolean, preview: InsightsPreview | null = null) {
   const dispatch = useDetailDispatch();
@@ -46,11 +63,12 @@ export function useInsightSection<S extends MatchSection>(id: string, section: S
   const select = useMemo(() => detailApi.endpoints.insights.select({ id, section }), [id, section]);
   const state = useDetailSelector(select);
   const completeAt = preview && previewHoldsSection(preview, section) ? preview.asOf : null;
+  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
   useEffect(() => {
-    if (!enabled || (completeAt !== null && Date.now() - completeAt < previewReuseMs)) return;
+    if (!enabled || !hydrated || (completeAt !== null && Date.now() - completeAt < previewReuseMs)) return;
     const request = dispatch(detailApi.endpoints.insights.initiate({ id, section }, attempt > 0 ? { forceRefetch: true } : undefined));
     return () => request.unsubscribe();
-  }, [attempt, completeAt, dispatch, enabled, id, section]);
+  }, [attempt, completeAt, dispatch, enabled, hydrated, id, section]);
   return {
     // The endpoint validated this payload against the section's own schema.
     data: state.data?.section === section ? state.data.data as InsightSections[S] : null,

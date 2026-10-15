@@ -75,25 +75,6 @@ function usePlayerLookup(open: boolean) {
     retry: () => { players.retry(); injuries.retry(); lineups.retry(); } };
 }
 
-const MiniPitch = styled.div`
-  display: none;
-  @container details-card (min-width: 15rem) {
-    position: relative;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    block-size: 6.5rem;
-    padding: 4px;
-    background: linear-gradient(90deg, #15803D 0%, #16A34A 50%, #15803D 100%);
-    border-radius: 4px;
-    &::after { content: ""; position: absolute; inset-block: 4px; inset-inline-start: 50%; border-inline-start: 1px solid rgb(255 255 255 / 55%); }
-  }
-  > div { display: flex; justify-content: space-around; padding-inline: 4px; }
-  > div[data-away] { flex-direction: row-reverse; }
-  > div > div { display: flex; flex-direction: column; justify-content: space-around; }
-  > div > div > span { inline-size: 9px; block-size: 9px; border: 1.5px solid #fff; border-radius: 50%; }
-  > div[data-home] > div > span { background: ${({ theme }) => theme.color.accent.red.solid}; }
-  > div[data-away] > div > span { background: ${({ theme }) => theme.color.text}; }
-`;
 /** Vertical pitch for a full lineup, forwards at the top; names stay readable at phone width. */
 const Pitch = styled.ol`
   display: grid;
@@ -161,26 +142,11 @@ export const LineupsSection = memo(function LineupsSection() {
       <b>{player.number ?? "–"}</b><span>{short(player.name)}</span>
     </button>;
   };
-  const mini = (side: "home" | "away") => {
-    const rows = lineups[side] ? pitchRows(lineups[side]!.starters) : null;
-    return <div data-home={side === "home" || undefined} data-away={side === "away" || undefined}>
-      {(rows ?? []).map((row, index) => <div key={index}>{row.map((player) => <span key={player.id} />)}</div>)}
-    </div>;
-  };
   const any = Boolean(lineups.home || lineups.away);
-  return <SectionCard section="lineups" icon={<LineupIcon />} accent="emerald" title={messages.text("details.section.lineups")}
+  return <SectionCard section="lineups" icon={<LineupIcon />} title={messages.text("details.section.lineups")}
     meta={lineups.home?.formation && lineups.away?.formation ? messages.text("details.formations", { home: lineups.home.formation, away: lineups.away.formation })
-      : messages.text(any ? "details.confirmed" : "details.lineupNotPublished")} viewAll={messages.text("details.viewAll.lineups")}
-    itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}
-    preview={any ? <>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.75rem" }}>
-        {(["home", "away"] as const).map((side) => <span key={side} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <Crest name={team(side).name} url={team(side).logoUrl} />
-          <Strong>{lineups[side]?.formation ?? messages.text("details.formationUnknown")}</Strong>
-        </span>)}
-      </div>
-      <MiniPitch aria-hidden="true">{mini("home")}{mini("away")}</MiniPitch>
-    </> : <Note>{messages.text("details.lineupsNone")}</Note>}>
+      : messages.text(any ? "details.confirmed" : "details.lineupNotPublished")}
+    itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}>
     <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
     {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar><TeamChoice /></PanelBar>
@@ -254,11 +220,9 @@ export const PlayersSection = memo(function PlayersSection() {
         : player.role ? <Pill $accent={player.role === "starting" ? "emerald" : "blue"}>{messages.text(`details.role.${player.role}`)}</Pill> : <span />}
     </SquadRow></li>;
   };
-  return <SectionCard section="players" icon={<PlayerIcon />} accent="blue" title={messages.text("details.section.players")}
-    meta={total ? messages.plural("details.playerCount", total) : null} viewAll={messages.text("details.viewAll.players")}
-    itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}
-    preview={(preview?.sections.players.players.length ?? 0) > 0
-      ? <RowList>{preview!.sections.players.players.slice(0, 3).map(row)}</RowList> : <Note>{messages.text("details.playersNone")}</Note>}>
+  return <SectionCard section="players" icon={<PlayerIcon />} title={messages.text("details.section.players")}
+    meta={total ? messages.plural("details.playerCount", total) : preview ? messages.text("details.summary.noPlayers") : null}
+    itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}>
     <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
     {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar>
@@ -301,11 +265,9 @@ export const InjuriesSection = memo(function InjuriesSection() {
       <Pill $accent={statusAccent[injury.status]}>{messages.text(`details.injury.${injury.status}`)}</Pill>
     </InjuryRow></li>;
   };
-  return <SectionCard section="injuries" icon={<InjuryIcon />} accent="red" title={messages.text("details.section.injuries")}
-    meta={total ? messages.plural("details.absenceCount", total) : null} viewAll={messages.text("details.viewAll.injuries")}
-    itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}
-    preview={(preview?.sections.injuries.injuries.length ?? 0) > 0
-      ? <RowList>{preview!.sections.injuries.injuries.slice(0, 3).map(row)}</RowList> : <Note>{messages.text("details.injuriesNone")}</Note>}>
+  return <SectionCard section="injuries" icon={<InjuryIcon />} title={messages.text("details.section.injuries")}
+    meta={total ? messages.plural("details.absenceCount", total) : preview ? messages.text("details.summary.noAbsences") : null}
+    itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}>
     <SectionState loading={lookup.loading} error={lookup.error} onRetry={lookup.retry} />
     {lookup.key ? <PlayerPanel player={lookup.player} injury={lookup.injury} lineup={lookup.lineup} /> : <div ref={list} style={{ display: "grid", gap: 10 }}>
       <PanelBar>

@@ -8,28 +8,35 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
-import { defaultMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
+import { defaultMatchView, openSection, type MatchSection, type MatchView } from "@/domain/match-view";
 import { feedReturnStorageKey, homeHref } from "@/domain/navigation";
 import { useMessages } from "@/i18n/use-messages";
 import { media } from "@/styles/theme";
 import { BackIcon } from "./details-icons";
 import { DetailsProvider, Note, ViewProvider, desktop, focusRing, size, useStableDetails } from "./details-ui";
 import { ContextSection, HistorySection, NewsSection, RefereeSection } from "./info-sections";
-import { MarketTiles, MatchBanner } from "./match-banner";
+import { MatchBanner } from "./match-banner";
 import { MarketsCard } from "./markets-card";
 import { AnalysisDrawer } from "./analysis-drawer";
 import { Verdict } from "./verdict";
 import { InjuriesSection, LineupsSection, PlayersSection } from "./squad-sections";
 import { FormSection, H2HSection, StatsSection } from "./team-sections";
-import { useMatchView } from "./use-match-view";
+import { DisclosureProvider } from "./section-card";
+import { useMatchView, useOpenByDefault } from "./use-match-view";
 
 
+/** One column at every width; desktop keeps it to the site's reading width, centred. */
 const Page = styled.article`
   display: grid;
   gap: 8px;
   min-inline-size: 0;
   overflow-wrap: anywhere;
-  ${desktop} { gap: 12px; }
+  ${desktop} {
+    gap: 12px;
+    inline-size: 100%;
+    max-inline-size: ${({ theme }) => theme.layout.maxWidth};
+    margin-inline: auto;
+  }
 `;
 const PhoneHeaderGroup = styled.div`
   display: grid;
@@ -118,44 +125,22 @@ const BackLink = styled(Link)`
 `;
 
 /**
- * Sections in reading order. Below desktop: one full-bleed list of drawers, markets first, then the
- * reasons, the match itself, the teams and the record. Desktop: three columns. Wide desktops reproduce
- * the reference grid: markets on the left spanning three rows, comparison and head-to-head, then form,
- * lineups and players, then news, injuries, context and referee. An opened section spans the full width
- * (and moves to the top on wide desktops).
+ * The drawers in reading order: markets first, then the reasons, the match itself, the teams and the record.
+ * Phones run them as one full-bleed list; desktop frames the list. An opened drawer reveals its section in place.
  */
 const Grid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-auto-flow: row dense;
-  gap: 8px;
-  align-items: start;
-  ${media.belowDesktop} {
-    gap: 0;
-    margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
-    ${(["markets", "analysis", "stats", "lineups", "injuries", "form", "h2h", "players", "news", "context", "referee", "history"] as const)
-      .map((section, index) => `> [data-section="${section}"] { order: ${index}; }`).join("\n")}
-  }
-  ${desktop} { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-  > [data-section="markets"], > [data-section="history"], > [data-open] { grid-column: 1 / -1; }
-  ${media.wide} {
-    grid-template-columns: minmax(0, 22fr) repeat(24, minmax(0, 1fr));
-    align-items: stretch;
-    > [data-section="markets"] { grid-column: 1; grid-row: span 3; }
-    > [data-section="stats"] { grid-column: 2 / 16; }
-    > [data-section="h2h"] { grid-column: 16 / 26; }
-    > [data-section="form"] { grid-column: 2 / 9; }
-    > [data-section="lineups"] { grid-column: 9 / 16; }
-    > [data-section="players"] { grid-column: 16 / 26; }
-    > [data-section="news"] { grid-column: 2 / 8; }
-    > [data-section="injuries"] { grid-column: 8 / 14; }
-    > [data-section="context"] { grid-column: 14 / 20; }
-    > [data-section="referee"] { grid-column: 20 / 26; }
-    > [data-section="history"] { grid-column: 1 / -1; }
-    > [data-open]:not([data-section="markets"]) { grid-column: 1 / -1; grid-row: 1; }
+  align-content: start;
+  min-inline-size: 0;
+  ${(["markets", "analysis", "stats", "lineups", "injuries", "form", "h2h", "players", "news", "context", "referee", "history"] as const)
+    .map((section, index) => `> [data-section="${section}"] { order: ${index}; }`).join("\n")}
+  ${media.belowDesktop} { margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter}); }
+  ${desktop} {
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-block-end: 0;
   }
 `;
-
 const subscribeNever = () => () => {};
 /** The feed's last URL, written by the feed page; storage can be blocked, so null falls back to today. */
 function readFeedReturn(): string | null {
@@ -206,18 +191,50 @@ function PhoneHeader() {
 }
 
 /**
- * Each card reads the view through its own provider. The open card gets the live view; closed cards
- * share one value that changes only with the open section, so filters, pages and items inside one
- * section (and market changes) re-render that card alone. Handlers read the URL through `update`.
+ * One section's view and disclosure. Desktop opens every section by default and remembers the reader's own
+ * collapse; phones open one section at a time through the URL. The URL's section gets the live view, other open
+ * sections a stable default view, closed ones a shared value that changes only with the URL's section, so
+ * filters, pages and items inside one section re-render that card alone. Handlers read the URL through `update`.
  */
-function SectionView({ section, view, closed, children }: { section: MatchSection; view: MatchView; closed: MatchView; children: ReactNode }) {
-  return <ViewProvider value={view.section === section ? view : closed}>{children}</ViewProvider>;
+function SectionView({ section, view, closed, byDefault, children }: {
+  section: MatchSection; view: MatchView; closed: MatchView; byDefault: boolean; children: ReactNode;
+}) {
+  const details = useStableDetails();
+  const focused = view.section === section;
+  // `choice`: the reader's own open or closed state on desktop. `inside`: the next focus change comes from this
+  // section's own controls (a filter, a page, an item) and must not move the page.
+  const [state, setState] = useState(() => ({ choice: null as boolean | null, focused, inside: false, reveal: focused ? 1 : 0 }));
+  if (state.focused !== focused) setState({ ...state, focused, inside: false, reveal: focused && !state.inside ? state.reveal + 1 : state.reveal });
+  const open = focused || (byDefault && state.choice !== false);
+  const expanded = useMemo(() => ({ ...defaultMatchView, section }), [section]);
+  // Interactions inside a section first make it the URL's section, so its filters, pages and items are addressable.
+  const scoped = useMemo(() => ({ ...details, update: ((change, mode) => {
+    setState((current) => ({ ...current, inside: true }));
+    details.update((current) => change(current.section === section ? current : openSection(current, section)), mode);
+  }) satisfies typeof details.update }), [details, section]);
+  const toggle = useCallback(() => {
+    if (open) {
+      setState((current) => ({ ...current, choice: false }));
+      if (focused) details.update((current) => openSection(current, null));
+    } else {
+      setState((current) => ({ ...current, choice: true, reveal: byDefault ? current.reveal + 1 : current.reveal }));
+      if (!byDefault) details.update((current) => openSection(current, section));
+    }
+  }, [byDefault, details, focused, open, section]);
+  const disclosure = useMemo(() => ({ open, byDefault: open && !focused && state.choice === null, reveal: state.reveal, toggle }),
+    [focused, open, state.choice, state.reveal, toggle]);
+  return <DetailsProvider value={scoped}>
+    <DisclosureProvider value={disclosure}>
+      <ViewProvider value={focused ? view : open ? expanded : closed}>{children}</ViewProvider>
+    </DisclosureProvider>
+  </DetailsProvider>;
 }
 
 export const MatchDetails = memo(function MatchDetails({ data, preview, locale = "en", history, historyRequested = false }: {
   data: MatchDetailResponse; preview: InsightsPreview | null; locale?: string; history?: ReactNode; historyRequested?: boolean;
 }) {
   const { view, go, update } = useMatchView();
+  const byDefault = useOpenByDefault();
   const messages = useMessages(locale);
   const fixture = data.fixture;
   const home = fixture.homeTeam.name || messages.text("match.homeUnknown"), away = fixture.awayTeam.name || messages.text("match.awayUnknown");
@@ -234,15 +251,14 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
   const { marketsOpen, market, marketCategory, marketSearch } = view;
   const markets = useMemo(() => ({ ...defaultMatchView, marketsOpen, market, marketCategory, marketSearch }),
     [market, marketCategory, marketSearch, marketsOpen]);
-  const scoped = { view, closed };
+  const scoped = { view, closed, byDefault };
   return <DetailsProvider value={value}>
     <Page data-match-detail data-fixture-id={fixture.fixtureId} data-detail-revision={data.snapshot?.revisionId ?? ""}>
       <PhoneHeader />
       <DesktopBackLink />
       <MatchBanner />
       <Verdict />
-      <MarketTiles />
-      <Grid data-open-section={view.section ?? undefined}>
+      <Grid>
         <ViewProvider value={markets}><MarketsCard /></ViewProvider>
         <AnalysisDrawer />
         <SectionView section="stats" {...scoped}><StatsSection /></SectionView>
