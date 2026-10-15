@@ -172,7 +172,7 @@ export function createScheduleLifecycleService(options: Readonly<{
         await tx.$executeRaw`INSERT INTO FixtureLifecycleObservation
           (id, fixtureId, cycleId, fixtureVersion, at, retrievedAt, outcome, reason, integrity, receiptJson)
           VALUES (${id}, ${fixture.id}, ${target?.cycleId ?? null}, ${version}, ${new Date(now)}, ${new Date(observation.retrievedAt)},
-            ${receipt.outcome}, ${receipt.reason}, SHA2(CAST(CAST(${payload} AS JSON) AS CHAR), 256), CAST(${payload} AS JSON))`;
+            ${receipt.outcome}, ${receipt.reason}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
         if (material) await tx.predictionChangeEvent.create({ data: { fixtureId: fixture.id, version, lifecycleId: id,
           kind: issue ? "lifecycle-conflict" : "schedule-lifecycle", at: new Date(now) } });
         authorize(observation);

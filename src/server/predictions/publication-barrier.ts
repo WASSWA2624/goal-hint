@@ -13,6 +13,6 @@ export async function recordPublicationBarrier(tx: Prisma.TransactionClient, obs
   const payload = evidenceSerialize(observation), closedAt = observation.actualStartedAt ?? observation.retrievedAt;
   await tx.$executeRaw`INSERT INTO PredictionPublicationBarrier (cycleId, fixtureId, closedAt, recordedAt, integrity, observationJson)
     VALUES (${observation.cycleId}, ${observation.fixtureId}, ${new Date(closedAt)}, ${new Date(at)},
-      SHA2(CAST(CAST(${payload} AS JSON) AS CHAR), 256), CAST(${payload} AS JSON))`;
+      SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
   return (await storedPublicationBarrier(tx, observation.cycleId))!;
 }

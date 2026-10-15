@@ -92,6 +92,12 @@ def verify(origin, cases, *, staging):
     assert root.status == 308
     assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en"
     checks += 1
+    for query in ["", "?page=2", "?date=2026-10-09&status=finished", "?league=39&league=40"]:
+        for host, destination in [(None, origin), ("www.goalhint.com", fixed)]:
+            response = anonymous("/" + query, {"host": host} if host else None)
+            assert response.status == 308
+            assert urljoin(origin, response.headers.get("location")) == destination + "/en" + query
+            checks += 1
     www = anonymous("/en/predictions/2026-10-09?page=2", {"host": "www.goalhint.com"})
     assert www.status == 308
     assert www.headers.get("location") == fixed + "/en/predictions/2026-10-09?page=2"
@@ -101,7 +107,7 @@ def verify(origin, cases, *, staging):
         separator = "&" if "?" in path else "?"
         shared = anonymous(path + separator + "utm_source=search&gclid=click")
         assert shared.status == 308
-        assert urljoin(origin, shared.headers.get("location")) == origin + path
+        assert urljoin(origin, shared.headers.get("location")) == origin + path + "#gh_attr=utm_source%3Dsearch%26click%3Dgoogle"
         assert shared.headers.get("x-robots-tag") == ("noindex, follow" if staging else None)
         checks += 1
     match(r"<title>Goal Hint \| Daily Football Predictions</title>", home)
@@ -123,11 +129,15 @@ def verify(origin, cases, *, staging):
     detail = cases["details"][cases["publishedId"]]["current"]["data"]
     shared_detail = anonymous(detail["route"]["path"] + "?revision=" + cases["revision"] + "&fbclid=shared")
     assert shared_detail.status == 308
-    assert urljoin(origin, shared_detail.headers.get("location")) == origin + detail["route"]["path"] + "?revision=" + cases["revision"]
+    assert urljoin(origin, shared_detail.headers.get("location")) == origin + detail["route"]["path"] + "?revision=" + cases["revision"] + "#gh_attr=click%3Dmeta"
     checks += 1
     html = page(detail["route"]["path"], detail["route"]["path"], not staging)
     match("Renamed Discovery Club", visible_html(html, comments=False))
     match("data-detail-market=", html)
+    record = match(r'<p\b[^>]*data-prediction-record="true"[^>]*>([\s\S]*?)</p>', visible_html(html, comments=False)).group(1)
+    match("AI prediction", record)
+    match("Provisional estimate", record)
+    match("Locked prediction", record)
     checks += 1
     page(detail["route"]["path"] + "?revision=" + cases["revision"], detail["route"]["path"], False)
     assert anonymous("/en/matches/00000000-0000-4000-8000-000000000000/unknown").status == 404
@@ -149,8 +159,15 @@ def verify(origin, cases, *, staging):
     match(r"Disallow: /api/", robots)
     no_match(r"Disallow:.*(?:revision|\?|predictions|matches|/en)", robots)
     sitemap = anonymous("/sitemap.xml").text
-    matches = anonymous("/matches/sitemap/0.xml").text
-    dates = anonymous("/archive/sitemap/0.xml").text
+    matches_response = anonymous("/sitemap-matches-0.xml")
+    dates_response = anonymous("/sitemap-archive-0.xml")
+    for response in [matches_response, dates_response]:
+        assert response.status == 200 and "xml" in response.headers.get("content-type", "")
+        checks += 1
+    matches, dates = matches_response.text, dates_response.text
+    assert anonymous("/matches/sitemap/0.xml").text == matches
+    assert anonymous("/archive/sitemap/0.xml").text == dates
+    checks += 2
     index_response = anonymous("/sitemap-index.xml")
     assert index_response.status == 200 and "<sitemapindex" in index_response.text
     if staging:
@@ -162,7 +179,7 @@ def verify(origin, cases, *, staging):
     else:
         match(r"Sitemap: https://goalhint\.com/sitemap-index\.xml", robots)
         index = locations(index_response.text)
-        assert index == [fixed + "/sitemap.xml", fixed + "/matches/sitemap/0.xml", fixed + "/archive/sitemap/0.xml"]
+        assert index == [fixed + "/sitemap.xml", fixed + "/sitemap-matches-0.xml", fixed + "/sitemap-archive-0.xml"]
         assert locations(sitemap) == [fixed + "/en", fixed + "/en/help", fixed + "/en/contact"]
         assert locations(matches) == [fixed + row["path"] for row in cases["matches"]]
         assert locations(dates) == [fixed + archive]
@@ -179,6 +196,10 @@ def verify(origin, cases, *, staging):
             assert urlsplit(url).path in links
         assert anonymous("/matches/sitemap/1.xml").status == 404
         assert anonymous("/matches/sitemap/01.xml").status == 404
+        for path in ["/sitemap-matches-1.xml", "/sitemap-matches-01.xml", "/sitemap-matches-invalid.xml",
+                     "/sitemap-archive-1.xml", "/sitemap-archive-01.xml"]:
+            assert anonymous(path).status == 404, path
+            checks += 1
     checks += 1
     for asset in ["/brand/goal-hint-open-graph.png", "/brand/goal-hint-favicon.svg", "/brand/goal-hint-favicon.ico"]:
         assert anonymous(asset).status == 200, asset

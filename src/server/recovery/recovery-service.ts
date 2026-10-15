@@ -85,7 +85,7 @@ async function appendAudit(tx: JobTransaction, jobId: string, actionId: string, 
   const encoded = evidenceSerialize(body), at = await now(tx);
   await tx.$executeRaw`INSERT INTO RecoveryAudit (id, jobId, actionId, phase, at, integrity, body)
     VALUES (${id}, ${jobId}, ${actionId}, ${phase}, ${new Date(at)},
-      SHA2(CAST(CAST(${encoded} AS JSON) AS CHAR), 256), CAST(${encoded} AS JSON))`;
+      SHA2(CAST(JSON_EXTRACT(${encoded}, '$') AS CHAR), 256), JSON_EXTRACT(${encoded}, '$'))`;
 }
 
 export function createRecoveryWatchdog(options: Readonly<{ database: DatabaseRuntime; queue: JobQueue;

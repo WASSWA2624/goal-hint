@@ -155,7 +155,7 @@ export function createMysqlEvidenceStore(database: DatabaseRuntime, options: Rea
               VALUES (${source.id}, ${binding.fixtureId}, ${binding.homeTeamId}, ${binding.awayTeamId}, ${binding.fixtureVersion}, ${source.sourceKey},
                 ${source.syndicationKey}, ${source.kind}, ${source.version}, ${source.publisher}, ${source.title}, ${source.sourceUrl},
                 ${sqlDate(source.publishedAt)}, ${sqlDate(source.retrievedAt)}, ${sqlDate(source.providerUpdatedAt)}, ${sqlDate(source.reuse.retainUntil)},
-                SHA2(CAST(CAST(${payload} AS JSON) AS CHAR), 256), CAST(${payload} AS JSON))`;
+                SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
           }
           const payload = evidenceSerialize(snapshot);
           await transaction.$executeRaw`INSERT INTO FixtureEvidenceSnapshot
@@ -164,7 +164,7 @@ export function createMysqlEvidenceStore(database: DatabaseRuntime, options: Rea
             VALUES (${requestId}, ${requestFingerprint}, ${snapshot.hash}, ${context.fixtureId}, ${context.home.teamId}, ${context.away.teamId},
               ${context.fixtureVersion}, ${sqlDate(context.analysisAt)}, ${sqlDate(context.cutoffAt)}, ${sqlDate(context.kickoffAt)},
               ${context.cycleId}, ${context.runId}, ${snapshot.policy.version}, ${snapshot.coverage.sufficient},
-              SHA2(CONCAT(${requestId}, ':', ${requestFingerprint}, ':', CAST(CAST(${payload} AS JSON) AS CHAR)), 256), CAST(${payload} AS JSON))`;
+              SHA2(CONCAT(${requestId}, ':', ${requestFingerprint}, ':', CAST(JSON_EXTRACT(${payload}, '$') AS CHAR)), 256), JSON_EXTRACT(${payload}, '$'))`;
           for (const source of snapshot.sources) await transaction.$executeRaw`INSERT INTO FixtureEvidenceSnapshotSource
             (requestId, sourceVersionId, fixtureId, homeTeamId, awayTeamId, fixtureVersion)
             VALUES (${requestId}, ${source.id}, ${context.fixtureId}, ${context.home.teamId}, ${context.away.teamId}, ${context.fixtureVersion})`;

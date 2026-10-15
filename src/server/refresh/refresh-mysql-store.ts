@@ -37,7 +37,7 @@ async function insert(tx: Transaction, table: Table, jobId: string, body: unknow
   const encoded = evidenceSerialize(body);
   if (Buffer.byteLength(encoded) > 8_388_608) return refreshFail("invalid-request");
   await tx.$executeRawUnsafe(`INSERT INTO ${table} (jobId, ${phase === undefined ? "" : "phase, kind,"} integrity, body)
-    VALUES (?, ${phase === undefined ? "" : "?, ?,"} SHA2(CAST(CAST(? AS JSON) AS CHAR), 256), CAST(? AS JSON))`,
+    VALUES (?, ${phase === undefined ? "" : "?, ?,"} SHA2(CAST(JSON_EXTRACT(?, '$') AS CHAR), 256), JSON_EXTRACT(?, '$'))`,
     jobId, ...(phase === undefined ? [] : [phase, kind]), encoded, encoded);
 }
 export function createMysqlRefreshStore(database: DatabaseRuntime, queue: JobQueue) {

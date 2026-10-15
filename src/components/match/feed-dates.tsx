@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import styled, { css } from "styled-components";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
-import { DateCalendar } from "./date-calendar";
 import { RangeFields, RangeFieldset, RangeHelp, RangeLegend } from "./feed-range-fields";
 import { addReportingDays, parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { feedDateNavigation } from "@/domain/feed-date-navigation";
@@ -12,6 +12,8 @@ import { feedQueryHref, feedQueryRules, resolveFeedDates, type DateSelection, ty
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { focusRing, plainClick } from "./filter-parts";
+
+const DateCalendar = dynamic(() => import("./date-calendar").then((module) => module.DateCalendar));
 
 /** Always-visible dates; equal endpoints select one date. */
 export function DateRangePicker({ query, today, from, to, onChange }: {

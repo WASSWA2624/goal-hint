@@ -92,7 +92,7 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
             if (periodRow) {
               const period = parseMonitoring(quotaPeriodStateSchema, periodRow.stateJson);
               const counts = (await tx.$queryRaw<{ launched: bigint; uncertain: bigint; rateLimited: bigint; providerErrors: bigint }[]>`SELECT
-                COALESCE(SUM(JSON_EXTRACT(payloadJson, '$.launchedAt') != CAST('null' AS JSON)), 0) AS launched,
+                COALESCE(SUM(JSON_EXTRACT(payloadJson, '$.launchedAt') != JSON_EXTRACT('null', '$')), 0) AS launched,
                 COALESCE(SUM(state = 'uncertain'), 0) AS uncertain,
                 COALESCE(SUM(JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.responseKind')) = 'rate-limited'), 0) AS rateLimited,
                 COALESCE(SUM(JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.responseKind')) = 'provider-error'), 0) AS providerErrors

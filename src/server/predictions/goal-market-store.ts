@@ -96,7 +96,7 @@ export async function appendGoalMarketExtension(tx: Tx, input: GoalMarketExtensi
   const value = freezeEvidence({ ...prepared, ...identity, contentHash }), body = evidenceSerialize(value);
   await tx.$executeRaw`INSERT INTO GoalMarketExtension (revisionId, cycleId, fixtureId, ruleVersion, contentHash, integrity, recordedAt, body)
     VALUES (${identity.revisionId}, ${identity.cycleId}, ${identity.fixtureId}, ${prepared.ruleVersion}, ${contentHash},
-      SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), ${new Date(identity.recordedAt)}, CAST(${body} AS JSON))`;
+      SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), ${new Date(identity.recordedAt)}, JSON_EXTRACT(${body}, '$'))`;
   return value;
 }
 
@@ -227,7 +227,7 @@ export async function persistGoalMarketSettlements(tx: Tx, plans: readonly GoalM
     await tx.$executeRaw`INSERT INTO ExtendedMarketSettlementRevision
       (id, fixtureId, cycleId, marketKey, predictionRevisionId, source, batchId, previousId, resultId, inputHash, at, integrity, body)
       VALUES (${id}, ${base.fixtureId}, ${base.cycleId}, ${base.marketKey}, ${base.predictionRevisionId}, ${base.source}, ${batchId}, ${value.previousId},
-        ${value.resultId}, ${inputHash}, ${new Date(at)}, SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`;
+        ${value.resultId}, ${inputHash}, ${new Date(at)}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
     await tx.$executeRaw`INSERT INTO ExtendedMarketSettlement (fixtureId, cycleId, marketKey, revisionId)
       VALUES (${base.fixtureId}, ${base.cycleId}, ${base.marketKey}, ${id})
       ON DUPLICATE KEY UPDATE revisionId = ${id}`;

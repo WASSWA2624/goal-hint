@@ -166,6 +166,15 @@ def verify_detail(origin, directory, scenarios):
         no_match(r"/_next/image|\s\$[\w-]+=", visible)
         if snapshot:
             assert f'data-detail-revision="{snapshot["revisionId"]}"' in visible
+            record = match(r'<p\b[^>]*data-prediction-record="true"[^>]*>([\s\S]*?)</p>', visible).group(1)
+            for source in {item["source"]["kind"] for item in snapshot["markets"]}:
+                match("AI prediction" if source == "ai" else "API-Football", record)
+            if any(item["source"]["provisional"] for item in snapshot["markets"]):
+                match("Provisional estimate", record)
+            statuses = {"current": "Current prediction", "locked": "Locked prediction", "historical": "Historical publication", "void": "Void cycle"}
+            match(statuses[snapshot["applicability"]], record)
+            if fixture.get("update", {}).get("result") == "delayed":
+                match("Score and result updates delayed", record)
             for item in snapshot["markets"]:
                 family = item["market"]["family"]
                 assert item["market"]["period"] == "regulation-including-stoppage-time"

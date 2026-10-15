@@ -758,6 +758,17 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         </SheetClose>
       </SheetHeader>
       <SheetBody>
+        <PhoneSection>
+          <SectionLabel>{messages.text("feed.date.zone", { zone: query.zone ?? publicPolicy.reportingTimeZone })}</SectionLabel>
+          <MarketToggles>
+            {deviceZone !== (query.zone ?? publicPolicy.reportingTimeZone) && <MarketToggle type="button" $family="match-result" onClick={() => {
+              onOpenChange(false); onApply({ ...query, zone: deviceZone, time: null, page: 1 });
+            }}>{messages.text("feed.date.useLocal")}</MarketToggle>}
+            {query.zone && <MarketToggle type="button" $family="match-result" onClick={() => {
+              onOpenChange(false); onApply({ ...query, zone: null, time: null, page: 1 });
+            }}>{messages.text("feed.date.useReporting")}</MarketToggle>}
+          </MarketToggles>
+        </PhoneSection>
         <DateRangePicker query={query} today={today} {...dateInputs} onChange={(from, to) => setDateInputs({ from, to })} />
         <FeedTimeFilter query={query} {...timeInputs} onChange={(from, to) => setTimeInputs({ from, to })} />
         <PhoneSection role="group" aria-labelledby={marketsId}>

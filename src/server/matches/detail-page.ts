@@ -49,7 +49,7 @@ export function matchDetailMetadata(result: DetailPageResult, locale = "en", var
   const date = data.fixture.kickoffAt == null ? null : getReportingDate(utcInstantFromEpochMilliseconds(data.fixture.kickoffAt));
   const pageTitle = date ? messages.text("detail.datedMetadataTitle", { match: title.slice(0, 180), date: messages.reportingDateMedium(date) })
     : messages.text("detail.metadataTitle", { match: title.slice(0, 180) });
-  const lead = date ? leadForecast(data.fixture) : null;
+  const lead = leadForecast(data.fixture);
   const description = date && lead ? messages.text("detail.forecastMetadataDescription", { match: title.slice(0, 240),
     date: messages.reportingDate(date), market: messages.text(`details.market.${lead.item.market.family}`),
     pick: messages.text(`details.pick.${lead.item.market.selection}`, { home: data.fixture.homeTeam.name || messages.text("match.homeUnknown"),
@@ -57,7 +57,11 @@ export function matchDetailMetadata(result: DetailPageResult, locale = "en", var
     probability: messages.number(lead.probability.roundedPercent / 100, { style: "percent" }) })
     : date ? messages.text("detail.datedMetadataDescription", { match: title.slice(0, 240), date: messages.reportingDate(date) })
     : messages.text("detail.metadataDescription", { match: title.slice(0, 240) });
-  return pageMetadata({ title: pageTitle, description, path: data.route.path, index: policy.index && !variant && matchPageIndexable(data.fixture) });
+  // A void cycle is still an auditable record, but must not be previewed as a usable prediction.
+  // selectedCardPrediction verifies the outcome's revision, cycle and selection before exposing this status.
+  const preview = lead?.status === "void" ? messages.text("detail.voidForecastMetadataDescription", { description }) : description;
+  return pageMetadata({ title: pageTitle, description: preview, path: data.route.path,
+    index: policy.index && !variant && matchPageIndexable(data.fixture) });
 }
 
 /** Home → the kickoff's EAT-day collection → this match, mirroring the page's "Back to Predictions" path. */

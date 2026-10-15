@@ -1,6 +1,23 @@
 import type { DetailSnapshot, MatchDetailResponse } from "./match-detail.ts";
 import type { MarketFamily } from "./markets.ts";
 import { isSafeEvidenceUrl } from "./evidence-url.ts";
+import type { TextKey } from "../i18n/messages.ts";
+
+/** The visible pick keeps its own revision's provenance and applicability, even when another revision exists. */
+export function detailRecordNotices(data: MatchDetailResponse): readonly TextKey[] {
+  const { fixture, snapshot } = data, notices: TextKey[] = [];
+  if (snapshot) {
+    for (const source of new Set(snapshot.markets.map((item) => item.source.kind))) notices.push(`market.source.${source}`);
+    if (snapshot.markets.some((item) => item.source.provisional)) notices.push("match.provisional");
+    notices.push(`history.status.${snapshot.applicability}`);
+  } else if (fixture.cycle?.state === "closed") notices.push("detail.noLockedPrediction");
+  const refresh = fixture.update?.prediction;
+  if ((!snapshot || snapshot.applicability === "current") &&
+    (refresh === "delayed" || refresh === "updating" || refresh === "outside-window")) notices.push(`detail.refresh.${refresh}`);
+  if (fixture.update?.result === "delayed") notices.push("match.resultDelayed");
+  if (fixture.partialCoverage) notices.push("match.partialCoverage");
+  return notices;
+}
 
 /** Use this one revision exclusively; never supplement it from fixture.forecast. */
 export function detailMarket(data: MatchDetailResponse, family: MarketFamily) {

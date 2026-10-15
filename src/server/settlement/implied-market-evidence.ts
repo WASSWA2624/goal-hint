@@ -82,7 +82,7 @@ export async function appendImpliedResultEvidence(tx: Tx, input: unknown, record
   const id = evidenceFingerprint({ input: value, recordedAt }), body = evidenceSerialize({ ...value, id, recordedAt, contentHash });
   await tx.$executeRaw`INSERT INTO ImpliedMarketResultEvidence (id, fixtureId, resultId, recordedAt, contentHash, integrity, body)
     VALUES (${id}, ${value.fixtureId}, ${value.resultId}, ${new Date(recordedAt)}, ${contentHash},
-      SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`;
+      SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
   const appended = await readImpliedResultEvidence(tx, value.fixtureId, value.resultId);
   if (!appended || appended.id !== id) return historyFail("invalid-state");
   return appended;

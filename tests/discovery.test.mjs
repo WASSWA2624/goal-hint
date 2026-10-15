@@ -129,9 +129,12 @@ test('sitemap shards preserve stored lastmod, advertise each bounded shard and p
   assert.deepEqual(await routes.dates({ id: Promise.resolve('0') }), [{ url: 'https://goalhint.com/en/predictions/2026-10-09' }]);
   const robots = await routes.robots(); assert.equal(robots.sitemap, 'https://goalhint.com/sitemap-index.xml');
   const index = await routes.sitemapIndex();
+  for (const [, location] of index.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+    assert.equal(new URL('.', location).pathname, '/', 'Advertised sitemap files must cover /en URLs without a Search Console scope override.');
+  }
   assert.deepEqual([...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]), ['https://goalhint.com/sitemap.xml',
-    'https://goalhint.com/matches/sitemap/0.xml', 'https://goalhint.com/matches/sitemap/1.xml', 'https://goalhint.com/matches/sitemap/2.xml',
-    'https://goalhint.com/archive/sitemap/0.xml']);
+    'https://goalhint.com/sitemap-matches-0.xml', 'https://goalhint.com/sitemap-matches-1.xml', 'https://goalhint.com/sitemap-matches-2.xml',
+    'https://goalhint.com/sitemap-archive-0.xml']);
   assert.match(index, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<sitemapindex xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
   const urls = (await routes.sitemap()).map(row => row.url);
   assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/help', 'https://goalhint.com/en/contact']);

@@ -193,7 +193,7 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
       const stored = await write(async (tx) => {
         await tx.$executeRaw`INSERT IGNORE INTO OddsImportBatch (id, accountId, kind, scopeKey, policyHash, status, requestsDispatched, receivedAt, integrity, body)
           VALUES (${id}, ${parsed.data.accountId}, ${parsed.data.kind}, ${parsed.data.scopeKey}, ${parsed.data.policyHash}, ${parsed.data.status},
-            ${parsed.data.requestsDispatched}, ${new Date(parsed.data.receivedAt)}, SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`;
+            ${parsed.data.requestsDispatched}, ${new Date(parsed.data.receivedAt)}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
         const sealed = await sealedBatch(tx, id);
         if (!sealed || evidenceFingerprint(sealed) !== evidenceFingerprint(parsed.data)) return oddsFail("conflicting-request");
         return sealed;
@@ -293,7 +293,7 @@ export function createMysqlOddsStore(database: DatabaseRuntime) {
               return Prisma.sql`(${body.id}, ${body.fixtureId}, ${input.batchId}, ${body.previousId}, ${body.bookmakerId}, ${body.bookmakerName}, ${body.betId},
                 ${body.betName}, ${body.valuesHash}, ${body.values.length}, ${new Date(retrievedAt)},
                 ${providerUpdatedAt === null ? null : new Date(providerUpdatedAt)}, ${new Date(body.retainUntil)},
-                SHA2(CAST(CAST(${json} AS JSON) AS CHAR), 256), CAST(${json} AS JSON))`;
+                SHA2(CAST(JSON_EXTRACT(${json}, '$') AS CHAR), 256), JSON_EXTRACT(${json}, '$'))`;
             }))}`);
         }
         const sealed = pending.length === 0 ? new Map<string, StoredOddsSnapshot>() : await sealedSnapshots(tx, pending.map((body) => body.id));

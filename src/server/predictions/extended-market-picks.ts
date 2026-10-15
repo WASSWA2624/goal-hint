@@ -88,7 +88,7 @@ export async function appendPublishedExtendedPicks(tx: Tx, revisionId: string, r
   if (!picks.length) return picks;
   const values = picks.map((pick) => { const body = evidenceSerialize(pick); return Prisma.sql`(${pick.revisionId}, ${pick.cycleId}, ${pick.fixtureId},
     ${pick.key}, ${pick.source}, ${pick.ruleVersion}, ${pick.period}, ${pick.selection}, ${pick.selectedProbability}, ${pick.sortOrder},
-    SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`; });
+    SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`; });
   await tx.$executeRaw(Prisma.sql`INSERT INTO ExtendedMarketPublishedPick
     (revisionId, cycleId, fixtureId, marketKey, source, ruleVersion, period, selection, selectedProbability, sortOrder, integrity, body)
     VALUES ${Prisma.join(values)}`);

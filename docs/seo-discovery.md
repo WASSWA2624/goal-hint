@@ -1,8 +1,9 @@
 # SEO and crawlable discovery
 
 Prompt 042 implements local metadata, canonical discovery and indexing controls.
-Public indexing and deployment remain unapproved. No search submission, Search
-Console setup, visitor analytics or production hosting change is included.
+The owner authorized production publication and deployment on 15 October 2026.
+See [the production release record](reports/seo-production-2026-10-15.md). Search
+Console submission remains a separate owner-account action.
 
 ## Canonical pages and metadata
 
@@ -67,10 +68,17 @@ redirect to the home page. With one published language no hreflang is emitted.
 
 Native dynamic Next metadata routes expose `/sitemap.xml`, match shards at
 `/matches/sitemap/N.xml`, archive shards at `/archive/sitemap/N.xml`, and
-`/robots.txt`. Next.js does not index `generateSitemaps` shards, so
-`/sitemap-index.xml` (a route handler) lists `/sitemap.xml` and every populated
-shard; robots names only that index, so Search Console needs one submission and
-robots.txt no longer reads the database. No fixed recent-day window is introduced.
+`/robots.txt`. Root-level rewrites also expose those shards at
+`/sitemap-matches-N.xml` and `/sitemap-archive-N.xml`. Next.js does not index
+`generateSitemaps` shards, so `/sitemap-index.xml` (a route handler) lists
+`/sitemap.xml` and every populated root-level shard; robots names only that index,
+so Search Console needs one submission and robots.txt no longer reads the
+database. The advertised files live at the site root so their directory scope
+covers the canonical `/en/...` pages even before a Search Console submission.
+[Google's sitemap location guidance](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap#sitemap-best-practices)
+and the [Sitemaps protocol](https://www.sitemaps.org/protocol.html#location)
+describe that directory restriction. Existing nested endpoints remain available.
+No fixed recent-day window is introduced.
 
 `createDiscoveryReader` uses the same public fixture predicate as the feed:
 configured API-Football competitions plus retained closed/void historical
@@ -100,14 +108,13 @@ and locale metadata prevent a staging build's decision from freezing into the
 production artifact. The runtime environment contract recognizes the new field
 without granting provider/publication capabilities.
 
-The source-owned `discoveryReleaseApproval` is currently `{ verified: false,
-evidenceRef: null }`. Privacy and terms retain `releaseReady: false`. Contact is
-available and ready, using the owner's confirmed public email.
-Both verified release approval and all three publication gates are required in
-addition to production classification/runtime. No environment value or provider
-approval reference replaces these facts. All current HTML responses therefore
-retain noindex through metadata and the proxy's `X-Robots-Tag`, and discovery XML
-contains no public URLs. Robots does not advertise those empty prelaunch maps.
+The source-owned `discoveryReleaseApproval` records the owner's explicit
+15 October 2026 production instruction and links its evidence record. Production
+classification/runtime and the published contact remain necessary. Privacy and
+terms retain `releaseReady: false` and their individual noindex controls while
+their outstanding operational disclosures are reviewed. Their draft status no
+longer silently blocks all football pages. No environment string alone enables
+indexing, and staging retains its noindex headers and empty discovery XML.
 
 OP-25/27/28, source/public redistribution rights, forecast qualification and prior
 operational release decisions remain unresolved. Prompts 048–049 must review

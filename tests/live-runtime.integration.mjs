@@ -137,8 +137,8 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       t.diagnostic(JSON.stringify({ network, events, jobs, outcomes: outcomes.map((row) => JSON.parse(row.body)).map(({ outcome, reason, phases }) => ({ outcome, reason, phases })) }));
     }
 
-    await t.test('one selection imports seven dates and refreshes only selected competitions', async () => {
-      assert.equal(network.filter((entry) => entry === '/fixtures?date').length, 7);
+    await t.test('one selection imports eight dates for civil-day coverage and refreshes only selected competitions', async () => {
+      assert.equal(network.filter((entry) => entry === '/fixtures?date').length, 8);
       assert.equal(network.filter((entry) => entry === '/predictions?fixture').length, 2);
       assert.equal(network.filter((entry) => entry === '/fixtures?id').length, 2);
       const counts = await runtime.database.query(async (tx) => ({ sets: await tx.predictionSet.count(), runs: await tx.dailyRun.count(),
@@ -233,7 +233,7 @@ test('the live runtime imports, publishes fallback forecasts and serves them thr
       oddsRuntime = await createLiveRuntime(parseRuntimePolicy({ ...policyEnv, GOAL_HINT_ODDS_IMPORT_ENABLED: 'true', GOAL_HINT_ODDS_BOOKMAKER_ID: '8' }),
         { fetcher, approvals });
       assert.equal(oddsRuntime.odds.enabled, true); assert.equal(oddsRuntime.odds.horizonDays, 7);
-      assert.equal(oddsRuntime.workload.odds.floor, 6639);
+      assert.equal(oddsRuntime.workload.odds.floor, 6641);
       const before = { fixtures: await runtime.database.query((tx) => tx.footballFixture.count()), enrichment: await enrichmentDispatched() };
       assert.equal(before.enrichment, await teamsReceipts(), 'only the team-code sweep has used enrichment priority so far');
       const calls = oddsCalls();

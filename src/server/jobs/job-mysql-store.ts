@@ -73,7 +73,7 @@ export function createMysqlJobQueue(database: DatabaseRuntime): JobQueue {
         (id, type, handlerVersion, idempotencyKey, requestHash, integrity, envelopeJson,
          refreshRunId, refreshFixtureId, refreshCycleId, priority, availableAt, expiresAt, createdAt, updatedAt)
         VALUES (${id}, ${envelope.type}, ${envelope.handlerVersion}, ${envelope.idempotencyKey}, ${requestHash},
-          SHA2(CONCAT(${id}, ':', ${requestHash}, ':', CAST(CAST(${json} AS JSON) AS CHAR)), 256), CAST(${json} AS JSON),
+          SHA2(CONCAT(${id}, ':', ${requestHash}, ':', CAST(JSON_EXTRACT(${json}, '$') AS CHAR)), 256), JSON_EXTRACT(${json}, '$'),
           ${envelope.refresh?.runId ?? null}, ${envelope.refresh?.fixtureId ?? null}, ${envelope.refresh?.cycleId ?? null},
           ${envelope.priority}, ${new Date(envelope.notBefore)}, ${new Date(envelope.expiresAt)}, ${new Date(at)}, ${new Date(at)})`;
     } catch {

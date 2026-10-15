@@ -27,8 +27,10 @@ export function createDiscoveryRoutes({ policy = getDiscoveryPolicy, reader = re
   /** Every populated map: static pages first, then each bounded match and archive shard. */
   async function maps() {
     const inventory = await reader().inventory();
+    // Public root-level rewrites give every shard site-wide scope, including /en pages.
+    // Native nested metadata routes remain available for compatibility.
     return [canonicalUrl("/sitemap.xml"), ...(["matches", "dates"] as const).flatMap(kind => inventory[kind] ? pages(inventory[kind]).map(({ id }) =>
-      canonicalUrl(`/${kind === "matches" ? "matches" : "archive"}/sitemap/${id}.xml`)) : [])];
+      canonicalUrl(`/sitemap-${kind === "matches" ? "matches" : "archive"}-${id}.xml`)) : [])];
   }
   return {
     async robots(): Promise<MetadataRoute.Robots> {

@@ -188,7 +188,7 @@ function transactionApi(transaction: Prisma.TransactionClient, accountId: string
     async saveAccount(input: CostAccountState) {
       const state = parseCostAccountState(input); scopeMatches(state, accountId, category);
       const value = payload(state);
-      await transaction.$executeRaw`UPDATE CostBudgetAccount SET stateJson = CAST(${value} AS JSON) WHERE accountId = ${accountId} AND category = ${category}`;
+      await transaction.$executeRaw`UPDATE CostBudgetAccount SET stateJson = JSON_EXTRACT(${value}, '$') WHERE accountId = ${accountId} AND category = ${category}`;
     },
     period: (id) => one(periodProjection, "CostBudgetPeriod", id, decodePeriod),
     async periods() {
@@ -203,7 +203,7 @@ function transactionApi(transaction: Prisma.TransactionClient, accountId: string
       const value = payload(state), startsAt = sqlDate(state.startsAt), endsAt = sqlDate(state.endsAt);
       const cap = costUsdDecimal(state.capUsdPicos), opening = costUsdDecimal(state.openingChargedUsdPicos);
       await transaction.$executeRaw`INSERT INTO CostBudgetPeriod (accountId, category, id, startsAt, endsAt, capAmount, openingChargedAmount, stateJson)
-        VALUES (${accountId}, ${category}, ${state.periodId}, ${startsAt}, ${endsAt}, ${cap}, ${opening}, CAST(${value} AS JSON))`;
+        VALUES (${accountId}, ${category}, ${state.periodId}, ${startsAt}, ${endsAt}, ${cap}, ${opening}, JSON_EXTRACT(${value}, '$'))`;
     },
     job: (id) => one(jobProjection, "CostBudgetJob", id, decodeJob),
     async jobByWorkKey(workKey) {
@@ -218,7 +218,7 @@ function transactionApi(transaction: Prisma.TransactionClient, accountId: string
       if (existing) { if (costFingerprint(existing) !== costFingerprint(state)) invalid(); return; }
       const value = payload(state), startsAt = sqlDate(state.startsAt), deadlineAt = sqlDate(state.deadlineAt), cap = costUsdDecimal(state.costCapUsdPicos);
       await transaction.$executeRaw`INSERT INTO CostBudgetJob (accountId, category, id, workKey, startsAt, deadlineAt, capAmount, stateJson)
-        VALUES (${accountId}, ${category}, ${state.jobId}, ${state.workKey}, ${startsAt}, ${deadlineAt}, ${cap}, CAST(${value} AS JSON))`;
+        VALUES (${accountId}, ${category}, ${state.jobId}, ${state.workKey}, ${startsAt}, ${deadlineAt}, ${cap}, JSON_EXTRACT(${value}, '$'))`;
     },
     async attempt(id) {
       const result = await rows(attemptProjection, "CostBudgetAttempt", "AND id = ?", [parseCostIdentity(id)]);
@@ -249,13 +249,13 @@ function transactionApi(transaction: Prisma.TransactionClient, accountId: string
           VALUES (${accountId}, ${category}, ${request.attemptId}, ${request.jobId}, ${state.periodId}, ${state.state}, ${queuedAt}, ${kickoffAt},
           ${priority}, ${deadlineAt}, ${dispatchedAt}, ${maximum}, ${liability}, ${estimated}, ${observed}, ${invoiced}, ${totals.requests},
           ${totals.inputTokens}, ${totals.outputTokens}, ${totals.billedUnits}, ${totals.elapsedMs}, ${totals.hasOverage},
-          ${request.provider}, ${request.model}, ${request.rateVersion}, CAST(${value} AS JSON), SHA2(CAST(CAST(${value} AS JSON) AS CHAR), 256))`;
+          ${request.provider}, ${request.model}, ${request.rateVersion}, JSON_EXTRACT(${value}, '$'), SHA2(CAST(JSON_EXTRACT(${value}, '$') AS CHAR), 256))`;
       } else {
         await transaction.$executeRaw`UPDATE CostBudgetAttempt SET periodId = ${state.periodId}, state = ${state.state}, dispatchedAt = ${dispatchedAt},
           liabilityAmount = ${liability}, estimatedAmount = ${estimated}, observedAmount = ${observed}, invoicedAmount = ${invoiced},
           chargedRequests = ${totals.requests}, chargedInputTokens = ${totals.inputTokens}, chargedOutputTokens = ${totals.outputTokens},
-          chargedBilledUnits = ${totals.billedUnits}, timeMs = ${totals.elapsedMs}, overage = ${totals.hasOverage}, stateJson = CAST(${value} AS JSON),
-          integrity = SHA2(CAST(CAST(${value} AS JSON) AS CHAR), 256)
+          chargedBilledUnits = ${totals.billedUnits}, timeMs = ${totals.elapsedMs}, overage = ${totals.hasOverage}, stateJson = JSON_EXTRACT(${value}, '$'),
+          integrity = SHA2(CAST(JSON_EXTRACT(${value}, '$') AS CHAR), 256)
           WHERE accountId = ${accountId} AND category = ${category} AND id = ${request.attemptId}`;
       }
     },

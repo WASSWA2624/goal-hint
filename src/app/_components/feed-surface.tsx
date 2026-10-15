@@ -8,7 +8,6 @@ import { FeedFilterActions, FeedFilters, type FeedFilterDraftStatus } from "@/co
 import { FeedFilterToolbar, FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
 import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
-import { deviceFeedQuery } from "@/domain/device-feed";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { MatchCard } from "@/components/match/match-card";
@@ -24,7 +23,6 @@ import type { MatchFeedResponse } from "@/domain/match-feed";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { feedReturnStorageKey } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
-import { useDeviceCalendar } from "@/i18n/use-messages";
 import type { FeedPageResult } from "@/server/matches/feed-page";
 import { FeedStateProvider } from "@/state/provider";
 import { media } from "@/styles/theme";
@@ -80,13 +78,6 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
-  const device = useDeviceCalendar();
-  const deviceQuery = device ? deviceFeedQuery(query, device.zone) : null;
-  const deviceHref = deviceQuery && device ? feedQueryHref(deviceQuery, device.today) : null;
-  useEffect(() => {
-    if (deviceHref) startTransition(() => router.replace(deviceHref, { scroll: false }));
-  }, [deviceHref, router]);
-  const changingDay = deviceHref !== null;
   // Phones edit filters in a sheet; search, days, sort and the applied summary stay in the page.
   const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId();
   const filtersFormId = useId();
@@ -114,7 +105,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
       else router.push(nextHref, { scroll: false });
     });
   }, [failed, href, pending, router, today]);
-  const announcement = pending || changingDay ? messages.text("feed.filters.loading") : result.error
+  const announcement = pending ? messages.text("feed.filters.loading") : result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
     : paginationStatus?.href === href ? paginationStatus.message
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? messages.plural("feed.matchCount", result.data.total)
@@ -127,7 +118,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
         summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
-    <Results $gap="md" aria-busy={pending || changingDay} data-feed-results>
+    <Results $gap="md" aria-busy={pending} data-feed-results>
       {!visible && <ResultsToolbar query={query} today={today} total={null} first={0} last={0} />}
       {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
         description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}
@@ -140,7 +131,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />
       </Stack>}
       {visible && <FeedResults key={feedQueryHref(visible.query, visible.today) + ":" + resolveFeedDates(visible.query, visible.today).startDate}
-        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !changingDay && !result.error} onStatus={onPaginationStatus} />}
+        data={visible.data} query={visible.query} today={visible.today} enabled={!pending && !result.error} onStatus={onPaginationStatus} />}
       {!result.error && pagination}
     </Results>
   </FeedStack>;

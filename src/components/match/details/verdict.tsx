@@ -4,6 +4,7 @@ import { memo } from "react";
 import styled from "styled-components";
 import { PredictionOdds } from "@/components/match/prediction-presentation";
 import { noPickReason } from "@/domain/feed-presentation";
+import { detailRecordNotices } from "@/domain/detail-presentation";
 import { featuredFamily, liveStanding, marketRow, resultOutlook, selectedDetailPrice } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { media } from "@/styles/theme";
@@ -14,6 +15,7 @@ import { marketName, percent, pickLabel } from "./labels";
 /** Between the scoreboard and the market rows: full bleed on phones, a framed card on desktop. */
 const Box = styled.section`
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 9px;
   min-inline-size: 0;
   margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
@@ -100,6 +102,13 @@ function outlookText(messages: Messages, outlook: NonNullable<ReturnType<typeof 
   return text.charAt(0).toLocaleUpperCase() + text.slice(1);
 }
 
+/** Keep attribution and stale-result warnings beside the pick on every viewport and in the initial HTML. */
+function PredictionRecord() {
+  const { data, messages } = useStableDetails();
+  const notices = detailRecordNotices(data);
+  return notices.length > 0 ? <Note data-prediction-record>{notices.map((key) => messages.text(key)).join(" · ")}</Note> : null;
+}
+
 /**
  * The highest-probability pick with its chance, a plain-language read of the match-result chances, and the
  * home/draw/away split. Tapping the pick opens that market's full details.
@@ -113,6 +122,7 @@ export const Verdict = memo(function Verdict() {
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2></Eyebrow>
     <strong>{messages.text("details.noPick")}</strong>
     <Note>{messages.text(`match.noPickReason.${noPickReason(fixture)}`)}</Note>
+    <PredictionRecord />
   </Box>;
   const item = row.item, price = selectedDetailPrice(data, featured), standing = liveStanding(data, featured);
   const pick = pickLabel(messages, item.market.selection, home, away), chance = percent(messages, item.market.selectedProbability);
@@ -136,5 +146,6 @@ export const Verdict = memo(function Verdict() {
       {outlook.chances.map(({ selection, probability }) => <span key={selection} data-side={sides[selection][0]} style={{ flex: `${Math.max(probability, 0.04)} 1 0` }}>
         {probability >= 0.18 ? `${sides[selection][1]} ` : ""}{percent(messages, probability)}</span>)}
     </Chances>}
+    <PredictionRecord />
   </Box>;
 });

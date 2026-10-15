@@ -85,7 +85,7 @@ export function createMysqlModelVersionStore(database: DatabaseRuntime) {
               ${date(windows.validation?.startsAt)}, ${date(windows.validation?.endsAt)},
               ${date(windows.calibration?.startsAt)}, ${date(windows.calibration?.endsAt)},
               ${date(windows.finalTest?.startsAt)}, ${date(windows.finalTest?.endsAt)},
-              SHA2(CONCAT(${model.id}, ':', CAST(CAST(${configuration} AS JSON) AS CHAR)), 256), CAST(${configuration} AS JSON))`;
+              SHA2(CONCAT(${model.id}, ':', CAST(JSON_EXTRACT(${configuration}, '$') AS CHAR)), 256), JSON_EXTRACT(${configuration}, '$'))`;
           const saved = await stored(transaction, model.id);
           if (saved === null) return fail("invalid-state");
           authorized(saved, authority);

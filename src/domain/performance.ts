@@ -3,7 +3,7 @@ import { parseReportingDate } from "./calendar.ts";
 import { publicForecastSchema } from "./fixture-snapshot.ts";
 import { marketSelections } from "./markets.ts";
 
-export const performanceRules = Object.freeze({ maximumDays: 31, defaultDays: 30, maximumFixtures: 1000,
+export const performanceRules = Object.freeze({ maximumDays: 31, defaultDays: 30, maximumFixtures: 1000, maximumCohortFixtures: 31_000,
   maximumStoredBytes: 16_777_216, maximumEvidenceLinks: 20 });
 export const performanceFamilies = Object.keys(marketSelections) as (keyof typeof marketSelections)[];
 export const performanceSourceSchema = z.enum(["combined", "ai", "api-football"]);
@@ -45,7 +45,7 @@ export const performanceCellSchema = z.strictObject({ family, source: performanc
 export const performanceResponseSchema = z.strictObject({ asOf: instant,
   filters: z.strictObject({ market: z.union([z.literal("all"), family]), source: performanceSourceSchema, model: hash.nullable(), version: label.nullable() }),
   cohort: z.strictObject({ from: date, to: date, startInclusive: instant, endExclusive: instant, timezone: z.literal("Africa/Kampala"),
-    basis: z.literal("current-fixture-kickoff-applicable-cycle-locked-selection"), fixtureCount: count.max(performanceRules.maximumFixtures),
+    basis: z.literal("current-fixture-kickoff-applicable-cycle-locked-selection"), fixtureCount: count.max(performanceRules.maximumCohortFixtures),
     filterAccounting: z.literal("nonmatching-available-forecasts-are-filtered-out;unattributed-unavailable-and-void-remain"),
     horizonBasis: z.literal("scheduled-kickoff-minus-locked-publication;horizon-cells-only-known-locks") }),
   policy: z.strictObject({ id: hash.nullable(), state: z.enum(["unapproved", "verified"]), publicClaimAuthorized: z.literal(false), provisional: z.literal(true) }),

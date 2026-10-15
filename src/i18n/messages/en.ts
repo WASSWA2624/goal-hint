@@ -1,6 +1,9 @@
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  "feed.date.zone": "Match dates: {zone}",
+  "feed.date.useLocal": "Use my local dates",
+  "feed.date.useReporting": "Use East Africa dates",
   "match.columns.score": "Score",
   "feed.time.range": "Time range",
   "feed.time.title": "Kickoff time · optional",
@@ -693,7 +696,8 @@ export const en = {
   "detail.metadataDescription": "Stored predictions, sources and regulation-time results for {match}.",
   "detail.datedMetadataTitle": "{match} · {date} | Goal Hint",
   "detail.datedMetadataDescription": "Football predictions, sources and regulation-time results for {match} on {date} in East Africa Time.",
-  "detail.forecastMetadataDescription": "{match}, {date} (EAT). {market} estimate: {pick}, {probability}. See all markets, sources and the locked forecast record. Not a guarantee.",
+  "detail.forecastMetadataDescription": "{match}, {date} (EAT). {market} estimate: {pick}, {probability}. See available markets, sources and forecast history. Not a guarantee.",
+  "detail.voidForecastMetadataDescription": "Void forecast record. {description}",
   "detail.unavailableTitle": "Match temporarily unavailable",
   "detail.unavailable": "The stored match could not be loaded.",
   "detail.rateLimited": "Match requests are temporarily busy.",

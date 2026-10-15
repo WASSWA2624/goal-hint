@@ -153,7 +153,7 @@ function quotaTransaction(transaction: Prisma.TransactionClient, accountId: stri
     async saveAccount(state: QuotaAccountState) {
       const payload = JSON.stringify(decode(accountSchema, state));
       await transaction.$executeRaw`
-        UPDATE ApiQuotaAccount SET stateJson = CAST(${payload} AS JSON) WHERE id = ${accountId}
+        UPDATE ApiQuotaAccount SET stateJson = JSON_EXTRACT(${payload}, '$') WHERE id = ${accountId}
       `;
     },
     async period(id: string) {
@@ -172,7 +172,7 @@ function quotaTransaction(transaction: Prisma.TransactionClient, accountId: stri
       const payload = JSON.stringify(period);
       await transaction.$executeRaw`
         INSERT INTO ApiQuotaPeriod (accountId, id, stateJson)
-        VALUES (${accountId}, ${period.id}, CAST(${payload} AS JSON))
+        VALUES (${accountId}, ${period.id}, JSON_EXTRACT(${payload}, '$'))
         ON DUPLICATE KEY UPDATE stateJson = VALUES(stateJson)
       `;
     },
@@ -214,7 +214,7 @@ function quotaTransaction(transaction: Prisma.TransactionClient, accountId: stri
             accountId, id, workKey, state, priority, queuedAt, deadlineAt, dispatchedAt, periodId, sequence, payloadJson
           ) VALUES (
             ${accountId}, ${attempt.id}, ${attempt.workKey}, ${attempt.state}, ${attempt.rank}, ${queuedAt},
-            ${deadlineAt}, ${dispatchedAt}, ${attempt.periodId}, ${attempt.sequence}, CAST(${payload} AS JSON)
+            ${deadlineAt}, ${dispatchedAt}, ${attempt.periodId}, ${attempt.sequence}, JSON_EXTRACT(${payload}, '$')
           )
         `;
       } else if (existing.length === 1 && existing[0]!.id === attempt.id) {
@@ -222,7 +222,7 @@ function quotaTransaction(transaction: Prisma.TransactionClient, accountId: stri
           UPDATE ApiQuotaAttempt SET
             workKey = ${attempt.workKey}, state = ${attempt.state}, priority = ${attempt.rank}, queuedAt = ${queuedAt},
             deadlineAt = ${deadlineAt}, dispatchedAt = ${dispatchedAt}, periodId = ${attempt.periodId},
-            sequence = ${attempt.sequence}, payloadJson = CAST(${payload} AS JSON)
+            sequence = ${attempt.sequence}, payloadJson = JSON_EXTRACT(${payload}, '$')
           WHERE accountId = ${accountId} AND id = ${attempt.id}
         `;
       } else {

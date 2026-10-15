@@ -80,7 +80,7 @@ export function createExtendedMarketPerformanceService(options: Readonly<{ datab
           SELECT r.source, r.marketKey, JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.ruleVersion')) AS ruleVersion,
             JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.status')) AS status, COUNT(*) AS count,
             CAST(SUM(CASE WHEN c.state = 'closed' AND r.resultId IS NOT NULL
-              AND JSON_EXTRACT(r.body, '$.resultUsable') = CAST('true' AS JSON)
+              AND JSON_EXTRACT(r.body, '$.resultUsable') = JSON_EXTRACT('true', '$')
               AND JSON_TYPE(JSON_EXTRACT(r.body, '$.selection')) = 'STRING'
               AND JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.status')) IN ('correct','incorrect') THEN 1 ELSE 0 END) AS UNSIGNED) AS binaryCount
           FROM ExtendedMarketSettlement p
@@ -95,7 +95,7 @@ export function createExtendedMarketPerformanceService(options: Readonly<{ datab
               OR (c.state='closed' AND lifecycle.issue IS NULL AND r.resultId=rs.resultId
                 AND fr.status=f.status AND fr.regulationVerified=TRUE
                 AND fr.regulationHome <=> f.regulationHome AND fr.regulationAway <=> f.regulationAway
-                AND JSON_EXTRACT(r.body, '$.resultUsable')=CAST('true' AS JSON)
+                AND JSON_EXTRACT(r.body, '$.resultUsable')=JSON_EXTRACT('true', '$')
                 AND (r.source='ai-score-distribution' OR JSON_UNQUOTE(JSON_EXTRACT(r.body, '$.evidenceId'))=(
                   SELECT evidence.id FROM ImpliedMarketResultEvidence evidence WHERE evidence.fixtureId=r.fixtureId AND evidence.resultId=r.resultId
                   ORDER BY evidence.sequence DESC LIMIT 1))))

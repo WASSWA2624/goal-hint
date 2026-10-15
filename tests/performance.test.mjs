@@ -118,9 +118,34 @@ test('mixed horizons and versions never borrow an approved gate from a different
 test('a fixture cohort above the bound stops before loading snapshots or silently truncating counts', async () => {
   let calls = 0;
   await assert.rejects(readPerformanceSnapshot({ $queryRaw: async (sql) => {
-    calls++; assert.match(sql.strings.join(' '), /LIMIT/u); return Array.from({ length: 1001 }, (_, i) => ({ id: String(i) }));
+    calls++; assert.match(sql.strings.join(' '), /LIMIT/u); return Array.from({ length: 31001 }, (_, i) => ({ id: String(i) }));
   } }, query(), [39]), (e) => e.code === 'unavailable');
   assert.equal(calls, 1);
+});
+
+test('cohorts above one batch retain every fixture and read historical cycles once', async () => {
+  const selected = Array.from({ length: 1005 }, (_, index) => ({ id: String(index) }));
+  const batches = [];
+  let inventoryRead = false, historicalReads = 0;
+  const tx = {
+    $queryRaw: async (sql) => {
+      const text = sql.strings.join(' ');
+      if (!inventoryRead) { inventoryRead = true; return selected; }
+      if (text.includes('SELECT c.voidReason')) { historicalReads++; return [{ voidReason: 'formal-postponement' }]; }
+      return [];
+    },
+    footballFixture: { findMany: async ({ where }) => {
+      const ids = where.id.in; batches.push(ids.length);
+      return ids.map(id => ({ id, activeCycleId: null, resultState: null }));
+    } },
+    predictionCycle: { findMany: async () => [] },
+  };
+  const snapshot = await readPerformanceSnapshot(tx, query(), [39]);
+  assert.deepEqual(batches, [1000, 5]);
+  assert.equal(snapshot.records.length, 1005);
+  assert.equal(new Set(snapshot.records.map(record => record.fixture.id)).size, 1005);
+  assert.equal(historicalReads, 1);
+  assert.equal(snapshot.historicalCycles.postponed, 1);
 });
 test('sealed result reads reconcile MySQL raw unsigned goals and booleans without losing result integrity', () => {
   const body = { id: 'a'.repeat(64), fixtureId: '20000000-0000-4000-8000-000000000001', fixtureVersion: 8n,

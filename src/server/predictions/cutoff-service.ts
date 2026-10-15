@@ -60,7 +60,7 @@ export function createCutoffLockingService(options: Readonly<{
     await tx.$executeRaw`INSERT INTO PredictionCycleOperation
       (id, fixtureId, cycleId, kind, fixtureVersion, revisionId, at, integrity, operationJson)
       VALUES (${operation.id}, ${operation.fixtureId}, ${operation.cycleId}, ${operation.kind}, ${operation.fixtureVersion},
-        ${operation.cycle.lockedSetId}, ${new Date(operation.at)}, SHA2(CAST(CAST(${payload} AS JSON) AS CHAR), 256), CAST(${payload} AS JSON))`;
+        ${operation.cycle.lockedSetId}, ${new Date(operation.at)}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
     await tx.predictionChangeEvent.create({ data: { fixtureId: operation.fixtureId, version: operation.fixtureVersion,
       operationId: operation.id, kind: operation.kind === "close" ? "cycle-closed" : "cycle-voided", at: new Date(operation.at) } });
     return cutoffResult(tx, (await storedCutoffOperation(tx, operation.cycleId, operation.kind))!);

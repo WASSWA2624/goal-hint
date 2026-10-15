@@ -116,7 +116,7 @@ export async function appendImpliedMarketExtension(tx: Tx, input: ImpliedMarketE
   const contentHash = evidenceFingerprint(prepared), value = freezeEvidence({ ...prepared, ...identity, contentHash }), body = evidenceSerialize(value);
   await tx.$executeRaw`INSERT INTO ImpliedMarketExtension (revisionId, cycleId, fixtureId, ruleVersion, contentHash, integrity, recordedAt, body)
     VALUES (${identity.revisionId}, ${identity.cycleId}, ${identity.fixtureId}, ${prepared.ruleVersion}, ${contentHash},
-      SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), ${new Date(identity.recordedAt)}, CAST(${body} AS JSON))`;
+      SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), ${new Date(identity.recordedAt)}, JSON_EXTRACT(${body}, '$'))`;
   return value;
 }
 

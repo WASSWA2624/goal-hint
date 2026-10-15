@@ -18,9 +18,24 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
   const selected = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id FROM FootballFixture f
     JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
     LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id WHERE ${scope}
-    ORDER BY f.kickoff,f.id LIMIT ${performanceRules.maximumFixtures + 1}`);
-  if (selected.length > performanceRules.maximumFixtures) throw new MatchFeedError("unavailable");
+    ORDER BY f.kickoff,f.id LIMIT ${performanceRules.maximumCohortFixtures + 1}`);
+  if (selected.length > performanceRules.maximumCohortFixtures) throw new MatchFeedError("unavailable");
   const ids = selected.map((v) => v.id);
+  const budget = { remainingBytes: performanceRules.maximumStoredBytes };
+  const snapshot = await readPerformanceBatch(tx, query, ids.slice(0, performanceRules.maximumFixtures), budget, true);
+  for (let offset = performanceRules.maximumFixtures; offset < ids.length; offset += performanceRules.maximumFixtures) {
+    const next = await readPerformanceBatch(tx, query, ids.slice(offset, offset + performanceRules.maximumFixtures), budget, false);
+    snapshot.records.push(...next.records);
+    snapshot.settlements.push(...next.settlements);
+    for (const [id, model] of next.models) snapshot.models.set(id, model);
+    for (const key of ["total", "failed", "pending", "failedFixtures", "delayedRefreshes", "delayedFixtures"] as const)
+      snapshot.operations[key] += next.operations[key];
+  }
+  return snapshot;
+}
+
+/** All batches share one repeatable-read transaction and one total payload budget. */
+async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string[], budget: { remainingBytes: number }, includeHistorical: boolean) {
   const fixtures = await tx.footballFixture.findMany({ where: { id: { in: ids } },
     include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } },
       season: { select: { competitionId: true } }, lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } },
@@ -33,12 +48,11 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
   const cycleMap = new Map(cycles.map((c) => [c.id, cycleFromRows(c, scheduleMap.get(`${c.id}:${c.scheduleVersion}`) ?? null)]));
   if (cycleMap.size !== cycleIds.length) throw new MatchFeedError("unavailable");
   const locks = cycles.flatMap((c) => c.lockedSetId ? [c.lockedSetId] : []);
-  let remainingBytes: number = performanceRules.maximumStoredBytes;
   async function jsonRows(from: Prisma.Sql, payload: Prisma.Sql, seal: Prisma.Sql, limit: number) {
     const [size] = await tx.$queryRaw<{ bytes: bigint; total: bigint }[]>(Prisma.sql`SELECT COALESCE(SUM(OCTET_LENGTH(CAST(${payload} AS CHAR))),0) AS bytes, COUNT(*) AS total ${from}`);
     const bytes = Number(size?.bytes), total = Number(size?.total);
-    if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > remainingBytes || !Number.isSafeInteger(total) || total > limit) throw new MatchFeedError("unavailable");
-    remainingBytes -= bytes;
+    if (!Number.isSafeInteger(bytes) || bytes < 0 || bytes > budget.remainingBytes || !Number.isSafeInteger(total) || total > limit) throw new MatchFeedError("unavailable");
+    budget.remainingBytes -= bytes;
     return tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT r.*, ${seal} AS validIntegrity ${from}`);
   }
   const setRows = locks.length ? await jsonRows(Prisma.sql`FROM PredictionSet r WHERE r.id IN (${Prisma.join(locks)})`, Prisma.sql`r.candidateJson`,
@@ -77,13 +91,13 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
     return { fixture, cycle, revision, result, projection: cycle ? projectSettlementCycle(fixture, result, fixture.lifecycleState?.issue ?? null, cycle, revision, previous) : null };
   });
   const delta = calendarRules.cutoffSecondsBeforeKickoff * 1000;
-  const historical = await tx.$queryRaw<{ voidReason: string }[]>(Prisma.sql`SELECT c.voidReason FROM PredictionCycle c
+  const historical = includeHistorical ? await tx.$queryRaw<{ voidReason: string }[]>(Prisma.sql`SELECT c.voidReason FROM PredictionCycle c
     JOIN FootballFixture f ON f.id=c.fixtureId WHERE c.state='void'
     AND c.cutoffAt>=${new Date(query.range.window.startInclusive - delta)} AND c.cutoffAt<${new Date(query.range.window.endExclusive - delta)}
     AND c.kickoffAt>=${new Date(query.range.window.startInclusive)} AND c.kickoffAt<${new Date(query.range.window.endExclusive)}
     AND f.provider='api-football' AND (f.activeCycleId IS NULL OR f.activeCycleId<>c.id)
-    LIMIT ${performanceRules.maximumFixtures + 1}`);
-  if (historical.length > performanceRules.maximumFixtures) throw new MatchFeedError("unavailable");
+    LIMIT ${performanceRules.maximumCohortFixtures + 1}`) : [];
+  if (historical.length > performanceRules.maximumCohortFixtures) throw new MatchFeedError("unavailable");
   const firstRun = BigInt(query.range.startDate.replaceAll("-", "")), lastRun = BigInt(query.range.endDate.replaceAll("-", ""));
   const jobs = ids.length ? await tx.$queryRaw<{ fixtureId: string; state: string }[]>(Prisma.sql`SELECT rf.fixtureId,j.state FROM DailyRun d
     JOIN RunFixture rf ON rf.runId=d.id JOIN DurableJob j ON j.id=rf.jobId

@@ -91,9 +91,9 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
           await transaction.$executeRaw`INSERT INTO PredictionAudit
             (id, fixtureId, cycleId, version, eventKey, requestHash, kind, recordedAt, actor, reason, evidenceRef, beforeJson, afterJson, integrity)
             VALUES (${randomUUID()}, ${fixtureId}, ${value.id}, ${value.version}, ${eventKey}, ${requestHash}, ${kind}, ${new Date(at)},
-              ${actor.actor}, ${actor.reason}, ${actor.evidenceRef}, CAST(${beforeJson} AS JSON), CAST(${afterJson} AS JSON),
-              SHA2(CONCAT(${eventKey}, ':', ${requestHash}, ':', COALESCE(CAST(CAST(${beforeJson} AS JSON) AS CHAR), 'null'), ':',
-                CAST(CAST(${afterJson} AS JSON) AS CHAR)), 256))`;
+              ${actor.actor}, ${actor.reason}, ${actor.evidenceRef}, JSON_EXTRACT(${beforeJson}, '$'), JSON_EXTRACT(${afterJson}, '$'),
+              SHA2(CONCAT(${eventKey}, ':', ${requestHash}, ':', COALESCE(CAST(JSON_EXTRACT(${beforeJson}, '$') AS CHAR), 'null'), ':',
+                CAST(JSON_EXTRACT(${afterJson}, '$') AS CHAR)), 256))`;
           auditedActiveId = activeId;
         }
         async function schedule(value: StoredCycle, at: number, actor: HistoryActor,
@@ -163,7 +163,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
                 ${predecessor?.id ?? null}, ${request.scheduleVersion}, ${request.candidate.context.pin?.modelVersionId ?? null},
                 ${request.evidenceSnapshotId}, ${request.candidate.context.evidenceHash}, ${new Date(context.cutoffAt)},
                 ${new Date(request.generationCompletedAt)}, ${new Date(request.publishedAt)}, ${new Date(at)}, ${MARKET_RULE_VERSION},
-                ${requestHash}, SHA2(CONCAT(${id}, ':', ${requestHash}, ':', CAST(CAST(${candidateJson} AS JSON) AS CHAR)), 256), CAST(${candidateJson} AS JSON))`;
+                ${requestHash}, SHA2(CONCAT(${id}, ':', ${requestHash}, ':', CAST(JSON_EXTRACT(${candidateJson}, '$') AS CHAR)), 256), JSON_EXTRACT(${candidateJson}, '$'))`;
             for (const family of Object.keys(marketSelections) as MarketFamily[]) {
               const item = request.candidate.markets[family], payload = evidenceSerialize(item);
               const values = item.available ? marketSelections[family].map((selection) =>
@@ -175,7 +175,7 @@ export function createMysqlPredictionHistoryStore(database: DatabaseRuntime, opt
                   ${item.available ? item.market.selection : null}, ${item.available ? item.market.selectedProbability : null},
                   ${values[0] ?? null}, ${values[1] ?? null}, ${values[2] ?? null}, ${item.available ? null : item.reason},
                   ${historyDate(item.available ? item.timestamps.generatedAt : null)}, ${historyDate(item.available ? item.timestamps.retrievedAt : null)},
-                  ${historyDate(item.available ? item.timestamps.providerUpdatedAt : null)}, SHA2(CAST(CAST(${payload} AS JSON) AS CHAR), 256), CAST(${payload} AS JSON))`;
+                  ${historyDate(item.available ? item.timestamps.providerUpdatedAt : null)}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
             }
             const value = { ...previousCycle, version: nextHistoryVersion(previousCycle.version) };
             await transaction.predictionCycle.update({ where: { id: cycleId }, data: { version: value.version } });

@@ -57,7 +57,7 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
             const body = evidenceSerialize(value);
             await tx.$executeRaw`INSERT INTO MarketSettlementRevision (id, fixtureId, cycleId, family, batchId, previousId, resultId, lockedSetId, inputHash, at, integrity, body)
               VALUES (${id}, ${fixtureId}, ${base.cycleId}, ${base.family}, ${batchId}, ${value.previousId}, ${value.resultId}, ${value.lockedSetId}, ${inputHash}, ${new Date(at)},
-                SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`;
+                SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
             await tx.marketSettlement.upsert({ where: { cycleId_family: { cycleId: base.cycleId, family: base.family } },
               create: { fixtureId, cycleId: base.cycleId, family: base.family, revisionId: id }, update: { revisionId: id } });
           }

@@ -192,7 +192,7 @@ export function createRevisionPublicationService(options: Readonly<{
           await tx.$executeRaw`INSERT INTO PredictionRefreshResult
             (id, requestHash, attemptKey, runId, runSequence, fixtureId, cycleId, jobId, fixtureVersion, outcome, reason, revisionId, at, integrity, resultJson)
             VALUES (${id}, ${requestHash}, ${input.attemptKey}, ${run.id}, ${run.sequence}, ${fixture.id}, ${cycle.id}, ${jobId}, ${version},
-              ${outcome}, ${reason}, ${revision?.id ?? null}, ${new Date(now)}, SHA2(CAST(CAST(${payload} AS JSON) AS CHAR), 256), CAST(${payload} AS JSON))`;
+              ${outcome}, ${reason}, ${revision?.id ?? null}, ${new Date(now)}, SHA2(CAST(JSON_EXTRACT(${payload}, '$') AS CHAR), 256), JSON_EXTRACT(${payload}, '$'))`;
           await tx.predictionChangeEvent.create({ data: { fixtureId: fixture.id, version, resultId: id,
             kind: outcome === "published" ? "revision-published" : reason === "early-play" ? "eligibility-closed" : "refresh-result", at: new Date(now) } });
           const result = await publicationResult(tx, refresh);

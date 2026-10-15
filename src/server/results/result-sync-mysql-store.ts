@@ -111,7 +111,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
         if (batch.accountId !== accountId || batch.receivedAt > at || batch.observations.some((entry) => entry.retrievedAt > batch.receivedAt))
           return resultSyncFail("invalid-request");
         await tx.$executeRaw`INSERT IGNORE INTO ResultSyncBatch (id, accountId, receivedAt, integrity, body)
-          VALUES (${batch.id}, ${accountId}, ${new Date(batch.receivedAt)}, SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`;
+          VALUES (${batch.id}, ${accountId}, ${new Date(batch.receivedAt)}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
         if (evidenceFingerprint(await sealedBatch(tx, batch.id)) !== evidenceFingerprint(batch)) return resultSyncFail("invalid-request");
       });
     },
@@ -162,7 +162,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
               await tx.$executeRaw`INSERT INTO FixtureResult (id, fixtureId, fixtureVersion, observedAt, status,
                 regulationVerified, regulationHome, regulationAway, contentHash, integrity, body)
                 VALUES (${resultId}, ${fixture.id}, ${version}, ${new Date(observation.retrievedAt)}, ${fixture.status},
-                  ${verified}, ${value.regulation.home}, ${value.regulation.away}, ${contentHash}, SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`;
+                  ${verified}, ${value.regulation.home}, ${value.regulation.away}, ${contentHash}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
               await tx.predictionChangeEvent.create({ data: { fixtureId: fixture.id, version, fixtureResultId: resultId, kind: "fixture-result", at: new Date(at) } });
             }
             const lastSyncAt = new Date(Math.max(state?.lastSyncAt?.getTime() ?? 0, observation.retrievedAt));
@@ -175,7 +175,7 @@ export function createMysqlResultSyncStore(options: Readonly<{
             const body = evidenceSerialize({ observation, lifecycleId: receipt.id, outcome, lifecycleOutcome: receipt.outcome, resultId, appliedAt: at });
             await tx.$executeRaw`INSERT INTO ResultProviderObservation (id, batchId, fixtureId, lifecycleId, retrievedAt, integrity, body)
               VALUES (${id}, ${batch.id}, ${fixture.id}, ${receipt.id}, ${new Date(observation.retrievedAt)},
-                SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`;
+                SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
           }, tx);
           await locked(tx, lease);
         });

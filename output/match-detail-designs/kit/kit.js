@@ -128,7 +128,7 @@
   B.formList = (s) => `<ul class="k-fl-list">${M.form[s].map(([r, sc, opp, v]) => `<li><i class="k-r ${r}">${r}</i><span>${v === "H" ? "vs" : "at"} ${opp}</span><b>${sc}</b></li>`).join("")}</ul>`;
 
   B.h2h = () => {
-    const s = M.h2h.summary, t = s.home + s.draw + s.away;
+    const s = M.h2h.summary;
     return `<div class="k-h2h"><div class="k-h2h-s"><span><b>${s.home}</b>${H.name}</span><span><b>${s.draw}</b>Draws</span><span><b>${s.away}</b>${A.name}</span></div>
       <i class="k-h2h-bar"><u style="flex:${s.home};background:${H.color}"></u><u style="flex:${s.draw}"></u><u style="flex:${s.away || 0.0001};background:${A.color}"></u></i>
       <p class="k-h2h-m">Avg ${s.goals} goals · BTTS ${s.btts} · Over 2.5 ${s.over}</p>

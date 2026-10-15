@@ -137,7 +137,7 @@ export async function persistImpliedMarketSettlements(tx: Tx, plans: readonly Im
     await tx.$executeRaw`INSERT INTO ExtendedMarketSettlementRevision
       (id, fixtureId, cycleId, marketKey, predictionRevisionId, source, batchId, previousId, resultId, inputHash, at, integrity, body)
       VALUES (${id}, ${base.fixtureId}, ${base.cycleId}, ${base.marketKey}, ${base.predictionRevisionId}, ${base.source}, ${batchId}, ${value.previousId},
-        ${value.resultId}, ${inputHash}, ${new Date(at)}, SHA2(CAST(CAST(${body} AS JSON) AS CHAR), 256), CAST(${body} AS JSON))`;
+        ${value.resultId}, ${inputHash}, ${new Date(at)}, SHA2(CAST(JSON_EXTRACT(${body}, '$') AS CHAR), 256), JSON_EXTRACT(${body}, '$'))`;
     await tx.$executeRaw`INSERT INTO ExtendedMarketSettlement (fixtureId, cycleId, marketKey, revisionId)
       VALUES (${base.fixtureId}, ${base.cycleId}, ${base.marketKey}, ${id}) ON DUPLICATE KEY UPDATE revisionId = ${id}`;
     changed++;
