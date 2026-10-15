@@ -41,7 +41,10 @@ def main():
                 if file.is_file():
                     bundle.write(file, 'release/' + file.relative_to(ROOT).as_posix())
             for name in ['package.json', 'package-lock.json', 'scripts/cpanel-worker.sh']:
-                bundle.write(ROOT / name, 'release/' + name)
+                if name.endswith('.sh'):
+                    bundle.writestr('release/' + name, (ROOT / name).read_bytes().replace(b'\r\n', b'\n'))
+                else:
+                    bundle.write(ROOT / name, 'release/' + name)
             bundle.write(options.env_file, 'private/.env.production.local')
             bundle.write(options.approvals, 'private/.goal-hint/owner-approvals.json')
         deploy['scp'](archive, 'goal-hint-worker/incoming/worker.zip')

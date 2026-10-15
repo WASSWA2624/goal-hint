@@ -84,8 +84,12 @@ def verify(origin, directory):
     images = re.findall(r"<img\b[^>]*>", visible)
     assert images
     for tag in images:
-        for pattern in [r'src="https://static\.match-card\.test/', 'alt=""', 'width="32"', 'height="32"']:
+        for pattern in [r'(?:data-logo-src|src)="https://static\.match-card\.test/', 'alt=""', 'width="32"', 'height="32"']:
             match(pattern, tag)
+        if 'data-logo-src=' in tag:
+            no_match(r'(?<![\w-])src=', tag)
+        else:
+            match('loading="eager"', tag)
     print(f"Match card SSR verification passed: {len(articles)} labeled examples, every outcome/source, live minute, coherent probability and direct remote image markup.")
 
 

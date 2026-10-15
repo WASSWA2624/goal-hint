@@ -40,7 +40,7 @@ export interface BrandImageProps {
 export function BrandLogo({ alt = "Goal Hint", variant = "primary" }: BrandImageProps) {
   return (
     <LogoSpace>
-      <LogoImage src={`/brand/goal-hint-logo-${variant}.svg`} alt={alt} width={553} height={128} />
+      <LogoImage src={`/brand/goal-hint-logo-${variant}.svg`} alt={alt} width={553} height={128} fetchPriority="high" />
     </LogoSpace>
   );
 }

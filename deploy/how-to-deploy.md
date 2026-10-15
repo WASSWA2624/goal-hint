@@ -131,14 +131,27 @@ TLS and matching access/budget approvals. Use `.env.example` and the
 analytics secret, username and password hash; changing the secret changes visitor
 keys. See [analytics setup](../docs/analytics.md).
 
-**Content:** matches appear once the live runner (`npm run live`) writes them. Shared
-hosting stops long-running processes, so run it on your computer:
-- put `DATABASE_URL=mysql://hossuney_goalhint_db:<PASSWORD>@127.0.0.1:3317/hossuney_goalhint_db`
-  in `.env.operations`, not `.env.local`;
-- keep the tunnel open while it runs.
+**Content:** the separate worker deployment now runs on the hosting account. Its
+five-minute cron holds a file lock and runs the live worker for at most 270
+seconds, allowing shared hosting to reclaim the process between invocations.
+Database leases, approved provider limits and existing job idempotency remain
+authoritative. This avoids dependence on a local computer or an SSH tunnel.
 
-Writing through the tunnel bypasses the app's approval and TLS checks, so record that
-decision in your owner approvals.
+After worker code changes, prepare the git-ignored worker environment and existing
+owner register, then run:
+
+```powershell
+python scripts/deploy-worker-cpanel.py --env-file deploy/.env.worker.production.local --approvals deploy/.goal-hint/worker-owner-approvals.json
+```
+
+Worker credentials live in `~/goal-hint-worker/private/`, outside the web bundle.
+The worker source is in versioned releases under `~/goal-hint-worker/releases/`;
+`current` selects the active one. Read sanitized events in
+`~/goal-hint-worker/logs/worker.log`. Its cron is tagged `# goalhint-worker`; the
+installer preserves unrelated entries and stores the original crontab in
+`~/goal-hint-worker/crontab.before`. To stop the worker schedule, remove only its
+tagged entry, then let the bounded invocation finish. Keep the prior release for
+rollback; do not reset job, forecast or quota data.
 
 ## Troubleshooting
 

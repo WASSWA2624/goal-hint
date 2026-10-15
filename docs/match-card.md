@@ -217,7 +217,12 @@ exact URLs may be projected to visitors.
 
 Logos use native `styled.img` with the exact supplied URL, empty alt text,
 32px width/height attributes and `object-fit: contain`. The container reserves
-its `--gh-logo-size` square before loading (20px on phone tiles, 22px in table rows; country flags are 16×11 on tiles). Default loading is lazy; callers may explicitly opt into eager loading
+its `--gh-logo-size` square before loading. Default loading uses one shared
+IntersectionObserver with a 120px margin, so offscreen badges retain initials
+without downloading provider PNGs thousands of pixels ahead. Unsupported browsers
+fall back to native lazy loading. The server carries the approved URL in
+`data-logo-src`; the observer sets `src` as the image approaches the viewport.
+Callers may explicitly opt into eager loading
 for known above-the-fold cards. Requests use `no-referrer`. There is no Next
 optimizer, server proxy, binary download, image database column or asset copy.
 

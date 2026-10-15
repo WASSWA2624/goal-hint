@@ -194,7 +194,7 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
   // The strip has no first or last day: blocks of days are added as either end comes near. The server
   // list starts one day before the selection, so three visible days are already centred before scripts load.
   const [days, setDays] = useState(() => dayBlock(addReportingDays(anchor, -1), block + 2));
-  const prepended = useRef(0), growing = useRef(false), centerAfter = useRef<ReportingDate | null>(null), handled = useRef(days);
+  const prepended = useRef(0), growing = useRef(false), activated = useRef(false), scrollAfter = useRef(0), handled = useRef(days);
   const selection = (date: ReportingDate): DateSelection => date === today ? { kind: "today" }
     : query.status !== "finished" && date === addReportingDays(today, 1) ? { kind: "tomorrow" } : { kind: "date", date };
   const center = useCallback((date: ReportingDate, behavior: ScrollBehavior) => {
@@ -203,14 +203,17 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
   }, []);
   const extend = useCallback(() => {
     const strip = list.current;
-    if (!strip || growing.current || strip.clientWidth === 0) return;
+    if (!strip || growing.current || strip.clientWidth === 0) return false;
     if (strip.scrollLeft < strip.clientWidth) {
       growing.current = true; prepended.current = block;
       setDays((current) => [...dayBlock(addReportingDays(current[0]!, -block), block), ...current]);
+      return true;
     } else if (strip.scrollLeft + strip.clientWidth * 2 > strip.scrollWidth) {
       growing.current = true;
       setDays((current) => [...current, ...dayBlock(addReportingDays(current.at(-1)!, 1), block)]);
+      return true;
     }
+    return false;
   }, []);
   // Declared first, so on mount it runs before the extension below sets its flags.
   useLayoutEffect(() => {
@@ -219,14 +222,14 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     handled.current = days;
     const strip = list.current, cell = strip?.firstElementChild as HTMLElement | null;
     if (strip && cell && prepended.current) strip.scrollLeft += prepended.current * (cell.offsetWidth + 4);
-    if (centerAfter.current) center(centerAfter.current, "auto");
-    prepended.current = 0; growing.current = false; centerAfter.current = null;
+    if (strip && scrollAfter.current) strip.scrollBy({ left: scrollAfter.current, behavior: smooth() });
+    prepended.current = 0; growing.current = false; scrollAfter.current = 0;
   }, [center, days]);
   useLayoutEffect(() => {
-    // Earlier days are added once scripts run, then the selection moves to the middle.
+    // Centre the server's dates once. Grow the strip only after a visitor scrolls it.
     if (!list.current?.clientWidth) return;
-    centerAfter.current = anchor; extend();
-  }, [anchor, extend]);
+    center(anchor, "auto");
+  }, [anchor, center]);
   useLayoutEffect(() => {
     const strip = list.current;
     if (!strip) return;
@@ -238,7 +241,7 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
       if (!width) return;
       // Cell sizes change with the strip width; retain the selected day rather than its old pixel offset.
       center(selected ?? anchor, "auto");
-      extend();
+      if (activated.current) extend();
     });
     observer.observe(strip);
     return () => observer.disconnect();
@@ -248,7 +251,10 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     const strip = list.current, cell = strip?.firstElementChild as HTMLElement | null;
     if (!strip || !cell) return;
     const step = cell.offsetWidth + 4, visible = Math.round((strip.clientWidth + 4) / step);
-    strip.scrollBy({ left: direction * Math.max(1, visible - 1) * step, behavior: smooth() });
+    activated.current = true;
+    const distance = direction * Math.max(1, visible - 1) * step;
+    if (extend()) scrollAfter.current = distance;
+    else strip.scrollBy({ left: distance, behavior: smooth() });
   };
   const closeCalendar = () => { setCalendarOpen(false); calendarButton.current?.focus(); };
   const span = messages.reportingDateSpan(range.startDate, range.endDate);
@@ -256,7 +262,9 @@ export function DayStrip({ query, today, onApply }: { query: FeedQuery; today: R
     <Scroll type="button" aria-label={messages.text("feed.date.earlier")} title={messages.text("feed.date.earlier")} onClick={() => page(-1)}>
       <ChevronLeftIcon />
     </Scroll>
-    <Days ref={list} onScroll={extend}>
+    <Days ref={list} onScroll={() => { if (activated.current) extend(); }}
+      onPointerDown={() => { activated.current = true; }} onWheel={() => { activated.current = true; }}
+      onKeyDown={() => { activated.current = true; }}>
       {days.map((date) => {
         const parts = messages.reportingDayParts(date);
         return <li key={date} data-date={date}>
