@@ -169,7 +169,8 @@ export const LineupsSection = memo(function LineupsSection() {
   };
   const any = Boolean(lineups.home || lineups.away);
   return <SectionCard section="lineups" icon={<LineupIcon />} accent="emerald" title={messages.text("details.section.lineups")}
-    meta={any ? messages.text("details.confirmed") : null} viewAll={messages.text("details.viewAll.lineups")}
+    meta={lineups.home?.formation && lineups.away?.formation ? messages.text("details.formations", { home: lineups.home.formation, away: lineups.away.formation })
+      : messages.text(any ? "details.confirmed" : "details.lineupNotPublished")} viewAll={messages.text("details.viewAll.lineups")}
     itemLabel={lookup.key ? playerName(messages, lookup.player ?? (lookup.injury ? { name: lookup.injury.playerName } : null)) : null}
     preview={any ? <>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "0.75rem" }}>

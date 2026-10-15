@@ -5,15 +5,16 @@ import styled from "styled-components";
 import { SearchIcon } from "@/components/ui/icons";
 import { PredictionOdds, ProbabilityBar } from "@/components/match/prediction-presentation";
 import { detailAnalysis } from "@/domain/detail-presentation";
-import { exclusiveFamily, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
+import { exclusiveFamily, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
 import { marketCategories, parseMatchView, type MarketCategory } from "@/domain/match-view";
 import type { MarketFamily } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
 import { toUtcIsoString, type UtcInstant } from "@/domain/calendar";
+import { media } from "@/styles/theme";
 import { MarketsIcon, ExternalIcon } from "./details-icons";
 import { DetailOutcome, familyAccent, familyIcon } from "./match-banner";
 import {
-  Card, CardHeader, ChoiceGroup, Crumbs, Facts, IconBadge, LinkButton, Note, Panel, PanelHeading, RowButton, RowList,
+  Card, CardHeader, ChoiceGroup, Crumbs, Facts, IconBadge, LinkButton, Note, Panel, PanelHeading, RowButton, RowList, Standing,
   desktop, focusRing, size, useDetails, useRevealOnOpen, useStableDetails,
 } from "./details-ui";
 import { useReturnFocus } from "./section-card";
@@ -51,8 +52,10 @@ const Head = styled.div`
     font-size: ${size("caption")};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
+  ${media.belowDesktop} { display: none; }
 `;
-/** One table row per market from 320px; the narrowest phones use two lines. */
+/** One table row per market from 320px; the narrowest phones use two lines. Below desktop a row reads like
+ * the verdict: market code, pick with its live standing, and the chance. */
 const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
   grid-template-columns: minmax(0, 1fr) auto 0.875rem;
   grid-template-areas: "name pick chevron" "bar bar chevron";
@@ -72,6 +75,30 @@ const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
   > span[data-bar] { grid-area: bar; display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
   > span[data-bar] > b { min-inline-size: 2.25rem; }
   > svg { grid-area: chevron; color: ${({ theme }) => theme.color.mutedText}; }
+  > span[data-code] { display: none; grid-area: code; color: ${({ theme, $family }) => theme.color.market[$family].text}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  > span[data-pick] > span[data-standing] { margin-inline-start: 6px; vertical-align: -0.2em; }
+  /* Doubled class: these phone rules outrank the card-width container queries above. */
+  ${media.belowDesktop} {
+    && {
+      grid-template-columns: 3.25rem minmax(0, 1fr) auto 0.875rem;
+      grid-template-areas: "code pick bar chevron";
+      column-gap: 10px;
+      min-block-size: 2.5rem;
+      padding-inline: 0;
+    }
+    && > span[data-name] { display: none; }
+    && > span[data-code] { display: block; }
+    && > span[data-pick] { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0; border: 0; font-size: ${size("body")}; }
+    && > span[data-pick] > :is([data-standing], [data-outcome]) { flex: none; margin: 0; white-space: nowrap; }
+    && > span[data-bar] > b { min-inline-size: 0; font-size: ${size("emphasis")}; text-align: end; }
+    && > span[data-bar] > span { display: none; }
+  }
+`;
+const Tools = styled.div`
+  display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+  ${media.belowDesktop} { display: none; }
 `;
 const Outcomes = styled.ul`
   display: grid;
@@ -121,17 +148,29 @@ function Time({ at }: { at: UtcInstant | null }) {
   return at === null ? <>{messages.text("detail.unknownTime")}</> : <time dateTime={toUtcIsoString(at)}>{messages.reportingInstant(at)}</time>;
 }
 
+/** The revision's generated reasons and key uncertainty, each with its permitted sources linked. */
+export function Explanation() {
+  const { data, messages } = useStableDetails();
+  const analysis = data.snapshot ? detailAnalysis(data.snapshot.analysis) : null;
+  const cite = (urls: readonly string[]) => [...new Set(urls)].flatMap((url) => {
+    const source = analysis?.sources.find((entry) => entry.url === url);
+    return source ? [<a key={url} href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"> {source.publisher}<ExternalIcon /></a>] : [];
+  });
+  return analysis?.state === "available" ? <>
+    <Note>{messages.text("details.explanationGenerated")}</Note>
+    <Reasons>
+      {analysis.reasons.map((entry, index) => <li key={index}>{entry.text}{cite(entry.sourceUrls)}</li>)}
+      {analysis.uncertainty && <li><b>{messages.text("detail.uncertainty")}:</b> {analysis.uncertainty.text}{cite(analysis.uncertainty.sourceUrls)}</li>}
+    </Reasons>
+  </> : <Note>{messages.text(analysis ? "detail.analysisWithheld" : "detail.analysisUnavailable")}</Note>;
+}
+
 /** All outcomes, source, timing, settlement and explanation for one market of the applicable revision. */
 function MarketPanel({ family }: { family: MarketFamily }) {
   const { data, messages, home, away, update } = useStableDetails();
   const { item, outcome, reason } = marketRow(data, family);
   const heading = useRevealOnOpen<HTMLHeadingElement>(true, family, "card");
-  const analysis = data.snapshot ? detailAnalysis(data.snapshot.analysis) : null;
   const close = () => update((current) => ({ ...current, market: null }));
-  const cite = (urls: readonly string[]) => [...new Set(urls)].flatMap((url) => {
-    const source = analysis?.sources.find((entry) => entry.url === url);
-    return source ? [<a key={url} href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"> {source.publisher}<ExternalIcon /></a>] : [];
-  });
   return <Panel data-market-panel={family}>
     <Crumbs items={[{ label: messages.text("details.title"), onSelect: () => update((current) => ({ ...current, market: null, section: null, item: null })) },
       { label: messages.text("details.markets"), onSelect: close }, { label: marketName(messages, family) }]} />
@@ -163,13 +202,7 @@ function MarketPanel({ family }: { family: MarketFamily }) {
         {data.snapshot!.applicability !== "historical" && <><dt>{messages.text("match.outcome")}</dt><dd><DetailOutcome status={outcome?.status ?? "pending"} /></dd></>}
       </Facts>
       <SubHeading>{messages.text("details.explanation")}</SubHeading>
-      {analysis?.state === "available" ? <>
-        <Note>{messages.text("details.explanationGenerated")}</Note>
-        <Reasons>
-          {analysis.reasons.map((entry, index) => <li key={index}>{entry.text}{cite(entry.sourceUrls)}</li>)}
-          {analysis.uncertainty && <li><b>{messages.text("detail.uncertainty")}:</b> {analysis.uncertainty.text}{cite(analysis.uncertainty.sourceUrls)}</li>}
-        </Reasons>
-      </> : <Note>{messages.text(analysis ? "detail.analysisWithheld" : "detail.analysisUnavailable")}</Note>}
+      <Explanation />
       <Note>{messages.text("detail.probabilityDisclosure")}</Note>
     </> : <>
       <Note>{messages.text(`detail.unavailable.${reason}`)}</Note>
@@ -223,25 +256,30 @@ export const MarketsCard = memo(function MarketsCard() {
       headingId="section-markets-title" />
     <div id="section-markets" hidden={!view.marketsOpen} style={{ minInlineSize: 0 }}>
       {view.marketsOpen && (view.market ? <MarketPanel family={view.market} /> : <Body>
-        <Search><SearchIcon aria-hidden="true" /><input type="search" value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
-          aria-label={messages.text("details.searchMarkets")} onChange={(event) => setSearch(event.target.value)} /></Search>
-        {!query && <ChoiceGroup label={messages.text("details.categories")} value={view.marketCategory}
-          options={marketCategories.map((category) => ({ value: category, label: categoryLabel(category) }))}
-          onChange={(category) => update((current) => ({ ...current, marketCategory: category }), "replace")} />}
+        <Tools>
+          <Search><SearchIcon aria-hidden="true" /><input type="search" value={search} maxLength={80} placeholder={messages.text("details.searchMarkets")}
+            aria-label={messages.text("details.searchMarkets")} onChange={(event) => setSearch(event.target.value)} /></Search>
+          {!query && <ChoiceGroup label={messages.text("details.categories")} value={view.marketCategory}
+            options={marketCategories.map((category) => ({ value: category, label: categoryLabel(category) }))}
+            onChange={(category) => update((current) => ({ ...current, marketCategory: category }), "replace")} />}
+        </Tools>
         <div>
           <Head aria-hidden="true"><span>{messages.text("details.market")}</span><span>{messages.text("details.prediction")}</span>
             <span>{messages.text("details.probability")}</span><span /></Head>
           {shown.length > 0 ? <RowList ref={list}>
             {shown.map((family) => {
-              const { item } = marketRow(data, family), Icon = familyIcon[family];
+              const { item, outcome } = marketRow(data, family), Icon = familyIcon[family];
+              const settled = data.snapshot?.applicability !== "historical" && outcome && outcome.status !== "pending" ? outcome.status : null;
               const pick = item ? pickLabel(messages, item.market.selection, home, away) : messages.text("details.notAvailable");
-              const price = selectedDetailPrice(data, family);
+              const price = selectedDetailPrice(data, family), standing = liveStanding(data, family);
               return <li key={family}>
                 <MarketRow type="button" $family={family} data-detail-market={family} data-item-key={family} onClick={() => update((current) => ({ ...current, market: family }))}
                   aria-label={[messages.text("details.tileOpen", { market: marketName(messages, family), pick, probability: percent(messages, item?.market.selectedProbability ?? null) }),
-                    price ? `${messages.text("details.odds")}: ${price}` : null].filter(Boolean).join(". ")}>
+                    price ? `${messages.text("details.odds")}: ${price}` : null,
+                    standing ? messages.text("details.standingLabel", { standing: messages.text(`details.standing.${standing}`) }) : null].filter(Boolean).join(". ")}>
                   <span data-name><IconBadge $accent={familyAccent[family]}><Icon /></IconBadge><span>{marketName(messages, family)}</span></span>
-                  <span data-pick>{pick}<PredictionOdds odds={price} /></span>
+                  <span data-code aria-hidden="true">{messages.text(`market.code.${family}`)}</span>
+                  <span data-pick><span>{pick}<PredictionOdds odds={price} /></span>{standing ? <Standing standing={standing} compact /> : settled && <DetailOutcome status={settled} />}</span>
                   <span data-bar>{item ? <><b>{percent(messages, item.market.selectedProbability)}</b><ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${item.market.selectedProbability * 100}%` }} /></ProbabilityBar></>
                     : <b>—</b>}</span>
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2}><path d="m9 6 6 6-6 6" /></svg>
@@ -253,10 +291,11 @@ export const MarketsCard = memo(function MarketsCard() {
         </div>
         {!query && marketCategoryMembers[view.marketCategory].length === 0 && <Note>{messages.text("details.supportedMarkets")}</Note>}
         <Footer>
+          <Note>{messages.text("details.settlesFullTime")}</Note>
           <Note>{messages.text("details.probabilityNotOdds")}</Note>
         </Footer>
       </Body>)}
     </div>
-    {!view.marketsOpen && <LinkButton type="button" onClick={() => update((current) => ({ ...current, marketsOpen: true }))}>{messages.text("details.showMarkets")}</LinkButton>}
+    {!view.marketsOpen && <LinkButton type="button" data-view-all onClick={() => update((current) => ({ ...current, marketsOpen: true }))}>{messages.text("details.showMarkets")}</LinkButton>}
   </Card>;
 });

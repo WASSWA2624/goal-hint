@@ -17,6 +17,8 @@ import { DetailsProvider, Note, ViewProvider, desktop, focusRing, size, useStabl
 import { ContextSection, HistorySection, NewsSection, RefereeSection } from "./info-sections";
 import { MarketTiles, MatchBanner } from "./match-banner";
 import { MarketsCard } from "./markets-card";
+import { AnalysisDrawer } from "./analysis-drawer";
+import { Verdict } from "./verdict";
 import { InjuriesSection, LineupsSection, PlayersSection } from "./squad-sections";
 import { FormSection, H2HSection, StatsSection } from "./team-sections";
 import { useMatchView } from "./use-match-view";
@@ -116,10 +118,11 @@ const BackLink = styled(Link)`
 `;
 
 /**
- * Sections in reading order. Phones: markets full width, then two-up cards. Tablets: two or three
- * columns. Wide desktops reproduce the reference grid: markets on the left spanning three rows,
- * comparison and head-to-head, then form, lineups and players, then news, injuries, context and
- * referee. An opened section spans the full width (and moves to the top on wide desktops).
+ * Sections in reading order. Below desktop: one full-bleed list of drawers, markets first, then the
+ * reasons, the match itself, the teams and the record. Desktop: three columns. Wide desktops reproduce
+ * the reference grid: markets on the left spanning three rows, comparison and head-to-head, then form,
+ * lineups and players, then news, injuries, context and referee. An opened section spans the full width
+ * (and moves to the top on wide desktops).
  */
 const Grid = styled.div`
   display: grid;
@@ -127,14 +130,14 @@ const Grid = styled.div`
   grid-auto-flow: row dense;
   gap: 8px;
   align-items: start;
-  @media (min-width: 22rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  ${media.belowDesktop} {
+    gap: 0;
+    margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
+    ${(["markets", "analysis", "stats", "lineups", "injuries", "form", "h2h", "players", "news", "context", "referee", "history"] as const)
+      .map((section, index) => `> [data-section="${section}"] { order: ${index}; }`).join("\n")}
+  }
   ${desktop} { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
   > [data-section="markets"], > [data-section="history"], > [data-open] { grid-column: 1 / -1; }
-  /* Two-up, Referee would sit alone beside an empty cell whenever eight other cards pair up. */
-  @media (min-width: 22rem) and (max-width: 63.99rem) {
-    &:not([data-open-section]) > [data-section="referee"],
-    &[data-open-section="history"] > [data-section="referee"] { grid-column: 1 / -1; }
-  }
   ${media.wide} {
     grid-template-columns: minmax(0, 22fr) repeat(24, minmax(0, 1fr));
     align-items: stretch;
@@ -237,9 +240,11 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
       <PhoneHeader />
       <DesktopBackLink />
       <MatchBanner />
+      <Verdict />
       <MarketTiles />
       <Grid data-open-section={view.section ?? undefined}>
         <ViewProvider value={markets}><MarketsCard /></ViewProvider>
+        <AnalysisDrawer />
         <SectionView section="stats" {...scoped}><StatsSection /></SectionView>
         <SectionView section="h2h" {...scoped}><H2HSection /></SectionView>
         <SectionView section="form" {...scoped}><FormSection /></SectionView>

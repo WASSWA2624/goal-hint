@@ -133,7 +133,7 @@ export const ContextSection = memo(function ContextSection() {
   const rest = (days: number | null) => days === null ? messages.text("details.notAvailable") : messages.text("details.restDays", { days: messages.number(days, { maximumFractionDigits: 1 }) });
   const kickoff = fixture.kickoffAt;
   return <SectionCard section="context" icon={<ContextIcon />} accent="amber" title={messages.text("details.section.context")}
-    viewAll={messages.text("details.viewAll.context")} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}
+    meta={value?.competition.round ?? null} viewAll={messages.text("details.viewAll.context")} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}
     preview={<Facts>
       <dt>{messages.text("details.competition")}</dt><dd>{[fixture.competition.name, value?.competition.round].filter(Boolean).join(" · ") || messages.text("match.competitionUnknown")}</dd>
       <dt>{messages.text("details.venue")}</dt><dd>{messages.text("details.notAvailable")}</dd>
@@ -184,7 +184,7 @@ export const ContextSection = memo(function ContextSection() {
 export const RefereeSection = memo(function RefereeSection() {
   const { messages } = useStableDetails();
   return <SectionCard section="referee" icon={<RefereeIcon />} accent="violet" title={messages.text("details.section.referee")}
-    viewAll={messages.text("details.viewAll.referee")}
+    meta={messages.text("details.notAvailable")} viewAll={messages.text("details.viewAll.referee")}
     preview={<Facts><dt>{messages.text("details.official")}</dt><dd>{messages.text("details.notAvailable")}</dd></Facts>}>
     <Facts>
       <dt>{messages.text("details.official")}</dt><dd>{messages.text("details.notAvailable")}</dd>

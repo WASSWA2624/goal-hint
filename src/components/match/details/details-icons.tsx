@@ -40,3 +40,6 @@ export const GoalsIcon = (props: IconProps) => <Icon {...props}><circle cx="12" 
 export const BothTeamsIcon = (props: IconProps) => <Icon {...props}><circle cx="7" cy="12" r="4" /><circle cx="17" cy="12" r="4" /><path d="M11 12h2" /></Icon>;
 export const ExternalIcon = (props: IconProps) => <Icon {...props}><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></Icon>;
 export const BackIcon = (props: IconProps) => <Icon strokeWidth={2.25} {...props}><path d="m15 6-6 6 6 6" /></Icon>;
+export const ReasonIcon = (props: IconProps) => <Icon {...props}>
+  <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.3 1 2.1v.5h5V16c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3Z" />
+</Icon>;

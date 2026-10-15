@@ -15,7 +15,7 @@ import { matchHref } from "@/domain/navigation";
 import { media } from "@/styles/theme";
 import { CompareIcon, FormIcon, HeadToHeadIcon } from "./details-icons";
 import {
-  Bar, ChoiceGroup, Crest, Facts, FormLetters, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong,
+  Bar, ChoiceGroup, Crest, Facts, FormLetters, MiniForm, Note, Pager, PanelBar, Pill, RowButton, RowList, SectionState, Strong,
   desktop, size, useDetails, useStableDetails, type Messages,
 } from "./details-ui";
 import { ItemPanel, SectionCard, useReturnFocus } from "./section-card";
@@ -168,7 +168,10 @@ export const StatsSection = memo(function StatsSection() {
   useReturnFocus(list, view.item);
   const evidence = stats.data?.evidence ?? preview?.sections.stats.evidence ?? [];
   const sample = (records: readonly InsightResult[]) => messages.plural("details.sampleResults", records.length);
+  const points = teamComparison(previewForm.home.slice(0, 10), previewForm.away.slice(0, 10), homeId, awayId).rows.find((row) => row.metric === "pointsPerGame");
   return <SectionCard section="stats" icon={<CompareIcon />} accent="orange" title={messages.text("details.section.stats")}
+    meta={points && points.home !== null && points.away !== null ? messages.text("details.pointsPerGame", {
+      home: metricText(messages, "average", points.home), away: metricText(messages, "average", points.away) }) : null}
     viewAll={messages.text("details.viewAll.stats")} itemLabel={metric ? messages.text(`details.metric.${metric}`) : null}
     preview={<>
       <Teams />
@@ -275,7 +278,10 @@ export const FormSection = memo(function FormSection() {
       {records.length > 0 && <Note>{messages.text("details.goalsLine", { scored: messages.number(totals.scored), conceded: messages.number(totals.conceded) })}</Note>}
     </div>;
   };
+  const ticks = (side: "home" | "away") => <MiniForm letters={formLetters((preview?.sections.form[side] ?? []).slice(0, 5), team(side).id, 5)}
+    label={messages.text("details.lastFive", { team: side === "home" ? home : away })} />;
   return <SectionCard section="form" icon={<FormIcon />} accent="emerald" title={messages.text("details.section.form")}
+    meta={(preview?.sections.form.home.length ?? 0) + (preview?.sections.form.away.length ?? 0) > 0 ? <>{ticks("home")} {ticks("away")}</> : null}
     viewAll={messages.text("details.viewAll.form")} itemLabel={record ? messages.text("match.title", { home: record.home.name ?? "", away: record.away.name ?? "" }) : null}
     preview={<FormTeams>{previewTeam("home")}{previewTeam("away")}</FormTeams>}>
     <SectionState loading={form.loading} error={form.error} onRetry={form.retry} />

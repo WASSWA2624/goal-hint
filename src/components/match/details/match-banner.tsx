@@ -53,12 +53,42 @@ const Box = styled.section`
   border-radius: ${({ theme }) => theme.border.cardRadius};
   box-shadow: ${({ theme }) => theme.shadow.card};
   ${scrollClearance}
+  /* Phones: a full-bleed scoreboard under a home/away colour band, with competition, date and time on top. */
+  ${media.belowDesktop} {
+    grid-template-areas: "ctx ctx ctx" "home vs away";
+    gap: 10px 8px;
+    align-items: start;
+    margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
+    padding: 12px ${({ theme }) => theme.layout.gutter} 14px;
+    background: linear-gradient(90deg, ${({ theme }) => theme.color.accent.orange.solid} 0 50%, ${({ theme }) => theme.color.accent.blue.solid} 50% 100%) top / 100% 3px no-repeat,
+      ${({ theme }) => theme.color.surface};
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
   ${desktop} {
     grid-template-columns: minmax(9rem, 0.75fr) minmax(0, 1fr) auto minmax(0, 1fr) minmax(15rem, 1fr);
     grid-template-areas: "comp home when away pick" "comp home vs away pick";
     gap: 4px 18px;
     padding: 14px 16px;
   }
+`;
+/**
+ * Phones only: competition, round, date and time on one centred line above the teams. Each separator is
+ * glued to the item before it, so a long competition name wraps after a dot, never before one.
+ */
+const PhoneContext = styled.p`
+  grid-area: ctx;
+  margin: 0;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${size("secondary")};
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  text-align: center;
+  text-wrap: balance;
+  > img { display: inline-block; inline-size: 16px; block-size: 16px; margin-inline-end: 6px; object-fit: contain; vertical-align: -3px; }
+  > span { white-space: nowrap; }
+  ${desktop} { display: none; }
 `;
 const Competition = styled.div`
   grid-area: comp;
@@ -70,6 +100,7 @@ const Competition = styled.div`
   > div { min-inline-size: 0; }
   strong { display: block; font-size: ${size("body")}; line-height: 1.25; overflow-wrap: anywhere; ${desktop} { font-size: 1rem; } }
   span { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; ${desktop} { font-size: ${size("body")}; } }
+  ${media.belowDesktop} { display: none; }
 `;
 const CompetitionLogo = styled.img``;
 const When = styled.p`
@@ -85,9 +116,10 @@ const When = styled.p`
   white-space: nowrap;
   > span { display: inline-flex; align-items: center; gap: 4px; }
   svg { color: ${({ theme }) => theme.color.accent.blue.solid}; font-size: ${size("body")}; }
+  ${media.belowDesktop} { display: none; }
   ${desktop} { justify-content: center; align-self: end; font-size: ${size("emphasis")}; svg { font-size: 0.9375rem; } }
 `;
-/** Phones: 40px crests and 13px names keep long names such as "Manchester United" on one line. */
+/** Phones: 44px crests and 14px names; long names such as "Manchester United" wrap between words. */
 const Team = styled.div<{ $side: "home" | "away" }>`
   grid-area: ${({ $side }) => $side};
   display: grid;
@@ -95,7 +127,7 @@ const Team = styled.div<{ $side: "home" | "away" }>`
   gap: 4px;
   min-inline-size: 0;
   text-align: center;
-  > :first-child { --gh-logo-size: 40px; --gh-logo-font: 15px; }
+  > :first-child { --gh-logo-size: 44px; --gh-logo-font: 16px; }
   /* Desktop: both crests sit beside the score, with the name centred on the crest and the home name aligned towards it. */
   ${desktop} {
     display: flex;
@@ -109,7 +141,7 @@ const Team = styled.div<{ $side: "home" | "away" }>`
 /** Name over recent form; phones keep both as direct items of the centred team stack. */
 const TeamText = styled.div<{ $side: "home" | "away" }>`
   display: contents;
-  > strong { font-size: ${size("body")}; line-height: 1.2; overflow-wrap: anywhere; }
+  > strong { font-size: ${size("emphasis")}; line-height: 1.2; overflow-wrap: anywhere; }
   ${desktop} {
     display: grid;
     flex: 1;
@@ -139,6 +171,13 @@ const Versus = styled.div`
   > b[data-score] { color: ${({ theme }) => theme.color.text}; background: none; font-size: ${size("hero")}; }
   > span { color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > span[data-live] { color: ${({ theme }) => theme.color.live.text}; }
+  ${media.belowDesktop} {
+    padding-block-start: 2px;
+    > b[data-score] { block-size: auto; font-size: 2rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; line-height: 1.05; white-space: nowrap; }
+    > span { font-size: ${size("secondary")}; }
+    > span[data-live] { display: inline-flex; align-items: center; gap: 5px; }
+    > span[data-live]::before { content: ""; inline-size: 7px; block-size: 7px; background: ${({ theme }) => theme.color.live.solid}; border-radius: 50%; }
+  }
   ${desktop} {
     align-self: start;
     > b { min-inline-size: 3rem; block-size: 3rem; font-size: 0.9375rem; }
@@ -163,6 +202,8 @@ const Featured = styled.button<{ $empty: boolean; $family: MarketFamily }>`
   cursor: ${({ $empty }) => $empty ? "default" : "pointer"};
   ${focusRing}
   ${media.hover} { &:hover:not(:disabled) { border-color: ${({ theme, $family }) => theme.color.market[$family].solid}; } }
+  /* Phones show the pick in the verdict under the scoreboard instead. */
+  ${media.belowDesktop} { display: none; }
   > div { display: grid; gap: 1px; min-inline-size: 0; }
   > div > span[data-label] { display: inline-flex; align-items: center; gap: 4px; color: ${({ theme, $family }) => theme.color.market[$family].text}; font-size: ${size("caption")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   > div > strong { font-size: ${size("emphasis")}; line-height: 1.2; overflow-wrap: anywhere; ${desktop} { font-size: 1.0625rem; } }
@@ -199,6 +240,12 @@ export const MatchBanner = memo(function MatchBanner() {
     ? fixture.liveClock.minute !== null ? messages.text("match.clock.minute", { minute: messages.number(fixture.liveClock.minute) }) : messages.text(`match.clock.${fixture.liveClock.phase}`)
     : messages.text(`match.status.${fixture.status}`);
   return <Box id="current-match-summary" aria-labelledby="match-banner-title">
+    <PhoneContext>
+      {fixture.competition.logoUrl && <CompetitionLogo src={fixture.competition.logoUrl} alt="" width={16} height={16} referrerPolicy="no-referrer" />}
+      {[fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ")}{"\u00a0· "}
+      {fixture.kickoffAt !== null ? <span><time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time>
+        {"\u00a0· "}{messages.reportingTime(fixture.kickoffAt)} {messages.timeZone(fixture.kickoffAt)}</span> : <span>{messages.text("details.kickoffUnknown")}</span>}
+    </PhoneContext>
     <Competition>
       {fixture.competition.logoUrl && <CompetitionLogo src={fixture.competition.logoUrl} alt="" width={44} height={44} referrerPolicy="no-referrer" />}
       <div>
@@ -251,6 +298,8 @@ const Tiles = styled.div`
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   ${media.tablet} { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* Below desktop the verdict and the market rows carry every pick. */
+  ${media.belowDesktop} { display: none; }
   ${desktop} { gap: 10px; }
 `;
 const Tile = styled.button<{ $featured: boolean; $family: MarketFamily }>`

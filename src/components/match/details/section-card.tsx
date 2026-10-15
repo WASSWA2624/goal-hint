@@ -11,7 +11,7 @@ import { Card, CardHeader, Crumbs, HiddenHeading, LinkButton, Panel, PanelHeadin
  * section inside the same card (full width), with breadcrumbs and an explicit collapse action.
  */
 export function SectionCard({ section, icon, accent, title, meta, preview, viewAll, itemLabel, children }: {
-  section: MatchSection; icon: ReactNode; accent: AccentName; title: string; meta?: string | null;
+  section: MatchSection; icon: ReactNode; accent: AccentName; title: string; meta?: ReactNode;
   preview: ReactNode; viewAll: string; itemLabel?: string | null; children: ReactNode;
 }) {
   const { view, update, messages } = useDetails();
@@ -36,11 +36,11 @@ export function SectionCard({ section, icon, accent, title, meta, preview, viewA
         // Rows inside a preview open their own item; only clicks on plain content open the section.
         if (!(event.target as Element).closest("a, button, input, select, textarea")) toggle();
       }}>{preview}</PreviewArea>
-      <LinkButton type="button" onClick={toggle} aria-controls={panelId} aria-expanded={false}>{viewAll}<ArrowRightIcon /></LinkButton>
+      <LinkButton type="button" onClick={toggle} aria-controls={panelId} aria-expanded={false} data-view-all>{viewAll}<ArrowRightIcon /></LinkButton>
     </>}
     <div id={panelId} hidden={!open}>
       {open && <Panel>
-        <Crumbs items={[{ label: messages.text("details.title"), onSelect: () => update((current) => openSection(current, null)) },
+        <Crumbs shallow={!itemLabel} items={[{ label: messages.text("details.title"), onSelect: () => update((current) => openSection(current, null)) },
           itemLabel ? { label: title, onSelect: closeItem } : { label: title }, ...(itemLabel ? [{ label: itemLabel }] : [])]} />
         <HiddenHeading ref={heading} tabIndex={-1}>{title}</HiddenHeading>
         {children}

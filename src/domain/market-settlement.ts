@@ -89,7 +89,8 @@ function isGoalCount(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function occurred(selection: MarketSelection, home: number, away: number): boolean {
+/** Whether a selection holds for a score; settlement applies it to verified regulation scores only. */
+export function selectionOccurred(selection: MarketSelection, home: number, away: number): boolean {
   switch (selection) {
     case "home-win": return home > away;
     case "draw": return home === away;
@@ -156,7 +157,7 @@ export function settleMarketSelection(
     return outcome("pending", "invalid-regulation-score");
   }
 
-  return occurred(selection, score.home, score.away)
+  return selectionOccurred(selection, score.home, score.away)
     ? outcome("correct", "selection-occurred")
     : outcome("incorrect", "selection-did-not-occur");
 }

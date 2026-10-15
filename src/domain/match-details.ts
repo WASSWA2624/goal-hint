@@ -5,6 +5,7 @@ import { marketSelections, type MarketFamily, type MarketSelection } from "./mar
 import { publicPolicy } from "./public-policy.ts";
 import { bestPublishedFamily } from "./market-ranking.ts";
 import { selectedCardPrice } from "./match-card.ts";
+import { selectionOccurred } from "./market-settlement.ts";
 
 /**
  * Pure presentation rules for the match-details screen. Every value is read from the stored
@@ -57,6 +58,37 @@ export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
     family: group.family, selection: price.selection, price: price.price,
   })))];
   return bestPublishedFamily(data.snapshot?.markets, prices);
+}
+
+export type LiveStanding = "on-track" | "off-track";
+/**
+ * As it stands: whether a live fixture's current score satisfies the displayed pick. Only the current or locked
+ * publication is tracked, never a historical one, and settlement still waits for the verified regulation result.
+ */
+export function liveStanding(data: MatchDetailResponse, family: MarketFamily): LiveStanding | null {
+  const { fixture, snapshot } = data;
+  if (fixture.status !== "live" || !fixture.score || !snapshot || (snapshot.applicability !== "current" && snapshot.applicability !== "locked")) return null;
+  const item = snapshot.markets.find((entry) => entry.market.family === family);
+  if (!item) return null;
+  return selectionOccurred(item.market.selection as MarketSelection, fixture.score.home, fixture.score.away) ? "on-track" : "off-track";
+}
+
+type ResultSelection = "home-win" | "draw" | "away-win";
+/**
+ * Match-result chances in home, draw, away order, with the likeliest and least likely outcome. A tie at whole
+ * percentages names neither side of it; no published match-result group gives null.
+ */
+export function resultOutlook(data: MatchDetailResponse) {
+  const item = data.snapshot?.markets.find((entry) => entry.market.family === "match-result");
+  if (!item) return null;
+  const probabilities = item.market.probabilities as Readonly<Record<string, number>>;
+  const chances = (["home-win", "draw", "away-win"] as const).map((selection) => ({ selection, probability: probabilities[selection] ?? 0 }));
+  const sorted = [...chances].sort((a, b) => b.probability - a.probability), whole = (index: number) => Math.round(sorted[index]!.probability * 100);
+  return {
+    chances,
+    likeliest: whole(0) > whole(1) ? sorted[0]!.selection as ResultSelection : null,
+    least: whole(2) < whole(1) ? sorted[2]!.selection as ResultSelection : null,
+  };
 }
 
 /** Families visible for a category and search text; search spans every category. */

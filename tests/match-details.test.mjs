@@ -11,8 +11,8 @@ import {
   teamComparison,
 } from '../src/domain/match-insights.ts';
 import {
-  featuredFamily, formLetters, goalTotals, marketCategoryMembers, marketOutcomes, marketRow, parsePlayerKey, pitchRows, playerKey,
-  positionGroup, selectedDetailPrice, visibleMarkets,
+  featuredFamily, formLetters, goalTotals, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, parsePlayerKey, pitchRows, playerKey,
+  positionGroup, resultOutlook, selectedDetailPrice, visibleMarkets,
 } from '../src/domain/match-details.ts';
 import { makeStore } from '../src/state/store.ts';
 import { detailApi } from '../src/state/detail-api.ts';
@@ -135,6 +135,29 @@ test('the featured pick is the highest stored probability; missing markets keep 
   assert.equal(marketRow({ fixture: { unavailableMarkets: [] }, snapshot: null }, 'match-result').reason, 'not-published');
   assert.deepEqual(marketOutcomes({ draw: 0.45, 'home-win': 0.1, 'away-win': 0.45 }, 'match-result').map((entry) => entry.selection), ['home-win', 'draw', 'away-win']);
   assert.equal(marketOutcomes({}, 'both-teams-to-score')[0].probability, null);
+});
+
+test('live picks are tracked against the current score of the current publication only; the outlook names untied extremes', () => {
+  const data = detail([market('match-result', 'home-win', { 'home-win': 0.54, draw: 0.24, 'away-win': 0.22 }),
+    market('double-chance', 'home-or-draw', { 'home-or-draw': 0.78, 'away-or-draw': 0.46, 'home-or-away': 0.76 }),
+    market('total-goals', 'over-2.5', { 'over-2.5': 0.61, 'under-2.5': 0.39 }), market('both-teams-to-score', 'yes', { yes: 0.58, no: 0.42 })]);
+  Object.assign(data.fixture, { status: 'live', score: { home: 1, away: 1 } });
+  data.snapshot.applicability = 'current';
+  assert.deepEqual(['match-result', 'double-chance', 'total-goals', 'both-teams-to-score'].map((family) => liveStanding(data, family)),
+    ['off-track', 'on-track', 'off-track', 'on-track']);
+  data.fixture.score = { home: 2, away: 1 };
+  assert.equal(liveStanding(data, 'total-goals'), 'on-track');
+  for (const change of [{ status: 'scheduled' }, { status: 'finished-regulation' }, { score: null }]) {
+    assert.equal(liveStanding({ ...data, fixture: { ...data.fixture, ...change } }, 'match-result'), null);
+  }
+  for (const applicability of ['historical', 'void']) assert.equal(liveStanding({ ...data, snapshot: { ...data.snapshot, applicability } }, 'match-result'), null);
+  assert.equal(liveStanding(detail([]), 'match-result'), null);
+
+  assert.deepEqual(resultOutlook(data), { chances: [{ selection: 'home-win', probability: 0.54 }, { selection: 'draw', probability: 0.24 },
+    { selection: 'away-win', probability: 0.22 }], likeliest: 'home-win', least: 'away-win' });
+  const tied = resultOutlook(detail([market('match-result', 'draw', { 'home-win': 0.1, draw: 0.45, 'away-win': 0.45 })]));
+  assert.equal(tied.likeliest, null); assert.equal(tied.least, 'home-win');
+  assert.equal(resultOutlook(detail([])), null);
 });
 
 test('detail odds match the current or locked publication and exact selection without borrowing historical prices', () => {

@@ -2,11 +2,13 @@
 
 import { createContext, useContext, useEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import styled, { css, type DefaultTheme } from "styled-components";
-import { ChevronRightIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { paginationListStyles } from "@/components/ui/pagination-styles";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { ClockIcon } from "@/components/match/match-icons";
 import { TeamLogo } from "@/components/match/team-logo";
 import { paginationItems } from "@/domain/feed-presentation";
-import type { FormLetter } from "@/domain/match-details";
+import type { FormLetter, LiveStanding } from "@/domain/match-details";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
 import { defaultMatchView, type MatchView } from "@/domain/match-view";
@@ -49,7 +51,10 @@ export const scrollClearance = css`
   ${media.desktop} { scroll-margin-block: 5rem 1rem; }
 `;
 
-/** Compact card; open sections widen to the full content width. */
+/**
+ * Compact card; open sections widen to the full content width. Below desktop every card is a drawer: one
+ * full-width row (icon, title, one-line summary, chevron) in a ruled list; opening it reveals the section.
+ */
 export const Card = styled.section<{ $open?: boolean; $accent?: AccentName }>`
   position: relative;
   display: grid;
@@ -64,6 +69,16 @@ export const Card = styled.section<{ $open?: boolean; $accent?: AccentName }>`
   box-shadow: ${({ theme, $open }) => $open ? theme.shadow.cardHover : theme.shadow.card};
   container: details-card / inline-size;
   ${scrollClearance}
+  ${media.belowDesktop} {
+    gap: 0;
+    padding: 0 ${({ theme }) => theme.layout.gutter};
+    border: 0;
+    border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-radius: 0;
+    box-shadow: none;
+    &[data-open] { padding-block-end: 12px; }
+    > button[data-view-all] { display: none; }
+  }
   ${desktop} { padding: 11px 14px 12px; gap: 10px; }
 `;
 
@@ -102,6 +117,17 @@ const HeadButton = styled.button`
   > svg:last-child { flex: none; margin-inline-start: auto; color: ${({ theme }) => theme.color.mutedText}; font-size: ${size("secondary")}; transition: transform 160ms ease; }
   &[aria-expanded="true"] > svg:last-child { transform: rotate(90deg); color: ${({ theme }) => theme.color.accent.blue.solid}; }
   ${media.hover} { &:hover > span[data-title] { color: ${({ theme }) => theme.color.accent.blue.text}; } }
+  /* Drawer row: plain teal icon, title, the summary pushed to the end, and a chevron that points down to open. */
+  ${media.belowDesktop} {
+    gap: 10px;
+    min-block-size: 2.875rem;
+    > span:first-child { inline-size: 1.25rem; color: ${({ theme }) => theme.color.brand}; background: none; font-size: 1.125rem; }
+    > span[data-title] { flex: none; font-size: ${size("emphasis")}; text-wrap: nowrap; }
+    > small { margin-inline-start: auto; font-size: ${size("secondary")}; text-align: end; }
+    > small + svg:last-child { margin-inline-start: 0; }
+    > svg:last-child { font-size: 0.9375rem; transform: rotate(90deg); }
+    &[aria-expanded="true"] > svg:last-child { transform: rotate(-90deg); }
+  }
   ${desktop} { gap: 8px; > svg:last-child { font-size: 0.9375rem; } }
   @media (prefers-reduced-motion: reduce) { > svg:last-child { transition: none; } }
 `;
@@ -120,7 +146,7 @@ export const IconBadge = styled.span<{ $accent: AccentName }>`
 
 /** The section heading is a disclosure button; extra header controls sit beside it, never inside. */
 export function CardHeader({ icon, accent, title, meta, open, controls, onToggle, headingId, buttonRef, children }: {
-  icon: ReactNode; accent: AccentName; title: string; meta?: string | null | undefined; open: boolean; controls: string; onToggle: () => void;
+  icon: ReactNode; accent: AccentName; title: string; meta?: ReactNode; open: boolean; controls: string; onToggle: () => void;
   headingId: string; buttonRef?: Ref<HTMLButtonElement>; children?: ReactNode;
 }) {
   return <HeadRow>
@@ -142,6 +168,8 @@ export const PreviewArea = styled.div`
   cursor: pointer;
   border-radius: 3px;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
+  /* A closed drawer is its one-line header; the summary there replaces the preview. */
+  ${media.belowDesktop} { display: none; }
 `;
 
 /** Text-like action; its arrow icon flows with the last line of wrapped text. */
@@ -172,11 +200,13 @@ export const Breadcrumb = styled.nav`
   > ol > li + li::before { content: "/"; color: ${({ theme }) => theme.color.border}; }
   button { padding: 0; color: ${({ theme }) => theme.color.accent.blue.solid}; background: none; border: 0; font: inherit; cursor: pointer; ${focusRing} }
   [aria-current] { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
+  /* An open drawer already names its section, so phones show the trail only inside an item. */
+  ${media.belowDesktop} { &[data-shallow] { display: none; } }
   ${desktop} { font-size: ${size("secondary")}; }
 `;
-export function Crumbs({ items }: { items: readonly { label: string; onSelect?: () => void }[] }) {
+export function Crumbs({ items, shallow = false }: { items: readonly { label: string; onSelect?: () => void }[]; shallow?: boolean }) {
   const { messages } = useStableDetails();
-  return <Breadcrumb aria-label={messages.text("details.breadcrumb")}>
+  return <Breadcrumb aria-label={messages.text("details.breadcrumb")} data-shallow={shallow || undefined}>
     <ol>{items.map((item, index) => <li key={index}>
       {item.onSelect ? <button type="button" onClick={item.onSelect}>{item.label}</button> : <span aria-current="location">{item.label}</span>}
     </li>)}</ol>
@@ -322,6 +352,53 @@ export function FormLetters({ letters, label }: { letters: readonly FormLetter[]
   return <Letters role="img" aria-label={`${label}: ${letters.map((letter) => messages.text(`details.result.${letter}`)).join(", ")}`}>
     {letters.map((letter, index) => <LetterChip key={index} $letter={letter} title={messages.text(`details.result.${letter}`)} aria-hidden="true">{letter}</LetterChip>)}
   </Letters>;
+}
+
+const MiniBars = styled.span`
+  display: inline-flex;
+  gap: 2px;
+  vertical-align: -1px;
+  > i { inline-size: 6px; block-size: 11px; background: ${({ theme }) => theme.color.border}; }
+  > i[data-letter="W"] { background: ${({ theme }) => theme.color.accent.emerald.solid}; }
+  > i[data-letter="L"] { background: ${({ theme }) => theme.color.accent.red.solid}; }
+`;
+/** Five W/D/L ticks for a one-line drawer summary, oldest first; the label carries the words. */
+export function MiniForm({ letters, label }: { letters: readonly FormLetter[]; label: string }) {
+  const { messages } = useStableDetails();
+  if (letters.length === 0) return null;
+  return <MiniBars role="img" aria-label={`${label}: ${letters.map((letter) => messages.text(`details.result.${letter}`)).join(", ")}`}>
+    {letters.map((letter, index) => <i key={index} data-letter={letter} />)}
+  </MiniBars>;
+}
+
+const StandingMark = styled.span<{ $standing: LiveStanding }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: ${({ theme, $standing }) => theme.color.outcome[$standing === "on-track" ? "correct" : "pending"].text};
+  font-size: ${size("caption")};
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  white-space: nowrap;
+  > svg { flex: none; font-size: 0.875rem; }
+  &[data-compact] {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    color: ${({ theme, $standing }) => $standing === "on-track" ? theme.color.onBrand : theme.color.outcome.pending.text};
+    background: ${({ theme, $standing }) => $standing === "on-track" ? theme.color.outcome.correct.text : theme.color.outcome.pending.background};
+    > svg { font-size: 0.75rem; }
+  }
+`;
+/** A live pick as it stands: a check when the current score satisfies it, a clock when it does not yet. */
+export function Standing({ standing, compact = false }: { standing: LiveStanding; compact?: boolean }) {
+  const { messages } = useStableDetails();
+  const text = messages.text(`details.standing.${standing}`);
+  return <StandingMark $standing={standing} data-standing={standing} data-compact={compact || undefined}
+    title={compact ? messages.text("details.standingLabel", { standing: text }) : undefined}>
+    {standing === "on-track" ? <CheckIcon aria-hidden="true" /> : <ClockIcon aria-hidden="true" />}
+    {compact ? <VisuallyHidden>{messages.text("details.standingLabel", { standing: text })}</VisuallyHidden> : text}
+  </StandingMark>;
 }
 
 const CrestBox = styled.span<{ $size: number }>`
