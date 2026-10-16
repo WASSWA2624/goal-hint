@@ -62,9 +62,9 @@ SCENARIOS = {
 }
 
 CRITERIA_GROUP_FIELDS = {
-    "targets": ["totalMin", "totalMax", "teamsMin", "teamsMax", "slips"],
     "limits": ["oddsMin", "oddsMax", "probMin", "probMax"],
     "kickoff": ["dateFrom", "dateTo", "timeFrom", "timeTo"],
+    "markets": [],
 }
 
 
@@ -72,10 +72,10 @@ def criteria_groups(document, path, error_group=None):
     groups = document.nodes("details", "data-slip-criteria-group")
     assert len(groups) == 3, f"{path}: three native criteria accordions"
     by_name = {group.attrs["data-slip-criteria-group"]: group for group in groups}
-    assert set(by_name) == set(CRITERIA_GROUP_FIELDS), f"{path}: targets, limits and kickoff groups"
+    assert set(by_name) == set(CRITERIA_GROUP_FIELDS), f"{path}: limits, kickoff and markets groups"
     summaries = {}
     for name, group in by_name.items():
-        assert ("open" in group.attrs) == (name == "limits" or name == error_group), f"{path}: {name} default/error expansion"
+        assert ("open" in group.attrs) == (name == error_group), f"{path}: {name} starts closed unless invalid"
         summary = [child for child in group.children if isinstance(child, Element) and child.tag == "summary"]
         assert len(summary) == 1 and summary[0].text.strip(), f"{path}: native {name} summary"
         summaries[name] = summary[0].text
@@ -86,7 +86,12 @@ def criteria_groups(document, path, error_group=None):
             assert len([node for node in document.nodes("input") if node.attrs.get("name") == field]) == 1, f"{path}: no duplicated {field}"
         assert all("disabled" not in fieldset.attrs for fieldset in group.nodes("fieldset")), f"{path}: collapsing {name} does not disable native submission"
     markets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "markets"]
-    assert len(markets) == 1 and all(markets[0] not in group.nodes() for group in groups), f"{path}: Markets remains outside every criteria accordion"
+    assert len(markets) == 1 and markets[0] in by_name["markets"].nodes(), f"{path}: market toggles and outcomes share their own accordion"
+    targets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "targets"]
+    assert len(targets) == 1 and all(targets[0] not in group.nodes() for group in groups), f"{path}: essential slip targets always stay visible"
+    for name in ["slips", "totalMin", "totalMax", "teamsMin", "teamsMax"]:
+        controls = [node for node in targets[0].nodes("input") if node.attrs.get("name") == name]
+        assert len(controls) == 1 and "disabled" not in controls[0].attrs, f"{path}: one enabled essential target {name}"
     inputs = document.nodes("input")
     reuse = [node for node in inputs if node.attrs.get("name") == "reuse"]
     choices = markets[0].nodes("input")
@@ -183,13 +188,21 @@ def verify(origin, directory):
     generated = inspect(origin, "/en/slips?" + urlencode(query), directory, "route-build", "generated", 3)
     initial_summaries = criteria_groups(generated, "/en/slips?build=1")
     for group, changes in [
-        ("targets", {"totalMin": "4.00", "totalMax": "5.00"}),
         ("limits", {"oddsMin": "1.50", "oddsMax": "2.50", "probMin": "75", "probMax": "90"}),
         ("kickoff", {"dateTo": "2026-10-15", "timeFrom": "12:30", "timeTo": "18:00"}),
     ]:
         changed = [(field, changes.get(field, value)) for field, value in query]
         draft = inspect(origin, "/en/slips?" + urlencode(changed), directory, f"route-{group}-summary", "generated", 3)
         assert criteria_groups(draft, f"{group} draft")[group] != initial_summaries[group], f"{group} summary reflects changed native draft values"
+    chosen_query = query + [("picks.match-result", "home-win")]
+    chosen = inspect(origin, "/en/slips?" + urlencode(chosen_query), directory, "route-market-summary", "generated", 3)
+    assert "1 with chosen results" in criteria_groups(chosen, "manual market summary")["markets"], "Market summary distinguishes manual results from Automatic"
+    no_markets = [(name, value) for name, value in query if name != "markets"]
+    invalid_markets = inspect(origin, "/en/slips?" + urlencode(no_markets), directory, "route-invalid-markets", "idle", 0, error_group="markets")
+    assert "Select at least one market" in invalid_markets.text, "No-market validation opens the market controls"
+    invalid_outcomes = query + [("picks.match-result", "yes")]
+    invalid_pick = inspect(origin, "/en/slips?" + urlencode(invalid_outcomes), directory, "route-invalid-outcomes", "idle", 0, error_group="markets")
+    assert "Choose Automatic or valid results" in invalid_pick.text, "Invalid manual results open the same market group"
     cutoff = inspect(origin, "/cutoff?" + urlencode(query), directory, "route-cutoff", "generated", 3)
     assert all(row.attrs["data-slip-selection"] != "synthetic-slip-1" for row in cutoff.nodes("tr", "data-slip-selection")), "The route passes the fresh completion clock through to its stored build service"
     invalid = [(name, "2026-10-12" if name == "dateTo" else value) for name, value in query]
@@ -204,7 +217,6 @@ def verify(origin, directory):
         assert any(node.attrs.get("name") == field and node.attrs.get("aria-invalid") == "true" for node in invalid_group.nodes("input")), f"{group} error exposes its invalid field"
     blank_quantity = [(name, "" if name == "slips" else value) for name, value in query]
     required = inspect(origin, "/en/slips?" + urlencode(blank_quantity), directory, "route-required-quantity", "idle", 0, error_group="targets")
-    assert "Required" in criteria_groups(required, "blank quantity", "targets")["targets"], "A blank required slip count is identified in the Targets summary"
     quantity = next(node for node in required.nodes("input") if node.attrs.get("name") == "slips")
     assert quantity.attrs.get("value") == "" and "required" in quantity.attrs and quantity.attrs.get("aria-invalid") == "true", "The blank required quantity remains editable and invalid"
     native = native_inputs(idle)

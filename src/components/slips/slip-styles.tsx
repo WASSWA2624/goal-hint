@@ -20,14 +20,26 @@ export const CriteriaPanel = styled(Surface)`
 `;
 export const CriteriaForm = styled.form<{ $hasError: boolean }>`
   display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px;
-  grid-template-areas: "targets" "limits" "kickoff" "markets" "reuse" ${({ $hasError }) => $hasError ? '"error"' : ""} "actions";
-  min-inline-size: 0; margin-block-start: 8px;
-  > [data-slip-criteria-group="targets"] { grid-area: targets; }
+  grid-template-areas: "targets" "limits" "kickoff" "markets" "reuse" "hint" ${({ $hasError }) => $hasError ? '"error"' : ""} "actions";
+  min-inline-size: 0;
+  > [data-criteria-field="targets"] { grid-area: targets; }
   > [data-slip-criteria-group="limits"] { grid-area: limits; }
   > [data-slip-criteria-group="kickoff"] { grid-area: kickoff; }
+  > [data-slip-criteria-group="markets"] { grid-area: markets; }
+  > [data-criteria-hint] { grid-area: hint; font-size: 0.6875rem; }
+  ${media.belowDesktop} {
+    > [data-slip-criteria-group] {
+      border-color: ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface};
+      > summary { padding: 7px 9px; }
+      > summary > span { gap: 2px; }
+      > summary strong { font-size: 0.75rem; }
+      > summary small { font-size: 0.6875rem; }
+      &[open] > div { padding-block-start: 8px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+    }
+  }
   ${media.desktop} {
     grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
-    grid-template-areas: "targets limits kickoff" "markets markets markets" ${({ $hasError }) => $hasError ? '"error error error"' : ""} "reuse actions actions";
+    grid-template-areas: "targets limits kickoff" "markets markets markets" "hint hint hint" ${({ $hasError }) => $hasError ? '"error error error"' : ""} "reuse actions actions";
   }
 `;
 export const FieldGroup = styled.fieldset`
@@ -48,19 +60,44 @@ export const LimitGroups = styled.div`
   > fieldset { padding: 0; margin: 0; border: 0; min-inline-size: 0; }
   > fieldset > legend { padding: 0; margin-block-end: 4px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
 `;
+export const TargetGroups = styled(LimitGroups)`
+  grid-template-columns: 2.75rem minmax(0, 1.3fr) minmax(0, 1fr); align-items: end; gap: 7px;
+  > div { gap: 2px; }
+  > div > label { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  > div > input { min-block-size: 2rem; padding: 3px 5px; font-size: 1rem; }
+  > fieldset > legend { font-size: 0.6875rem; margin-block-end: 3px; }
+  > div > label { margin-block-end: 1.25rem; }
+  ${Fields} { gap: 4px; }
+  ${Fields} > div > label { font-size: 0.625rem; }
+  ${Fields} > div > input { padding-inline: 4px; }
+  @media (max-width: 22.5rem) { grid-template-columns: 2.5rem minmax(0, 1.3fr) minmax(0, 1fr); gap: 5px; }
+  ${media.desktop} {
+    grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start;
+    > div { grid-column: 1 / -1; max-inline-size: 6rem; }
+    > div > label { margin-block-end: 0; }
+    > div > input { font-size: 0.875rem; }
+  }
+`;
 export const MarketChoices = styled.div`
-  display: grid; gap: 4px; grid-template-columns: repeat(2, minmax(0, 1fr));
-  ${media.tablet} { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  display: grid; grid-template-columns: minmax(0, 1fr);
+  ${media.desktop} { gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 `;
 export const MarketChoice = styled.label`
-  display: flex; align-items: center; gap: 6px; min-inline-size: 0; min-block-size: 2rem;
-  padding: 4px 6px; border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surfaceMuted};
+  display: flex; align-items: center; gap: 6px; min-inline-size: 0; min-block-size: 2.5rem;
+  padding: 4px 0; color: ${({ theme }) => theme.color.text};
   font-size: 0.75rem; cursor: pointer;
-  &:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; }
   > input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
-export const MarketField = styled.div`display: grid; gap: 4px; align-content: start; min-inline-size: 0;`;
+export const MarketField = styled.div`
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr); gap: 8px; align-items: start; min-inline-size: 0;
+  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  > details > summary {
+    min-block-size: 2.5rem; padding: 4px 0; border: 0;
+    color: ${({ theme }) => theme.color.link}; background: transparent; font-size: 0.6875rem;
+  }
+  > details > fieldset { position: static; margin-block-end: 6px; box-shadow: none; }
+  ${media.desktop} { grid-template-columns: minmax(0, 1fr); gap: 0; }
+`;
 export const ReuseRow = styled.div`
   grid-area: reuse; display: flex; align-items: center; min-inline-size: 0;
   > label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: ${({ theme }) => theme.color.mutedText}; cursor: pointer; }

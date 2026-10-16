@@ -19,7 +19,7 @@ import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { SlipTable } from "./slip-table";
 import { Actions, BuildButton, ClearLink, CriteriaError, CriteriaForm, CriteriaPanel, FieldGroup,
-  Fields, HeadingRow, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipStack } from "./slip-styles";
+  Fields, HeadingRow, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipStack, TargetGroups } from "./slip-styles";
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type Props = Readonly<{
@@ -65,9 +65,17 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     } catch { return messages.text("slips.summary.checkDates"); }
   }
   const invalidField = error?.field;
-  const invalidTargets = invalidField === "totalMin" || invalidField === "totalMax" || invalidField === "teamsMin" || invalidField === "teamsMax" || invalidField === "slips";
   const invalidLimits = invalidField === "oddsMin" || invalidField === "oddsMax" || invalidField === "probMin" || invalidField === "probMax";
   const invalidKickoff = invalidField === "dateFrom" || invalidField === "dateTo" || invalidField === "timeFrom" || invalidField === "timeTo";
+  const invalidMarkets = invalidField === "markets" || invalidField === "outcomes";
+  const manualMarkets = selectedMarkets.filter((family) => outcomes[family]?.length).length;
+  const marketsSummary = messages.text("slips.summary.markets", {
+    markets: selectedMarkets.length === publicPolicy.markets.length
+      ? messages.text("slips.summary.allMarkets", { count: messages.number(selectedMarkets.length) })
+      : messages.plural("slips.marketCount", selectedMarkets.length),
+    results: manualMarkets ? messages.text("slips.summary.chosenResults", { count: messages.number(manualMarkets) })
+      : messages.text("slips.summary.automaticResults"),
+  });
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -110,20 +118,21 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     <AppBrandBar locale={locale} />
     <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     <CriteriaPanel aria-labelledby={`${prefix}-criteria`}>
-      <HeadingRow><h2 id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</h2></HeadingRow>
+      <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>
       <CriteriaForm $hasError={error !== null} action={action} method="get" ref={formRef} onSubmit={submit} onInput={(event) => updateDraft(event.currentTarget)} noValidate>
         <input type="hidden" name="build" value="1" />
-        <CriteriaAccordion group="targets" title={messages.text("slips.accordion.targets")} resetVersion={resetVersion} invalid={invalidTargets} validationVersion={validationVersion}
-          summary={messages.text("slips.summary.targets", { odds: range("totalMin", "totalMax"), selections: range("teamsMin", "teamsMax"), slips: draft.slips || messages.text("slips.summary.requiredCount") })}>
-        <FieldGroup><legend>{messages.text("slips.targets")}</legend><Fields>
-          {field("totalMin", messages.text("slips.totalMin"), { ...oddsOptions, max: slipBuilderRules.maximumTotalOddsHundredths / 100 })}
-          {field("totalMax", messages.text("slips.totalMax"), { ...oddsOptions, max: slipBuilderRules.maximumTotalOddsHundredths / 100 })}
-          {field("teamsMin", messages.text("slips.teamsMin"), { min: 1, max: slipBuilderRules.maximumSelections, step: 1, inputMode: "numeric" })}
-          {field("teamsMax", messages.text("slips.teamsMax"), { min: 1, max: slipBuilderRules.maximumSelections, step: 1, inputMode: "numeric" })}
-          {field("slips", messages.text("slips.count"), { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true })}
-        </Fields><Note>{messages.text("slips.anyHint")}</Note></FieldGroup>
-        </CriteriaAccordion>
-        <CriteriaAccordion group="limits" title={messages.text("slips.accordion.limits")} defaultOpen resetVersion={resetVersion} invalid={invalidLimits} validationVersion={validationVersion}
+        <FieldGroup data-criteria-field="targets"><legend>{messages.text("slips.yourSlips")}</legend><TargetGroups>
+          {field("slips", messages.text("slips.countShort"), { min: 1, max: slipBuilderRules.maximumSlips, step: 1, inputMode: "numeric", required: true, "aria-label": messages.text("slips.count") })}
+          <fieldset><legend>{messages.text("slips.totalOddsRange")}</legend><Fields>
+            {field("totalMin", messages.text("slips.minimum"), { ...oddsOptions, max: slipBuilderRules.maximumTotalOddsHundredths / 100, "aria-label": messages.text("slips.totalMin") })}
+            {field("totalMax", messages.text("slips.maximum"), { ...oddsOptions, max: slipBuilderRules.maximumTotalOddsHundredths / 100, "aria-label": messages.text("slips.totalMax") })}
+          </Fields></fieldset>
+          <fieldset><legend>{messages.text("slips.selectionsRange")}</legend><Fields>
+            {field("teamsMin", messages.text("slips.minimum"), { min: 1, max: slipBuilderRules.maximumSelections, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMin") })}
+            {field("teamsMax", messages.text("slips.maximum"), { min: 1, max: slipBuilderRules.maximumSelections, step: 1, inputMode: "numeric", "aria-label": messages.text("slips.teamsMax") })}
+          </Fields></fieldset>
+        </TargetGroups></FieldGroup>
+        <CriteriaAccordion group="limits" title={messages.text("slips.accordion.limits")} resetVersion={resetVersion} invalid={invalidLimits} validationVersion={validationVersion}
           summary={messages.text("slips.summary.limits", { odds: range("oddsMin", "oddsMax"), probability: range("probMin", "probMax", "%") })}>
         <FieldGroup><legend>{messages.text("slips.limits")}</legend><LimitGroups>
           <fieldset><legend>{messages.text("slips.individualOdds")}</legend><Fields>
@@ -137,7 +146,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         </LimitGroups><Note>{messages.text("slips.oddsHint")}</Note></FieldGroup>
         </CriteriaAccordion>
         <CriteriaAccordion group="kickoff" title={messages.text("slips.accordion.kickoff")} resetVersion={resetVersion} invalid={invalidKickoff} validationVersion={validationVersion}
-          summary={messages.text("slips.summary.kickoff", { dates: dateSummary(), times: range("timeFrom", "timeTo") })}>
+          summary={messages.text("slips.summary.kickoff", { dates: dateSummary(), times: draft.timeFrom || draft.timeTo
+            ? range("timeFrom", "timeTo") : messages.text("slips.summary.allDay") })}>
         <FieldGroup data-criteria-field="kickoff"><legend>{messages.text("slips.kickoff")}</legend><Fields>
           {field("dateFrom", messages.text("slips.dateFrom"), { type: "date", inputMode: undefined })}
           {field("dateTo", messages.text("slips.dateTo"), { type: "date", inputMode: undefined })}
@@ -145,8 +155,10 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
           {field("timeTo", messages.text("slips.timeTo"), { type: "time", inputMode: undefined, step: 60 })}
         </Fields><Note>{messages.text("slips.timeHint")}</Note></FieldGroup>
         </CriteriaAccordion>
-        <FieldGroup data-criteria-field="markets" aria-describedby={error?.field === "markets" ? errorId : undefined}>
-          <legend>{messages.text("slips.markets")}</legend><MarketChoices>
+        <CriteriaAccordion group="markets" title={messages.text("slips.accordion.markets")} resetVersion={resetVersion} invalid={invalidMarkets} validationVersion={validationVersion}
+          summary={marketsSummary}>
+        <FieldGroup data-criteria-field="markets" aria-describedby={invalidMarkets ? errorId : undefined}>
+          <legend>{messages.text("slips.accordion.markets")}</legend><MarketChoices>
             {publicPolicy.markets.map((family) => <MarketField key={family}><MarketChoice>
               <input type="checkbox" name="markets" value={family} checked={selectedMarkets.includes(family)}
                 onChange={() => {
@@ -162,10 +174,12 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
           </MarketChoices>
           <Note>{messages.text("slips.outcomeHint")}</Note>
         </FieldGroup>
+        </CriteriaAccordion>
         <ReuseRow>
           <input type="hidden" name="reuse" value="0" />
           <label><input type="checkbox" name="reuse" value="1" defaultChecked={initialReuse ?? criteria.reuse} />{messages.text("slips.reuse")}</label>
         </ReuseRow>
+        <Note data-criteria-hint>{messages.text("slips.compactHint")}</Note>
         {error && <CriteriaError id={errorId} ref={errorRef} tabIndex={-1} role="alert">{messages.text(`slips.error.${error.code}`)}</CriteriaError>}
         <Actions>
           <ClearLink href={action} variant="secondary" prefetch={false} onClick={(event) => {

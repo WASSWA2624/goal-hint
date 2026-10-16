@@ -1,24 +1,24 @@
 # Slip builder
 
-`/en/slips` implements the selected compact mobile accordion and classic table
-slips, with all criteria expanded on desktop. Markets occupy a separate
-full-width criteria row below the targets,
-selection limits and kickoff range. Each slip has its total odds, average forecast
+`/en/slips` implements the Essentials first mobile layout with the Four folds
+Markets & results section and the existing classic table slips. All criteria
+expand on desktop. Each slip has its total odds, average forecast
 probability and selection count in its title, with one semantic table row per match.
 The shared navigation includes Slip builder; its More menu holds the items that exceed the compact primary
 navigation. Controls and results use the existing square, themed components.
 
 ## Responsive criteria layout
 
-Mobile groups the criteria into three native `<details>` sections: Targets,
-Limits and Kickoff. Targets and Kickoff start closed; Limits
-starts open. Their summaries show the current draft ranges and requested slip
-count, so collapsed sections still explain their settings. With JavaScript,
+Mobile keeps the slip count, total odds range and picks-per-slip range visible
+in one compact row. Three native `<details>` sections follow: Each pick,
+Kickoff and Markets & results. All three start closed. Their summaries show
+the current draft ranges, selected markets and Automatic/manual outcome mode,
+so collapsed sections still explain their settings. With JavaScript,
 these summaries update as fields change, without submitting a build. Desktop
 keeps all three groups expanded and the fields visible.
 
-Markets and its result pickers remain outside the three accordion sections and
-stay visible below the other criteria. Match reuse follows Markets in both the
+Markets & results opens to one row per market, pairing its checkbox with the
+existing multi-result picker. Match reuse follows Markets in both the
 visual layout and keyboard order, followed by Reset and Build slips.
 Collapsing a group hides its controls visually while retaining
 the enabled, named inputs in the same native GET form; date, time and numeric
@@ -27,8 +27,8 @@ sections without JavaScript as well. Mobile sections opened before hydration
 keep that native open state when the enhanced controls attach.
 
 A validation error opens the group containing its invalid controls on every
-failed submission, even if the group was subsequently closed. A blank required
-slip count shows Required in the Targets summary. The entered
+failed submission, even if the group was subsequently closed. Target validation
+keeps the already-visible essential inputs marked invalid. The entered
 draft remains editable, the offending fields retain their accessible error
 association, and the error explanation stays visible. The responsive layout
 changes neither the criteria contract nor the stored-data generation rules.
