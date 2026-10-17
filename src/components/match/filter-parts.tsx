@@ -279,6 +279,7 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   useLayoutEffect(() => {
     const element = panel.current, anchor = button.current;
     if (!open || !element || !anchor) return;
+    const headers = [...document.querySelectorAll<HTMLElement>("[data-app-header]")];
     let frame: number | null = null;
     const update = () => {
       frame = null;
@@ -293,7 +294,13 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
       const left = viewport?.offsetLeft ?? 0, top = viewport?.offsetTop ?? 0;
       const width = viewport?.width ?? document.documentElement.clientWidth, height = viewport?.height ?? window.innerHeight;
       const trigger = anchor.getBoundingClientRect();
-      if (trigger.bottom <= top || trigger.top >= top + height || trigger.right <= left || trigger.left >= left + width) {
+      const bottom = top + height;
+      const safeTop = headers.reduce((boundary, header) => {
+        const bounds = header.getBoundingClientRect(), position = getComputedStyle(header).position;
+        return bounds.width > 0 && bounds.height > 0 && bounds.bottom > top && bounds.top < bottom &&
+          (position === "sticky" || position === "fixed") ? Math.max(boundary, Math.min(bottom, bounds.bottom)) : boundary;
+      }, top);
+      if (trigger.bottom <= safeTop || trigger.top >= bottom || trigger.right <= left || trigger.left >= left + width) {
         close();
         return;
       }
@@ -304,8 +311,8 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
       const list = element.querySelector("ul");
       const listHeight = list ? Math.min(list.scrollHeight, Number.parseFloat(getComputedStyle(list).maxBlockSize) || list.scrollHeight) : 0;
       const naturalHeight = element.scrollHeight + element.offsetHeight - element.clientHeight + (list ? listHeight - list.clientHeight : 0);
-      const below = Math.max(0, top + height - gutter - trigger.bottom - gap);
-      const above = Math.max(0, trigger.top - top - gutter - gap);
+      const below = Math.max(0, bottom - gutter - trigger.bottom - gap);
+      const above = Math.max(0, trigger.top - safeTop - gutter - gap);
       const placement = naturalHeight > below && above > below ? "above" : "below";
       element.dataset.pickerPlacement = placement;
       element.style.setProperty("--picker-max-height", `${placement === "above" ? above : below}px`);
@@ -320,6 +327,7 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
     const observer = new ResizeObserver(schedule);
     observer.observe(element);
     observer.observe(anchor);
+    for (const header of headers) observer.observe(header);
     if (root.current) observer.observe(root.current);
     if (root.current?.parentElement) observer.observe(root.current.parentElement);
     window.addEventListener("resize", schedule);

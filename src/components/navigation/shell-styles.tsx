@@ -69,7 +69,7 @@ export const SkipLink = styled.a`
  * The branded bar: solid navy/charcoal behind the inverse logo, with the teal brand edge along
  * the bottom. App pages own their phone bar (same fill), so this one is desktop-only there.
  */
-export const Header = styled.header<{ $app?: boolean }>`
+export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "data-app-header": "" })<{ $app?: boolean }>`
   position: sticky;
   inset-block-start: 0;
   z-index: 20;
