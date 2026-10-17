@@ -1,4 +1,4 @@
-import { validKickoffTime, type KickoffTimeFilter } from "./kickoff-time.ts";
+import { isAnyKickoffTime, validKickoffTime, type KickoffTimeFilter } from "./kickoff-time.ts";
 import {
   addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type ReportingDate, type ReportingDateRange,
 } from "./calendar.ts";
@@ -10,9 +10,11 @@ import { resolveLocale, type Locale } from "../i18n/locales.ts";
 
 export const feedStatuses = ["all", "scheduled", "live", "finished", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const;
 export type FeedStatus = (typeof feedStatuses)[number];
-export const feedDatePresets = ["today", "tomorrow", "next-3-days", "next-7-days", "next-30-days"] as const;
+export const feedDatePresets = ["last-30-days", "today", "tomorrow", "next-3-days", "next-7-days", "next-30-days"] as const;
 export type FeedDatePreset = (typeof feedDatePresets)[number];
+export const defaultFeedDatePreset: FeedDatePreset = "last-30-days";
 const presetDays: Readonly<Record<FeedDatePreset, { offset: number; days: number }>> = Object.freeze({
+  "last-30-days": { offset: -29, days: 30 },
   today: { offset: 0, days: 1 }, tomorrow: { offset: 1, days: 1 }, "next-3-days": { offset: 0, days: 3 },
   "next-7-days": { offset: 0, days: 7 }, "next-30-days": { offset: 0, days: 30 },
 });
@@ -220,13 +222,14 @@ export function parseFeedQuery(input: FeedParameters, context: { today: Reportin
       dates = { kind: "range", from: parseReportingDate(from), to: parseReportingDate(to) };
     } else {
       if (when !== undefined && !isFeedDatePreset(when)) fail();
-      dates = { kind: (when ?? "today") as FeedDatePreset };
+      dates = { kind: (when ?? defaultFeedDatePreset) as FeedDatePreset };
     }
   }
   const timeFrom = get("timeFrom"), timeTo = get("timeTo"), zone = get("tz");
   if (zone !== undefined && !validTimeZone(zone)) fail();
-  const time = (timeFrom === undefined || timeFrom === "") && (timeTo === undefined || timeTo === "") ? null
-    : { from: timeFrom ?? "", to: timeTo ?? timeFrom ?? "", zone: zone ?? "" };
+  const bounds = { from: timeFrom ?? "", to: timeTo ?? timeFrom ?? "" };
+  const time = (bounds.from === "" && bounds.to === "") || isAnyKickoffTime(bounds) ? null
+    : { ...bounds, zone: zone ?? "" };
   if (time && !validKickoffTime(time)) fail();
   resolveFeedDates({ dates, ...(zone === undefined ? {} : { zone }), ...(time ? { time } : {}) }, context.today, context.asOf);
   const rawSearch = get("q") ?? "";
@@ -266,10 +269,13 @@ export function serializeFeedQuery(query: FeedQuery, today: ReportingDate): URLS
   const dates = query.dates;
   if (dates.kind === "date") result.set("date", dates.date);
   else if (dates.kind === "range") { result.set("from", dates.from); result.set("to", dates.to); }
-  else if (dates.kind !== "today") result.set("when", dates.kind);
+  else if (dates.kind !== defaultFeedDatePreset) result.set("when", dates.kind);
   if (query.time) {
     if (!validKickoffTime(query.time)) fail();
-    result.set("timeFrom", query.time.from); result.set("timeTo", query.time.to); result.set("tz", query.time.zone);
+    if (!isAnyKickoffTime(query.time)) {
+      result.set("timeFrom", query.time.from); result.set("timeTo", query.time.to);
+    }
+    result.set("tz", query.time.zone);
   }
   if (query.zone !== undefined && query.zone !== null) {
     if (!validTimeZone(query.zone) || query.time && query.time.zone !== query.zone) fail();
@@ -331,7 +337,7 @@ export function feedQueryKey(query: FeedQuery, today: ReportingDate): string {
 export function panelFilterCount(query: Pick<FeedQuery, "leagues" | "countries" | "markets" | "probability"> & Partial<Pick<FeedQuery, "odds" | "time">>): number {
   return query.leagues.length + query.countries.length +
     Number(!isAnyMarkets(query.markets)) + Number(!isAnyProbability(query.probability)) +
-    Number(!isAnyOdds(query.odds ?? null)) + Number(Boolean(query.time));
+    Number(!isAnyOdds(query.odds ?? null)) + Number(!isAnyKickoffTime(query.time));
 }
 
 export function activeFeedFilterCount(query: FeedQuery): number {

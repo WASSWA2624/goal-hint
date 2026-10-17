@@ -1,6 +1,13 @@
 import { addReportingDays, type ReportingDateRange } from "./calendar.ts";
 
 export type KickoffTimeFilter = Readonly<{ from: string; to: string; zone: string }>;
+export const fullDayKickoffTime = Object.freeze({ from: "00:00", to: "23:59" });
+
+/** The complete local day is unrestricted, including both occurrences of a repeated DST hour. */
+export function isAnyKickoffTime(value?: Pick<KickoffTimeFilter, "from" | "to"> | null): boolean {
+  return !value || value.from === fullDayKickoffTime.from && value.to === fullDayKickoffTime.to;
+}
+
 export function validKickoffTime(value: KickoffTimeFilter): boolean {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.from) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.to) || value.from > value.to || value.zone.length > 100) return false;
   try { new Intl.DateTimeFormat("en", { timeZone: value.zone }); return true; } catch { return false; }

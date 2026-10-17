@@ -68,7 +68,8 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
     assert.throws(() => canonicalUrl(path), RangeError);
   }
   assert.equal(feedDiscovery(query({}), today).path, '/en');
-  assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/predictions/2026-10-09?page=2');
+  assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/predictions/2026-09-10?to=2026-10-09&page=2');
+  assert.equal(feedDiscovery(query({ when: 'today' }), today).path, '/en/predictions/2026-10-09');
   assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3');
   assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08');
   for (const values of [{ q: '<script>' }, { league: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, { status: 'live' },
@@ -84,7 +85,7 @@ test('page metadata has independent social fields, real canonical pagination and
   assert.equal(home.robots.index, true);
   const page = feedMetadata(query({ page: '2' }), today, populated, approved);
   assert.match(page.title, /Page 2/); assert.notEqual(page.title, home.title);
-  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/predictions/2026-10-09?page=2');
+  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/predictions/2026-09-10?to=2026-10-09&page=2');
   assert.equal(page.openGraph.url, page.alternates.canonical);
   assert.equal(page.openGraph.title, page.title); assert.equal(page.twitter.title, page.title);
   assert.equal(page.openGraph.images[0].url, 'https://goalhint.com/brand/goal-hint-open-graph.png');

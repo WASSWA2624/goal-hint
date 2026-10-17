@@ -20,7 +20,7 @@ test('date navigation retains all applied filters and resets pagination for ever
     assert.equal(next.status, query.status); assert.deepEqual(next.markets, query.markets); assert.deepEqual(next.probability, query.probability);
     assert.deepEqual(next.sort, query.sort); assert.equal(next.page, 1); assert.equal(next.pageSize, 40);
   }
-  assert.deepEqual(links.presets.map((link) => link.kind), ['today', 'tomorrow', 'next-3-days', 'next-7-days', 'next-30-days']);
+  assert.deepEqual(links.presets.map((link) => link.kind), ['last-30-days', 'today', 'tomorrow', 'next-3-days', 'next-7-days', 'next-30-days']);
   assert.ok(links.presets.every((link) => !link.current));
 });
 

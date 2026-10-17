@@ -3,10 +3,12 @@ import test from "node:test";
 import { activeFeedFilterCount, defaultMarkets, feedQueryHref, feedQueryKey, FeedQueryError, isAnyMarkets, isAnyOdds, panelFilterCount, parseFeedQuery, resolveFeedDates,
   serializeFeedQuery, formatProbabilityValue, parseProbabilityValue, probabilityFraction, validProbabilityRange } from "../src/domain/feed-query.ts";
 import { publicPolicy } from "../src/domain/public-policy.ts";
+import { parseReportingDate } from "../src/domain/calendar.ts";
+import { fullDayKickoffTime } from "../src/domain/kickoff-time.ts";
 import { query, today } from "./helpers/client-state-fixtures.mjs";
 
 test("URL queries round trip with one canonical order and explicit EAT context", () => {
-  for (const parameters of ["", "when=tomorrow", "when=next-3-days", "when=next-7-days", "when=next-30-days", "date=2020-02-29",
+  for (const parameters of ["", "when=last-30-days", "when=today", "when=tomorrow", "when=next-3-days", "when=next-7-days", "when=next-30-days", "date=2020-02-29",
     "from=2020-02-29&to=2020-03-06", "from=2026-10-01&to=2026-10-31",
     "q=Example+FC&league=league-b,league-a&country=Spain,England&status=live&market=total-goals,match-result&prob=55-90&sort=probability&dir=asc&page=3&pageSize=40",
     "sort=probability", "sort=kickoff&dir=desc", "status=finished", "market=both-teams-to-score", "market=double-chance", "prob=0-60", "picks=only"]) {
@@ -16,7 +18,8 @@ test("URL queries round trip with one canonical order and explicit EAT context",
     const date = url.pathname.split("/")[3];
     assert.deepEqual(query(url.searchParams.toString(), date ? { routeDate: date } : {}), parsed);
   }
-  assert.equal(serializeFeedQuery(query(`page=1&status=all&market=${defaultMarkets.join(",")}&prob=0-100&picks=all&sort=kickoff&dir=asc&when=today`), today).toString(), "");
+  assert.equal(serializeFeedQuery(query(`page=1&status=all&market=${defaultMarkets.join(",")}&prob=0-100&picks=all&sort=kickoff&dir=asc&when=last-30-days`), today).toString(), "");
+  assert.equal(serializeFeedQuery(query("when=today"), today).toString(), "when=today");
   assert.equal(serializeFeedQuery(query("q=+Cafe%CC%81+++FC+"), today).toString(), "q=Caf%C3%A9+FC");
   assert.equal(feedQueryHref(query("from=2020-02-29&to=2020-03-06&status=finished"), today),
     "/en/predictions/2020-02-29?to=2020-03-06&status=finished");
@@ -24,7 +27,7 @@ test("URL queries round trip with one canonical order and explicit EAT context",
 
 test("default markets are Any; explicit single-family filters remain distinct and all-family URLs canonicalize to home", () => {
   const defaults = query();
-  assert.deepEqual(defaults.dates, { kind: "today" });
+  assert.deepEqual(defaults.dates, { kind: "last-30-days" });
   assert.deepEqual(defaults.markets, publicPolicy.markets);
   assert.equal(defaults.time, undefined); assert.deepEqual(defaults.leagues, []); assert.deepEqual(defaults.countries, []);
   assert.deepEqual(defaults.probability, { min: 0, max: 100 }); assert.equal(defaults.odds, null);
@@ -35,6 +38,45 @@ test("default markets are Any; explicit single-family filters remain distinct an
   assert.equal(feedQueryHref(query("market=match-result"), today), "/en?market=match-result");
   assert.equal(panelFilterCount(defaults), 0); assert.equal(panelFilterCount(query("market=match-result")), 1);
   assert.notEqual(feedQueryKey(defaults, today), feedQueryKey(query("market=match-result"), today));
+});
+
+test("home resolves the rolling last 30 calendar days inclusively across month, leap-day and year boundaries", () => {
+  for (const [day, from] of [["2026-10-09", "2026-09-10"], ["2024-03-01", "2024-02-01"], ["2026-01-15", "2025-12-17"]]) {
+    const current = parseReportingDate(day), selected = parseFeedQuery({}, { today: current });
+    const range = resolveFeedDates(selected, current);
+    assert.equal(range.startDate, from); assert.equal(range.endDate, day); assert.equal(range.dayCount, 30);
+    assert.equal(feedQueryHref(selected, current), "/en");
+    assert.deepEqual(parseFeedQuery({ when: "last-30-days" }, { today: current }), selected);
+  }
+  const current = query(), tomorrow = parseReportingDate("2026-10-10");
+  assert.equal(resolveFeedDates(current, tomorrow).startDate, "2026-09-11");
+  assert.equal(resolveFeedDates(current, tomorrow).endDate, tomorrow);
+  assert.notEqual(feedQueryKey(current, today), feedQueryKey(current, tomorrow));
+  const explicit = query("from=2026-09-10&to=2026-10-09");
+  assert.equal(resolveFeedDates(explicit, tomorrow).startDate, "2026-09-10");
+  assert.equal(resolveFeedDates(explicit, tomorrow).endDate, today);
+  assert.equal(feedQueryHref(explicit, today), "/en/predictions/2026-09-10?to=2026-10-09");
+  assert.equal(feedQueryHref(query("when=today"), today), "/en?when=today");
+  assert.equal(resolveFeedDates(query("when=today"), today).dayCount, 1);
+});
+
+test("full-day time bounds are unrestricted and canonicalize without adding an active filter", () => {
+  for (const input of ["timeFrom=&timeTo=", "timeFrom=00:00&timeTo=23:59"]) {
+    assert.deepEqual(query(input), query());
+    assert.equal(feedQueryHref(query(input), today), "/en");
+    assert.equal(panelFilterCount(query(input)), 0);
+  }
+  const zoned = query("tz=America%2FNew_York");
+  const allDay = query("timeFrom=00:00&timeTo=23:59&tz=America%2FNew_York");
+  assert.deepEqual(allDay, zoned);
+  assert.equal(feedQueryKey(allDay, today), feedQueryKey(zoned, today));
+  const draft = { ...query(), time: { ...fullDayKickoffTime, zone: "America/New_York" } };
+  assert.equal(feedQueryHref(draft, today), "/en?tz=America%2FNew_York");
+  assert.equal(panelFilterCount(draft), 0);
+  assert.equal(activeFeedFilterCount(draft), 0);
+  const limited = query("timeFrom=00:00&timeTo=23:58&tz=Africa%2FKampala");
+  assert.equal(limited.time.to, "23:58"); assert.equal(panelFilterCount(limited), 1);
+  assert.throws(() => query("timeFrom=00:00&timeTo=23:59&tz=Invalid%2FZone"), FeedQueryError);
 });
 
 test("list filters are deduplicated, sorted and in policy order, so equivalent URLs share a key", () => {
@@ -54,8 +96,11 @@ test("list filters are deduplicated, sorted and in policy order, so equivalent U
 
 test("canonical list identity includes filters, order, locale and resolved dates, but excludes loaded page", () => {
   const key = feedQueryKey(query(), today);
-  assert.equal(feedQueryKey(query("date=2026-10-09&page=2"), today), key);
-  assert.equal(feedQueryKey(query("from=2026-10-09&to=2026-10-09"), today), key);
+  assert.equal(feedQueryKey(query("from=2026-09-10&to=2026-10-09&page=2"), today), key);
+  const todayKey = feedQueryKey(query("when=today"), today);
+  assert.notEqual(todayKey, key);
+  assert.equal(feedQueryKey(query("date=2026-10-09&page=2"), today), todayKey);
+  assert.equal(feedQueryKey(query("from=2026-10-09&to=2026-10-09"), today), todayKey);
   for (const input of ["q=team", "league=a", "country=Spain", "status=live", "market=total-goals", "market=match-result,total-goals",
     "prob=50-100", "sort=probability", "dir=desc", "pageSize=20", "when=tomorrow"]) {
     assert.notEqual(feedQueryKey(query(input), today), key, input);

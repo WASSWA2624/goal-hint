@@ -30,12 +30,12 @@ test('native GET controls and canonical URLs produce the same applied query', ()
   assert.throws(() => applyFeedDraft({ ...query, markets: [] }, today));
   assert.throws(() => applyFeedDraft({ ...query, probability: { min: 80, max: 20 } }, today));
 });
-test('Clear filters resets every date selection to Today and Any, retaining the navigation section and page size', () => {
-  for (const dates of [{ date: today }, { from: today, to: '2026-10-15' }, { when: 'tomorrow' }, { when: 'next-30-days' }]) {
+test('Clear filters resets every date selection to the last 30 days and Any, retaining navigation and page size', () => {
+  for (const dates of [{ date: today }, { from: today, to: '2026-10-15' }, { when: 'today' }, { when: 'tomorrow' }, { when: 'next-30-days' }]) {
     const query = parseFeedQuery({ ...dates, q: 'team', league: 'league-a,league-b', country: 'Spain', status: 'live', market: 'total-goals,both-teams-to-score',
       prob: '60-100', timeFrom: '12:00', timeTo: '18:00', tz: 'Africa/Kampala', picks: 'only', sort: 'probability', dir: 'asc', page: '3', pageSize: '40' }, { today });
     const reset = resetFeedFilters(query);
-    assert.deepEqual(reset.dates, { kind: 'today' }); assert.equal(reset.pageSize, 40); assert.equal(reset.page, 1);
+    assert.deepEqual(reset.dates, { kind: 'last-30-days' }); assert.equal(reset.pageSize, 40); assert.equal(reset.page, 1);
     assert.equal(reset.time, undefined); assert.equal(reset.zone, query.zone);
     assert.equal(reset.search, ''); assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
     assert.equal(reset.status, 'live', 'Live and Results are navigation sections, not filters');
@@ -45,6 +45,15 @@ test('Clear filters resets every date selection to Today and Any, retaining the 
     assert.equal(panelFilterCount(reset), 0);
     assert.deepEqual(applyFeedDraft(reset, today), reset);
   }
+});
+
+test('Apply drops full-day time bounds while retaining the browsing zone and explicit dates', () => {
+  const query = parseFeedQuery({ date: '2026-10-07', tz: 'America/New_York', page: '3' }, { today });
+  const applied = applyFeedDraft({ ...query, time: { from: '00:00', to: '23:59', zone: query.zone } }, today);
+  assert.equal(applied.time, undefined); assert.equal(applied.zone, query.zone);
+  assert.deepEqual(applied.dates, query.dates); assert.equal(applied.page, 1);
+  assert.equal(panelFilterCount(applied), 0);
+  assert.equal(feedQueryHref(applied, today), '/en/predictions/2026-10-07?tz=America%2FNew_York');
 });
 
 test('Any probability inputs accept open bounds while incomplete or invalid numeric drafts cannot apply', () => {

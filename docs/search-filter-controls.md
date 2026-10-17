@@ -5,9 +5,11 @@ URLs and stored server projections remain authoritative. A persistent search
 bar sits in the page body on every screen size. Phones and tablets use the
 Day Strip layout: full-width search; a day strip with earlier/later scroll
 buttons and a Calendar button; then one row with the match count, the Sort
-menu and a Filters button. Filters opens a bottom sheet holding every other
+menu and an Advanced filters button. Advanced filters opens a bottom sheet holding every other
 filter. Desktop always shows the search bar and all filter fields, without a
-sheet or day strip.
+sheet or day strip. The default date range is the last 30 calendar days through
+today, resolving from today minus 29 days to today in the browsing zone. The
+relative preset remains current across midnight; explicit date selections stay unchanged.
 Search and filter edits share one draft and remain unsubmitted until Enter in
 the search bar or the single Apply action submits the complete draft. Both
 submission paths normalize NFC/whitespace, validate all fields and reset page
@@ -18,7 +20,7 @@ Apply navigates through `feedQueryHref` using the App Router and a transition.
 The same parser and stored service handle initial rendering, Apply, reload,
 shared URLs and Back. Next discards superseded navigations. Explicit filter
 actions always dispatch normal navigation, including a rapid Apply followed by
-Clear back to the currently displayed URL. Only an idle retry of a failed read
+Reset back to the currently displayed URL. Only an idle retry of a failed read
 at the same URL uses `router.refresh()`. The shared form retains a canonical
 GET search fallback with the applied query parameters and page reset to one.
 Empty "all" options parse as empty lists and are omitted from canonical URLs. Repeated
@@ -28,13 +30,13 @@ and other malformed parameters remain invalid.
 
 From date, To date, From time and To time share the filter fields with Markets,
 Leagues, Countries and Probability. Below 64rem these fields live in a modal
-bottom sheet (`role="dialog"`) above the tab bar, opened by the Filters button.
+bottom sheet (`role="dialog"`) above the tab bar, opened by the Advanced filters button.
 The sheet lists, in order: Match dates, Kickoff time, Markets, Leagues,
-Countries, Probability and the Odds explanation, with Clear filters and Apply filters
+Countries, Probability and the Odds explanation, with Reset filters and Apply filters
 pinned at its foot. Opening it moves focus into the sheet, keeps Tab inside
 it and stops the page behind from scrolling. The close button, Escape or a tap
 on the backdrop discards unapplied filter edits (typed search text stays) and
-returns focus to Filters. Apply and Clear close the sheet. Widening to desktop
+returns focus to Advanced filters. Apply and Reset close the sheet. Widening to desktop
 closes it. The sheet is a fixed element inside the form, so no ancestor of the
 form may be a CSS size container.
 At desktop widths all fields remain visible. The common range controls are
@@ -64,12 +66,15 @@ filled and shows the range. The strip is absent for live matches.
 
 Equal date endpoints select one day; different endpoints select an inclusive
 range of up to 31 days. Equal time endpoints select one kickoff minute; different
-endpoints select an inclusive minute range. Both time inputs empty mean no time
-filter. A missing endpoint, reversed range or invalid date/time remains editable
-and disables the shared Apply action. Browsing `tz` is independent of optional
-time bounds: dates select complete local days, including DST boundaries, and
-blank time fields keep that zone. Clear filters removes time bounds, returns the
-date to Today and retains the browsing zone. An unzoned relative entry adopts the device
+endpoints select an inclusive minute range. Unrestricted time fields show From
+00:00 and To 23:59 in the initial HTML and after reset. Clearing an endpoint
+restores its corresponding full-day bound. The full-day pair is unrestricted:
+it adds no time constraint, canonical time parameters or active-filter count.
+A reversed range or invalid date/time remains editable and disables the shared
+Apply action. Browsing `tz` is independent of optional time bounds: dates select
+complete local days, including DST boundaries, and full-day time fields keep
+that zone. Reset filters removes time constraints, restores the last 30 days
+through today and retains the browsing zone. An unzoned relative entry adopts the device
 zone after hydration; explicit named dates and shared applied zones remain
 stable. Unzoned explicit dates retain their EAT boundaries. New time selections
 use the applied browsing zone, or the device zone when none is applied; its IANA
@@ -124,13 +129,13 @@ list remain removable. Probability uses the same directly editable
 minimum/maximum fields as desktop. Mobile retains the muted Odds unavailable
 explanation.
 
-On desktop, Sort, Clear and Apply sit right-aligned below the filter fields,
+On desktop, Sort, Reset and Apply sit right-aligned below the filter fields,
 with a compact summary of the applied date or range, markets, leagues and
 countries (plus search, time and probability constraints when present) at the
 far left of the same row. On phones the row below the day strip holds the
-applied match count, the Sort menu and Filters; the sort label shortens
+applied match count, the Sort menu and Advanced filters; the sort label shortens
 before the row would wrap. Sorting retains its immediate navigation behavior.
-Filters badges the number of applied filters. The applied summary appears on
+Advanced filters badges the number of applied filters. The applied summary appears on
 phones under Showing only when a filter or search is applied. These describe
 the applied query, rather than unsent edits. In the sheet, a Changes ready to
 apply notice distinguishes valid unsent edits. Phone controls retain visible
@@ -139,11 +144,13 @@ at least 44px. The phone match count updates with the displayed projection,
 including live refreshes; desktop shows it with the results. It is omitted when
 no successful projection is available. Draft edits make no count-preview
 requests. Apply filters submits the complete
-search, date, time and filter draft. Clear filters resets
+search, date, time and filter draft. Reset filters resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
-Today, all supported markets and kickoff ascending order, and resets page to one.
+the last 30 days through today, all supported markets and kickoff ascending order,
+and resets page to one. The time fields show 00:00–23:59 without restricting kickoff times.
 It retains the browsing zone, status entry and page size. The button labels are
-Clear filters and Apply filters, each in two rows on mobile and one row on desktop.
+Reset filters and Apply filters, each in two rows on mobile and one row on desktop.
+Advanced filters uses the same two-line label treatment on mobile, with both words visible.
 An empty-result message appears with the results. The sort menu includes
 both kickoff directions and both probability directions, without a separate
 reverse-order button.
@@ -170,7 +177,7 @@ On phones and tablets the feed's brand bar contains the home logo and theme
 control. Desktop retains the page title and quick date presets, with the theme
 control at the far right of the shell header; feed pages
 omit the shell search so there is one body search bar on every device. The
-mobile Filters button has a visible label, `aria-haspopup="dialog"`,
+mobile Advanced filters button has a visible label, `aria-haspopup="dialog"`,
 `aria-expanded`/`aria-controls` for the sheet, and an accessible name that
 includes the active filter count. The feed uses one semantic h1: it stays visually
 hidden on phones and tablets to conserve space and visible on desktop. Only the

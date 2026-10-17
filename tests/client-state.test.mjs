@@ -145,7 +145,7 @@ test("Back restores pagination and scroll only for its history entry, canonical 
   assert.doesNotThrow(() => JSON.stringify(state(store).history));
   store.dispatch(queryApplied(query("q=another")));
   receive(store, [fixture({ dataVersion: "10" })], "replace");
-  store.dispatch(navigationRestored({ entryId: "back-a", query: query("date=2026-10-09"), now: now + 1 }));
+  store.dispatch(navigationRestored({ entryId: "back-a", query: query("from=2026-09-10&to=2026-10-09"), now: now + 1 }));
   assert.deepEqual(state(store).view.ids, ["fixture-a", "fixture-b"]);
   assert.equal(state(store).view.lastPage, 2);
   assert.equal(state(store).view.scrollY, 850);

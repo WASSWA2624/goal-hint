@@ -90,9 +90,16 @@ def verify_feed(origin, directory, scenarios):
         assert len(re.findall(r"<h1[\s>]", visible)) == 1
         # Expanding filters needs no extra fetch: range fields render once in the initial document.
         assert len(re.findall(r'<input\b[^>]*type="date"', visible)) == 2
-        assert len(re.findall(r'<input\b[^>]*type="time"', visible)) == 2
+        time_inputs = re.findall(r'<input\b[^>]*type="time"[^>]*>', visible)
+        assert len(time_inputs) == 2
+        time_range = scenario["query"].get("time") or {"from": "00:00", "to": "23:59"}
+        for field, bound in zip(time_inputs, ("from", "to")):
+            match(r'\bvalue="' + re.escape(time_range[bound]) + r'"', field)
         for label in ["From date", "To date", "From time", "To time"]:
             match(label, visible)
+        match(r'aria-label="Reset filters"', visible)
+        match(r'aria-label="Advanced filters(?:, [^"]+ active)?"', visible)
+        no_match("Clear filters", visible)
         filter_form = match(r'<form\b[^>]*aria-label="Search and filter matches"[\s\S]*?</form>', visible).group()
         form_id = match(r'\bid="([^"]+)"', filter_form).group(1)
         submit_buttons = [button for button in re.findall(r'<button\b[^>]*>', visible)

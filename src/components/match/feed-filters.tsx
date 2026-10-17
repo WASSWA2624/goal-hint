@@ -5,7 +5,7 @@ import styled, { css } from "styled-components";
 import { CheckIcon, CloseIcon, InfoIcon, ResetIcon, FilterIcon, SearchIcon, SlidersIcon, SortIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
-import { validKickoffTime } from "@/domain/kickoff-time";
+import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import { countryFlagAsset } from "@/domain/country-flag";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
 import { applyFeedDraft, parseProbabilityInputs, resetFeedFilters } from "@/domain/feed-controls";
@@ -112,7 +112,7 @@ const SearchButton = styled.button`
   ${media.hover} { &:hover { background: ${({ theme }) => theme.gradient.actionHover}; border-color: ${({ theme }) => theme.gradient.actionHover}; } }
   ${focusRing}
 `;
-/** Sort, Clear and Filters share one phone row; labels adapt to the available width. */
+/** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
 const PhoneToolbar = styled.div`
   container-type: inline-size;
   display: flex;
@@ -187,7 +187,6 @@ const FilterToggle = styled.button`
   @container (max-width: 14rem) {
     min-inline-size: 2.75rem;
     padding-inline: 6px;
-    > span { display: none; }
   }
 `;
 const DesktopOnly = styled.div`display: none; ${desktop} { display: block; grid-column: 1 / -1; order: 1; }`;
@@ -596,7 +595,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   // Desktop always shows the fields in the page, so the sheet only exists below the desktop width.
   usePhoneSheet(open, sheet, () => onOpenChange(false));
   const [dateInputs, setDateInputs] = useState({ from: String(range.startDate), to: String(range.endDate) });
-  const [timeInputs, setTimeInputs] = useState({ from: query.time?.from ?? "", to: query.time?.to ?? "" });
+  const [timeInputs, setTimeInputs] = useState({ from: query.time?.from ?? fullDayKickoffTime.from, to: query.time?.to ?? fullDayKickoffTime.to });
   const [probabilityInputs, setProbabilityInputs] = useState(() => probabilityInputValues(query.probability));
   const probability = useMemo(() => parseProbabilityInputs(probabilityInputs), [probabilityInputs]);
   const zone = query.zone ?? query.time?.zone ?? deviceZone;
@@ -607,7 +606,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
       const dates: FeedQuery["dates"] = from === range.startDate && to === range.endDate ? query.dates
         : from === to ? { kind: "date", date: from } : { kind: "range", from, to };
       resolveFeedDates({ dates }, today);
-      const time = timeInputs.from || timeInputs.to ? { ...timeInputs, zone } : null;
+      const time = isAnyKickoffTime(timeInputs) ? null : { ...timeInputs, zone };
       if (time && !validKickoffTime(time)) return null;
       const next = { ...draft, dates, time, probability, page: 1 };
       applyFeedDraft(next, today);
@@ -631,7 +630,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
   /** Closing without Apply restores the applied filters; typed search text stays in the field. */
   const closeSheet = () => {
     setDateInputs({ from: range.startDate, to: range.endDate });
-    setTimeInputs({ from: query.time?.from ?? "", to: query.time?.to ?? "" });
+    setTimeInputs({ from: query.time?.from ?? fullDayKickoffTime.from, to: query.time?.to ?? fullDayKickoffTime.to });
     setProbabilityInputs(probabilityInputValues(query.probability));
     dispatch(draftChanged({ ...query, search: draft.search, page: 1 }));
     onOpenChange(false);
@@ -709,7 +708,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
     event.preventDefault();
     const resetRange = resolveFeedDates(reset, today);
     setDateInputs({ from: resetRange.startDate, to: resetRange.endDate });
-    setTimeInputs({ from: "", to: "" });
+    setTimeInputs(fullDayKickoffTime);
     setProbabilityInputs(probabilityInputValues(reset.probability));
     onOpenChange(false);
     apply(reset);
@@ -744,7 +743,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
       <FilterToggle ref={filterToggle} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls={panelId}
         aria-label={count > 0 ? messages.plural("feed.filters.toggleCount", count) : filtersLabel}
         onClick={() => onOpenChange(true)}>
-        <SlidersIcon /><span>{filtersLabel}</span>{count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
+        <SlidersIcon /><FilterActionLabel label={filtersLabel} />{count > 0 && <b aria-hidden="true">{messages.number(count)}</b>}
       </FilterToggle>
     </PhoneToolbar>
     {open && <SheetScrim aria-hidden="true" onClick={closeSheet} />}

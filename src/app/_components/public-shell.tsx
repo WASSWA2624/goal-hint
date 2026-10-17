@@ -49,11 +49,11 @@ export async function PublicShell({ children, locale, current, today: reportingD
   const language = resolveLocale(locale);
   const messages = createMessages(language);
   const today = reportingDate ?? await getShellDate();
-  const todayHref = zone ? deviceFeedEntryHref("today", today, zone, language) : feedHref(getFeedEntry(today, "today"), language);
+  const todayHref = zone ? deviceFeedEntryHref("today", today, zone, language) : homeHref(language);
   const resultsHref = zone ? deviceFeedEntryHref("results", today, zone, language) : feedHref(getFeedEntry(today, "results"), language);
   const sections = [
     { key: "today", href: todayHref, label: messages.text("navigation.predictions"), tab: messages.text("navigation.matches"), icon: "matches", tone: "teal" },
-    { key: "live", href: zone ? deviceFeedEntryHref("live", today, zone, language) : feedHref({ date: today, status: "live" }, language), label: messages.text("navigation.live"), tab: messages.text("navigation.live"), icon: "live", tone: "red" },
+    { key: "live", href: zone ? deviceFeedEntryHref("live", today, zone, language) : `${homeHref(language)}?status=live`, label: messages.text("navigation.live"), tab: messages.text("navigation.live"), icon: "live", tone: "red" },
     { key: "results", href: resultsHref, label: messages.text("navigation.results"), tab: messages.text("navigation.results"), icon: "results", tone: "violet" },
     { key: "slips", href: slipsHref(language), label: messages.text("navigation.slips"), tab: messages.text("navigation.slips"), icon: "slips", tone: "teal" },
   ] as const;
