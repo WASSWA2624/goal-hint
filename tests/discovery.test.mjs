@@ -73,10 +73,12 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
   assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3');
   assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08');
   for (const values of [{ q: '<script>' }, { league: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, { status: 'live' },
-    { market: 'total-goals' }, { market: 'match-result', sort: 'probability' }, { pageSize: '10' }, { when: 'next-7-days' }]) {
+    { market: 'total-goals' }, { market: 'match-result', sort: 'probability' }, { dir: 'asc' }, { pageSize: '10' }, { when: 'next-7-days' }]) {
     assert.equal(feedDiscovery(query(values), today).eligible, false);
     assert.equal(feedMetadata(query(values), today, populated, approved).robots.index, false);
   }
+  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).path, '/en');
+  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).eligible, true);
 });
 
 test('page metadata has independent social fields, real canonical pagination and honest unavailable indexing', async () => {

@@ -40,7 +40,7 @@ test('Clear filters resets every date selection to the last 30 days and Any, ret
     assert.equal(reset.search, ''); assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
     assert.equal(reset.status, 'live', 'Live and Results are navigation sections, not filters');
     assert.deepEqual(reset.markets, defaultMarkets); assert.deepEqual(reset.probability, { min: 0, max: 100 }); assert.equal(reset.picks, 'all');
-    assert.deepEqual(reset.sort, { by: 'kickoff', direction: 'asc' });
+    assert.deepEqual(reset.sort, { by: 'kickoff', direction: 'desc' });
     assert.equal(reset.odds, null);
     assert.equal(panelFilterCount(reset), 0);
     assert.deepEqual(applyFeedDraft(reset, today), reset);

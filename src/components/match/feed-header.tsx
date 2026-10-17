@@ -101,8 +101,8 @@ const Count = styled.div`
   align-items: baseline;
   gap: 12px;
   min-inline-size: 0;
-  > h2 { font-size: 0.75rem; ${desktop} { font-size: 1.25rem; } }
-  ${desktop} { flex: none; white-space: nowrap; }
+  > h2 { font-size: 0.75rem; ${desktop} { font-size: 1rem; } }
+  ${desktop} { flex: 1; justify-content: space-between; white-space: nowrap; }
   ${media.belowDesktop} { > h2 {
     position: absolute;
     inline-size: 1px;

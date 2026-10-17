@@ -63,7 +63,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
     {/* Fixtures without the selected market still list; each row states why it has no pick. */}
     {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
     {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
-    {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale}>
+    {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale} rowNumberMaximum={first + records.length - 1}>
       {records.map((fixture, index) => <li key={fixture.fixtureId}>
         <MatchCard fixture={fixture} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
           markets={query.markets} locale={query.locale} position={first + index} />

@@ -1,11 +1,20 @@
 # Pagination and Back restoration
 
 Prompt 034 enhances ordinary feed pagination with explicit Load more. The initial
-HTML contains approximately 30 cards and crawlable Previous/Next page links.
+HTML contains approximately 30 cards and crawlable numbered page links.
 Every page URL preserves validated filters, selected-market order and page size,
 and pins the resolved reporting date/range so following a link across midnight
 does not silently switch cohorts. Direct later-page visits are independent of
-earlier browsing. JavaScript-disabled visitors follow the same ordinary links.
+earlier browsing. JavaScript-disabled visitors follow ordinary numbered links.
+
+The feed and detail panels share a horizontally scrollable page-number strip.
+Available width determines how many sequential numbers are visible; there are
+no ellipsis gaps. The arrows smoothly scroll one number in either direction
+without changing the selected page, URL, or results. Only selecting a numbered
+link or button navigates. Touch, trackpad, and keyboard scrolling also work, and
+reduced-motion preferences disable smooth animation. The active page is brought
+into view on navigation and resizing. Long collections render a bounded window
+of numbered controls while retaining the complete scroll range.
 
 With JavaScript, Load more calls only `GET /api/matches`, appends a contiguous
 page, and retains the URL's starting page/history entry. It never scroll-loads
@@ -38,8 +47,8 @@ available. Whole fixture snapshots never move to an older `dataVersion`; equal
 versions retain the accepted whole snapshot. No independent market merge occurs.
 
 At most ten pages remain appended at once (normally 300 cards; at most 1,000 for
-the allowed page-size limit). Ordinary Next page navigation continues beyond
-that bound. Legacy responses without a marker use direct page links.
+the allowed page-size limit). Numbered page navigation continues beyond that
+bound. Legacy responses without a marker use direct numbered links.
 
 ## Restoration
 

@@ -1,17 +1,18 @@
 "use client";
 
 import type { ComponentPropsWithRef } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 
-export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & { locale?: string };
+export type MatchCardListProps = Omit<ComponentPropsWithRef<"ul">, "role"> & { locale?: string; rowNumberMaximum?: number };
 
-const Board = styled.div`
+const Board = styled.div<{ $indexLength: number }>`
   min-inline-size: 0;
+  /* Root-relative tracks stay identical across bold header digits and regular row digits. */
+  ${({ $indexLength }) => $indexLength > 0 && css`--match-index-width: max(1.5rem, calc(${$indexLength} * 0.5rem + 2px));`}
   ${media.desktop} {
-    overflow: hidden;
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     border-radius: 0;
@@ -22,6 +23,9 @@ const Board = styled.div`
 const Columns = styled.div`
   display: none;
   ${media.desktop} {
+    position: sticky;
+    inset-block-start: var(--app-header-height, calc(4rem + 2px));
+    z-index: 10;
     display: grid;
     grid-template-columns: ${matchTableColumns.compact};
     column-gap: ${matchTableGap};
@@ -66,10 +70,12 @@ const List = styled.ul`
 `;
 
 /** Cards below 64rem, an aligned match table above it. Source order is also visual and keyboard order. */
-export function MatchCardList({ locale, ...props }: MatchCardListProps) {
+export function MatchCardList({ locale, rowNumberMaximum, ...props }: MatchCardListProps) {
   const messages = createMessages(locale);
-  return <Board>
-    <Columns aria-hidden="true">
+  const indexLabel = rowNumberMaximum !== undefined && Number.isSafeInteger(rowNumberMaximum) && rowNumberMaximum > 0
+    ? messages.number(Math.min(rowNumberMaximum, 9_999)) : "";
+  return <Board $indexLength={indexLabel.length} data-match-board>
+    <Columns aria-hidden="true" data-match-table-header>
       <span>{messages.text("match.columns.number")}</span><span>{messages.text("match.columns.dateTime")}</span>
       <span>{messages.text("match.columns.league")}</span><span>{messages.text("match.columns.home")}</span>
       <span>{messages.text("match.columns.score")}</span><span>{messages.text("match.columns.away")}</span>

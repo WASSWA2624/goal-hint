@@ -3,11 +3,10 @@
 import { createContext, useContext, useEffect, useRef, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 import styled, { css, type DefaultTheme } from "styled-components";
 import { CheckIcon, ChevronRightIcon } from "@/components/ui/icons";
-import { paginationListStyles } from "@/components/ui/pagination-styles";
+import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ClockIcon } from "@/components/match/match-icons";
 import { TeamLogo } from "@/components/match/team-logo";
-import { paginationItems } from "@/domain/feed-presentation";
 import type { FormLetter, LiveStanding } from "@/domain/match-details";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
@@ -387,28 +386,12 @@ export function Crest({ name, url, size = 20, eager = false }: { name: string | 
   return <CrestBox $size={size}><TeamLogo name={name} url={url ?? undefined} eager={eager} size={size} /></CrestBox>;
 }
 
-const PagerList = styled.ol`
-  ${paginationListStyles}
-  ${desktop} {
-    grid-auto-columns: minmax(0, 1.75rem);
-    gap: 4px;
-    font-size: ${size("secondary")};
-    > li > button, > li > span { block-size: 1.75rem; }
-  }
-`;
 /** Every page of a section's complete collection; the URL keeps the page for Back and refresh. */
 export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
   const { messages } = useStableDetails();
   if (pages <= 1) return null;
-  return <nav aria-label={messages.text("details.pages")}>
-    <PagerList>
-      <li><button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label={messages.text("feed.pagination.previous")}>‹</button></li>
-      {paginationItems(page, pages).map((item) => item.kind === "gap" ? <li key={item.key}><span data-gap aria-hidden="true">…</span></li>
-        : <li key={item.page}><button type="button" aria-current={item.current ? "page" : undefined} onClick={() => onPage(item.page)}
-          aria-label={messages.text("feed.pagination.pageLink", { page: messages.number(item.page) })}>{messages.number(item.page)}</button></li>)}
-      <li><button type="button" disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label={messages.text("feed.pagination.next")}>›</button></li>
-    </PagerList>
-  </nav>;
+  return <NumberedPagination page={page} pages={pages} compact onPage={onPage}
+    labels={numberedPaginationLabels(messages, messages.text("details.pages"))} />;
 }
 
 /** Rows that open nested panels are buttons laid out as compact grids. */

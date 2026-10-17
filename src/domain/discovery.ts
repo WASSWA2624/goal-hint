@@ -1,4 +1,4 @@
-import { activeFeedFilterCount, defaultFeedDatePreset, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
+import { activeFeedFilterCount, defaultFeedDatePreset, defaultSortDirection, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { publicPolicy } from "./public-policy.ts";
 
@@ -18,7 +18,7 @@ export function canonicalUrl(path: string): string {
 
 export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
   const range = resolveFeedDates(query, today);
-  const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || query.sort.by !== "kickoff" || query.sort.direction !== "asc" ||
+  const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || query.sort.by !== "kickoff" || query.sort.direction !== defaultSortDirection.kickoff ||
     query.pageSize !== feedQueryRules.pageSize || range.dayCount !== 1 && query.dates.kind !== defaultFeedDatePreset;
   // Pin pagination/relative aliases to a dated collection. The plain home page stays /en.
   const home = query.dates.kind === defaultFeedDatePreset && query.page === 1;

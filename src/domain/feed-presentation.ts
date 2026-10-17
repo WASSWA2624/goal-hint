@@ -36,26 +36,21 @@ export function feedRowNumber(page: number, pageSize: number, index: number): nu
   return (page - 1) * pageSize + index + 1;
 }
 
-export type PaginationItem = Readonly<{ kind: "page"; page: number; current: boolean }> | Readonly<{ kind: "gap"; key: string }>;
+export type PaginationWindow = Readonly<{ from: number; to: number }>;
 
 /**
- * Compact numbered pages: `1 2 3 4 … N` near the start, `1 … N-3 N-2 N-1 N` near the end and
- * `1 … p-1 p p+1 … N` between. At most seven slots, so phones never wrap.
+ * Inclusive pages to mount around a scrolling strip's viewport, without allocating every page.
+ * Empty/invalid totals return 0–0; other inputs become bounded integers. At the end of the strip,
+ * keep a full viewport before adding overscan so the final pages stay reachable.
  */
-export function paginationItems(current: number, total: number): PaginationItem[] {
-  if (!Number.isSafeInteger(total) || total < 1) return [];
-  const page = Math.min(Math.max(1, current), total);
-  let pages: number[];
-  if (total <= 6) pages = Array.from({ length: total }, (_, index) => index + 1);
-  else if (page <= 3) pages = [1, 2, 3, 4, total];
-  else if (page >= total - 2) pages = [1, total - 3, total - 2, total - 1, total];
-  else pages = [1, page - 1, page, page + 1, total];
-  const items: PaginationItem[] = [];
-  pages.forEach((number, index) => {
-    if (index > 0 && number - pages[index - 1]! > 1) items.push({ kind: "gap", key: `gap-${pages[index - 1]}` });
-    items.push({ kind: "page", page: number, current: number === current });
-  });
-  return items;
+export function paginationWindow(totalPages: number, firstVisiblePage: number, visiblePages: number, overscan = 8): PaginationWindow {
+  if (!Number.isSafeInteger(totalPages) || totalPages < 1) return { from: 0, to: 0 };
+  const bounded = (value: number, fallback: number, minimum: number) =>
+    Math.min(totalPages, Math.max(minimum, Number.isFinite(value) ? Math.trunc(value) : fallback));
+  const visible = bounded(visiblePages, 1, 1), extra = bounded(overscan, 8, 0);
+  const first = Math.min(bounded(firstVisiblePage, 1, 1), totalPages - visible + 1);
+  const last = first + visible - 1;
+  return { from: Math.max(1, first - extra), to: last + Math.min(extra, totalPages - last) };
 }
 
 export type FilterOption = Readonly<{ value: string; label: string; detail: string | null; logoUrl: string | null; fixtures: number }>;

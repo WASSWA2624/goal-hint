@@ -1,14 +1,11 @@
 "use client";
 
-import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
-import { paginationListStyles } from "@/components/ui/pagination-styles";
+import { NumberedPagination, numberedPaginationLabels } from "@/components/ui/numbered-pagination";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedPageHref, type FeedPaginationError } from "@/domain/feed-pagination";
-import { paginationItems } from "@/domain/feed-presentation";
-import type { FeedQuery } from "@/domain/feed-query";
+import { feedQueryRules, type FeedQuery } from "@/domain/feed-query";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
@@ -26,14 +23,10 @@ const Bar = styled.div`
     gap: 8px 16px;
   }
   > p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; ${desktop} { font-size: 0.875rem; } }
-  > nav { inline-size: 100%; min-inline-size: 0; ${desktop} { inline-size: auto; max-inline-size: 100%; } }
-`;
-/** Always one row: buttons shrink together on narrow phones instead of wrapping. */
-const Pages = styled.ol`
-  ${paginationListStyles}
+  > nav { inline-size: 100%; min-inline-size: 0; ${desktop} { flex: 1 1 16rem; inline-size: auto; max-inline-size: 100%; } }
 `;
 
-/** Numbered pages: ‹ 1 2 3 4 … N ›. Every page is an ordinary link for crawlers and keyboards. */
+/** Numbers navigate; the surrounding arrows only scroll through the sequential number rail. */
 export function FeedPagination({ query, today, data, busy, error, onRetry }: {
   query: FeedQuery; today: ReportingDate; data: MatchFeedResponse; busy: boolean; error: FeedPaginationError["code"] | null; onRetry: () => void;
 }) {
@@ -41,24 +34,11 @@ export function FeedPagination({ query, today, data, busy, error, onRetry }: {
   const first = data.total === 0 ? 0 : (page - 1) * data.pageSize + 1, last = Math.min(data.total, (page - 1) * data.pageSize + data.records.length);
   const changed = error === "changed" || error === "stale-data";
   if (total < 1) return null;
-  const arrow = (target: number | null, direction: "previous" | "next") => {
-    const Icon = direction === "previous" ? ChevronLeftIcon : ChevronRightIcon, label = messages.text(`feed.pagination.${direction}`);
-    return <li>{target === null ? <span aria-disabled="true" title={label}><Icon /></span>
-      : <Link href={feedPageHref(query, today, target)} prefetch={false} aria-label={label} title={label} rel={direction === "previous" ? "prev" : "next"}><Icon /></Link>}</li>;
-  };
   return <Bar>
     <p>{messages.text("feed.results.showing", { shown: `${messages.number(first)}–${messages.number(last)}`, total: messages.number(data.total) })}</p>
     {error && <p role="alert">{messages.text(changed ? "feed.pagination.changed" : error === "rate-limited" ? "feed.pagination.busy" : "feed.pagination.failed")}
       {" "}<Button variant="quiet" onClick={onRetry} disabled={busy} data-pagination-retry>{messages.text(changed ? "feed.pagination.refresh" : "feed.pagination.retry")}</Button></p>}
-    <nav aria-label={messages.text("feed.pagination.navigation")}>
-      <Pages>
-        {arrow(data.previousPage, "previous")}
-        {paginationItems(page, total).map((item) => item.kind === "gap"
-          ? <li key={item.key}><span data-gap aria-label={messages.text("feed.pagination.gap")} role="img">…</span></li>
-          : <li key={item.page}><Link href={feedPageHref(query, today, item.page)} prefetch={false} aria-current={item.current ? "page" : undefined}
-            aria-label={messages.text("feed.pagination.pageLink", { page: messages.number(item.page) })}>{messages.number(item.page)}</Link></li>)}
-        {arrow(data.nextPage, "next")}
-      </Pages>
-    </nav>
+    <NumberedPagination page={page} pages={Math.min(total, feedQueryRules.maximumPage)}
+      labels={numberedPaginationLabels(messages, messages.text("feed.pagination.navigation"))} href={(target) => feedPageHref(query, today, target)} />
   </Bar>;
 }

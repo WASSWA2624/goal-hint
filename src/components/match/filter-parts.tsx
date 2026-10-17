@@ -2,7 +2,7 @@
 
 import Link from "@/components/navigation/navigation-link";
 import {
-  useCallback, useId, useMemo, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
+  useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
 } from "react";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon, CloseIcon } from "@/components/ui/icons";
@@ -197,17 +197,25 @@ const PickerPanel = styled.div`
   inset-inline-end: 0;
   z-index: 15;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: ${({ theme }) => theme.space.sm};
-  inline-size: min(20rem, calc(100vw - 32px));
+  inline-size: min(20rem, var(--picker-max-width, calc(100vw - 32px)));
   padding: ${({ theme }) => theme.space.sm};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 0;
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
-  ${media.desktop} { border-radius: 6px; }
+  &[data-picker-floating] {
+    max-block-size: var(--picker-max-height);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(var(--picker-offset-x, 0px));
+  }
+  &[data-picker-placement="above"] { inset-block-start: auto; inset-block-end: calc(100% + 6px); }
 `;
 /** Phones list compact 36px rows at 13px; desktop keeps its 40px rows at 15px. */
 const PickerSearch = styled.input`
+  min-inline-size: 0;
   min-block-size: 2.25rem;
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
@@ -217,9 +225,11 @@ const PickerSearch = styled.input`
   font: inherit;
   font-size: 0.8125rem;
   ${focusRing}
-  ${media.desktop} { min-block-size: 2.5rem; border-radius: 8px; font-size: 0.9375rem; }
+  ${media.desktop} { min-block-size: 2.5rem; font-size: 0.9375rem; }
 `;
 const PickerList = styled.ul`
+  min-inline-size: 0;
+  min-block-size: 0;
   max-block-size: 16rem;
   margin: 0;
   padding: 0;
@@ -238,12 +248,11 @@ const PickerList = styled.ul`
     &:has(input:checked) { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; }
     > input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
     > img { flex: none; inline-size: 16px; block-size: 16px; object-fit: contain; }
-    > span { min-inline-size: 0; flex: 1; }
+    > span { min-inline-size: 0; flex: 1; overflow-wrap: anywhere; }
     > small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
     ${media.desktop} {
       gap: ${({ theme }) => theme.space.sm};
       min-block-size: 2.5rem;
-      border-radius: 8px;
       font-size: 0.9375rem;
       > input { inline-size: 1.125rem; block-size: 1.125rem; }
       > img { inline-size: 20px; block-size: 20px; }
@@ -264,9 +273,70 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   findLabel: string; emptyLabel: string; searchable?: boolean; trigger?: ReactNode; summary?: ReactNode; className?: string;
 }) {
   const [open, setOpen] = useState(false), [filter, setFilter] = useState("");
-  const root = useRef<HTMLDivElement>(null), button = useRef<HTMLButtonElement>(null), panelId = useId();
+  const root = useRef<HTMLDivElement>(null), button = useRef<HTMLButtonElement>(null), panel = useRef<HTMLDivElement>(null), panelId = useId();
   const close = useCallback(() => setOpen(false), []);
   useOutsideDismiss({ enabled: open, root, onDismiss: close });
+  useLayoutEffect(() => {
+    const element = panel.current, anchor = button.current;
+    if (!open || !element || !anchor) return;
+    let frame: number | null = null;
+    const update = () => {
+      frame = null;
+      // PhonePicker deliberately expands in the sheet's normal flow.
+      if (getComputedStyle(element).position !== "absolute") {
+        delete element.dataset.pickerFloating;
+        delete element.dataset.pickerPlacement;
+        for (const property of ["--picker-max-width", "--picker-max-height", "--picker-offset-x"]) element.style.removeProperty(property);
+        return;
+      }
+      const viewport = window.visualViewport;
+      const left = viewport?.offsetLeft ?? 0, top = viewport?.offsetTop ?? 0;
+      const width = viewport?.width ?? document.documentElement.clientWidth, height = viewport?.height ?? window.innerHeight;
+      const trigger = anchor.getBoundingClientRect();
+      if (trigger.bottom <= top || trigger.top >= top + height || trigger.right <= left || trigger.left >= left + width) {
+        close();
+        return;
+      }
+      const gutter = 16, gap = 6;
+      element.dataset.pickerFloating = "";
+      element.style.setProperty("--picker-max-width", `${Math.max(0, width - gutter * 2)}px`);
+      // Recover the preferred list height without expanding a scrolled panel and resetting its scroll position.
+      const list = element.querySelector("ul");
+      const listHeight = list ? Math.min(list.scrollHeight, Number.parseFloat(getComputedStyle(list).maxBlockSize) || list.scrollHeight) : 0;
+      const naturalHeight = element.scrollHeight + element.offsetHeight - element.clientHeight + (list ? listHeight - list.clientHeight : 0);
+      const below = Math.max(0, top + height - gutter - trigger.bottom - gap);
+      const above = Math.max(0, trigger.top - top - gutter - gap);
+      const placement = naturalHeight > below && above > below ? "above" : "below";
+      element.dataset.pickerPlacement = placement;
+      element.style.setProperty("--picker-max-height", `${placement === "above" ? above : below}px`);
+      const bounds = element.getBoundingClientRect();
+      const previousOffset = Number.parseFloat(element.style.getPropertyValue("--picker-offset-x")) || 0;
+      const naturalLeft = bounds.left - previousOffset;
+      const clampedLeft = Math.max(left + gutter, Math.min(naturalLeft, left + width - gutter - bounds.width));
+      element.style.setProperty("--picker-offset-x", `${clampedLeft - naturalLeft}px`);
+    };
+    const schedule = () => { if (frame === null) frame = requestAnimationFrame(update); };
+    update();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(element);
+    observer.observe(anchor);
+    if (root.current) observer.observe(root.current);
+    if (root.current?.parentElement) observer.observe(root.current.parentElement);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("scroll", schedule, true);
+    window.visualViewport?.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("scroll", schedule);
+    document.fonts.addEventListener("loadingdone", schedule);
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("scroll", schedule, true);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("scroll", schedule);
+      document.fonts.removeEventListener("loadingdone", schedule);
+    };
+  }, [open, close]);
   const needle = filter.trim();
   const search = useMemo(() => prepareFootballSearch(needle), [needle]);
   const visible = useMemo(() => {
@@ -285,7 +355,7 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   }}>
     <Trigger ref={button} type="button" aria-expanded={open} aria-controls={panelId} aria-label={title} title={title}
       onClick={() => setOpen(!open)}>{summary ?? trigger}{(summary || !trigger) && <ChevronDownIcon />}</Trigger>
-    {open && <PickerPanel id={panelId} role="group" aria-label={title}>
+    {open && <PickerPanel ref={panel} id={panelId} role="group" aria-label={title} data-option-picker-panel>
       {searchable && <PickerSearch type="search" value={filter} onChange={(event) => setFilter(event.target.value)}
         aria-label={findLabel} placeholder={findLabel} autoFocus />}
       {visible.length === 0 ? <PickerEmpty>{emptyLabel}</PickerEmpty> : <PickerList>

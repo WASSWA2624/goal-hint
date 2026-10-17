@@ -1,5 +1,5 @@
 import type { ReportingDate } from "./calendar.ts";
-import { anyProbability, defaultFeedDatePreset, defaultMarkets, parseFeedQuery, parseProbabilityValue, serializeFeedQuery, validProbabilityRange,
+import { anyProbability, defaultFeedDatePreset, defaultMarkets, defaultSortDirection, parseFeedQuery, parseProbabilityValue, serializeFeedQuery, validProbabilityRange,
   type FeedQuery, type ProbabilityRange } from "./feed-query.ts";
 
 /** Draft text stays editable; normalization happens once, at submission. */
@@ -21,5 +21,5 @@ export function resetFeedFilters(query: FeedQuery): FeedQuery {
   const reset = { ...query };
   delete reset.time;
   return { ...reset, dates: { kind: defaultFeedDatePreset }, search: "", leagues: [], countries: [], markets: [...defaultMarkets], probability: anyProbability, odds: null, picks: "all",
-    sort: { by: "kickoff", direction: "asc" }, page: 1 };
+    sort: { by: "kickoff", direction: defaultSortDirection.kickoff }, page: 1 };
 }

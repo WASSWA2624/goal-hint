@@ -4,7 +4,7 @@ import Link from "@/components/navigation/navigation-link";
 import { memo, useId, useState, type PointerEvent, type ReactNode } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
-import { countryCode } from "@/domain/country-code";
+import { countryCode, countryDisplayName } from "@/domain/country-code";
 import { countryFlagAsset } from "@/domain/country-flag";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
@@ -73,8 +73,9 @@ const Card = styled.article`
   }
   ${table} {
     grid-template-columns: ${matchTableColumns.compact};
+    grid-template-rows: auto auto;
     column-gap: ${matchTableGap};
-    row-gap: 4px;
+    row-gap: 2px;
     align-items: center;
     padding: 6px 16px;
     background: transparent;
@@ -102,11 +103,26 @@ const Meta = styled.header`
     line-height: 1.2;
     white-space: nowrap;
   }
-  ${table} { display: grid; grid-column: 1 / span 3; grid-template-columns: subgrid; }
+  ${table} {
+    display: grid;
+    grid-column: 1 / span 3;
+    grid-row: 1 / span 2;
+    grid-template-columns: subgrid;
+    grid-template-rows: subgrid;
+    align-items: center;
+    align-self: stretch;
+  }
 `;
-const Index = styled.span`
+const Index = styled.span<{ $wrap: boolean }>`
   display: none;
-  ${table} { display: block; grid-column: 1; grid-row: 1; font-variant-numeric: tabular-nums; }
+  ${table} {
+    display: block;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    white-space: ${({ $wrap }) => $wrap ? "normal" : "nowrap"};
+    overflow-wrap: ${({ $wrap }) => $wrap ? "anywhere" : "normal"};
+    font-variant-numeric: tabular-nums;
+  }
 `;
 const LeagueName = styled.span`
   ${tile} { flex: 1 1 auto; }
@@ -131,8 +147,10 @@ const League = styled.p`
   ${table} {
     display: grid;
     grid-column: 3;
-    grid-row: 1;
+    grid-row: 1 / span 2;
     grid-template-columns: 16px minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    align-self: stretch;
     gap: 2px 4px;
     > [data-country] { grid-column: 1 / -1; grid-row: 1; }
     > img, > svg { grid-column: 1; grid-row: 2; }
@@ -154,7 +172,7 @@ const When = styled.time`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   ${tile} { flex: none; }
-  ${table} { grid-column: 2; grid-row: 1; flex-wrap: wrap; gap: 0 6px; white-space: normal; }
+  ${table} { grid-column: 2; grid-row: 1 / span 2; flex-wrap: wrap; gap: 0 6px; white-space: normal; }
 `;
 const Dot = styled.span`
   ${table} { display: none; }
@@ -227,7 +245,8 @@ const Teams = styled.div`
     min-inline-size: 0;
     padding: 6px 10px 6px 8px;
   }
-  ${table} { --gh-logo-size: 22px; --gh-logo-font: 0.625rem; display: grid; grid-column: 4 / span 3; grid-template-columns: subgrid; align-items: center; }
+  /* Desktop cells share the league row; the score's live/final status gets its own row below. */
+  ${table} { --gh-logo-size: 22px; --gh-logo-font: 0.625rem; display: contents; }
 `;
 const Team = styled.div`
   display: flex;
@@ -242,7 +261,12 @@ const Team = styled.div`
     &[data-result="loss"] { color: ${({ theme }) => theme.color.mutedText}; }
   }
   /* Both crests sit beside the score; the home name aligns towards it. */
-  ${table} { gap: 8px; &[data-team-side="home"] { flex-direction: row-reverse; text-align: end; } }
+  ${table} {
+    grid-column: 6;
+    grid-row: 2;
+    gap: 8px;
+    &[data-team-side="home"] { grid-column: 4; flex-direction: row-reverse; text-align: end; }
+  }
 `;
 const TeamName = styled.span`
   flex: 1;
@@ -263,10 +287,12 @@ const Center = styled.div`
   align-items: center;
   gap: 2px;
   ${tile} { grid-column: 2; grid-row: 1 / span 2; flex-direction: row; gap: 7px; }
+  ${table} { display: contents; }
 `;
 const Versus = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
   ${tile} { display: none; }
+  ${table} { grid-column: 5; grid-row: 2; justify-self: center; }
 `;
 const Score = styled.span<{ $live: boolean }>`
   display: inline-flex;
@@ -278,6 +304,7 @@ const Score = styled.span<{ $live: boolean }>`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   > span:nth-child(2) { color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  ${table} { grid-column: 5; grid-row: 2; justify-self: center; }
   /* Tile: the two goals stacked in one box, level with their teams; the losing side's goals are muted. */
   ${tile} {
     display: grid;
@@ -304,6 +331,7 @@ const StateChip = styled.span<{ $tone: StateTone }>`
     ? css`color: ${theme.color.live.text}; background: ${theme.color.live.soft};`
     : $tone === "final" ? css`color: ${theme.color.mutedText}; background: ${theme.color.surfaceMuted};`
     : css`color: ${theme.color.accent.amber.text}; background: ${theme.color.accent.amber.soft};`}
+  ${table} { grid-column: 5; grid-row: 3; justify-self: center; }
   /* Tile: a pill before the score; live is solid red, a final whistle grey, a halted match amber. */
   ${tile} {
     order: -1;
@@ -345,7 +373,7 @@ const Pick = styled.div<{ $family: MarketFamily; $available: boolean }>`
     border-inline-start: 3px solid ${({ theme, $family, $available }) => $available ? theme.color.market[$family].solid : theme.color.border};
     &[data-pick-state="none"] { grid-template-areas: "pick pick"; }
   }
-  ${table} { display: grid; grid-column: 7 / span 4; grid-template-columns: subgrid; align-items: center; }
+  ${table} { display: grid; grid-column: 7 / span 4; grid-row: 2; grid-template-columns: subgrid; align-items: center; }
 `;
 /** A shared value cell keeps every selected-pick fact in the same column on both layouts. */
 const PickCell = styled.span`
@@ -486,7 +514,7 @@ const Open = styled(Link)`
     position: static;
     display: grid;
     grid-column: 11;
-    grid-row: 1;
+    grid-row: 2;
     place-items: center;
     > svg { display: block; font-size: 1rem; }
     &::after { content: ""; position: absolute; inset: 0; z-index: 1; }
@@ -629,6 +657,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const title = messages.text("match.title", { home, away });
   const competition = fixture.competition.name?.trim() || messages.text("match.competitionUnknown");
   const country = fixture.competition.country?.trim();
+  const countryName = countryDisplayName(country);
   const flagUrl = countryFlagUrl(fixture);
   const prediction = selectedCardPrediction(fixture, shownFamily);
   const price = prediction ? selectedCardPrice(fixture, shownFamily) : null;
@@ -651,11 +680,11 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
     data-status={fixture.status} onPointerEnter={(event) => showFullNames(event, title)}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{title}</VisuallyHidden>
     <Meta>
-      {position !== undefined && <Index aria-hidden="true">{messages.number(position)}</Index>}
+      {position !== undefined && <Index $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
       <League title={country ?? undefined}>
         <CountryDetails data-country aria-hidden="true">
           <CountryFlag key={`${country}:${flagUrl}`} url={flagUrl} country={country} />
-          <CountryName data-country-name title={country}>{country || "–"}</CountryName>
+          <CountryName data-country-name title={countryName || undefined}>{countryName || "–"}</CountryName>
         </CountryDetails>
         <CompetitionLogo key={fixture.competition.logoUrl} url={fixture.competition.logoUrl} /><LeagueName title={competition}>{competition}</LeagueName>
         {country && <VisuallyHidden>, {country}</VisuallyHidden>}</League>

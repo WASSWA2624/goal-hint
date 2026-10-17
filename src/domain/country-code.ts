@@ -55,6 +55,14 @@ const fifaCodes: Readonly<Record<string, string>> = {
   vanuatu: "VAN", venezuela: "VEN", vietnam: "VIE", wales: "WAL", yemen: "YEM", zambia: "ZAM", zimbabwe: "ZIM",
 };
 const knownCodes = new Set(Object.values(fifaCodes));
+const countryNames = new Map<string, string>([
+  ["BIH", "Bosnia and Herzegovina"], ["COD", "Democratic Republic of the Congo"], ["MKD", "North Macedonia"],
+]);
+for (const [name, code] of Object.entries(fifaCodes)) {
+  if (countryNames.has(code) || name === code.toLowerCase()) continue;
+  countryNames.set(code, name.split(" ").map((word, index) => index > 0 && ["and", "of", "the"].includes(word)
+    ? word : word[0]!.toUpperCase() + word.slice(1)).join(" "));
+}
 
 /** Lowercase ASCII words: accents stripped; hyphens, apostrophes, "&" and other separators become single spaces. */
 function key(name: string): string {
@@ -68,6 +76,13 @@ export function knownCountryCode(country: string | null | undefined): string {
   const normalized = key(name);
   if (Object.hasOwn(fifaCodes, normalized)) return fifaCodes[normalized]!;
   return /^[A-Z]{3}$/u.test(name) && knownCodes.has(name) ? name : "";
+}
+
+/** Full names for known football codes; retain provider names and accents, spacing known hyphenated names only. */
+export function countryDisplayName(country: string | null | undefined): string {
+  const name = typeof country === "string" ? country.trim() : "";
+  if (/^[a-z]{3}$/iu.test(name)) return countryNames.get(knownCountryCode(name.toUpperCase())) ?? name;
+  return knownCountryCode(name) ? name.replace(/-+/gu, " ") : name;
 }
 
 /** The competition country's three-letter code (see the module rules); "" when there is no name. */

@@ -11,14 +11,14 @@ test("URL queries round trip with one canonical order and explicit EAT context",
   for (const parameters of ["", "when=last-30-days", "when=today", "when=tomorrow", "when=next-3-days", "when=next-7-days", "when=next-30-days", "date=2020-02-29",
     "from=2020-02-29&to=2020-03-06", "from=2026-10-01&to=2026-10-31",
     "q=Example+FC&league=league-b,league-a&country=Spain,England&status=live&market=total-goals,match-result&prob=55-90&sort=probability&dir=asc&page=3&pageSize=40",
-    "sort=probability", "sort=kickoff&dir=desc", "status=finished", "market=both-teams-to-score", "market=double-chance", "prob=0-60", "picks=only"]) {
+    "sort=probability", "sort=kickoff&dir=desc", "sort=kickoff&dir=asc", "status=finished", "market=both-teams-to-score", "market=double-chance", "prob=0-60", "picks=only"]) {
     const parsed = query(parameters);
     assert.deepEqual(query(serializeFeedQuery(parsed, today).toString()), parsed);
     const url = new URL(feedQueryHref(parsed, today), "https://example.test");
     const date = url.pathname.split("/")[3];
     assert.deepEqual(query(url.searchParams.toString(), date ? { routeDate: date } : {}), parsed);
   }
-  assert.equal(serializeFeedQuery(query(`page=1&status=all&market=${defaultMarkets.join(",")}&prob=0-100&picks=all&sort=kickoff&dir=asc&when=last-30-days`), today).toString(), "");
+  assert.equal(serializeFeedQuery(query(`page=1&status=all&market=${defaultMarkets.join(",")}&prob=0-100&picks=all&sort=kickoff&dir=desc&when=last-30-days`), today).toString(), "");
   assert.equal(serializeFeedQuery(query("when=today"), today).toString(), "when=today");
   assert.equal(serializeFeedQuery(query("q=+Cafe%CC%81+++FC+"), today).toString(), "q=Caf%C3%A9+FC");
   assert.equal(feedQueryHref(query("from=2020-02-29&to=2020-03-06&status=finished"), today),
@@ -102,7 +102,7 @@ test("canonical list identity includes filters, order, locale and resolved dates
   assert.equal(feedQueryKey(query("date=2026-10-09&page=2"), today), todayKey);
   assert.equal(feedQueryKey(query("from=2026-10-09&to=2026-10-09"), today), todayKey);
   for (const input of ["q=team", "league=a", "country=Spain", "status=live", "market=total-goals", "market=match-result,total-goals",
-    "prob=50-100", "sort=probability", "dir=desc", "pageSize=20", "when=tomorrow"]) {
+    "prob=50-100", "sort=probability", "dir=asc", "pageSize=20", "when=tomorrow"]) {
     assert.notEqual(feedQueryKey(query(input), today), key, input);
   }
   assert.equal(resolveFeedDates(query("when=next-7-days"), today).endDate, "2026-10-15");
@@ -127,12 +127,19 @@ test("malformed, ambiguous, unbounded and unsupported URL values are rejected", 
   assert.throws(() => query("date=2026-10-09", { routeDate: "2026-10-09" }));
 });
 
-test("sorting defaults direction per field and serializes only non-default directions", () => {
-  assert.deepEqual(query().sort, { by: "kickoff", direction: "asc" });
+test("sorting defaults to Latest first and preserves explicit ascending and probability orders", () => {
+  assert.deepEqual(query().sort, { by: "kickoff", direction: "desc" });
+  assert.deepEqual(query("sort=kickoff").sort, query().sort);
+  assert.deepEqual(query("dir=asc").sort, { by: "kickoff", direction: "asc" });
   assert.deepEqual(query("sort=probability").sort, { by: "probability", direction: "desc" });
   assert.deepEqual(query("sort=probability&dir=asc").sort, { by: "probability", direction: "asc" });
   assert.equal(serializeFeedQuery(query("sort=probability&dir=desc"), today).toString(), "sort=probability");
-  assert.equal(serializeFeedQuery(query("dir=desc"), today).toString(), "dir=desc");
+  assert.equal(serializeFeedQuery(query("dir=desc"), today).toString(), "");
+  assert.equal(serializeFeedQuery(query("dir=asc"), today).toString(), "dir=asc");
+  assert.equal(feedQueryHref(query("sort=kickoff&dir=desc"), today), "/en");
+  assert.equal(feedQueryHref(query("sort=kickoff&dir=asc"), today), "/en?dir=asc");
+  assert.equal(feedQueryKey(query("dir=desc"), today), feedQueryKey(query(), today));
+  assert.notEqual(feedQueryKey(query("dir=asc"), today), feedQueryKey(query(), today));
   const sorted = query("sort=probability");
   assert.throws(() => serializeFeedQuery({ ...sorted, sort: { by: "probability", direction: "sideways" } }, today));
   assert.throws(() => serializeFeedQuery({ ...sorted, markets: [] }, today));

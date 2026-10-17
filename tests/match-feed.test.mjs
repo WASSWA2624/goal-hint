@@ -38,7 +38,7 @@ for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'f
 test('public parsing preserves shared URL defaults, historical dates and SSR route context', () => {
   const defaults = parseMatchFeedQuery(new URLSearchParams(), today);
   assert.equal(defaults.pageSize, 30); assert.equal(defaults.page, 1); assert.deepEqual(defaults.markets, defaultMarkets);
-  assert.deepEqual(defaults.sort, { by: 'kickoff', direction: 'asc' }); assert.deepEqual(defaults.probability, { min: 0, max: 100 });
+  assert.deepEqual(defaults.sort, { by: 'kickoff', direction: 'desc' }); assert.deepEqual(defaults.probability, { min: 0, max: 100 });
   assert.equal(parseMatchFeedQuery(new URLSearchParams('from=2026-10-09&to=2026-11-08'), today).dates.kind, 'range');
   assert.equal(parseMatchFeedQuery(new URLSearchParams('date=1000-01-02'), today).dates.date, '1000-01-02');
   assert.equal(parseMatchFeedQuery({ to: '2026-10-15', pageSize: '100' }, today, { routeDate: today }).dates.kind, 'range');

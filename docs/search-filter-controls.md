@@ -99,8 +99,8 @@ by fresh odds for the same published family/selection, then policy order. The sa
 picks the market shown on the card (`bestCardFamily`). Markets defaults to Any,
 which includes every supported family. Probability and Odds default to Any,
 applying no bounds. Odds, when available, belong to the shown pick rather than
-another market's higher price. Default order is kickoff ascending, then fixture ID.
-`dir=desc` reverses kickoff order. Probability order
+another market's higher price. Default order is kickoff descending (Latest first), then fixture ID descending.
+`dir=asc` selects Earliest first. Probability order
 is descending by default (`dir=asc` reverses it), with missing picks last and
 kickoff/ID ties. The probability range (`prob`) accepts integer or decimal
 percentages in 0–100 and keeps only fixtures whose shown pick's unrounded

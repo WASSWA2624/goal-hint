@@ -59,7 +59,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         // Source writes and these generations commit atomically. Progress-only
         // changes do not reorder a cohort; catalog/date changes conservatively do.
         const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
-        const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v2", query: feedQueryKey(query, today),
+        const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v3", query: feedQueryKey(query, today),
           scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
         const search = await storedFeedSearch(tx, query.search, range, competitionIds);
         const sql = feedSql(query, range, competitionIds, providerOdds, search);

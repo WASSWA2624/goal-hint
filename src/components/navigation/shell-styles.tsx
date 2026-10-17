@@ -25,6 +25,9 @@ const headerFocus = css`
 `;
 
 export const ShellFrame = styled.div`
+  --app-header-content-height: 4rem;
+  --app-header-border-width: 2px;
+  --app-header-height: calc(var(--app-header-content-height) + var(--app-header-border-width));
   display: flex;
   flex-direction: column;
   min-block-size: 100dvh;
@@ -73,7 +76,7 @@ export const Header = styled.header<{ $app?: boolean }>`
   display: ${({ $app }) => $app ? "none" : "block"};
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.gradient};
-  border-block-end: 2px solid ${({ theme }) => theme.header.accent};
+  border-block-end: var(--app-header-border-width, 2px) solid ${({ theme }) => theme.header.accent};
   box-shadow: ${({ theme }) => theme.header.shadow};
   ${desktop} { display: block; }
 `;
@@ -83,7 +86,7 @@ export const HeaderContent = styled(Container)`
   align-items: center;
   gap: ${({ theme }) => theme.space.sm};
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
-  ${desktop} { flex-wrap: nowrap; gap: 12px; min-block-size: 4rem; }
+  ${desktop} { flex-wrap: nowrap; gap: 12px; min-block-size: var(--app-header-content-height, 4rem); }
   ${media.wide} { gap: ${({ theme }) => theme.space.md}; }
 `;
 

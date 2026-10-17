@@ -61,7 +61,7 @@ export const feedQueryRules = Object.freeze({ maximumDays: 31, maximumSearchLeng
 /** Any market: each fixture shows its highest-probability available pick across all supported families. */
 export const defaultMarkets: readonly MarketFamily[] = publicPolicy.markets;
 export const anyProbability: ProbabilityRange = Object.freeze({ min: 0, max: 100 });
-export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ kickoff: "asc", probability: "desc" });
+export const defaultSortDirection: Readonly<Record<FeedSortField, FeedSortDirection>> = Object.freeze({ kickoff: "desc", probability: "desc" });
 export const feedDefaults = Object.freeze({
   today: Object.freeze({ dayOffset: 0, status: "all" }),
   results: Object.freeze({ dayOffset: -1, status: "finished" }),

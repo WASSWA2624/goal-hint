@@ -93,7 +93,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.deepEqual(first.records.map((item) => item.fixtureId), repeat.records.map((item) => item.fixtureId));
       assert.equal(first.range.startInclusive, Date.parse('2026-10-08T21:00:00Z'));
       assert.equal(first.range.endExclusive, Date.parse('2026-10-09T21:00:00Z'));
-      assert.equal(first.records[0].fixtureId, (await fixture(3070)).id);
+      assert.equal(first.records[0].fixtureId, (await fixture(3071)).id);
       assert.equal(first.state, 'insufficient-data'); assert.equal(first.coverage.partial, false);
       assert.equal(first.nextPage, 2); assert.equal(first.previousPage, null);
       assert.match(first.links.next, /date=2026-10-09&page=2$/u);
@@ -101,7 +101,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       const third = await query({ page: '3' });
       assert.equal(second.records.length, 30); assert.equal(third.records.length, 12);
       assert.equal(new Set([...first.records, ...second.records, ...third.records].map((item) => item.fixtureId)).size, 72);
-      assert.equal(third.records.at(-1).fixtureId, (await fixture(3071)).id);
+      assert.equal(third.records.at(-1).fixtureId, (await fixture(3070)).id);
       assert.equal((await query({ date: '2026-10-10' })).records[0].fixtureId, (await fixture(3072)).id);
       const range = await service.query({ from: '2026-10-09', to: '2026-10-10', pageSize: '100' });
       assert.equal(range.total, 73); assert.equal(range.coverage.dates.length, 2);
@@ -189,10 +189,12 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       await publish(3007, 0.43, 0.65); await publish(3008, 0.5, 0.6, false, 'api-football');
     });
     await t.test('anonymous HTTP shares the card snapshot, references and real sync timestamps', async () => {
-      const response = await createMatchFeedHandler((parameters) => service.query(parameters))(new Request('http://localhost/api/matches?date=2026-10-09'));
+      // Inspect the earliest published fixture without assuming it belongs to the default Latest first page.
+      const response = await createMatchFeedHandler((parameters) => service.query(parameters))(new Request('http://localhost/api/matches?date=2026-10-09&dir=asc'));
       assert.equal(response.status, 200); assert.equal(response.headers.get('set-cookie'), null);
       assert.match(response.headers.get('link'), /rel="next"/u);
       const body = matchFeedResponseSchema.parse(await response.json()), record = body.records.find((item) => item.fixtureId === published.get(3000).fixture.id);
+      assert.ok(record, 'the explicitly ascending HTTP page contains its earliest published fixture');
       parseFixtureSnapshot(record); assert.equal(record.cycle.mode, 'current');
       assert.equal(record.forecast.runId, cohort.selected.runId); assert.equal(record.cycleId, published.get(3000).cycle.id);
       assert.equal(record.forecast.publishedAt, PUBLICATION_NOW);

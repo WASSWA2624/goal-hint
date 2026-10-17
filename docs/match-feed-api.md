@@ -34,7 +34,7 @@ access. All SQL values, limits and offsets are bound parameters.
 | `picks` | `all` (default) or `only`, which keeps fixtures that have a shown pick. |
 | `status` | `all` (default), `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. `finished` includes regulation, extra-time and penalty finals. |
 | `sort` | `kickoff` (default) or `probability`. |
-| `dir` | `asc` or `desc`. The default is `asc` for kickoff and `desc` for probability; a default direction is omitted from canonical URLs. |
+| `dir` | `asc` or `desc`. The default is `desc` for kickoff (Latest first) and probability; a default direction is omitted from canonical URLs. |
 | `page` | Integer 1–10,000, default 1. |
 | `pageSize` | Integer 1–100, default 30. |
 | `leagues` | Optional response option, only `0`: the response carries `leagues: []`. Browser page refreshes and live polls use it because they never read filter options. It is removed before query parsing and not charged to the 2 KiB query limit, so it never enters the canonical query, cache key or page links. |
@@ -77,8 +77,8 @@ filters used. A family outside the selection never supplies a probability.
 When a search is applied, relevance is the primary order: an exact name or alias
 precedes a partial or misspelled match. Without search, the selected sort remains
 the primary order. It is also the stable tie breaker between equal search scores.
-Default order is kickoff ascending, then canonical fixture ID ascending;
-`dir=desc` reverses both. Probability order uses the shown pick's unrounded
+Default order is kickoff descending (Latest first), then canonical fixture ID descending;
+`dir=asc` reverses both. Probability order uses the shown pick's unrounded
 value, descending by default or ascending with `dir=asc`. Fixtures without a shown
 pick come last in both directions, and ties fall back to kickoff ascending, then
 fixture ID ascending. `prob` keeps fixtures whose shown pick's unrounded

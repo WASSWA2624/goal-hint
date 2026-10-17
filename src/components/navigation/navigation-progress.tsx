@@ -7,31 +7,28 @@ const Track = styled.div`
   position: absolute;
   inset-inline: 0;
   inset-block-end: -2px;
-  block-size: 2px;
+  block-size: 3px;
   overflow: hidden;
   pointer-events: none;
-  visibility: hidden;
-  background: ${({ theme }) => theme.header.background};
-  &::after {
-    content: "";
-    display: block;
+  background: ${({ theme }) => `color-mix(in srgb, ${theme.header.accent} 35%, ${theme.header.background})`};
+  > span {
+    display: none;
     inline-size: 30%;
     block-size: 100%;
     background: ${({ theme }) => theme.header.accent};
   }
   body:has([data-navigation-pending], main [aria-busy="true"]) & {
-    visibility: visible;
-    &::after { animation: ${travel} 1.1s linear infinite; }
+    > span { display: block; animation: ${travel} 1.1s linear infinite; }
   }
   @media (prefers-reduced-motion: reduce) {
-    body:has([data-navigation-pending], main [aria-busy="true"]) &::after {
+    body:has([data-navigation-pending], main [aria-busy="true"]) & > span {
       animation: none;
       transform: translateX(115%);
     }
   }
 `;
 
-/** No polling, animation callbacks or layout changes; idle bars do not animate. */
+/** The track stays visible; only real router or content loading reveals an accessible busy indicator. */
 export function NavigationProgress({ label }: { label: string }) {
-  return <Track role="progressbar" aria-label={label} />;
+  return <Track data-navigation-progress><span role="progressbar" aria-label={label} /></Track>;
 }

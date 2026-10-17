@@ -85,8 +85,10 @@ test('SQL filters matching identities before pagination and puts max relevance a
   assert.doesNotMatch(sql.scope.sql, /CASE|h\.id IN/u, 'Known counts and league options retain the full date cohort.');
   assert.throws(() => feedSql(query, range, [39]), unavailable);
   assert.throws(() => feedSql(query, range, [39], false, { ...search, query: 'other' }), unavailable);
-  const ordinary = feedSql({ ...query, search: '', sort: { by: 'kickoff', direction: 'desc' } }, range, [39]);
+  const ordinary = feedSql(parseFeedQuery({ date: '2026-10-09' }, { today: '2026-10-09' }), range, [39]);
   assert.equal(ordinary.order.sql, 'f.kickoff DESC, f.id DESC');
+  const earliest = feedSql({ ...query, search: '', sort: { by: 'kickoff', direction: 'asc' } }, range, [39]);
+  assert.equal(earliest.order.sql, 'f.kickoff ASC, f.id ASC');
 });
 
 test('catalog and identity limits fail explicitly instead of truncating search results', async () => {

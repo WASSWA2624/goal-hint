@@ -1,29 +1,42 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bestCardFamily, countryOptions, feedRowNumber, leagueOptions, noPickReason, paginationItems } from "../src/domain/feed-presentation.ts";
+import { bestCardFamily, countryOptions, feedRowNumber, leagueOptions, noPickReason, paginationWindow } from "../src/domain/feed-presentation.ts";
 import { cardFixture } from "./helpers/match-card-fixtures.mjs";
 
-const pages = (current, total) => paginationItems(current, total).map((item) => item.kind === "gap" ? "…" : item.current ? `[${item.page}]` : String(item.page)).join(" ");
+test("scrolling pagination mounts consecutive viewport pages with bounded overscan through page 10,000", () => {
+  assert.deepEqual(paginationWindow(1, 1, 7), { from: 1, to: 1 });
+  assert.deepEqual(paginationWindow(6, 3, 7), { from: 1, to: 6 });
+  assert.deepEqual(paginationWindow(10_000, 1, 7), { from: 1, to: 15 });
+  assert.deepEqual(paginationWindow(10_000, 5_000, 7), { from: 4_992, to: 5_014 });
+  assert.deepEqual(paginationWindow(10_000, 10_000, 7), { from: 9_986, to: 10_000 });
+  assert.deepEqual(paginationWindow(49, 25, 5, 0), { from: 25, to: 29 });
 
-test("numbered pagination shows 1 2 3 4 … N and never more than seven slots", () => {
-  assert.equal(pages(1, 0), "");
-  assert.equal(pages(1, 1), "[1]");
-  assert.equal(pages(2, 6), "1 [2] 3 4 5 6");
-  assert.equal(pages(1, 49), "[1] 2 3 4 … 49");
-  assert.equal(pages(3, 49), "1 2 [3] 4 … 49");
-  assert.equal(pages(4, 49), "1 … 3 [4] 5 … 49");
-  assert.equal(pages(25, 49), "1 … 24 [25] 26 … 49");
-  assert.equal(pages(47, 49), "1 … 46 [47] 48 49");
-  assert.equal(pages(49, 49), "1 … 46 47 48 [49]");
-  assert.equal(pages(7, 7), "1 … 4 5 6 [7]");
-  for (let total = 1; total <= 60; total++) for (let current = 1; current <= total; current++) {
-    const items = paginationItems(current, total);
-    assert.ok(items.length <= 7, `${current}/${total}`);
-    assert.equal(items.filter((item) => item.kind === "page" && item.current).length, 1);
-    const numbers = items.filter((item) => item.kind === "page").map((item) => item.page);
-    assert.equal(numbers[0], 1); assert.equal(numbers.at(-1), total);
-    assert.deepEqual(numbers, [...numbers].sort((a, b) => a - b));
+  // Every viewport is represented; mounting cost depends on viewport size, not the collection.
+  for (const total of [1, 6, 49, 10_000, Number.MAX_SAFE_INTEGER]) for (const visible of [1, 7, 30]) {
+    for (const requested of [1, 2, Math.floor(total / 2), total - 1, total, Number.MAX_SAFE_INTEGER]) {
+      const { from, to } = paginationWindow(total, requested, visible);
+      const count = Math.min(total, visible), first = Math.min(Math.max(1, requested), total - count + 1);
+      assert.ok(Number.isSafeInteger(from) && Number.isSafeInteger(to));
+      assert.ok(from >= 1 && to <= total && from <= to);
+      assert.ok(from <= first && to >= first + count - 1);
+      assert.ok(to - from + 1 <= Math.min(total, count + 16));
+    }
   }
+});
+
+test("scrolling pagination rejects invalid totals and normalizes viewport inputs without NaNs", () => {
+  for (const total of [0, -1, 1.5, NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.deepEqual(paginationWindow(total, 1, 7), { from: 0, to: 0 });
+  }
+  for (const first of [NaN, Infinity, -Infinity, -2, 0]) {
+    assert.deepEqual(paginationWindow(100, first, 5, 0), { from: 1, to: 5 });
+  }
+  assert.deepEqual(paginationWindow(100, 10.9, 5.9, 2.9), { from: 8, to: 16 });
+  assert.deepEqual(paginationWindow(100, 10, NaN, -1), { from: 10, to: 10 });
+  assert.deepEqual(paginationWindow(100, 10, Infinity, NaN), { from: 2, to: 18 });
+  assert.deepEqual(paginationWindow(100, 200, 500, 500), { from: 1, to: 100 });
+  assert.deepEqual(paginationWindow(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER,
+    Number.MAX_SAFE_INTEGER), { from: 1, to: Number.MAX_SAFE_INTEGER });
 });
 
 test("row numbers continue across pages", () => {

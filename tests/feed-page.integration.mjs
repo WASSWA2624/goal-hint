@@ -57,15 +57,16 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
         .import(catalogRequest({ kind: 'fixtures', query: { date } }, provider.clock.value));
     }
 
-    await t.test('initial handoff is the first 30 stored cards in stable kickoff/fixture order', async () => {
+    await t.test('initial handoff is the latest 30 stored cards; explicit earliest order retains its publications', async () => {
       const data = await capture('today');
       assert.equal(data.records.length, 30); assert.equal(data.total, 32); assert.equal(data.nextPage, 2);
       assert.equal(data.run.completed, 2); assert.equal(data.run.total, 34);
-      const sorted = [...data.records].sort((a, b) => a.kickoffAt - b.kickoffAt || a.fixtureId.localeCompare(b.fixtureId));
+      const sorted = [...data.records].sort((a, b) => b.kickoffAt - a.kickoffAt || b.fixtureId.localeCompare(a.fixtureId));
       assert.deepEqual(data.records, sorted); assert.equal(data.state, 'ready');
-      const published = data.records.find((record) => record.fixtureId === state.fixture.id);
+      const earliest = await capture('earliest', { dir: 'asc' });
+      const published = earliest.records.find((record) => record.fixtureId === state.fixture.id);
       assert.equal(published.forecast.publishedAt, PUBLICATION_NOW); assert.notEqual(published.syncedAt, data.asOf);
-      const closed = data.records.find((record) => record.fixtureId === unlocked.fixture.id);
+      const closed = earliest.records.find((record) => record.fixtureId === unlocked.fixture.id);
       assert.equal(closed.cycle.state, 'closed'); assert.equal(closed.forecast, null);
     });
     await t.test('tomorrow, next seven days, final inclusive instant and exclusive boundary', async () => {
@@ -87,7 +88,7 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
         .import(catalogRequest({ kind: 'fixtures', query: { fixtureId: 3031 } }, provider.clock.value));
       const alias = await capture('search-alias', { q: 'bEyOnD pAgE aLiAs' });
       assert.equal(alias.total, 1); assert.equal(alias.records[0].homeTeam.name, 'Canonical Renamed Club');
-      assert.ok(!captured.today.result.data.records.some((item) => item.fixtureId === alias.records[0].fixtureId));
+      assert.ok(!captured.earliest.result.data.records.some((item) => item.fixtureId === alias.records[0].fixtureId));
       const country = await capture('search-country', { q: 'FARAWAY LAND' }); assert.equal(country.total, 1);
       assert.equal((await capture('search-league-alias', { q: 'SYNTHETIC COMPETITION 39' })).total, 32);
       assert.equal((await capture('search-league', { q: 'CANONICAL LEAGUE' })).total, 32);
@@ -113,7 +114,7 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
       assert.equal((await capture('failed-import', { date: '2026-10-07' })).coverage.dates[0].status, 'failed');
       assert.equal((await capture('unknown', { date: '2026-10-06' })).coverage.dates[0].status, 'unknown');
       await importDate('2026-10-09', [rows[0]], { paging: { current: 1, total: 2 } });
-      const partial = await capture('partial'); assert.equal(partial.records.length, 30);
+      const partial = await capture('partial', { dir: 'asc' }); assert.equal(partial.records.length, 30);
       assert.equal(partial.coverage.partial, true); assert.ok(partial.records.some((item) => item.forecast));
       await capture('no-filter-matches', { status: 'finished' });
       await capture('page-out-of-range', { page: '10000' });
@@ -193,13 +194,13 @@ test('pagination detects genuine cohort changes and supplies consistent multi-pa
     assert.equal(navigation.data.fixture.fixtureId, destination.fixtureId);
     await savePageScenarios(t, 'MATCH_DETAIL_PAGE_CAPTURE', { navigation });
 
-    // Move a fixture from the last page to the beginning without changing totals.
+    // Move the latest fixture from the first page to the end without changing totals.
     const moved = await p.setup(4094);
     const lifecycle = createScheduleLifecycleService({ database: p.a, cutoff: p.first, policy: lifecyclePolicy(), authority: lifecycleAuthority() });
     await lifecycle.observe(lifecycleInput(moved,p.now(),{kickoffAt:Date.parse('2026-10-09T11:59:00Z')}));
     const updated=[];for(let page=1;page<=4;page++)updated.push(await capture('pagination-changed',page));
     assert.notEqual(updated[0].paginationVersion,pages[0].paginationVersion);
-    assert.equal(updated[0].total,pages[0].total);assert.equal(updated[0].records[0].fixtureId,pages[3].records.at(-1).fixtureId);
+    assert.equal(updated[0].total,pages[0].total);assert.equal(updated[3].records.at(-1).fixtureId,pages[0].records[0].fixtureId);
     assert.throws(()=>appendFeedPage(initialLoadedFeed(pages[0]),updated[1]),error=>error.code==='changed');
     assert.equal(loaded.records.length,95);
     const refreshed=replaceFeedPages(loaded,updated);assert.equal(refreshed.records.length,95);
