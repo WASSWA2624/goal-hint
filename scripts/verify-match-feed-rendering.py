@@ -99,14 +99,18 @@ def verify_feed(origin, directory, scenarios):
             if 'type="submit"' in button and f'form="{form_id}"' in button]
         assert len(submit_buttons) == 1
         no_match('role="slider"|Picks only|With predictions|Any time|Specific time', visible)
-        articles = re.findall(r'<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>([\s\S]*?)</article>', visible)
+        articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
         data = scenario["result"].get("data")
         if data and data["state"] not in ("ready", "insufficient-data"):
             heading = match(r'<h2\b[^>]*>' + re.escape(empty_titles[data["state"]]) + r'</h2>', visible)
             assert visible.index(submit_buttons[0]) < heading.start(), name + ": filter actions before empty state"
         records = data["records"] if data else []
-        assert [article[0] for article in articles] == [record["fixtureId"] for record in records]
-        for (_, article), record in zip(articles, records):
+        assert [article[1] for article in articles] == [record["fixtureId"] for record in records]
+        for (tag, _, article), record in zip(articles, records):
+            no_match(r'\baria-describedby=', tag)
+            no_match(r'<(?:ul|ol)\b|\bid="[^"]*-notes"|\baria-describedby="[^"]*-notes', article)
+            no_match("Update delayed|Limited news coverage|Partial coverage|Prediction update in progress|"
+                     "No prediction was locked for this market", article)
             assert record["homeTeam"]["name"] in article and record["awayTeam"]["name"] in article
             match("Kickoff: |Kickoff unavailable", article)
             match("prediction: |prediction unavailable", article)
@@ -118,8 +122,8 @@ def verify_feed(origin, directory, scenarios):
             no_match(r"/_next/image|\s\$[\w-]+=", article)
         if name == "today":
             match(r'data-prediction="(?!none)', visible)
-            match("No prediction was locked for this market", visible)
-        no_match("prediction jobs completed|Partial fixture coverage|Prediction data unavailable", visible)
+            match("No prediction locked", visible)
+        no_match("prediction jobs completed|Partial fixture coverage|Prediction data unavailable|Score and result updates delayed", visible)
         if name == "historical":
             for pattern in ["Locked prediction", "Final score", 'data-outcome="correct"']:
                 match(pattern, visible)
@@ -131,11 +135,9 @@ def verify_feed(origin, directory, scenarios):
             match("Matches temporarily unavailable", visible)
             match("Try again", visible)
             no_match("No fixtures confirmed|prediction jobs completed", visible)
-        unavailable = "Predictions become available within seven days of the match"
         if name == "outside":
-            match(unavailable, visible)
-        if name in ("today", "last-day", "historical"):
-            no_match(unavailable, visible)
+            match("Predictions start within 7 days", visible)
+        no_match("Predictions become available within seven days of the match", visible)
         if name in ("not-started", "selecting"):
             no_match(r"of \d+ prediction jobs completed", visible)
     print(f"PASS {len(scenarios)} anonymous server-rendered scenarios: stored cards/clocks, initial CSS, coverage/errors, current/locked forecasts and EAT window.")
@@ -150,6 +152,7 @@ def verify_detail(origin, directory, scenarios):
             continue
         count += 1
         html, visible = get(origin, f"/detail-cases/{name}")
+        no_match("Score and result updates delayed", visible)
         (directory / f"detail-{name}.html").write_text(html, encoding="utf-8")
         assert 0 <= html.find("data-styled=") < html.find("<main"), name + ": CSS before content"
         assert len(re.findall(r"<h1[\s>]", visible)) == 1
@@ -173,8 +176,6 @@ def verify_detail(origin, directory, scenarios):
                 match("Provisional estimate", record)
             statuses = {"current": "Current prediction", "locked": "Locked prediction", "historical": "Historical publication", "void": "Void cycle"}
             match(statuses[snapshot["applicability"]], record)
-            if fixture.get("update", {}).get("result") == "delayed":
-                match("Score and result updates delayed", record)
             for item in snapshot["markets"]:
                 family = item["market"]["family"]
                 assert item["market"]["period"] == "regulation-including-stoppage-time"

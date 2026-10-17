@@ -74,16 +74,22 @@ def outline(text: str, weight: int, tracking: int, word_space: int) -> dict:
     names = [cmap[ord(character)] for character in text]
     advance = 0
     kerns = []
+    runs = []
     for i, glyph_name in enumerate(names):
         transform = (1, 0, 0, 1, advance, 0)
         glyphs[glyph_name].draw(TransformPen(path, transform))
         glyphs[glyph_name].draw(TransformPen(bounds, transform))
+        if text == "Goal Hint":
+            glyph_path = SVGPathPen(glyphs)
+            glyphs[glyph_name].draw(TransformPen(glyph_path, transform))
+            if glyph_path.getCommands():
+                runs.append({"accent": i > text.index(" "), "path": glyph_path.getCommands()})
         advance += font["hmtx"][glyph_name][0]
         if i + 1 < len(names):
             k = kern(glyph_name, names[i + 1])
             kerns.append(k)
             advance += tracking + k + (word_space if text[i] == " " else 0)
-    return {
+    result = {
         "text": text,
         "weight": weight,
         "tracking": tracking,
@@ -93,6 +99,9 @@ def outline(text: str, weight: int, tracking: int, word_space: int) -> dict:
         "bounds": bounds.bounds,
         "path": path.getCommands(),
     }
+    if runs:
+        result["runs"] = runs
+    return result
 
 
 if __name__ == "__main__":

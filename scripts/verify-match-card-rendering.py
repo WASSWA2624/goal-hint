@@ -13,11 +13,16 @@ def verify(origin, directory):
     html = response.text
     (directory / "initial.html").write_text(html, encoding="utf-8")
     visible = visible_html(html)
-    articles = re.findall(r'<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>([\s\S]*?)</article>', visible)
+    no_match("Score and result updates delayed", visible)
+    articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
     assert len(articles) == 13
-    by_id = dict(articles)
+    by_id = {fixture_id: article for _, fixture_id, article in articles}
     assert 0 <= html.find("data-styled=") < html.find("<main")
-    for _, article in articles:
+    for tag, _, article in articles:
+        no_match(r'\baria-describedby=', tag)
+        no_match(r'<(?:ul|ol)\b|\bid="[^"]*-notes"|\baria-describedby="[^"]*-notes', article)
+        no_match("Update delayed|Limited news coverage|Partial coverage|Prediction update in progress|"
+                 "No prediction was locked for this market|Postponed before play", article)
         order = ["<header", 'data-team-side="home"', 'data-team-side="away"', "data-prediction=", "View analysis"]
         positions = [article.find(item) for item in order]
         assert all(position >= 0 and (index == 0 or position > positions[index - 1])
@@ -71,9 +76,9 @@ def verify(origin, directory):
     checks = {
         "card-correct": ["Final score: Example Home FC 2, Example Away FC 1", "Match result prediction: Home win, estimated probability 54%", ">FT<", "AI prediction"],
         "card-pending": ['data-live-minute="67"', "Live, 2nd half, 67 minutes played", "Live score: Example Home FC 2, Example Away FC 0"],
-        "card-delayed": ['data-match-state="scheduled"', "Update delayed", "Oct 9, 2026, 00:18 EAT"],
-        "card-incorrect": ["API-Football fallback"], "card-limited": ["Limited news coverage"],
-        "card-partial": ["Partial coverage"], "card-void": ["Postponed before play"],
+        "card-delayed": ['data-match-state="scheduled"', "Oct 9, 2026, 00:18 EAT"],
+        "card-incorrect": ["API-Football fallback"], "card-limited": ["AI prediction"],
+        "card-partial": ["API-Football fallback"], "card-void": ['data-outcome="void"'],
     }
     for card, patterns in checks.items():
         for pattern in patterns:

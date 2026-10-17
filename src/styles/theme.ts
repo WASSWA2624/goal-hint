@@ -51,6 +51,8 @@ export interface GoalHintTheme {
     /** Selected chips and segments on light surfaces; pairs with `brand` text. */
     readonly brandSoft: string;
     readonly onBrand: string;
+    /** White text on the royal-blue primary action fill in either mode. */
+    readonly onAction: string;
     readonly focus: string;
     readonly disabledText: string;
     readonly disabledSurface: string;
@@ -65,6 +67,7 @@ export interface GoalHintTheme {
   readonly gradient: {
     /** Flat primary action fills paired with `onBrand`. */
     readonly action: string;
+    readonly actionHover: string;
     readonly tableHeader: string;
     /** Thin decorative edge on feature panels. */
     readonly edge: string;
@@ -72,11 +75,12 @@ export interface GoalHintTheme {
   };
   /**
    * The branded top bar: the desktop shell header and every phone top bar (shell, feed, match details)
-   * share a solid navy/charcoal fill behind the inverse logo. Light text and inverse teal pass
-   * 4.5:1 on the bar and control fills.
+   * share blue artwork behind the inverse logo. Solid fills remain available for controls.
    */
   readonly header: {
     readonly background: string;
+    readonly gradient: string;
+    readonly navigationBackground: string;
     /** Primary text and icons on the bar. */
     readonly text: string;
     /** Resting navigation links stay readable on the bar. */
@@ -182,23 +186,24 @@ export interface GoalHintTheme {
 export const lightTheme: GoalHintTheme = {
   mode: "light",
   color: {
-    text: "#102A3A",
-    mutedText: "#486071",
-    page: "#CEDBE3",
+    text: "#071747",
+    mutedText: "#486B9F",
+    page: "#EFF8FF",
     surface: brandTokens.colors.white,
-    surfaceMuted: "#EAF0F2",
+    surfaceMuted: "#E6F3FF",
     // Brand dividers are decorative; controls need a stronger accessible boundary.
-    border: "#C5D4DE",
-    controlBorder: "#7C8A95",
-    brand: "#007F7A",
-    link: "#00645F",
-    brandHover: "#00645F",
-    brandSoft: "#E2F3F1",
+    border: "#BEDFFF",
+    controlBorder: "#668ABA",
+    brand: "#0066F5",
+    link: "#005BD6",
+    brandHover: "#0054CC",
+    brandSoft: "#E1F0FF",
     onBrand: brandTokens.colors.white,
-    focus: "#007F7A",
-    disabledText: "#486071",
-    disabledSurface: "#EAF0F2",
-    // Outcome meanings stay separate from the teal brand accent.
+    onAction: brandTokens.colors.white,
+    focus: "#0066F5",
+    disabledText: "#486B9F",
+    disabledSurface: "#E6F3FF",
+    // Outcome meanings stay separate from the blue brand accent.
     outcome: {
       correct: { text: "#007754", background: "#E5F4EC", border: "#007754" },
       incorrect: { text: "#9C2328", background: "#FFF0F1", border: "#9C2328" },
@@ -220,7 +225,7 @@ export const lightTheme: GoalHintTheme = {
     },
     live: { solid: "#DC2626", soft: "#FEE2E2", text: "#991B1B", gradient: "linear-gradient(135deg, #DC2626 0%, #DB2777 100%)" },
     accent: {
-      teal: { solid: "#0F766E", soft: "#D5F5EF", text: "#115E59", gradient: "linear-gradient(135deg, #0F766E 0%, #0891B2 100%)" },
+      teal: { solid: "#0066F5", soft: "#E1F0FF", text: "#0054CC", gradient: "linear-gradient(135deg, #0066F5 0%, #0054CC 100%)" },
       blue: { solid: "#2563EB", soft: "#E0EAFF", text: "#1E40AF", gradient: "linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)" },
       violet: { solid: "#7C3AED", soft: "#EDE4FF", text: "#5B21B6", gradient: "linear-gradient(135deg, #7C3AED 0%, #C026D3 100%)" },
       orange: { solid: "#C2410C", soft: "#FFE8D6", text: "#9A3412", gradient: "linear-gradient(135deg, #EA580C 0%, #D97706 100%)" },
@@ -229,8 +234,8 @@ export const lightTheme: GoalHintTheme = {
       emerald: { solid: "#047857", soft: "#D1FAE5", text: "#065F46", gradient: "linear-gradient(135deg, #059669 0%, #0D9488 100%)" },
       red: { solid: "#DC2626", soft: "#FEE2E2", text: "#991B1B", gradient: "linear-gradient(135deg, #DC2626 0%, #DB2777 100%)" },
     },
-    cardHeader: "#F6F8FA",
-    rowHover: "#F3F7F8",
+    cardHeader: "#E6F3FF",
+    rowHover: "#EAF5FF",
   },
   typography: {
     family: "var(--font-manrope), Arial, sans-serif",
@@ -266,26 +271,29 @@ export const lightTheme: GoalHintTheme = {
   layout: { maxWidth: "72rem", wideMaxWidth: "100rem", gutter: "16px" },
   control: { minHeight: "2.75rem", compactHeight: "2.25rem" },
   gradient: {
-    action: "#007F7A",
-    tableHeader: "linear-gradient(90deg, #0B1F33 0%, #172F63 55%, #0F5E6E 100%)",
-    edge: "linear-gradient(90deg, #007F7A 0%, #007F7A 100%)",
-    page: "#CEDBE3",
+    action: "#0066F5",
+    actionHover: "#0054CC",
+    tableHeader: "linear-gradient(90deg, #06235B 0%, #003B91 100%)",
+    edge: "linear-gradient(90deg, #0066F5 0%, #00B9F2 100%)",
+    page: "#EFF8FF",
   },
-  // Flat navy and solid controls match the approved light preview.
+  // Shared blue branding at every viewport; translucent diagonal bands stay decorative.
   header: {
-    background: "#102A3A",
+    background: "#003B91",
+    gradient: "linear-gradient(140deg, transparent 60%, #FFFFFF08 60%, #FFFFFF08 68%, transparent 68%, transparent 76%, #FFFFFF05 76%, #FFFFFF05 82%, transparent 82%), linear-gradient(110deg, #06235B 0%, #00358A 100%)",
+    navigationBackground: "linear-gradient(110deg, #003B91 0%, #00337C 100%)",
     text: brandTokens.colors.white,
-    mutedText: "#D6E2E9",
-    placeholder: "#CAD7E0",
-    accent: brandTokens.colors.tealOnDark,
-    onAccent: "#102A3A",
-    controlFill: "#1D3B4A",
-    controlHover: "#294957",
-    fieldFill: "#1D3B4A",
-    fieldFillActive: "#294957",
-    controlBorder: "#617B8A",
+    mutedText: "#D8E9FF",
+    placeholder: "#BDD8FA",
+    accent: brandTokens.colors.cyanOnDark,
+    onAccent: "#061747",
+    controlFill: "#082C6B",
+    controlHover: "#103778",
+    fieldFill: "#082C6B",
+    fieldFillActive: "#103778",
+    controlBorder: "#779DCE",
     tone: {
-      teal: "#5EEAD4", blue: "#93C5FD", violet: "#C4B5FD", orange: "#FDBA74",
+      teal: "#7DDFFF", blue: "#93C5FD", violet: "#C4B5FD", orange: "#FDBA74",
       pink: "#F9A8D4", amber: "#FCD34D", emerald: "#6EE7B7", red: "#FCA5A5",
     },
     phoneHeight: "3.25rem",
@@ -303,21 +311,21 @@ export const darkTheme: GoalHintTheme = {
   mode: "dark",
   color: {
     ...lightTheme.color,
-    text: "#F2F7F8",
-    mutedText: "#B1BEC8",
-    page: "#141C22",
-    surface: "#1E2932",
-    surfaceMuted: "#18232B",
-    border: "#3C505E",
-    controlBorder: "#69808F",
-    brand: "#53D5C6",
-    link: "#53D5C6",
-    brandHover: "#8EE8DD",
-    brandSoft: "#183C3B",
-    onBrand: "#102A3A",
-    focus: "#53D5C6",
-    disabledText: "#B1BEC8",
-    disabledSurface: "#18232B",
+    text: "#F4F7FF",
+    mutedText: "#A8CBEF",
+    page: "#03111F",
+    surface: "#041525",
+    surfaceMuted: "#06203B",
+    border: "#124B76",
+    controlBorder: "#447BA8",
+    brand: "#00B9F2",
+    link: "#00B9F2",
+    brandHover: "#79DCFF",
+    brandSoft: "#073052",
+    onBrand: "#03111F",
+    focus: "#00B9F2",
+    disabledText: "#A8CBEF",
+    disabledSurface: "#06203B",
     outcome: {
       correct: { text: "#70DEA4", background: "#1C342B", border: "#70DEA4" },
       incorrect: { text: "#FF9C9C", background: "#3B252C", border: "#FF9C9C" },
@@ -333,7 +341,7 @@ export const darkTheme: GoalHintTheme = {
     },
     live: { solid: "#FF9C9C", soft: "#3B252C", text: "#FF9C9C", gradient: "#FF9C9C" },
     accent: {
-      teal: { solid: "#53D5C6", soft: "#183C3B", text: "#53D5C6", gradient: "#53D5C6" },
+      teal: { solid: "#00B9F2", soft: "#073052", text: "#00B9F2", gradient: "#00B9F2" },
       blue: { solid: "#9EC5FF", soft: "#233449", text: "#9EC5FF", gradient: "#9EC5FF" },
       violet: { solid: "#C6AEFF", soft: "#322B45", text: "#C6AEFF", gradient: "#C6AEFF" },
       orange: { solid: "#FFBA8F", soft: "#3D2D25", text: "#FFBA8F", gradient: "#FFBA8F" },
@@ -342,27 +350,30 @@ export const darkTheme: GoalHintTheme = {
       emerald: { solid: "#70DEA4", soft: "#1C342B", text: "#70DEA4", gradient: "#70DEA4" },
       red: { solid: "#FF9C9C", soft: "#3B252C", text: "#FF9C9C", gradient: "#FF9C9C" },
     },
-    cardHeader: "#18232B",
-    rowHover: "#253541",
+    cardHeader: "#04203C",
+    rowHover: "#082B48",
   },
   gradient: {
-    action: "#53D5C6",
-    tableHeader: "#10181D",
-    edge: "linear-gradient(90deg, #53D5C6 0%, #53D5C6 100%)",
-    page: "#141C22",
+    action: "#0066F5",
+    actionHover: "#0054CC",
+    tableHeader: "#04203C",
+    edge: "linear-gradient(90deg, #0066F5 0%, #00B9F2 100%)",
+    page: "#03111F",
   },
   header: {
     ...lightTheme.header,
-    background: "#10181D",
-    text: "#F2F7F8",
-    mutedText: "#B1BEC8",
-    placeholder: "#B1BEC8",
-    accent: "#53D5C6",
-    controlFill: "#1B2A34",
-    controlHover: "#283E4A",
-    fieldFill: "#1B2A34",
-    fieldFillActive: "#283E4A",
-    controlBorder: "#69808F",
+    background: "#052451",
+    gradient: "linear-gradient(140deg, transparent 60%, #0078FF14 60%, #0078FF14 68%, transparent 68%, transparent 76%, #0078FF0D 76%, #0078FF0D 82%, transparent 82%), linear-gradient(110deg, #04162E 0%, #003071 100%)",
+    navigationBackground: "#031525",
+    text: "#F4F7FF",
+    mutedText: "#D8E9FF",
+    placeholder: "#A8CBEF",
+    accent: "#00B9F2",
+    controlFill: "#06264A",
+    controlHover: "#10385D",
+    fieldFill: "#06264A",
+    fieldFillActive: "#10385D",
+    controlBorder: "#447BA8",
   },
 };
 

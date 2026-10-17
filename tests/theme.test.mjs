@@ -24,10 +24,10 @@ const luminance = (hex) => {
   });
   return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
 };
-const readable = (foreground, background, label) => {
+const readable = (foreground, background, label, minimum = 4.5) => {
   const [light, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
   const ratio = (light + 0.05) / (dark + 0.05);
-  assert.ok(ratio >= 4.5, `${label}: ${foreground} on ${background} is ${ratio.toFixed(2)}:1`);
+  assert.ok(ratio >= minimum, `${label}: ${foreground} on ${background} is ${ratio.toFixed(2)}:1`);
 };
 
 test("both themes keep body, controls, captions and outcome text readable", () => {
@@ -36,11 +36,22 @@ test("both themes keep body, controls, captions and outcome text readable", () =
       readable(theme.color.text, background, `${theme.mode} body`);
       readable(theme.color.mutedText, background, `${theme.mode} captions`);
       readable(theme.color.link, background, `${theme.mode} links`);
+      readable(theme.color.controlBorder, background, `${theme.mode} control boundaries`, 3);
     }
     readable(theme.color.onBrand, theme.color.brand, `${theme.mode} primary actions`);
+    for (const background of [theme.gradient.action, theme.gradient.actionHover]) {
+      readable(theme.color.onAction, background, `${theme.mode} blue primary actions`);
+    }
+    for (const background of theme.gradient.tableHeader.match(/#[0-9a-f]{6}/gi)) {
+      readable(theme.header.text, background, `${theme.mode} desktop table headings`);
+    }
     for (const background of [theme.header.background, theme.header.controlFill, theme.header.controlHover]) {
       readable(theme.header.text, background, `${theme.mode} title bar`);
       readable(theme.header.accent, background, `${theme.mode} current navigation`);
+    }
+    for (const background of theme.header.navigationBackground.match(/#[0-9a-f]{6}/gi)) {
+      readable(theme.header.mutedText, background, `${theme.mode} navigation`);
+      readable(theme.header.accent, background, `${theme.mode} active navigation`);
     }
     for (const [outcome, colors] of Object.entries(theme.color.outcome)) {
       readable(colors.text, colors.background, `${theme.mode} ${outcome}`);

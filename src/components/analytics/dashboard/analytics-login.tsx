@@ -74,7 +74,7 @@ const Form = styled.form`
   button {
     min-block-size: 44px;
     border: 0;
-    color: ${({ theme }) => theme.color.onBrand};
+    color: ${({ theme }) => theme.color.onAction};
     background: ${({ theme }) => theme.gradient.action};
     font-weight: ${({ theme }) => theme.typography.weight.bold};
     cursor: pointer;

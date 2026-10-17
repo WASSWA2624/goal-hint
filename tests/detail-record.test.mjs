@@ -6,17 +6,16 @@ import { createMessages } from '../src/i18n/messages.ts';
 const market = (kind, provisional) => ({ source: { kind, provisional } });
 const detail = (snapshot, fixture = {}) => ({ snapshot, fixture: { partialCoverage: false, update: { prediction: 'current', result: 'current' }, ...fixture } });
 
-test('the visible record identifies the locked fallback and delayed result without claiming current AI analysis', () => {
+test('the visible record identifies the locked fallback without a result-delay notice or current AI claim', () => {
   const data = detail({ applicability: 'locked', markets: [market('api-football', true), market('api-football', true)] },
     { forecast: { provisional: false, markets: [{ market: { source: 'ai' } }] }, update: { prediction: 'locked', result: 'delayed' } });
   const notices = detailRecordNotices(data);
-  assert.deepEqual(notices, ['market.source.api-football', 'match.provisional', 'history.status.locked', 'match.resultDelayed']);
+  assert.deepEqual(notices, ['market.source.api-football', 'match.provisional', 'history.status.locked']);
   const text = notices.map((key) => createMessages('en').text(key)).join(' · ');
   assert.match(text, /API-Football/);
   assert.match(text, /Provisional estimate/);
   assert.match(text, /Locked prediction/);
-  assert.match(text, /Score and result updates delayed/);
-  assert.doesNotMatch(text, /AI prediction|Current prediction/);
+  assert.doesNotMatch(text, /Score and result updates delayed|AI prediction|Current prediction/);
 });
 
 test('historical and void records retain their own provenance instead of inheriting current refresh claims', () => {
@@ -32,7 +31,7 @@ test('historical and void records retain their own provenance instead of inherit
 
 test('missing locked snapshots cannot borrow a forecast, source, or provisional label', () => {
   assert.deepEqual(detailRecordNotices(detail(null, { cycle: { state: 'closed' }, forecast: { provisional: true },
-    update: { prediction: 'locked', result: 'delayed' } })), ['detail.noLockedPrediction', 'match.resultDelayed']);
+    update: { prediction: 'locked', result: 'delayed' } })), ['detail.noLockedPrediction']);
   assert.deepEqual(detailRecordNotices(detail(null)), []);
   assert.deepEqual(detailRecordNotices(detail(null, { update: { prediction: 'outside-window', result: 'untracked' } })),
     ['detail.refresh.outside-window']);

@@ -60,7 +60,7 @@ const PhoneBar = styled.div`
   margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
   padding-inline: ${({ theme }) => theme.layout.gutter};
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.background};
+  background: ${({ theme }) => theme.header.gradient};
   border-block-end: 2px solid ${({ theme }) => theme.header.accent};
   ${desktop} { display: none; }
   > p { margin: 0; font-size: ${size("title")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
@@ -109,7 +109,7 @@ const SearchForm = styled.form`
   ${desktop} { display: none; }
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
   > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; font: inherit; font-size: ${size("emphasis")}; outline: none; }
-  > button { padding: 4px 8px; color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; border: 0; border-radius: 0; font: inherit; font-size: ${size("secondary")}; cursor: pointer; ${focusRing} }
+  > button { padding: 4px 8px; color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action}; border: 0; border-radius: 0; font: inherit; font-size: ${size("secondary")}; cursor: pointer; ${focusRing} }
 `;
 const BackLink = styled(Link)`
   display: none;

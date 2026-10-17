@@ -52,8 +52,8 @@ export const paginationListStyles = css`
     }
   }
   > li > [aria-current="page"] {
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.brand};
+    color: ${({ theme }) => theme.color.onAction};
+    background: ${({ theme }) => theme.gradient.action};
     border-color: transparent;
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }

@@ -1,6 +1,6 @@
 # Goal Hint brand kit
 
-The selected identity combines a solid football with a heavy open geometric **G**, deep navy and teal. The G is one thick filled ring with a square crossbar. The football fills its counter and is cut away around the bar; on dark surfaces it stays a white ball with navy panels. The wordmark is Manrope ExtraBold (800) with slightly tightened tracking, converted to vector outlines so exported artwork renders without an installed font.
+The selected identity combines a solid football with a heavy open geometric **G**, deep navy and cyan. The G is one thick filled ring with a square crossbar. The football fills its counter and is cut away around the bar; on dark surfaces it stays a white ball with navy panels. Goal uses navy on light surfaces and white on dark surfaces; Hint and the G use cyan. The wordmark is Manrope ExtraBold (800) with slightly tightened tracking, converted to vector outlines so exported artwork renders without an installed font.
 
 **Tagline:** Football predictions. Clearly explained.
 
@@ -11,10 +11,10 @@ Open [the standalone preview](goal-hint-brand-preview.html) or [the contact shee
 | Asset | Dimensions: SVG / PNG | Use |
 | --- | --- | --- |
 | `goal-hint-logo-primary` | 553 × 128 / 1106 × 256 | Default horizontal logo on white or paper. |
-| `goal-hint-logo-inverse` | 553 × 128 / 1106 × 256 | Teal and white horizontal logo on navy. |
+| `goal-hint-logo-inverse` | 553 × 128 / 1106 × 256 | Cyan and white horizontal logo on navy. |
 | `goal-hint-logo-monochrome`, `goal-hint-logo-monochrome-inverse` | 553 × 128 / 1106 × 256 | Single-color navy or white reproduction. |
 | `goal-hint-mark-primary`, `-inverse`, `-monochrome`, `-monochrome-inverse` | 160 × 160 / 640 × 640 | Standalone full-detail symbols. |
-| `goal-hint-favicon` | SVG: 160 × 160; ICO: 16, 32 and 48 px | Bright teal micro mark with an opaque white football, navy panels and a transparent surrounding background, so it reads on light and dark tab bars. Separate PNGs are named `goal-hint-favicon-16`, `-32` and `-48`. |
+| `goal-hint-favicon` | SVG: 160 × 160; ICO: 16, 32 and 48 px | Bright cyan micro mark with an opaque white football, navy panels and a transparent surrounding background, so it reads on light and dark tab bars. Separate PNGs are named `goal-hint-favicon-16`, `-32` and `-48`. |
 | `goal-hint-apple-touch-icon` | 180 × 180 / 180 × 180 | Apple touch icon. |
 | `goal-hint-app-icon-192`, `goal-hint-app-icon-512` | 192 × 192 and 512 × 512 | Prepared square icon exports; these do not enable a PWA. |
 | `goal-hint-social-avatar` | 512 × 512 / 512 × 512 | Profile/avatar image. |
@@ -29,11 +29,11 @@ Do not stretch, recolor, add shadows or place artwork in rounded containers. Com
 
 | Token | Value | Role |
 | --- | --- | --- |
-| Navy | `#0B1F33` | Wordmark, primary text and dark surfaces. |
-| Teal | `#007F7A` | Brand/navigation accent on light surfaces. |
-| Inverse teal | `#39D5CA` | Brand accent on navy. |
-| Paper / white | `#F5F8F7` / `#FFFFFF` | Light surfaces. |
-| Muted / border | `#566574` / `#D8E2E6` | Supporting text and dividers. |
+| Navy | `#061747` | Wordmark, primary text and dark surfaces. |
+| Cyan | `#00A9EE` | G symbol and Hint wordmark on light surfaces. |
+| Inverse cyan | `#00B9F2` | G symbol and Hint wordmark on navy. |
+| Paper / white | `#EFF7FF` / `#FFFFFF` | Light surfaces. |
+| Muted / border | `#456A9D` / `#BDD9F6` | Supporting text and dividers. |
 
 Brand accents do not communicate prediction outcomes. Use separately defined outcome colors with readable Correct, Incorrect, Pending, Void or Unavailable labels. Keep the logo's surrounding background compatible with its variant.
 
@@ -83,7 +83,7 @@ $env:BRAND_NODE_MODULES = Join-Path $brandTools 'node_modules'
 python scripts/generate-brand.py
 ```
 
-Optional type-outline rebuild: install Python's `fontTools` package, run `python scripts/build-brand-type.py`, then rerun the asset generator. The script sets the wordmark at weight 800 with −28 units of tracking (−40 more at the word space) and applies the font's own pair kerning to every string. Normal regeneration uses the committed outlines and does not require fontTools.
+Optional type-outline rebuild: install Python's `fontTools` package, run `python scripts/build-brand-type.py`, then rerun the asset generator. The script sets the wordmark at weight 800 with −28 units of tracking (−40 more at the word space) and applies the font's own pair kerning to every string. The wordmark also records positioned glyph runs so Hint can use the cyan accent without altering glyph geometry or spacing. Normal regeneration uses the committed outlines and does not require fontTools.
 
 The unmodified [Manrope source font](source/fonts/Manrope-wght.ttf) came from [Google Fonts](https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf). Its [SIL Open Font License](source/fonts/OFL.txt) is preserved alongside it; retain that license when redistributing the font.
 

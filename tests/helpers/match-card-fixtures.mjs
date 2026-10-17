@@ -22,7 +22,8 @@ export function cardFixture(overrides = {}, source = "ai", outcome = "correct") 
 }
 
 export function cardExamples() {
-  const delayed = cardFixture({ fixtureId: "card-delayed", status: "scheduled", score: null }, "ai", null);
+  const delayed = cardFixture({ fixtureId: "card-delayed", status: "scheduled", score: null,
+    update: { prediction: "delayed", result: "delayed" } }, "ai", null);
   delayed.forecast.updateDelayed = true;
   const limited = cardFixture({ fixtureId: "card-limited", status: "scheduled", score: null }, "ai", null);
   limited.forecast.markets.forEach((item) => { item.limitedNews = true; });

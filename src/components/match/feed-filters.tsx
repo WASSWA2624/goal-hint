@@ -99,9 +99,9 @@ const SearchButton = styled.button`
   gap: 6px;
   min-block-size: 2.75rem;
   padding-inline: 14px;
-  color: ${({ theme }) => theme.color.onBrand};
+  color: ${({ theme }) => theme.color.onAction};
   background: ${({ theme }) => theme.gradient.action};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.gradient.action};
   border-radius: 0;
   font: inherit;
   font-size: 0.875rem;
@@ -109,7 +109,7 @@ const SearchButton = styled.button`
   white-space: nowrap;
   cursor: pointer;
   > svg { flex: none; font-size: 1rem; }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.brandHover}; border-color: ${({ theme }) => theme.color.brandHover}; } }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.gradient.actionHover}; border-color: ${({ theme }) => theme.gradient.actionHover}; } }
   ${focusRing}
 `;
 /** Sort, Clear and Filters share one phone row; labels adapt to the available width. */
@@ -170,8 +170,8 @@ const FilterToggle = styled.button`
   > b {
     min-inline-size: 1.25rem;
     padding: 1px 5px;
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.brand};
+    color: ${({ theme }) => theme.color.onAction};
+    background: ${({ theme }) => theme.gradient.action};
     font-size: 0.6875rem;
     line-height: 1.4;
     text-align: center;
@@ -210,7 +210,6 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
     display: grid;
     padding: 4px 8px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-block-start: 3px solid ${({ theme }) => theme.color.brand};
   }
 `;
 /** Desktop keeps dates and times side by side above the filter row; phones stack sections and scroll. */
@@ -495,7 +494,7 @@ const ApplyButton = styled.button`
   gap: 6px;
   min-block-size: 2rem;
   padding-inline: 10px;
-  color: ${({ theme }) => theme.color.onBrand};
+  color: ${({ theme }) => theme.color.onAction};
   background: ${({ theme }) => theme.gradient.action};
   border: 0;
   ${media.belowDesktop} { ${buttonBorder} }

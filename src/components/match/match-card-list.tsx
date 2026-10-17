@@ -26,7 +26,7 @@ const Columns = styled.div`
     grid-template-columns: ${matchTableColumns.compact};
     column-gap: ${matchTableGap};
     padding: 12px 16px;
-    color: ${({ theme }) => theme.color.onBrand};
+    color: ${({ theme }) => theme.header.text};
     background: ${({ theme }) => theme.gradient.tableHeader};
     font-size: 0.8125rem;
     font-weight: ${({ theme }) => theme.typography.weight.bold};

@@ -14,7 +14,6 @@ export function detailRecordNotices(data: MatchDetailResponse): readonly TextKey
   const refresh = fixture.update?.prediction;
   if ((!snapshot || snapshot.applicability === "current") &&
     (refresh === "delayed" || refresh === "updating" || refresh === "outside-window")) notices.push(`detail.refresh.${refresh}`);
-  if (fixture.update?.result === "delayed") notices.push("match.resultDelayed");
   if (fixture.partialCoverage) notices.push("match.partialCoverage");
   return notices;
 }

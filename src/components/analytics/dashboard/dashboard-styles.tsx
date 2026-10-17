@@ -12,7 +12,7 @@ export const TopBar = styled.header`
   inset-block-start: 0;
   z-index: 10;
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.background};
+  background: ${({ theme }) => theme.header.gradient};
   border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
 `;
 export const TopBarContent = styled.div`
@@ -161,7 +161,7 @@ export const ToolButton = styled.button<{ $variant?: "primary" | "secondary" | "
   font-size: ${({ theme }) => theme.typography.scale.body};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
-  ${({ theme, $variant }) => $variant === "primary" && css`color: ${theme.color.onBrand}; background: ${theme.gradient.action}; border-color: ${theme.gradient.action};`}
+  ${({ theme, $variant }) => $variant === "primary" && css`color: ${theme.color.onAction}; background: ${theme.gradient.action}; border-color: ${theme.gradient.action};`}
   ${({ $variant }) => $variant === "quiet" && css`border-color: transparent; background: transparent;`}
   &:disabled { cursor: not-allowed; opacity: 0.55; }
   @media (hover: hover) { &:hover:not(:disabled) { filter: brightness(0.96); } }

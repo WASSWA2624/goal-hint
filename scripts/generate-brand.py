@@ -127,7 +127,7 @@ class Brand:
 
     def mark(self, accent=None, ink=None, micro=False, ball_background=None):
         c = self.colors
-        accent, ink = accent or c["teal"], ink or c["navy"]
+        accent, ink = accent or c["cyan"], ink or c["navy"]
         self.mask_count += 1
         identifier = f"goal-hint-ball-{self.mask_count}"
         tip, gap = (110, 5.5) if micro else (106, 6)
@@ -152,22 +152,26 @@ class Brand:
     def favicon(self):
         # An opaque white football and navy panels stay visible on either tab theme.
         c = self.colors
-        return svg(160, 160, "Goal Hint", self.mark(c["tealOnDark"], c["navy"], micro=True, ball_background=c["white"]))
+        return svg(160, 160, "Goal Hint", self.mark(c["cyanOnDark"], c["navy"], micro=True, ball_background=c["white"]))
 
-    def text_path(self, key, x, baseline, size, color):
+    def text_path(self, key, x, baseline, size, color, accent=None):
         item = self.type[key]
         scale = size / item["unitsPerEm"]
-        return f'<g fill="{color}" transform="translate({x} {baseline}) scale({scale} {-scale})"><path d="{item["path"]}"/></g>'
+        if accent and accent != color and "runs" in item:
+            paths = "".join(f'<path fill="{accent if run["accent"] else color}" d="{run["path"]}"/>' for run in item["runs"])
+        else:
+            paths = f'<path d="{item["path"]}"/>'
+        return f'<g fill="{color}" transform="translate({x} {baseline}) scale({scale} {-scale})">{paths}</g>'
 
     def logo_body(self, accent, ink):
-        return '<g transform="translate(8 8) scale(.7)">' + self.mark(accent, ink) + '</g>' + self.text_path("wordmark", 133.4, self.baseline, 93, ink)
+        return '<g transform="translate(8 8) scale(.7)">' + self.mark(accent, ink) + '</g>' + self.text_path("wordmark", 133.4, self.baseline, 93, ink, accent)
 
     def logo_at(self, x, y, width, accent, ink):
         return f'<g transform="translate({x} {y}) scale({width / self.logo_width})">{self.logo_body(accent, ink)}</g>'
 
     def icon_body(self, size):
         c = self.colors
-        return f'<rect width="{size}" height="{size}" fill="{c["navy"]}"/><g transform="translate({size * .14} {size * .14}) scale({size * .72 / 160})">{self.mark(c["tealOnDark"], c["white"])}</g>'
+        return f'<rect width="{size}" height="{size}" fill="{c["navy"]}"/><g transform="translate({size * .14} {size * .14}) scale({size * .72 / 160})">{self.mark(c["cyanOnDark"], c["white"])}</g>'
 
     def save_svg(self, name, source, scale=0):
         target = self.output_dir / (name + ".svg")
@@ -183,7 +187,7 @@ class Brand:
     def generate(self):
         c = self.colors
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        variants = [("primary", c["teal"], c["navy"]), ("inverse", c["tealOnDark"], c["white"]), ("monochrome", c["navy"], c["navy"]), ("monochrome-inverse", c["white"], c["white"])]
+        variants = [("primary", c["cyan"], c["navy"]), ("inverse", c["cyanOnDark"], c["white"]), ("monochrome", c["navy"], c["navy"]), ("monochrome-inverse", c["white"], c["white"])]
         logos = {}
         for name, accent, ink in variants:
             logos[name] = svg(self.logo_width, 128, "Goal Hint", self.logo_body(accent, ink), "A geometric G around a football beside the Goal Hint wordmark.")
@@ -199,11 +203,11 @@ class Brand:
             self.exports.append(target)
         for name, size in (("apple-touch-icon", 180), ("app-icon-192", 192), ("app-icon-512", 512), ("social-avatar", 512)):
             self.save_svg("goal-hint-" + name, svg(size, size, "Goal Hint", self.icon_body(size)), 1)
-        og = f'<rect width="1200" height="630" fill="{c["navy"]}"/>' + self.logo_at(64, 45, 326, c["tealOnDark"], c["white"])
-        og += f'<path d="M64 158 H1136" stroke="{c["white"]}" stroke-opacity=".2"/>' + self.text_path("headline1", 64, 287, 62, c["white"]) + self.text_path("headline2", 64, 369, 62, c["tealOnDark"])
-        og += '<g transform="translate(882 220) scale(1.46)">' + self.mark(c["tealOnDark"], c["white"]) + '</g>' + self.text_path("descriptor", 64, 457, 22, c["white"]) + self.text_path("domain", 64, 566, 25, c["tealOnDark"])
+        og = f'<rect width="1200" height="630" fill="{c["navy"]}"/>' + self.logo_at(64, 45, 326, c["cyanOnDark"], c["white"])
+        og += f'<path d="M64 158 H1136" stroke="{c["white"]}" stroke-opacity=".2"/>' + self.text_path("headline1", 64, 287, 62, c["white"]) + self.text_path("headline2", 64, 369, 62, c["cyanOnDark"])
+        og += '<g transform="translate(882 220) scale(1.46)">' + self.mark(c["cyanOnDark"], c["white"]) + '</g>' + self.text_path("descriptor", 64, 457, 22, c["white"]) + self.text_path("domain", 64, 566, 25, c["cyanOnDark"])
         self.save_svg("goal-hint-open-graph", svg(1200, 630, "Goal Hint — Football predictions. Clearly explained.", og, "AI analysis, estimated probabilities and verified outcomes. goalhint.com."), 1)
-        css_names = {"navy": "navy", "teal": "teal", "tealOnDark": "teal-on-dark", "paper": "paper", "white": "white", "muted": "text-muted", "border": "border"}
+        css_names = {"navy": "navy", "cyan": "cyan", "cyanOnDark": "cyan-on-dark", "paper": "paper", "white": "white", "muted": "text-muted", "border": "border"}
         css = "/* Generated from assets/brand/brand-tokens.json. */\n:root {\n" + "".join(f"  --gh-{css_names[key]}: {value};\n" for key, value in c.items())
         css += f"  --gh-font-family: {self.tokens['typography']['family']};\n  --gh-radius: {self.tokens['shape']['componentRadius']};\n}}\n"
         (self.output_dir / "goal-hint-brand-tokens.css").write_text(css, encoding="utf-8", newline="\n")
@@ -226,23 +230,23 @@ class Brand:
 
     def write_preview(self, variants, logos, favicon, og):
         c = self.colors
-        labels = {"navy": "Navy", "teal": "Teal", "tealOnDark": "Teal on dark", "paper": "Paper", "white": "White", "muted": "Muted text", "border": "Border"}
+        labels = {"navy": "Navy", "cyan": "Cyan", "cyanOnDark": "Cyan on dark", "paper": "Paper", "white": "White", "muted": "Muted text", "border": "Border"}
         figures = "".join(f'<figure class="{"dark" if "inverse" in name else ""}"><div class="art">{raw_svg(logos[name])}</div><figcaption>Horizontal logo / {name.replace("-", " ")}</figcaption></figure>' for name, _, _ in variants)
         palette = "".join(f'<li><span style="background:{color}"></span><strong>{labels[key]}</strong><code>{color}</code></li>' for key, color in c.items())
-        styles = f'*{{box-sizing:border-box}}body{{margin:0;background:{c["paper"]};color:{c["navy"]};font:16px/1.6 Arial,sans-serif}}main{{max-width:1240px;margin:auto;padding:40px 24px}}h1{{font-size:40px;line-height:1.15}}h2{{margin-top:40px;font-size:22px}}a{{color:{c["teal"]}}}.grid{{display:grid;grid-template-columns:1fr 1fr;gap:20px}}figure{{margin:0;background:white;border:1px solid {c["border"]}}}.art{{padding:32px;min-height:180px;display:flex;align-items:center}}.art svg,.social svg{{width:100%;height:auto}}.dark .art{{background:{c["navy"]}}}figcaption{{padding:12px 20px;border-top:1px solid {c["border"]};font-size:14px}}.symbols{{display:flex;gap:40px;align-items:center;flex-wrap:wrap;padding:24px;background:white}}.symbols svg{{width:120px;height:120px}}.symbols .favicon{{width:32px;height:32px}}.palette{{list-style:none;padding:0;display:grid;grid-template-columns:repeat(7,1fr);gap:12px}}.palette span{{display:block;height:64px;border:1px solid {c["border"]}}}.palette strong,.palette code{{display:block;font-size:13px;overflow-wrap:anywhere}}.notes{{padding:24px;background:white;border-left:4px solid {c["teal"]}}}@media(max-width:650px){{.grid{{grid-template-columns:1fr}}.art{{padding:20px;min-height:120px}}.palette{{grid-template-columns:repeat(3,1fr)}}h1{{font-size:32px}}}}'
+        styles = f'*{{box-sizing:border-box}}body{{margin:0;background:{c["paper"]};color:{c["navy"]};font:16px/1.6 Arial,sans-serif}}main{{max-width:1240px;margin:auto;padding:40px 24px}}h1{{font-size:40px;line-height:1.15}}h2{{margin-top:40px;font-size:22px}}a{{color:{c["cyan"]}}}.grid{{display:grid;grid-template-columns:1fr 1fr;gap:20px}}figure{{margin:0;background:white;border:1px solid {c["border"]}}}.art{{padding:32px;min-height:180px;display:flex;align-items:center}}.art svg,.social svg{{width:100%;height:auto}}.dark .art{{background:{c["navy"]}}}figcaption{{padding:12px 20px;border-top:1px solid {c["border"]};font-size:14px}}.symbols{{display:flex;gap:40px;align-items:center;flex-wrap:wrap;padding:24px;background:white}}.symbols svg{{width:120px;height:120px}}.symbols .favicon{{width:32px;height:32px}}.palette{{list-style:none;padding:0;display:grid;grid-template-columns:repeat(7,1fr);gap:12px}}.palette span{{display:block;height:64px;border:1px solid {c["border"]}}}.palette strong,.palette code{{display:block;font-size:13px;overflow-wrap:anywhere}}.notes{{padding:24px;background:white;border-left:4px solid {c["cyan"]}}}@media(max-width:650px){{.grid{{grid-template-columns:1fr}}.art{{padding:20px;min-height:120px}}.palette{{grid-template-columns:repeat(3,1fr)}}h1{{font-size:32px}}}}'
         symbols = raw_svg(svg(160, 160, "Primary mark", self.mark())) + raw_svg(svg(160, 160, "Monochrome mark", self.mark(c["navy"], c["navy"]))) + raw_svg(favicon).replace('<svg ', '<svg class="favicon" ')
-        preview = f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Goal Hint — Brand assets</title><style>{styles}</style></head><body><main><p>GOAL HINT / BRAND SYSTEM</p><h1>Football predictions.<br>Clearly explained.</h1><p>A solid football inside a heavy open geometric G, beside a bold Manrope wordmark. Deep navy establishes the reading surface; teal is the navigation and identity accent.</p><h2>Horizontal logos</h2><div class="grid">{figures}</div><h2>Full symbol and small-size favicon</h2><div class="symbols">{symbols}</div><h2>Shared palette</h2><ul class="palette">{palette}</ul><h2>Social preview</h2><div class="social">{raw_svg(svg(1200, 630, "Goal Hint social preview", og))}</div><h2>Use consistently</h2><div class="notes"><p>Use primary artwork on white or paper; inverse artwork on navy. Keep clear space equal to one quarter of the mark width. Use the micro favicon at 16–32 pixels. Do not stretch, recolor, add shadows or apply rounded containers.</p><p>The wordmark is Manrope, converted to paths. The source font and its SIL Open Font License are preserved. Label icon-only links accessibly.</p><p>See <a href="README.md">the asset guide</a> for files, metadata integration and regeneration. The existing raster logo is preserved unchanged under <code>reference/</code>.</p></div></main></body></html>\n'
+        preview = f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Goal Hint — Brand assets</title><style>{styles}</style></head><body><main><p>GOAL HINT / BRAND SYSTEM</p><h1>Football predictions.<br>Clearly explained.</h1><p>A solid football inside a heavy open geometric G, beside a bold Manrope wordmark. Deep navy establishes the reading surface; cyan is the navigation and identity accent.</p><h2>Horizontal logos</h2><div class="grid">{figures}</div><h2>Full symbol and small-size favicon</h2><div class="symbols">{symbols}</div><h2>Shared palette</h2><ul class="palette">{palette}</ul><h2>Social preview</h2><div class="social">{raw_svg(svg(1200, 630, "Goal Hint social preview", og))}</div><h2>Use consistently</h2><div class="notes"><p>Use primary artwork on white or paper; inverse artwork on navy. Keep clear space equal to one quarter of the mark width. Use the micro favicon at 16–32 pixels. Do not stretch, recolor, add shadows or apply rounded containers.</p><p>The wordmark is Manrope, converted to paths. The source font and its SIL Open Font License are preserved. Label icon-only links accessibly.</p><p>See <a href="README.md">the asset guide</a> for files, metadata integration and regeneration. The existing raster logo is preserved unchanged under <code>reference/</code>.</p></div></main></body></html>\n'
         (self.brand_dir / "goal-hint-brand-preview.html").write_text(preview, encoding="utf-8", newline="\n")
         label = lambda text, x, y, size=22, color=c["muted"], weight=400: f'<text x="{x}" y="{y}" font-family="Arial, sans-serif" font-size="{size}" font-weight="{weight}" fill="{color}">{html.escape(text)}</text>'
         panel = lambda x, y, width, height, fill, body: f'<rect x="{x}" y="{y}" width="{width}" height="{height}" fill="{fill}"/>{body}'
-        sheet = f'<rect width="1600" height="1480" fill="{c["paper"]}"/>' + label("GOAL HINT / BRAND SYSTEM", 64, 68, 20, c["teal"], 700) + label("A clear view of the match.", 64, 121, 40, c["navy"], 700)
-        sheet += label("PRIMARY / NAVY + TEAL", 64, 180, 18) + label("INVERSE / DARK SURFACES", 836, 180, 18)
-        sheet += panel(64, 204, 708, 230, c["white"], self.logo_at(112, 256, 612, c["teal"], c["navy"])) + panel(836, 204, 700, 230, c["navy"], self.logo_at(880, 256, 612, c["tealOnDark"], c["white"]))
+        sheet = f'<rect width="1600" height="1480" fill="{c["paper"]}"/>' + label("GOAL HINT / BRAND SYSTEM", 64, 68, 20, c["cyan"], 700) + label("A clear view of the match.", 64, 121, 40, c["navy"], 700)
+        sheet += label("PRIMARY / NAVY + CYAN", 64, 180, 18) + label("INVERSE / DARK SURFACES", 836, 180, 18)
+        sheet += panel(64, 204, 708, 230, c["white"], self.logo_at(112, 256, 612, c["cyan"], c["navy"])) + panel(836, 204, 700, 230, c["navy"], self.logo_at(880, 256, 612, c["cyanOnDark"], c["white"]))
         sheet += label("MONOCHROME", 64, 484, 18) + label("SYMBOL / FULL + SMALL SIZE", 836, 484, 18)
         sheet += panel(64, 506, 708, 180, c["white"], self.logo_at(128, 538, 580, c["navy"], c["navy"]))
         sheet += panel(836, 506, 700, 180, c["white"], '<g transform="translate(878 516)">' + self.mark() + '</g><g transform="translate(1088 516)">' + self.mark(c["navy"], c["navy"]) + '</g><g transform="translate(1324 540) scale(.68)">' + raw_svg(favicon) + '</g>')
         sheet += label("CORE PALETTE", 64, 736, 18)
-        for i, key in enumerate(("navy", "teal", "tealOnDark", "paper", "white")):
+        for i, key in enumerate(("navy", "cyan", "cyanOnDark", "paper", "white")):
             x = 64 + i * 296
             sheet += f'<rect x="{x}" y="758" width="288" height="72" fill="{c[key]}" stroke="{c["border"]}"/>' + label(labels[key].upper(), x, 858, 16) + label(c[key], x, 884, 20, c["navy"])
         sheet += label("SOCIAL / OPEN GRAPH 1200 × 630", 64, 952, 18) + '<g transform="translate(64 974) scale(.65)">' + og + '</g>' + label("APP ICON + SOCIAL AVATAR", 900, 952, 18) + '<g transform="translate(900 974)">' + self.icon_body(288) + '</g>'

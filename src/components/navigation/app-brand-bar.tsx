@@ -22,7 +22,7 @@ const Bar = styled.div`
   margin-inline: -8px;
   padding-inline: 8px;
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.background};
+  background: ${({ theme }) => theme.header.gradient};
   border-block-end: 2px solid ${({ theme }) => theme.header.accent};
   ${media.desktop} { display: none; }
 `;

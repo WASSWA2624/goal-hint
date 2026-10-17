@@ -93,14 +93,14 @@ const buttonTreatment = css<{ $variant: ButtonVariant }>`
         `;
       default:
         return css`
-          color: ${theme.color.onBrand};
-          background: ${theme.color.brand};
-          border-color: ${theme.color.brand};
+          color: ${theme.color.onAction};
+          background: ${theme.gradient.action};
+          border-color: ${theme.gradient.action};
 
           ${media.hover} {
             &:hover {
-              background: ${theme.color.brandHover};
-              border-color: ${theme.color.brandHover};
+              background: ${theme.gradient.actionHover};
+              border-color: ${theme.gradient.actionHover};
             }
           }
         `;

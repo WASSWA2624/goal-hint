@@ -93,8 +93,9 @@ def create_fixture(name: str, *, directory: Path | None = None) -> Path:
         shutil.copytree(template, directory, dirs_exist_ok=True)
     relative = Path(os.path.relpath(ROOT, directory)).as_posix()
     write_json(directory / "package.json", {"private": True, "type": "module"})
+    # Small acceptance apps need one page-data worker; host-wide defaults add needless processes.
     (directory / "next.config.mjs").write_text(
-        "export default { agentRules: false, compiler: { styledComponents: true }, turbopack: { root: "
+        "export default { agentRules: false, compiler: { styledComponents: true }, experimental: { cpus: 1 }, turbopack: { root: "
         + json.dumps(str(ROOT)) + " } };\n", encoding="utf-8")
     write_json(directory / "tsconfig.json", {"extends": relative + "/tsconfig.json",
         "compilerOptions": {"paths": {"@/*": [relative + "/src/*"]}},

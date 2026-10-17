@@ -18,7 +18,7 @@ import { useMessages } from "@/i18n/use-messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media, type OutcomeTone } from "@/styles/theme";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { CheckIcon, ChevronIcon, CrossIcon, FlagIcon, GlobeIcon, NoticeIcon, TrophyIcon, VoidIcon } from "./match-icons";
+import { CheckIcon, ChevronIcon, CrossIcon, FlagIcon, GlobeIcon, TrophyIcon, VoidIcon } from "./match-icons";
 import { matchTableColumns, matchTableGap } from "./match-columns";
 import { TeamLogo } from "./team-logo";
 import { providerImageSource } from "@/components/ui/provider-image";
@@ -64,7 +64,7 @@ const Card = styled.article`
   ${tile} {
     font-family: ${({ theme }) => theme.typography.family};
     grid-template-columns: minmax(0, 1fr) ${stubWidth};
-    grid-template-areas: "meta meta" "teams pick" "notes notes";
+    grid-template-areas: "meta meta" "teams pick";
     overflow: hidden;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     box-shadow: none;
@@ -113,6 +113,7 @@ const LeagueName = styled.span`
 `;
 const League = styled.p`
   display: flex;
+  color: ${({ theme }) => theme.color.link};
   align-items: center;
   gap: 6px;
   min-inline-size: 0;
@@ -462,46 +463,6 @@ const Result = styled(OutcomeBadge)`
   }
 `;
 
-const Notes = styled.ul`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  font-size: 0.625rem;
-  line-height: 1.35;
-  list-style: none;
-  /* An implicit row under the card, so cards without notes carry no empty track. */
-  ${tile} {
-    grid-area: notes;
-    display: grid;
-    gap: 0;
-    border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    font-size: ${({ theme }) => theme.typography.scale.caption};
-  }
-  ${table} { grid-column: 4 / span 7; }
-`;
-const Note = styled.li`
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 3px;
-  min-inline-size: 0;
-  padding: 0 6px;
-  color: ${({ theme }) => theme.color.accent.amber.text};
-  background: ${({ theme }) => theme.color.accent.amber.soft};
-  > svg { flex: none; margin-block-start: 0.2em; }
-  ${tile} {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 2px 8px;
-    border-radius: ${tileRadius};
-    font-weight: ${({ theme }) => theme.typography.weight.bold};
-    > svg { margin: 0; }
-    > span { ${ellipsis} }
-  }
-`;
-
 const Open = styled(Link)`
   position: absolute;
   inset: 0;
@@ -676,17 +637,6 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const percent = prediction && (prediction.probability.labelKey === "probability.percent"
     ? messages.text("probability.percent", { percent: messages.number(prediction.probability.roundedPercent) })
     : messages.text(prediction.probability.labelKey === "probability.less-than-one" ? "probability.compact.less-than-one" : "probability.compact.more-than-ninety-nine"));
-  const notes = [
-    fixture.update?.prediction === "updating" && messages.text("match.predictionUpdating"),
-    fixture.forecast?.updateDelayed && messages.text("match.updateDelayed"),
-    fixture.update?.result === "delayed" && messages.text("match.resultDelayed"),
-    prediction?.item.limitedNews && messages.text("match.limitedNews"),
-    fixture.partialCoverage && messages.text("match.partialCoverage"),
-    locked && !prediction && messages.text("match.noLockedPrediction"),
-    prediction?.explanation && outcome === "void" && prediction.explanation,
-    fixture.cycle?.state === "void" && !prediction && fixture.cycle.voidReason?.explanation,
-    fixture.availabilityMessage,
-  ].filter((note): note is string => typeof note === "string" && note.length > 0);
   const selection = prediction?.item.market.selection;
   const final = hasFinalScoreStatus(fixture.status);
   const showScore = fixture.score !== null && (fixture.status === "live" || final);
@@ -697,7 +647,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={shownFamily}
-    data-status={fixture.status} aria-describedby={notes.length ? `${titleId}-notes` : undefined} onPointerEnter={(event) => showFullNames(event, title)}>
+    data-status={fixture.status} onPointerEnter={(event) => showFullNames(event, title)}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{title}</VisuallyHidden>
     <Meta>
       {position !== undefined && <Index aria-hidden="true">{messages.number(position)}</Index>}
@@ -748,7 +698,6 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
       </Result>
       {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
-    {notes.length > 0 && <Notes id={`${titleId}-notes`}>{notes.map((note, index) => <Note key={index}><NoticeIcon /><span>{note}</span></Note>)}</Notes>}
     <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
       <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
     </Open>

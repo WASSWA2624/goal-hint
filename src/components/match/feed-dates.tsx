@@ -133,14 +133,14 @@ const Day = styled(Link)`
   > b { font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
   &[data-selected] {
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.brand};
-    border-color: ${({ theme }) => theme.color.brand};
+    color: ${({ theme }) => theme.color.onAction};
+    background: ${({ theme }) => theme.gradient.action};
+    border-color: ${({ theme }) => theme.gradient.action};
     > small { color: inherit; }
   }
   /* Drawn inside, so the scrolling strip never clips the ring. */
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -4px; }
-  &[data-selected]:focus-visible { outline-color: ${({ theme }) => theme.color.onBrand}; }
+  &[data-selected]:focus-visible { outline-color: ${({ theme }) => theme.color.onAction}; }
 `;
 const Scroll = styled.button`
   ${dayCell}
@@ -169,9 +169,9 @@ const CalendarButton = styled.button`
   > b { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; text-align: center; }
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
   &[data-current] {
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.brand};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
+    color: ${({ theme }) => theme.color.onAction};
+    background: ${({ theme }) => theme.gradient.action};
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.gradient.action};
   }
   ${focusRing}
 `;

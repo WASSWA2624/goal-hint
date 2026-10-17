@@ -72,7 +72,7 @@ export const Header = styled.header<{ $app?: boolean }>`
   z-index: 20;
   display: ${({ $app }) => $app ? "none" : "block"};
   color: ${({ theme }) => theme.header.text};
-  background: ${({ theme }) => theme.header.background};
+  background: ${({ theme }) => theme.header.gradient};
   border-block-end: 2px solid ${({ theme }) => theme.header.accent};
   box-shadow: ${({ theme }) => theme.header.shadow};
   ${desktop} { display: block; }
@@ -188,7 +188,7 @@ const tabLink = css`
   gap: 3px;
   min-block-size: ${mobileTabHeight};
   padding: 6px 8px;
-  color: ${({ theme }) => theme.header.text};
+  color: ${({ theme }) => theme.header.mutedText};
   font-size: 0.75rem;
   line-height: 1.25;
   text-align: center;
@@ -361,7 +361,7 @@ export const TabBar = styled.nav`
   inset-block-end: 0;
   z-index: 20;
   padding-block-end: env(safe-area-inset-bottom);
-  background: ${({ theme }) => theme.header.background};
+  background: ${({ theme }) => theme.header.navigationBackground};
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
   box-shadow: none;
   ${desktop} { display: none; }

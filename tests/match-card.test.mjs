@@ -51,7 +51,7 @@ test("outcome bindings require the same cycle, revision and selected pick, with 
   assert.throws(() => parseFixtureSnapshot(record));
 });
 
-test("all outcomes, both sources and independent coverage notices have deterministic fixtures", () => {
+test("all outcomes, both sources and independent coverage facts have deterministic fixtures", () => {
   const examples = cardExamples();
   const outcomes = new Set(examples.map(({ fixture, selectedFamily }) => selectedCardPrediction(fixture, selectedFamily)?.status ?? "unavailable"));
   assert.deepEqual([...outcomes].sort(), ["correct", "incorrect", "pending", "unavailable", "void"]);

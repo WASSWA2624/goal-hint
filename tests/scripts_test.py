@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from lib.backup_contract import BackupError, parse_backup_policy
 from lib.backup_crypto import backup_text, decrypt_backup, seal_backup, verify_backup
 from lib.backup_engine import validate_log_chain
+from lib.rendering import create_fixture
 from lib.runtime import node_binary
 
 
@@ -26,6 +27,28 @@ def load_script(name):
 
 
 class ScriptTests(unittest.TestCase):
+    def test_rendering_fixture_limits_workers_and_preserves_build_checks(self):
+        temporary = ROOT / ".tmp"
+        temporary.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=temporary) as directory:
+            fixture = create_fixture("match-card", directory=Path(directory))
+            source = """
+const { default: config } = await import(process.argv[1]);
+console.log(JSON.stringify({ workers: config.experimental.cpus,
+  styledComponents: config.compiler.styledComponents,
+  skipsTypechecking: config.typescript?.ignoreBuildErrors === true,
+  root: config.turbopack.root }));
+"""
+            result = subprocess.run([node_binary(), "--input-type=module", "--eval", source,
+                                     (fixture / "next.config.mjs").as_uri()], cwd=fixture,
+                                    capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, "Generated acceptance configuration must load.")
+            self.assertEqual(json.loads(result.stdout), {
+                "workers": 1, "styledComponents": True, "skipsTypechecking": False, "root": str(ROOT),
+            })
+            self.assertEqual((fixture / "app/layout.tsx").read_text(encoding="utf-8"),
+                             'export { default, metadata } from "@/app/layout";\n')
+
     def test_policy_requires_live_decisions_and_rejects_unknown_fields(self):
         policy = {"version": 1, "mode": "local-verification", "evidenceRef": "synthetic-proof", "owner": None,
                   "keyRef": "synthetic-key", "grantsRef": "synthetic-grants", "permissionsRef": "synthetic-permissions", "releaseRef": "synthetic-release",

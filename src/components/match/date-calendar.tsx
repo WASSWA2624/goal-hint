@@ -100,8 +100,8 @@ const DayButton = styled.button`
   }
   &[data-in-range] { color: ${({ theme }) => theme.color.accent.teal.text}; background: ${({ theme }) => theme.color.brandSoft}; }
   &[data-endpoint] {
-    color: ${({ theme }) => theme.color.onBrand};
-    background: ${({ theme }) => theme.color.brand};
+    color: ${({ theme }) => theme.color.onAction};
+    background: ${({ theme }) => theme.gradient.action};
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
     box-shadow: none;
   }
@@ -133,7 +133,7 @@ const Footer = styled.div`
     cursor: pointer;
     ${focusRing}
   }
-  > button:last-child { flex: 1; color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.gradient.action}; border-color: ${({ theme }) => theme.color.brand}; }
+  > button:last-child { flex: 1; color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action}; border-color: ${({ theme }) => theme.gradient.action}; }
 `;
 
 /**

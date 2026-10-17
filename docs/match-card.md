@@ -92,10 +92,10 @@ abandoned, awarded and paused live states retain their actual labels.
 
 Local MIT-licensed SVG flags in `public/flags` resolve recognized football countries, including England, Scotland, Wales and Northern Ireland, and work without a remote image request. A safe supplied provider flag is a secondary fallback. Unknown countries never borrow another country's flag from a derived abbreviation; international fixtures retain a globe. League/team images keep the existing URL safety and loading fallback behavior.
 
-The same full-card link, canonical navigation, hidden full team names,
-score/outcome descriptions and supplied notes remain accessible. Notes occupy
-no fifth visible mobile row and are linked with `aria-describedby`; desktop
-notices remain visible. Public odds for the selected pick appear beneath the
+The same full-card link, canonical navigation, hidden full team names and
+score/outcome descriptions remain accessible. Cards render no warning strip,
+notice list or notice-related `aria-describedby` reference on any screen.
+Public odds for the selected pick appear beneath the
 prediction and remain in its tooltip and accessible text. No unrelated or
 missing price fills that line. Long team names ellipsize with full names in
 the heading/link and a hover tooltip; league names truncate first.
@@ -127,7 +127,7 @@ lookup and slug canonicalization.
 The article's accessible heading names both teams and can match the page's
 heading hierarchy. Reading order is competition/kickoff, Home, match state,
 Away, selected market prediction with estimated probability and outcome,
-supplied notices, then View analysis. Decorative visual text (score digits,
+then View analysis. Decorative visual text (score digits,
 `VS`, short picks, percent, column headers) is `aria-hidden`; hidden text
 announces the score line, live phase and minute, and prediction in full. Each
 card has one keyboard destination, with a contextual accessible link name and
@@ -197,14 +197,13 @@ current clock cannot change the supplied instant or reporting cohort. Formatting
 only immutable `Intl` formatters, never visitor data.
 
 The pill tooltip says Provisional estimate unless trusted server data
-qualifies the forecast otherwise. Presentation makes no calibration claim. Update delayed is a
-forecast-wide supplied fact, Limited news coverage is selected-market-specific,
-and Partial coverage is fixture-wide. Missing notices do not imply full coverage.
+qualifies the forecast otherwise. Presentation makes no calibration claim.
+Delayed updates, limited news and partial coverage remain stored facts without
+adding a card notice strip. The detail page retains its provenance and coverage notices.
 
-Prompt 032 also presents the optional stored cycle/update metadata: locked
-prediction (padlock and hidden text), no locked selection for the selected
-family, an in-progress prediction refresh, outside-window availability and
-delayed result updates. `syncedAt` is shown on the detail page, not the card. The card does not select another revision
+Cards retain the locked-prediction hidden text and the concise no-pick reason
+for a missing selection, an in-progress refresh or outside-window availability.
+`syncedAt` is shown on the detail page, not the card. The card does not select another revision
 or change timestamps. Feed and detail links share `domain/match-slug.ts`.
 
 ## Remote logos and fallbacks
