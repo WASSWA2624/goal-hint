@@ -6,10 +6,11 @@ import { isAnyProbability, probabilityFraction, type FeedQuery } from "../../dom
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { MatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
-import { catalogScopeKey, normalizeCatalogSearch, parseCatalogImportRequest } from "../football/catalog-input.ts";
+import { catalogScopeKey, parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { oddsPriceJoin } from "../odds/odds-read.ts";
 import { selectionRunWindow, storedSelectionManifest } from "../selection/selection-read.ts";
 import { MatchFeedError } from "./feed-error.ts";
+import type { FeedSearch } from "./feed-search.ts";
 
 type Tx = Prisma.TransactionClient;
 /** Shared indexed fixture cohort; aliases f/l/c denote fixture, competition and applicable cycle. */
@@ -30,7 +31,7 @@ export const displayedSet = Prisma.sql`CASE
 /** `providerOdds` is the caller's effective odds flag (publicPolicy.features.providerOdds unless an isolated test
  * overrides it), so the SQL join and filter always follow the same rule as the record prices. */
 export function feedSql(query: FeedQuery, range: ReportingDateRange, competitionIds: readonly number[],
-  providerOdds: boolean = publicPolicy.features.providerOdds) {
+  providerOdds: boolean = publicPolicy.features.providerOdds, search: FeedSearch | null = null) {
   const markets = Prisma.join(query.markets);
   // One shown pick per fixture: highest unrounded probability, then the exact fresh public price,
   // then policy order. Candidate odds remain unread while their public feature is disabled.
@@ -69,19 +70,38 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   // (parseFeedQuery already rejects `odds` in that case; this guard keeps a hand-built query from joining).
   if (query.odds && providerOdds) filters.push(Prisma.sql`m.available=TRUE AND op.displayHundredths BETWEEN ${query.odds.min} AND ${query.odds.max}`);
   if (query.search) {
-    // Match %, _ and the escape character literally. Values never become SQL.
-    const pattern = `%${normalizeCatalogSearch(query.search).replace(/[!%_]/gu, "!$&")}%`;
-    filters.push(Prisma.sql`(h.nameSearch LIKE ${pattern} ESCAPE '!' OR h.countrySearch LIKE ${pattern} ESCAPE '!'
-      OR a.nameSearch LIKE ${pattern} ESCAPE '!' OR a.countrySearch LIKE ${pattern} ESCAPE '!'
-      OR l.nameSearch LIKE ${pattern} ESCAPE '!' OR l.countrySearch LIKE ${pattern} ESCAPE '!'
-      OR EXISTS (SELECT 1 FROM FootballTeamAlias t WHERE t.teamId=h.id AND t.normalizedSearch LIKE ${pattern} ESCAPE '!')
-      OR EXISTS (SELECT 1 FROM FootballTeamAlias t WHERE t.teamId=a.id AND t.normalizedSearch LIKE ${pattern} ESCAPE '!')
-      OR EXISTS (SELECT 1 FROM FootballCompetitionAlias ca WHERE ca.competitionId=l.id AND ca.normalizedSearch LIKE ${pattern} ESCAPE '!'))`);
+    if (!search || search.query !== query.search) throw new MatchFeedError("unavailable");
+    const matches: Prisma.Sql[] = [];
+    if (search.teams.length > 0) {
+      const ids = Prisma.join(search.teams.map((item) => item.id));
+      matches.push(Prisma.sql`h.id IN (${ids})`, Prisma.sql`a.id IN (${ids})`);
+    }
+    if (search.competitions.length > 0) matches.push(Prisma.sql`l.id IN (${Prisma.join(search.competitions.map((item) => item.id))})`);
+    filters.push(matches.length > 0 ? Prisma.sql`(${Prisma.join(matches, " OR ")})` : Prisma.sql`FALSE`);
   }
   const descending = query.sort.direction === "desc";
-  return { joins, scope, where: Prisma.join(filters, " AND "), order: query.sort.by === "probability"
+  const order = query.sort.by === "probability"
     ? Prisma.sql`m.selectedProbability IS NULL ASC, m.selectedProbability ${descending ? Prisma.sql`DESC` : Prisma.sql`ASC`}, f.kickoff ASC, f.id ASC`
-    : descending ? Prisma.sql`f.kickoff DESC, f.id DESC` : Prisma.sql`f.kickoff ASC, f.id ASC` };
+    : descending ? Prisma.sql`f.kickoff DESC, f.id DESC` : Prisma.sql`f.kickoff ASC, f.id ASC`;
+  let rankedOrder = order;
+  if (query.search && search && search.teams.length + search.competitions.length > 0) {
+    // Broad country/name matches often share a score. Grouped IN predicates avoid one CASE branch per club.
+    const grouped = (matches: FeedSearch["teams"]) => {
+      const groups = new Map<number, string[]>();
+      for (const { id, score } of matches) {
+        const ids = groups.get(score);
+        if (ids) ids.push(id); else groups.set(score, [id]);
+      }
+      return [...groups].sort(([left], [right]) => right - left);
+    };
+    const rank = (field: Prisma.Sql, groups: ReturnType<typeof grouped>) => groups.length > 0
+      ? Prisma.sql`CASE ${Prisma.join(groups.map(([score, ids]) => Prisma.sql`WHEN ${field} IN (${Prisma.join(ids)}) THEN ${score}`), " ")} ELSE 0 END`
+      : Prisma.sql`0`;
+    const teams = grouped(search.teams), competitions = grouped(search.competitions);
+    rankedOrder = Prisma.sql`GREATEST(${rank(Prisma.sql`h.id`, teams)}, ${rank(Prisma.sql`a.id`, teams)},
+        ${rank(Prisma.sql`l.id`, competitions)}) DESC, ${order}`;
+  }
+  return { joins, scope, where: Prisma.join(filters, " AND "), order: rankedOrder };
 }
 
 export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Promise<MatchFeedResponse["coverage"]["dates"]> {

@@ -24,8 +24,8 @@ access. All SQL values, limits and offsets are bound parameters.
 | --- | --- |
 | `date` | Exact EAT Gregorian `YYYY-MM-DD`, including historical dates whose UTC bounds fit MySQL DATETIME (earliest EAT date 1000-01-02). |
 | `from`, `to` | Both required; inclusive named EAT dates spanning at most 31 days. |
-| `when` | `today` (default), `tomorrow`, `next-3-days`, `next-7-days`, `next-30-days`. Mutually exclusive with `date` or `from`/`to`. |
-| `q` | At most 120 characters under the shared URL validator; normalized, trimmed case-insensitive substring matching. Controls are rejected. `%`, `_` and `!` match literally. |
+| `when` | `last-30-days` (default, today and the preceding 29 calendar days), `today`, `tomorrow`, `next-3-days`, `next-7-days`, `next-30-days`. Mutually exclusive with `date` or `from`/`to`. |
+| `q` | At most 120 characters under the shared URL validator; ranked matching of team, competition, country and historical alias names, including typos, prefixes and reordered words. Controls are rejected; punctuation never becomes a SQL pattern or expression. |
 | `league` | Comma list of canonical competition IDs (matching `competition.id`), at most 50. Absent or empty selects all leagues. |
 | `country` | Comma list of stored competition country names (`competition.country`), at most 50. Absent or empty selects all countries. |
 | `market` | Comma list of one or more of `match-result`, `double-chance`, `total-goals`, `both-teams-to-score`. Omitted means Any: all supported families, showing the highest-probability available pick. An explicit complete list is omitted from canonical URLs. Duplicates are rejected. |
@@ -56,9 +56,15 @@ The range resolves to UTC `[startInclusive, endExclusive)` using the shared EAT
 calendar. Enabled competitions are included, together with stored historical
 closed/void forecasts even if their competition is subsequently disabled. Team,
 league and country names and historical team/league aliases are searched across
-the entire range before pagination. Search uses the canonical normalized columns
-and alias tables with their existing indexes, bounded by indexed kickoff dates;
-leading-wildcard substring search does not promise a prefix-index plan.
+the entire range before pagination. Search reads distinct identities and aliases
+from the indexed date cohort, ranks their labels with the shared football name
+matcher, and binds the matching identities and relevance scores into SQL.
+Counts, filters and pagination therefore use the same ranked cohort. Search
+does not load fixture records into memory to paginate them.
+The resolver reads at most 50,000 catalog/alias rows and accepts at most 10,000
+matching identities per request. Exceeding either bound returns the recoverable
+unavailable response instead of silently omitting matches. The existing shared
+search rate limit applies before this work.
 
 Each fixture has at most one **shown pick**: in its displayed revision, the
 available family among the selected `market` families with the highest stored
@@ -68,6 +74,9 @@ this pick once per fixture; `bestCardFamily` in `src/domain/feed-presentation.ts
 applies the same rule to the same values, so cards show the pick that ordering and
 filters used. A family outside the selection never supplies a probability.
 
+When a search is applied, relevance is the primary order: an exact name or alias
+precedes a partial or misspelled match. Without search, the selected sort remains
+the primary order. It is also the stable tie breaker between equal search scores.
 Default order is kickoff ascending, then canonical fixture ID ascending;
 `dir=desc` reverses both. Probability order uses the shown pick's unrounded
 value, descending by default or ascending with `dir=asc`. Fixtures without a shown

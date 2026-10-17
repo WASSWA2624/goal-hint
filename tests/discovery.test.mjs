@@ -219,7 +219,8 @@ test('the sitemap index escapes locations and the dated feed heading names its d
   assert.match(sitemapIndexXml(['https://goalhint.com/a?b=1&c=<2>']), /<loc>https:\/\/goalhint\.com\/a\?b=1&amp;c=&lt;2&gt;<\/loc>/);
   assert.equal(sitemapIndexXml([]), '<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</sitemapindex>\n');
   const messages = createMessages('en');
-  assert.equal(feedHeading(query({}), today, messages), "Today's Matches");
+  assert.equal(feedHeading(query({}), today, messages), 'Football Predictions');
+  assert.equal(feedHeading(query({ when: 'today' }), today, messages), "Today's Matches");
   assert.equal(feedHeading(query({ date: '2026-10-08' }), today, messages), 'Football Predictions · Thu, Oct 8, 2026');
   assert.equal(feedHeading(query({ when: 'next-7-days' }), today, messages), 'Football Predictions');
 });

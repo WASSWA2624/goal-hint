@@ -50,8 +50,10 @@ const oddsColumns = {
 const target = (state) => ({ fixtureId: state.fixture.id, cycleId: state.cycle.id });
 
 export async function withPredictionPipeline(t, operation, instanceOptions) {
+  const { migrationTimeoutMs = 90_000, ...mysqlOptions } = instanceOptions ?? {};
+  if (!Number.isSafeInteger(migrationTimeoutMs) || migrationTimeoutMs <= 0) throw new RangeError('Invalid test migration timeout.');
   let instance;
-  try { instance = await startIsolatedMysql(instanceOptions); }
+  try { instance = await startIsolatedMysql(mysqlOptions); }
   catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(`${error.message} Cutoff acceptance remains pending.`); return; }
   t.diagnostic(`Owned MySQL ${instance.version}; synthetic policies, clocks and forecasts, no provider calls.`);
   const migrationPassword = randomBytes(24).toString('hex'), appPassword = randomBytes(24).toString('hex');
@@ -72,7 +74,7 @@ export async function withPredictionPipeline(t, operation, instanceOptions) {
     await instance.executeAdmin(`CREATE USER 'cutoff_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
       CREATE USER 'cutoff_app'@'127.0.0.1' IDENTIFIED BY '${appPassword}';
       GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'cutoff_migration'@'127.0.0.1';`);
-    try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: 90_000 }); }
+    try { await execute(process.execPath, ['--conditions=react-server', script, 'deploy'], { cwd: workspace, env, windowsHide: true, timeout: migrationTimeoutMs }); }
     catch (error) { t.diagnostic((await instance.executeAdmin('SELECT migration_name, LEFT(logs, 1500) FROM _prisma_migrations WHERE finished_at IS NULL')).stdout); throw error; }
     await instance.executeAdmin(catalogTables.map((name) => `GRANT ${catalogAppendOnly.includes(name) ? 'SELECT, INSERT' : 'SELECT, INSERT, UPDATE'} ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') +
       appendOnly.map((name) => `GRANT SELECT, INSERT ON goal_hint_test.${name} TO 'cutoff_app'@'127.0.0.1';`).join('\n') +

@@ -51,10 +51,10 @@ browser-safe `src/domain/slip-builder.ts` contract:
 | Selection probability | Inclusive unrounded percentage bounds, 0–100 | Any supported probability |
 | Selection count | Minimum and maximum of 1–8 matches per slip | Any supported count |
 | Number of slips | 1–10 | 3 |
-| Reuse matches | Allow a fixture in multiple separate slips | On |
+| Reuse matches | Allow a fixture in multiple separate slips | Off |
 
 Reset restores the blank Any criteria, all markets with Automatic outcomes,
-three requested slips and enabled match reuse. The underlying default date
+three requested slips and disabled match reuse. The underlying default date
 range remains bounded to 31 days. Blank date-from means today; blank date-to
 means 30 days after the chosen date-from. An explicit single date bound is
 accepted when the resulting range is valid and no longer than 31 days.

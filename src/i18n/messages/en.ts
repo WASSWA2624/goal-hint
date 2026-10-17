@@ -57,7 +57,6 @@ export const en = {
   "slips.selectionsRange": "Picks / slip",
   "slips.compactHint": "Blank limits = Any. Decimal odds. Dates span up to 31 days.",
   "slips.targets": "Slip targets",
-  "slips.limits": "Each selection",
   "slips.kickoff": "Kickoff range · EAT",
   "slips.markets": "Markets",
   "slips.accordion.targets": "Targets",

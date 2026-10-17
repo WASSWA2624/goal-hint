@@ -1,11 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { fixture, query, today, now } from './client-state-fixtures.mjs';
+import { fixture, query as clientQuery, today, now } from './client-state-fixtures.mjs';
 import { resolveFeedDates } from '../../src/domain/feed-query.ts';
 import { matchFeedRecordSchema, matchFeedResponseSchema } from '../../src/domain/match-feed.ts';
 import { matchDetailResponseSchema } from '../../src/domain/match-detail.ts';
 import { deMargin, DE_MARGIN_METHOD, parseDecimalOdds } from '../../src/domain/odds.ts';
 
-export { query, today, now };
+export { today, now };
+/** These clock-driven fixtures model one day unless a test explicitly selects another range. */
+export function query(parameters = '', context = {}) {
+  const values = new URLSearchParams(parameters);
+  if (!['when', 'date', 'from', 'to'].some(key => values.has(key)) && context.routeDate === undefined) values.set('when', 'today');
+  return clientQuery(values.toString(), context);
+}
 export const ids = { fixture: randomUUID(), cycle: randomUUID(), revision: randomUUID(), run: randomUUID() };
 export function liveRecord(overrides = {}) {
   return matchFeedRecordSchema.parse({ ...fixture({ fixtureId: ids.fixture, cycleId: ids.cycle,

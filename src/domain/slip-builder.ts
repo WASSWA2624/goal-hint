@@ -61,7 +61,7 @@ export function defaultSlipCriteria(today: string): SlipCriteria {
   return { dateFrom: from, dateTo: addReportingDays(from, 30), timeFrom: "", timeTo: "", markets: [...publicPolicy.markets],
     totalMin: slipBuilderRules.minimumOddsHundredths, totalMax: slipBuilderRules.maximumTotalOddsHundredths,
     oddsMin: slipBuilderRules.minimumOddsHundredths, oddsMax: slipBuilderRules.maximumOddsHundredths, probMin: 0, probMax: 100,
-    teamsMin: 1, teamsMax: slipBuilderRules.maximumSelections, slips: 3, reuse: true };
+    teamsMin: 1, teamsMax: slipBuilderRules.maximumSelections, slips: 3, reuse: false };
 }
 const outcomeKeys = new Map(publicPolicy.markets.map((family) => [`picks.${family}`, family]));
 const keys = new Set(["dateFrom", "dateTo", "timeFrom", "timeTo", "markets", "totalMin", "totalMax", "oddsMin", "oddsMax",
@@ -167,7 +167,7 @@ export function parseSlipCriteria(input: FeedParameters, today: string): SlipCri
   const teamsMin = integer(get("teamsMin"), defaults.teamsMin, slipBuilderRules.maximumSelections, "teamsMin");
   const teamsMax = integer(get("teamsMax"), defaults.teamsMax, slipBuilderRules.maximumSelections, "teamsMax");
   if (teamsMin > teamsMax) fail("teamsMin", "invalid-selection-range");
-  const slips = integer(get("slips"), defaults.slips, slipBuilderRules.maximumSlips, "slips"), reuseValue = get("reuse") ?? "1";
+  const slips = integer(get("slips"), defaults.slips, slipBuilderRules.maximumSlips, "slips"), reuseValue = get("reuse") ?? (defaults.reuse ? "1" : "0");
   if (reuseValue !== "0" && reuseValue !== "1") fail("reuse", "invalid-query");
   return { dateFrom, dateTo, timeFrom, timeTo, markets, ...(Object.keys(outcomes).length > 0 ? { outcomes } : {}),
     totalMin, totalMax, oddsMin, oddsMax, probMin, probMax, teamsMin, teamsMax, slips, reuse: reuseValue === "1" };

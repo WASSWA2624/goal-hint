@@ -1,5 +1,5 @@
 """Verify isolated SEO production/staging responses from genuine SQL captures."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import re
@@ -123,8 +123,10 @@ def verify(origin, cases, *, staging):
     assert "page=2" in visible_html(first, comments=False)
     match("Page 2", second)
     checks += 1
+    today = datetime.fromtimestamp(cases["at"] / 1000, timezone(timedelta(hours=3))).date()
+    default_archive = f"/en/predictions/{today - timedelta(days=29)}?to={today}"
     for path in ["/en?page=2", "/en?q=Discovery+Home+1", "/en?when=next-7-days", "/en?page=10000"]:
-        canonical = archive + path[len("/en"):] if path in ("/en?page=2", "/en?page=10000") else path
+        canonical = default_archive + "&" + path.split("?", 1)[1] if path in ("/en?page=2", "/en?page=10000") else path
         page(path, canonical, path == "/en?page=2" and not staging)
     detail = cases["details"][cases["publishedId"]]["current"]["data"]
     shared_detail = anonymous(detail["route"]["path"] + "?revision=" + cases["revision"] + "&fbclid=shared")

@@ -2,7 +2,7 @@
 
 import Link from "@/components/navigation/navigation-link";
 import {
-  useCallback, useId, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
+  useCallback, useId, useMemo, useRef, useState, type ComponentPropsWithoutRef, type MouseEvent, type ReactNode,
 } from "react";
 import styled, { css } from "styled-components";
 import { ChevronDownIcon, CloseIcon } from "@/components/ui/icons";
@@ -12,6 +12,7 @@ import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { providerImageSource } from "@/components/ui/provider-image";
 import { isLocalCountryFlagAsset } from "@/domain/country-flag";
 import type { FilterOption } from "@/domain/feed-presentation";
+import { prepareFootballSearch } from "@/domain/football-search";
 import { media, type AccentName } from "@/styles/theme";
 
 export const focusRing = css`
@@ -266,8 +267,18 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   const root = useRef<HTMLDivElement>(null), button = useRef<HTMLButtonElement>(null), panelId = useId();
   const close = useCallback(() => setOpen(false), []);
   useOutsideDismiss({ enabled: open, root, onDismiss: close });
-  const needle = filter.trim().toLocaleLowerCase();
-  const visible = needle ? options.filter((option) => `${option.label} ${option.detail ?? ""}`.toLocaleLowerCase().includes(needle)) : options;
+  const needle = filter.trim();
+  const search = useMemo(() => prepareFootballSearch(needle), [needle]);
+  const visible = useMemo(() => {
+    if (!needle) return options;
+    return options.map((option, index) => ({
+      option, index,
+      score: Math.max(search.score(option.label), option.detail ? search.score(option.detail) : 0,
+        option.detail ? search.score(`${option.label} ${option.detail}`) : 0),
+    })).filter(({ score }) => score > 0)
+      .sort((left, right) => right.score - left.score || left.index - right.index)
+      .map(({ option }) => option);
+  }, [needle, options, search]);
   const Trigger = summary ? PickerSummary : IconButton;
   return <PickerRoot className={className} ref={root} onKeyDown={(event) => {
     if (event.key === "Escape" && open) { event.stopPropagation(); setOpen(false); button.current?.focus(); }

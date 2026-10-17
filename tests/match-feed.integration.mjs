@@ -34,7 +34,7 @@ const groups = (home, over) => ({
   'both-teams-to-score': { period, probabilities: { yes: 0.6, no: 0.4 } },
 });
 
-test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 }, async (t) => {
+test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
     const rows = Array.from({ length: 75 }, (_, index) => catalogFixture(3000 + index, {
       homeId: 6000 + index * 2, awayId: 6001 + index * 2,
@@ -42,6 +42,10 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
         : ['2026-10-08T21:00:00Z', '2026-10-09T20:59:59Z', '2026-10-09T21:00:00Z', '2026-10-14T21:00:00Z', '2026-10-15T21:00:00Z'][index - 70],
     }));
     rows[65].teams.home.name = 'Beyond Page Alias';
+    rows[60].teams.home.name = 'Manchester United';
+    rows[10].teams.away.name = 'Manchester United U21';
+    rows[11].teams.home.name = 'Newcastle United';
+    rows[61].teams.home.name = 'Manchester City';
     const cohort = await p.cohort('2026-10-09', p.first, { rows });
     let readAt = PUBLICATION_NOW, importAt = CATALOG_NOW + 1000;
     const service = createMatchFeedService({ database: p.a, competitionIds: [39], clock: { now: () => readAt } });
@@ -128,6 +132,25 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       assert.equal((await query({ country: 'Elsewhere,Synthetic country', league: `unknown-league,${competitionId}` })).total, 72);
       assert.equal((await query({ country: 'Elsewhere' })).state, 'no-filter-matches');
       assert.equal((await query({ status: 'finished' })).total, 0);
+    });
+    await t.test('fuzzy names rank the closest identity before earlier fixtures and paginate the complete cohort', async () => {
+      const exact = (await fixture(3060)).id, related = (await fixture(3010)).id;
+      const unrelated = [(await fixture(3011)).id, (await fixture(3061)).id];
+      for (const q of ['Manchester United', 'Machester United', 'Man United', 'United Manchester', 'Mankheste Unitited']) {
+        const response = await query({ q, pageSize: '100' });
+        assert.equal(response.records[0]?.fixtureId, exact, q);
+        assert.ok(response.records.some((item) => item.fixtureId === related), `${q}: near matches follow`);
+        assert.ok(!response.records.some((item) => unrelated.includes(item.fixtureId)), `${q}: both words must match`);
+        const first = await query({ q, pageSize: '1' });
+        assert.equal(first.total, response.total); assert.equal(first.records[0]?.fixtureId, exact);
+        assert.ok(first.links.next, `${q}: near matches remain on later pages`);
+        const next = await service.query(new URL(first.links.next, 'http://localhost').searchParams);
+        assert.equal(next.records[0]?.fixtureId, related); assert.equal(next.total, response.total);
+      }
+      assert.equal((await query({ q: 'United Manchester', sort: 'kickoff', dir: 'desc' })).records[0]?.fixtureId, exact);
+      assert.equal((await query({ q: 'United Manchester', sort: 'probability', dir: 'asc' })).records[0]?.fixtureId, exact);
+      assert.equal((await query({ q: 'Mankheste Unitited', country: 'Elsewhere' })).total, 0);
+      assert.equal((await query({ q: 'Mankheste Unitited', date: '2026-10-10' })).total, 0);
     });
     await t.test('selected-family unrounded probability ordering, missing values and stable ties', async () => {
       await publish(3000, 0.600041, 0.55); await publish(3001, 0.600049, 0.51);
@@ -448,5 +471,5 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 300_000 },
       }
       assert.equal((await card(3050)).competition.countryFlagUrl, flag);
     });
-  });
+  }, { migrationTimeoutMs: 180_000 });
 });

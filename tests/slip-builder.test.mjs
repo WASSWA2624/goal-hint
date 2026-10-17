@@ -25,7 +25,7 @@ function record(id, odds = '2.00', probability = 0.8, overrides = {}) {
 }
 function criteria(overrides = {}) {
   return { ...defaultSlipCriteria(today), markets: ['match-result'], oddsMin: 101, oddsMax: 100_000,
-    probMin: 0, probMax: 100, totalMin: 101, totalMax: 10_000_000, teamsMin: 1, teamsMax: 8, slips: 10, ...overrides };
+    probMin: 0, probMax: 100, totalMin: 101, totalMax: 10_000_000, teamsMin: 1, teamsMax: 8, slips: 10, reuse: true, ...overrides };
 }
 const fixtureIds = (slip) => slip.selections.map((selection) => selection.fixtureId).sort();
 
@@ -33,7 +33,7 @@ test('Any defaults and canonical native GET criteria round trip', () => {
   const defaults = defaultSlipCriteria(today);
   assert.deepEqual(defaults, { dateFrom: today, dateTo: '2026-11-12', timeFrom: '', timeTo: '',
     markets: ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score'], totalMin: 101, totalMax: 10_000_000, oddsMin: 101, oddsMax: 100_000,
-    probMin: 0, probMax: 100, teamsMin: 1, teamsMax: 8, slips: 3, reuse: true });
+    probMin: 0, probMax: 100, teamsMin: 1, teamsMax: 8, slips: 3, reuse: false });
   assert.deepEqual(parseSlipCriteria({}, today), defaults);
   assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(defaults), today), defaults);
   const repeated = parseSlipCriteria(new URLSearchParams('build=1&markets=total-goals&markets=match-result&reuse=0&reuse=1'), today);
@@ -43,6 +43,19 @@ test('Any defaults and canonical native GET criteria round trip', () => {
   assert.equal(serializeSlipCriteria(repeated).getAll('reuse').length, 1);
   const smallProbability = criteria({ probMin: 0.0000001 });
   assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(smallProbability), today), smallProbability);
+});
+
+test('omitting reuse builds separate slips while an explicit opt-in still allows shared matches', () => {
+  const records = [record('a', '2.00', 0.95), record('b', '2.00', 0.9), record('c', '2.00', 0.8), record('d', '2.00', 0.7)];
+  const parameters = { teamsMin: '2', teamsMax: '2', slips: '2' };
+  const separate = buildSlips(parseSlipCriteria(parameters, today), records, asOf);
+  assert.equal(separate.slips.length, 2);
+  const chosen = separate.slips.flatMap(fixtureIds);
+  assert.equal(new Set(chosen).size, chosen.length);
+  const reusable = buildSlips(parseSlipCriteria({ ...parameters, reuse: '1' }, today), records, asOf);
+  assert.equal(reusable.slips.length, 2);
+  const repeated = reusable.slips.flatMap(fixtureIds);
+  assert.ok(new Set(repeated).size < repeated.length);
 });
 
 test('independent blank odds bounds mean the supported lower or upper bound', () => {
@@ -73,7 +86,7 @@ test('automatic outcomes canonicalize to omitted criteria and manual choices use
 });
 
 test('all ten manual outcome checkboxes fit the bounded full native GET contract', () => {
-  const outcomes = { ...marketSelections }, expected = { ...defaultSlipCriteria(today), outcomes };
+  const outcomes = { ...marketSelections }, expected = { ...defaultSlipCriteria(today), outcomes, reuse: true };
   const form = serializeSlipCriteria(expected); form.delete('markets'); form.delete('reuse');
   for (const [family, choices] of Object.entries(outcomes)) {
     form.delete(`picks.${family}`);
@@ -110,7 +123,7 @@ test('invalid typed outcome mappings cannot bypass serialization validation', ()
 
 test('bounded parsing preserves the complete native GET form with four repeated markets and hidden reuse pair', () => {
   const allMarkets = ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score'];
-  const expected = { ...defaultSlipCriteria(today), markets: allMarkets };
+  const expected = { ...defaultSlipCriteria(today), markets: allMarkets, reuse: true };
   const form = serializeSlipCriteria(expected); form.delete('markets'); form.delete('reuse');
   for (const market of allMarkets) form.append('markets', market);
   form.append('reuse', '0'); form.append('reuse', '1'); form.append('build', '1');

@@ -16,7 +16,7 @@ function page(number, ids, token = version, overrides = {}) {
   const nextPage = number < 3 ? number + 1 : null, previousPage = number > 1 ? number - 1 : null;
   return matchFeedResponseSchema.parse({ paginationVersion: token, records: ids.map(id=>record(id)), page: number, nextPage, previousPage,
     pageSize: 2, total: 6, totalPages: 3, links: { next: nextPage ? `/api/matches?page=${nextPage}` : null, previous: previousPage ? `/api/matches?page=${previousPage}` : null },
-    asOf: now, today, range: { from: today,to:today,...range.window }, state:'insufficient-data', message:null,
+    asOf: now, today, range: { from: range.startDate,to:range.endDate,...range.window }, state:'insufficient-data', message:null,
     coverage:{partial:false,knownFixtures:6,matchingWithMarket:0,dates:[{date:today,status:'complete',observedAt:now,authoritative:true}]},run:null,...overrides });
 }
 test('page URLs retain filters/order/size and pin relative reporting dates', () => {

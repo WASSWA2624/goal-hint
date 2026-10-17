@@ -38,7 +38,7 @@ def main() -> None:
         assert 0 <= html.find("data-styled=") < html.find("<header"), f"{path}: initial shell CSS"
         visible = visible_html(html, comments=False)
         assert_navigation_overflow(visible,
-            primary=[today_path, today_path + "?status=live", results_path],
+            primary=["/en", "/en?status=live", results_path],
             overflow=["/en/slips", *[f"/en/{page}" for page in information_pages]],
             footer=[f"/en/{page}" for page in information_pages])
         target = urlsplit(path)
@@ -58,9 +58,9 @@ def main() -> None:
             assert_navigation(visible, primary="/en/slips", mobile="/en/slips")
         else:
             status = parse_qs(target.query).get("status", ["all"])[0]
-            expected = results_path if status == "finished" else today_path + "?status=live" if status == "live" else today_path
+            expected = results_path if status == "finished" else "/en?status=live" if status == "live" else "/en"
             assert_navigation(visible, primary=expected, mobile=expected)
-        assert f'href="{today_path}"' in visible, f"{path}: Today target"
+        assert 'href="/en"' in visible, f"{path}: Default matches target"
         assert f'href="{results_path}"' in visible, f"{path}: Results target"
         assert 'href="/en/slips"' in visible, f"{path}: Slips target"
         no_match(r'(?:href|action)="[^"\s]*/(?:sign[-_]?in|log[-_]?in|auth)(?:[/?#]|"|$)', visible, flags=re.I)

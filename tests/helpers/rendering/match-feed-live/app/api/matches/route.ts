@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { getReportingDate, utcInstantFromEpochMilliseconds, addReportingDays } from '@/domain/calendar';
 const readClock = async () => JSON.parse(await readFile("__LIVE_CLOCK_PATH__", 'utf8')).now as number;
-import { parseFeedQuery, feedQueryKey, resolveFeedDates } from '@/domain/feed-query';
+import { parseFeedQuery, feedQueryKey, isFeedDatePreset, resolveFeedDates } from '@/domain/feed-query';
 import { parseReportingDate } from '@/domain/calendar';
 import type { MatchFeedResponse } from '@/domain/match-feed';
 import scenarios from '../../scenarios.json';
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   return selected ? Response.json(rollover(selected[1].result.data!, query, today, instant), { headers: { 'cache-control': 'no-store' } }) : Response.json({error:'unavailable'},{status:503});
 }
 function rollover(original: import('@/domain/match-feed').MatchFeedResponse, query: ReturnType<typeof parseFeedQuery>, today: ReturnType<typeof parseReportingDate>, instant: number) {
-  const data = structuredClone(original), relative = ['today','tomorrow','next-7-days'].includes(query.dates.kind);
+  const data = structuredClone(original), relative = isFeedDatePreset(query.dates.kind);
   const range = resolveFeedDates(query, today), shift = relative ? Date.parse(today) - Date.parse('2026-10-09') : 0;
   data.today = today; data.asOf = Math.max(data.asOf, instant);
   data.range = { from: range.startDate, to: range.endDate, ...range.window };

@@ -134,7 +134,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         </TargetGroups></FieldGroup>
         <CriteriaAccordion group="limits" title={messages.text("slips.accordion.limits")} resetVersion={resetVersion} invalid={invalidLimits} validationVersion={validationVersion}
           summary={messages.text("slips.summary.limits", { odds: range("oddsMin", "oddsMax"), probability: range("probMin", "probMax", "%") })}>
-        <FieldGroup><legend>{messages.text("slips.limits")}</legend><LimitGroups>
+        <FieldGroup as="div"><LimitGroups>
           <fieldset><legend>{messages.text("slips.individualOdds")}</legend><Fields>
             {field("oddsMin", messages.text("slips.minimum"), { ...oddsOptions, max: slipBuilderRules.maximumOddsHundredths / 100, "aria-label": messages.text("slips.oddsMin") })}
             {field("oddsMax", messages.text("slips.maximum"), { ...oddsOptions, max: slipBuilderRules.maximumOddsHundredths / 100, "aria-label": messages.text("slips.oddsMax") })}

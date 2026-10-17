@@ -14,6 +14,7 @@ import { publicPolicy } from "../../domain/public-policy.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { createMysqlPublicSearchLimiter } from "./search-limit.ts";
 import { feedSql, storedFeedCoverage, storedFeedRunContext } from "./feed-read.ts";
+import { storedFeedSearch } from "./feed-search.ts";
 import { storedFeedFixture } from "./fixture-read.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
 import { readPublicCacheGenerations } from "../cache/mysql-public-cache.ts";
@@ -58,9 +59,10 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         // Source writes and these generations commit atomically. Progress-only
         // changes do not reorder a cohort; catalog/date changes conservatively do.
         const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
-        const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v1", query: feedQueryKey(query, today),
+        const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v2", query: feedQueryKey(query, today),
           scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
-        const sql = feedSql(query, range, competitionIds, providerOdds);
+        const search = await storedFeedSearch(tx, query.search, range, competitionIds);
+        const sql = feedSql(query, range, competitionIds, providerOdds, search);
         const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.joins} WHERE ${sql.scope}`);
         // Options cover the entire date cohort, independently of applied filters/page.
         const leagueRows = await tx.$queryRaw<{ id: string; name: string | null; country: string | null; logoUrl: string | null; fixtures: bigint }[]>(Prisma.sql`
@@ -100,7 +102,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 11, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 12, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
