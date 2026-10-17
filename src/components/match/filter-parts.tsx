@@ -205,6 +205,7 @@ const PickerPanel = styled.div`
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 0;
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
+  transition-property: none;
   &[data-picker-floating] {
     max-block-size: var(--picker-max-height);
     overflow-y: auto;
