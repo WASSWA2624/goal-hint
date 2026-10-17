@@ -11,6 +11,13 @@ from lib.capture_rendering import captured_directory, unique_options
 from lib.rendering import ROOT, Server, build_fixture, create_fixture, environment, match, no_match, parse_args, request, run_node, visible_html, write_json
 from lib.runtime import main_guard
 
+PREDICTION_LABELS = {
+    "home-win": "Home win", "draw": "Draw", "away-win": "Away win",
+    "home-or-draw": "Home or draw", "away-or-draw": "Away or draw", "home-or-away": "Home or away",
+    "over-2.5": "Over 2.5", "under-2.5": "Under 2.5",
+    "yes": "Both teams to score", "no": "Not both teams to score",
+}
+
 
 def iso(value):
     return datetime.fromtimestamp(value / 1000, timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -121,6 +128,9 @@ def verify_feed(origin, directory, scenarios):
             assert record["homeTeam"]["name"] in article and record["awayTeam"]["name"] in article
             match("Kickoff: |Kickoff unavailable", article)
             match("prediction: |prediction unavailable", article)
+            for pick in re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article):
+                assert pick in PREDICTION_LABELS.values(), name + ": generic full-word prediction"
+            no_match(r'>(?:1X2|DC|BTTS|O/U 2\.5)</span>', article)
             assert len(re.findall(r"<a\b", article)) == 1
             if record["kickoffAt"] is not None:
                 assert iso(record["kickoffAt"]) in article
@@ -188,6 +198,10 @@ def verify_detail(origin, directory, scenarios):
                 assert item["market"]["period"] == "regulation-including-stoppage-time"
                 _, panel = get(origin, f"/detail-cases/{name}?market={family}")
                 match(f'data-market-panel="{family}"', panel)
+                prediction = re.escape(PREDICTION_LABELS[item["market"]["selection"]])
+                match(r'>Prediction</dt><dd><strong>' + prediction + r'(?:<|$)', panel)
+                for selection in item["market"]["probabilities"]:
+                    match(r'<li\b[^>]*><span>' + re.escape(PREDICTION_LABELS[selection]) + r'(?:<| ·)', panel)
                 assert iso(snapshot["publishedAt"]) in panel
                 outcome = next((entry for entry in snapshot["outcomes"] if entry["family"] == family), None)
                 if snapshot["applicability"] != "historical":
@@ -235,6 +249,12 @@ def verify_history(origin, directory, scenarios):
         match("Historical prediction snapshot", visible)
         match("Historical publication", visible)
         assert visible.count("data-detail-market=") == 8
+        history = visible[visible.index('data-history-snapshot="'):]
+        for item in data["snapshot"]["markets"]:
+            prediction = re.escape(PREDICTION_LABELS[item["market"]["selection"]])
+            match(r'>Prediction: <strong>' + prediction + r'</strong>', history)
+            for alternative in item["alternatives"]:
+                match(r'>' + re.escape(PREDICTION_LABELS[alternative["selection"]]) + r'</p>', history)
         assert len(re.findall(r"<article\b", visible)) == 1
         match("noindex, follow", html)
         assert f'href="https://goalhint.com{path}"' in html

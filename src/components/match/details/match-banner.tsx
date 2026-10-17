@@ -75,7 +75,10 @@ const Context = styled.p`
   text-wrap: balance;
   > img { display: inline-block; inline-size: 16px; block-size: 16px; margin-inline-end: 6px; object-fit: contain; vertical-align: -3px; }
   > span { white-space: nowrap; }
-  ${desktop} { font-size: ${size("body")}; > img { inline-size: 18px; block-size: 18px; vertical-align: -4px; } }
+  ${desktop} {
+    min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    font-size: ${size("body")}; > img { inline-size: 18px; block-size: 18px; vertical-align: -4px; }
+  }
 `;
 const CompetitionLogo = styled.img``;
 /** Phones: 44px crests and 14px names; long names such as "Manchester United" wrap between words. */
@@ -107,7 +110,7 @@ const TeamText = styled.div<{ $side: "home" | "away" }>`
     justify-items: ${({ $side }) => $side === "home" ? "end" : "start"};
     gap: 5px;
     min-inline-size: 0;
-    > strong { font-size: 1.375rem; }
+    > strong { min-inline-size: 0; max-inline-size: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 1.375rem; }
   }
 `;
 const Versus = styled.div`
@@ -156,10 +159,11 @@ export const MatchBanner = memo(function MatchBanner() {
   const status = fixture.status === "live" && fixture.liveClock
     ? fixture.liveClock.minute !== null ? messages.text("match.clock.minute", { minute: messages.number(fixture.liveClock.minute) }) : messages.text(`match.clock.${fixture.liveClock.phase}`)
     : messages.text(`match.status.${fixture.status}`);
+  const competition = [fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ");
   return <Box id="current-match-summary" aria-labelledby="match-banner-title">
-    <Context>
+    <Context title={competition}>
       {fixture.competition.logoUrl && <CompetitionLogo src={providerImageSource(fixture.competition.logoUrl, 16)} alt="" width={16} height={16} referrerPolicy="no-referrer" />}
-      {[fixture.competition.name || messages.text("match.competitionUnknown"), context?.competition.round].filter(Boolean).join("\u00a0· ")}{"\u00a0· "}
+      {competition}{"\u00a0· "}
       {fixture.kickoffAt !== null ? <span><time dateTime={toUtcIsoString(fixture.kickoffAt)}>{messages.reportingDay(fixture.kickoffAt)}</time>
         {"\u00a0· "}{messages.reportingTime(fixture.kickoffAt)} {messages.timeZone(fixture.kickoffAt)}</span> : <span>{messages.text("details.kickoffUnknown")}</span>}
     </Context>
@@ -167,12 +171,12 @@ export const MatchBanner = memo(function MatchBanner() {
       {messages.text("match.title", { home, away })}
     </h1>
     <Team $side="home"><Crest name={fixture.homeTeam.name} url={fixture.homeTeam.logoUrl} size={48} eager />
-      <TeamText $side="home"><strong>{home}</strong>{form("home")}</TeamText></Team>
+      <TeamText $side="home"><strong title={home}>{home}</strong>{form("home")}</TeamText></Team>
     <Versus>
       {played ? <b data-score>{messages.number(fixture.score!.home)} – {messages.number(fixture.score!.away)}</b> : <b>{fixture.status.startsWith("finished") || fixture.status === "awarded" ? "–" : messages.text("details.versus")}</b>}
       {(played || fixture.status !== "scheduled") && <span data-live={fixture.status === "live" || undefined}>{status}</span>}
     </Versus>
     <Team $side="away"><Crest name={fixture.awayTeam.name} url={fixture.awayTeam.logoUrl} size={48} eager />
-      <TeamText $side="away"><strong>{away}</strong>{form("away")}</TeamText></Team>
+      <TeamText $side="away"><strong title={away}>{away}</strong>{form("away")}</TeamText></Team>
   </Box>;
 });

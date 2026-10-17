@@ -44,7 +44,7 @@ export function cardExamples() {
     { label: "Example: void cycle", fixture: cardFixture({ fixtureId: "card-void", status: "postponed", score: null }, "ai", "void") },
     { label: "Example: unavailable forecast, known final score", fixture: cardFixture({ fixtureId: "card-unavailable", forecast: null }) },
     { label: "Example: delayed prediction retains publication time", fixture: delayed },
-    { label: "Example: limited news", fixture: limited },
+    { label: "Example: limited news", fixture: limited, selectedFamily: "both-teams-to-score" },
     { label: "Example: partial fixture coverage and fallback", fixture: cardFixture({ fixtureId: "card-partial", partialCoverage: true }, "api-football") },
     { label: "Example: selected family unavailable, another family correct", fixture: missing, selectedFamily: "total-goals" },
     { label: "Example: unknown values and missing logos", fixture: cardFixture({ fixtureId: "card-unknown", homeTeam: { id: "unknown-home", name: null },
@@ -54,7 +54,7 @@ export function cardExamples() {
       { family: "total-goals", selection: "under-2.5", price: "9999.99", basis: "bookmaker", retrievedAt: now, providerUpdatedAt: null },
     ], homeTeam: { id: "long-home", name: "Example International Football Club With A Very Long Name " + "UnbrokenHomeIdentifier".repeat(9) },
       awayTeam: { id: "long-away", name: "Example Association Sporting Club With A Very Long Name " + "UnbrokenAwayIdentifier".repeat(9) },
-      competition: { id: "long-league", name: "Example International Competition " + "LongCompetitionIdentifier".repeat(7), country: null } }) },
+      competition: { id: "long-league", name: "Example International Competition " + "LongCompetitionIdentifier".repeat(7), country: "Bosnia and Herzegovina" } }) },
     { label: "Example: broken and throttled remote logos", fixture: broken },
   ];
 }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { goalMarketPeriods, type GoalMarketPeriod } from "./score-distribution-markets.ts";
+import { predictionRuleLabel } from "./prediction-label.ts";
 
 export const NON_GOAL_MARKET_RULE_VERSION = "non-goal-market-implied-v1";
 export const countMetrics = ["corners", "yellow-cards", "red-cards", "cards", "booking-points", "shots-on-goal", "shots-off-goal",
@@ -90,7 +91,8 @@ function define(kind: NonGoalMarketIdentity["kind"], metric: NonGoalMarketIdenti
   selections: Selection[], options: Options = {}, line: number | null = null, playerId: number | null = null): NonGoalMarketDefinition {
   const identity: NonGoalMarketIdentity = { kind, metric, period: options.period ?? "full-time", scope: options.scope ?? "total", line, playerId,
     countingRule: options.countingRule ?? "provider-reported-count-v1" };
-  const parsed = nonGoalMarketDefinitionSchema.parse({ ...identity, key: nonGoalMarketKey(identity), label, code, selections });
+  const parsed = nonGoalMarketDefinitionSchema.parse({ ...identity, key: nonGoalMarketKey(identity), label, code,
+    selections: selections.map((selection) => ({ ...selection, label: predictionRuleLabel(selection.rule) })) });
   return Object.freeze({ ...parsed, selections: Object.freeze(parsed.selections.map((item) => Object.freeze({ ...item, rule: Object.freeze(item.rule) }))) });
 }
 export function nonGoalResultMarket(metric: CountMetric, options: Options = {}): NonGoalMarketDefinition {

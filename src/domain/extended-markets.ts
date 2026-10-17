@@ -4,7 +4,8 @@ export const extendedMarketSources = ["ai-score-distribution", "market-implied"]
 export type ExtendedMarketSource = typeof extendedMarketSources[number];
 export const extendedSettlementStatuses = ["correct", "incorrect", "half-win", "half-loss", "push", "pending", "void", "unavailable"] as const;
 export type ExtendedSettlementStatus = typeof extendedSettlementStatuses[number];
-const label = z.string().min(1).max(128).refine((value) => value === value.trim() && !/[\p{Cc}<>]/u.test(value));
+const text = z.string().min(1).refine((value) => value === value.trim() && !/[\p{Cc}<>]/u.test(value));
+const label = text.max(128), selectionLabel = text.max(512);
 const probability = z.number().finite().min(0).max(1);
 const outcomes = z.strictObject({ win: probability, "half-win": probability, push: probability, "half-loss": probability, loss: probability });
 
@@ -14,7 +15,7 @@ const publicFields = {
   period: z.enum(["full-time", "half-time", "second-half"]), ruleVersion: label,
   source: z.enum(extendedMarketSources), sourceLabel: z.enum(["AI score distribution", "Market-implied"]),
   probabilityBasis: z.enum(["model-event", "model-positive-payout", "normalized-bookmaker-price", "conditional-payout-price"]),
-  selection: label.max(64), selectionLabel: label, selectedProbability: probability,
+  selection: label.max(64), selectionLabel, selectedProbability: probability,
   result: z.strictObject({ status: z.enum(extendedSettlementStatuses), reason: label,
     correctedAt: z.number().int().nonnegative().nullable() }),
 };
@@ -27,7 +28,7 @@ function sourceCoherent(market: z.infer<z.ZodObject<typeof publicFields>>): bool
 export const publicExtendedPickSchema = z.strictObject(publicFields).refine(sourceCoherent);
 export type PublicExtendedPick = Readonly<z.infer<typeof publicExtendedPickSchema>>;
 export const publicExtendedMarketSchema = z.strictObject({ ...publicFields,
-  selections: z.array(z.strictObject({ key: label.max(64), label, probability,
+  selections: z.array(z.strictObject({ key: label.max(64), label: selectionLabel, probability,
     settlementProbabilities: outcomes.optional() })).min(2).max(1000),
 }).superRefine((market, context) => {
   const selected = market.selections.find(({ key }) => key === market.selection);

@@ -159,14 +159,14 @@ test("compact kickoff parts use the EAT reporting zone regardless of the visitor
   assert.equal(messages.reportingDay(Date.UTC(2026, 9, 16, 21, 30)), "Sat, Oct 17");
 });
 
-test("phone chips have a short market code and pick for every family and selection", () => {
+test("every family and selection has a full generic prediction label", () => {
   const messages = createMessages();
   for (const [family, selections] of Object.entries(marketSelections)) {
-    const code = messages.text(`market.code.${family}`);
-    assert.ok(code !== `market.code.${family}` && code.length <= 7, `${family}: ${code}`);
+    assert.notEqual(messages.text(`market.family.${family}`), `market.family.${family}`);
     for (const selection of selections) {
       const pick = messages.text(`market.pick.${selection}`);
-      assert.ok(pick !== `market.pick.${selection}` && pick.length <= 5, `${selection}: ${pick}`);
+      assert.equal(pick, messages.text(`market.selection.${selection}`), selection);
+      assert.doesNotMatch(pick, /^(?:1|2|X|1X|X1|X2|2X|12|21|Over|Under)$/u, selection);
     }
   }
 });

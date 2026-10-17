@@ -55,7 +55,7 @@ const Head = styled.div`
   ${media.belowDesktop} { display: none; }
 `;
 /** One table row per market from 320px; the narrowest phones use two lines. Below desktop a row reads like
- * the verdict: market code, pick with its live standing, and the chance. */
+ * the verdict: market name, pick with its live standing, and the chance. */
 const MarketRow = styled(RowButton)<{ $family: MarketFamily }>`
   grid-template-columns: minmax(0, 1fr) auto 0.875rem;
   grid-template-areas: "name pick chevron" "bar bar chevron";
@@ -163,7 +163,7 @@ export function Explanation() {
 
 /** All outcomes, source, timing, settlement and explanation for one market of the applicable revision. */
 function MarketPanel({ family }: { family: MarketFamily }) {
-  const { data, messages, home, away, update } = useStableDetails();
+  const { data, messages, update } = useStableDetails();
   const { item, outcome, reason } = marketRow(data, family);
   const heading = useRevealOnOpen<HTMLHeadingElement>(true, family, "card");
   const close = () => update((current) => ({ ...current, market: null }));
@@ -173,14 +173,14 @@ function MarketPanel({ family }: { family: MarketFamily }) {
     <PanelHeading ref={heading} tabIndex={-1}>{marketName(messages, family)}</PanelHeading>
     {item ? <>
       <Facts>
-        <dt>{messages.text("details.prediction")}</dt><dd><strong>{pickLabel(messages, item.market.selection, home, away)}<PredictionOdds odds={selectedDetailPrice(data, family)} /></strong></dd>
+        <dt>{messages.text("details.prediction")}</dt><dd><strong>{pickLabel(messages, item.market.selection)}<PredictionOdds odds={selectedDetailPrice(data, family)} /></strong></dd>
         <dt>{messages.text("details.estimatedProbability")}</dt><dd><b>{percent(messages, item.market.selectedProbability)}</b></dd>
       </Facts>
       <SubHeading>{messages.text("details.allOutcomes")}</SubHeading>
       <Outcomes aria-label={messages.text("details.allOutcomes")}>
         {marketOutcomes(item.market.probabilities as Readonly<Record<string, number>>, family).map(({ selection, probability }) =>
           <li key={selection} data-selected={selection === item.market.selection || undefined}>
-            <span>{pickLabel(messages, selection, home, away)}{selection === item.market.selection && <> · {messages.text("details.predicted")}</>}</span>
+            <span>{pickLabel(messages, selection)}{selection === item.market.selection && <> · {messages.text("details.predicted")}</>}</span>
             <ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${(probability ?? 0) * 100}%` }} /></ProbabilityBar>
             <b>{percent(messages, probability)}</b>
           </li>)}
@@ -236,12 +236,12 @@ function useMarketSearch(value: string) {
 
 /** All Markets & Odds: open initially, with categories, search and a nested panel per market. */
 export const MarketsCard = memo(function MarketsCard() {
-  const { data, messages, home, away, view, update } = useDetails();
+  const { data, messages, view, update } = useDetails();
   const list = useRef<HTMLUListElement>(null);
   useReturnFocus(list, view.market);
   const [search, setSearch] = useMarketSearch(view.marketSearch), query = useDeferredValue(search);
   const published = data.snapshot?.markets.length ?? 0;
-  const label = (family: MarketFamily) => `${marketName(messages, family)} ${messages.text(`market.code.${family}`)}`;
+  const label = (family: MarketFamily) => marketName(messages, family);
   const shown = visibleMarkets(view.marketCategory, query, label);
   const categoryLabel = (category: MarketCategory) => messages.text(`details.category.${category}`);
   return <Card data-section="markets" data-open={view.marketsOpen || undefined} aria-labelledby="section-markets-title">
@@ -265,7 +265,7 @@ export const MarketsCard = memo(function MarketsCard() {
             {shown.map((family) => {
               const { item, outcome } = marketRow(data, family), Icon = familyIcon[family];
               const settled = data.snapshot?.applicability !== "historical" && outcome && outcome.status !== "pending" ? outcome.status : null;
-              const pick = item ? pickLabel(messages, item.market.selection, home, away) : messages.text("details.notAvailable");
+              const pick = item ? pickLabel(messages, item.market.selection) : messages.text("details.notAvailable");
               const price = selectedDetailPrice(data, family), standing = liveStanding(data, family);
               return <li key={family}>
                 <MarketRow type="button" $family={family} data-detail-market={family} data-item-key={family} onClick={() => update((current) => ({ ...current, market: family }))}
@@ -273,7 +273,7 @@ export const MarketsCard = memo(function MarketsCard() {
                     price ? `${messages.text("details.odds")}: ${price}` : null,
                     standing ? messages.text("details.standingLabel", { standing: messages.text(`details.standing.${standing}`) }) : null].filter(Boolean).join(". ")}>
                   <span data-name><IconBadge $accent={familyAccent[family]}><Icon /></IconBadge><span>{marketName(messages, family)}</span></span>
-                  <span data-code aria-hidden="true">{messages.text(`market.code.${family}`)}</span>
+                  <span data-code aria-hidden="true">{marketName(messages, family)}</span>
                   <span data-pick><span>{pick}<PredictionOdds odds={price} /></span>{standing ? <Standing standing={standing} compact /> : settled && <DetailOutcome status={settled} />}</span>
                   <span data-bar>{item ? <><b>{percent(messages, item.market.selectedProbability)}</b><ProbabilityBar $family={family} aria-hidden="true"><span style={{ inlineSize: `${item.market.selectedProbability * 100}%` }} /></ProbabilityBar></>
                     : <b>—</b>}</span>

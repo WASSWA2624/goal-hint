@@ -95,7 +95,7 @@ function outlookText(messages: Messages, outlook: NonNullable<ReturnType<typeof 
   if (outlook.likeliest === "draw") parts.push(messages.text("details.drawLikeliest"));
   else if (outlook.likeliest) parts.push(messages.text("details.favourites", { team: team(outlook.likeliest) }));
   if (outlook.least) parts.push(messages.text("details.leastLikely", {
-    outcome: outlook.least === "draw" ? messages.text("details.outcomeDraw") : messages.text("details.outcomeWin", { team: team(outlook.least) }),
+    outcome: pickLabel(messages, outlook.least),
   }));
   if (parts.length === 0) return null;
   const text = `${parts.join("; ")}.`;
@@ -125,10 +125,11 @@ export const Verdict = memo(function Verdict() {
     <PredictionRecord />
   </Box>;
   const item = row.item, price = selectedDetailPrice(data, featured), standing = liveStanding(data, featured);
-  const pick = pickLabel(messages, item.market.selection, home, away), chance = percent(messages, item.market.selectedProbability);
+  const pick = pickLabel(messages, item.market.selection), chance = percent(messages, item.market.selectedProbability);
   const settled = snapshot?.applicability === "historical" ? null : row.outcome?.status ?? (snapshot?.applicability === "void" ? "void" : null);
   const sentence = outlook ? outlookText(messages, outlook, home, away) : null;
-  const sides = { "home-win": ["home", fixture.homeTeam.code ?? home], draw: ["draw", messages.text("details.pick.draw")], "away-win": ["away", fixture.awayTeam.code ?? away] } as const;
+  const sides = { "home-win": ["home", pickLabel(messages, "home-win")], draw: ["draw", pickLabel(messages, "draw")],
+    "away-win": ["away", pickLabel(messages, "away-win")] } as const;
   return <Box aria-labelledby="verdict-title" data-verdict={featured} data-featured-pick={featured}>
     <Eyebrow><h2 id="verdict-title">{messages.text("details.verdict")}</h2>
       {snapshot && <span>{messages.text("details.publishedAt", { time: messages.reportingInstant(snapshot.publishedAt) })}</span>}</Eyebrow>

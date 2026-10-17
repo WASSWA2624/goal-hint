@@ -153,7 +153,7 @@ export const SlipPick = styled.span<{ $family: MarketFamily }>`
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy};
   line-height: 1.3;
-  [data-pick-selection] { white-space: nowrap; }
+  [data-pick-selection] { white-space: normal; }
   @media (max-width: 22.5rem) { font-size: 0.75rem; }
 `;
 export const Table = styled.table`
@@ -202,6 +202,7 @@ export const Table = styled.table`
     [data-mobile] { display: none; }
     [data-team-list] { display: flex; align-items: center; gap: 8px; }
     [data-team-side] { flex: 1; }
+    [data-team-name] { min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     [data-versus] { display: inline; color: ${({ theme }) => theme.color.mutedText}; font-weight: ${({ theme }) => theme.typography.weight.body}; }
     [data-probability-content] { margin-inline-start: auto; }
   }

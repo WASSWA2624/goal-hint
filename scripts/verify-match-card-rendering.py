@@ -38,6 +38,9 @@ def verify(origin, directory):
             assert article.count('data-pick-odds=""') <= 1, "An available price appears once after the shown prediction"
             assert article.count('data-probability-meter=""') == 1, "One decorative meter for the shown probability"
             no_match(r"Odds", re.search(r"<header\b[^>]*>([\s\S]*?)</header>", article).group(1))
+            picks = re.findall(r'data-pick-selection=""[^>]*>([^<]+)</span>', article)
+            assert len(picks) == 1 and not re.fullmatch(r"[12Xx]+|Yes|No", picks[0]), "One full-word generic prediction per card"
+            no_match(r'>(?:1X2|DC|BTTS|O/U 2\.5)</span>', article)
         no_match(r"\(—\)", article)
     for card, status in [("card-correct", "correct"), ("card-incorrect", "incorrect"), ("card-pending", "pending"),
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
@@ -55,8 +58,8 @@ def verify(origin, directory):
         match(r'<b data-mobile-only=""[^>]*>No pick</b>', by_id[card])
     for card, state in [("card-correct", "settled"), ("card-incorrect", "settled"), ("card-void", "settled"), ("card-pending", "open")]:
         match(f'data-pick-state="{state}"', by_id[card])
-    match(r'data-pick-selection=""[^>]*>1</span>', by_id["card-correct"])
-    match(r'data-mobile-only=""[^>]*>1X2</span>', by_id["card-unavailable"])
+    match(r'data-pick-selection=""[^>]*>Home win</span>', by_id["card-correct"])
+    match(r'data-mobile-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-selected-odds[^>]*>\(1\.85\)</span>', by_id["card-correct"])
     match("Odds: 1.85", by_id["card-correct"])
@@ -65,6 +68,8 @@ def verify(origin, directory):
     no_match(r"data-pick-odds=", by_id["card-incorrect"])
     match("Odds: Unavailable", by_id["card-incorrect"])
     match(r'data-pick-selection=""[^>]*>Under 2\.5</span>', by_id["card-long"])
+    match(r'data-pick-selection=""[^>]*>Not both teams to score</span>', by_id["card-limited"])
+    match(r'<span\b[^>]*data-country-name[^>]*>Bosnia and Herzegovina</span>', by_id["card-long"])
     match(r'data-selected-odds[^>]*>\(9999\.99\)</span>', by_id["card-long"])
     match(r'<article[^>]*data-fixture-id="card-any"[^>]*data-market="double-chance"', visible)
     match("Double chance prediction: Home or draw, estimated probability 82%", by_id["card-any"])
@@ -89,6 +94,10 @@ def verify(origin, directory):
     images = re.findall(r"<img\b[^>]*>", visible)
     assert images
     for tag in images:
+        if 'src="/flags/' in tag:
+            for pattern in ['src="/flags/ba.svg"', 'alt=""', 'width="16"', 'height="12"', 'loading="lazy"']:
+                match(pattern, tag)
+            continue
         for pattern in [r'(?:data-logo-src|src)="https://static\.match-card\.test/', 'alt=""', 'width="32"', 'height="32"']:
             match(pattern, tag)
         if 'data-logo-src=' in tag:

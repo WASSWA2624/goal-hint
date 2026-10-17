@@ -12,6 +12,7 @@ import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
 import { hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
+import { predictionLabel } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { useMessages } from "@/i18n/use-messages";
@@ -136,7 +137,7 @@ const League = styled.p`
     > [data-country] { grid-column: 1 / -1; grid-row: 1; }
     > img, > svg { grid-column: 1; grid-row: 2; }
     > svg { font-size: 1rem; }
-    > span { white-space: normal; }
+    > span { white-space: nowrap; }
   }
 `;
 const LeagueLogo = styled.img`
@@ -180,8 +181,9 @@ const CountryDetails = styled.span`
   line-height: 0.875rem;
   white-space: nowrap;
   > span { flex: none; }
+  > [data-country-name] { flex: 1; min-inline-size: 0; white-space: normal; }
 `;
-const CountryCode = styled.span`
+const CountryName = styled.span`
   ${tile} { display: none; }
 `;
 const FlagImage = styled.img`
@@ -253,7 +255,7 @@ const TeamName = styled.span`
     white-space: nowrap;
     [data-result="loss"] > & { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
   }
-  ${table} { white-space: normal; font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  ${table} { white-space: nowrap; font-weight: ${({ theme }) => theme.typography.weight.body}; }
 `;
 const Center = styled.div`
   display: flex;
@@ -325,7 +327,7 @@ const LiveDot = styled.span`
   ${tile} { background: currentColor; animation: none; }
 `;
 
-/** Quiet prediction stub: market code, bold pick and its own odds, then the probability meter. */
+/** Quiet prediction stub: market name, bold pick and its own odds, then the probability meter. */
 const Pick = styled.div<{ $family: MarketFamily; $available: boolean }>`
   ${tile} {
     grid-area: pick;
@@ -369,7 +371,7 @@ const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
       font-size: ${({ theme }) => theme.typography.scale.micro};
       font-weight: ${({ theme }) => theme.typography.weight.medium};
       line-height: 1.1;
-      white-space: nowrap;
+      white-space: normal;
     }
   }
   ${table} {
@@ -554,7 +556,7 @@ function CardTeam({ team, side, name, eager, result }: {
   const url = isSafeRemoteImageUrl(team.logoUrl) ? team.logoUrl : undefined;
   return <Team data-team-side={side} data-result={result ?? undefined}>
     <TeamLogo key={`${team.id}:${url ?? "missing"}`} name={team.name} url={url} eager={eager} />
-    <TeamName data-team-name="">{name}</TeamName>
+    <TeamName data-team-name="" title={name}>{name}</TeamName>
   </Team>;
 }
 
@@ -627,7 +629,6 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const title = messages.text("match.title", { home, away });
   const competition = fixture.competition.name?.trim() || messages.text("match.competitionUnknown");
   const country = fixture.competition.country?.trim();
-  const countryLabel = countryCode(country);
   const flagUrl = countryFlagUrl(fixture);
   const prediction = selectedCardPrediction(fixture, shownFamily);
   const price = prediction ? selectedCardPrice(fixture, shownFamily) : null;
@@ -654,7 +655,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
       <League title={country ?? undefined}>
         <CountryDetails data-country aria-hidden="true">
           <CountryFlag key={`${country}:${flagUrl}`} url={flagUrl} country={country} />
-          <CountryCode>{countryLabel || "–"}</CountryCode>
+          <CountryName data-country-name title={country}>{country || "–"}</CountryName>
         </CountryDetails>
         <CompetitionLogo key={fixture.competition.logoUrl} url={fixture.competition.logoUrl} /><LeagueName title={competition}>{competition}</LeagueName>
         {country && <VisuallyHidden>, {country}</VisuallyHidden>}</League>
@@ -667,14 +668,13 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
     </Teams>
     <Pick $family={shownFamily} $available={prediction !== null} data-pick-state={pickState}>
       <MarketName $family={shownFamily} aria-hidden="true">
-        <span data-pick-value="" data-mobile-only="">{messages.text(`market.code.${shownFamily}`)}</span>
+        <span data-pick-value="" data-mobile-only="">{family}</span>
         <span data-pick-value="" data-desktop-only="">{family}</span>
       </MarketName>
       <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <>
-            <span data-pick-value=""><span data-pick-selection="">{messages.text(shownFamily === "total-goals"
-              ? `market.pickPlain.${selection}` : `market.pick.${selection}`)}</span>
+            <span data-pick-value=""><span data-pick-selection="">{predictionLabel(messages, selection)}</span>
               <PredictionOdds odds={price?.price} />
             </span>
           </> : <>
@@ -687,7 +687,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
           {prediction && <ProbabilityBar $family={shownFamily} data-probability-meter=""><span style={{ inlineSize: `${Math.max(2, prediction.probability.roundedPercent)}%` }} /></ProbabilityBar>}
           <Percent data-pick-value="">{prediction ? percent : "—"}</Percent>
         </Probability>
-        {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: messages.text(`market.selection.${selection}`),
+        {prediction && selection ? <VisuallyHidden>{messages.text("match.pickLabel", { market: family, selection: predictionLabel(messages, selection),
           probability: messages.text(prediction.probability.labelKey, { percent: messages.number(prediction.probability.roundedPercent) }) })}
           {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {messages.text(`outcome.${outcome}`)}
         </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}</VisuallyHidden>}

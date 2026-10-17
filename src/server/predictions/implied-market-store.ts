@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { deriveMappedImpliedMarket } from "../../domain/market-implied-markets.ts";
 import { NON_GOAL_MARKET_RULE_VERSION } from "../../domain/non-goal-market-definitions.ts";
+import { predictionRuleLabel } from "../../domain/prediction-label.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { oddsValuesHash, storedOddsSnapshotSchema } from "../odds/odds-mysql-store.ts";
@@ -126,10 +127,11 @@ export function publicImpliedMarketExtension(extension: StoredImpliedMarketExten
   return extension.markets.flatMap(({ definition, snapshotId, derivation }) => {
     if (!derivation.available) return [];
     const snapshot = extension.snapshots.find(({ id }) => id === snapshotId)!;
+    const labels = new Map(definition.selections.map(({ key, rule }) => [key, predictionRuleLabel(rule)]));
     return [{ key: definition.key, label: definition.label, code: definition.code, period: definition.period,
       source: "market-implied" as const, method: derivation.market.method, probabilityBasis: derivation.market.probabilityBasis,
       selection: derivation.market.selection, selectedProbability: derivation.market.selectedProbability,
-      selections: derivation.market.selections.map(({ key, label, normalizedProbability, displayHundredths }) => ({ key, label,
+      selections: derivation.market.selections.map(({ key, normalizedProbability, displayHundredths }) => ({ key, label: labels.get(key) ?? historyFail("invalid-state"),
         probability: normalizedProbability, capturedPrice: snapshot.retainUntil > at ? `${Math.floor(displayHundredths / 100)}.${String(displayHundredths % 100).padStart(2, "0")}` : null })),
       retrievedAt: snapshot.retrievedAt, providerUpdatedAt: snapshot.providerUpdatedAt, confirmedAt: extension.confirmedAt }];
   });

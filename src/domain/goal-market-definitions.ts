@@ -1,4 +1,5 @@
 import { freezeDefinition, goalMarketDefinitionSchema, type GoalMarketDefinition, type GoalMarketPeriod, type GoalRule } from "./score-distribution-markets.ts";
+import { predictionRuleLabel } from "./prediction-label.ts";
 
 const resultLabels = { home: "Home", draw: "Draw", away: "Away" } as const;
 const periodLabels = { "full-time": "Full time", "half-time": "First half", "second-half": "Second half" } as const;
@@ -10,7 +11,12 @@ const selected = (key: string, label: string, rule: GoalRule): Selection => ({ k
 function definition(kind: string, period: GoalMarketPeriod, label: string, code: string, selections: Selection[],
   group: GoalMarketDefinition["group"] = "partition"): GoalMarketDefinition {
   return freezeDefinition(goalMarketDefinitionSchema.parse({ key: `goal:${period}:${kind}`, period,
-    label: `${periodLabels[period]} · ${label}`, code, selections, group }));
+    label: `${periodLabels[period]} · ${label}`, code,
+    selections: selections.map((selection) => {
+      const display = predictionRuleLabel(selection.rule);
+      // Stored definitions keep their original bounded description; public reads format the full structured event.
+      return { ...selection, label: display.length <= 128 ? display : selection.label };
+    }), group }));
 }
 
 export function goalResultMarket(period: GoalMarketPeriod = "full-time"): GoalMarketDefinition {

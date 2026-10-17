@@ -7,6 +7,7 @@ import { breadcrumbStructuredData, matchPageIndexable, type DiscoveryPolicy } fr
 import { feedDefaults, feedHref, homeHref } from "../../domain/navigation.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { selectedCardPrediction } from "../../domain/match-card.ts";
+import { predictionLabel } from "../../domain/prediction-label.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { parseMatchDetailQuery } from "./detail-query.ts";
 import { MatchFeedError } from "./feed-error.ts";
@@ -52,8 +53,7 @@ export function matchDetailMetadata(result: DetailPageResult, locale = "en", var
   const lead = leadForecast(data.fixture);
   const description = date && lead ? messages.text("detail.forecastMetadataDescription", { match: title.slice(0, 240),
     date: messages.reportingDate(date), market: messages.text(`details.market.${lead.item.market.family}`),
-    pick: messages.text(`details.pick.${lead.item.market.selection}`, { home: data.fixture.homeTeam.name || messages.text("match.homeUnknown"),
-      away: data.fixture.awayTeam.name || messages.text("match.awayUnknown") }),
+    pick: predictionLabel(messages, lead.item.market.selection),
     probability: messages.number(lead.probability.roundedPercent / 100, { style: "percent" }) })
     : date ? messages.text("detail.datedMetadataDescription", { match: title.slice(0, 240), date: messages.reportingDate(date) })
     : messages.text("detail.metadataDescription", { match: title.slice(0, 240) });

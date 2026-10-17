@@ -8,6 +8,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { getReportingDate, toUtcIsoString, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { matchHref } from "@/domain/navigation";
+import { predictionLabel } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
 import { createMessages, type Messages } from "@/i18n/messages";
@@ -22,7 +23,7 @@ function percent(value: number, messages: Messages): string {
 function SlipTeam({ team, name, side }: { team: SlipSelection["homeTeam"]; name: string; side: "home" | "away" }) {
   return <span data-team-side={side}>
     <TeamLogo name={team.name} url={isSafeRemoteImageUrl(team.logoUrl) ? team.logoUrl : undefined} eager={false} />
-    <span data-team-name>{name}</span>
+    <span data-team-name title={name}>{name}</span>
   </span>;
 }
 
@@ -64,8 +65,7 @@ export function SlipTable({ slip, index, locale }: { slip: BuiltSlip; index: num
         const kickoff = `${messages.reportingDateShort(getReportingDate(at))} · ${messages.reportingTime(at)} EAT`;
         const probability = percent(selection.probability, messages);
         const family = messages.text(`market.family.${selection.family}`);
-        const pick = messages.text(selection.family === "total-goals"
-          ? `market.pickPlain.${selection.selection}` : `market.pick.${selection.selection}`);
+        const pick = predictionLabel(messages, selection.selection);
         return <tr key={selection.fixtureId} data-slip-selection={selection.fixtureId}>
           <td data-column="match">
             <span data-mobile="metadata">
@@ -80,12 +80,12 @@ export function SlipTable({ slip, index, locale }: { slip: BuiltSlip; index: num
           </td>
           <td data-column="selection">
             <SlipMarket $family={selection.family} data-market>
-              <span aria-hidden="true">{messages.text(`market.code.${selection.family}`)}</span>
+              <span aria-hidden="true">{family}</span>
               <VisuallyHidden>{family}</VisuallyHidden>
             </SlipMarket>
             <SlipPick $family={selection.family} data-slip-pick>
               <span aria-hidden="true" data-pick-selection>{pick}</span>
-              <VisuallyHidden>{messages.text(`market.selection.${selection.selection}`)}. {messages.text("slips.odds")}: </VisuallyHidden>
+              <VisuallyHidden>{pick}. {messages.text("slips.odds")}: </VisuallyHidden>
               <PredictionOdds odds={selection.odds} />
             </SlipPick>
             <span data-mobile="probability">

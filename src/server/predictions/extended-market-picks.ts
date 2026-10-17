@@ -16,7 +16,9 @@ const identity = z.strictObject({ revisionId: historyId, fixtureId: historyId, c
   sortOrder: z.number().int().min(0).max(255) });
 const publishedShape = publicExtendedPickSchema.shape;
 const fields = Object.fromEntries(Object.entries(publishedShape).filter(([key]) => key !== "result")) as Omit<typeof publishedShape, "result">;
-export const publishedExtendedPickSchema = z.strictObject({ version: z.literal(1), ...identity.shape, ...fields });
+// Sealed publication bodies retain their original source-label bound; public display labels may be longer.
+export const publishedExtendedPickSchema = z.strictObject({ version: z.literal(1), ...identity.shape, ...fields,
+  selectionLabel: fields.selectionLabel.max(128) });
 export type PublishedExtendedPick = Readonly<z.infer<typeof publishedExtendedPickSchema>>;
 export const extendedPickLimits = Object.freeze({ bodyBytes: 2048, fixtures: 30, marketKeys: 256, picksPerRevision: 512 });
 

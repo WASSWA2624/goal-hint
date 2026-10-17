@@ -142,6 +142,9 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
             assert "Synthetic" in row.text and "%" in row.text, f"{path}: real synthetic selection details"
             assert re.search(r"\d+\.\d{2}", row.text), f"{path}: selection price"
             pick = next(cell for cell in row.nodes("td") if cell.attrs.get("data-column") == "selection")
+            labels = pick.nodes(attr="data-pick-selection")
+            assert len(labels) == 1 and not re.fullmatch(r"[12Xx]+|Yes|No", labels[0].text), f"{path}: one generic full-word prediction"
+            assert not re.search(r"\b(?:1X2|BTTS|O/U)\b", pick.text), f"{path}: full market names on every screen"
             prices = pick.nodes(attr="data-pick-odds")
             assert len(prices) == 1 and re.fullmatch(r"\(\d+\.\d{2}\)", prices[0].text), f"{path}: own price appears once in brackets beside its pick"
             assert len(row.nodes(attr="data-pick-odds")) == 1, f"{path}: selection odds are not duplicated in another column"

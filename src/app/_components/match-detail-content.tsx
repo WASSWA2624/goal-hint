@@ -5,6 +5,7 @@ import type { UtcInstant } from "@/domain/calendar";
 import type { DetailSnapshot, MatchDetailResponse } from "@/domain/match-detail";
 import type { MarketFamily, MarketSelection } from "@/domain/markets";
 import { publicPolicy } from "@/domain/public-policy";
+import { predictionLabel } from "@/domain/prediction-label";
 import { createMessages, type TextKey } from "@/i18n/messages";
 import { detailAnalysis, detailMarket } from "@/domain/detail-presentation";
 import { DetailMarket, DetailMarketGrid } from "@/components/match/detail-styles";
@@ -26,7 +27,7 @@ function MarketPrediction({ data, family, locale, sources, scope = "" }: {
   return <DetailMarket $gap="sm" data-detail-market={family}>
     <SectionHeading id={`${scope}market-${family}`}>{messages.text(`market.family.${family}`)}</SectionHeading>
     <BodyText>{messages.text("match.prediction")}: <strong>{item
-      ? messages.text(`market.selection.${item.market.selection}`) : messages.text("match.predictionUnavailable")}</strong></BodyText>
+      ? predictionLabel(messages, item.market.selection) : messages.text("match.predictionUnavailable")}</strong></BodyText>
     {item && <ProbabilityLabel market={item.market} locale={locale} />}
     {data.snapshot?.applicability === "historical" ? <MutedText>{messages.text("history.noSettlement")}</MutedText>
       : <div><BodyText>{messages.text("match.outcome")}</BodyText><OutcomeBadge status={outcome?.status ?? "unavailable"} locale={locale} /></div>}
@@ -46,7 +47,7 @@ function MarketPrediction({ data, family, locale, sources, scope = "" }: {
         <summary>{messages.text("detail.alternatives")}</summary>
         <Stack $gap="sm">
           {item.alternatives.map((alternative) => <div key={alternative.selection}>
-            <BodyText>{messages.text(`market.selection.${alternative.selection as MarketSelection}`)}</BodyText>
+            <BodyText>{predictionLabel(messages, alternative.selection)}</BodyText>
             <ProbabilityLabel market={item.market} selection={alternative.selection as MarketSelection} locale={locale} />
           </div>)}
           {family === "double-chance" && <MutedText>{messages.text("detail.overlappingProbabilities")}</MutedText>}

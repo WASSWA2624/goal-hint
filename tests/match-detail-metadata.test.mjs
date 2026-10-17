@@ -9,7 +9,8 @@ const metadataFor = fixture => matchDetailMetadata({ data: { fixture, route: { p
 
 test('an open forecast preview describes available markets and history without claiming a locked record', () => {
   const metadata = metadataFor(cardFixture({ status: 'scheduled', score: null }, 'ai', null));
-  assert.match(metadata.description, /Match result \(1X2\) estimate: Example Home FC win, 54%\./);
+  assert.match(metadata.description, /Match result estimate: Home win, 54%\./);
+  assert.doesNotMatch(metadata.description, /Example Home FC win|Example Away FC win|\(1X2\)/);
   assert.match(metadata.description, /See available markets, sources and forecast history\. Not a guarantee\.$/);
   assert.doesNotMatch(metadata.description, /[Vv]oid|locked forecast/);
   assert.equal(metadata.openGraph.description, metadata.description);
@@ -20,7 +21,8 @@ test('verified void forecasts are labelled before the pick in search and social 
   const fixture = cardFixture({ status: 'postponed', score: null }, 'ai', 'void');
   const metadata = metadataFor(fixture);
   assert.match(metadata.description, /^Void forecast record\. Example Home FC v Example Away FC,/);
-  assert.match(metadata.description, /Example Home FC win, 54%\./);
+  assert.match(metadata.description, /Home win, 54%\./);
+  assert.doesNotMatch(metadata.description, /Example Home FC win|Example Away FC win/);
   assert.equal(metadata.openGraph.description, metadata.description);
   assert.equal(metadata.twitter.description, metadata.description);
   assert.equal(metadata.alternates.canonical, `https://goalhint.com${path}`);
@@ -46,7 +48,7 @@ test('partial and undated void records stay honest without borrowing missing mar
   const metadata = metadataFor(fixture);
   assert.match(metadata.description, /^Void forecast record\./);
   assert.match(metadata.description, /Over\/Under 2\.5 goals estimate: Under 2\.5, 70%/);
-  assert.doesNotMatch(metadata.description, /Match result \(1X2\)/);
+  assert.doesNotMatch(metadata.description, /Match result estimate:/);
   assert.equal(metadataFor({ ...fixture, kickoffAt: null }).description,
     'Void forecast record. Stored predictions, sources and regulation-time results for Example Home FC v Example Away FC.');
 });

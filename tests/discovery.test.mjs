@@ -178,7 +178,7 @@ test('match pages with a published forecast are indexable and lead their snippet
   const data = { fixture: forecast, route: { path: '/en/matches/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/example-home-fc-vs-example-away-fc' } };
   const metadata = matchDetailMetadata({ data, error: null }, 'en', false, approved);
   assert.equal(metadata.robots.index, true);
-  assert.match(metadata.description, /^Example Home FC v Example Away FC, .+ \(EAT\)\. Match result \(1X2\) estimate: Example Home FC win, 54%\. /);
+  assert.match(metadata.description, /^Example Home FC v Example Away FC, .+ \(EAT\)\. Match result estimate: Home win, 54%\. /);
   assert.match(metadata.description, /Not a guarantee\.$/);
   assert.equal(metadata.openGraph.description, metadata.description);
   assert.equal(matchDetailMetadata({ data, error: null }, 'en', true, approved).robots.index, false, 'Revision variants stay noindex.');

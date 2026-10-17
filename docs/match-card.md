@@ -17,7 +17,7 @@ Import directly from the owning module under `@/components/match`:
 | `outcome-badge` | `OutcomeBadge`, `OutcomeBadgeProps`: one canonical settlement outcome status and locale. Explicit text plus the shared decorative icon; no live-region announcements for static cards. |
 | `match-card-list` | `MatchCardList`: native list with caller-supplied `li` children and an optional locale. One column of tiles below `lg` (64rem) and an aligned table with a decorative navy column header from `lg`. Source order remains visual and keyboard order. |
 | `match-icons` | Decorative inline SVG icons (`aria-hidden`, not focusable). |
-| Domain `country-code` | `countryCode`: the competition country's three-letter code on the phone tile's meta line (below). Domain `team-name` keeps only `teamCodePattern` and `validTeamCode` for stored provider team codes, which cards never display. |
+| Domain `prediction-label` | `predictionLabel` supplies generic full-word outcomes to cards, details, history, slips and metadata. `predictionRuleLabel` formats extended market rules without participant-name substitution or lost goal lines. |
 
 Desktop presentation retains its compact table composition:
 
@@ -40,14 +40,11 @@ missing field.
    desktop the family is a tag washed from the family tint into white, with a
    1px family ring, a solid 3px family edge and bold family-coloured text
    (inset shadows draw the ring and edge, so rows keep their height); the
-   short pick sits in a pill in the family's gradient. An available exact-pick
+   full-word pick sits in a pill in the family's gradient. An available exact-pick
    price appears on a small secondary line beneath the selection. The Result
    column explicitly shows Win, Loss, Pending or Void. Missing predictions show
    Unavailable with dashes for probability and result; they never appear as 0%
    or Pending. Phone and tablet cards use the flat strip described below.
-4. Notes, only when supplied: updating, update delayed, result delayed, limited
-   news, partial coverage, no locked selection, void reasons and outside-window
-   availability.
 
 Source, provisional status and publication time move to the pill tooltip; sync
 time stays on the detail page. On desktop each card becomes one table row
@@ -64,13 +61,13 @@ The mobile card has four visible rows:
 3. Single-line home name and crest, compact centered match state, away crest and single-line name. A live match shows its bold score in place of VS, with no minute repeated beneath it. Upcoming matches show VS; finished matches retain their score and final state.
 4. One flat strip with four equal cells separated by thin vertical dividers. Each
    cell contains a tiny caption (Market, Pick, Prob. or Result) above
-   its value. Mobile markets use established 1X2, DC, O/U 2.5 or BTTS notation;
-   desktop retains the full family name. The prediction uses its compact
-   selection code (for example 1X), and the exact available price a small Odds
+   its value. Every viewport uses full market and selection names, such as
+   `Home win`, `Home or draw`, `Over 2.5` and `Not both teams to score`,
+   with the exact available price on a small Odds
    line beneath the prediction. The strip has no boxed pills, gradients or
    shadows. Its fill uses the light or dark theme's neutral surface.
 
-All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Within the existing desktop league column, country metadata sits above the league name and logo to keep both readable without adding table columns.
+All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Within the existing desktop league column, full country names sit above the league name and logo and may wrap. Desktop league and team names remain on one line with ellipsis and full-value titles. Generic prediction wording is shared with details, history, slips and metadata; extended totals retain their actual lines, including `Under 1.5`. Stored historical labels and their hashes stay unchanged.
 
 Cards use 6px padding, 3px internal row gaps, 8px page gutters and 6px list gaps.
 Metadata and team names are 12px, bold scores 14px, and prediction captions 10px.

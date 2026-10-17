@@ -1,6 +1,7 @@
 import "server-only";
 
 import { publicExtendedMarketSchema, type PublicExtendedMarket, type PublicExtendedMarketSnapshot } from "../../domain/extended-markets.ts";
+import { predictionRuleLabel } from "../../domain/prediction-label.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { historyFail, type CycleDisplay } from "./history-contract.ts";
@@ -28,8 +29,8 @@ export function publicGoalMarketExtension(extension: StoredGoalMarketExtension,
     return [publicExtendedMarketSchema.parse({ key: definition.key, label: definition.label, code: definition.code, period: definition.period,
       ruleVersion: market.ruleVersion, source: market.source, sourceLabel: "AI score distribution",
       probabilityBasis: definition.group === "payout" ? "model-positive-payout" : "model-event",
-      selection: selected.key, selectionLabel: selected.label, selectedProbability: selected.winProbability,
-      selections: market.selections.map(({ key, label, winProbability, outcomes }) => ({ key, label, probability: winProbability,
+      selection: selected.key, selectionLabel: predictionRuleLabel(selected.rule), selectedProbability: selected.winProbability,
+      selections: market.selections.map(({ key, rule, winProbability, outcomes }) => ({ key, label: predictionRuleLabel(rule), probability: winProbability,
         settlementProbabilities: outcomes })),
       result: recorded ? { status: recorded.status, reason: recorded.reason, correctedAt: recorded.correctedAt } : pending })];
   }));
@@ -41,6 +42,8 @@ export function publicImpliedMarkets(extension: StoredImpliedMarketExtension,
   return freezeEvidence(extension.markets.flatMap(({ definition, derivation }) => {
     if (!derivation.available) return [];
     const market = derivation.market, selected = market.selections.find(({ key }) => key === market.selection)!;
+    const labels = new Map(definition.selections.map(({ key, rule }) => [key, predictionRuleLabel(rule)]));
+    const label = (key: string) => labels.get(key) ?? historyFail("invalid-state");
     const recorded = settlements.get(definition.key);
     if (recorded && (recorded.fixtureId !== extension.fixtureId || recorded.cycleId !== extension.cycleId ||
         recorded.predictionRevisionId !== extension.revisionId || recorded.selection !== selected.key ||
@@ -48,8 +51,8 @@ export function publicImpliedMarkets(extension: StoredImpliedMarketExtension,
         recorded.probabilityBasis !== market.probabilityBasis || recorded.selectedProbability !== market.selectedProbability)) return historyFail("invalid-state");
     return [publicExtendedMarketSchema.parse({ key: definition.key, label: definition.label, code: definition.code, period: definition.period,
       ruleVersion: market.ruleVersion, source: market.source, sourceLabel: "Market-implied", probabilityBasis: market.probabilityBasis,
-      selection: selected.key, selectionLabel: selected.label, selectedProbability: Number(selected.normalizedProbability),
-      selections: market.selections.map(({ key, label, normalizedProbability }) => ({ key, label, probability: Number(normalizedProbability) })),
+      selection: selected.key, selectionLabel: label(selected.key), selectedProbability: Number(selected.normalizedProbability),
+      selections: market.selections.map(({ key, normalizedProbability }) => ({ key, label: label(key), probability: Number(normalizedProbability) })),
       result: recorded ? { status: recorded.status, reason: recorded.reason, correctedAt: recorded.correctedAt } : pending })];
   }));
 }

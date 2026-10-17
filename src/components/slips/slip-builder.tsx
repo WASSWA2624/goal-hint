@@ -12,6 +12,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { marketSelections, type MarketFamily, type MarketSelection } from "@/domain/markets";
 import { slipsHref } from "@/domain/navigation";
+import { predictionLabel } from "@/domain/prediction-label";
 import { publicPolicy } from "@/domain/public-policy";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules, slipInputFields,
   type SlipCriteria, type SlipCriteriaErrorCode, type SlipInputs } from "@/domain/slip-builder";
@@ -167,7 +168,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
                 }} aria-invalid={error?.field === "markets" || undefined} />{messages.text(`market.family.${family}`)}
             </MarketChoice><ChoicePicker name={`picks.${family}`} label={messages.text("slips.outcomeLabel", { market: messages.text(`market.family.${family}`) })}
               automaticLabel={messages.text("slips.anyAutomatic")} automaticHint={messages.text("slips.automaticHint")}
-              options={marketSelections[family].map((value) => ({ value, label: messages.text(`market.selection.${value}`) }))}
+              options={marketSelections[family].map((value) => ({ value, label: predictionLabel(messages, value) }))}
               selected={outcomes[family] ?? []} onChange={(values) => setOutcomes((current) => ({ ...current, [family]: values as readonly MarketSelection[] }))}
               disabled={!selectedMarkets.includes(family)} invalid={error?.field === "outcomes"} {...(error?.field === "outcomes" ? { describedBy: errorId } : {})} />
             </MarketField>)}

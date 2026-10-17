@@ -1,13 +1,14 @@
 import type { MarketFamily, MarketSelection } from "@/domain/markets";
+import { predictionLabel } from "@/domain/prediction-label";
 import type { createMessages } from "@/i18n/messages";
 
 type Messages = ReturnType<typeof createMessages>;
 
-/** Selection with the actual team names, e.g. "Arsenal win" or "Liverpool or draw". */
-export function pickLabel(messages: Messages, selection: MarketSelection, home: string, away: string): string {
-  return messages.text(`details.pick.${selection}`, { home, away });
+/** The same generic outcome wording used by cards, slips and revision history. */
+export function pickLabel(messages: Messages, selection: MarketSelection): string {
+  return predictionLabel(messages, selection);
 }
-/** Full market name; short codes such as 1X2 and BTTS come from market.code. */
+/** Full market name on every viewport. */
 export function marketName(messages: Messages, family: MarketFamily): string {
   return messages.text(`details.market.${family}`);
 }
