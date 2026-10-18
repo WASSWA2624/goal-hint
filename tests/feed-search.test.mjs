@@ -110,13 +110,17 @@ test('a fixture combines the words its teams and competition cover, and a lone m
     [{ id: 'team-barca', covered: 0b001, direct: 0b001, anchor: 0b001 }, { id: 'team-real', covered: 0b110, direct: 0b110, anchor: 0b110 }]);
   const query = parseFeedQuery({ date: '2026-10-09', q: 'Barcelona vs Real Madrid' }, { today: '2026-10-09' });
   const sql = feedSql(query, range, [39], false, derby);
-  assert.match(sql.where.sql, /\(\(\(sm\.home \| sm\.away \| sm\.competition\) & \?\)=\? OR \(\(\(\(sm\.home \| sm\.away \| sm\.competition\) >> 32\) & \?\)<>0 AND \(\? & ~\(sm\.home \| sm\.away \| sm\.competition\)\)<>0\)\)$/u);
-  assert.deepEqual(sql.where.values.slice(-4), [7, 7, 5, 5], 'all words, then the distinctive words a partial match must split');
+  assert.match(sql.where.sql, /\(\(\(sm\.home \| sm\.away \| sm\.competition\) & \?\)=\? OR \(\(\(sm\.home \| sm\.away \| sm\.competition\) >> 32\) & \?\)<>0\)$/u);
+  assert.deepEqual(sql.where.values.slice(-3), [7, 7, 5], 'every word, or a distinctive word covered by a name');
   const spanish = await resolve('spanish league', rows);
   assert.deepEqual(spanish.competitions.map(({ id, covered, anchor }) => ({ id, covered, anchor })), [{ id: 'league-liga', covered: 0b11, anchor: 0b10 }],
     'La Liga covers "league" by name and "spain" by country');
   assert.deepEqual(spanish.teams.map(({ id, anchor }) => ({ id, anchor })), [{ id: 'team-barca', anchor: 0 }, { id: 'team-getafe', anchor: 0 }, { id: 'team-real', anchor: 0 }]);
   assert.deepEqual((await resolve('Manchester United', rows)).teams, [], 'City is never a mention of United');
+  // "Reading" resembles "racing"; a catalog name containing it confirms it as a team, so either side may stand alone.
+  const reading = await resolve('Reading vs Arsenal', [row('team-reading', 'Reading'), row('team-arsenal', 'Arsenal')]);
+  assert.equal(reading.distinctive, 0b11);
+  assert.equal((await resolve('Reading vs Arsenal', [row('team-arsenal', 'Arsenal')])).distinctive, 0b10, 'unconfirmed, it stays a qualifier');
 });
 
 test('long queries search their first sixteen words, and an empty identity set is an ordinary empty result', async () => {

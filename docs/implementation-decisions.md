@@ -3481,3 +3481,53 @@ ranked matcher of a852296.
   LIMIT/OFFSET, the catalog bounds (50,000 rows, 10,000 identities), the search
   rate limit and "no broad fallback": a search with no credible match is empty.
   Feed cache projection 12 → 13 and pagination contract v3 → v4.
+
+### Review follow-up (18 October 2026)
+
+An adversarial review of the matcher against the stored catalog found gaps;
+all are fixed with regression tests written in stored-name forms.
+
+- A word shared by two named teams ("Man Utd vs Man City") belongs to both alias
+  groups, and the words of an expanded alias count as distinctive.
+- Club forms (AC, FK, RB, SV, FF, IS, US, ...) and name articles join the club
+  words. A mention may leave other name words over when it matched a distinctive
+  word of the name directly ("Bayern" in "Bayern München"), never through a
+  spelling correction ("rice" is no mention of "Costa Rica").
+- Words resembling a generic word are ambiguous: abbreviations such as "Cty" or
+  "Un" stay qualifiers, while "Reading" or "Internacional" become distinctive
+  when a searched name contains them (the feed checks its whole date cohort, the
+  checklists their options). Generic leftovers conflict with unmatched
+  qualifiers, and numbers only with numbers.
+- Stored names containing a phrase the query expanded are read the same way, so
+  "PSG U19" and "Singida Black Stars" stay findable in sentences. Two teams set
+  apart by "vs" never join into one alias.
+- Filler is removed before articles are judged ("Serie A matches"); filler words
+  in stored names are optional; Roman numerals behave as numbers; a subject "I"
+  before a verb is filler. A last one- or two-letter word reads as a prefix.
+- The Athletic Club alias meets "Athletic Bilbao"; initials skip age groups;
+  "U-19", "1º", Arabic separators, locale space grouping, Hangul fillers and
+  Greek final sigma normalize.
+
+### Second review follow-up (18 October 2026)
+
+A second adversarial pass over the stored corpus found regressions from the
+first follow-up and further gaps. All are fixed with stored-form tests.
+
+- Queries split into sides at "vs", "versus", "against" or a "v"/"x" between two
+  words. Each side reads whole aliases and nicknames, alone or before qualifiers
+  ("US vs Mexico", "US W", "Spurs U21"); a nickname inside a longer name stays
+  literal ("Singida Black Stars"). Qualifier conflicts only look at the side a
+  mention answers ("Boca vs Racing"), and one stored name that covers two sides is
+  a similar result ("Inter Milano W" for "Inter vs Milan").
+- "US" is a word again, not a club form. Stored names read aliases before
+  qualifiers too ("USA W", "PSG U19"), plus stored short forms ("Inter",
+  "Tottenham"); queries never use those, so "Inter" still finds Inter Miami.
+- A record or fixture stands when a team or competition name covers a distinctive
+  word, so "Leeds United" finds the stored "Leeds" as a similar result.
+- A half-typed last word never matches numbers, age groups or numerals; a name
+  keeping another division marker beside the matched one is a similar result.
+- Women's forms ("W", "women's", "ladies", "Femenil", "Frauen") read as one word;
+  plural age groups ("U21s"), letter ordinals ("1a", "2nd") and elided articles
+  ("L'Aquila") normalize; joined spellings also compare with every typed word
+  ("ACMilan", "LaLiga"); a run-on word is no spelling slip ("ManchesterUtd");
+  one-slip misspellings of longer filler words are dropped ("tomorow").

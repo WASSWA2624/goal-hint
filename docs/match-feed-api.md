@@ -64,24 +64,38 @@ pagination therefore use the same ranked cohort. Search does not load fixture
 records into memory to paginate them.
 
 The matcher normalizes case, accents, Unicode compatibility forms, invisible
-formatting, spacing and punctuation. Numbers keep their value in the request
-locale: `10,000`, `10 000` and `10000` are one number, a decimal stays one word,
-and an English `1,5` is two numbers, never fifteen. Words match exactly, as
-prefixes, by established alias or nickname ("Man Utd", "PSG", "Red Devils"),
-through demonyms and local competition words ("English", "Liga", "Pokal"), or
-with spelling tolerance: one missing, extra, wrong or swapped letter up to five
-letters, two up to eight and three from nine (at most 30% of the word, keeping
-the first letter beyond one slip), then abbreviations that keep most of a word
-in order ("Mchster Untd") and consonant outlines. Filler in sentences ("show me",
-"matches today", "vs") is ignored, and each team named in a sentence is matched
-on its own. Numbers never drift to a neighbour, and "United" or "City" alone never
+formatting and fillers, spacing and punctuation, age groups ("U-19", "Under 19"
+read `u19`) and ordinal signs ("1º" reads 1). Numbers keep their value in the
+request locale: `10,000`, a no-break-space `10 000` and `10000` are one number
+(plain-space groups only where the locale groups with spaces), Arabic separators
+are read, a decimal stays one word, and an English `1,5` is two numbers, never
+fifteen. Words match exactly, as prefixes, by established alias or nickname ("Man
+Utd", "PSG", "Red Devils"), through demonyms and local competition words
+("English", "Liga", "Pokal"), or with spelling tolerance: one missing, extra,
+wrong or swapped letter up to five letters, two up to eight and three from nine
+(at most 30% of the word, keeping the first letter beyond one slip), then
+abbreviations that keep most of a word in order ("Mchster Untd", "Cty") and
+consonant outlines. Club forms and name articles ("AC", "FK", "IS", "La", "da")
+never decide a match. Filler in sentences ("show me", "matches today", "vs") is
+ignored, a last one- or two-letter word is read as a prefix while typing ("Real
+M"), and each team named in a sentence is matched on its own; a stored name that
+contains a phrase the query expanded ("PSG U19") is read the same way. Numbers and
+Roman numerals never drift to a neighbour, and "United" or "City" alone never
 stand for one club.
 
-A fixture qualifies when its home team, away team and competition together cover
-every query word, or when a team or competition name covers a distinctive word
-while another distinctive word stays uncovered (one of several named teams, as
-"Barcelona" in "Barcelona vs Real Madrid"). Dropping only a qualifier is not
-enough: "Manchester City" and "Manchester SC" never answer "Manchester United". A
+A query splits into sides at "vs", "versus", "against" or a "v"/"x" between two
+words; each side reads its own aliases and nicknames ("US vs Mexico", "Wolves U21"),
+a nickname inside a longer name stays literal ("Singida Black Stars"), and one
+stored name never answers two sides exactly. A fixture qualifies when its home
+team, away team and competition together cover every query word, or when a team
+or competition name covers a distinctive word ("Leeds" for "Leeds United", either
+team of "Barcelona vs Real Madrid"); a country alone never does. The words of an
+expanded alias name its team. A word that merely resembles a generic word
+("Reading", "Inter") counts as distinctive when a name in the date cohort contains
+it. A sibling club is never a match: "Manchester City" never answers "Manchester
+United", even as "Manchester Cty" or "Manchester Unitd", and a competition that
+keeps another division number or letter beside the matched one ("Serie C - Girone
+A" for "Serie A") is at most a similar result. A
 fixture is **exact** when every word is matched directly (exactly, by alias or as
 a prefix) and otherwise a **similar result**. The response reports
 `search: { exact, similar }` (null without `q`); exact records always come first,

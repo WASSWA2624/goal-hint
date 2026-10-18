@@ -14,7 +14,8 @@ export type FeedSearch = Readonly<{
   query: string;
   /** Number of query words; bit i of every mask stands for word i. */
   words: number;
-  /** Words that identify something on their own; see PreparedFootballSearch.distinctive. */
+  /** Words that identify something on their own (PreparedFootballSearch.distinctive), plus ambiguous words that a catalog
+   * name in this date cohort contains exactly. */
   distinctive: number;
   teams: readonly RankedFeedIdentity[];
   competitions: readonly RankedFeedIdentity[];
@@ -33,6 +34,8 @@ export async function storedFeedSearch(tx: Prisma.TransactionClient, search: str
   const prepared = prepareFootballSearch(search, locale);
   const words = prepared.tokens.length, full = 2 ** Math.min(words, feedSearchRules.maximumWords) - 1;
   const teams = new Map<string, Identity>(), competitions = new Map<string, Identity>();
+  // Query words that resemble a generic word count as distinctive once a catalog name contains them ("Reading").
+  let named = 0;
   if (words > 0 && words <= feedSearchRules.maximumWords) {
     const rows = await tx.$queryRaw<CatalogRow[]>(Prisma.sql`
       WITH cohort AS (
@@ -62,8 +65,9 @@ export async function storedFeedSearch(tx: Prisma.TransactionClient, search: str
       if (found === undefined) {
         found = prepared.match(label);
         if (found && (!Number.isInteger(found.score) || found.score < 1 || found.score > 1000 ||
-          [found.covered, found.direct].some((mask) => !Number.isInteger(mask) || mask < 0 || mask > full) ||
-          found.covered === 0 || (found.direct & ~found.covered) !== 0)) throw new MatchFeedError("unavailable");
+          [found.covered, found.direct, found.named].some((mask) => !Number.isInteger(mask) || mask < 0 || mask > full) ||
+          found.covered === 0 || (found.direct & ~found.covered) !== 0 || (found.named & ~found.covered) !== 0)) throw new MatchFeedError("unavailable");
+        if (found) named |= found.named;
         labels.set(label, found);
       }
       return found;
@@ -88,5 +92,6 @@ export async function storedFeedSearch(tx: Prisma.TransactionClient, search: str
   const ranked = (matches: Map<string, Identity>) => Object.freeze([...matches]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([id, identity]) => Object.freeze({ id, ...identity })));
-  return Object.freeze({ query: search, words, distinctive: prepared.distinctive, teams: ranked(teams), competitions: ranked(competitions) });
+  return Object.freeze({ query: search, words, distinctive: prepared.distinctive | prepared.ambiguous & named,
+    teams: ranked(teams), competitions: ranked(competitions) });
 }

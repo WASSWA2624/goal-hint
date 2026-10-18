@@ -114,14 +114,15 @@ test("descriptive sentences drop filler and keep each named team", () => {
   assert.ok(isSimilar(spurs.score("Arsenal")) && isSimilar(spurs.score("Tottenham Hotspur Women")));
 });
 
-test("a partial mention stands only beside another named team, never by dropping a qualifier", () => {
+test("a partial mention is a similar result when it covers a distinctive word, never a crossing between sibling clubs", () => {
   for (const [query, candidate] of [["Barcelona Madrid", "Barcelona"], ["Barcelona Madrid", "Real Madrid"], ["Manchester Arsenal", "Manchester United"],
-    ["Barcelona Real Madrid", "Barcelona"]]) {
+    ["Barcelona Real Madrid", "Barcelona"], ["Leeds United", "Leeds"], ["Newcastle United", "Newcastle"], ["Olympique de Marseille", "Marseille"],
+    ["North Macedonia", "Macedonia"]]) {
     assert.ok(isSimilar(footballSearchScore(query, candidate)), `${query}: ${candidate}`);
   }
   const united = prepareFootballSearch("Manchester United");
-  assert.ok(united.match("Manchester SC"), "the mention still counts towards a fixture");
-  assert.equal(united.score("Manchester SC"), 0);
+  assert.ok(isSimilar(united.score("Manchester SC")), "a short stored name is a similar result");
+  assert.equal(united.score("Racing United"), 0, "a qualifier alone never stands");
   assert.equal(united.match("Manchester City"), null, "City is no mention of United");
   assert.equal(prepareFootballSearch("League 1").match("League 2"), null);
   const psg = prepareFootballSearch("psg");
@@ -129,7 +130,7 @@ test("a partial mention stands only beside another named team, never by dropping
   assert.equal(psg.match("Germany"), null);
   const english = prepareFootballSearch("english premier league");
   assert.equal(english.score("Premier League"), 0, "another country's Premier League needs England too");
-  assert.equal(english.score("England"), 0);
+  assert.ok(isSimilar(english.score("England")));
   assert.equal((english.match("Premier League").covered | english.match("England").covered), 2 ** english.tokens.length - 1);
 });
 
@@ -240,6 +241,135 @@ test("distinct query words cannot reuse a single candidate word, and repeated wo
     "zaaaaaaaaa zbbaaaaaaa zbbbbaaaaa zaaaaaaabb") > 0, "a complete spelling assignment beats an incomplete exact assignment");
 });
 
+// Stored names as the provider writes them, and the words a query names across all of them (as the feed and lists do).
+const stored = ["Manchester United", "Manchester City", "Newcastle United", "Leeds United", "Leicester City", "Paris Saint Germain",
+  "Paris FC", "PSG U19", "USA W", "Singida Black Stars", "Ghana", "MLS Next Pro", "AC Milan", "FK Partizan", "FK Rabotnicki",
+  "RB Leipzig", "Bayern München", "Hammarby FF", "Kalmar FF", "Vasco DA Gama", "Flamengo", "Reading", "Arsenal", "Arsenal U19",
+  "Sparta Praha", "Slavia Praha", "Internacional", "Gremio", "Orgryte IS", "Landvetter IS", "All Boys", "Team Altamura",
+  "Serie A", "Serie B", "NB I", "NB II", "Athletic Club", "Charlton Athletic", "Real Madrid", "Real Sociedad", "South Africa",
+  "1º de Agosto", "Tau Altopascio", "Thor Akureyri U19", "Costa-Rica", "Manchester SC", "Germany", "USA", "Mexico", "England",
+  "England W", "Palmeiras U20", "AS Roma", "La Liga", "Liga II", "III Liga - Group 1", "Real Madrid II", "Real Madrid III",
+  "Tercera División RFEF - Group 2", "Division 2", "Serie C - Girone A", "Inter", "Inter Milano W", "Inter Miami", "Tottenham",
+  "Wolves", "Boca Juniors", "Racing Club", "Leeds", "Marseille", "Chelsea", "Chelsea W", "Arsenal W", "Frauen Bundesliga",
+  "Chelsea U21", "1a Divisão - Women", "2. Bundesliga", "L'Hospitalet", "L'Aquila", "Inter Club d'Escaldes", "Manchester City U19"];
+// Fixture rule as in feed-read: names together cover every word (exact when all matched directly), or one anchors a distinctive word.
+function fixture(query, home, away) {
+  const { search } = across(query), named = stored.reduce((bits, name) => bits | (search.match(name)?.named ?? 0), 0);
+  const distinctive = search.distinctive | search.ambiguous & named, full = 2 ** search.tokens.length - 1;
+  const parts = [search.match(home), search.match(away)], covered = parts.reduce((bits, part) => bits | (part?.covered ?? 0), 0);
+  const direct = parts.reduce((bits, part) => bits | (part?.direct ?? 0), 0);
+  return covered !== full && (covered & distinctive) === 0 ? "missing" : direct === full ? "exact" : "similar";
+}
+function across(query) {
+  const search = prepareFootballSearch(query);
+  const named = stored.reduce((bits, name) => bits | (search.match(name)?.named ?? 0), 0);
+  return { search, score: (name) => search.score(name, named), covered: (name) => search.match(name)?.covered ?? 0 };
+}
+
+test("two named teams are both found, whether written as aliases, with club forms or with extra name words", () => {
+  for (const [query, home, away] of [["Man Utd vs Man City", "Manchester United", "Manchester City"],
+    ["Man Utd vs Newcastle United", "Manchester United", "Newcastle United"], ["Man Utd vs Leeds Utd", "Manchester United", "Leeds United"],
+    ["Man City vs Leicester City", "Manchester City", "Leicester City"], ["PSG vs Paris FC", "Paris Saint Germain", "Paris FC"],
+    ["Partizan vs Rabotnicki", "FK Partizan", "FK Rabotnicki"], ["Leipzig vs Bayern", "RB Leipzig", "Bayern München"],
+    ["Hammarby vs Kalmar", "Hammarby FF", "Kalmar FF"], ["Flamengo x Vasco", "Flamengo", "Vasco DA Gama"],
+    ["Orgryte vs Landvetter", "Orgryte IS", "Landvetter IS"], ["Reading vs Arsenal", "Reading", "Arsenal"],
+    ["Sparta Praha vs Slavia Praha", "Sparta Praha", "Slavia Praha"], ["Internacional vs Gremio", "Internacional", "Gremio"]]) {
+    const { search, score, covered } = across(query);
+    assert.ok(score(home) > 0 && score(away) > 0, `${query}: ${score(home)} / ${score(away)}`);
+    assert.equal(covered(home) | covered(away), 2 ** search.tokens.length - 1, `${query}: together they cover the query`);
+  }
+  assert.equal(across("psg").search.match("Paris FC"), null, "an alias still names one team");
+  assert.equal(across("psg").search.match("Germany"), null);
+  assert.equal(across("Inter vs Milan").search.tokens.join(" "), "inter milan", "two teams never join into one alias");
+});
+
+test("qualifiers stay qualifiers: abbreviations and half-typed words never cross City and United", () => {
+  for (const [query, wanted, other] of [["Manchester Cty", "Manchester City", "Manchester United"], ["Manchester Un", "Manchester United", "Manchester City"],
+    ["Manchester Ci", "Manchester City", "Manchester United"], ["Manchester U", "Manchester United", "Manchester City"],
+    ["Mankheste Unitited", "Manchester United", "Manchester City"], ["Manchester Unitd", "Manchester United", "Manchester City"]]) {
+    const { score } = across(query);
+    assert.ok(score(wanted) > 0, `${query}: ${wanted}`);
+    assert.equal(score(other), 0, `${query}: ${other}`);
+  }
+  assert.ok(across("Manchester Unitd").score("Manchester SC") < exact, "a short stored name is at most similar");
+  assert.equal(across("how to cook rice").score("Costa-Rica"), 0, "a corrected word cannot carry a name's other words");
+});
+
+test("half-typed last words keep their results while typing", () => {
+  for (const [query, name] of [["Real M", "Real Madrid"], ["South A", "South Africa"], ["AC Mi", "AC Milan"], ["Bayern M", "Bayern München"]]) {
+    assert.ok(across(query).score(name) >= exact, `${query}: ${name}`);
+  }
+  assert.equal(across("Real M").score("Real Sociedad"), 0);
+});
+
+test("names containing aliases, nicknames or filler stay findable in sentences", () => {
+  for (const [query, name] of [["show me PSG U19 matches", "PSG U19"], ["show me USA W matches", "USA W"],
+    ["show me singida black stars matches", "Singida Black Stars"], ["MLS Next Pro matches", "MLS Next Pro"]]) {
+    const { score } = across(query);
+    assert.ok(score(name) >= exact, `${query}: ${name}`);
+  }
+  assert.ok(across("show me singida black stars matches").score("Singida Black Stars") > across("show me singida black stars matches").score("Ghana"));
+  for (const [query, name] of [["All Boys vs Chacarita", "All Boys"], ["Team Altamura vs Bari", "Team Altamura"]]) {
+    assert.ok(across(query).score(name) > 0, `${query}: ${name}`);
+  }
+  const serie = across("Serie A matches"), nb = across("NB I matches");
+  assert.ok(serie.score("Serie A") >= exact && serie.score("Serie B") === 0, "a final letter survives trailing filler");
+  assert.ok(nb.score("NB I") > nb.score("NB II"), "Roman numerals never drift");
+  assert.ok(across("I want to see arsenal").score("Arsenal") >= exact);
+  const athletic = across("Athletic Bilbao");
+  assert.ok(athletic.score("Athletic Club") >= 940 && athletic.score("Charlton Athletic") === 0);
+});
+
+test("age groups, ordinals and initials normalize consistently", () => {
+  for (const query of ["Arsenal U-19", "Arsenal U 19", "Arsenal U.19", "Arsenal Under 19"]) {
+    assert.ok(across(query).score("Arsenal U19") >= exact, query);
+  }
+  for (const query of ["1 de Agosto", "1° de Agosto"]) assert.ok(across(query).score("1º de Agosto") >= exact, query);
+  const tau = across("tau");
+  assert.ok(tau.score("Tau Altopascio") > tau.score("Thor Akureyri U19"), "age groups spell no acronym");
+  assert.equal(normalizeFootballSearch(`10${character(0x66c)}000`), "10000");
+  assert.equal(normalizeFootballSearch(`10${character(0x66b)}5`), "10.5");
+  assert.equal(normalizeFootballSearch("10 000", "fr"), "10000", "plain spaces group thousands where the locale groups with spaces");
+  assert.equal(normalizeFootballSearch("10 000"), "10 000");
+  assert.equal(normalizeFootballSearch(`Arsenal${character(0x3164)}`), "arsenal");
+  assert.equal(normalizeFootballSearch("ΟΛΥΜΠΙΑΚΟΣ"), normalizeFootballSearch("ολυμπιακοσ"));
+});
+
+test("each side of 'X vs Y' is read on its own: aliases, nicknames, qualifiers and the US", () => {
+  for (const [query, home, away] of [["Mexico vs US", "Mexico", "USA"], ["England v US", "England", "USA"], ["Inter vs Milan", "Inter", "AC Milan"],
+    ["Boca vs Racing", "Boca Juniors", "Racing Club"], ["wolves vs arsenal", "Wolves", "Arsenal"], ["chelsea women's vs arsenal women's", "Chelsea W", "Arsenal W"]]) {
+    assert.equal(fixture(query, home, away), "exact", query);
+  }
+  assert.notEqual(fixture("chelsea vs leeds united", "Chelsea", "Leeds"), "missing", "a short stored name still answers its side");
+  assert.ok(across("Inter vs Milan").score("Inter Milano W") < exact, "one name never answers both sides");
+  const us = across("US W");
+  assert.ok(us.score("USA W") >= exact && us.score("England W") === 0, "US before a qualifier is still the United States");
+  assert.equal(across("US U20").score("Palmeiras U20"), 0);
+  assert.ok(across("Singida Black Stars").score("Singida Black Stars") >= exact && across("Singida Black Stars").score("Ghana") === 0,
+    "a nickname inside a longer name stays literal");
+  assert.ok(across("black stars").score("Ghana") >= exact);
+});
+
+test("divisions, numerals and half-typed letters never drift to a neighbouring competition in the exact tier", () => {
+  for (const [query, wrong] of [["Liga II", "III Liga - Group 1"], ["real madrid ii", "Real Madrid III"], ["Division 2", "Tercera División RFEF - Group 2"],
+    ["Serie A", "Serie C - Girone A"], ["Manchester U", "Manchester City U19"]]) {
+    assert.ok(across(query).score(wrong) < exact, `${query}: ${wrong}`);
+  }
+  assert.ok(across("Serie A").score("Serie A") >= exact && across("Division 2").score("Division 2") >= exact);
+});
+
+test("stored spellings meet everyday ones: short forms, women's teams, plural age groups, ordinals, elisions and joined words", () => {
+  for (const [query, name] of [["spurs", "Tottenham"], ["Inter Milan", "Inter"], ["inter milan women", "Inter Milano W"],
+    ["chelsea women's", "Chelsea W"], ["england ladies", "England W"], ["womens bundesliga", "Frauen Bundesliga"],
+    ["Chelsea U21s", "Chelsea U21"], ["arsenal under-19s", "Arsenal U19"], ["1ª divisão", "1a Divisão - Women"], ["2nd bundesliga", "2. Bundesliga"],
+    ["1o de agosto", "1º de Agosto"], ["hospitalet", "L'Hospitalet"], ["aquila", "L'Aquila"], ["Escaldes", "Inter Club d'Escaldes"],
+    ["ACMilan", "AC Milan"], ["ASRoma", "AS Roma"], ["LaLiga", "La Liga"], ["BayernMünchen", "Bayern München"], ["arsenal matchs tomorow", "Arsenal"]]) {
+    assert.ok(across(query).score(name) > 0, `${query}: ${name}`);
+  }
+  assert.ok(across("Inter").score("Inter Miami") >= exact, "a stored short form never narrows the query");
+  assert.equal(across("ManchesterUtd").score("Manchester City"), 0, "a run-on word is no spelling slip");
+});
+
 test("a long list of teams keeps its first sixteen words and still finds the teams it names", () => {
   const search = prepareFootballSearch("arsenal chelsea liverpool spurs man city man united newcastle aston villa brighton west ham everton wolves fulham");
   assert.equal(search.tokens.length, 16);
@@ -265,7 +395,8 @@ test("prepared scorers are immutable, deterministic and independent across searc
   assert.ok(Object.isFrozen(united.match("Manchester United")));
   assert.equal(united.normalized, "man united");
   assert.deepEqual(united.tokens, ["manchester", "united"]);
-  assert.equal(united.distinctive, 0b01, "Manchester identifies a team; United alone does not");
+  assert.equal(prepareFootballSearch("Manchester United").distinctive, 0b01, "Manchester identifies a team; United alone does not");
+  assert.equal(united.distinctive, 0b11, "an expanded alias names its team with every word");
   const expected = united.score("Manchester United");
   for (let index = 0; index < 300; index++) united.score(`Unrelated ${index}`);
   assert.equal(united.score("Manchester United"), expected);

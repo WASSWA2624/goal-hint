@@ -96,7 +96,7 @@ const feedSearchWords = 16;
  * names cover, 16–31 words they match directly, 32–47 words covered by a name rather than a country, 48+ relevance), so
  * one derived row per candidate fixture carries its home, away and competition values and the outer query ORs them:
  * - a fixture qualifies when its names together cover every word, or cover a distinctive word through a team or
- *   competition name while another distinctive word stays uncovered (one of several named teams);
+ *   competition name ("Leeds" for "Leeds United", either team of "Barcelona vs Real Madrid"); a country alone never does;
  * - it is exact when every word is matched directly, otherwise a similar result;
  * - exact fixtures come first, then fixtures covering more words, then the best single relevance, then the chosen sort. */
 function searchMatches(search: FeedSearch, range: ReportingDateRange) {
@@ -128,7 +128,7 @@ function searchMatches(search: FeedSearch, range: ReportingDateRange) {
   const all = 2 ** search.words - 1, mask = Prisma.sql`(sm.home | sm.away | sm.competition)`;
   const covered = Prisma.sql`(${mask} & ${all})`, direct = Prisma.sql`((${mask} >> 16) & ${all})`;
   const stands = search.distinctive === 0 ? Prisma.sql`${covered}=${all}`
-    : Prisma.sql`(${covered}=${all} OR (((${mask} >> 32) & ${search.distinctive})<>0 AND (${search.distinctive} & ~${mask})<>0))`;
+    : Prisma.sql`(${covered}=${all} OR ((${mask} >> 32) & ${search.distinctive})<>0)`;
   const exact = Prisma.sql`${direct}=${all}`;
   return { join, stands, exact,
     order: Prisma.sql`${exact} DESC, BIT_COUNT(${covered}) DESC, GREATEST(sm.home >> 48, sm.away >> 48, sm.competition >> 48) DESC` };

@@ -359,10 +359,11 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   const search = useMemo(() => prepareFootballSearch(needle), [needle]);
   const { exact, similar } = useMemo(() => {
     if (!needle) return { exact: options, similar: [] };
+    const labels = (option: FilterOption) => option.detail ? [option.label, option.detail, `${option.label} ${option.detail}`] : [option.label];
+    // Words like "Reading" that resemble a generic word identify a team once any listed name contains them.
+    const named = options.reduce((bits, option) => labels(option).reduce((all, label) => all | (search.match(label)?.named ?? 0), bits), 0);
     const ranked = options.map((option, index) => ({
-      option, index,
-      score: Math.max(search.score(option.label), option.detail ? search.score(option.detail) : 0,
-        option.detail ? search.score(`${option.label} ${option.detail}`) : 0),
+      option, index, score: Math.max(...labels(option).map((label) => search.score(label, named))),
     })).filter(({ score }) => score > 0)
       .sort((left, right) => right.score - left.score || left.index - right.index);
     return { exact: ranked.filter(({ score }) => score >= footballSearchTiers.exact).map(({ option }) => option),

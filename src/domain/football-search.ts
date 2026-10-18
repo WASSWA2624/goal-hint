@@ -1,20 +1,24 @@
 /** Deterministic name relevance: 0 rejects a candidate; 1–1000 ranks accepted matches.
  * Scores from `footballSearchTiers.exact` up are direct matches: the exact name, an established alias, the same words
- * in another order, or literal word parts. Lower scores are credible alternatives (spelling slips, abbreviations and
- * names mentioned inside a longer query) that the feed and filter lists label "Similar results". */
+ * in another order, or literal word prefixes. Lower scores are credible alternatives (spelling slips, abbreviations,
+ * inner word fragments and names mentioned inside a longer query) that the feed and filter lists label "Similar results". */
 export const footballSearchTiers = Object.freeze({ exact: 700 });
 
-/** Bit i of `covered` and `direct` stands for `tokens[i]` of the prepared query. */
-export type FootballSearchMatch = Readonly<{ score: number; covered: number; direct: number }>;
+/** Bit i of each mask stands for `tokens[i]` of the prepared query. `named` holds the query words this name contains
+ * exactly as distinctive words; it confirms an ambiguous query word as a real name (see `ambiguous`). */
+export type FootballSearchMatch = Readonly<{ score: number; covered: number; direct: number; named: number }>;
 export type PreparedFootballSearch = Readonly<{
   normalized: string;
   tokens: readonly string[];
   /** Bits of query words that identify something on their own (not "United", "League", numbers or club words). A record
-   * whose names cover only part of the query is a similar result when the covered words include a distinctive word and the
-   * uncovered words include another (one of several named teams); otherwise it must cover every word. */
+   * whose names cover only part of the query is a similar result when the covered words include a distinctive word;
+   * otherwise it must cover every word. */
   distinctive: number;
-  /** Standalone relevance of one name: 0 rejects it. */
-  score: (candidate: string) => number;
+  /** Words that resemble a generic word ("Reading" ~ racing, "Inter" ~ international, "Untd" ~ united). They count as
+   * distinctive only where a searched name contains them exactly: pass the union of `named` across the searched names. */
+  ambiguous: number;
+  /** Standalone relevance of one name: 0 rejects it. `named` defaults to this name's own confirmed words. */
+  score: (candidate: string, named?: number) => number;
   /** Relevance plus the query words this name covers. A partial mention ("Barcelona" in "Barcelona vs Real Madrid")
    * is returned even when it would not stand alone, so a fixture can combine its home, away and competition names. */
   match: (candidate: string) => FootballSearchMatch | null;
@@ -31,9 +35,12 @@ const decimalMark = "\u2024";
 const wordSet = (text: string) => new Set(text.trim().split(/\s+/u));
 const wordMap = <T>(entries: Record<string, T>) => new Map<string, T>(Object.entries(entries));
 
-/** Club-form words and name articles ("La Liga", "Al Ahly", "Vasco da Gama") never decide a match on their own. */
+/** Club forms and name articles ("AC Milan", "FK Partizan", "Örgryte IS", "La Liga", "Vasco da Gama", "L'Aquila") never
+ * decide a match on their own; a search made only of them still finds them literally. "US" stays a word: it is also the
+ * United States. */
 const clubWords = wordSet(`fc afc cf sc football soccer club the and of la el los las le les il lo de del da do dos das di du
-  des van von der den het al`);
+  des van von der den het al l d fk ac as sk sv ff if is ud cd ca rb vfl vfb tsv tsg fsv bsc ssc ss bk ik ifk nk hnk ofk ks
+  kv ec es se cr rc rcd sd ad cs`);
 /** Words that describe many clubs or competitions. Alone they never pick one record out of many. */
 const genericWords = wordSet(`united city town county real athletic atletico athletico sporting sport sports racing rovers
   wanderers albion olympic olympique deportivo deportes union dynamo dinamo central national nacional juniors junior youth
@@ -41,19 +48,31 @@ const genericWords = wordSet(`united city town county real athletic atletico ath
   north south east west red white black blue green royal star stars stade league liga ligue lega cup copa coupe coppa
   pokal taca trophy shield super premier premiership first second third division primera segunda tercera serie
   championship championnat campeonato professional profesional amateur regional group playoff playoffs qualification
-  qualifiers qualifying round friendly friendlies international world continental conference major pro elite`);
-/** Filler in descriptive queries ("show me Arsenal matches today"). None of them is a word in a stored name. */
+  qualifiers qualifying round friendly friendlies international world continental conference major pro elite
+  fa efl dfb rfef knvb figc uefa caf concacaf conmebol ofc fifa`);
+/** Filler in descriptive queries ("show me Arsenal matches today"). A stored name may contain one ("All Boys",
+ * "MLS Next Pro"); there it is an optional word, like a generic one. */
 const stopwords = wordSet(`show me my find search get give list all any every for in on at to from with by about or vs versus
   against match matches game games fixture fixtures result results score scores prediction predictions predict tip tips
   odds bet bets betting pick picks play plays playing played today tonight tomorrow yesterday weekend this next last week
-  upcoming who what when where which is are was will does do did i want see watch please between team teams how latest
-  win wins won beat beats
-  info schedule kickoff`);
+  upcoming who what when where which are was will does do did want see watch please between team teams how latest
+  win wins won beat beats info schedule kickoff need like wish would love follow support wanna think`);
+/** "I" is filler only as the subject of such a verb; "NB I" and "Liga I" keep their numeral. */
+const pronounVerbs = wordSet("want need see watch like wish would love follow support wanna think am m");
 /** Articles before a word and fixture separators between two words. "Serie A" keeps its final letter. */
 const articles = wordSet("a an");
 const separators = wordSet("v x");
+/** Words that set two named teams apart in a query. ("And" stays inside names such as "Brighton and Hove Albion".) */
+const connectors = wordSet("vs versus against between");
+/** Division ordinals a stored name may keep beside a matched group number ("Tercera División RFEF - Group 2"). */
+const divisionWords = wordSet("primera segunda tercera cuarta first second third fourth");
+/** Roman numerals in names ("NB I", "Liga II") behave like numbers: they never drift to a neighbour. */
+const numerals = wordSet("i ii iii iv");
 const tokenAliases = wordMap<string>({ utd: "united", st: "saint", ste: "sainte", munchen: "munich", muenchen: "munich",
-  koln: "cologne", koeln: "cologne", wien: "vienna", nottm: "nottingham", kiev: "kyiv", kiew: "kyiv" });
+  koln: "cologne", koeln: "cologne", wien: "vienna", nottm: "nottingham", kiev: "kyiv", kiew: "kyiv",
+  // Every women's form, including the stored "W" suffix, reads as one word on both sides.
+  w: "women", womens: "women", ladies: "women", feminine: "women", femenino: "women", femenina: "women", femenil: "women",
+  femeni: "women", feminino: "women", feminina: "women", frauen: "women", femminile: "women", dames: "women", wfc: "women" });
 // Only established names are expanded. Ambiguous initials, "United", "City" and country fragments stay literal.
 const nameAliases = wordMap<string>({
   "man united": "manchester united", "man utd": "manchester united", "man u": "manchester united",
@@ -65,7 +84,8 @@ const nameAliases = wordMap<string>({
   lfc: "liverpool", cfc: "chelsea", efc: "everton", thfc: "tottenham hotspur", avfc: "aston villa",
   nufc: "newcastle united", lufc: "leeds united", whufc: "west ham united", wba: "west bromwich albion",
   hsv: "hamburger sv", bmg: "borussia monchengladbach", juve: "juventus", atleti: "atletico madrid",
-  "athletic bilbao": "athletic club",
+  // The club's stored name is generic on its own, so both spellings meet at the distinctive one.
+  "athletic club": "athletic bilbao",
   epl: "premier league", ucl: "uefa champions league", "uefa cl": "uefa champions league", uel: "uefa europa league",
   uecl: "uefa europa conference league", mls: "major league soccer", afcon: "africa cup of nations", euros: "euro championship",
   usa: "united states", us: "united states", "united states of america": "united states",
@@ -74,8 +94,8 @@ const nameAliases = wordMap<string>({
   "cote divoire": "ivory coast", "cote d ivoire": "ivory coast", "czech republic": "czechia",
   turkiye: "turkey", brasil: "brazil", deutschland: "germany",
 });
-/** Aliases that are also ordinary name words apply only to a whole name: "US Lecce" is not the United States and
- * "Juve Stabia" is not Juventus. Stored names only ever use whole-name aliases. */
+/** Aliases that are also ordinary name words apply only to a whole query: "US Lecce" is not the United States and
+ * "Juve Stabia" is not Juventus. Stored names use whole-name aliases, plus the phrases the query itself expanded. */
 const wholeOnlyAliases = wordSet("us uk juve wolves");
 /** Unambiguous nicknames, read only in queries; stored names are official names. */
 const nicknames = wordMap<string>({
@@ -95,6 +115,10 @@ const nicknames = wordMap<string>({
   "taeguk warriors": "south korea", "el tri": "mexico", albiceleste: "argentina", "la celeste": "uruguay",
   ivorian: "ivory coast", "south african": "south africa", "saudi arabian": "saudi arabia",
 });
+/** Established abbreviations a query may expand anywhere in a side. Nicknames and whole-only aliases name a team only as a
+ * whole side (see wholeSide). */
+const aliasPhrases = new Map<string, readonly string[]>([...nameAliases]
+  .filter(([phrase]) => !wholeOnlyAliases.has(phrase)).map(([phrase, target]) => [phrase, target.split(" ")]));
 /** "English Premier League" reads as the Premier League of England; the adjective still matches itself. */
 const demonyms = wordMap<string>({
   english: "england", scottish: "scotland", welsh: "wales", irish: "ireland", spanish: "spain", german: "germany",
@@ -111,15 +135,15 @@ const demonyms = wordMap<string>({
   rwandan: "rwanda", zambian: "zambia", cameroonian: "cameroon", senegalese: "senegal", ethiopian: "ethiopia",
 });
 /** English competition words also match their usual local forms ("German Cup" finds the DFB Pokal). */
-const synonyms = wordMap<readonly string[]>({ league: ["liga", "ligue", "lega"], cup: ["copa", "coupe", "coppa", "pokal", "taca", "beker"],
-  women: ["w", "womens", "ladies", "feminine", "femenino", "feminino", "frauen", "femminile", "dames"] });
-const longestPhrase = Math.max(...[...nameAliases.keys(), ...nicknames.keys()].map((phrase) => phrase.split(" ").length));
+const synonyms = wordMap<readonly string[]>({ league: ["liga", "ligue", "lega"], cup: ["copa", "coupe", "coppa", "pokal", "taca", "beker"] });
+const longestPhrase = Math.max(...[...aliasPhrases.keys()].map((phrase) => phrase.split(" ").length));
 
 // Zero code points of common decimal digit blocks (Arabic-Indic, Indic scripts, Thai, Lao, Tibetan, Myanmar, Khmer, Mongolian, fullwidth).
 const digitZeros = [0x0660, 0x06f0, 0x07c0, 0x0966, 0x09e6, 0x0a66, 0x0ae6, 0x0b66, 0x0be6, 0x0c66, 0x0ce6, 0x0d66,
   0x0de6, 0x0e50, 0x0ed0, 0x0f20, 0x1040, 0x1090, 0x17e0, 0x1810, 0xff10];
 const numberSymbolsByLocale = new Map<string, Readonly<{ group: string; decimal: string }>>();
-function numberSymbols(locale: string): Readonly<{ group: string; decimal: string }> {
+/** The locale's own separators, reduced to the forms the folded text can hold: "," or "." for either, or a space for grouping. */
+function numberSymbols(locale: string): Readonly<{ group: string | null; decimal: string }> {
   let symbols = numberSymbolsByLocale.get(locale);
   if (!symbols) {
     let group = ",", decimal = ".";
@@ -131,7 +155,10 @@ function numberSymbols(locale: string): Readonly<{ group: string; decimal: strin
     symbols = Object.freeze({ group, decimal });
     if (numberSymbolsByLocale.size < 64) numberSymbolsByLocale.set(locale, symbols);
   }
-  return symbols;
+  const decimal = symbols.decimal === "," ? "," : ".";
+  const group = symbols.group === "," || symbols.group === "." ? (symbols.group === decimal ? null : symbols.group)
+    : /^\s$/u.test(symbols.group) ? " " : null;
+  return { group, decimal };
 }
 const escapeExpression = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 function asciiDigit(digit: string): string {
@@ -142,45 +169,65 @@ function asciiDigit(digit: string): string {
 }
 
 /** Keep Unicode letters/numbers, fold case, accents, invisible formatting and spacing, and join dotted initials and
- * apostrophes. Numbers keep their value in the given locale: "10,000" and "10 000" read 10000, a decimal stays one word
- * ("2.50" reads "2.5"), and "1,5" in English is two numbers rather than fifteen. */
+ * apostrophes. Numbers keep their value in the given locale: "10,000" reads 10000 (as do no-break-space groups, and
+ * plain-space groups in locales that group with spaces), a decimal stays one word ("2.50" reads "2.5"), and "1,5" in
+ * English is two numbers rather than fifteen. Age groups join ("U-19", "Under 19" read "u19"); ordinal signs drop. */
 export function normalizeFootballSearch(value: string, locale: string = defaultLocale): string {
   const { group, decimal } = numberSymbols(locale);
-  let text = value.replace(/\p{Nd}/gu, asciiDigit).replace(/\p{Cf}+/gu, "")
+  let text = value.replace(/\p{Nd}/gu, asciiDigit).replace(/[\p{Cf}\u115f\u1160\u3164\uffa0]+/gu, "")
     // Spaces and apostrophes never mark a decimal, so between digit groups they always group thousands.
-    .replace(/(?<=\d)[\u00a0\u2007\u2009\u202f'’](?=\d{3}(?!\d))/gu, "")
-    .normalize("NFKD").replace(/\p{M}+/gu, "").toLowerCase()
-    .replace(/[ßæœøłđðþı]/gu, (letter) => ({ ß: "ss", æ: "ae", œ: "oe", ø: "o", ł: "l", đ: "d", ð: "d", þ: "th", ı: "i" })[letter]!);
-  if (group === "," || group === ".") {
+    .replace(/(?<=\d)[\u00a0\u2007\u2009\u202f'’\u066c](?=\d{3}(?!\d))/gu, "")
+    .replace(/(?<=\d)\u066b(?=\d)/gu, decimal).replace(/(?<=\d)[ºª°]/gu, "")
+    .normalize("NFKD").replace(/\p{M}+/gu, "").toLowerCase().replace(/ς/gu, "σ")
+    .replace(/[ßæœøłđðþı]/gu, (letter) => ({ ß: "ss", æ: "ae", œ: "oe", ø: "o", ł: "l", đ: "d", ð: "d", þ: "th", ı: "i" })[letter]!)
+    // Age groups join and lose a plural ("U-19s", "Under 21's" read u19, u21); ordinals lose their suffix ("1a", "2nd").
+    .replace(/(?<![\p{L}\p{N}])(?:u|under)[\s._–—-]*(\d{1,2})(?:['’]?s)?(?![\p{L}\p{N}])/gu, "u$1")
+    .replace(/(?<![\p{L}\p{N}])(\d{1,2})(?:o|a|st|nd|rd|th)(?![\p{L}\p{N}])/gu, "$1")
+    // An elided article stands apart from its name: "L'Aquila", "d'Escaldes".
+    .replace(/(?<![\p{L}\p{N}])([dl])['’ʼ](?=[aeiouh])/gu, "$1 ");
+  if (group) {
     const separator = escapeExpression(group);
     text = text.replace(new RegExp(`(?<![\\d.,])\\d{1,3}(?:${separator}\\d{3})+(?!\\d|${separator}\\d)`, "gu"),
       (number) => number.replaceAll(group, ""));
   }
-  if (decimal === "," || decimal === ".") {
-    text = text.replace(new RegExp(`(?<![\\d.,])(\\d+)${escapeExpression(decimal)}(\\d+)(?![\\d]|[.,]\\d)`, "gu"), (_, whole: string, fraction: string) => {
-      const significant = fraction.replace(/0+$/u, "");
-      return significant ? `${whole}${decimalMark}${significant}` : whole;
-    });
-  }
+  text = text.replace(new RegExp(`(?<![\\d.,])(\\d+)${escapeExpression(decimal)}(\\d+)(?![\\d]|[.,]\\d)`, "gu"), (_, whole: string, fraction: string) => {
+    const significant = fraction.replace(/0+$/u, "");
+    return significant ? `${whole}${decimalMark}${significant}` : whole;
+  });
   return text.replace(/(?:\p{L}\.){2,}/gu, (initials) => initials.replace(/\./gu, ""))
     .replace(/[’'ʼ]/gu, "").replace(/&/gu, " and ").replace(/[^\p{L}\p{N}\u2024]+/gu, " ").trim().replaceAll(decimalMark, ".");
 }
 
 type Token = Readonly<{ value: string; characters: readonly string[]; numeric: boolean; literal: boolean; generic: boolean;
-  alternates: readonly Token[] }>;
-type Name = Readonly<{ normalized: string; canonical: string; joined: string; initials: string; raw: readonly Token[]; tokens: readonly Token[] }>;
-type QueryName = Name & Readonly<{ groups: readonly number[]; genericLike: readonly boolean[]; full: number; distinctive: number }>;
+  /** The last word of a longer query while it is still being typed ("Real M"): it matches as a prefix of any length. */
+  partial: boolean;
+  /** For a query word, the sides of the query it belongs to: "Inter" and "Milan" in "Inter vs Milan" are on two sides. */
+  sides: number; alternates: readonly Token[] }>;
+type Name = Readonly<{ normalized: string; canonical: string; joined: string;
+  /** Spellings without spaces that a one-word query may equal: canonical words, all typed words, typed words without club forms. */
+  joins: readonly string[]; initials: string; raw: readonly Token[]; tokens: readonly Token[]; groups: readonly number[] }>;
+type QueryName = Name & Readonly<{ phrases: ReadonlyMap<string, readonly string[]>; qualifierLike: readonly boolean[];
+  full: number; distinctive: number; ambiguous: number; sideCount: number }>;
 
-function token(value: string, alternates: readonly string[] = []): Token {
+function token(value: string, alternates: readonly string[] = [], partial = false, sides = 0): Token {
   const characters = Array.from(value);
-  return { value, characters, numeric: /\p{N}/u.test(value), literal: clubWords.has(value),
-    generic: genericWords.has(value) || characters.length === 1, alternates: alternates.map((alternate) => token(alternate)) };
+  return { value, characters, numeric: /\p{N}/u.test(value) || numerals.has(value), literal: clubWords.has(value),
+    generic: genericWords.has(value) || stopwords.has(value) || characters.length === 1, partial, sides,
+    alternates: alternates.map((alternate) => token(alternate)) };
 }
 const genericTokens = [...genericWords].map((word) => token(word));
+// Only one slip in a longer filler word is corrected ("matchs", "tomorow"): shorter or looser readings sit too close to
+// names ("Manch" ~ match, "Sparta" ~ support, "Beijing" ~ betting).
+const fillerTokens = [...stopwords].filter((word) => word.length >= 6).map((word) => token(word));
+const isSlip = (word: string, filler: Token) => word[0] === filler.value[0] && editDistance(Array.from(word), filler.characters, 1) <= 1;
 const unique = (tokens: readonly Token[]) => {
   const seen = new Set<string>();
   return tokens.filter((item) => !seen.has(item.value) && Boolean(seen.add(item.value)));
 };
+/** A word of a stored name that identifies it. */
+const isDistinctive = (item: Token) => !item.generic && !item.numeric && !item.literal;
+/** Joined words compare "ManchesterUnited" with "Manchester United"; numbers keep their gaps, so "1 5" never reads 15. */
+const joinWords = (tokens: readonly Token[]) => tokens.map((item, index) => (index && (item.numeric || tokens[index - 1]!.numeric) ? " " : "") + item.value).join("");
 
 /** Words in groups: an alias expansion ("psg" → paris saint germain) is one group, every other word its own. */
 type Words = readonly (readonly string[])[];
@@ -191,65 +238,134 @@ const meaningful = (groups: Words, keep: (word: string, index: number, words: re
   return groups.map((group) => group.filter((word) => keep(word, index++, words))).filter((group) => group.length > 0);
 };
 
-/** Whole-name aliases first; with `phrases`, a query also replaces the longest alias or nickname phrase at each position. */
-function expand(groups: Words, query: boolean, phrases: boolean): Words {
-  const words = flat(groups), whole = nameAliases.get(words.join(" ")) ?? (query ? nicknames.get(words.join(" ")) : undefined);
-  if (whole !== undefined) return [whole.split(" ")];
-  if (!query || !phrases) return groups;
+/** A whole-name alias, else the longest of `phrases` at each position. A query records what it expanded in `expanded`,
+ * so stored names containing those phrases can be read the same way. */
+function expand(groups: Words, phrases: ReadonlyMap<string, readonly string[]> | null, expanded?: Map<string, readonly string[]>): Words {
+  const words = flat(groups), joined = words.join(" "), whole = nameAliases.get(joined);
+  if (whole !== undefined) {
+    if (!wholeOnlyAliases.has(joined)) expanded?.set(joined, whole.split(" "));
+    return [whole.split(" ")];
+  }
+  if (!phrases?.size) return groups;
   const result: string[][] = [];
   for (let index = 0; index < words.length;) {
     let replaced = false;
     for (let size = Math.min(longestPhrase, words.length - index); size > 0 && !replaced; size--) {
-      const phrase = words.slice(index, index + size).join(" ");
-      const target = wholeOnlyAliases.has(phrase) ? undefined : nameAliases.get(phrase) ?? nicknames.get(phrase);
-      if (target !== undefined) { result.push(target.split(" ")); index += size; replaced = true; }
+      const phrase = words.slice(index, index + size).join(" "), target = phrases.get(phrase);
+      if (target !== undefined) { expanded?.set(phrase, target); result.push([...target]); index += size; replaced = true; }
     }
     if (!replaced) result.push([words[index++]!]);
   }
   return result;
 }
 
-const isFiller = (word: string, index: number, words: readonly string[]) => stopwords.has(word) ||
-  articles.has(word) && index < words.length - 1 || separators.has(word) && index > 0 && index < words.length - 1;
+const isQualifierWord = (word: string) => {
+  const value = tokenAliases.get(word) ?? word;
+  return genericWords.has(value) || /\p{N}/u.test(value) || numerals.has(value);
+};
+/** A side that is an alias or a nickname, alone or followed by qualifiers ("US W", "Spurs U21"), names that team.
+ * Inside a longer name a nickname stays literal: "Singida Black Stars" is no Ghana side. */
+function wholeSide(groups: Words, lookup: (head: string) => string | undefined, expanded?: Map<string, readonly string[]>): Words {
+  const words = flat(groups);
+  for (let size = words.length; size > 0; size--) {
+    const head = words.slice(0, size).join(" "), target = lookup(head);
+    if (target === undefined || !words.slice(size).every(isQualifierWord)) continue;
+    if (!wholeOnlyAliases.has(head)) expanded?.set(head, target.split(" "));
+    return [target.split(" "), ...words.slice(size).map((word) => [word])];
+  }
+  return groups;
+}
+const sideAlias = (head: string) => nameAliases.get(head) ?? nicknames.get(head);
+/** Stored names read the same way ("USA W", "PSG U19", "Wolves U21"), plus short stored forms of clubs whose alias
+ * expands further. Queries never read these, so "Inter" still finds Inter Miami. */
+const storedAliases = wordMap<string>({ inter: "internazionale", "inter milano": "internazionale", tottenham: "tottenham hotspur" });
+const storedAlias = (head: string) => nameAliases.get(head) ?? storedAliases.get(head);
 
-function prepareName(value: string, locale: string, query: boolean): Name & Readonly<{ groups: readonly number[] }> {
+/** Filler: stopwords and their spelling slips ("tomorow", "matchs"), a subject "I"; then articles and separators are judged
+ * among the remaining words, so "Serie A matches" keeps its final letter. */
+function withoutFiller(groups: Words): Words {
+  const content = meaningful(groups, (word, index, words) => !stopwords.has(word) && !(word === "i" && pronounVerbs.has(words[index + 1] ?? "")) &&
+    !(word.length >= 5 && !genericWords.has(word) && fillerTokens.some((filler) => isSlip(word, filler))));
+  return meaningful(content, (word, index, words) => !(articles.has(word) && index < words.length - 1) &&
+    !(separators.has(word) && index > 0 && index < words.length - 1));
+}
+
+/** A query's sides: connectors anywhere and "v" or "x" between two words set named teams apart. */
+function querySides(words: readonly string[]): string[][] {
+  const sides: string[][] = [[]];
+  words.forEach((word, index) => {
+    if (connectors.has(word) || separators.has(word) && index > 0 && index < words.length - 1) sides.push([]);
+    else sides.at(-1)!.push(word);
+  });
+  return sides.filter((side) => side.length > 0);
+}
+
+function nameOf(normalized: string, raw: readonly Token[], canonical: readonly Token[], groups: readonly number[]): Name {
+  // A literal search for "Club" or "FC" still searches those actual words; they never gain fuzzy alternatives.
+  const tokens = canonical.length ? canonical : raw, joined = joinWords(tokens);
+  // Initials skip age groups and numbers, which no acronym spells.
+  const initials = tokens.filter((item) => !item.numeric).map((item) => item.characters[0]).join("");
+  return { normalized, canonical: tokens.map((item) => item.value).join(" "), joined,
+    joins: [...new Set([joined, joinWords(raw), joinWords(raw.filter((item) => !item.literal))])], initials, raw, tokens,
+    groups: canonical.length ? groups : [] };
+}
+
+/** A stored name: whole-name aliases (plus the phrases a query expanded, when given) and no club forms. */
+function prepareCandidate(value: string, locale: string, phrases: ReadonlyMap<string, readonly string[]> | null = null): Name {
   const normalized = value.length <= maximumTextLength ? normalizeFootballSearch(value, locale) : "";
   const words = normalized ? normalized.split(" ") : [];
   const raw = unique(words.map((word) => token(word)));
-  let significant = meaningful(expand(words.map((word) => [word]), query, true), (word) => !clubWords.has(word));
-  if (query) {
-    const content = meaningful(significant, (word, index, all) => !isFiller(word, index, all));
-    if (content.length) significant = content;
-  }
-  const canonical: Token[] = [], groups: number[] = [], seen = new Set<string>();
-  // A second whole-name pass reads "Man Utd FC" or "the US" once club and filler words are gone.
-  for (const group of meaningful(expand(significant, query, false), (word) => !clubWords.has(word))) {
-    let mask = 0;
-    for (const word of group) {
-      const value = tokenAliases.get(word) ?? word, country = query ? demonyms.get(value) : undefined;
-      const item = !query ? token(value) : country === undefined ? token(value, synonyms.get(value)) : token(country, [value]);
-      if (seen.has(item.value)) continue;
-      seen.add(item.value);
-      mask |= 2 ** canonical.length;
-      canonical.push(item);
+  const significant = meaningful(expand(words.map((word) => [word]), phrases), (word) => !clubWords.has(word));
+  const groups = meaningful(wholeSide(significant, storedAlias), (word) => !clubWords.has(word));
+  const canonical = unique(flat(groups).map((word) => token(tokenAliases.get(word) ?? word)));
+  return nameOf(normalized, raw, canonical, []);
+}
+
+/** A query: split into sides, aliases and nicknames read per side, filler dropped, words shared across teams kept once. */
+function prepareQueryName(value: string, locale: string, expanded: Map<string, readonly string[]>): Name & Readonly<{ sideCount: number }> {
+  const normalized = value.length <= maximumTextLength ? normalizeFootballSearch(value, locale) : "";
+  const words = normalized ? normalized.split(" ") : [];
+  const raw = unique(words.map((word) => token(word)));
+  // A leading "the" never belongs to an alias: "the US" reads as the United States.
+  const named = words[0] === "the" && words.length > 1 ? words.slice(1) : words;
+  const parts = querySides(named).map((side) => meaningful(expand(side.map((word) => [word]), aliasPhrases, expanded),
+    (word) => !clubWords.has(word)));
+  const content = parts.map(withoutFiller);
+  const sides = (content.some((part) => part.length) ? content : parts).filter((part) => part.length)
+    .map((part) => meaningful(wholeSide(part, sideAlias, expanded), (word) => !clubWords.has(word))).filter((part) => part.length);
+  // The last typed word of a longer query is still being typed if it is one or two letters ("Real M", "AC Mi").
+  const last = words.at(-1) ?? "";
+  const typing = words.length > 1 && /^\p{L}{1,2}$/u.test(last) && !numerals.has(last) ? last : null;
+  const canonical: Token[] = [], groups: number[] = [], sideBits: number[] = [], positions = new Map<string, number>();
+  for (const [side, part] of sides.entries()) {
+    for (const [index, group] of part.entries()) {
+      let mask = 0;
+      for (const word of group) {
+        const value = tokenAliases.get(word) ?? word, country = demonyms.get(value);
+        const partial = side === sides.length - 1 && index === part.length - 1 && group.length === 1 && word === typing && value === word;
+        // A word a stored short form expands to one word ("Inter" → internazionale) also matches that word.
+        const stored = storedAliases.get(value), alternates = [...synonyms.get(value) ?? [], ...stored && !stored.includes(" ") ? [stored] : []];
+        const item = country === undefined ? token(value, alternates, partial) : token(country, [value]);
+        // A word shared by two named teams ("Man Utd vs Man City") belongs to both of their groups.
+        let position = positions.get(item.value);
+        if (position === undefined) { position = canonical.length; positions.set(item.value, position); canonical.push(item); sideBits.push(0); }
+        sideBits[position]! |= 1 << side;
+        mask |= 2 ** position;
+      }
+      groups.push(mask);
     }
-    if (mask) groups.push(mask);
   }
-  // A literal search for "Club" or "FC" still searches those actual words; they never gain fuzzy alternatives.
-  const tokens = canonical.length ? canonical : raw;
-  // Joined words compare "ManchesterUnited" with "Manchester United"; numbers keep their gaps, so "1 5" never reads 15.
-  const joined = tokens.map((item, index) => (index && (item.numeric || tokens[index - 1]!.numeric) ? " " : "") + item.value).join("");
-  return { normalized, canonical: tokens.map((item) => item.value).join(" "), joined,
-    initials: tokens.map((item) => item.characters[0]).join(""), raw, tokens, groups: canonical.length ? groups : [] };
+  const tokens = canonical.map((item, index) => ({ ...item, sides: sideBits[index]! }));
+  return { ...nameOf(normalized, raw, tokens, groups), sideCount: sides.length };
 }
 
 const preparedNames = new Map<string, Name>();
 /** Stored names recur across searches, so their normalization is shared, bounded and evicted oldest first. */
 function candidateName(value: string, locale: string): Name {
-  const key = `${locale}\u0000${value}`;
+  const key = `${locale}|${value}`;
   let name = preparedNames.get(key);
   if (!name) {
-    name = prepareName(value, locale, false);
+    name = prepareCandidate(value, locale);
     if (preparedNames.size >= preparedNameCacheSize) preparedNames.delete(preparedNames.keys().next().value!);
     preparedNames.set(key, name);
   }
@@ -299,8 +415,12 @@ function skeleton(characters: readonly string[]): string {
 function similarity(query: Token, candidate: Token): number {
   const left = query.characters, right = candidate.characters;
   const shorter = Math.min(left.length, right.length), longer = Math.max(left.length, right.length);
-  if (shorter < 4) return 0;
   const sameStart = left[0] === right[0];
+  // A three-letter abbreviation of a four-letter word drops one letter: "Cty" → City, "Twn" → Town.
+  if (shorter < 4) return left.length === 3 && right.length === 4 && sameStart && isSubsequence(left, right) ? 560 + 75 : 0;
+  // A word that runs on past the other by three letters or more holds another word, not a slip: "ManchesterUtd" is no
+  // misspelling of "Manchester".
+  if (longer - shorter >= 3 && (query.value.startsWith(candidate.value) || candidate.value.startsWith(query.value))) return 0;
   // Beyond one wrong or swapped letter in equally long words the first letter must agree, so "Chichester" is no
   // misspelling of "Manchester". Checking that first also skips most distance computations.
   if (!sameStart && (left.length !== right.length || longer < 5)) return 0;
@@ -325,9 +445,12 @@ function similarity(query: Token, candidate: Token): number {
  * An inner fragment is literal but weak ("man" inside "Fettehman"), so only equal words and prefixes are direct. */
 function formScore(query: Token, candidate: Token, fragments: boolean, spelling = true): number {
   if (query.value === candidate.value) return 1000;
+  const queryLength = query.characters.length, ratio = queryLength / candidate.characters.length;
+  // A word still being typed matches as a prefix of any length and nothing else; never of a number or age group, so
+  // "Manchester U" is no "Manchester City U19".
+  if (query.partial) return !candidate.numeric && candidate.value.startsWith(query.value) ? 760 + Math.round(140 * ratio) : 0;
   // Ages, divisions, years and identifiers must never drift to a neighboring number.
   if (query.numeric || candidate.numeric) return 0;
-  const queryLength = query.characters.length, ratio = queryLength / candidate.characters.length;
   if (queryLength >= 3 && ratio >= 0.3 && candidate.value.startsWith(query.value) && (fragments || queryLength >= 4 && ratio >= 0.4)) {
     return 760 + Math.round(140 * ratio);
   }
@@ -395,32 +518,51 @@ function assign(weights: readonly (readonly number[])[]): number[] {
   return result;
 }
 
-/** Every query word matches its own word of the name. */
-function wordMatch(query: readonly Token[], candidate: readonly Token[], full: number): FootballSearchMatch | null {
+type Found = Readonly<{ score: number; covered: number; direct: number }>;
+/** A reading kept as a similar result rather than a direct one. */
+const demote = (found: Found): Found => ({ score: Math.max(1, Math.min(699, Math.round(found.score * 0.72))), covered: found.covered, direct: 0 });
+/** Numbers, Roman numerals and single letters mark divisions and groups. */
+const isMarker = (item: Token) => item.numeric || item.characters.length === 1;
+
+/** Every query word matches its own word of the name. A name that keeps another division marker beside the matched one
+ * is a different competition, so it is a similar result: "Division 2" is no "Tercera División RFEF - Group 2" and
+ * "Serie A" no "Serie C - Girone A". */
+function wordMatch(query: readonly Token[], candidate: readonly Token[], full: number): Found | null {
   if (!query.length || query.length > candidate.length || query.length > maximumQueryTokens || candidate.length > maximumCandidateTokens) return null;
   const extra = (candidate.length - query.length) / candidate.length;
   const values = new Set(candidate.map((item) => item.value));
+  let found: Found, leftover: readonly Token[];
   if (query.every((item) => values.has(item.value) || item.alternates.some((alternate) => values.has(alternate.value)))) {
-    return { score: query.length === candidate.length ? 940 : 900 - Math.round(100 * extra), covered: full, direct: full };
+    found = { score: query.length === candidate.length ? 940 : 900 - Math.round(100 * extra), covered: full, direct: full };
+    leftover = candidate.filter((word) => !query.some((item) => item.value === word.value || item.alternates.some((alternate) => alternate.value === word.value)));
+  } else {
+    const weights = query.map((item) => candidate.map((word) => tokenScore(item, word, true)));
+    if (weights.some((row) => !row.some(Boolean))) return null;
+    const columns = assign(weights);
+    if (columns.some((column) => column < 0)) return null;
+    const scores = columns.map((column, row) => weights[row]![column]!);
+    const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+    const direct = scores.reduce((mask, score, index) => score >= footballSearchTiers.exact ? mask | 1 << index : mask, 0);
+    // Literal word prefixes stay direct (700–799); any corrected word makes the whole name a similar result (1–699).
+    found = { score: direct === full ? 700 + Math.round((average - 700) / 4) + Math.round(24 * (1 - extra))
+      : Math.max(1, Math.min(699, Math.round(average * 0.72) - Math.round(40 * extra))), covered: full, direct };
+    leftover = candidate.filter((_, index) => !columns.includes(index));
   }
-  const weights = query.map((item) => candidate.map((word) => tokenScore(item, word, true)));
-  if (weights.some((row) => !row.some(Boolean))) return null;
-  const columns = assign(weights);
-  if (columns.some((column) => column < 0)) return null;
-  const scores = columns.map((column, row) => weights[row]![column]!);
-  const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  const direct = scores.reduce((mask, score, index) => score >= footballSearchTiers.exact ? mask | 1 << index : mask, 0);
-  // Literal word parts stay direct (700–799); any corrected word makes the whole name a similar result (1–699).
-  const score = direct === full ? 700 + Math.round((average - 700) / 4) + Math.round(24 * (1 - extra))
-    : Math.max(1, Math.min(699, Math.round(average * 0.72) - Math.round(40 * extra)));
-  return { score, covered: full, direct };
+  // A half-typed letter marks a division only once it is a whole word of the name ("Serie A", not "Real M").
+  const marked = query.some((item) => isMarker(item) && (!item.partial || values.has(item.value)));
+  return marked && leftover.some((item) => isMarker(item) || divisionWords.has(item.value)) ? demote(found) : found;
 }
 
-/** A name mentioned inside a longer query: "Barcelona" in "Barcelona vs Real Madrid". Every word of the name must be
- * matched, except leftover generic words or numbers ("Real", "City", "U21"), and those may not stand against an unmatched
- * generic word or number of the query: "Manchester City" is no mention of "Manchester United", nor "League 2" of
- * "League 1". Word fragments are not mentions. */
-function mentionMatch(query: QueryName, candidate: Name): FootballSearchMatch | null {
+/** A name mentioned inside a longer query: "Barcelona" in "Barcelona vs Real Madrid", "Bayern" for "Bayern München".
+ * - A leftover word of the name must be generic, a number or filler, unless the mention matched a distinctive word of
+ *   the name directly: "Leeds United" is no mention of "United" and "Costa Rica" none of "rice", but "Bayern München"
+ *   is one of "Bayern".
+ * - A leftover generic word may not stand against an unmatched qualifier on the same side of the query, nor a leftover
+ *   number against an unmatched number: "Manchester City" is no mention of "Manchester United", nor "League 2" of
+ *   "League 1", while "Boca Juniors" is one of "Boca vs Racing".
+ * - The covered words must be whole alias groups: "Germany" mentions nothing of "psg" (paris saint germain).
+ * Word fragments are not mentions. */
+function mentionMatch(query: QueryName, candidate: Name): Found | null {
   const words = query.tokens, names = candidate.tokens;
   if (words.length < 2 || words.length > maximumQueryTokens || names.length > maximumCandidateTokens) return null;
   const weights = words.map((item) => names.map((word) => tokenScore(item, word, false)));
@@ -432,8 +574,14 @@ function mentionMatch(query: QueryName, candidate: Name): FootballSearchMatch | 
   if (!pairs.length) return null;
   const matchedNames = new Set(pairs.map(([, column]) => column)), matchedWords = new Set(pairs.map(([row]) => row));
   const leftover = names.filter((_, index) => !matchedNames.has(index));
-  if (leftover.some((item) => !item.generic && !item.numeric)) return null;
-  if (leftover.length > 0 && words.some((item, index) => !matchedWords.has(index) && (query.genericLike[index] || item.numeric))) return null;
+  // Only the side of the query this name answers can contradict it.
+  const anchors = pairs.filter(([, column]) => isDistinctive(names[column]!));
+  const sides = (anchors.length ? anchors : pairs).reduce((bits, [row]) => bits | words[row]!.sides, 0);
+  const unmatched = words.flatMap((item, index) => !matchedWords.has(index) && (item.sides & sides) !== 0 ? [index] : []);
+  if (leftover.some((item) => !item.generic && !item.numeric) &&
+    !pairs.some(([row, column]) => isDistinctive(names[column]!) && weights[row]![column]! >= footballSearchTiers.exact)) return null;
+  if (leftover.some((item) => item.generic && !item.numeric) && unmatched.some((index) => query.qualifierLike[index])) return null;
+  if (leftover.some((item) => item.numeric) && unmatched.some((index) => words[index]!.numeric)) return null;
   let covered = 0, direct = 0, total = 0;
   for (const [row, column] of pairs) {
     const score = weights[row]![column]!;
@@ -441,46 +589,61 @@ function mentionMatch(query: QueryName, candidate: Name): FootballSearchMatch | 
     if (score >= footballSearchTiers.exact) direct |= 1 << row;
     total += score;
   }
-  // Words of one expanded alias name one team: "Germany" mentions none of "psg" (paris saint germain).
-  if (query.groups.some((mask) => (covered & mask) !== 0 && (covered & mask) !== mask)) return null;
+  const whole = query.groups.reduce((mask, group) => (covered & group) === group ? mask | group : mask, 0);
+  if (whole !== covered) return null;
   const coverage = matchedWords.size / words.length, average = total / pairs.length;
   const score = Math.max(1, Math.min(649, Math.round(200 + 300 * coverage * average / 1000) - Math.round(30 * leftover.length / names.length)));
   return { score, covered, direct };
 }
 
-function matchName(query: QueryName, candidate: Name): FootballSearchMatch | null {
-  if (!query.normalized || !candidate.normalized || !query.tokens.length || !candidate.tokens.length ||
-    query.tokens.length > maximumQueryTokens) return null;
+function matchName(query: QueryName, candidate: Name): Found | null {
+  if (!query.normalized || !candidate.normalized || !query.tokens.length || !candidate.tokens.length) return null;
   const whole = (score: number) => ({ score, covered: query.full, direct: query.full });
   if (query.normalized === candidate.normalized) return whole(1000);
-  if (query.canonical === candidate.canonical) return whole(970);
-  if (query.joined === candidate.joined) return whole(930);
-  let best: FootballSearchMatch | null = query.tokens.length === 1 && query.joined.length >= 3 && query.joined.length <= 6 &&
+  // One name never answers two teams a query set apart: "Inter Milano W" is no exact result for "Inter vs Milan".
+  const apart = query.sideCount > 1;
+  if (!apart && query.canonical === candidate.canonical) return whole(970);
+  if (!apart && candidate.joins.includes(query.joined)) return whole(930);
+  let best: Found | null = !apart && query.tokens.length === 1 && query.joined.length >= 3 && query.joined.length <= 6 &&
     query.joined === candidate.initials ? whole(870) : null;
   const words = wordMatch(query.tokens, candidate.tokens, query.full);
   if (words && words.score > (best?.score ?? 0)) best = words;
   const raw = wordMatch(query.raw, candidate.raw, 2 ** query.raw.length - 1);
   if (raw && raw.score > (best?.score ?? 0)) best = { ...whole(raw.score), direct: raw.score >= footballSearchTiers.exact ? query.full : 0 };
-  return best ?? mentionMatch(query, candidate);
+  return best ? apart ? demote(best) : best : mentionMatch(query, candidate);
 }
+
+const bitCount = (mask: number) => { let count = 0; for (let value = mask; value; value &= value - 1) count++; return count; };
+/** The better reading of a name: more query words covered, then higher relevance. */
+const better = (left: Found | null, right: Found | null) => !right ? left : !left ? right
+  : bitCount(right.covered) > bitCount(left.covered) || bitCount(right.covered) === bitCount(left.covered) && right.score > left.score ? right : left;
 
 function prepareQuery(value: string, locale: string): QueryName {
-  const name = prepareName(value, locale, true);
+  const phrases = new Map<string, readonly string[]>();
+  const name = prepareQueryName(value, locale, phrases);
   // A very long query keeps its first words, one mask bit each, so a long list of teams still finds them.
   const tokens = name.tokens.slice(0, maximumQueryTokens), full = 2 ** tokens.length - 1;
-  const genericLike = tokens.map((item) => item.generic || genericTokens.some((word) =>
+  // Generic words, numbers, club words and one- or two-letter words never name a team. Words that resemble a generic
+  // word ("Untd", "Cty", "Unitited", but also "Reading" or "Inter") are ambiguous until a searched name confirms them.
+  const plain = tokens.map((item) => item.generic || item.numeric || item.literal || item.partial || item.characters.length <= 2);
+  const resembling = tokens.map((item, index) => !plain[index] && genericTokens.some((word) =>
     item.characters.length >= 3 && word.value.startsWith(item.value) || similarity(item, word) > 0));
-  const distinctive = tokens.reduce((mask, item, index) =>
-    !item.numeric && !item.literal && !genericLike[index] ? mask | 1 << index : mask, 0);
-  return { ...name, tokens, groups: name.groups.map((mask) => mask & full).filter(Boolean), genericLike, full, distinctive };
+  const mask = (flags: readonly boolean[]) => flags.reduce((bits, flag, index) => flag ? bits | 1 << index : bits, 0);
+  const groups = name.groups.map((group) => group & full).filter(Boolean);
+  // An expanded alias names one team even when its words are generic ("man city" → manchester city); a mention covers
+  // such a group whole or not at all, so its words may count as distinctive.
+  const aliased = groups.reduce((bits, group) => group & group - 1 ? bits | group : bits, 0);
+  return { ...name, tokens, groups, phrases,
+    qualifierLike: tokens.map((item, index) => plain[index] && !item.numeric || resembling[index]!), full,
+    distinctive: mask(tokens.map((_, index) => !plain[index] && !resembling[index])) | aliased, ambiguous: mask(resembling) & ~aliased };
 }
 
-/** Matched words stand on their own when they are all the query's words, or include a distinctive word while another
- * distinctive word stays unmatched: one of several named teams ("Barcelona" for "Barcelona Madrid"). Leaving out only
- * qualifiers is not enough ("Manchester SC" for "Manchester United"). Feed records apply the same rule to the words their
- * teams and competition cover together. */
-function mentionStands(covered: number, query: Readonly<{ full: number; distinctive: number }>): boolean {
-  return covered === query.full || (covered & query.distinctive) !== 0 && (query.distinctive & ~covered) !== 0;
+/** Matched words stand on their own when they are all the query's words or include a distinctive one: "Leeds" answers
+ * "Leeds United" and "Barcelona" answers "Barcelona vs Real Madrid" as similar results, while a name matched only by
+ * qualifiers ("Racing United" for "Manchester United") never stands. Feed records apply the same rule to the words
+ * their teams and competition cover together. */
+function mentionStands(covered: number, full: number, distinctive: number): boolean {
+  return covered === full || (covered & distinctive) !== 0;
 }
 
 /** Prepare once per search. Candidate memoization is local and bounded; equal scores retain the caller's stable secondary order. */
@@ -488,8 +651,19 @@ export function prepareFootballSearch(query: string, locale: string = defaultLoc
   const prepared = prepareQuery(query, locale), cache = new Map<string, FootballSearchMatch | null>();
   const match = (candidate: string): FootballSearchMatch | null => {
     if (cache.has(candidate)) return cache.get(candidate)!;
-    const found = matchName(prepared, candidateName(candidate, locale));
-    const result = found && Object.freeze(found);
+    const name = candidateName(candidate, locale);
+    let found = matchName(prepared, name);
+    // A stored name containing a phrase the query expanded ("PSG U19" for "psg u19 matches") is read the same way.
+    const words = ` ${name.normalized} `;
+    if (prepared.phrases.size && [...prepared.phrases.keys()].some((phrase) => words.includes(` ${phrase} `))) {
+      found = better(found, matchName(prepared, prepareCandidate(candidate, locale, prepared.phrases)));
+    }
+    let result: FootballSearchMatch | null = null;
+    if (found) {
+      const names = new Set(name.tokens.filter(isDistinctive).map((item) => item.value));
+      const named = prepared.tokens.reduce((bits, item, index) => names.has(item.value) ? bits | 1 << index : bits, 0) & found.covered;
+      result = Object.freeze({ ...found, named });
+    }
     if (cache.size >= candidateCacheSize) cache.delete(cache.keys().next().value!);
     cache.set(candidate, result);
     return result;
@@ -498,11 +672,13 @@ export function prepareFootballSearch(query: string, locale: string = defaultLoc
     normalized: prepared.normalized,
     tokens: Object.freeze(prepared.tokens.map((item) => item.value)),
     distinctive: prepared.distinctive,
+    ambiguous: prepared.ambiguous,
     match,
-    score(candidate: string): number {
+    score(candidate: string, named?: number): number {
       const found = match(candidate);
       if (!found) return 0;
-      return mentionStands(found.covered, prepared) ? found.score : 0;
+      const distinctive = prepared.distinctive | prepared.ambiguous & (named ?? found.named);
+      return mentionStands(found.covered, prepared.full, distinctive) ? found.score : 0;
     },
   });
 }
