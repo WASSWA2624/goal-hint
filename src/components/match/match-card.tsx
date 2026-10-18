@@ -377,13 +377,14 @@ const LiveDot = styled.span`
   ${tile} { animation: none; }
 `;
 
-/** Tile: one pick line under the teams: market caption, bold pick, its own odds and the probability. The "likely" word
+/** Tile: one right-aligned pick line under the teams: market caption, bold pick, its own odds and the probability. The "likely" word
  * drops first and the market caption shortens next, so the pick and its numbers stay whole at narrow widths. */
 const Pick = styled.div`
   ${tile} {
     grid-area: pick;
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 6px;
     min-inline-size: 0;
     padding: 3px 10px 6px;

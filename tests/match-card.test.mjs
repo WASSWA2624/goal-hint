@@ -227,6 +227,7 @@ test("the phone tile puts the result tag in the top-right corner, outside the de
 });
 
 test("the phone pick line drops the market caption and the probability word before the pick", async () => {
+  assert.match((await styledBlock("Pick")).tile.split("${table}")[0], /justify-content: flex-end;/u);
   const market = (await styledBlock("MarketName")).tile.split("${table}")[0];
   const probability = (await styledBlock("Probability")).tile;
   assert.match(market, /flex: 0 100 auto;/u);

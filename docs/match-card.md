@@ -84,7 +84,7 @@ The mobile card ("Verdict Corner", design 09) has three rows on one grid
    the bold score (live red text while live, the losing side muted), with the state
    beneath it: the live minute with a dot (`67′`, `90+4′`, or the phase), `FT`,
    `AET*`/`Pens*`, or a halted status such as Postponed in grey.
-3. **Pick line.** Market caption in its family colour, the full-word pick
+3. **Pick line.** Right-aligned under the teams: market caption in its family colour, the full-word pick
    (`Home win`, `Over 2.5`, `Not both teams to score`), the exact available
    price as `@ 1.85`, and the probability as `54% likely`. At narrow widths the
    word "likely" drops first (it wraps onto a clipped second line, never below
