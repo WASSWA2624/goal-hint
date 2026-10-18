@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   agentRules: false,
+  // No `X-Powered-By: Next.js` response header.
+  poweredByHeader: false,
   // Development only: let phones and other machines on the local network open `next dev` by its LAN address
   // (e.g. http://192.168.1.148:3000). Without this, Next blocks the dev scripts and HMR socket from that origin, so
   // pages never hydrate: lazy team crests stay as initials and client controls stay in their pending state.
@@ -10,7 +12,7 @@ const nextConfig: NextConfig = {
   ...(process.env.BUILD_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // Readable `file__Component` class names only in development; production emits bare `sc-` ids.
   compiler: { styledComponents: { displayName: process.env.NODE_ENV !== "production", ssr: true } },
-  // The private analytics dashboard and its APIs: never cached, framed or indexed.
+  // Every response: no MIME sniffing. The private analytics dashboard and its APIs: never cached, framed or indexed.
   async headers() {
     const privateHeaders = [
       { key: "Cache-Control", value: "no-store" },
@@ -19,7 +21,9 @@ const nextConfig: NextConfig = {
       { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
       { key: "Referrer-Policy", value: "same-origin" },
     ];
-    return [{ source: "/analytics", headers: privateHeaders }, { source: "/api/analytics/:path*", headers: privateHeaders }];
+    // The global rule stays first: when a key repeats, the last matching rule wins.
+    return [{ source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] },
+      { source: "/analytics", headers: privateHeaders }, { source: "/api/analytics/:path*", headers: privateHeaders }];
   },
   async redirects() {
     return [

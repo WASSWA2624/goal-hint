@@ -3,7 +3,7 @@ import "server-only";
 import type { UtcInstant } from "../../domain/calendar.ts";
 import type { DE_MARGIN_METHOD } from "../../domain/odds.ts";
 import type { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
-import type { ApiFootballBounds, ApiFootballPageProvenance, ApiFootballResult, ODDS_CONTRACT_VERSION } from "../football/api-football-contract.ts";
+import type { ApiFootballPageProvenance, ApiFootballResult, ODDS_CONTRACT_VERSION } from "../football/api-football-contract.ts";
 import type { NormalizedFixtureOdds, NormalizedOddsCatalogEntry } from "../football/api-football-normalize.ts";
 
 /** Owner-approved odds import policy (prompt 052). Fingerprinted into every receipt and fixture state. */
@@ -112,4 +112,3 @@ export type OddsImportSummary = Readonly<{
   /** The adapter's static failure reason, never provider diagnostics. */
   error: Readonly<{ reason: string; retryable: boolean }> | null;
 }>;
-export type OddsBoundsFactory = (request: OddsImportRequest) => ApiFootballBounds;

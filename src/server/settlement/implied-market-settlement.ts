@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { settledExtendedStatuses as settledStatuses } from "../../domain/extended-markets.ts";
 import { NON_GOAL_MARKET_RULE_VERSION } from "../../domain/non-goal-market-definitions.ts";
 import { settleNonGoalSelection, type NonGoalSettlementContext } from "../../domain/non-goal-market-settlement.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
@@ -12,9 +13,9 @@ import type { StoredImpliedMarketExtension } from "../predictions/implied-market
 import { readImpliedMarketExtension } from "../predictions/implied-market-store.ts";
 import { fixtureResultMatchesCanonical, resultStatus, storedFixtureResult } from "../results/result-read.ts";
 import { readImpliedResultEvidence, type StoredImpliedResultEvidence } from "./implied-market-evidence.ts";
+import { cycleEligibilityFor } from "./settlement-read.ts";
 
 type Tx = Prisma.TransactionClient;
-const settledStatuses = ["correct", "incorrect", "half-win", "half-loss", "push"] as const;
 const baseSchema = z.strictObject({
   fixtureId: historyId, cycleId: historyId, predictionRevisionId: historyId,
   marketKey: z.string().startsWith("implied:").max(128), source: z.literal("market-implied"), ruleVersion: z.literal(NON_GOAL_MARKET_RULE_VERSION),
@@ -104,9 +105,7 @@ export async function planImpliedMarketSettlements(tx: Tx, fixtureId: string): P
     const recorded = new Map<string, ImpliedMarketSettlementRevision>();
     for (const pointer of pointers) { const previous = await readImpliedMarketSettlement(tx, pointer.revisionId); recorded.set(previous.marketKey, previous); }
     const context: NonGoalSettlementContext = { status: issue && cycle.state !== "void" ? "unknown" : resultStatus.parse(fixture.status),
-      cycleEligibility: cycle.state !== "void" ? { eligible: true } : { eligible: false,
-        reason: cycle.voidReason === "formal-postponement" ? "postponed-cycle"
-          : cycle.voidReason === "locked-cutoff-invalidated" ? "cutoff-invalidated" : "ineligible-cycle" },
+      cycleEligibility: cycleEligibilityFor(cycle),
       resultUsable, evidence: evidence?.evidence ?? null };
     plans.push(...projectImpliedMarketSettlements(extension, cycle, context, result?.id ?? null, evidence, recorded));
   }

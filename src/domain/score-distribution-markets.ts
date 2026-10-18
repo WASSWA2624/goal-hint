@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isPlayedFinalStatus, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
+import { isPlayedFinalStatus, settlementStatuses, type CycleEligibility, type SettlementStatus } from "./market-settlement.ts";
 import { asianPayoutGrade, type ExtendedMarketGrade } from "./market-payout.ts";
 import { parseScoreDistribution, type ScoreDistribution, type ScoreState } from "./score-distribution.ts";
 
@@ -159,7 +159,7 @@ export type GoalSettlement = Readonly<{
   reason: string;
 }>;
 const settlementContextSchema = z.strictObject({
-  status: z.enum(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties", "postponed", "canceled", "abandoned", "awarded", "unknown"]),
+  status: z.enum(settlementStatuses),
   cycleEligibility: z.union([z.strictObject({ eligible: z.literal(true) }), z.strictObject({ eligible: z.literal(false),
     reason: z.enum(["postponed-cycle", "cutoff-invalidated", "ineligible-cycle"]) })]),
   // Align with the provider/public fixture score bounds, independently of the predictor support cap.

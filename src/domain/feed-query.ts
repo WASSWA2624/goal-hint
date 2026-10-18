@@ -328,9 +328,13 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
 /** Data/list identity excludes page position and includes resolved browsing dates, zone and locale. */
 export function feedQueryKey(query: FeedQuery, today: ReportingDate): string {
   const range = resolveFeedDates(query, today);
-  const resolved: FeedQuery = { ...query, page: 1, dates: range.dayCount === 1
-    ? { kind: "date", date: range.startDate } : { kind: "range", from: range.startDate, to: range.endDate } };
+  const resolved: FeedQuery = { ...query, page: 1, dates: pinnedDateSelection(range) };
   return `${resolveLocale(query.locale)}?${serializeFeedQuery(resolved, today).toString()}`;
+}
+
+/** One resolved day pins to a date, several to an explicit range; keys, pagination and canonical URLs share this. */
+export function pinnedDateSelection(range: ReportingDateRange): DateSelection {
+  return range.dayCount === 1 ? { kind: "date", date: range.startDate } : { kind: "range", from: range.startDate, to: range.endDate };
 }
 
 /** Filters that narrow the cohort (dates and order excluded). */

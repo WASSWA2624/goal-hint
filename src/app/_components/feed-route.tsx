@@ -29,11 +29,14 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
   });
   async function resolve({ params, searchParams }: Props) {
     const route = await params, at = await instant();
-    let query;
-    try { query = parseMatchFeedQuery(await searchParams, getReportingDate(at), { locale: route.locale, asOf: at,
-      ...(dated ? { routeDate: route.date } : {}) }); }
-    catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
-    const today = getFeedToday(query, at), result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
+    let query, today, result;
+    // The canonical re-parse inside load() also enforces the byte limit, so it must map to 404 too.
+    try {
+      query = parseMatchFeedQuery(await searchParams, getReportingDate(at), { locale: route.locale, asOf: at,
+        ...(dated ? { routeDate: route.date } : {}) });
+      today = getFeedToday(query, at);
+      result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
+    } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
     return { query, today, result };
   }
   return {

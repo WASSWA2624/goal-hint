@@ -5,6 +5,7 @@ import { z } from "zod";
 import { parseUtcInstant, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { UtcInstant } from "../../domain/calendar.ts";
 import type { SettlementStatus } from "../../domain/market-settlement.ts";
+import { deepFreeze as freeze } from "../shared/deep-freeze.ts";
 
 export type RegulationScoreCandidate = Readonly<{
   fixtureId: number;
@@ -302,13 +303,6 @@ const percentageStatistics: Readonly<Record<string, string>> = Object.freeze({
   "Ball Possession": "possession", "Passes %": "pass-accuracy",
 });
 
-function freeze<Data>(value: Data): Data {
-  if (value !== null && typeof value === "object") {
-    for (const child of Object.values(value)) freeze(child);
-    Object.freeze(value);
-  }
-  return value;
-}
 const invalid = (): NormalizationResult<never> => Object.freeze({ valid: false, reason: "schema-error" });
 function valid<Data>(data: Data, missing: string[]): NormalizationResult<Data> {
   return freeze({ valid: true as const, data, missingCoverage: [...new Set(missing)].sort() });

@@ -1,13 +1,13 @@
 import "server-only";
 
 import { z } from "zod";
-import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { marketRules, presentMarketProbabilities, validateMarketGroup, validateMarketSnapshot, type MarketSnapshot, type MarketSource } from "../../domain/markets.ts";
 import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
 import { scoreDistributionSchema } from "../../domain/score-distribution.ts";
 import { SCORE_SCHEMA_VERSION } from "../predictor/predictor-prompt.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, isSafeEvidenceLink, parseEvidenceContext } from "../evidence/evidence-input.ts";
 import { parseModelPin } from "../predictor/predictor-input.ts";
+import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import type { FallbackContext, ForecastTimestamps, ProviderFallbackCandidate, ProviderFallbackResult, ResolvedForecastCandidate } from "./fallback-contract.ts";
 
@@ -33,10 +33,6 @@ const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const text = z.string().min(1).max(512).refine((value) => value === value.trim() && !/[\r\n\0]/u.test(value));
 const plain = z.string().min(1).max(4096).refine((value) => value === value.trim() && !/[\u0000-\u001f\u007f<>`]/u.test(value) &&
   !/(?:https?:\/\/|www\.|\]\s*\()/iu.test(value));
-const instant = z.number().int().refine((value) => {
-  try { utcInstantFromEpochMilliseconds(value); const year = new Date(value).getUTCFullYear(); return year >= 1000 && year <= 9999; }
-  catch { return false; }
-}).transform(utcInstantFromEpochMilliseconds);
 const timestamps = z.object({ generatedAt: instant.nullable(), retrievedAt: instant, providerUpdatedAt: instant.nullable() }).strict()
   .refine((value) => (value.generatedAt === null || value.generatedAt <= value.retrievedAt) &&
     (value.providerUpdatedAt === null || value.providerUpdatedAt <= value.retrievedAt));
@@ -118,7 +114,6 @@ export function parseFallbackContext(value: unknown): FallbackContext {
     return freezeEvidence({ context, jobId: result.jobId, pin, evidenceHash: result.evidenceHash });
   } catch { throw new FallbackInputError(); }
 }
-export function parseForecastTimestamps(value: unknown): ForecastTimestamps { return freezeEvidence(parse(timestamps, value)); }
 export function parseFallbackAiResult(value: unknown): PredictorResult {
   const denied = z.object({ status: z.literal("denied"), reason: z.enum(fallbackAiReasons), requestsDispatched: z.union([z.literal(0), z.literal(1)]),
     requestCountUnknown: z.boolean(), markets: z.unknown().optional() }).strict();

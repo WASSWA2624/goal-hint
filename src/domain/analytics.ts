@@ -5,8 +5,7 @@ import { z } from "zod";
  * Definitions of every metric live in docs/analytics.md; keep both in step.
  */
 import { analyticsRules } from "./analytics-settings.ts";
-export { analyticsRules, analyticsStorageKeys } from "./analytics-settings.ts";
-export type { ConsentChoice } from "./analytics-settings.ts";
+export { analyticsRules } from "./analytics-settings.ts";
 
 const uuid = z.uuid();
 const text = (maximum: number) => z.string().max(maximum);
@@ -93,8 +92,6 @@ export const analyticsGoals = Object.freeze([
   { id: "source-click", label: "Followed a source link", kind: "event", type: "outbound" },
   { id: "match-search", label: "Searched matches", kind: "event", type: "search" },
 ] as const);
-export type AnalyticsGoal = (typeof analyticsGoals)[number];
-export type AnalyticsGoalId = AnalyticsGoal["id"];
 
 export function analyticsGoalLabel(id: string): string {
   return analyticsGoals.find((goal) => goal.id === id)?.label ?? id;

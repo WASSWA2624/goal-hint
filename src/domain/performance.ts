@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { parseReportingDate } from "./calendar.ts";
-import { publicForecastSchema } from "./fixture-snapshot.ts";
+import { marketFamilySchema, publicForecastSchema } from "./fixture-snapshot.ts";
 import { marketSelections } from "./markets.ts";
 
 export const performanceRules = Object.freeze({ maximumDays: 31, defaultDays: 30, maximumFixtures: 1000, maximumCohortFixtures: 31_000,
   maximumStoredBytes: 16_777_216, maximumEvidenceLinks: 20 });
 export const performanceFamilies = Object.keys(marketSelections) as (keyof typeof marketSelections)[];
 export const performanceSourceSchema = z.enum(["combined", "ai", "api-football"]);
-const family = z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]);
+const family = marketFamilySchema;
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const instant = publicForecastSchema.shape.publishedAt;
 const hash = z.string().regex(/^[a-f0-9]{64}$/u);

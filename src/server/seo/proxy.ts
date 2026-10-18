@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server.js";
-import { analyticsRules } from "../../domain/analytics.ts";
+import { analyticsRules } from "../../domain/analytics-settings.ts";
 import { getLocaleRedirect } from "../../i18n/locales.ts";
 import { getDiscoveryPolicy } from "./policy.ts";
 

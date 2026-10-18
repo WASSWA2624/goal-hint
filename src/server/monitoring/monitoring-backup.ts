@@ -12,7 +12,6 @@ const evidenceSchema = z.strictObject({ evidenceRef: monitoringRef, measuredAt: 
 }).refine((v) => [v.snapshotAt, v.archiveAt, v.restoreAt].every((at) => at === null || at <= v.measuredAt));
 export type BackupHealthEvidence = z.infer<typeof evidenceSchema>;
 export type BackupMonitoringSource = Readonly<{ read(): Promise<unknown>; verify(evidence: BackupHealthEvidence): boolean }>;
-export const backupMetricNames = ["backup-failures", "backup-stale", "restore-verification-pending"] as const;
 
 /** Missing/stale/unapproved evidence cannot imply a healthy backup or clear an incident. */
 export function assessBackupHealth(input: unknown, at: number, evidenceMaxAgeMs: number, verify?: BackupMonitoringSource["verify"]) {

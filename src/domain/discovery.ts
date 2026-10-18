@@ -1,4 +1,4 @@
-import { activeFeedFilterCount, defaultFeedDatePreset, defaultSortDirection, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
+import { activeFeedFilterCount, defaultFeedDatePreset, defaultSortDirection, pinnedDateSelection, resolveFeedDates, feedQueryHref, feedQueryRules, type FeedQuery } from "./feed-query.ts";
 import type { ReportingDate } from "./calendar.ts";
 import { publicPolicy } from "./public-policy.ts";
 
@@ -22,9 +22,7 @@ export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
     query.pageSize !== feedQueryRules.pageSize || range.dayCount !== 1 && query.dates.kind !== defaultFeedDatePreset;
   // Pin pagination/relative aliases to a dated collection. The plain home page stays /en.
   const home = query.dates.kind === defaultFeedDatePreset && query.page === 1;
-  const canonicalQuery: FeedQuery = filtered || home ? query : { ...query,
-    dates: range.dayCount === 1 ? { kind: "date", date: range.startDate }
-      : { kind: "range", from: range.startDate, to: range.endDate } };
+  const canonicalQuery: FeedQuery = filtered || home ? query : { ...query, dates: pinnedDateSelection(range) };
   return { path: feedQueryHref(canonicalQuery, today), eligible: !filtered, home, range };
 }
 

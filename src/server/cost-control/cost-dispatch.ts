@@ -1,6 +1,7 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { synchronous } from "../shared/authority-proof.ts";
 import type { CostJobPolicy } from "./cost-contract.ts";
 import type { CostTransportContext } from "./cost-gateway.ts";
 
@@ -11,10 +12,6 @@ export class CostDispatchError extends Error {
     super("Provider dispatch cannot proceed. Private authorization details are withheld.");
     this.name = "CostDispatchError"; this.reason = reason;
   }
-}
-function synchronous(value: unknown): unknown {
-  if (value instanceof Promise) void value.catch(() => undefined);
-  return value;
 }
 
 /** A final boundary inside the cost gateway's one-attempt callback. Synchronous

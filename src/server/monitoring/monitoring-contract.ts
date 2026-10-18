@@ -33,9 +33,7 @@ export const operationMetrics = ["available", "missing-runs", "partial-runs", "s
   "source-failures", "cutoff-misses", "missing-locks", "stale-data", "poller-missing", "unresolved-results",
   "poller-delayed", "result-backlog", "final-badge-delays", "delayed-results", "recovery-failures", "recovery-completed", "jobs-completed", "job-duration-ms", "job-duration-count",
   "backup-failures", "backup-stale", "restore-verification-pending", "odds-requests", "team-code-requests"] as const;
-export type OperationMetric = typeof operationMetrics[number];
 export const budgetCategories = ["football", "ai", "research", "database", "hosting", "monitoring", "network", "domain"] as const;
-export type BudgetCategory = typeof budgetCategories[number];
 const usd = z.string().max(39).refine((v) => { try { costUsdPicosFromDecimal(v); return true; } catch { return false; } });
 export const monitoringCostSchema = z.strictObject({ category: z.enum(budgetCategories), startsAt: jobInstant,
   endsAt: jobInstant, measuredAt: jobInstant, capUsd: usd, committedUsd: usd, invoicedUsd: usd.nullable(),

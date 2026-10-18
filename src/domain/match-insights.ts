@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
-import { matchSections, type MatchSection } from "./match-view.ts";
+import { matchSections } from "./match-view.ts";
 
 /**
  * Match insights are read-only projections of stored data: verified regulation results from
@@ -69,7 +69,6 @@ export const matchInsightsSchema = z.strictObject({ fixtureId: id, asOf: at,
 export type MatchInsights = z.infer<typeof matchInsightsSchema>;
 export const insightSectionResponseSchema = z.strictObject({ fixtureId: id, asOf: at, section: z.enum(matchSections), data: z.unknown() });
 export const insightSectionSchemas = insightSectionsSchema.shape;
-export type InsightSection<S extends MatchSection> = InsightSections[S];
 
 const totalsSchema = z.strictObject({ formHome: count, formAway: count, meetings: count, players: count, injuries: count, news: count, stats: count });
 export const insightsPreviewSchema = z.strictObject({ fixtureId: id, asOf: at, home: insightTeamSchema, away: insightTeamSchema,
@@ -77,7 +76,6 @@ export const insightsPreviewSchema = z.strictObject({ fixtureId: id, asOf: at, h
 export type InsightsPreview = z.infer<typeof insightsPreviewSchema>;
 
 export {
-  comparisonMetrics, formRecords, headToHead, injuryStatus, insightsPreview, metricValue,
+  formRecords, headToHead, injuryStatus, insightsPreview,
   pageOf, perMatchValue, previewHoldsSection, previewRules, resultFor, summarize, teamComparison,
 } from "./match-insight-presentation.ts";
-export type { ComparisonMetric, ComparisonRow } from "./match-insight-presentation.ts";

@@ -12,7 +12,8 @@ export function validTimeZone(value: unknown): value is string {
   if (cached !== undefined) return cached;
   let valid = false;
   try { new Intl.DateTimeFormat("en", { timeZone: value }); valid = true; } catch { /* Invalid IANA zone. */ }
-  if (validatedZones.size < 128) validatedZones.set(value, valid);
+  if (validatedZones.size >= 128) validatedZones.delete(validatedZones.keys().next().value!);
+  validatedZones.set(value, valid);
   return valid;
 }
 
@@ -23,7 +24,8 @@ function dateFormatter(zone: string) {
   if (!validTimeZone(zone)) throw new RangeError("Invalid browsing timezone.");
   const formatter = new Intl.DateTimeFormat("en-US", { timeZone: zone, calendar: "gregory", numberingSystem: "latn",
     era: "short", year: "numeric", month: "2-digit", day: "2-digit" });
-  if (formatters.size < 64) formatters.set(zone, formatter);
+  if (formatters.size >= 64) formatters.delete(formatters.keys().next().value!);
+  formatters.set(zone, formatter);
   return formatter;
 }
 

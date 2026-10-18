@@ -28,7 +28,8 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
         const t = policy.thresholds;
         const metrics = Object.fromEntries(operationMetrics.map((key) => [key, 0])) as MonitoringSnapshot["metrics"];
         metrics.available = 1;
-        Object.assign(metrics, assessBackupHealth(backupEvidence, at, policy.evidenceMaxAgeMs, options.backup?.verify));
+        Object.assign(metrics, assessBackupHealth(backupEvidence, at, policy.evidenceMaxAgeMs,
+          options.backup ? (evidence) => options.backup!.verify(evidence) : undefined));
         const runs = await tx.dailyRun.findMany({ where: { eatDate: { gte: new Date(`${firstDate}T00:00:00Z`), lte: new Date(`${today}T00:00:00Z`) } },
           select: { id: true, eatDate: true, createdAt: true, committedAt: true, partial: true, totalJobs: true, terminalJobs: true,
             jobs: { orderBy: { updatedAt: "desc" }, take: 1, select: { updatedAt: true } } }, take: 7 });

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { settlementStatuses } from "../../domain/market-settlement.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseResolvedForecastCandidate } from "../fallback/fallback-input.ts";
 import { historyHash, historyId, historyInstant, historyVersion } from "./history-input.ts";
@@ -17,7 +18,7 @@ const policy = z.strictObject({ version: z.literal(1), evidenceRef: ref,
   sources: z.strictObject({ ai: freshness, "api-football": freshness }) });
 const observation = z.strictObject({ provider: z.literal("api-football"), fixtureId: historyId,
   externalFixtureId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER), cycleId: historyId, kickoffAt: historyInstant,
-  status: z.enum(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties", "postponed", "canceled", "abandoned", "awarded", "unknown"]),
+  status: z.enum(settlementStatuses),
   retrievedAt: historyInstant, providerUpdatedAt: historyInstant.nullable(), actualStartedAt: historyInstant.nullable(), evidenceRef: ref,
 }).refine((value) => (value.providerUpdatedAt === null || value.providerUpdatedAt <= value.retrievedAt) &&
   (value.actualStartedAt === null || value.actualStartedAt <= value.retrievedAt));

@@ -57,7 +57,8 @@ export function createAnalyticsCollector({ database, config, now = Date.now }: {
           const visitNumber = visitor === undefined ? 1 : Number(visitor.sessionCount) + 1;
           if (visitor === undefined) await tx.analyticsVisitor.create({ data: { id: visitorId, firstSeenAt: at, lastSeenAt: at, sessionCount: 1 } });
           else await tx.analyticsVisitor.update({ where: { id: visitorId }, data: { lastSeenAt: at, sessionCount: visitNumber } });
-          const client = summarizeClient(context.userAgent, { mobileHint: context.mobileHint, touchPoints: payload.ctx.tp ?? null,
+          // Real browser user agents are far shorter; the cap bounds pattern work on this public endpoint.
+          const client = summarizeClient(context.userAgent.slice(0, 1024), { mobileHint: context.mobileHint, touchPoints: payload.ctx.tp ?? null,
             screenWidth: payload.ctx.sw ?? null });
           const location = resolveLocation(payload.ctx.tz, context.edge);
           const ownHost = context.host.toLowerCase().replace(/^www\./, "").split(":")[0] ?? "";

@@ -8,7 +8,8 @@ import { formLetters } from "@/domain/match-details";
 import type { MarketFamily } from "@/domain/markets";
 import { toUtcIsoString } from "@/domain/calendar";
 import { media, type AccentName, type OutcomeTone } from "@/styles/theme";
-import { BothTeamsIcon, GoalsIcon, ResultIcon, ShieldIcon } from "./details-icons";
+import { ShieldIcon } from "@/components/ui/icons";
+import { BothTeamsIcon, GoalsIcon, ResultIcon } from "./details-icons";
 import { Crest, FormLetters, desktop, scrollClearance, size, useStableDetails, type Messages } from "./details-ui";
 
 export const familyIcon: Record<MarketFamily, typeof ResultIcon> = {

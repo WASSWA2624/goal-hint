@@ -90,3 +90,22 @@ test('shared transport keeps malformed JSON and oversized UTF-8 payloads outside
     await assert.rejects(readJson('/api/matches/example', signal), (error) => error.code === 'invalid-response');
   }
 });
+
+test('shared transport still reads and cancels where AbortSignal.any is missing', async (t) => {
+  const original = globalThis.fetch, any = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+  delete AbortSignal.any;
+  t.after(() => { globalThis.fetch = original; Object.defineProperty(AbortSignal, 'any', any); });
+  assert.equal(AbortSignal.any, undefined);
+  globalThis.fetch = async (href, options) => {
+    assert.equal(options.signal.aborted, false);
+    return Response.json({ ok: true });
+  };
+  assert.deepEqual(await readJson('/api/matches/example', new AbortController().signal), { ok: true });
+  const controller = new AbortController(), reason = new DOMException('Refresh canceled.', 'AbortError');
+  globalThis.fetch = (href, { signal }) => new Promise((resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  });
+  const pending = readJson('/api/matches/example', controller.signal);
+  controller.abort(reason);
+  await assert.rejects(pending, (error) => error === reason);
+});

@@ -6,6 +6,7 @@ import type { CostJobPolicy, CostRequest, CostDenialReason } from "../cost-contr
 import { parseCostJob, parseCostRequest, parseCostEvidenceRef } from "../cost-control/cost-input.ts";
 import type { createCostGateway, CostTransportContext, CostTransportResponse } from "../cost-control/cost-gateway.ts";
 import { dispatchCostProvider } from "../cost-control/cost-dispatch.ts";
+import { synchronous } from "../shared/authority-proof.ts";
 import type { EvidenceAuthority, EvidenceContext, EvidencePolicy, EvidenceSource, EvidenceWorkflow } from "./evidence-contract.ts";
 import { EvidenceInputError, evidenceSerialize, freezeEvidence, parseEvidenceContext, parseEvidencePolicy, parseEvidenceSource } from "./evidence-input.ts";
 
@@ -30,10 +31,6 @@ export type ResearchEvidenceCollection = Readonly<{
   sources: readonly []; requestsDispatched: 0 | 1; requestCountUnknown: boolean;
 }>;
 type Gateway = Pick<ReturnType<typeof createCostGateway>, "execute">;
-function synchronous(value: unknown): unknown {
-  if (value instanceof Promise) void value.catch(() => undefined);
-  return value;
-}
 
 export function parseResearchEvidencePlan(input: unknown, context: EvidenceContext, policy: EvidencePolicy): ResearchEvidencePlan {
   try {

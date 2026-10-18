@@ -1,13 +1,15 @@
 import "server-only";
 
 import { z } from "zod";
-import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
+import type { UtcInstant } from "../../domain/calendar.ts";
 import { validateMarketSnapshot, type MarketSnapshot } from "../../domain/markets.ts";
 import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
 import { parseScoreDistribution, scoreDistributionSchema, type ScoreDistribution } from "../../domain/score-distribution.ts";
 import type { EvidenceAuthority, EvidenceContext, EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, parseEvidenceContext, parseEvidenceSnapshot } from "../evidence/evidence-input.ts";
 import { buildEvidenceSnapshot } from "../evidence/evidence-snapshot.ts";
+import { synchronous as sync, provenTrue as trusted } from "../shared/authority-proof.ts";
+import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { ModelAuthority, ModelVersion } from "./predictor-contract.ts";
 import { parseModelVersion } from "./predictor-input.ts";
 import { supportedPredictorVersions, usesScoreDistribution } from "./predictor-prompt.ts";
@@ -61,10 +63,6 @@ export function assertCurrentPredictorOutputAuthority(output: PredictorValidated
 const identity = z.string().regex(/^[a-f0-9]{64}$/u);
 const uuid = z.uuid();
 const count = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-const instant = z.number().int().refine((value) => {
-  try { utcInstantFromEpochMilliseconds(value); const year = new Date(value).getUTCFullYear(); return year >= 1000 && year <= 9999; }
-  catch { return false; }
-}).transform(utcInstantFromEpochMilliseconds);
 const reference = z.object({ sourceId: identity, factId: identity, claimId: identity, subjectTeamId: uuid.nullable() }).strict();
 const plain = z.string().min(1).max(4096).refine((value) => value === value.trim() &&
   !/[\u0000-\u001f\u007f<>`]/u.test(value) && !/(?:https?:\/\/|www\.|\]\s*\()/iu.test(value));
@@ -81,8 +79,6 @@ const scoreEnvelope = envelope.omit({ groups: true }).extend({ scoreDistribution
 type OutputEnvelope = z.infer<typeof envelope> | z.infer<typeof scoreEnvelope>;
 const metadataSchema = z.object({ generatedAt: instant.nullable(), retrievedAt: instant, providerUpdatedAt: instant.nullable(),
   evidenceRef: z.string().min(1).max(512).refine((value) => value === value.trim() && !/[\r\n\0]/u.test(value)) }).strict();
-function sync(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
-function trusted(check: () => boolean): boolean { try { return sync(check()) === true; } catch { return false; } }
 function authorized(model: ModelVersion, authority: ModelAuthority): boolean {
   try { return sync(authority.authorize(model)) === undefined && trusted(() => authority.verifyModel(model)) &&
     trusted(() => authority.verifyCalibration(model)) &&

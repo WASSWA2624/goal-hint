@@ -84,6 +84,8 @@ export function formatDuration(milliseconds: number): string {
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 }
 
+export const formatPercent = (value: number) => `${(value * 100).toFixed(value > 0 && value < 0.1 ? 1 : 0)}%`;
+
 const integer = new Intl.NumberFormat("en", { maximumFractionDigits: 0 });
 const decimal = new Intl.NumberFormat("en", { maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
@@ -95,7 +97,7 @@ export function formatValue(value: BreakdownRow[string] | undefined, kind: Colum
   switch (kind) {
     case "count": return compactNumbers && number >= 10_000 ? compact.format(number) : integer.format(number);
     case "decimal": return decimal.format(number);
-    case "percent": return `${(number * 100).toFixed(number > 0 && number < 0.1 ? 1 : 0)}%`;
+    case "percent": return formatPercent(number);
     case "duration": return formatDuration(number);
   }
 }

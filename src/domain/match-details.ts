@@ -6,6 +6,7 @@ import { publicPolicy } from "./public-policy.ts";
 import { bestPublishedFamily } from "./market-ranking.ts";
 import { selectedCardPrice } from "./match-card.ts";
 import { selectionOccurred } from "./market-settlement.ts";
+import { resultFor } from "./match-insight-presentation.ts";
 
 /**
  * Pure presentation rules for the match-details screen. Every value is read from the stored
@@ -111,11 +112,7 @@ export function exclusiveFamily(family: MarketFamily): boolean {
 export type FormLetter = "W" | "D" | "L";
 /** Chronological (oldest first) W/D/L letters for a team, from newest-first records. */
 export function formLetters(records: readonly InsightResult[], teamId: string, count: number): FormLetter[] {
-  return records.slice(0, count).map((record) => {
-    const home = record.home.id === teamId;
-    const scored = home ? record.homeGoals : record.awayGoals, conceded = home ? record.awayGoals : record.homeGoals;
-    return scored > conceded ? "W" : scored < conceded ? "L" : "D";
-  }).reverse();
+  return records.slice(0, count).map((record) => resultFor(record, teamId)).reverse();
 }
 
 /** Goals scored and conceded over newest-first records, and the scored series oldest first for a sparkline. */

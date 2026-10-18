@@ -2,17 +2,8 @@ import { MARKET_RULE_VERSION, isMarketSelection } from "./markets.ts";
 import type { MarketSelection } from "./markets.ts";
 
 /** Provider statuses must be mapped and verified before entering this domain. */
-export type SettlementStatus =
-  | "scheduled"
-  | "live"
-  | "finished-regulation"
-  | "finished-extra-time"
-  | "finished-penalties"
-  | "postponed"
-  | "canceled"
-  | "abandoned"
-  | "awarded"
-  | "unknown";
+export const settlementStatuses = ["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const;
+export type SettlementStatus = typeof settlementStatuses[number];
 
 export type CycleIneligibilityReason =
   | "postponed-cycle"

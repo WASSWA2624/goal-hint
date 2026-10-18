@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Clock, UtcInstant } from "../../domain/calendar.ts";
+import type { UtcInstant } from "../../domain/calendar.ts";
 import type { ApiFootballBounds, ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixture } from "../football/api-football-normalize.ts";
 import type { LifecycleObservation } from "../predictions/lifecycle-contract.ts";
@@ -59,4 +59,3 @@ export type ResultSyncStore = Readonly<{
   schedule(lease: PollLease, channel: "live" | "date", nextAt: number, failures: number, error: string | null): Promise<void>;
   attempts(lease: PollLease, entries: readonly Readonly<{ fixtureId: string; nextAt: number | null; failures: number; error: string | null }>[]): Promise<void>;
 }>;
-export type ResultSyncClock = Clock;

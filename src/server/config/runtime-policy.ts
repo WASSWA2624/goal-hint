@@ -4,6 +4,7 @@ import { z } from "zod";
 import { calendarRules } from "../../domain/calendar.ts";
 import { marketRules } from "../../domain/markets.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
+import { deepFreeze } from "../shared/deep-freeze.ts";
 
 type Environment = Readonly<Record<string, string | undefined>>;
 type DeepReadonly<T> = T extends (...args: never[]) => unknown ? T : T extends object
@@ -11,11 +12,7 @@ type DeepReadonly<T> = T extends (...args: never[]) => unknown ? T : T extends o
   : T;
 
 function freeze<T>(value: T): DeepReadonly<T> {
-  if (value !== null && typeof value === "object") {
-    for (const child of Object.values(value)) freeze(child);
-    Object.freeze(value);
-  }
-  return value as DeepReadonly<T>;
+  return deepFreeze(value) as DeepReadonly<T>;
 }
 
 /** Secrets require an explicit read and are redacted by JSON/string conversion. */

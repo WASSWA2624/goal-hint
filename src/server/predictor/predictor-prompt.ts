@@ -4,7 +4,8 @@ import { marketRules, marketSelections, type SourceGroup } from "../../domain/ma
 import { SCORE_DISTRIBUTION_VERSION, scoreDistributionRules } from "../../domain/score-distribution.ts";
 import type { EvidenceAuthority, EvidenceContext, EvidenceSnapshot, EvidenceSource } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, isSafeEvidenceLink, parseEvidenceSnapshot } from "../evidence/evidence-input.ts";
-import { buildEvidenceSnapshot } from "../evidence/evidence-snapshot.ts";
+import { buildEvidenceSnapshot, eligibleEvidenceBody } from "../evidence/evidence-snapshot.ts";
+import { provenTrue as proof } from "../shared/authority-proof.ts";
 import type { ModelVersion } from "./predictor-contract.ts";
 import { parseModelVersion } from "./predictor-input.ts";
 
@@ -56,15 +57,6 @@ const scoreInstructions = instructions
     "Return one joint regulation full-time and half-time score distribution, or null when unsupported. Every state describes the same possible match path; half-time scores cannot exceed its full-time scores. Do not assume independent halves, normalize missing mass, convert odds, or invent missing evidence.")
   .replace("Outcome probabilities in each complete family must sum to one within the supplied tolerance and obey the supplied cross-market constraints. Double chance is derived later by server code and must not be returned.",
     "Represented state probability plus explicit unrepresentedProbability must sum to one. Retain unsupported tail mass explicitly. Use null for both half-time counts when that joint information is unavailable. Server code derives market groups; do not return market probability groups or verbal confidence.");
-function synchronous(value: unknown): unknown {
-  if (value instanceof Promise) void value.catch(() => undefined);
-  return value;
-}
-function proof(operation: () => unknown): boolean { try { return synchronous(operation()) === true; } catch { return false; } }
-function eligibleBody(snapshot: EvidenceSnapshot) {
-  return { context: snapshot.context, policy: snapshot.policy, sources: snapshot.sources, facts: snapshot.facts,
-    missingness: snapshot.missingness, coverage: snapshot.coverage };
-}
 function authorize(snapshot: EvidenceSnapshot, model: ModelVersion, authority: PredictorPromptAuthority) {
   if (!proof(() => authority.verifyModel(model))) throw new PredictorPromptError("not-authorized");
   for (const source of snapshot.sources) if (!source.reuse.allowSummary || source.sourceUrl !== null && !isSafeEvidenceLink(source.sourceUrl) ||
@@ -79,7 +71,7 @@ function verifyEvidence(snapshot: EvidenceSnapshot, model: ModelVersion, authori
   try { rebuilt = buildEvidenceSnapshot({ context: snapshot.context, policy: snapshot.policy, sources: snapshot.sources }, authority.evidence); }
   catch { throw new PredictorPromptError("not-authorized"); }
   // Rehashed data alone cannot manufacture derived facts, sufficient coverage or citation bindings.
-  if (evidenceFingerprint(eligibleBody(snapshot)) !== evidenceFingerprint(eligibleBody(rebuilt))) throw new PredictorPromptError("invalid-evidence");
+  if (evidenceFingerprint(eligibleEvidenceBody(snapshot)) !== evidenceFingerprint(eligibleEvidenceBody(rebuilt))) throw new PredictorPromptError("invalid-evidence");
   if (!snapshot.coverage.sufficient || snapshot.sources.length === 0 || snapshot.facts.length === 0) throw new PredictorPromptError("insufficient-evidence");
   if (snapshot.sources.length > model.bounds.maxSources || snapshot.facts.length > model.bounds.maxFacts) throw new PredictorPromptError("input-limit");
 }
@@ -182,7 +174,7 @@ export function buildPredictorPrompt(input: Readonly<{ snapshot: EvidenceSnapsho
   authorize(snapshot, model, authority);
   try {
     const checked = buildEvidenceSnapshot({ context: snapshot.context, policy: snapshot.policy, sources: snapshot.sources }, authority.evidence);
-    if (evidenceFingerprint(eligibleBody(snapshot)) !== evidenceFingerprint(eligibleBody(checked))) throw new Error();
+    if (evidenceFingerprint(eligibleEvidenceBody(snapshot)) !== evidenceFingerprint(eligibleEvidenceBody(checked))) throw new Error();
   } catch { throw new PredictorPromptError("not-authorized"); }
   const result: PredictorPrompt = freezeEvidence({ instructions: selectedInstructions, inputJson, schema, sourceIds: snapshot.sources.map((source) => source.id),
     factIds: snapshot.facts.map((fact) => fact.id),

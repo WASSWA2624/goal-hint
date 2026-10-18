@@ -5,7 +5,7 @@ import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { Container } from "@/components/ui/layout";
-import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
+import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
 
 const desktop = media.desktop;
@@ -43,7 +43,8 @@ export const SkipLink = styled.a`
   position: fixed;
   inset-block-start: ${({ theme }) => theme.space.sm};
   inset-inline-start: ${({ theme }) => theme.space.md};
-  z-index: 30;
+  /* Above the sticky phone brand bar (30); below the filter popovers (35) and sheets. */
+  z-index: 31;
   padding: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
@@ -242,15 +243,7 @@ export function MoreMenu({ children, label, current = false, $tone = "blue", $mo
   const root = useRef<HTMLDetailsElement>(null);
   const popupId = useId();
   const [open, setOpen] = useState(false);
-  const dismiss = useCallback(() => {
-    const menu = root.current;
-    if (!menu) return;
-    const trigger = menu.querySelector("summary");
-    const restoreFocus = menu.contains(menu.ownerDocument.activeElement) && menu.ownerDocument.activeElement !== trigger;
-    menu.open = false;
-    setOpen(false);
-    if (restoreFocus) trigger?.focus({ preventScroll: true });
-  }, []);
+  const dismiss = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
   useOutsideDismiss({ enabled: open, root, onDismiss: dismiss });
   return <MoreMenuDetails ref={root} $tone={$tone} $mobile={$mobile} onToggle={(event) => setOpen(event.currentTarget.open)}
     onKeyDown={(event) => {

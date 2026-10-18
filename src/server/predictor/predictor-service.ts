@@ -7,6 +7,7 @@ import { parseCostJob, parseCostRequest } from "../cost-control/cost-input.ts";
 import type { CostDispatchWorkflow } from "../cost-control/cost-dispatch.ts";
 import type { EvidenceAuthority, EvidenceContext, EvidenceSnapshot, EvidenceSource } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint, freezeEvidence, parseEvidenceSnapshot } from "../evidence/evidence-input.ts";
+import { synchronous } from "../shared/authority-proof.ts";
 import type { ModelAuthority, ModelPin, ModelVersion } from "./predictor-contract.ts";
 import { parseModelPin } from "./predictor-input.ts";
 import { assertModelAuthorized, ModelRegistryError, type ModelRegistry } from "./predictor-registry.ts";
@@ -31,7 +32,6 @@ const adapterReasons = new Set<AdapterDenial>(["not-authorized", "invalid-respon
   "conflicting-policy", "clock-regression", "period-inactive", "budget-exhausted", "job-budget-exhausted", "request-limit", "token-limit",
   "billed-unit-limit", "time-limit", "fallback-time-reserved", "priority-wait", "already-attempted", "dispatch-expired", "invalid-permit",
   "timeout", "uncertain-usage", "unverified-usage", "conflicting-reconciliation"]);
-function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
 class PredictorFailure extends Error {
   readonly reason: PredictorReason;
   constructor(reason: PredictorReason) { super("Primary prediction could not complete. Private diagnostics are withheld."); this.reason = reason; }

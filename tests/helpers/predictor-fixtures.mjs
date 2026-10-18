@@ -3,7 +3,6 @@ import { createModelVersion } from "../../src/server/predictor/predictor-input.t
 
 // Configuration, permissions, windows and any evaluation artifact here are
 // synthetic. They do not select a real provider or establish forecast quality.
-export const PREDICTOR_NOW = Date.parse("2026-10-09T08:00:00.000Z");
 export const predictorHash = (value) => createHash("sha256").update(value).digest("hex");
 export function modelConfiguration(overrides = {}) {
   const base = {

@@ -8,6 +8,7 @@ import type { FallbackContext, FallbackResolutionAuthority, FallbackResolutionRe
 import { FallbackInputError, parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult } from "./fallback-input.ts";
 import { isProviderFallbackCurrent, parseProviderFallbackRequest, type createProviderFallbackAdapter } from "./fallback-adapter.ts";
 import { isPredictorForecastCurrent } from "../predictor/predictor-output.ts";
+import { synchronous } from "../shared/authority-proof.ts";
 import { fallbackRequestedGroups, resolveFallbackCandidate } from "./fallback-resolution.ts";
 
 export type FallbackRefreshRequest = Readonly<{
@@ -18,7 +19,6 @@ export type FallbackRefreshReason = "invalid-request" | "not-authorized" | "inel
 export type FallbackRefreshResult = (Exclude<FallbackResolutionResult, { status: "denied" }> & Readonly<{
   requestsDispatched: number; requestCountUnknown: boolean;
 }>) | Readonly<{ status: "denied"; reason: FallbackRefreshReason; requestsDispatched: number; requestCountUnknown: boolean }>;
-function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
 class RefreshFailure extends Error {
   readonly reason: FallbackRefreshReason;
   constructor(reason: FallbackRefreshReason) { super("Forecast candidate resolution could not complete. Private diagnostics are withheld."); this.reason = reason; }

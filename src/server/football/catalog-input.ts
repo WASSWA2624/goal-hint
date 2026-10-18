@@ -5,7 +5,9 @@ export { isSafeRemoteImageUrl as isSafeCatalogLogo } from "../../domain/remote-i
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
-import { settleMarketSelection } from "../../domain/market-settlement.ts";
+import { settleMarketSelection, settlementStatuses } from "../../domain/market-settlement.ts";
+import { deepFreeze as freeze } from "../shared/deep-freeze.ts";
+import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoints } from "./api-football-contract.ts";
 import { normalizeFixture, type NormalizedFixture, type NormalizedTeam, type NormalizedCompetition } from "./api-football-normalize.ts";
 import type { CatalogAuthority, CatalogImportRequest, CatalogPreparedBatch, CatalogProviderRow, CatalogSelection, CatalogTeamMapping } from "./catalog-contract.ts";
@@ -16,13 +18,6 @@ const nonnegative = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 // Reuse 007's safe integer identity range; MySQL stores these as unsigned BIGINT.
 const identity = positive;
 const season = positive.max(9999);
-const instant = z.number().int().refine((value) => {
-  try {
-    utcInstantFromEpochMilliseconds(value);
-    const year = new Date(value).getUTCFullYear();
-    return year >= 1000 && year <= 9999;
-  } catch { return false; }
-}).transform(utcInstantFromEpochMilliseconds);
 const date = z.string().refine((value) => {
   try { return Number(parseReportingDate(value).slice(0, 4)) >= 1000; } catch { return false; }
 });
@@ -87,8 +82,7 @@ const pair = z.object({ home: goal.nullable(), away: goal.nullable() }).strict()
 const score = z.object({ fixtureId: identity, providerStatus: z.enum(["FT", "AET", "PEN"]), sourceField: z.literal("score.fulltime"),
   period: z.literal("regulation-including-stoppage-time"), home: goal, away: goal, verified: z.boolean() }).strict();
 const fixtureSchema = z.object({ id: identity, homeTeam: teamSchema, awayTeam: teamSchema, competition: competitionSchema,
-  kickoff: instant.nullable(), status: z.enum(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties",
-    "postponed", "canceled", "abandoned", "awarded", "unknown"]), providerStatus: string(32).nullable(), elapsedMinutes: goal.nullable(),
+  kickoff: instant.nullable(), status: z.enum(settlementStatuses), providerStatus: string(32).nullable(), elapsedMinutes: goal.nullable(),
   stoppageMinutes: goal.nullable().optional(),
   regulationScore: score.nullable(), reportedGoals: pair, extraTimeScore: pair, penaltyScore: pair, source: sourceSchema,
 }).strict().refine((fixture) => fixture.homeTeam.id !== fixture.awayTeam.id && fixture.competition.season !== null);
@@ -116,13 +110,6 @@ const resultSchema = z.object({ status: z.enum(["complete", "partial", "failed"]
   provenance: z.array(z.unknown()), requestsDispatched: nonnegative, error: failureSchema.nullable(),
 }).strict();
 
-function freeze<T>(value: T): T {
-  if (value !== null && typeof value === "object") {
-    for (const child of Object.values(value)) freeze(child);
-    Object.freeze(value);
-  }
-  return value;
-}
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
   if (value !== null && typeof value === "object") return Object.fromEntries(

@@ -177,4 +177,3 @@ export function createMysqlEvidenceStore(database: DatabaseRuntime, options: Rea
   }
   return Object.freeze({ find, save, findInTransaction: stored });
 }
-export type MysqlEvidenceStore = ReturnType<typeof createMysqlEvidenceStore>;

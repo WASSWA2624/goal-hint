@@ -2,7 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { deepFreeze as freeze } from "../shared/deep-freeze.ts";
+import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { CostAccountState, CostAmount, CostAttempt, CostCategory, CostJobPolicy, CostPeriodPolicy, CostPermit, CostQuantities, CostRateCard, CostRequest, CostUsage } from "./cost-contract.ts";
 
 export const COST_USD_SCALE = 1_000_000_000_000n;
@@ -21,13 +22,6 @@ const duration = positive.max(2_147_483_647);
 const category = z.enum(["ai", "research"]);
 const identity = z.string().regex(/^[a-f0-9]{64}$/u);
 const label = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u);
-const instant = z.number().int().refine((value) => {
-  try {
-    utcInstantFromEpochMilliseconds(value);
-    const year = new Date(value).getUTCFullYear();
-    return year >= 1000 && year <= 9999;
-  } catch { return false; }
-}).transform(utcInstantFromEpochMilliseconds);
 const reference = z.string().min(1).max(512).refine((value) => {
   if (value !== value.trim() || /[\r\n\0]/u.test(value)) return false;
   if (!/^https?:/iu.test(value)) return true;
@@ -114,13 +108,6 @@ const attemptSchema = z.object({ request: requestSchema, requestFingerprint: ide
     value.reconciliations.every((entry) => entry.usage.observedAt <= value.completedAt!);
 });
 
-function freeze<T>(value: T): T {
-  if (value !== null && typeof value === "object") {
-    for (const child of Object.values(value)) freeze(child);
-    Object.freeze(value);
-  }
-  return value;
-}
 function parse<Output>(schema: z.ZodType<Output>, value: unknown): Output {
   const parsed = schema.safeParse(value);
   if (!parsed.success) throw new CostInputError();

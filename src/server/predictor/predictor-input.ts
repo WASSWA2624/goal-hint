@@ -1,8 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
-import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
+import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { ModelPin, ModelVersion, ModelVersionConfiguration } from "./predictor-contract.ts";
 
 export class PredictorInputError extends Error {
@@ -17,10 +17,6 @@ const reference = z.string().min(1).max(512).refine((value) => value === value.t
 const identity = z.string().regex(/^[a-f0-9]{64}$/u);
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const positive = count.positive();
-const instant = z.number().int().refine((value) => {
-  try { utcInstantFromEpochMilliseconds(value); const year = new Date(value).getUTCFullYear(); return year >= 1000 && year <= 9999; }
-  catch { return false; }
-}).transform(utcInstantFromEpochMilliseconds);
 const window = z.object({ startsAt: instant, endsAt: instant }).strict().refine((value) => value.startsAt < value.endsAt);
 const families = z.array(z.enum(["match-result", "total-goals", "both-teams-to-score"])).min(1).max(3)
   .refine((value) => new Set(value).size === value.length).transform((value) => [...value].sort());

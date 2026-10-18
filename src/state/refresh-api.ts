@@ -4,8 +4,7 @@ import type { FeedQuery } from "../domain/feed-query.ts";
 import type { MatchFeedResponse } from "../domain/match-feed.ts";
 import { failure, publicRefreshApi, readJson } from "./refresh-base.ts";
 
-export { consumeRefresh, failure, readJson } from "./refresh-base.ts";
-export type { RefreshError } from "./refresh-base.ts";
+export { consumeRefresh } from "./refresh-base.ts";
 
 /** Feed-only endpoints share the base cache and do not enter the initial match-detail bundle. */
 export const refreshApi = publicRefreshApi.injectEndpoints({

@@ -8,6 +8,7 @@ import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.
 import { API_FOOTBALL_CONTRACT_VERSION, ODDS_CONTRACT_VERSION, type ApiFootballBounds, type ApiFootballEndpoint,
   type ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixtureOdds } from "../football/api-football-normalize.ts";
+import { provenTrue as verified } from "../shared/authority-proof.ts";
 import { oddsFail, type OddsAuthority, type OddsImportRequest, type OddsPolicy, type OddsProvenance,
   type ValidatedOddsObservation } from "./odds-contract.ts";
 
@@ -79,9 +80,6 @@ export function oddsScopeKey(request: Pick<OddsImportRequest, "kind" | "date" | 
 export function oddsRequestParameters(request: OddsImportRequest): Readonly<Record<string, string>> {
   return request.kind === "prices" ? Object.freeze({ bookmaker: String(request.policy.bookmakerId), date: request.date!, timezone: "Africa/Kampala" })
     : Object.freeze({});
-}
-function verified(check: () => unknown): boolean {
-  try { const value = check(); if (value instanceof Promise) void value.catch(() => undefined); return value === true; } catch { return false; }
 }
 /** The authority accepts the request, its exact policy and the retention purpose before any provider call. */
 export function authorizeOddsRequest(input: OddsImportRequest, authority: OddsAuthority): OddsImportRequest {

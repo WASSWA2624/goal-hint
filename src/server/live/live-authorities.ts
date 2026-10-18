@@ -188,4 +188,3 @@ export function createLiveAuthorities(options: Readonly<{
   return Object.freeze({ catalog, selection, cutoff, lifecycle, publication, evidence, providerFallback, fallback, verifyFallbackRequest,
     refresh, results, verifyStatusResponse, odds });
 }
-export type LiveAuthorities = ReturnType<typeof createLiveAuthorities>;

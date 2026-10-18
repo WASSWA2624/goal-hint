@@ -137,8 +137,8 @@ Browser acceptance covers 320, 360, 390 and 430px, 200% root text, long names, s
 ([football catalog](football-catalog.md#team-codes-spare-quota-import)). Cards
 do not display it, following the owner's decision for full names.
 
-Use the existing root style provider. The desktop table uses `theme.border.cardRadius`,
-`theme.shadow.card` and the per-family `theme.color.market` hues (match result
+Use the existing root style provider. The desktop table uses the per-family
+`theme.color.market` hues (match result
 emerald `#00824A`, double chance violet `#7C3AED`, total goals blue `#2563EB`,
 BTTS orange `#C2410C`; clean tints share one lightness). Match result uses the
 lightest, most vivid emerald that still holds white text, and its gradient

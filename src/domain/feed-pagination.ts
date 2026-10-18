@@ -1,6 +1,6 @@
 import type { ReportingDate } from "./calendar.ts";
 import { FeedPaginationError } from "./feed-pagination-error.ts";
-import { feedQueryHref, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
+import { feedQueryHref, pinnedDateSelection, resolveFeedDates, serializeFeedQuery, type FeedQuery } from "./feed-query.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
 import { matchFeedResponseSchema, type MatchFeedRecord, type MatchFeedResponse } from "./match-feed.ts";
 
@@ -10,8 +10,7 @@ export const feedPaginationRules = Object.freeze({ maximumLoadedPages: 10 });
 export type LoadedFeed = Readonly<{ data: MatchFeedResponse; records: readonly MatchFeedRecord[]; firstPage: number; lastPage: number; pages: number }>;
 export function pinnedFeedQuery(query: FeedQuery, today: ReportingDate): FeedQuery {
   const range = resolveFeedDates(query, today);
-  return { ...query, dates: range.dayCount === 1 ? { kind: "date", date: range.startDate }
-    : { kind: "range", from: range.startDate, to: range.endDate } };
+  return { ...query, dates: pinnedDateSelection(range) };
 }
 export function feedPageHref(query: FeedQuery, today: ReportingDate, page: number): string {
   return feedQueryHref({ ...pinnedFeedQuery(query, today), page }, today);

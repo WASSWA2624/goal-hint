@@ -76,7 +76,7 @@ test("the root not-found page renders its styled shell even when Next omits the 
         compilerOptions: { paths: { "@/*": [`${source}/*`] } }, include: ["app/**/*.tsx"],
       })),
       writeFile(path.join(app, "layout.tsx"), 'export { default, metadata } from "@/app/layout";\n'),
-      writeFile(path.join(app, "not-found.tsx"), 'export { default } from "@/app/not-found";\n'),
+      writeFile(path.join(app, "not-found.tsx"), 'export { default, metadata } from "@/app/not-found";\n'),
       writeFile(path.join(app, "page.tsx"), 'export const dynamic = "force-dynamic";\nexport default function Page() { return <main>fixture</main>; }\n'),
     ]);
     await execFileAsync(process.execPath, [next, "build", fixture], {
@@ -89,6 +89,7 @@ test("the root not-found page renders its styled shell even when Next omits the 
     assert.equal(missing.status, 404);
     assert.match(missingHtml, /<html[^>]*lang="en"/u, "An unmatched address keeps the root layout.");
     assert.match(missingHtml, /Page not found/u);
+    assert.match(missingHtml, /<title>Page not found \| Goal Hint<\/title>/u, "A missing page must not inherit the home page title.");
     assert.equal(missingHtml.match(globalStyleMarker)?.length, 1, "The fallback must not nest a second provider under the root layout.");
 
     const rejected = await fetch(server.origin, { method: "POST", headers: fakeAction, body: "probe=1", redirect: "manual" });

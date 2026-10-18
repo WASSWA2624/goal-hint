@@ -1,6 +1,7 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { synchronous } from "../shared/authority-proof.ts";
 import type { EvidenceAuthority, EvidenceContext, EvidencePolicy, EvidenceSnapshot, EvidenceSource, EvidenceWorkflow } from "./evidence-contract.ts";
 import type { FootballEvidenceCollection, FootballEvidencePlan } from "./evidence-football.ts";
 import { parseFootballEvidencePlan } from "./evidence-football.ts";
@@ -10,7 +11,7 @@ import type { StoredEvidenceSnapshot } from "./evidence-mysql-store.ts";
 import { EvidenceStorageError } from "./evidence-mysql-store.ts";
 import { EvidenceInputError, evidenceFingerprint, evidenceSerialize, freezeEvidence, parseEvidenceContext, parseEvidencePolicy,
   parseEvidenceSnapshot, parseEvidenceSource } from "./evidence-input.ts";
-import { buildEvidenceSnapshot } from "./evidence-snapshot.ts";
+import { buildEvidenceSnapshot, eligibleEvidenceBody } from "./evidence-snapshot.ts";
 
 export type EvidenceCollectionRequest = Readonly<{
   requestId: string; context: EvidenceContext; policy: EvidencePolicy;
@@ -41,7 +42,6 @@ const researchReasons = new Set<ResearchDenialReason>(["unconfigured", "invalid-
   "conflicting-policy", "clock-regression", "period-inactive", "budget-exhausted", "job-budget-exhausted", "request-limit", "token-limit",
   "billed-unit-limit", "time-limit", "fallback-time-reserved", "priority-wait", "already-attempted", "dispatch-expired", "invalid-permit",
   "timeout", "uncertain-usage", "unverified-usage", "conflicting-reconciliation"]);
-function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
 class ServiceFailure extends Error {
   readonly reason: EvidenceServiceReason;
   constructor(reason: EvidenceServiceReason) { super("Fixture evidence collection could not complete. Private diagnostics are withheld."); this.reason = reason; }
@@ -65,10 +65,6 @@ export function parseEvidenceCollectionRequest(input: unknown): EvidenceCollecti
 }
 export function evidenceCollectionFingerprint(request: EvidenceCollectionRequest): string {
   const { requestId: _id, ...body } = request; void _id; return evidenceFingerprint(body);
-}
-function eligibleBody(snapshot: EvidenceSnapshot) {
-  return { context: snapshot.context, policy: snapshot.policy, sources: snapshot.sources, facts: snapshot.facts,
-    missingness: snapshot.missingness, coverage: snapshot.coverage };
 }
 
 /** One explicit collection intent; no scheduler, fixture selection, prediction or public publication. */
@@ -134,7 +130,7 @@ export function createEvidenceService(options: Readonly<{ authority: EvidenceAut
         if (evidenceFingerprint(snapshot.context) !== evidenceFingerprint(request.context) ||
           evidenceFingerprint(snapshot.policy) !== evidenceFingerprint(request.policy)) throw new ServiceFailure("conflicting-request");
         const checked = buildEvidenceSnapshot({ context: request.context, policy: request.policy, sources: snapshot.sources }, authority);
-        if (evidenceFingerprint(eligibleBody(checked)) !== evidenceFingerprint(eligibleBody(snapshot))) throw new ServiceFailure("reuse-not-permitted");
+        if (evidenceFingerprint(eligibleEvidenceBody(checked)) !== evidenceFingerprint(eligibleEvidenceBody(snapshot))) throw new ServiceFailure("reuse-not-permitted");
         check(); return Object.freeze({ status: "reused", snapshot, requestsDispatched: 0, requestCountUnknown: false, collectionIssues: Object.freeze([]),
           usage: { football: { requests: 0, uncertain: false }, research: { requests: 0, uncertain: false } } });
       }

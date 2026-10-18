@@ -7,6 +7,7 @@ import { settleMarketSelection } from "../../domain/market-settlement.ts";
 import { marketSelections } from "../../domain/markets.ts";
 import type { AcceptedMarket, MarketFamily, MarketSource } from "../../domain/markets.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
+import { synchronous, provenTrue as trusted } from "../shared/authority-proof.ts";
 import { EVALUATION_VERSION, evaluationSystems } from "./evaluation-contract.ts";
 import type { EvaluationAuthority, EvaluationCell, EvaluationCoverage, EvaluationDataset, EvaluationFixture, EvaluationForecast,
   EvaluationGateResult, EvaluationProtocol, EvaluationReport, MatchedComparison, MetricObservation, QualityGate } from "./evaluation-contract.ts";
@@ -14,8 +15,6 @@ import { EvaluationInputError, evaluationFixtureKey, parseEvaluationDataset, par
 import { reconstructBaselines } from "./evaluation-baselines.ts";
 import { evaluateMarketMetrics } from "./evaluation-metrics.ts";
 
-function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
-function trusted(operation: () => unknown): boolean { try { return synchronous(operation()) === true; } catch { return false; } }
 const issuedReports = new WeakMap<object, Readonly<{ protocolId: string; datasetId: string; check(): void }>>();
 /** A checksum proves integrity; only an original trusted harness result can be archived. */
 export function assertEvaluationReportIssued(value: unknown, protocol: EvaluationProtocol, dataset: EvaluationDataset): void {

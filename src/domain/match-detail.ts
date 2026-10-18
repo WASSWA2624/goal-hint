@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicForecastSchema, publicVoidReasonSchema } from "./fixture-snapshot.ts";
+import { marketFamilySchema, publicForecastSchema, publicVoidReasonSchema } from "./fixture-snapshot.ts";
 import { dailyRunProgressSchema, matchFeedRecordSchema } from "./match-feed.ts";
 
 export const matchDetailRules = Object.freeze({ defaultLimit: 10, maximumLimit: 20, maximumSequence: 4_294_967_295 });
@@ -30,7 +30,7 @@ export const detailSnapshotSchema = publicForecastSchema.safeExtend({
   analysis: z.strictObject({ state: z.enum(["available", "withheld"]), reasons: z.array(explanation).max(4), uncertainty: explanation.nullable(),
     limitedNews: z.boolean(), sources: z.array(source).max(501) }).refine((v) => v.state === "available"
       ? v.reasons.length >= 2 && v.uncertainty !== null : v.reasons.length === 0 && v.uncertainty === null),
-  outcomes: z.array(z.strictObject({ family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
+  outcomes: z.array(z.strictObject({ family: marketFamilySchema,
     cycleId: id, revisionId: id, selection: z.string().max(32), status: z.enum(["correct", "incorrect", "pending", "void"]),
     reason: z.enum(["verified-result", "awaiting-result", "result-correction", "void-cycle"]), explanation: z.string().max(512),
     settledAt: at.nullable(), correctedAt: at.nullable(), voidedAt: at.nullable() })).max(4),
@@ -52,7 +52,7 @@ const probabilityText = z.string().regex(/^0\.\d{12}$/u);
  * "market-implied": never an AI or fallback estimate, never mixed into forecast groups, no bookmaker link. */
 export const detailOddsGroupSchema = z.strictObject({
   label: z.literal("market-implied"),
-  family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
+  family: marketFamilySchema,
   basis: z.enum(["bookmaker", "median"]),
   method: z.string().regex(/^[a-z0-9-]+-v\d+$/u),
   overround: z.string().regex(/^\d\.\d{12}$/u),

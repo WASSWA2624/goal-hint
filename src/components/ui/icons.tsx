@@ -1,12 +1,12 @@
 import type { ReactNode, SVGProps } from "react";
 
-type IconProps = Omit<SVGProps<SVGSVGElement>, "children">;
+export type IconProps = Omit<SVGProps<SVGSVGElement>, "children">;
 
 /**
  * Decorative 24px stroke icons; adjacent text or accessible names carry meaning.
  * A shared module (no "use client"): Server Components render plain SVG instead of client references.
  */
-function Icon({ children, ...props }: IconProps & { children: ReactNode }) {
+export function Icon({ children, ...props }: IconProps & { children: ReactNode }) {
   return <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2}
     strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" {...props}>{children}</svg>;
 }
@@ -21,7 +21,6 @@ export const ChevronRightIcon = (props: IconProps) => <Icon {...props}><path d="
 /** "Go to start/end": a chevron against a bar, for first and last page controls. */
 export const FirstPageIcon = (props: IconProps) => <Icon {...props}><path d="M7 6v12M17 6l-6 6 6 6" /></Icon>;
 export const LastPageIcon = (props: IconProps) => <Icon {...props}><path d="M17 6v12M7 6l6 6-6 6" /></Icon>;
-export const ArrowRightIcon = (props: IconProps) => <Icon {...props}><path d="M5 12h14M13 6l6 6-6 6" /></Icon>;
 export const CalendarIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="5" width="18" height="16" /><path d="M7 3v4M17 3v4M3 11h18" /></Icon>;
 export const SlidersIcon = (props: IconProps) => <Icon {...props}><path d="M4 7h4M12 7h8M4 17h8M16 17h4M8 4v6M16 14v6" /></Icon>;
 export const CheckIcon = (props: IconProps) => <Icon {...props}><path d="m5 12.5 4.5 4.5L19 7.5" /></Icon>;

@@ -73,8 +73,6 @@ export interface GoalHintTheme {
     readonly action: string;
     readonly actionHover: string;
     readonly tableHeader: string;
-    /** Thin decorative edge on feature panels. */
-    readonly edge: string;
     readonly page: string;
   };
   /**
@@ -134,8 +132,6 @@ export interface GoalHintTheme {
       readonly section: string;
       /** 18px: page titles. */
       readonly title: string;
-      /** 20px: hero figures such as the detail score. */
-      readonly hero: string;
     };
     readonly weight: {
       readonly body: number;
@@ -154,10 +150,8 @@ export interface GoalHintTheme {
     readonly md: string;
     readonly lg: string;
     readonly xl: string;
-    readonly "2xl": string;
   };
   readonly breakpoint: {
-    readonly sm: string;
     readonly md: string;
     readonly lg: string;
     readonly xl: string;
@@ -165,7 +159,6 @@ export interface GoalHintTheme {
   readonly border: {
     readonly width: string;
     readonly radius: string;
-    readonly cardRadius: string;
     readonly pillRadius: string;
     readonly focusWidth: string;
     readonly focusOffset: string;
@@ -182,7 +175,6 @@ export interface GoalHintTheme {
     readonly compactHeight: string;
   };
   readonly shadow: {
-    readonly card: string;
     readonly cardHover: string;
   };
 }
@@ -260,7 +252,6 @@ export const lightTheme: GoalHintTheme = {
       emphasis: "0.875rem",
       section: "1rem",
       title: "1.125rem",
-      hero: "1.25rem",
     },
     weight: {
       body: brandTokens.typography.bodyWeight,
@@ -270,12 +261,11 @@ export const lightTheme: GoalHintTheme = {
     },
     lineHeight: { body: 1.6, heading: 1.25 },
   },
-  space: { xs: "4px", sm: "8px", md: "16px", lg: "24px", xl: "32px", "2xl": "48px" },
-  breakpoint: { sm: "30rem", md: "48rem", lg: "64rem", xl: "80rem" },
+  space: { xs: "4px", sm: "8px", md: "16px", lg: "24px", xl: "32px" },
+  breakpoint: { md: "48rem", lg: "64rem", xl: "80rem" },
   border: {
     width: "1px",
     radius: "0",
-    cardRadius: "0",
     pillRadius: "999px",
     focusWidth: "3px",
     focusOffset: "3px",
@@ -286,7 +276,6 @@ export const lightTheme: GoalHintTheme = {
     action: "#0066F5",
     actionHover: "#0054CC",
     tableHeader: "linear-gradient(90deg, #06235B 0%, #003B91 100%)",
-    edge: "linear-gradient(90deg, #0066F5 0%, #00B9F2 100%)",
     page: "#EFF8FF",
   },
   // Shared blue branding at every viewport; translucent diagonal bands stay decorative.
@@ -312,7 +301,6 @@ export const lightTheme: GoalHintTheme = {
     shadow: "none",
   },
   shadow: {
-    card: "none",
     cardHover: "none",
   },
 };
@@ -369,7 +357,6 @@ export const darkTheme: GoalHintTheme = {
     action: "#0066F5",
     actionHover: "#0054CC",
     tableHeader: "#04203C",
-    edge: "linear-gradient(90deg, #0066F5 0%, #00B9F2 100%)",
     page: "#03111F",
   },
   header: {

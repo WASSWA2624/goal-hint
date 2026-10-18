@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { breadcrumbStructuredData, canonicalUrl, feedDiscovery, homeStructuredData, matchPageIndexable, resolveDiscoveryPolicy, serializeStructuredData, sitemapIndexXml, sitemapPage, websiteStructuredData } from '../src/domain/discovery.ts';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
@@ -225,4 +226,19 @@ test('the sitemap index escapes locations and the dated feed heading names its d
   assert.equal(feedHeading(query({ when: 'today' }), today, messages), "Today's Matches");
   assert.equal(feedHeading(query({ date: '2026-10-08' }), today, messages), 'Football Predictions · Thu, Oct 8, 2026');
   assert.equal(feedHeading(query({ when: 'next-7-days' }), today, messages), 'Football Predictions');
+});
+
+test('the SEO harness runs the production proxy matcher, which skips APIs, framework assets and files', () => {
+  // Next reads `config` statically, so the harness keeps its own copy; it must stay identical.
+  const matcher = file => {
+    const found = /matcher:\s*\[\s*(["'])(.*?)\1\s*\]/s.exec(readFileSync(new URL(file, import.meta.url), 'utf8'));
+    assert.ok(found, file);
+    return found[2];
+  };
+  const literal = matcher('../src/proxy.ts');
+  assert.equal(matcher('./helpers/rendering/seo/proxy.ts'), literal);
+  // Decode the string literal's escapes (`\\.` is the regex `\.`); Next applies the matcher to the whole path.
+  const pattern = new RegExp(`^${JSON.parse(`"${literal}"`)}$`);
+  for (const path of ['/en', '/en/matches/x/a-vs-b', '/badges/team/1/64']) assert.match(path, pattern);
+  for (const path of ['/api/matches', '/_next/static/x.js', '/brand/x.svg', '/flags/gb.svg', '/sitemap.xml']) assert.doesNotMatch(path, pattern);
 });

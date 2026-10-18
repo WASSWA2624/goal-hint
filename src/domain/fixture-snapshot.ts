@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import { isMarketFamily, validateMarketSnapshot, MARKET_RULE_VERSION, type AcceptedMarket } from "./markets.ts";
-import { isPlayedFinalStatus, type SettlementOutcomeStatus, type SettlementStatus } from "./market-settlement.ts";
+import { isPlayedFinalStatus, settlementStatuses, type SettlementOutcomeStatus } from "./market-settlement.ts";
+import { publicPolicy } from "./public-policy.ts";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { teamCodePattern } from "./team-name.ts";
 
@@ -27,7 +28,7 @@ const team = z.strictObject({
   /** Only server-approved, credential-free catalog URLs may populate this field. */
   logoUrl: z.string().refine(isSafeRemoteImageUrl, "Unsafe logo URL.").nullable().optional(),
 });
-const statuses = ["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const satisfies readonly SettlementStatus[];
+const statuses = settlementStatuses;
 const outcomeStatuses = ["correct", "incorrect", "pending", "void", "unavailable"] as const satisfies readonly SettlementOutcomeStatus[];
 const displayedOutcome = z.strictObject({
   cycleId: identity, revisionId: identity, selection: z.string(), status: z.enum(outcomeStatuses),
@@ -44,14 +45,16 @@ export const fixtureCycleSchema = z.strictObject({
   state: z.enum(["open", "closed", "void"]), mode: z.enum(["current", "locked", "void"]),
   ordinal: z.number().int().positive(), lockedAt: instant.nullable(), voidReason: publicVoidReasonSchema.nullable(),
 }).refine((value) => value.mode === ({ open: "current", closed: "locked", void: "void" } as const)[value.state], "Cycle mode must match its state.");
+/** The published market families, in policy order. */
+export const marketFamilySchema = z.enum(publicPolicy.markets);
 export const unavailableMarketSchema = z.strictObject({
-  family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
+  family: marketFamilySchema,
   reason: z.enum(["not-published", "no-locked-selection", "unsupported", "insufficient-data"]),
 });
 /** Market price for exactly one published pick (prompt 052). Information only, never a betting prompt.
  * An observation field: it changes without a fixture version bump and never fills another family's price. */
 export const fixturePriceSchema = z.strictObject({
-  family: z.enum(["match-result", "double-chance", "total-goals", "both-teams-to-score"]),
+  family: marketFamilySchema,
   selection: z.string().min(1).max(64),
   /** Decimal price, two places, rounded half-up once when stored. */
   price: z.string().regex(/^[1-9]\d{0,3}\.\d{2}$/u),

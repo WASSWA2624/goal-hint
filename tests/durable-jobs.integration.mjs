@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFile, fork } from 'node:child_process';
+import { fork } from 'node:child_process';
+import { execFile } from './helpers/command-runtime.mjs';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';

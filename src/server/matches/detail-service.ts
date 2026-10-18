@@ -41,7 +41,8 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
           // Market-implied odds groups are mutable observation data, read outside the immutable revision cache.
           const odds = await storedFixtureOddsGroups(tx, id, providerOdds);
           const currentRevisionId = fixture.forecast?.revisionId ?? null;
-          let display = fixture.cycleId ? await storedCycleDisplay(tx, fixture.cycleId) : null;
+          // History selections always replace the applicable display, so only the default read loads it.
+          let display = !query.cycle && !query.revision && fixture.cycleId ? await storedCycleDisplay(tx, fixture.cycleId) : null;
           if (query.cycle) {
             const owned = await tx.predictionCycle.findFirst({ where: { id: query.cycle, fixtureId: id }, select: { id: true } });
             if (!owned) throw new MatchFeedError("not-found");

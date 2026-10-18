@@ -14,7 +14,6 @@ const actor = { actor: label(128), reason: label(2000), evidenceRef: label(512) 
 export const cutoffPayloadSchema = cutoffTargetSchema.extend({ scheduleVersion: z.number().int().positive().max(4_294_967_295),
   recoveryKey: historyHash.nullable(), recoveryProof: z.strictObject(actor).nullable() })
   .refine((value) => (value.recoveryKey === null) === (value.recoveryProof === null));
-export type CutoffPayload = z.infer<typeof cutoffPayloadSchema>;
 export function parseCutoff<Value>(schema: z.ZodType<Value>, input: unknown): Value {
   try { return freezeEvidence(schema.parse(input)); } catch { return cutoffFail("invalid-request"); }
 }

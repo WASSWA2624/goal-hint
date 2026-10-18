@@ -1,18 +1,16 @@
 import "server-only";
 
 import { z } from "zod";
-import { getPublicationDeadline, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { getPublicationDeadline } from "../../domain/calendar.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { parseResolvedForecastCandidate } from "../fallback/fallback-input.ts";
+import { fourDigitYearInstant as historyInstant } from "../shared/utc-instant.ts";
 import { historyFail, type AppendRevisionInput, type ChangeCycleInput, type CreateCycleInput, type HistoryAuditSnapshot, type StoredCycle } from "./history-contract.ts";
 
 export const historyId = z.uuid();
 export const historyHash = z.string().regex(/^[a-f0-9]{64}$/u);
 export const historyVersion = z.number().int().positive().max(4_294_967_295);
-export const historyInstant = z.number().int().refine((value) => {
-  try { utcInstantFromEpochMilliseconds(value); const year = new Date(value).getUTCFullYear(); return year >= 1000 && year <= 9999; }
-  catch { return false; }
-}).transform(utcInstantFromEpochMilliseconds);
+export { historyInstant };
 const label = (max: number) => z.string().trim().min(1).max(max).refine((value) => !/[\u0000-\u001f\u007f]/u.test(value));
 const actor = { actor: label(128), reason: label(2000), evidenceRef: label(512) };
 const references = z.strictObject({ state: z.enum(["open", "closed", "void"]), currentSetId: historyId.nullable(),

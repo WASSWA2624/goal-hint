@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { analyticsRules } from "@/domain/analytics-settings";
-import { informationHref } from "@/domain/navigation";
+import { informationHref } from "@/domain/navigation-paths";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { media } from "@/styles/theme";
 import { getConsentState, getServerConsentState, rememberLanding, setConsent, startTracker, stopTracker, subscribeConsent,

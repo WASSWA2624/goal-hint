@@ -63,10 +63,10 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
         const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale);
         const sql = feedSql(query, range, competitionIds, providerOdds, search);
-        const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.joins} WHERE ${sql.scope}`);
+        const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.cohortJoins} WHERE ${sql.scope}`);
         // Options cover the entire date cohort, independently of applied filters/page.
         const leagueRows = await tx.$queryRaw<{ id: string; name: string | null; country: string | null; logoUrl: string | null; fixtures: bigint }[]>(Prisma.sql`
-          SELECT l.id, l.name, l.country, l.logoUrl, COUNT(*) AS fixtures ${sql.joins} WHERE ${sql.scope}
+          SELECT l.id, l.name, l.country, l.logoUrl, COUNT(*) AS fixtures ${sql.cohortJoins} WHERE ${sql.scope}
           GROUP BY l.id, l.name, l.country, l.logoUrl ORDER BY l.name, l.country, l.id LIMIT 1001`);
         const leagues = leagueRows.map((row) => ({ id: row.id, name: row.name, country: row.country,
           logoUrl: isSafeRemoteImageUrl(row.logoUrl) ? row.logoUrl : null, fixtures: Number(row.fixtures) }));

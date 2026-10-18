@@ -26,5 +26,3 @@ export const publicPolicy = Object.freeze({
     providerOdds: false,
   }),
 } as const);
-
-export type PublicPolicy = typeof publicPolicy;

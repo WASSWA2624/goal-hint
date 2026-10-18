@@ -1,14 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
+import { settlementStatuses } from "../../domain/market-settlement.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { lifecycleFail, type LifecycleInput, type LifecycleObservation, type LifecyclePolicy } from "./lifecycle-contract.ts";
 import { historyId, historyInstant } from "./history-input.ts";
 
 const label = (max: number) => z.string().trim().min(1).max(max).refine((value) => !/[\u0000-\u001f\u007f]/u.test(value));
 const externalId = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-const statuses = z.enum(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties",
-  "postponed", "canceled", "abandoned", "awarded", "unknown"]);
+const statuses = z.enum(settlementStatuses);
 const goal = z.number().int().min(0).max(1000).nullable();
 const pair = z.strictObject({ home: goal, away: goal });
 export const lifecycleObservationSchema = z.strictObject({

@@ -7,6 +7,7 @@ import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import type { LookupFunction } from "node:net";
+import { synchronous } from "../shared/authority-proof.ts";
 
 export type EvidenceSourceNetworkPolicy = Readonly<{
   sourceId: string;
@@ -49,7 +50,6 @@ const denied = (reason: EvidenceNetworkReason, requests = 0): Denied => Object.f
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const positive = (value: unknown, ceiling: number): value is number => Number.isSafeInteger(value) && Number(value) > 0 && Number(value) <= ceiling;
 const nonnegative = (value: unknown, ceiling: number): value is number => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= ceiling;
-function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
 
 /** No limits, permissions, source names or query parameters are inferred. */
 export function parseEvidenceSourceNetworkPolicy(value: unknown): EvidenceSourceNetworkPolicy {

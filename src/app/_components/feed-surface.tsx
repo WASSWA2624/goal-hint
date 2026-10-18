@@ -6,6 +6,7 @@ import styled from "styled-components";
 import { FeedActiveFilterSummary, FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
 import { FeedFilterActions, FeedFilters, type FeedFilterDraftStatus } from "@/components/match/feed-filters";
 import { FeedFilterToolbar, FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
+import { plainClick } from "@/components/match/filter-parts";
 import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
 import { FeedPagination } from "@/components/match/feed-pagination";
@@ -138,10 +139,8 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
       {!visible && <ResultsToolbar query={query} today={today} total={null} first={0} last={0} />}
       {result.error && <EmptyState title={messages.text(result.error === "rate-limited" ? "feed.rateLimitedTitle" : "feed.unavailableTitle")}
         description={messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")}
-        action={<ButtonLink href={href} prefetch={false} variant="secondary" onClick={(event) => {
-          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          event.preventDefault(); apply(query);
-        }}>{messages.text("feed.retry")}</ButtonLink>} />}
+        action={<ButtonLink href={href} prefetch={false} variant="secondary"
+          onClick={(event) => plainClick(event, () => apply(query))}>{messages.text("feed.retry")}</ButtonLink>} />}
       {result.error && visible && <Stack $gap="sm">
         <PreviousNote>{messages.text("feed.filters.previous")}</PreviousNote>
         <FeedAppliedSummary query={visible.query} leagues={visible.data.leagues} />

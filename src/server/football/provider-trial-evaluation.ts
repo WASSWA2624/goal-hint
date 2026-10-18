@@ -6,6 +6,7 @@ import type { Clock, UtcInstant } from "../../domain/calendar.ts";
 import { settleMarketSelection } from "../../domain/market-settlement.ts";
 import { validateMarketGroup, marketRules } from "../../domain/markets.ts";
 import { launchOddsGroup, launchOddsMapping, ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
+import { deepFreeze as freeze } from "../shared/deep-freeze.ts";
 import type { NormalizedFixture, NormalizedFallbackPrediction, NormalizedCompetition, NormalizedFixtureOdds,
   NormalizedOddsCatalogEntry, ProviderLogo } from "./api-football-normalize.ts";
 import type { TrialEvidence, TrialFinding, TrialFreshness, TrialJournal, TrialObservation, TrialReport, TrialRequirement, TrialTask } from "./provider-trial-contract.ts";
@@ -41,13 +42,6 @@ const instant = (value: unknown): value is UtcInstant => {
 };
 function trusted<Data>(verify: ((value: Data) => boolean) | undefined, value: Data): boolean {
   try { return verify?.(value) === true; } catch { return false; }
-}
-function freeze<Data>(value: Data): Data {
-  if (value !== null && typeof value === "object") {
-    for (const child of Object.values(value)) freeze(child);
-    Object.freeze(value);
-  }
-  return value;
 }
 function groupBy<Data, Key>(values: readonly Data[], keyFor: (value: Data) => Key): Map<Key, Data[]> {
   const groups = new Map<Key, Data[]>();

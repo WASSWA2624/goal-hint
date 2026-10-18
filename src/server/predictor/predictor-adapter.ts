@@ -8,6 +8,7 @@ import { CostDispatchError, dispatchCostProvider, type CostDispatchWorkflow } fr
 import type { createCostGateway, CostTransportContext, CostTransportResponse } from "../cost-control/cost-gateway.ts";
 import type { EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { parseEvidenceSnapshot, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
+import { synchronous } from "../shared/authority-proof.ts";
 import type { ModelAuthority, ModelPin, ModelVersion } from "./predictor-contract.ts";
 import { parseModelPin, parseModelVersion } from "./predictor-input.ts";
 import { assertPreparedPredictorPrompt, type BuiltPredictorPrompt } from "./predictor-prompt.ts";
@@ -33,10 +34,6 @@ export type PrimaryAiAdapterResult = Readonly<{
   status: "denied"; reason: CostDenialReason | "not-authorized" | "invalid-response" | "unavailable";
   requestsDispatched: 0 | 1; requestCountUnknown: boolean;
 }>;
-function synchronous(value: unknown): unknown {
-  if (value instanceof Promise) void value.catch(() => undefined);
-  return value;
-}
 
 export function createPrimaryAiAdapter(options: Readonly<{
   runtimePolicy: RuntimePolicy; verifyEvidence: EvidenceVerifier; modelAuthority: ModelAuthority;

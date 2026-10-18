@@ -4,6 +4,7 @@ export const extendedMarketSources = ["ai-score-distribution", "market-implied"]
 export type ExtendedMarketSource = typeof extendedMarketSources[number];
 export const extendedSettlementStatuses = ["correct", "incorrect", "half-win", "half-loss", "push", "pending", "void", "unavailable"] as const;
 export type ExtendedSettlementStatus = typeof extendedSettlementStatuses[number];
+export const settledExtendedStatuses = ["correct", "incorrect", "half-win", "half-loss", "push"] as const;
 const text = z.string().min(1).refine((value) => value === value.trim() && !/[\p{Cc}<>]/u.test(value));
 const label = text.max(128), selectionLabel = text.max(512);
 const probability = z.number().finite().min(0).max(1);

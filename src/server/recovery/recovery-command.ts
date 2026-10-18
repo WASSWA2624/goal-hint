@@ -29,10 +29,11 @@ export async function runRecoveryCommand(args: readonly string[], signal: AbortS
     createRecoveryBinding?: (policy: RuntimePolicy) => RecoveryBinding | Promise<RecoveryBinding> };
   if (typeof bindingModule.createRecoveryBinding !== "function") return recoveryFail("invalid-request");
   const runtime = getRuntimePolicy(), binding = await bindingModule.createRecoveryBinding(runtime);
-  if (!binding?.authority || await binding.authority.authorize(mode === "inspect" || mode === "plan" || mode === "audit" ? "inspect" : "repair") !== true)
-    return recoveryFail("unauthorized");
-  const database = createDatabase(runtime, binding.verifyDatabaseEvidence);
+  let database: DatabaseRuntime | undefined;
   try {
+    if (!binding?.authority || await binding.authority.authorize(mode === "inspect" || mode === "plan" || mode === "audit" ? "inspect" : "repair") !== true)
+      return recoveryFail("unauthorized");
+    database = createDatabase(runtime, binding.verifyDatabaseEvidence);
     if (await database.readiness() !== "ready") return recoveryFail("unavailable");
     const queue = createMysqlJobQueue(database), watchdog = createRecoveryWatchdog({ database, queue,
       policy: binding.policy, authority: binding.authority, services: await binding.createServices(database) });
@@ -50,5 +51,5 @@ export async function runRecoveryCommand(args: readonly string[], signal: AbortS
       return watchdog.enqueue(plan);
     }
     return watchdog.inspect(parseRecovery(recoveryScope, value), cursor);
-  } finally { await binding.close?.().catch(() => {}); await database.disconnect(); }
+  } finally { await binding?.close?.().catch(() => {}); await database?.disconnect(); }
 }

@@ -90,7 +90,9 @@ test('SQL filters matching fixtures before pagination and ranks exact, then wide
   assert.match(sql.order.sql, /^\(\(\(sm\.home \| sm\.away \| sm\.competition\) >> 16\) & \?\)=\? DESC, BIT_COUNT\(.*\) DESC, GREATEST\(sm\.home >> 48, sm\.away >> 48, sm\.competition >> 48\) DESC, /su);
   assert.match(sql.order.sql, /m\.selectedProbability IS NULL ASC, m\.selectedProbability ASC, f\.kickoff ASC, f\.id ASC$/u);
   assert.match(sql.exact.sql, /^\(\(\(sm\.home \| sm\.away \| sm\.competition\) >> 16\) & \?\)=\?$/u);
-  assert.doesNotMatch(`${sql.scope.sql} ${sql.joins.sql}`, /sm\.|sf\./u, 'Known counts and league options retain the full date cohort.');
+  assert.doesNotMatch(`${sql.scope.sql} ${sql.joins.sql} ${sql.cohortJoins.sql}`, /sm\.|sf\./u, 'Known counts and league options retain the full date cohort.');
+  assert.ok(sql.joins.sql.startsWith(sql.cohortJoins.sql), 'filtered reads extend the cohort joins');
+  assert.doesNotMatch(`${sql.scope.sql} ${sql.cohortJoins.sql}`, /\bm\.|\bop\.|MarketPrediction|FixtureOddsPrice/u, 'cohort counts never evaluate the shown pick');
   assert.throws(() => feedSql(query, range, [39]), unavailable);
   assert.throws(() => feedSql(query, range, [39], false, { ...search, query: 'other' }), unavailable);
   const ordinary = feedSql(parseFeedQuery({ date: '2026-10-09' }, { today: '2026-10-09' }), range, [39]);

@@ -8,7 +8,6 @@ import { randomId } from "@/components/ui/random-id";
  * Typed text, query strings and fragments are never collected; see docs/analytics.md.
  */
 
-export type { ConsentState } from "@/domain/analytics-consent";
 type StoredConsent = Readonly<{ v: 1; choice: ConsentChoice; at: number }>;
 type StoredSession = Readonly<{ id: string; last: number }>;
 

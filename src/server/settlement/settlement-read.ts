@@ -48,6 +48,13 @@ export async function storedSettlementProjection(tx: Tx, fixtureId: string, cycl
   return { fixture, result, cycles };
 }
 
+/** Shared void-reason eligibility for the four-family, goal-market and market-implied settlement paths. */
+export function cycleEligibilityFor(cycle: Pick<StoredCycle, "state" | "voidReason">): CycleEligibility {
+  return cycle.state !== "void" ? { eligible: true } : { eligible: false,
+    reason: cycle.voidReason === "formal-postponement" ? "postponed-cycle"
+      : cycle.voidReason === "locked-cutoff-invalidated" ? "cutoff-invalidated" : "ineligible-cycle" };
+}
+
 /** Shared audit projection for individual reads and bounded reporting batches. */
 export function projectSettlementCycle(fixture: FootballFixture, result: StoredFixtureResult | null, issue: string | null,
   cycle: StoredCycle, lock: StoredRevision | null, recorded: ReadonlyMap<MarketFamily, SettlementRevision>) {
@@ -55,9 +62,7 @@ export function projectSettlementCycle(fixture: FootballFixture, result: StoredF
   const resultUsable = fixtureResultMatchesCanonical(fixture, result, issue);
   if (cycle.fixtureId !== fixtureId || cycle.lockedSetId !== (lock?.id ?? null) ||
     lock && (lock.cycleId !== cycle.id || lock.fixtureId !== fixtureId)) return historyFail("invalid-state");
-  const eligibility: CycleEligibility = cycle.state !== "void" ? { eligible: true } : { eligible: false,
-    reason: cycle.voidReason === "formal-postponement" ? "postponed-cycle"
-      : cycle.voidReason === "locked-cutoff-invalidated" ? "cutoff-invalidated" : "ineligible-cycle" };
+  const eligibility = cycleEligibilityFor(cycle);
   const markets = [];
   for (const family of families) {
     const item = lock?.candidate.markets[family];

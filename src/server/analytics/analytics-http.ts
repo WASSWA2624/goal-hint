@@ -56,9 +56,30 @@ const empty = (status: number) => new Response(null, { status, headers: privateH
 export function readCookie(request: Request, name: string): string | undefined {
   for (const part of (request.headers.get("cookie") ?? "").split(";")) {
     const index = part.indexOf("=");
-    if (index > 0 && part.slice(0, index).trim() === name) return decodeURIComponent(part.slice(index + 1).trim());
+    if (index > 0 && part.slice(0, index).trim() === name) {
+      // A malformed escape still counts as present; the raw value never verifies as a session token.
+      const raw = part.slice(index + 1).trim();
+      try { return decodeURIComponent(raw); } catch { return raw; }
+    }
   }
   return undefined;
+}
+
+/** Reads at most `limit` body bytes, or null when the body is larger; chunked requests carry no Content-Length to check first. */
+async function readLimitedBody(request: Request, limit: number): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!request.body) return new Uint8Array(0);
+  const reader = request.body.getReader(), chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) return null;
+      chunks.push(value);
+    }
+    return new Uint8Array(Buffer.concat(chunks));
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
 
 export function cookie(config: AnalyticsConfig, name: string, value: string, maxAgeSeconds: number): string {
@@ -105,7 +126,10 @@ export function createCollectHandler(services: () => Promise<AnalyticsServices> 
     const userAgent = headers.get("user-agent");
     if (isBotUserAgent(userAgent)) return empty(204);
     if (Number(headers.get("content-length") ?? 0) > analyticsRules.maximumBodyBytes) return empty(413);
-    const body = await request.text();
+    const bytes = await readLimitedBody(request, analyticsRules.maximumBodyBytes);
+    if (bytes === null) return empty(413);
+    // Decoded exactly as request.text() would (BOM and invalid UTF-8 handling included).
+    const body = await new Response(bytes).text();
     if (Buffer.byteLength(body, "utf8") > analyticsRules.maximumBodyBytes) return empty(413);
     let payload;
     try { payload = collectPayloadSchema.parse(JSON.parse(body)); } catch { return empty(400); }
@@ -142,7 +166,11 @@ export function createLoginHandler(services: () => Promise<AnalyticsServices> = 
     if (Number(request.headers.get("content-length") ?? 0) > 4_096) return empty(413);
     let username = "", password = "";
     try {
-      const form = await request.formData();
+      const bytes = await readLimitedBody(request, 4_096);
+      if (bytes === null) return empty(413);
+      // Parsed exactly as request.formData() would, from the same bytes and Content-Type.
+      const type = request.headers.get("content-type");
+      const form = await new Response(bytes, type === null ? {} : { headers: { "content-type": type } }).formData();
       username = String(form.get("username") ?? "").slice(0, 128);
       password = String(form.get("password") ?? "").slice(0, 1024);
     } catch { return redirect(`${analyticsRules.dashboardPath}?login=invalid`); }
@@ -260,9 +288,14 @@ export function createSettingsHandlers(services: () => Promise<AnalyticsServices
       if (body.action === "retention") {
         if (!isRetentionDays(body.days)) return json({ error: "invalid-query", message: "Retention must be 1-1095 whole days." }, 400);
         await resolved.retention!.setRetentionDays(body.days);
-        return json({ ...(await describe(resolved, request)), purged: await resolved.retention!.purge() });
+        // Purge first so the response reports the purge that just ran.
+        const purged = await resolved.retention!.purge();
+        return json({ ...(await describe(resolved, request)), purged });
       }
-      if (body.action === "purge") return json({ ...(await describe(resolved, request)), purged: await resolved.retention!.purge() });
+      if (body.action === "purge") {
+        const purged = await resolved.retention!.purge();
+        return json({ ...(await describe(resolved, request)), purged });
+      }
       return json({ error: "invalid-query", message: "Unknown settings action." }, 400);
     }, services),
   };

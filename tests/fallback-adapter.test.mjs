@@ -310,6 +310,25 @@ test("bounded job capacity never evicts a spent allowance and silently renews it
   assert.equal(state.network.length, 1);
 });
 
+test("bounded job capacity frees jobs past their publication deadline without reviving them", async () => {
+  const state = fallbackAdapterSetup({ maxJobs: 1 });
+  assert.equal((await state.fallback.collect(state.request())).status, "candidate");
+  const closedAt = getPublicationDeadline(state.context.kickoffAt);
+  const later = evidenceContext(undefined, { kickoffAt: state.context.kickoffAt + 24 * 60 * 60 * 1000 });
+  const next = state.request({ context: later, jobId: evidenceHash("job-after-publication-deadline"),
+    bounds: fallbackBounds({ deadlineAt: closedAt + 10_000 }) });
+  assert.equal((await state.fallback.collect(next)).reason, "request-budget-exhausted");
+  state.setNow(closedAt);
+  state.setCanonical(fallbackCanonical(later, { retrievedAt: closedAt - 1000 }));
+  // The closed job is refused before the ledger lookup, exactly as before pruning.
+  assert.equal((await state.fallback.collect(state.request())).reason, "timeout");
+  assert.equal(state.network.length, 1);
+  const result = await state.fallback.collect(next);
+  assert.equal(result.status, "candidate");
+  assert.equal(result.requestsDispatched, 1);
+  assert.equal(state.network.length, 2);
+});
+
 test("tightened job limits cannot later be loosened back to the earlier allowance", async () => {
   const state = fallbackAdapterSetup();
   const first = state.request({ bounds: fallbackBounds({ cacheMaxAgeMs: 10_000 }) });

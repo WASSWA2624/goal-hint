@@ -240,6 +240,16 @@ test("consent-gated analytics records, reports, authenticates and expires agains
       }
       assert.match((await retention.state()).lastPurgedAt, /^2027-01-18T07:00:00/);
     });
+
+    await t.test("referrers are stored without www. and the site's own host is never recorded as one", async () => {
+      const external = randomUUID(), internal = randomUUID();
+      await collector.collect(visit(randomUUID(), external, [page("/en", { ref: "www.bbc.co.uk" })]), context());
+      await collector.collect(visit(randomUUID(), internal, [page("/en", { ref: "goalhint.com" })]), context());
+      const [externalRow] = await database.query((client) => client.$queryRaw`SELECT channel, referrerHost FROM AnalyticsSession WHERE id = ${external}`);
+      assert.deepEqual({ ...externalRow }, { channel: "referral", referrerHost: "bbc.co.uk" });
+      const [internalRow] = await database.query((client) => client.$queryRaw`SELECT channel, referrerHost FROM AnalyticsSession WHERE id = ${internal}`);
+      assert.deepEqual({ ...internalRow }, { channel: "direct", referrerHost: null });
+    });
   } finally {
     await database?.disconnect().catch(() => {});
     await instance.stop();

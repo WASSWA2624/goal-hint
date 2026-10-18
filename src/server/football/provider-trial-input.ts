@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { deepFreeze as freeze } from "../shared/deep-freeze.ts";
 import { trialCases, PROVIDER_TRIAL_VERSION, type TrialPlan } from "./provider-trial-contract.ts";
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
@@ -59,10 +60,6 @@ const planSchema = z.object({
   tasks: z.array(z.object({ id: slug, case: z.enum(trialCases), operation, maxRequests: positive, fixtureTaskId: slug.optional(), notBefore: instant.optional() }).strict()).max(1000),
   evidence: z.array(evidence).max(200),
 }).strict();
-function freeze<T>(value: T): T {
-  if (value !== null && typeof value === "object") { for (const child of Object.values(value)) freeze(child); Object.freeze(value); }
-  return value;
-}
 export class TrialInputError extends Error {
   constructor() { super("Invalid provider trial input; check the documented schema. Private input values are withheld."); this.name = "TrialInputError"; }
 }

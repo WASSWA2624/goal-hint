@@ -38,9 +38,12 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   const candidatePriceJoin = providerOdds ? Prisma.sql`LEFT JOIN FixtureOddsPrice bp ON bp.fixtureId=f.id
       AND bp.marketKey=b.family AND bp.selection=b.selection AND bp.stale=FALSE` : Prisma.empty;
   const candidatePriceOrder = providerOdds ? Prisma.sql`bp.displayHundredths DESC,` : Prisma.empty;
-  const joins = Prisma.sql`FROM FootballFixture f JOIN FootballTeam h ON h.id=f.homeTeamId JOIN FootballTeam a ON a.id=f.awayTeamId
+  // The cohort joins alone serve the known count and league options: each shown-pick join below matches a full primary
+  // key, (setId, family) and (fixtureId, marketKey, selection), so it never adds or removes a cohort row.
+  const cohortJoins = Prisma.sql`FROM FootballFixture f JOIN FootballTeam h ON h.id=f.homeTeamId JOIN FootballTeam a ON a.id=f.awayTeamId
     JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
-    LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id
+    LEFT JOIN PredictionCycle c ON c.id=f.activeCycleId AND c.fixtureId=f.id`;
+  const joins = Prisma.sql`${cohortJoins}
     LEFT JOIN MarketPrediction m ON m.setId=${displayedSet} AND m.family=(SELECT b.family FROM MarketPrediction b
       ${candidatePriceJoin}
       WHERE b.setId=${displayedSet} AND b.family IN (${markets}) AND b.available=TRUE
@@ -88,7 +91,7 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
     ? Prisma.sql`m.selectedProbability IS NULL ASC, m.selectedProbability ${descending ? Prisma.sql`DESC` : Prisma.sql`ASC`}, f.kickoff ASC, f.id ASC`
     : descending ? Prisma.sql`f.kickoff DESC, f.id DESC` : Prisma.sql`f.kickoff ASC, f.id ASC`;
   // `searchJoin` belongs to the filtered reads only: known counts and league options keep the whole date cohort.
-  return { joins, searchJoin, scope, where: Prisma.join(filters, " AND "), order: ranking ? Prisma.sql`${ranking}, ${order}` : order, exact };
+  return { joins, cohortJoins, searchJoin, scope, where: Prisma.join(filters, " AND "), order: ranking ? Prisma.sql`${ranking}, ${order}` : order, exact };
 }
 
 const feedSearchWords = 16;

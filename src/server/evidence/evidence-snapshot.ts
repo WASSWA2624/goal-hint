@@ -4,14 +4,10 @@ import type { EvidenceAuthority, EvidenceBuildRequest, EvidenceContext, Evidence
   EvidenceFlag, EvidenceKind, EvidencePolicy, EvidenceSnapshot, EvidenceSource } from "./evidence-contract.ts";
 import { EvidenceInputError, evidenceFingerprint, evidenceSerialize, evidenceSnapshotHash, freezeEvidence,
   parseEvidenceContext, parseEvidencePolicy, parseEvidenceSnapshot, parseEvidenceSource } from "./evidence-input.ts";
+import { synchronous, provenTrue as trusted } from "../shared/authority-proof.ts";
 
 const prepared = new WeakMap<EvidenceSnapshot, EvidenceAuthority>();
 const kinds: readonly EvidenceKind[] = ["history", "form", "rest", "venue", "statistic", "injury", "lineup", "xg", "news"];
-function synchronous(value: unknown): unknown {
-  if (value instanceof Promise) void value.catch(() => undefined);
-  return value;
-}
-function trusted(operation: () => boolean): boolean { try { return synchronous(operation()) === true; } catch { return false; } }
 function authorize(context: EvidenceContext, policy: EvidencePolicy, authority: EvidenceAuthority) {
   try {
     if (synchronous(authority.authorize(context)) !== undefined || !trusted(() => authority.verifyContext(context)) ||
@@ -149,6 +145,11 @@ function coverageFor(context: EvidenceContext, policy: EvidencePolicy, sources: 
   if (independentNewsSources === 0) missingness.push({ kind: "news", subjectTeamId: null, reason: "unavailable" });
   return { missingness, coverage: { sufficient: reasons.length === 0, independentNewsSources, limitedNews,
     labels: limitedNews ? ["Limited news coverage" as const] : [], reasons: reasons.sort() } };
+}
+/** The fields that make two evidence snapshots equivalent for reuse and prompting. */
+export function eligibleEvidenceBody(snapshot: EvidenceSnapshot) {
+  return { context: snapshot.context, policy: snapshot.policy, sources: snapshot.sources, facts: snapshot.facts,
+    missingness: snapshot.missingness, coverage: snapshot.coverage };
 }
 /** All retrieved strings remain passive data; this function has no network, tool or credential capability. */
 export function buildEvidenceSnapshot(request: EvidenceBuildRequest, authority: EvidenceAuthority): EvidenceSnapshot {

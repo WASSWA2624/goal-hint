@@ -1,6 +1,7 @@
 import type { DetailSnapshot, MatchDetailResponse } from "./match-detail.ts";
 import type { MarketFamily } from "./markets.ts";
 import { isSafeEvidenceUrl } from "./evidence-url.ts";
+import { marketRow } from "./match-details.ts";
 import type { TextKey } from "../i18n/messages.ts";
 
 /** The visible pick keeps its own revision's provenance and applicability, even when another revision exists. */
@@ -20,11 +21,8 @@ export function detailRecordNotices(data: MatchDetailResponse): readonly TextKey
 
 /** Use this one revision exclusively; never supplement it from fixture.forecast. */
 export function detailMarket(data: MatchDetailResponse, family: MarketFamily) {
-  const snapshot = data.snapshot, item = snapshot?.markets.find((entry) => entry.market.family === family) ?? null;
-  const outcome = item ? snapshot?.outcomes.find((entry) => entry.family === family && entry.selection === item.market.selection &&
-    entry.revisionId === snapshot.revisionId && entry.cycleId === snapshot.cycleId) ?? null : null;
-  return { item, outcome, unavailableReason: (snapshot?.unavailableMarkets ?? data.fixture.unavailableMarkets)
-    .find((entry) => entry.family === family)?.reason ?? "not-published" };
+  const { item, outcome, reason } = marketRow(data, family);
+  return { item, outcome, unavailableReason: reason };
 }
 /** Defense at the HTML boundary reuses the same offline rules as the resolver. */
 export function detailAnalysis(analysis: DetailSnapshot["analysis"]): DetailSnapshot["analysis"] {

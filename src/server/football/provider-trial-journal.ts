@@ -6,6 +6,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import { isAbsolute, join, parse, resolve } from "node:path";
 import { utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
+import { deepFreeze as freeze } from "../shared/deep-freeze.ts";
 import { PROVIDER_TRIAL_VERSION, type TrialJournal, type TrialPlan, type TrialTaskState } from "./provider-trial-contract.ts";
 import { parseTrialPlan } from "./provider-trial-input.ts";
 
@@ -67,13 +68,6 @@ function snapshot<T>(value: T): T {
   const encoded = canonical(value);
   if (Buffer.byteLength(encoded, "utf8") > MAX_FILE_BYTES) fail("invalid-journal");
   try { return JSON.parse(encoded) as T; } catch { return fail("invalid-journal"); }
-}
-function freeze<T>(value: T): T {
-  if (value && typeof value === "object") {
-    for (const child of Object.values(value)) freeze(child);
-    Object.freeze(value);
-  }
-  return value;
 }
 function hashPlan(plan: TrialPlan): string { return createHash("sha256").update(canonical(plan)).digest("hex"); }
 

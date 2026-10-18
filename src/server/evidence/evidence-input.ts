@@ -2,7 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { deepFreeze as freezeEvidence } from "../shared/deep-freeze.ts";
+import { fourDigitYearInstant as instant } from "../shared/utc-instant.ts";
 import type { EvidenceContext, EvidencePolicy, EvidenceSource, EvidenceSnapshot, EvidenceKind } from "./evidence-contract.ts";
 import { isSafeEvidenceUrl } from "./evidence-network.ts";
 
@@ -21,10 +22,6 @@ const label = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/u
 const reference = z.string().min(1).max(512).refine((value) => value === value.trim() && !/[\r\n\0]/u.test(value));
 const text = z.string().max(4096).refine((value) => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value));
 const short = text.max(512);
-const instant = z.number().int().refine((value) => {
-  try { utcInstantFromEpochMilliseconds(value); const year = new Date(value).getUTCFullYear(); return year >= 1000 && year <= 9999; }
-  catch { return false; }
-}).transform(utcInstantFromEpochMilliseconds);
 const version = z.bigint().positive().max(18_446_744_073_709_551_615n);
 const team = z.object({ teamId: uuid, externalId: positive }).strict();
 const contextSchema = z.object({ fixtureId: uuid, fixtureVersion: version, provider: z.literal("api-football"), externalFixtureId: positive,
@@ -99,10 +96,7 @@ const snapshotSchema = z.object({ version: z.literal(1), id: identity, hash: ide
     labels: z.array(z.literal("Limited news coverage")), reasons: z.array(label) }).strict(),
 }).strict();
 
-export function freezeEvidence<Value>(value: Value): Value {
-  if (value !== null && typeof value === "object") { for (const child of Object.values(value)) freezeEvidence(child); Object.freeze(value); }
-  return value;
-}
+export { freezeEvidence };
 function parsed<Value>(schema: z.ZodType<Value>, value: unknown): Value {
   try { return freezeEvidence(schema.parse(value)); } catch { throw new EvidenceInputError(); }
 }

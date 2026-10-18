@@ -5,6 +5,7 @@ import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { ApiFootballBounds, ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixtureOdds, NormalizedOddsCatalogEntry } from "../football/api-football-normalize.ts";
 import type { OddsQuery } from "../football/api-football-adapter.ts";
+import { provenTrue as verified } from "../shared/authority-proof.ts";
 import { oddsFail, type OddsAuthority, type OddsBatchBody, type OddsFixtureOutcome, type OddsImportRequest,
   type OddsImportSummary, type ValidatedOddsObservation } from "./odds-contract.ts";
 import { assertValidatedOdds, authorizeOddsRequest, validateOddsObservation } from "./odds-input.ts";
@@ -18,9 +19,6 @@ export type OddsProvider = Readonly<{
 }>;
 const MAX_RETAINED_COVERAGE = 1_000;
 
-function verified(check: () => unknown): boolean {
-  try { const value = check(); if (value instanceof Promise) void value.catch(() => undefined); return value === true; } catch { return false; }
-}
 /** Pure receipt classification; prices for unknown, started, rescheduled or non-scheduled fixtures are never applied. */
 export function classifyOddsRow(row: NormalizedFixtureOdds, target: OddsFixtureTarget | undefined): OddsFixtureOutcome {
   if (!target) return "unknown-fixture";

@@ -4,7 +4,7 @@ import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { assertOperationAllowed, type RuntimePolicy } from "../config/runtime-policy.ts";
 import { createMysqlPublicCacheStore } from "../cache/mysql-public-cache.ts";
-import { createDatabase, type DatabaseRuntime } from "../database/client.ts";
+import { createDatabase } from "../database/client.ts";
 import { createEvidenceService } from "../evidence/evidence-service.ts";
 import { createMysqlEvidenceStore } from "../evidence/evidence-mysql-store.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
@@ -106,7 +106,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
-      gateway, authorize: () => assertOperationAllowed(policy, "football", verify), cacheCapacity: 1024, ...fetcher,
+      gateway, authorize: () => assertOperationAllowed(policy, "football", verify), ...fetcher,
       verifyLogo: authorities.catalog.verifyLogo, verifyRegulationScore: authorities.catalog.verifyRegulationScore,
       // API-Football documents up to 20 IDs per /fixtures?ids request.
       batchEvidence: { maximumIds: 20, evidenceRef: "api-football-documentation-v3:fixtures-ids-maximum-20" },
@@ -247,4 +247,3 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
   } catch (error) { await database.disconnect().catch(() => {}); throw error; }
 }
 export type LiveRuntime = Awaited<ReturnType<typeof createLiveRuntime>>;
-export type LiveDatabase = DatabaseRuntime;

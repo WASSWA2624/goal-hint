@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import { getPublicationDeadline, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import { MARKET_RULE_VERSION } from "../../domain/markets.ts";
+import { settlementStatuses } from "../../domain/market-settlement.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence, parseEvidenceContext } from "../evidence/evidence-input.ts";
 import { parseFallbackMarketSnapshot } from "../fallback/fallback-input.ts";
 import { parseModelVersion } from "../predictor/predictor-input.ts";
@@ -70,8 +71,7 @@ const forecast = z.object({ version: label, modelVersionId: hash.nullable(), cal
   providerUpdatedAt: instant.nullable(), evidence: z.array(proof).max(10_000), markets }).strict();
 const score = z.union([z.object({ verified: z.literal(true), period: z.literal("regulation-including-stoppage-time"), home: count, away: count }).strict()
   .refine((value) => Number.isSafeInteger(value.home + value.away)), z.object({ verified: z.literal(false) }).strict()]);
-const settlement = z.object({ status: z.enum(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties",
-  "postponed", "canceled", "abandoned", "awarded", "unknown"]), cycleEligibility: z.union([
+const settlement = z.object({ status: z.enum(settlementStatuses), cycleEligibility: z.union([
     z.object({ eligible: z.literal(true) }).strict(), z.object({ eligible: z.literal(false), reason: z.enum(["postponed-cycle", "cutoff-invalidated", "ineligible-cycle"]) }).strict(),
   ]), regulationScore: score.nullable() }).strict();
 const fixture = z.object({ context, competitionId: uuid, forecastAt: instant, manifestAt: instant,

@@ -22,3 +22,13 @@ export function useOutsideDismiss({ enabled, root, onDismiss }: {
     return () => ownerDocument.removeEventListener("click", outside, true);
   }, [enabled, root, onDismiss]);
 }
+
+/** Closes a native <details> popover and returns focus to its summary only when focus was inside the popup. */
+export function closeDetails(menu: HTMLDetailsElement | null, onClose: () => void) {
+  if (!menu) return;
+  const trigger = menu.querySelector("summary");
+  const restoreFocus = menu.contains(menu.ownerDocument.activeElement) && menu.ownerDocument.activeElement !== trigger;
+  menu.open = false;
+  onClose();
+  if (restoreFocus) trigger?.focus({ preventScroll: true });
+}

@@ -2,7 +2,7 @@ import "server-only";
 
 import { publicExtendedMarketSchema, type PublicExtendedMarket, type PublicExtendedMarketSnapshot } from "../../domain/extended-markets.ts";
 import { predictionRuleLabel } from "../../domain/prediction-label.ts";
-import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
+import { freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { historyFail, type CycleDisplay } from "./history-contract.ts";
 import { historyId } from "./history-input.ts";
@@ -92,6 +92,3 @@ export async function readCurrentExtendedMarkets(tx: Tx, fixtureId: string, opti
   const display = fixture?.activeCycleId ? await storedCycleDisplay(tx, fixture.activeCycleId) : null;
   return display ? readExtendedMarketSnapshot(tx, display, options) : null;
 }
-
-/** Client cache/version identity includes source-qualified markets without changing legacy DTO bytes. */
-export const extendedMarketSnapshotFingerprint = (snapshot: PublicExtendedMarketSnapshot) => evidenceFingerprint(snapshot);

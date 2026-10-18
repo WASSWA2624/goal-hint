@@ -149,4 +149,3 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
     limiter: routed,
   });
 }
-export type QuotaRouter = ReturnType<typeof createQuotaRouter>;

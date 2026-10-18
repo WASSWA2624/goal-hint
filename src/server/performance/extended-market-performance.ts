@@ -1,18 +1,17 @@
 import "server-only";
 
 import { z } from "zod";
+import { extendedMarketSources, extendedSettlementStatuses, type ExtendedMarketSource, type ExtendedSettlementStatus } from "../../domain/extended-markets.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { historyFail } from "../predictions/history-contract.ts";
 import { historyInstant } from "../predictions/history-input.ts";
 
-export const extendedSettlementStatuses = ["correct", "incorrect", "half-win", "half-loss", "push", "pending", "void", "unavailable"] as const;
-export type ExtendedSettlementStatus = typeof extendedSettlementStatuses[number];
-export type ExtendedPredictionSource = "ai-score-distribution" | "market-implied";
+export type ExtendedPredictionSource = ExtendedMarketSource;
 const marketKey = z.string().max(128).regex(/^(?:goal|implied):[a-z0-9:._-]+$/u);
 const querySchema = z.strictObject({ from: historyInstant, to: historyInstant,
-  source: z.enum(["ai-score-distribution", "market-implied"]).optional(),
+  source: z.enum(extendedMarketSources).optional(),
   marketKeys: z.array(marketKey).min(1).max(256).refine((keys) => new Set(keys).size === keys.length).optional(),
 }).refine(({ from, to }) => to > from && to - from <= 366 * 86_400_000);
 export type ExtendedMarketPerformanceQuery = Readonly<{
@@ -30,7 +29,7 @@ export type ExtendedMarketPerformanceRow = Readonly<{
 }>;
 const count = z.union([z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   z.bigint().nonnegative().max(BigInt(Number.MAX_SAFE_INTEGER))]).transform(Number);
-const rowSchema = z.strictObject({ source: z.enum(["ai-score-distribution", "market-implied"]), marketKey,
+const rowSchema = z.strictObject({ source: z.enum(extendedMarketSources), marketKey,
   ruleVersion: z.string().min(1).max(64), status: z.enum(extendedSettlementStatuses), count, binaryCount: count,
 }).refine((row) => row.binaryCount <= row.count && (row.binaryCount === 0 || ["correct", "incorrect"].includes(row.status)) &&
   (row.source === "ai-score-distribution" ? row.marketKey.startsWith("goal:") : row.marketKey.startsWith("implied:")));

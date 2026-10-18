@@ -1,14 +1,12 @@
 import { addReportingDays, parseReportingDate, type ReportingDate } from "./calendar.ts";
-import { resolveLocale } from "../i18n/locales.ts";
 import { feedDefaults, parseFeedStatus, type FeedStatus } from "./feed-query.ts";
+import { homeHref, type InformationPage } from "./navigation-paths.ts";
 
 export { feedDefaults } from "./feed-query.ts";
-export type { FeedStatus } from "./feed-query.ts";
+export { homeHref, informationHref, informationPages, type InformationPage } from "./navigation-paths.ts";
 export type FeedView = Readonly<{ date: ReportingDate; status: FeedStatus }>;
 export type FeedEntry = "today" | "results";
 export type AppSection = FeedEntry | "live" | "slips";
-export const informationPages = ["help", "privacy", "terms", "contact"] as const;
-export type InformationPage = (typeof informationPages)[number];
 export type NavigationLocation = AppSection | InformationPage;
 
 /** Both entry points select the same feed. Results starts with yesterday's finals. */
@@ -21,10 +19,6 @@ export function parseFeedView(date: unknown, status?: string | string[]): FeedVi
   return { date: parseReportingDate(date), status: parseFeedStatus(status) };
 }
 
-export function homeHref(locale?: string): string {
-  return `/${resolveLocale(locale)}`;
-}
-
 export function slipsHref(locale?: string): string {
   return `${homeHref(locale)}/slips`;
 }
@@ -33,10 +27,6 @@ export function feedHref(view: FeedView, locale?: string): string {
   const parsed = parseFeedView(view.date, view.status);
   const path = `${homeHref(locale)}/predictions/${parsed.date}`;
   return parsed.status === feedDefaults.today.status ? path : `${path}?status=${parsed.status}`;
-}
-
-export function informationHref(page: InformationPage, locale?: string): string {
-  return `${homeHref(locale)}/${page}`;
 }
 
 /** Detail API supplies canonical identity/slug; page rendering belongs to prompt 035. */

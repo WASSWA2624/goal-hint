@@ -5,7 +5,7 @@ import { analyticsFilterKeys, analyticsFilterLabels, analyticsRules, comparisonM
   type AnalyticsReport, type AnalyticsSummary, type BreakdownKey, type BreakdownRow, type ComparisonMode, type LiveReport,
   type ReportQuery } from "@/domain/analytics";
 import { analyticsPresets, bucketLabel, formatRange, presetRange, rangeDays, type AnalyticsPreset } from "@/domain/analytics-range";
-import { analyticsDatasets, formatDuration } from "@/domain/analytics-datasets";
+import { analyticsDatasets, formatDuration, formatPercent } from "@/domain/analytics-datasets";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { SkipLink } from "@/components/navigation/shell-styles";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -23,7 +23,6 @@ type Settings = Readonly<{ retention: { retentionDays: number; source: string; l
 
 const integer = new Intl.NumberFormat("en");
 const count = (value: number) => integer.format(Math.round(value));
-const percent = (value: number) => `${(value * 100).toFixed(value > 0 && value < 0.1 ? 1 : 0)}%`;
 const axisCount = (value: number) => value >= 10_000 ? new Intl.NumberFormat("en", { notation: "compact" }).format(value) : count(value);
 
 const trendMetrics = {
@@ -31,7 +30,7 @@ const trendMetrics = {
   visits: { label: "Visits", format: count, axis: axisCount, integer: true },
   pageviews: { label: "Page views", format: count, axis: axisCount, integer: true },
   avgVisitMs: { label: "Avg. visit", format: formatDuration, axis: formatDuration, integer: false },
-  bounceRate: { label: "Bounce rate", format: percent, axis: percent, integer: false },
+  bounceRate: { label: "Bounce rate", format: formatPercent, axis: formatPercent, integer: false },
   conversions: { label: "Conversions", format: count, axis: axisCount, integer: true },
 } as const;
 type TrendMetric = keyof typeof trendMetrics;
@@ -42,12 +41,12 @@ const cards: readonly Readonly<{ key: keyof AnalyticsSummary; label: string; for
   { key: "pageviews", label: "Page views", format: count },
   { key: "pagesPerVisit", label: "Pages per visit", format: (value) => value.toFixed(2) },
   { key: "avgVisitMs", label: "Avg. visit duration", format: formatDuration },
-  { key: "bounceRate", label: "Bounce rate", format: percent, lowerIsBetter: true, rate: true },
+  { key: "bounceRate", label: "Bounce rate", format: formatPercent, lowerIsBetter: true, rate: true },
   { key: "avgPageMs", label: "Avg. time on page", format: formatDuration },
   { key: "newVisitors", label: "New visitors", format: count },
   { key: "returningVisitors", label: "Returning visitors", format: count },
   { key: "conversions", label: "Conversions", format: count },
-  { key: "conversionRate", label: "Conversion rate", format: percent, rate: true },
+  { key: "conversionRate", label: "Conversion rate", format: formatPercent, rate: true },
 ];
 
 const sections: readonly Readonly<{ id: string; title: string; tabs: readonly BreakdownKey[] }>[] = [
@@ -201,7 +200,7 @@ export function AnalyticsDashboard({ username, today, developmentCredentials }: 
 
   const addFilter = useCallback((key: AnalyticsFilterKey, value: string, label: string) => {
     setFilters((current) => ({ ...current, [key]: { value, label } }));
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }, []);
   const removeFilter = (key: AnalyticsFilterKey) => setFilters((current) => { const next = { ...current }; delete next[key]; return next; });
 

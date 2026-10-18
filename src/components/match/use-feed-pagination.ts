@@ -20,7 +20,6 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   onStatus: (href: string, message: string) => void;
 }) {
   const dispatch = useAppDispatch();
-  const [refreshError, setRefreshError] = useState(false);
   const [view, setView] = useState(() => initialLoadedFeed(data));
   const [phase, setPhase] = useState<Mode | null>(null), [error, setError] = useState<FeedPaginationError["code"] | null>(null);
   // A refreshed server query with the same canonical href must not tear down the listeners below.
@@ -76,7 +75,6 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       }
       if (controller.signal.aborted || !mounted.current || !enabledRef.current) return;
       acceptRun(base.data.run, next.data.run, getReportingDate(utcInstantFromEpochMilliseconds(next.data.asOf)));
-      setRefreshError(false);
       restored.current = true; retryCheckpoint.current = null;
       if (mode !== "background") focusTarget.current = { fixtureId: mode === "append" ? next.records[base.records.length]?.fixtureId ?? null : checkpoint?.focusFixtureId ?? null,
         ...(checkpoint ? { checkpoint } : {}) };
@@ -85,7 +83,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       else if (mode !== "background") announce(mode === "append" ? "loaded" : "refreshed", next, next.records.length - base.records.length);
     } catch (cause) {
       if (!mounted.current || !enabledRef.current || controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
-      if (mode === "background") { setRefreshError(true); return; }
+      if (mode === "background") return;
       const code = cause instanceof FeedPaginationError ? cause.code : "unavailable";
       failedMode.current = mode; retryCheckpoint.current = checkpoint ?? null; setError(code);
       focusTarget.current = { fixtureId: null, retry: true };
@@ -141,7 +139,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     };
   }, [data.page, href, queryKey, run, save]);
 
-  return { view, phase, error, refreshError, root, refresh: useCallback(() => run("background"), [run]), loadMore: () => run("append"), retry: () => {
+  return { view, phase, error, root, refresh: useCallback(() => run("background"), [run]), retry: () => {
     const checkpoint = retryCheckpoint.current;
     return run(checkpoint ? "restore" : error === "changed" || error === "stale-data" ? "refresh" : failedMode.current, checkpoint ?? undefined);
   } };

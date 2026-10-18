@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyticsRoute, analyticsRouteLabel, collectPayloadSchema, parseReportParameters, reportParameters } from "../src/domain/analytics.ts";
-import { classifyChannel, isBotUserAgent, normalizeSearchTerm, referrerHost, sanitizeTarget, screenBucket, summarizeClient } from "../src/domain/analytics-classify.ts";
+import { classifyChannel, isBotUserAgent, normalizeSearchTerm, sanitizeTarget, screenBucket, summarizeClient } from "../src/domain/analytics-classify.ts";
 import { bucketKeys, comparisonRange, granularityFor, parseDateRange, presetRange, weekStart } from "../src/domain/analytics-range.ts";
 import { csvCell, toCsv } from "../src/domain/analytics-csv.ts";
 import { csvValue, formatDuration, formatValue } from "../src/domain/analytics-datasets.ts";
@@ -94,6 +94,9 @@ test("user agents reduce to browser, OS and device families without storing the 
   ];
   for (const [agent, hints, expected] of cases) assert.deepEqual(summarizeClient(agent, hints), expected, agent);
   assert.equal(summarizeClient(chrome, { mobileHint: true }).deviceType, "mobile");
+  const start = performance.now();
+  summarizeClient(`Mozilla/5.0 (X11) Version/${"1".repeat(15_000)}`);
+  assert.ok(performance.now() - start < 100, "A long user agent cannot backtrack quadratically.");
   assert.equal(screenBucket(390), "360-413");
   assert.equal(screenBucket(undefined), null);
 });
@@ -115,11 +118,6 @@ test("traffic channels follow campaign tags, then click identifiers, then the re
   assert.equal(classifyChannel(null, { campaign: "launch" }), "campaign");
   assert.equal(classifyChannel("bing.com", { click: "microsoft" }), "paid-search");
   assert.equal(classifyChannel(null, { click: "meta" }), "social");
-  assert.equal(referrerHost("https://www.google.com/search?q=secret", "goalhint.com"), "google.com");
-  assert.equal(referrerHost("https://m.facebook.com/", "goalhint.com"), "facebook.com");
-  assert.equal(referrerHost("https://goalhint.com/en", "www.goalhint.com"), null);
-  assert.equal(referrerHost("android-app://com.google.android.gm/", "goalhint.com"), "com.google.android.gm");
-  assert.equal(referrerHost("not a url", "goalhint.com"), null);
 });
 
 test("search terms and labels are minimized before storage", () => {
@@ -258,8 +256,8 @@ function fakeServices({ production = false, admin = true } = {}) {
     },
     collector: { async collect(body, context) { calls.collect.push({ body, context }); return { accepted: body.events.length, dropped: 0 }; } },
     reporter: { async report() { return report; }, async live() { return { visitors: 2, visits: 2, pages: [], generatedAt: "" }; } },
-    retention: { maybePurge() {}, async state() { return { retentionDays: 395, source: "environment", lastPurgedAt: null }; },
-      async setRetentionDays() {}, async purge() { return { sessions: 0, pageviews: 0, events: 0 }; } },
+    retention: { lastPurgedAt: null, maybePurge() {}, async state() { return { retentionDays: 395, source: "environment", lastPurgedAt: this.lastPurgedAt }; },
+      async setRetentionDays() {}, async purge() { this.lastPurgedAt = "2026-10-14T07:00:00.000Z"; return { sessions: 0, pageviews: 0, events: 0 }; } },
     limiter: createCollectLimiter({ perSession: 30 }),
   };
   return { services, calls, resolve: async () => services };
@@ -268,6 +266,19 @@ function fakeServices({ production = false, admin = true } = {}) {
 const request = (path, { method = "GET", headers = {}, body } = {}) => new Request(`http://localhost:3000${path}`, {
   method, body, headers: { host: "localhost:3000", "user-agent": chrome, ...headers } });
 const sameSite = { "sec-fetch-site": "same-origin", origin: "http://localhost:3000" };
+/** A chunked upload: a body stream with no Content-Length, which counts the chunks the handler pulled. */
+const chunked = (path, totalBytes, headers = {}) => {
+  const progress = { pulls: 0 };
+  const body = new ReadableStream({ pull(controller) {
+    if (progress.pulls * 1024 >= totalBytes) { controller.close(); return; }
+    progress.pulls++;
+    controller.enqueue(new Uint8Array(1024).fill(120));
+  } });
+  const sent = new Request(`http://localhost:3000${path}`, { method: "POST", body, duplex: "half",
+    headers: { host: "localhost:3000", "user-agent": chrome, ...sameSite, ...headers } });
+  assert.equal(sent.headers.get("content-length"), null);
+  return { request: sent, progress };
+};
 
 test("the collector honours origin, privacy signals, admin browsers, bots, size and rate limits", async () => {
   const { resolve, calls } = fakeServices();
@@ -278,11 +289,15 @@ test("the collector honours origin, privacy signals, admin browsers, bots, size 
   assert.equal((await send({ dnt: "1" })).status, 204);
   assert.equal((await send({ cookie: "goal-hint-analytics-exclude=1" })).status, 204);
   assert.equal((await send({ cookie: "goal-hint-analytics=abc" })).status, 204);
+  assert.equal((await send({ cookie: "goal-hint-analytics=%" })).status, 204, "A malformed cookie value still marks an admin browser.");
   assert.equal((await send({ "user-agent": "Googlebot/2.1" })).status, 204);
   assert.equal(calls.collect.length, 0, "Excluded requests never reach storage.");
   assert.equal((await send({}, "{not json")).status, 400);
   assert.equal((await send({}, JSON.stringify(payload([{ t: "pageview", id: ids.pv, path: "/en?q=x" }])))).status, 400);
   assert.equal((await send({}, "x".repeat(20_000))).status, 413);
+  const upload = chunked("/api/analytics/collect", 1024 * 1024);
+  assert.equal((await collect(upload.request)).status, 413);
+  assert.ok(upload.progress.pulls < 64, "An oversized chunked body is refused without buffering all of it.");
   const accepted = await send({ "sec-ch-ua-mobile": "?1", "x-forwarded-host": "goalhint.com" });
   assert.equal(accepted.status, 204);
   assert.equal(accepted.headers.get("cache-control"), "no-store");
@@ -321,8 +336,10 @@ test("reporting, live, export and settings APIs require a signed-in session", as
     body: JSON.stringify({ action: "purge" }) }))).status, 403);
   assert.equal((await settings(request("/api/analytics/settings", { method: "POST", headers: { ...cookie, ...sameSite },
     body: JSON.stringify({ action: "retention", days: 0 }) }))).status, 400);
-  assert.equal((await settings(request("/api/analytics/settings", { method: "POST", headers: { ...cookie, ...sameSite },
-    body: JSON.stringify({ action: "retention", days: 90 }) }))).status, 200);
+  const saved = await settings(request("/api/analytics/settings", { method: "POST", headers: { ...cookie, ...sameSite },
+    body: JSON.stringify({ action: "retention", days: 90 }) }));
+  assert.equal(saved.status, 200);
+  assert.equal((await saved.json()).retention.lastPurgedAt, "2026-10-14T07:00:00.000Z", "The response reports the purge it just ran.");
 });
 
 test("sign-in and sign-out set hardened cookies and never echo credentials", async () => {
@@ -333,6 +350,11 @@ test("sign-in and sign-out set hardened cookies and never echo credentials", asy
       "x-forwarded-for": "203.0.113.9, 10.0.0.2" }, body: new URLSearchParams({ username: "owner", password }).toString() });
     assert.equal((await login(request("/api/analytics/login", { method: "POST", headers: { origin: "https://evil.example", host: "localhost:3000" },
       body: "username=owner&password=right" }))).status, 403);
+    const attempts = calls.login.length;
+    const upload = chunked("/api/analytics/login", 1024 * 1024, { "content-type": "application/x-www-form-urlencoded" });
+    assert.equal((await login(upload.request)).status, 413);
+    assert.ok(upload.progress.pulls < 64, "An oversized chunked form is refused without buffering all of it.");
+    assert.equal(calls.login.length, attempts, "An oversized form never reaches sign-in.");
     const invalid = await login(form("wrong"));
     assert.equal(invalid.status, 303); assert.equal(invalid.headers.get("location"), "/analytics?login=invalid");
     assert.equal(invalid.headers.get("set-cookie"), null);

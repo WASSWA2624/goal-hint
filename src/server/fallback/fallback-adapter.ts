@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getPublicationDeadline, utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "../../domain/calendar.ts";
 import { marketRules, validateMarketSnapshot, type MarketSnapshot, type SourceGroup } from "../../domain/markets.ts";
 import type { EvidenceContext, EvidenceWorkflow } from "../evidence/evidence-contract.ts";
+import { sameFixture } from "../evidence/evidence-football.ts";
 import { evidenceFingerprint, freezeEvidence, isSafeEvidenceLink, parseEvidenceContext } from "../evidence/evidence-input.ts";
 import type { createApiFootballAdapter } from "../football/api-football-adapter.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballBounds, type ApiFootballResult } from "../football/api-football-contract.ts";
@@ -11,6 +12,7 @@ import type { NormalizedFallbackPrediction } from "../football/api-football-norm
 import { parseCatalogEvidenceRef, parseCatalogImportRequest } from "../football/catalog-input.ts";
 import type { CatalogFixtureSnapshot } from "../football/catalog-mysql-store.ts";
 import type { TrialFreshness } from "../football/provider-trial-contract.ts";
+import { synchronous, provenTrue as verified } from "../shared/authority-proof.ts";
 import type { ProviderFallbackCandidate, ProviderFallbackReason, ProviderFallbackResult } from "./fallback-contract.ts";
 
 export type ProviderFallbackMapping = Readonly<{
@@ -71,13 +73,6 @@ export function parseProviderFallbackRequest(value: unknown): ProviderFallbackRe
     return freezeEvidence({ context, jobId: input.jobId, requestedGroups: [...input.requestedGroups], bounds: parsed.bounds });
   } catch { throw new ProviderFallbackError("invalid-request"); }
 }
-function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
-function verified(check: () => unknown): boolean { try { return synchronous(check()) === true; } catch { return false; } }
-function sameFixture(fixture: CatalogFixtureSnapshot, context: EvidenceContext): boolean {
-  return fixture.id === context.fixtureId && fixture.dataVersion === context.fixtureVersion && fixture.externalId === context.externalFixtureId &&
-    fixture.homeTeamId === context.home.teamId && fixture.awayTeamId === context.away.teamId && fixture.kickoff === context.kickoffAt &&
-    fixture.homeExternalIds.includes(context.home.externalId) && fixture.awayExternalIds.includes(context.away.externalId);
-}
 function assertFresh(retrievedAt: UtcInstant, providerUpdatedAt: UtcInstant | null, policy: TrialFreshness, now: UtcInstant,
   staleReason: "stale" | "stale-context" = "stale"): void {
   try {
@@ -130,7 +125,8 @@ export function createProviderFallbackAdapter(options: Readonly<{
   const policy = parseProviderFallbackPolicy(options.policy);
   if (!Number.isSafeInteger(options.maxJobs) || options.maxJobs < 1 || options.maxJobs > 100_000) throw new ProviderFallbackError("invalid-request");
   const currentTime = () => utcInstantFromEpochMilliseconds(options.clock?.now() ?? Date.now());
-  type Job = { fingerprint: string; charged: number; maxRequests: number; deadlineAt: UtcInstant; timeoutMs: number; pending: boolean };
+  type Job = { fingerprint: string; charged: number; maxRequests: number; deadlineAt: UtcInstant; timeoutMs: number; pending: boolean;
+    closesAt: UtcInstant };
   const jobs = new Map<string, Job>();
   const denied = (reason: ProviderFallbackReason, requestsDispatched = 0, requestCountUnknown = false): ProviderFallbackResult =>
     freezeEvidence({ status: "denied", reason, requestsDispatched, requestCountUnknown });
@@ -192,9 +188,13 @@ export function createProviderFallbackAdapter(options: Readonly<{
         return denied("invalid-request");
       if (state?.pending) return denied("provider-unavailable");
       if (!state) {
-        if (jobs.size >= options.maxJobs) return denied("request-budget-exhausted");
+        if (jobs.size >= options.maxJobs) {
+          // A job past its publication deadline can never dispatch again (authorize() throws ineligible-refresh first).
+          for (const [id, job] of jobs) if (!job.pending && job.closesAt <= lastNow) jobs.delete(id);
+          if (jobs.size >= options.maxJobs) return denied("request-budget-exhausted");
+        }
         state = { fingerprint, charged: 0, maxRequests: request.bounds.maxRequests, deadlineAt: request.bounds.deadlineAt,
-          timeoutMs: request.bounds.timeoutMs, pending: false };
+          timeoutMs: request.bounds.timeoutMs, pending: false, closesAt: getPublicationDeadline(request.context.kickoffAt) };
         jobs.set(request.jobId, state);
       } else {
         state.deadlineAt = request.bounds.deadlineAt;

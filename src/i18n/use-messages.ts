@@ -1,23 +1,19 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
+import { utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import { getDateInTimeZone, getDayBoundsInTimeZone } from "@/domain/device-calendar";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "./messages";
 
 let timeZone: string = publicPolicy.reportingTimeZone;
-type DeviceCalendar = Readonly<{ zone: string; today: ReportingDate }>;
-let calendar: DeviceCalendar | null = null;
 const listeners = new Set<() => void>();
 let stop: (() => void) | null = null;
 
 function refreshTimeZone() {
   const next = Intl.DateTimeFormat().resolvedOptions().timeZone || publicPolicy.reportingTimeZone;
-  const today = getDateInTimeZone(utcInstantFromEpochMilliseconds(Date.now()), next);
-  if (next === timeZone && calendar?.today === today) return;
+  if (next === timeZone) return;
   timeZone = next;
-  calendar = Object.freeze({ zone: next, today });
   listeners.forEach((listener) => listener());
 }
 
@@ -54,11 +50,6 @@ const serverSnapshot = () => publicPolicy.reportingTimeZone;
 
 export function useDeviceTimeZone() {
   return useSyncExternalStore(subscribe, snapshot, serverSnapshot);
-}
-
-/** Null during SSR/hydration; one shared clock then follows the device's civil day. */
-export function useDeviceCalendar() {
-  return useSyncExternalStore(subscribe, () => calendar, () => null);
 }
 
 /** SSR and hydration share a stable zone; mounted displays follow the device. */

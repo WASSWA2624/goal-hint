@@ -1,12 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
+import { settledExtendedStatuses as settledStatuses } from "../../domain/extended-markets.ts";
 import { scoreDistributionSchema, type ScoreDistribution } from "../../domain/score-distribution.ts";
 import { deriveGoalMarket, goalMarketDefinitionSchema, GOAL_MARKET_RULE_VERSION, settleGoalSelection,
   type GoalDerivationResult, type GoalMarketDefinition, type GoalSettlementContext } from "../../domain/score-distribution-markets.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { fixtureResultMatchesCanonical, resultStatus, storedFixtureResult } from "../results/result-read.ts";
+import { cycleEligibilityFor } from "../settlement/settlement-read.ts";
 import { historyFail, type StoredCycle } from "./history-contract.ts";
 import { historyHash, historyId, historyInstant } from "./history-input.ts";
 import { assertHistorySeal, historyJson, historyTime, storedCycle, type HistoryRow } from "./history-read.ts";
@@ -100,7 +102,6 @@ export async function appendGoalMarketExtension(tx: Tx, input: GoalMarketExtensi
   return value;
 }
 
-const settledStatuses = ["correct", "incorrect", "half-win", "half-loss", "push"] as const;
 const settlementBaseSchema = z.strictObject({
   fixtureId: historyId, cycleId: historyId, predictionRevisionId: historyId,
   marketKey: z.string().min(1).max(128), source: z.literal("ai-score-distribution"), ruleVersion: z.literal(GOAL_MARKET_RULE_VERSION),
@@ -188,9 +189,7 @@ export async function planGoalMarketSettlements(tx: Tx, fixtureId: string): Prom
     for (const pointer of pointers) { const previous = await readGoalMarketSettlement(tx, pointer.revisionId); recorded.set(previous.marketKey, previous); }
     const context: GoalSettlementContext = {
       status: issue && cycle.state !== "void" ? "unknown" : resultStatus.parse(fixture.status),
-      cycleEligibility: cycle.state !== "void" ? { eligible: true } : { eligible: false,
-        reason: cycle.voidReason === "formal-postponement" ? "postponed-cycle"
-          : cycle.voidReason === "locked-cutoff-invalidated" ? "cutoff-invalidated" : "ineligible-cycle" },
+      cycleEligibility: cycleEligibilityFor(cycle),
       regulationScore: resultUsable && result?.regulation.verified ? { verified: true, period: "regulation-including-stoppage-time",
         home: result.regulation.home!, away: result.regulation.away! } : null,
       halfTimeScore: resultUsable && result?.halfTime ? { verified: true, period: result.halfTime.period,

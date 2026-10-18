@@ -10,7 +10,7 @@ import type { SlipBuildPageResult } from "../../domain/slip-page.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
 
 export const slipReadRules = Object.freeze({ pageSize: feedQueryRules.maximumPageSize, maximumRecords: 500 });
-export type { SlipBuildPageResult, SlipBuildState } from "../../domain/slip-page.ts";
+export type { SlipBuildPageResult } from "../../domain/slip-page.ts";
 export type SlipFeedReader = (parameters: FeedParameters, context: Readonly<{ locale?: string }>, clock: Clock) => Promise<MatchFeedResponse | SlipPricePage>;
 
 /** One bounded stored cohort, never a provider request. Feed bounds apply to its best displayed family;

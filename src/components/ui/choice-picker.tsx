@@ -3,7 +3,7 @@
 import { useCallback, useId, useRef, useState, useSyncExternalStore } from "react";
 import styled from "styled-components";
 import { ChevronDownIcon } from "./icons";
-import { useOutsideDismiss } from "./use-outside-dismiss";
+import { closeDetails, useOutsideDismiss } from "./use-outside-dismiss";
 import { VisuallyHidden } from "./visually-hidden";
 
 type Option = Readonly<{ value: string; label: string }>;
@@ -46,14 +46,7 @@ export function ChoicePicker({ name, label, automaticLabel, automaticHint, optio
   const root = useRef<HTMLDetailsElement>(null), panelId = useId(), [open, setOpen] = useState(false);
   const hydrated = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const inactive = disabled && hydrated;
-  const close = useCallback(() => {
-    const menu = root.current;
-    if (!menu) return;
-    const trigger = menu.querySelector("summary");
-    const restoreFocus = menu.contains(menu.ownerDocument.activeElement) && menu.ownerDocument.activeElement !== trigger;
-    menu.open = false; setOpen(false);
-    if (restoreFocus) trigger?.focus({ preventScroll: true });
-  }, []);
+  const close = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
   useOutsideDismiss({ enabled: open, root, onDismiss: close });
   const summary = selected.length ? options.filter((option) => selected.includes(option.value)).map((option) => option.label).join(", ") : automaticLabel;
   return <Root ref={root} data-disabled={inactive} onToggle={(event) => setOpen(event.currentTarget.open)} onKeyDown={(event) => {

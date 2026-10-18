@@ -13,7 +13,6 @@ const mappingSchema = z.strictObject({
     context.addIssue({ code: "custom", message: "Every selection must map to one exact unique provider label." });
   }
 });
-export type GoalBetMapping = Readonly<z.infer<typeof mappingSchema>>;
 export type MappedGoalMarket = GoalDerivationResult | Readonly<{ available: false; reason:
   "invalid-mapping" | "unverified-provider-bet" | "incomplete-provider-group" }>;
 

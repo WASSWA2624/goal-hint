@@ -1,14 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
+import { isPlayedFinalStatus, settlementStatuses } from "../../domain/market-settlement.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { Prisma, FootballFixture } from "../generated/prisma/client.ts";
 import { historyFail } from "../predictions/history-contract.ts";
 import { historyHash, historyId, historyInstant } from "../predictions/history-input.ts";
 import { assertHistorySeal, historyJson, historyTime, type HistoryRow } from "../predictions/history-read.ts";
 
-export const resultStatus = z.enum(["scheduled", "live", "finished-regulation", "finished-extra-time", "finished-penalties",
-  "postponed", "canceled", "abandoned", "awarded", "unknown"]);
+export const resultStatus = z.enum(settlementStatuses);
 const goal = z.number().int().min(0).max(1000), pair = z.strictObject({ home: goal.nullable(), away: goal.nullable() });
 const resultSchema = z.strictObject({ id: historyHash, fixtureId: historyId, fixtureVersion: z.bigint().positive(),
   previousId: historyHash.nullable(), observationId: historyHash, observedAt: historyInstant,
@@ -24,7 +24,7 @@ const resultSchema = z.strictObject({ id: historyHash, fixtureId: historyId, fix
   : v.regulation.home === null && v.regulation.away === null && v.regulation.evidenceRef === null && v.regulationVerifiedAt === null)
   .refine((v) => v.halfTime === undefined || v.regulation.verified && v.regulation.home !== null && v.regulation.away !== null &&
     v.halfTime.home <= v.regulation.home && v.halfTime.away <= v.regulation.away &&
-    ["finished-regulation", "finished-extra-time", "finished-penalties"].includes(v.status));
+    isPlayedFinalStatus(v.status));
 export type StoredFixtureResult = Readonly<z.infer<typeof resultSchema>>;
 
 export function fixtureResultMatchesCanonical(fixture: Pick<FootballFixture, "status" | "regulationHome" | "regulationAway" | "regulationVerifiedAt" | "regulationEvidenceRef">,

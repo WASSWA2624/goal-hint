@@ -7,6 +7,7 @@ import { API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoints, type ApiFootballBo
 import { parseCatalogEvidenceRef, parseCatalogImportRequest } from "../football/catalog-input.ts";
 import type { CatalogFixtureSnapshot } from "../football/catalog-mysql-store.ts";
 import type { NormalizedAvailability, NormalizedFixture, NormalizedStatistics } from "../football/api-football-normalize.ts";
+import { synchronous } from "../shared/authority-proof.ts";
 import type { EvidenceAuthority, EvidenceClaim, EvidenceContext, EvidencePolicy, EvidenceSource, EvidenceWorkflow } from "./evidence-contract.ts";
 import { EvidenceInputError, evidenceFingerprint, evidenceSourceId, freezeEvidence, parseEvidenceContext,
   parseEvidencePolicy, parseEvidenceSource } from "./evidence-input.ts";
@@ -27,7 +28,6 @@ export type FootballEvidenceCollection = Readonly<{
 const systemClock: Clock = { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
 const positive = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0;
 const nonnegative = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0;
-function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
 export function parseFootballEvidencePlan(value: unknown, context: EvidenceContext): FootballEvidencePlan {
   try {
     const input = value as FootballEvidencePlan;
@@ -51,7 +51,7 @@ export function parseFootballEvidencePlan(value: unknown, context: EvidenceConte
       reuse: { allowSummary: true, retainUntil, evidenceRef: reuseRef } }));
   } catch { throw new EvidenceInputError(); }
 }
-function sameFixture(fixture: CatalogFixtureSnapshot, context: EvidenceContext): boolean {
+export function sameFixture(fixture: CatalogFixtureSnapshot, context: EvidenceContext): boolean {
   return fixture.id === context.fixtureId && fixture.dataVersion === context.fixtureVersion && fixture.externalId === context.externalFixtureId
     && fixture.homeTeamId === context.home.teamId && fixture.awayTeamId === context.away.teamId && fixture.kickoff === context.kickoffAt
     && fixture.homeExternalIds.includes(context.home.externalId) && fixture.awayExternalIds.includes(context.away.externalId);

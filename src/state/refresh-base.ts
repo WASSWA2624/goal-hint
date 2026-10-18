@@ -4,8 +4,18 @@ import { liveRefreshRules } from "../domain/live-refresh.ts";
 import { matchFeedRules } from "../domain/match-feed-rules.ts";
 
 export type RefreshError = { code: FeedPaginationError["code"] };
+/** AbortSignal.any is missing before Chrome 116, Firefox 124 and Safari 17.4, all inside Next 16's default targets. */
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  if (typeof AbortSignal.any === "function") return AbortSignal.any(signals);
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (signal.aborted) { controller.abort(signal.reason); break; }
+    signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
+  }
+  return controller.signal;
+}
 export async function readJson(href: string, signal: AbortSignal): Promise<unknown> {
-  const response = await fetch(href, { signal: AbortSignal.any([signal, AbortSignal.timeout(liveRefreshRules.timeoutMs)]),
+  const response = await fetch(href, { signal: anySignal([signal, AbortSignal.timeout(liveRefreshRules.timeoutMs)]),
     cache: "no-store", credentials: "omit" });
   if (!response.ok) throw new FeedPaginationError(response.status === 429 ? "rate-limited" : "unavailable");
   const text = await response.text(), max = matchFeedRules.maximumResponseBytes;

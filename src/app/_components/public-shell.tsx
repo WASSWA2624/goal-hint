@@ -29,9 +29,6 @@ export const getShellInstant = cache(async () => {
 });
 export const getShellDate = cache(async () => getReportingDate(await getShellInstant()));
 
-/** A GET search that keeps the visitor's other feed parameters. */
-export type ShellSearch = Readonly<{ action: string; hidden: readonly (readonly [string, string])[]; value: string }>;
-
 export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, search }: {
   children: ReactNode;
   locale?: string;
@@ -44,7 +41,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
   /** Dense mobile feeds use 8px gutters; other app screens retain their existing spacing. */
   compact?: boolean;
   /** null lets a page own its body search without a duplicate shell field. */
-  search?: ShellSearch | null;
+  search?: null;
 }) {
   const language = resolveLocale(locale);
   const messages = createMessages(language);
@@ -61,7 +58,6 @@ export async function PublicShell({ children, locale, current, today: reportingD
     key: page, href: informationHref(page, language), label: messages.text(`navigation.${page}`),
     tab: messages.text(`navigation.${page}`), icon: page, tone: "blue" as const,
   }))];
-  const searchForm = search ?? { action: homeHref(language), hidden: [], value: "" };
 
   return (
     <ShellFrame>
@@ -74,10 +70,9 @@ export async function PublicShell({ children, locale, current, today: reportingD
           <DesktopNav aria-label={messages.text("navigation.primary")}>
             <ResponsiveNavigation destinations={destinations} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
           </DesktopNav>
-          {search !== null && <HeaderSearch action={searchForm.action} method="get" role="search" aria-label={messages.text("navigation.searchLabel")}>
+          {search !== null && <HeaderSearch action={homeHref(language)} method="get" role="search" aria-label={messages.text("navigation.searchLabel")}>
             <SearchIcon />
-            {searchForm.hidden.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
-            <input type="search" name="q" defaultValue={searchForm.value} maxLength={feedQueryRules.maximumSearchLength}
+            <input type="search" name="q" defaultValue="" maxLength={feedQueryRules.maximumSearchLength}
               placeholder={messages.text("navigation.search")} aria-label={messages.text("navigation.searchLabel")} autoComplete="off" />
           </HeaderSearch>}
           <HeaderActions><ThemeToggle /></HeaderActions>

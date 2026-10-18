@@ -5,14 +5,13 @@ import { validateMarketSnapshot, type AcceptedMarket, type MarketAvailability, t
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { isPredictorForecastCurrent } from "../predictor/predictor-output.ts";
+import { synchronous, provenTrue as verified } from "../shared/authority-proof.ts";
 import type { FallbackContext, FallbackReason, FallbackResolutionAuthority, FallbackResolutionResult, ForecastExplanation,
   ForecastProvenance, ProviderFallbackCandidate, ProviderFallbackResult, ResolvedForecastCandidate, ResolvedForecastMarket } from "./fallback-contract.ts";
 import { parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult } from "./fallback-input.ts";
 
 const groups = ["match-result", "total-goals", "both-teams-to-score"] as const;
 const families = ["match-result", "double-chance", "total-goals", "both-teams-to-score"] as const;
-function synchronous(value: unknown): unknown { if (value instanceof Promise) void value.catch(() => undefined); return value; }
-function verified(check: () => boolean): boolean { try { return synchronous(check()) === true; } catch { return false; } }
 function sourceCandidate(availability: MarketAvailability): unknown {
   if (!availability.available) return undefined;
   const market = availability.market;

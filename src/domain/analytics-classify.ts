@@ -45,7 +45,7 @@ const browsers: readonly (readonly [string, RegExp])[] = [
   ["Mi Browser", /\b(?:MiuiBrowser|XiaoMi\/MiuiBrowser)\/([\d.]+)/],
   ["Firefox", /\b(?:Firefox|FxiOS)\/([\d.]+)/],
   ["Chrome", /\b(?:CriOS|Chrome)\/([\d.]+)/],
-  ["Safari", /\bVersion\/([\d.]+).*Safari\//],
+  ["Safari", /\bVersion\/([\d.]+)(?![\d.]).*Safari\//],
   ["Internet Explorer", /\b(?:MSIE |Trident\/.*rv:)([\d.]+)/],
 ];
 
@@ -131,18 +131,6 @@ const socialNetworks: readonly (readonly [RegExp, string])[] = [
 ];
 const aiAssistants = /(^|\.)(chatgpt\.com|chat\.openai\.com|perplexity\.ai|claude\.ai|gemini\.google\.com|copilot\.microsoft\.com|chat\.deepseek\.com|meta\.ai|grok\.com)$/;
 const webmail = /^(mail\.google\.com|com\.google\.android\.gm|outlook\.live\.com|outlook\.office\.com|outlook\.office365\.com|mail\.yahoo\.com|mail\.aol\.com|mail\.proton\.me)$/;
-
-/** Accepts the browser's referrer URL (or an android-app:// referrer) and returns its bare host. */
-export function referrerHost(referrer: string | undefined, ownHost: string): string | null {
-  if (!referrer) return null;
-  try {
-    const url = new URL(referrer);
-    const host = (url.protocol === "android-app:" ? url.hostname || url.pathname.replace(/^\/+/, "").split("/")[0] : url.hostname)
-      ?.toLowerCase().replace(/^www\./, "").replace(/^m\./, "") ?? "";
-    if (!/^[a-z0-9.-]{1,255}$/.test(host) || host === ownHost.toLowerCase().replace(/^www\./, "")) return null;
-    return host;
-  } catch { return null; }
-}
 
 function lookup(table: readonly (readonly [RegExp, string])[], host: string): string | null {
   return table.find(([pattern]) => pattern.test(host))?.[1] ?? null;
