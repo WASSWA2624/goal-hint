@@ -146,7 +146,7 @@ no successful projection is available. Draft edits make no count-preview
 requests. Apply filters submits the complete
 search, date, time and filter draft. Reset filters resets
 search, leagues, countries, time, probability, odds, picks and ordering, selects
-the last 30 days through today, all supported markets and kickoff ascending order,
+the last 30 days through today, all supported markets and kickoff descending order (Latest first),
 and resets page to one. The time fields show 00:00–23:59 without restricting kickoff times.
 It retains the browsing zone, status entry and page size. The button labels are
 Reset filters and Apply filters, each in two rows on mobile and one row on desktop.

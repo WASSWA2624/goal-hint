@@ -28,9 +28,11 @@ Remaining ties use policy order. Selection, probability, odds and result always
 come from that one shown published pick; an unrelated family cannot fill a
 missing field.
 
-1. Header: competition (and country), compact local kickoff day and time in one
-   `time` element whose title carries the full instant and displayed zone.
-2. Teams: logos and names either side of a centre state. Scheduled shows `VS`;
+1. Header: competition (and country) and the compact local kickoff day in the
+   Date column. One semantic `time` element retains the date and time, a full
+   UTC ISO `datetime` and a title with the full instant and displayed zone.
+2. Teams: logos and names either side of a centre state. The local 24-hour
+   kickoff time and zone sit above the centre score on desktop. Scheduled shows `VS`;
    live shows the score and a red chip with the provider minute (`67′`) or
    phase (`HT`, `Break`, `Penalties`…); finished shows the score with `FT`,
    `AET*` or `Pens*` (the asterisk marks a 90-minute score, explained in the
@@ -48,7 +50,7 @@ missing field.
 
 Source, provisional status and publication time move to the pill tooltip; sync
 time stays on the detail page. On desktop each card becomes one table row
-using `match-columns.ts` tracks and CSS subgrid: #, time, league, home, score,
+using `match-columns.ts` tracks and CSS subgrid: #, date, league, home, score,
 away, market, prediction, probability, result and a chevron. Column headers and
 rows share the same eleven grid tracks at compact and wide desktop sizes.
 The desktop column header stays below the sticky app menu while the board
@@ -73,7 +75,7 @@ The mobile card has four visible rows:
    line beneath the prediction. The strip has no boxed pills, gradients or
    shadows. Its fill uses the light or dark theme's neutral surface.
 
-All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Within the existing desktop league column, full country names sit above the league name and logo and may wrap. Recognized provider abbreviations such as `USA` expand for desktop display; raw country values still drive flags and filters. Desktop league and team names remain on one line with ellipsis and full-value titles. Shared grid rows align the league logo/name, both team names/logos, score, market, prediction, probability and result, including when the country wraps. The live/final status remains below the score. Generic prediction wording is shared with details, history, slips and metadata; extended totals retain their actual lines, including `Under 1.5`. Stored historical labels and their hashes stay unchanged.
+All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Desktop keeps the date in its Date column and places the kickoff clock above the score or VS, with live/final status below. An unknown kickoff retains its localized date-column fallback without inventing a clock or `datetime`. Phone date/time composition stays unchanged. Within the existing desktop league column, full country names sit above the league name and logo and may wrap. Recognized provider abbreviations such as `USA` expand for desktop display; raw country values still drive flags and filters. Desktop league and team names remain on one line with ellipsis and full-value titles. Shared grid rows align the league logo/name, both team names/logos, score, market, prediction, probability and result, including when the country wraps. Generic prediction wording is shared with details, history, slips and metadata; extended totals retain their actual lines, including `Under 1.5`. Stored historical labels and their hashes stay unchanged.
 
 Cards use 6px padding, 3px internal row gaps, 8px page gutters and 6px list gaps.
 Metadata and team names are 12px, bold scores 14px, and prediction captions 10px.

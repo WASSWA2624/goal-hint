@@ -76,7 +76,7 @@ export function MatchCardList({ locale, rowNumberMaximum, ...props }: MatchCardL
     ? messages.number(Math.min(rowNumberMaximum, 9_999)) : "";
   return <Board $indexLength={indexLabel.length} data-match-board>
     <Columns aria-hidden="true" data-match-table-header>
-      <span>{messages.text("match.columns.number")}</span><span>{messages.text("match.columns.dateTime")}</span>
+      <span>{messages.text("match.columns.number")}</span><span>{messages.text("match.columns.date")}</span>
       <span>{messages.text("match.columns.league")}</span><span>{messages.text("match.columns.home")}</span>
       <span>{messages.text("match.columns.score")}</span><span>{messages.text("match.columns.away")}</span>
       <span>{messages.text("match.columns.market")}</span><span>{messages.text("match.columns.prediction")}</span>

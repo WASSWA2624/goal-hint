@@ -103,15 +103,7 @@ const Meta = styled.header`
     line-height: 1.2;
     white-space: nowrap;
   }
-  ${table} {
-    display: grid;
-    grid-column: 1 / span 3;
-    grid-row: 1 / span 2;
-    grid-template-columns: subgrid;
-    grid-template-rows: subgrid;
-    align-items: center;
-    align-self: stretch;
-  }
+  ${table} { display: contents; }
 `;
 const Index = styled.span<{ $wrap: boolean }>`
   display: none;
@@ -172,17 +164,34 @@ const When = styled.time`
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   ${tile} { flex: none; }
-  ${table} { grid-column: 2; grid-row: 1 / span 2; flex-wrap: wrap; gap: 0 6px; white-space: normal; }
+  ${table} { display: contents; white-space: normal; }
+`;
+const KickoffDate = styled.span`
+  ${table} { grid-column: 2; grid-row: 1 / span 2; }
 `;
 const Dot = styled.span`
   ${table} { display: none; }
 `;
 const KickoffTime = styled.span`
   ${tile} { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  ${table} {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    grid-column: 5;
+    grid-row: 1;
+    align-self: end;
+    justify-self: center;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    font-size: 0.75rem;
+    line-height: 1.2;
+  }
 `;
 const KickoffZone = styled.span`
   color: ${({ theme }) => theme.color.mutedText};
   font-weight: 400;
+  ${table} { max-inline-size: 100%; font-size: 0.625rem; overflow-wrap: anywhere; }
 `;
 const KickoffDetails = styled.span`
   display: contents;
@@ -622,12 +631,14 @@ const resultIcon = { correct: <CheckIcon />, incorrect: <CrossIcon />, void: <Vo
 /** Only timestamps subscribe to the device clock; the rest of a card stays unchanged. */
 function CardKickoff({ kickoff, locale }: { kickoff: FixtureSnapshot["kickoffAt"]; locale: string }) {
   const messages = useMessages(locale);
-  return kickoff === null ? <When as="p"><KickoffDetails>{messages.text("match.kickoffUnknown")}</KickoffDetails></When>
-    : <When dateTime={toUtcIsoString(kickoff)} title={messages.reportingInstant(kickoff)}>
+  return kickoff === null ? <When as="p" data-kickoff data-kickoff-unknown><KickoffDetails>
+    <KickoffDate data-kickoff-date>{messages.text("match.kickoffUnknown")}</KickoffDate>
+  </KickoffDetails></When>
+    : <When dateTime={toUtcIsoString(kickoff)} title={messages.reportingInstant(kickoff)} data-kickoff>
       <KickoffDetails>
         <VisuallyHidden>{messages.text("match.kickoff")}: </VisuallyHidden>
-        <span>{messages.reportingDay(kickoff)}</span><Dot aria-hidden="true">·</Dot>
-        <KickoffTime>{messages.reportingTime(kickoff)}<KickoffZone> {messages.timeZone(kickoff)}</KickoffZone></KickoffTime>
+        <KickoffDate data-kickoff-date>{messages.reportingDay(kickoff)}</KickoffDate><Dot aria-hidden="true">·</Dot>
+        <KickoffTime data-kickoff-time>{messages.reportingTime(kickoff)}<KickoffZone data-kickoff-zone> {messages.timeZone(kickoff)}</KickoffZone></KickoffTime>
       </KickoffDetails>
     </When>;
 }

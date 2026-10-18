@@ -432,7 +432,7 @@ export const en = {
   "match.pickLabel": "{market} prediction: {selection}, estimated probability {probability}",
   "match.noPickLabel": "{market} prediction unavailable",
   "match.columns.number": "#",
-  "match.columns.dateTime": "Date & Time",
+  "match.columns.date": "Date",
   "match.columns.probability": "Probability",
   "match.columns.probabilityShort": "Prob.",
   "match.columns.time": "Time",

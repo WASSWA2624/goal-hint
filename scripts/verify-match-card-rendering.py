@@ -32,6 +32,21 @@ def verify(origin, directory):
         match(r"prediction: [^<]+, estimated probability|prediction unavailable", article)
         match(r'data-outcome="(?:correct|incorrect|pending|void|unavailable)"', article)
         no_match(r"\s(?:\$[\w-]+|tone|variant|loaded)=", article)
+        kickoff = re.findall(r'<time\b(?=[^>]*\bdata-kickoff(?:\s|=|>))([^>]*)>([\s\S]*?)</time>', article)
+        if 'data-fixture-id="card-unknown"' in tag:
+            assert not kickoff, "Unknown kickoff must not invent a time element"
+            fallback = match(r'<p\b(?=[^>]*\bdata-kickoff-unknown(?:\s|=|>))([^>]*)>([\s\S]*?)</p>', article)
+            match(r'\bdata-kickoff(?:\s|=|>)', fallback.group(1))
+            no_match(r'\bdatetime=|\bdata-kickoff-(?:time|zone)(?:\s|=|>)', fallback.group(0), flags=re.IGNORECASE)
+            match(r'data-kickoff-date[^>]*>Kickoff unavailable</span>', fallback.group(2))
+        else:
+            assert len(kickoff) == 1, "Known kickoff retains one semantic time element at every viewport"
+            attributes, parts = kickoff[0]
+            match(r'\bdatetime="2026-10-09T09:00:00\.000Z"', attributes, flags=re.IGNORECASE)
+            match(r'\btitle="Oct 9, 2026, 12:00 EAT"', attributes)
+            match(r'data-kickoff-date[^>]*>Fri, Oct 9</span>', parts)
+            match(r'data-kickoff-time[^>]*>12:00', parts)
+            match(r'data-kickoff-zone[^>]*>\s*EAT</span>', parts)
         if 'data-prediction="none"' in article:
             no_match(r"data-pick-odds=|data-probability-meter=", article)
         else:
