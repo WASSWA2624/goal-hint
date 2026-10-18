@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "@/components/navigation/navigation-link";
-import { memo, useId, useState, type PointerEvent, type ReactNode } from "react";
+import { memo, useId, useState, type ReactNode } from "react";
 import styled, { css, keyframes } from "styled-components";
 import { toUtcIsoString } from "@/domain/calendar";
-import { countryCode, countryDisplayName } from "@/domain/country-code";
+import { countryCode, countryDisplayName, countryShortName } from "@/domain/country-code";
 import { countryFlagAsset } from "@/domain/country-flag";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
@@ -221,7 +221,8 @@ const CountryDetails = styled.span`
   line-height: 0.875rem;
   white-space: nowrap;
   > span { flex: none; }
-  > [data-country-name] { flex: 1; min-inline-size: 0; white-space: normal; }
+  /* One line: a long recognized country uses its short form; anything still too wide ends in an ellipsis. */
+  > [data-country-name] { flex: 1; ${ellipsis} }
 `;
 const CountryName = styled.span`
   ${tile} { display: none; }
@@ -665,15 +666,6 @@ function CountryFlag({ url, country }: { url: string | null | undefined; country
   return <FlagFallback>{countryCode(country) === "INT" ? <GlobeIcon /> : <FlagIcon />}</FlagFallback>;
 }
 
-/** Keep full names available on hover when a mobile name is ellipsized. */
-function showFullNames(event: PointerEvent<HTMLElement>, title: string) {
-  const card = event.currentTarget;
-  const truncated = [...card.querySelectorAll<HTMLElement>("[data-team-name]")]
-    .some((name) => name.scrollHeight - name.clientHeight > 1 || name.scrollWidth - name.clientWidth > 1);
-  if (truncated) card.title = title;
-  else card.removeAttribute("title");
-}
-
 const resultIcon = { correct: <CheckIcon />, incorrect: <CrossIcon />, void: <VoidIcon /> } as const;
 
 /** Only timestamps subscribe to the device clock; the rest of a card stays unchanged. */
@@ -739,14 +731,14 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={shownFamily}
-    data-status={fixture.status} onPointerEnter={(event) => showFullNames(event, title)}>
+    data-status={fixture.status}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{title}</VisuallyHidden>
     <Meta>
       {position !== undefined && <Index $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
       <League title={country ?? undefined}>
         <CountryDetails data-country aria-hidden="true">
           <CountryFlag key={`${country}:${flagUrl}`} url={flagUrl} country={country} />
-          <CountryName data-country-name title={countryName || undefined}>{countryName || "–"}</CountryName>
+          <CountryName data-country-name title={countryName || undefined}>{countryShortName(country) || "–"}</CountryName>
         </CountryDetails>
         <CompetitionLogo key={fixture.competition.logoUrl} url={fixture.competition.logoUrl} /><LeagueName title={competition}>{competition}</LeagueName>
         {country && <VisuallyHidden>, {country}</VisuallyHidden>}</League>

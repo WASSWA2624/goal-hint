@@ -6,6 +6,7 @@ import { StyleProvider } from "@/styles/provider";
 import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
 import { MetadataRecovery } from "@/components/navigation/metadata-recovery";
+import { TruncationTooltips } from "@/components/ui/truncation-tooltips";
 import { AnalyticsProvider } from "@/server/analytics/analytics-provider";
 import { consentBootstrapScript, consentInitialStyle } from "@/server/analytics/consent-bootstrap";
 
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <Suspense fallback={null}><MetadataRecovery /></Suspense>
+        <TruncationTooltips />
         <StyleProvider>{children}<Suspense fallback={null}><AnalyticsProvider /></Suspense></StyleProvider>
       </body>
     </html>

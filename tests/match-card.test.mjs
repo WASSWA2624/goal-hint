@@ -255,5 +255,18 @@ test("long team names stay on one line with full-name tooltip and accessible lab
   const tile = styles.tile.split("${table}")[0];
   assert.match(tile, /white-space: nowrap;/u);
   assert.doesNotMatch(tile, /-webkit-line-clamp|text-wrap: balance|white-space: normal/u);
-  assert.match(await cardSource, /name\.scrollWidth - name\.clientWidth > 1/u);
+  assert.match(await cardSource, /<TeamName data-team-name="" title=\{name\}>/u);
+});
+
+test("hovering any ellipsized text shows its full value, even under the full-card link", async () => {
+  const source = await readFile(new URL("../src/components/ui/truncation-tooltips.tsx", import.meta.url), "utf8");
+  const layout = await readFile(new URL("../src/app/layout.tsx", import.meta.url), "utf8");
+  assert.match(source, /element\.scrollWidth - element\.clientWidth > 1 && getComputedStyle\(element\)\.textOverflow === "ellipsis"/u);
+  // The link overlay is the hovered element, so the text is found beneath it and the tooltip goes on the overlay.
+  assert.match(source, /document\.elementsFromPoint\(pointer\.x, pointer\.y\)/u);
+  assert.match(source, /label\.getAttribute\("title"\)\?\.trim\(\) \|\| label\.innerText\.trim\(\)/u);
+  assert.match(source, /event\.pointerType === "touch"/u);
+  assert.match(layout, /<TruncationTooltips \/>/u);
+  // The country label keeps its full name as the title behind its one-line short form.
+  assert.match(await cardSource, /<CountryName data-country-name title=\{countryName \|\| undefined\}>\{countryShortName\(country\) \|\| "–"\}<\/CountryName>/u);
 });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countryCode, countryDisplayName } from "../src/domain/country-code.ts";
+import { countryCode, countryDisplayName, countryShortName } from "../src/domain/country-code.ts";
 import { countryFlagAsset } from "../src/domain/country-flag.ts";
 
 test("recognized football abbreviations expand to full country names, including home nations", () => {
@@ -26,6 +26,24 @@ test("unknown and missing country labels are not invented or rewritten", () => {
     assert.equal(countryDisplayName(country), country);
   }
   for (const country of [null, undefined, "", "   "]) assert.equal(countryDisplayName(country), "");
+});
+
+test("long recognized country names use a familiar short form on one line; short and unknown names stay as shown", () => {
+  for (const [country, name] of [["Dominican-Republic", "Dominican Rep."], ["Dominican Republic", "Dominican Rep."],
+    ["Bosnia-And-Herzegovina", "Bosnia & Herz."], ["BIH", "Bosnia & Herz."], ["Northern-Ireland", "N. Ireland"],
+    ["NIR", "N. Ireland"], ["North-Macedonia", "N. Macedonia"], ["UAE", "UAE"], ["uae", "UAE"],
+    ["United-Arab-Emirates", "UAE"], ["United States of America", "USA"], ["Czech-Republic", "Czechia"],
+    ["Republic of Ireland", "Ireland"], ["Trinidad-And-Tobago", "Trinidad"], ["Papua-New-Guinea", "Papua NG"],
+    ["COD", "DR Congo"]]) {
+    assert.equal(countryShortName(country), name, country);
+  }
+  // Names that already fit keep their display form, including the expanded USA; unknown long names are left for the
+  // layout's ellipsis rather than rewritten.
+  for (const [country, name] of [["USA", "United States"], ["England", "England"], ["Saudi-Arabia", "Saudi Arabia"],
+    ["Faroe-Islands", "Faroe Islands"], ["Congo-DR", "Congo DR"], ["Chinese-Taipei", "Chinese Taipei"], ["Synthetic Long Nation Name", "Synthetic Long Nation Name"],
+    ["World", "World"], ["", ""], [null, ""]]) {
+    assert.equal(countryShortName(country), name, String(country));
+  }
 });
 
 test("display expansion keeps the original mobile code and flag identities available", () => {

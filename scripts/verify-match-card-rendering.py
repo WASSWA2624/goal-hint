@@ -101,7 +101,8 @@ def verify(origin, directory):
     match("Odds: Unavailable", by_id["card-incorrect"])
     match(r'data-pick-selection=""[^>]*>Under 2\.5</span>', by_id["card-long"])
     match(r'data-pick-selection=""[^>]*>Not both teams to score</span>', by_id["card-limited"])
-    match(r'<span\b[^>]*data-country-name[^>]*>Bosnia and Herzegovina</span>', by_id["card-long"])
+    match(r'<span\b(?=[^>]*data-country-name)(?=[^>]*title="Bosnia and Herzegovina")[^>]*>Bosnia &amp; Herz\.</span>',
+          by_id["card-long"])
     match(r'data-selected-odds[^>]*>\(9999\.99\)</span>', by_id["card-long"])
     match(r'<article[^>]*data-fixture-id="card-any"[^>]*data-market="double-chance"', visible)
     match("Double chance prediction: Home or draw, estimated probability 82%", by_id["card-any"])

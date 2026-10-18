@@ -85,6 +85,25 @@ export function countryDisplayName(country: string | null | undefined): string {
   return knownCountryCode(name) ? name.replace(/-+/gu, " ") : name;
 }
 
+/** Familiar short forms for recognized countries whose display name is too long for one line of the desktop league
+ * column. */
+const shortNames = new Map<string, string>([
+  ["ATG", "Antigua"], ["BIH", "Bosnia & Herz."], ["CPV", "Cape Verde"], ["CTA", "CAR"], ["COD", "DR Congo"],
+  ["CZE", "Czechia"], ["DOM", "Dominican Rep."], ["EQG", "Eq. Guinea"], ["IRL", "Ireland"], ["KOR", "South Korea"],
+  ["MKD", "N. Macedonia"], ["NIR", "N. Ireland"], ["PNG", "Papua NG"], ["SKN", "St Kitts"], ["SOL", "Solomon Is."],
+  ["TRI", "Trinidad"], ["UAE", "UAE"], ["USA", "USA"], ["VIN", "St Vincent"],
+]);
+/** Display names longer than this use a known short form; anything still too wide is ellipsized by the layout. */
+const shortNameThreshold = 13;
+
+/** The one-line country label: the display name, or a familiar short form when that name is long and recognized. */
+export function countryShortName(country: string | null | undefined): string {
+  const name = countryDisplayName(country);
+  if (name.length <= shortNameThreshold) return name;
+  const given = typeof country === "string" ? country.trim() : "";
+  return shortNames.get(knownCountryCode(/^[a-z]{3}$/iu.test(given) ? given.toUpperCase() : given)) ?? name;
+}
+
 /** The competition country's three-letter code (see the module rules); "" when there is no name. */
 export function countryCode(country: string | null | undefined): string {
   const name = typeof country === "string" ? country.trim() : "";
