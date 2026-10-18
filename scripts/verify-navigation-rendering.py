@@ -51,7 +51,8 @@ def main() -> None:
                     assert f'id="{section}"' in visible
                     assert f'href="#{section}"' in visible
                 for phrase in ["Choose a day or range", "Your device’s time zone", "Latest first",
-                        "elapsed minutes in the top-right badge", "A live match result prediction remains Pending"]:
+                        "elapsed minutes under it", "a tag in the top-right corner of each card on mobile",
+                        "A live match result prediction remains Pending"]:
                     assert phrase in visible
                 no_match(r'data-stored-performance|data-performance-cell|action="[^"\s]*#performance', visible)
         elif target.path == "/en/slips":

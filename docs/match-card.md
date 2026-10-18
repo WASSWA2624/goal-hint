@@ -65,27 +65,43 @@ the left, with its match count aligned to the right.
 
 ### Phone and tablet tile (below 64rem)
 
-The mobile card has four visible rows:
+The mobile card ("Verdict Corner", design 09) has three rows on one grid
+(`"meta result" "teams teams" "pick pick"`), about 75px tall in every state:
 
-1. Match date and 24-hour local kickoff time with a visible zone together on the left; a match status badge on the right. Upcoming and Ended use neutral tones. For live matches the red badge shows the supplied elapsed minute, including stoppage notation such as `90+4′`, instead of Live. With no minute, it shows the actual phase or a dash when the phase is unknown.
-2. Country flag and FIFA code on the left; one-line, ellipsized league name and competition logo on the right, with the logo at the outer edge.
-3. Single-line home name and crest, compact centered match state, away crest and single-line name. A live match shows its bold score in place of VS, with no minute repeated beneath it. Upcoming matches show VS; finished matches retain their score and final state.
-4. One flat strip with four equal cells separated by thin vertical dividers. Each
-   cell contains a tiny caption (Market, Pick, Prob. or Result) above
-   its value. Every viewport uses full market and selection names, such as
-   `Home win`, `Home or draw`, `Over 2.5` and `Not both teams to score`,
-   with the exact available price on a small Odds
-   line beneath the prediction. The strip has no boxed pills, gradients or
-   shadows. Its fill uses the light or dark theme's neutral surface.
+1. **Meta and verdict.** One quiet muted line: country flag, one-line ellipsized
+   league name, `·`, then the kickoff date and 24-hour time with its zone. An
+   upcoming match's clock is bold; other states keep it muted. When enlarged
+   text leaves the line narrower than the kickoff needs (the card is a
+   `match-card` inline-size container; below 18rem), the league takes the
+   first line and the kickoff moves to a second one instead of running under
+   the tag. The result tag
+   owns the top-right corner (at least 4.75rem wide, overlapping the card's
+   border): solid green Win with a check, solid red Loss with a cross, solid
+   amber Pending, solid grey Void, and an amber outline for Upcoming. Labels are
+   uppercase words; an unavailable result shows no tag.
+2. **Teams.** Home name and crest, the centre column, away crest and name, with
+   each crest beside the centre. The centre shows `vs` (scheduled or halted) or
+   the bold score (live red text while live, the losing side muted), with the state
+   beneath it: the live minute with a dot (`67′`, `90+4′`, or the phase), `FT`,
+   `AET*`/`Pens*`, or a halted status such as Postponed in grey.
+3. **Pick line.** Market caption in its family colour, the full-word pick
+   (`Home win`, `Over 2.5`, `Not both teams to score`), the exact available
+   price as `@ 1.85`, and the probability as `54% likely`. At narrow widths the
+   word "likely" drops first (it wraps onto a clipped second line, never below
+   the percentage's own width) and the market caption shortens next, so the
+   pick and its numbers stay whole. A missing pick reads `No pick · Too early` (the
+   short reason). The decorative meter and the bracketed desktop price stay in
+   the markup but are hidden on the tile.
 
 All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Desktop keeps both date and kickoff clock in the Date & Time column; elapsed time and FT share the separate status slot above the score. An unknown kickoff retains its localized date-column fallback without inventing a clock or `datetime`. Phone date/time composition stays unchanged. Within the existing desktop league column, full country names sit above the league name and logo and may wrap. Recognized provider abbreviations such as `USA` expand for desktop display; raw country values still drive flags and filters. Desktop league and team names remain on one line with ellipsis and full-value titles. Shared grid rows align the row number with the country and align the league logo/name, both team names/logos, score, market, prediction, probability and result on the lower track, including when the country wraps. Generic prediction wording is shared with details, history, slips and metadata; extended totals retain their actual lines, including `Under 1.5`. Stored historical labels and their hashes stay unchanged.
 
-Cards use 6px padding, 3px internal row gaps, 8px page gutters and 6px list gaps.
-Metadata and team names are 12px, bold scores 14px, and prediction captions 10px.
-Team names use the shared medium weight. Fine borders and square edges separate
+Tile rows use 10px side padding, 8px page gutters and 6px list gaps. Metadata
+is 11px, team names and picks 12px bold, scores 16px, and captions, state and
+the result tag 10px. The list's offscreen placeholder
+(`contain-intrinsic-block-size`) matches the 75px card. Fine borders and square edges separate
 white or dark cards from the darker page canvas; mobile cards have no shadow.
-Long names ellipsize on one line. Captions, metric values and the secondary odds
-line stay on one line, with bounded ellipsis only at unusually narrow effective
+Long names ellipsize on one line. Captions, metric values and the inline price
+stay on one line, with bounded ellipsis only at unusually narrow effective
 widths or enlarged text. Full semantic descriptions remain accessible. Text
 uses rem units and card/cell heights are never fixed.
 
@@ -105,12 +121,12 @@ Local MIT-licensed SVG flags in `public/flags` resolve recognized football count
 The same full-card link, canonical navigation, hidden full team names and
 score/outcome descriptions remain accessible. Cards render no warning strip,
 notice list or notice-related `aria-describedby` reference on any screen.
-Public odds for the selected pick appear beneath the
-prediction and remain in its tooltip and accessible text. No unrelated or
+Public odds for the selected pick appear beside the
+prediction (bracketed on desktop, `@ price` on the tile) and remain in its tooltip and accessible text. No unrelated or
 missing price fills that line. Long team names ellipsize with full names in
 the heading/link and a hover tooltip; league names truncate first.
 
-Browser acceptance covers 320, 360, 390 and 430px, 200% root text, long names, scheduled/live/final states, local flags, four visible rows and no page/card horizontal overflow. Date controls stack at narrow effective container widths to preserve readable labels with enlarged text.
+Browser acceptance covers 320, 360, 390 and 430px, 200% root text, long names, scheduled/live/final states, local flags, three visible rows with the corner result tag and no page/card horizontal overflow. Date controls stack at narrow effective container widths to preserve readable labels with enlarged text.
 
 **Team codes.** Fixture snapshot teams still carry an optional provider `code`
 (`fixture-snapshot.ts`; the feed and detail read publishes
@@ -266,7 +282,7 @@ outcomes, binding/validation, all sources/notices, boundary/group rounding,
 Unicode initials, structural URL checks, actual EAT times and atomic version
 replacement. Additional checks cover market labels, no-pick descriptions,
 full team identity and single-line name truncation. Browser checks verify the
-four-row geometry and natural height growth with enlarged text.
+three-row geometry with the corner result tag and natural height growth with enlarged text.
 `tests/team-name.test.mjs` covers
 provider code validation against the stored pattern; `tests/country-code.test.mjs`
 covers the photo's countries, provider spellings and variants, distinct codes

@@ -383,6 +383,7 @@ export const en = {
   "match.status.awarded": "Awarded",
   "match.status.unknown": "Match status unavailable",
   "match.versus": "vs",
+  "match.likely": "likely",
   "match.liveBadge": "Live",
   "match.clock.minute": "{minute}′",
   "match.clock.minuteLabel": "{minute} minutes played",

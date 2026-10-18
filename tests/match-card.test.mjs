@@ -206,12 +206,48 @@ test("cards show full team names, never abbreviations or provider team codes", a
 
 /** One styled component's template from the card source, and the part of it inside its `${tile} {` block. */
 async function styledBlock(name) {
-  const match = (await cardSource).match(new RegExp(`const ${name} = styled\\.[a-z]+(?:<[^>]*>)?\`([^\`]*)\`;`, "u"));
+  const match = (await cardSource).match(new RegExp(`const ${name} = styled(?:\\.[a-z]+|\\([A-Za-z]+\\))(?:<[^>]*>)?\`([^\`]*)\`;`, "u"));
   assert.ok(match, `${name} styles`);
   const tileStart = match[1].indexOf("${tile} {");
   assert.ok(tileStart >= 0, `${name} has tile rules`);
   return { all: match[1], tile: match[1].slice(tileStart) };
 }
+
+test("the phone tile puts the result tag in the top-right corner, outside the desktop pick subgrid", async () => {
+  const card = (await styledBlock("Card")).tile.split("${table}")[0];
+  assert.match(card, /grid-template-areas: "meta result" "teams teams" "pick pick";/u);
+  const result = await styledBlock("Result");
+  assert.match(result.tile.split("${table}")[0], /grid-area: result;/u);
+  assert.match(result.tile, /&\[data-result-badge="upcoming"\]/u);
+  assert.match(result.tile, /&\[data-result-badge="unavailable"\] \{ display: none; \}/u);
+  // The table keeps the result in its own column, right after the three pick columns.
+  assert.match(result.tile, /\$\{table\} \{\s*grid-column: 10;\s*grid-row: 2;/u);
+  assert.match((await styledBlock("Pick")).tile, /grid-column: 7 \/ span 3;/u);
+  assert.match(await cardSource, /<\/Pick>\s*<Result aria-hidden="true"/u);
+});
+
+test("the phone pick line drops the market caption and the probability word before the pick", async () => {
+  const market = (await styledBlock("MarketName")).tile.split("${table}")[0];
+  const probability = (await styledBlock("Probability")).tile;
+  assert.match(market, /flex: 0 100 auto;/u);
+  assert.match(probability, /flex: 0 100000 auto;/u);
+  assert.match(probability, /flex-wrap: wrap;/u);
+  assert.match(probability, /overflow: hidden;/u);
+  assert.match(probability, /min-inline-size: min-content;/u);
+  assert.equal(createMessages().text("match.likely"), "likely");
+});
+
+test("enlarged text moves the phone kickoff onto its own line instead of under the result tag", async () => {
+  const source = await cardSource;
+  assert.match((await styledBlock("Card")).tile, /container: match-card \/ inline-size;/u);
+  assert.match(source, /const narrowTile = "@container match-card \(max-width: 18rem\)";/u);
+  // The league stays beside the tag; the kickoff takes a full-width second row and the teams and pick move down one.
+  assert.match((await styledBlock("Meta")).tile, /\$\{narrowTile\} \{ display: contents; \}/u);
+  assert.match((await styledBlock("League")).tile, /\$\{narrowTile\} \{ grid-area: meta;/u);
+  assert.match((await styledBlock("When")).tile, /\$\{narrowTile\} \{ grid-column: 1 \/ -1; grid-row: 2;/u);
+  assert.match((await styledBlock("Teams")).tile, /\$\{narrowTile\} \{ grid-row: 3; \}/u);
+  assert.match((await styledBlock("Pick")).tile, /\$\{narrowTile\} \{ grid-row: 4; \}/u);
+});
 
 test("long team names stay on one line with full-name tooltip and accessible labels", async () => {
   const styles = await styledBlock("TeamName");

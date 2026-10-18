@@ -89,6 +89,11 @@ def verify(origin, directory):
     match(r'data-mobile-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-desktop-only=""[^>]*>Match result</span>', by_id["card-unavailable"])
     match(r'data-selected-odds[^>]*>\(1\.85\)</span>', by_id["card-correct"])
+    match(r'data-pick-price=""[^>]*>@ 1\.85</span>', by_id["card-correct"])
+    assert by_id["card-correct"].count('data-pick-price=""') == 1, "The tile shows the shown pick's price once"
+    no_match(r"data-pick-price=", by_id["card-incorrect"])
+    match(r'data-mobile-only=""[^>]*>likely</span>', by_id["card-correct"])
+    no_match(r">likely</span>", by_id["card-unavailable"])
     match("Odds: 1.85", by_id["card-correct"])
     no_match(r"Odds 2\.10", by_id["card-correct"])
     no_match(r"Odds 2\.10|Odds 2\.25|data-selected-odds=", by_id["card-incorrect"])

@@ -58,7 +58,7 @@ const List = styled.ul`
   ${media.belowDesktop} {
     /* Keep every match searchable and accessible while deferring offscreen layout.
      * Remember measured heights as visitors scroll through the list. */
-    > li { content-visibility: auto; contain-intrinsic-block-size: auto 84px; }
+    > li { content-visibility: auto; contain-intrinsic-block-size: auto 75px; }
   }
 
   ${media.desktop} {
