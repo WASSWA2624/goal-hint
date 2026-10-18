@@ -1,6 +1,7 @@
 import { analyticsRules, analyticsStorageKeys, type ConsentChoice } from "@/domain/analytics-settings";
 import type { AnalyticsEventInput, Attribution, CollectPayload } from "@/domain/analytics";
 import { hasBrowserPrivacySignal, resolveAnalyticsConsent, type ConsentState } from "@/domain/analytics-consent";
+import { randomId } from "@/components/ui/random-id";
 
 /**
  * Consent-gated first-party tracker. Nothing is stored or sent until the visitor allows analytics.
@@ -25,15 +26,6 @@ function writeJson(key: string, value: unknown) {
 }
 function remove(key: string) {
   try { store()?.removeItem(key); window.sessionStorage.removeItem(key); } catch { /* Nothing to clear. */ }
-}
-
-export function randomId(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
-  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /** Global Privacy Control and Do Not Track count as a refusal without asking. */

@@ -1,6 +1,7 @@
 "use client";
 
 import { matchingFeedCheckpoint, readFeedCheckpoints, writeFeedCheckpoint, type FeedCheckpoint } from "@/domain/feed-navigation";
+import { randomId } from "@/components/ui/random-id";
 
 export const feedNavigationStorageKey = "goal-hint.feed-navigation.v1";
 const markerKey = "goalHintFeed";
@@ -9,7 +10,8 @@ export function ensureFeedEntry(href: string): string {
   const state = window.history.state as Record<string, unknown> | null;
   const marker = state?.[markerKey] as { href?: unknown; entryId?: unknown } | undefined;
   if (marker?.href === href && typeof marker.entryId === "string" && /^[a-zA-Z0-9_-]{1,128}$/u.test(marker.entryId)) return marker.entryId;
-  const entryId = crypto.randomUUID();
+  // A plain-HTTP origin (the dev server by LAN address) has no crypto.randomUUID.
+  const entryId = randomId();
   window.history.replaceState({ ...state, [markerKey]: { href, entryId } }, "");
   return entryId;
 }
