@@ -33,6 +33,11 @@ export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketF
     updateDelayed: forecast.updateDelayed === true };
 }
 
+/** Upcoming describes the fixture, without changing the selected market's audited settlement. */
+export function cardResultStatus(status: FixtureSnapshot["status"], outcome: SettlementOutcomeStatus | "unavailable") {
+  return status === "scheduled" ? "upcoming" : outcome;
+}
+
 /**
  * Whether a card renders a refreshed record exactly as before. A version bump replaces the whole
  * record; at an equal version only the fields `mergeFixtureObservation` refreshes can differ.

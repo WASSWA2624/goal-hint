@@ -30,7 +30,15 @@ def verify(origin, directory):
         match(r'<svg[^>]*aria-hidden="true"[^>]*focusable="false"', article)
         assert len(re.findall(r"<a\b", article)) == 1, "One keyboard destination per card"
         match(r"prediction: [^<]+, estimated probability|prediction unavailable", article)
-        match(r'data-outcome="(?:correct|incorrect|pending|void|unavailable)"', article)
+        outcome = match(r'data-outcome="(correct|incorrect|pending|void|unavailable)"', article).group(1)
+        fixture_status = match(r'data-status="([^"]+)"', tag).group(1)
+        result = "upcoming" if fixture_status == "scheduled" else outcome
+        label = {"upcoming": "Upcoming", "correct": "Win", "incorrect": "Loss", "pending": "Pending",
+            "void": "Void", "unavailable": "—"}[result]
+        assert article.count(f'data-result-badge="{result}"') == 1, "One truthful fixture/prediction result"
+        match(rf'data-result-badge="{result}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span></span>', article)
+        if fixture_status != "scheduled":
+            no_match(r'data-result-badge="upcoming"', article)
         no_match(r"\s(?:\$[\w-]+|tone|variant|loaded)=", article)
         kickoff = re.findall(r'<time\b(?=[^>]*\bdata-kickoff(?:\s|=|>))([^>]*)>([\s\S]*?)</time>', article)
         if 'data-fixture-id="card-unknown"' in tag:
@@ -61,10 +69,14 @@ def verify(origin, directory):
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
         match(f'data-outcome="{status}"', by_id[card])
     for card, status, label in [("card-correct", "correct", "Win"), ("card-incorrect", "incorrect", "Loss"),
-        ("card-pending", "pending", "Pending")]:
+        ("card-pending", "pending", "Pending"), ("card-delayed", "upcoming", "Upcoming"),
+        ("card-limited", "upcoming", "Upcoming")]:
         article = by_id[card]
         assert article.count(f'data-result-badge="{status}"') == 1
         match(rf'data-result-badge="{status}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span></span>', article)
+    for card in ["card-delayed", "card-limited"]:
+        match(r'data-outcome="pending"', by_id[card])
+        no_match(r'data-result-badge="pending"|data-pick-value[^>]*>Pending</span>', by_id[card])
     for card in ["card-unavailable", "card-missing-family"]:
         match(r'data-result-badge="unavailable"[^>]*>[\s\S]*?<span data-pick-value[^>]*>—</span></span>', by_id[card])
         no_match(r'data-pick-value[^>]*>(?:0%|Pending)</span>', by_id[card])

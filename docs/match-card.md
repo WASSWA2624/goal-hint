@@ -28,25 +28,28 @@ Remaining ties use policy order. Selection, probability, odds and result always
 come from that one shown published pick; an unrelated family cannot fill a
 missing field.
 
-1. Header: competition (and country) and the compact local kickoff day in the
-   Date column. One semantic `time` element retains the date and time, a full
-   UTC ISO `datetime` and a title with the full instant and displayed zone.
-2. Teams: logos and names either side of a centre state. The local 24-hour
-   kickoff time and zone sit above the centre score on desktop. Scheduled shows `VS`;
-   live shows the score and a red chip with the provider minute (`67′`) or
-   phase (`HT`, `Break`, `Penalties`…); finished shows the score with `FT`,
-   `AET*` or `Pens*` (the asterisk marks a 90-minute score, explained in the
-   chip title and hidden text); postponed/canceled/abandoned/awarded show a
-   neutral status chip.
-3. Pick: the market family, selection, estimated percent and prediction result. On
-   desktop the family is a tag washed from the family tint into white, with a
-   1px family ring, a solid 3px family edge and bold family-coloured text
-   (inset shadows draw the ring and edge, so rows keep their height); the
-   full-word pick sits in a pill in the family's gradient. An available exact-pick
-   price appears on a small secondary line beneath the selection. The Result
-   column explicitly shows Win, Loss, Pending or Void. Missing predictions show
-   Unavailable with dashes for probability and result; they never appear as 0%
-   or Pending. Phone and tablet cards use the flat strip described below.
+1. Upper track: the row number (`#`) aligns with the country flag and full
+   country name. The Date & Time column shows the kickoff date here. In the
+   score column, the provider's elapsed minute (`67′`, `90+4′`) or live phase
+   (`HT`, `Break`, `Penalties`…) occupies the status slot above the score.
+   When the match ends, `FT`, `AET*` or `Pens*` replaces the live status in
+   that same slot. The asterisk identifies a regulation-only score and has
+   explanatory tooltip and accessible text. Postponed, canceled, abandoned
+   and awarded fixtures retain their actual status; scheduled fixtures have
+   no elapsed-minute or final-status chip.
+2. Lower track: the league logo and name, both team names and logos, score
+   (or scheduled `VS`), market, prediction, probability and result share one
+   vertical alignment. The local 24-hour kickoff time and its zone sit beside
+   the date in the Date & Time column, on its second line. One semantic
+   `time` element retains the date and time, a full UTC ISO `datetime` and a
+   title with the full instant and displayed zone.
+3. Pick: the market family, full-word generic selection, available exact-pick
+   price, estimated probability and result each stay in their existing
+   columns. Square family-tinted tags and bordered prediction values retain
+   the existing colour theme. The Result column shows Upcoming for every
+   scheduled match, even when no prediction is available. Live and completed
+   matches retain their actual prediction result: Win, Loss, Pending, Void or
+   an unavailable dash. Missing probabilities never appear as 0%.
 
 Source, provisional status and publication time move to the pill tooltip; sync
 time stays on the detail page. On desktop each card becomes one table row
@@ -75,7 +78,7 @@ The mobile card has four visible rows:
    line beneath the prediction. The strip has no boxed pills, gradients or
    shadows. Its fill uses the light or dark theme's neutral surface.
 
-All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Desktop keeps the date in its Date column and places the kickoff clock above the score or VS, with live/final status below. An unknown kickoff retains its localized date-column fallback without inventing a clock or `datetime`. Phone date/time composition stays unchanged. Within the existing desktop league column, full country names sit above the league name and logo and may wrap. Recognized provider abbreviations such as `USA` expand for desktop display; raw country values still drive flags and filters. Desktop league and team names remain on one line with ellipsis and full-value titles. Shared grid rows align the league logo/name, both team names/logos, score, market, prediction, probability and result, including when the country wraps. Generic prediction wording is shared with details, history, slips and metadata; extended totals retain their actual lines, including `Under 1.5`. Stored historical labels and their hashes stay unchanged.
+All screen sizes show 24-hour kickoff times with the device's time-zone label after hydration and a stable EAT server fallback. Display formatting never changes the stored instant or EAT reporting date. Desktop keeps both date and kickoff clock in the Date & Time column; elapsed time and FT share the separate status slot above the score. An unknown kickoff retains its localized date-column fallback without inventing a clock or `datetime`. Phone date/time composition stays unchanged. Within the existing desktop league column, full country names sit above the league name and logo and may wrap. Recognized provider abbreviations such as `USA` expand for desktop display; raw country values still drive flags and filters. Desktop league and team names remain on one line with ellipsis and full-value titles. Shared grid rows align the row number with the country and align the league logo/name, both team names/logos, score, market, prediction, probability and result on the lower track, including when the country wraps. Generic prediction wording is shared with details, history, slips and metadata; extended totals retain their actual lines, including `Under 1.5`. Stored historical labels and their hashes stay unchanged.
 
 Cards use 6px padding, 3px internal row gaps, 8px page gutters and 6px list gaps.
 Metadata and team names are 12px, bold scores 14px, and prediction captions 10px.
@@ -86,9 +89,11 @@ line stay on one line, with bounded ellipsis only at unusually narrow effective
 widths or enlarged text. Full semantic descriptions remain accessible. Text
 uses rem units and card/cell heights are never fixed.
 
-The result uses explicit text: green Win, red Loss, amber Pending and neutral
-Void. A missing prediction and its probability/result display dashes on mobile;
-desktop retains Unavailable in the prediction column. The full missing-prediction reason is in
+The result uses explicit text: Upcoming for scheduled matches, green Win,
+red Loss, amber Pending and neutral Void. Upcoming uses the pending colour
+tone and remains visible on desktop and mobile, including a scheduled match
+without a pick. Other missing predictions retain their no-pick presentation
+and unavailable result. The full missing-prediction reason is in
 accessible text. Only supplied, correctly bound final settlements can show
 Win/Loss; live score changes never settle a pending prediction. Scheduled
 matches show VS without an invented score. Running clocks include available
@@ -166,6 +171,8 @@ Explanations must be visitor-safe copy, not internal logs or provider payloads.
 `selectedCardPrediction` reads only the selected family. No forecast or missing
 family produces Unavailable and no probability, source or invented publication
 time. A valid supplied prediction without a matching outcome remains Pending.
+`cardResultStatus` changes only the presented result of a scheduled fixture
+to Upcoming; it never changes that market settlement or fabricates a pick.
 The UI does not adjudicate scores. A final fixture can therefore display its
 known final score alongside Pending or Unavailable prediction correctness.
 The score remains an overall display value, not a verified regulation score;

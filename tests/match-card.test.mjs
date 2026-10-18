@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { fixtureSnapshotSchema, parseFixtureSnapshot } from "../src/domain/fixture-snapshot.ts";
-import { hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, sameCardFixture, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
+import { cardResultStatus, hasFinalScoreStatus, liveClockFromProvider, probabilityEntry, sameCardFixture, selectedCardPrediction, teamInitials } from "../src/domain/match-card.ts";
 import { mergeFixtureObservation } from "../src/domain/fixture-reconciliation.ts";
 import { marketRules, marketSelections, validateMarketGroup } from "../src/domain/markets.ts";
 import { isSafeRemoteImageUrl } from "../src/domain/remote-image.ts";
@@ -37,6 +37,22 @@ test("display never settles live or final scores or invents missing forecasts", 
   assert.throws(() => parseFixtureSnapshot(premature));
   assert.equal(hasFinalScoreStatus("finished-extra-time"), true);
   for (const status of ["scheduled", "live", "postponed", "awarded", "unknown"]) assert.equal(hasFinalScoreStatus(status), false);
+});
+
+test("scheduled results show Upcoming with or without a pick, without altering market settlement", () => {
+  const scheduled = cardFixture({ status: "scheduled", score: null }, "ai", null);
+  const prediction = selectedCardPrediction(scheduled);
+  assert.equal(prediction.status, "pending");
+  assert.equal(cardResultStatus(scheduled.status, prediction.status), "upcoming");
+  const noPick = { ...scheduled, forecast: null };
+  assert.equal(selectedCardPrediction(noPick), null);
+  assert.equal(cardResultStatus(noPick.status, "unavailable"), "upcoming");
+  assert.equal(createMessages().text("match.result.upcoming"), "Upcoming");
+  for (const status of ["live", "finished-regulation", "finished-extra-time", "finished-penalties", "postponed", "canceled", "abandoned", "awarded", "unknown"]) {
+    for (const outcome of ["pending", "correct", "incorrect", "void", "unavailable"]) {
+      assert.equal(cardResultStatus(status, outcome), outcome, `${status}: ${outcome}`);
+    }
+  }
 });
 
 test("outcome bindings require the same cycle, revision and selected pick, with a retained void reason", () => {

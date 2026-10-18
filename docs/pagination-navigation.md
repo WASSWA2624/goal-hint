@@ -11,7 +11,11 @@ The feed and detail panels share a horizontally scrollable page-number strip.
 Available width determines how many sequential numbers are visible; there are
 no ellipsis gaps. The arrows smoothly scroll one number in either direction
 without changing the selected page, URL, or results. Only selecting a numbered
-link or button navigates. Touch, trackpad, and keyboard scrolling also work, and
+link or button navigates. Holding either arrow with a mouse, pen, touch, or the
+Enter or Space key starts continuous scrolling after a short delay; releasing, cancelling the pointer,
+losing capture or focus, hiding the tab, or reaching the rail boundary stops it.
+A short click or key press retains the one-number step, and a hold does not add a step on
+release. Touch, trackpad, and keyboard scrolling also work, and
 reduced-motion preferences disable smooth animation. The active page is brought
 into view on navigation and resizing. Long collections render a bounded window
 of numbered controls while retaining the complete scroll range.

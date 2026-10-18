@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
@@ -16,6 +16,9 @@ type Labels = Readonly<{
 }>;
 type Navigation = Readonly<{ href: (page: number) => string; onPage?: never }> | Readonly<{ onPage: (page: number) => void; href?: never }>;
 export type NumberedPaginationProps = Readonly<{ page: number; pages: number; labels: Labels; compact?: boolean; className?: string }> & Navigation;
+type HoldInput = { button: HTMLButtonElement; direction: -1 | 1 } &
+  ({ kind: "pointer"; pointer: number } | { kind: "keyboard"; key: "Enter" | " " });
+type ScrollHold = HoldInput & { previousTime: number | null; moved: boolean };
 
 export function numberedPaginationLabels(messages: Pick<Messages, "text" | "number">, navigation: string): Labels {
   return { navigation, numbers: messages.text("pagination.numbers"), instructions: messages.text("pagination.instructions"),
@@ -45,7 +48,11 @@ const Frame = styled.nav<{ $compact: boolean }>`
     font-size: ${({ $compact }) => $compact ? "0.75rem" : "0.875rem"};
   }
 `;
-const ScrollButton = styled.button`${paginationControlStyles}`;
+const ScrollButton = styled.button`
+  ${paginationControlStyles}
+  touch-action: none;
+  user-select: none;
+`;
 const Viewport = styled.div`
   min-inline-size: 0;
   max-inline-size: 100%;
@@ -80,11 +87,65 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
   const viewport = useRef<HTMLDivElement>(null), list = useRef<HTMLOListElement>(null);
   const step = useRef(36), cell = useRef(32), frame = useRef<number | null>(null), pendingFocus = useRef<number | null>(null);
   const scrollTarget = useRef<number | null>(null);
+  const holdFrame = useRef<number | null>(null), holdDelay = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef<ScrollHold | null>(null);
+  const suppressClick = useRef(false);
   const id = useId(), instructionsId = `${id}-instructions`;
   const [visibleRange, setVisibleRange] = useState(() => paginationWindow(count, current, 12));
   const [focusedPage, setFocusedPage] = useState<number | null>(null);
   const [bounds, setBounds] = useState({ backward: current > 1, forward: current < count });
   const mountedRange = visibleRange.from < 1 || visibleRange.to > count ? paginationWindow(count, current, 12) : visibleRange;
+
+  const stopHold = useCallback(() => {
+    if (holdDelay.current !== null) { clearTimeout(holdDelay.current); holdDelay.current = null; }
+    if (holdFrame.current !== null) { cancelAnimationFrame(holdFrame.current); holdFrame.current = null; }
+    const active = held.current;
+    held.current = null;
+    if (!active) return;
+    // A held pointer has already scrolled; its release must not add a normal click step.
+    suppressClick.current = active.kind === "pointer" && active.moved;
+    if (active.kind === "pointer" && active.button.hasPointerCapture(active.pointer)) active.button.releasePointerCapture(active.pointer);
+  }, []);
+  const repeatHold = useCallback(function repeat(time: number) {
+    const active = held.current, element = viewport.current;
+    if (!active || !element) return;
+    const elapsed = active.previousTime === null ? 0 : Math.min(time - active.previousTime, 50);
+    active.previousTime = time;
+    const maximum = Math.max(0, element.scrollWidth - element.clientWidth);
+    const next = Math.max(0, Math.min(maximum, element.scrollLeft + active.direction * step.current * 6 * elapsed / 1000));
+    if (elapsed > 0) {
+      scrollTarget.current = null;
+      if (Math.abs(next - element.scrollLeft) < 0.01) { stopHold(); return; }
+      active.moved = true;
+      // Press-controlled motion advances directly, without queuing smooth animations after release.
+      element.scrollTo({ left: next, behavior: "instant" });
+    }
+    holdFrame.current = requestAnimationFrame(repeat);
+  }, [stopHold]);
+  const beginHold = (input: HoldInput) => {
+    stopHold();
+    suppressClick.current = false;
+    if (input.kind === "pointer") input.button.setPointerCapture(input.pointer);
+    held.current = { ...input, previousTime: null, moved: false };
+    holdDelay.current = setTimeout(() => { holdDelay.current = null; holdFrame.current = requestAnimationFrame(repeatHold); }, 350);
+  };
+  const startHold = (event: PointerEvent<HTMLButtonElement>, direction: -1 | 1) => {
+    if (event.isPrimary && event.button === 0) beginHold({ kind: "pointer", pointer: event.pointerId, button: event.currentTarget, direction });
+  };
+  const endHold = (event: PointerEvent<HTMLButtonElement>) => {
+    if (held.current?.kind === "pointer" && held.current.pointer === event.pointerId && held.current.button === event.currentTarget) stopHold();
+  };
+  const blurHold = (event: FocusEvent<HTMLButtonElement>) => {
+    // Pointerdown precedes focus transfer: blurring the other arrow must not cancel a new hold.
+    if (held.current?.button === event.currentTarget) stopHold();
+  };
+
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) stopHold(); };
+    window.addEventListener("blur", stopHold);
+    document.addEventListener("visibilitychange", hidden);
+    return () => { stopHold(); window.removeEventListener("blur", stopHold); document.removeEventListener("visibilitychange", hidden); };
+  }, [stopHold]);
 
   const measure = useCallback(() => {
     const control = list.current?.querySelector<HTMLElement>("[data-pagination-page]");
@@ -114,6 +175,7 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
     const element = viewport.current;
     if (!element) return;
     const revealCurrent = () => {
+      stopHold();
       measure();
       scrollTarget.current = null;
       element.scrollTo({ left: current === count ? element.scrollWidth - element.clientWidth
@@ -134,7 +196,7 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
     observer.observe(element);
     if (list.current) observer.observe(list.current);
     return () => { observer.disconnect(); if (frame.current !== null) cancelAnimationFrame(frame.current); };
-  }, [current, count, measure, update]);
+  }, [current, count, measure, update, stopHold]);
 
   useLayoutEffect(() => {
     if (pendingFocus.current === null) return;
@@ -150,6 +212,25 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
       (scrollTarget.current ?? element.scrollLeft) + direction * step.current));
     element.scrollTo({ left: scrollTarget.current,
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
+  const clickScroll = (direction: -1 | 1, detail: number) => {
+    if (detail !== 0 && suppressClick.current) { suppressClick.current = false; return; }
+    scroll(direction);
+  };
+  const keyDownHold = (event: KeyboardEvent<HTMLButtonElement>, direction: -1 | 1) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    // Browser key repeat and the native release click would otherwise scroll twice.
+    event.preventDefault();
+    if (event.repeat) return;
+    beginHold({ kind: "keyboard", key: event.key, button: event.currentTarget, direction });
+  };
+  const keyUpHold = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    const active = held.current;
+    if (active?.kind !== "keyboard" || active.key !== event.key || active.button !== event.currentTarget) return;
+    stopHold();
+    if (!active.moved) scroll(active.direction);
   };
   const focusPage = (target: number) => {
     const element = viewport.current;
@@ -194,7 +275,10 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
     style={{ flexBasis: `calc(var(--pagination-step) * ${amount} - var(--pagination-gap))` }} /> : null;
   return <Frame $compact={compact} className={className} aria-label={labels.navigation} data-numbered-pagination data-page-count={count}
     data-current-page={current} style={{ "--pagination-digits": String(count).length } as CSSProperties}>
-    <ScrollButton type="button" onClick={() => scroll(-1)} disabled={!bounds.backward} aria-label={labels.backward} title={labels.backward}
+    <ScrollButton type="button" onClick={(event) => clickScroll(-1, event.detail)} disabled={!bounds.backward} aria-label={labels.backward} title={labels.backward}
+      onPointerDown={(event) => startHold(event, -1)} onPointerUp={endHold} onPointerCancel={endHold} onLostPointerCapture={endHold}
+      onKeyDown={(event) => keyDownHold(event, -1)} onKeyUp={keyUpHold}
+      onBlur={blurHold} onContextMenu={(event) => { if (held.current) event.preventDefault(); }}
       aria-controls={id} data-pagination-scroll="previous"><ChevronLeftIcon /></ScrollButton>
     <Viewport id={id} ref={viewport} tabIndex={0} role="group" aria-label={labels.numbers} aria-describedby={instructionsId}
       onScroll={scheduleUpdate} onKeyDown={keyboard} onPointerDown={() => { scrollTarget.current = null; }}
@@ -215,7 +299,10 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
         {spacer(count - numbers[numbers.length - 1]!, "after")}
       </Numbers>
     </Viewport>
-    <ScrollButton type="button" onClick={() => scroll(1)} disabled={!bounds.forward} aria-label={labels.forward} title={labels.forward}
+    <ScrollButton type="button" onClick={(event) => clickScroll(1, event.detail)} disabled={!bounds.forward} aria-label={labels.forward} title={labels.forward}
+      onPointerDown={(event) => startHold(event, 1)} onPointerUp={endHold} onPointerCancel={endHold} onLostPointerCapture={endHold}
+      onKeyDown={(event) => keyDownHold(event, 1)} onKeyUp={keyUpHold}
+      onBlur={blurHold} onContextMenu={(event) => { if (held.current) event.preventDefault(); }}
       aria-controls={id} data-pagination-scroll="next"><ChevronRightIcon /></ScrollButton>
     <VisuallyHidden id={instructionsId}>{labels.instructions}</VisuallyHidden>
     <noscript><style>{`[data-numbered-pagination]{grid-template-columns:minmax(0,1fr)}[data-numbered-pagination] [data-pagination-spacer],[data-numbered-pagination] [data-pagination-scroll]{display:none}[data-numbered-pagination] [data-pagination-viewport]{overflow:visible}[data-numbered-pagination] ol{inline-size:auto;flex-wrap:wrap}`}</style></noscript>
