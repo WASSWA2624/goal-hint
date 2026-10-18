@@ -20,11 +20,13 @@ function emptyDatabase(at) {
       observed.sql.push(statement);
       return statement.sql.trimStart().startsWith('SELECT COUNT') ? [{ total: 0n, available: 0n }] : [];
     },
-    footballImport: { findFirst: async () => {
+    // Coverage reads the whole range in one batch: the first seven days have complete receipts, the eighth none.
+    footballImport: { findMany: async ({ where }) => {
       observed.coverageReads++;
-      return observed.coverageReads <= 7 ? { id: `receipt-${observed.coverageReads}`, status: 'complete', observedAt: new Date(at) } : null;
+      if (where.id) return [];
+      return where.scopeKey.in.slice(0, 7).map((scopeKey, index) => ({ id: `receipt-${index + 1}`, scopeKey, status: 'complete', observedAt: new Date(at) }));
     } },
-    dailyRunImport: { findFirst: async () => null },
+    dailyRunImport: { findMany: async () => [] },
     dailyRun: { findUnique: async ({ where }) => { observed.runDates.push(where.eatDate.toISOString()); return null; } },
   };
   return { observed, database: { transaction: async (operation) => operation(tx) } };

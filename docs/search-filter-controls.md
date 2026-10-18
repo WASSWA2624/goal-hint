@@ -59,13 +59,13 @@ it at once, highlights it immediately and centres it. Today reads Today, and
 the first of each month shows its month name. Day links are canonical URLs
 (`when=today`/`when=tomorrow` presets, otherwise a dated route) that keep the
 applied filters. The Calendar button opens a month calendar in a bottom sheet:
-the first tap picks a day, a later tap within 31 days ends a range, and Apply
+the first tap picks a day, a later tap within a year ends a range, and Apply
 dates applies one day or the range, keeping the other applied filters. While a
 multi-day range is applied, no day is highlighted and the Calendar button is
 filled and shows the range. The strip is absent for live matches.
 
 Equal date endpoints select one day; different endpoints select an inclusive
-range of up to 31 days. Equal time endpoints select one kickoff minute; different
+range of up to 366 days (the last-30-days view is only the default). Equal time endpoints select one kickoff minute; different
 endpoints select an inclusive minute range. Unrestricted time fields show From
 00:00 and To 23:59 in the initial HTML and after reset. Clearing an endpoint
 restores its corresponding full-day bound. The full-day pair is unrestricted:
@@ -111,7 +111,9 @@ is unchanged. See the [stored match feed](match-feed-api.md) for that contract.
 
 Desktop filters place Leagues, Countries, Markets, Odds and Probability
 in one row. League, country and market fields retain selected chip links and complete
-checklists, searchable for leagues and countries. Each chip's `href` is the
+checklists, searchable for leagues and countries with the same football name matcher
+as the feed search: direct matches first, then spelling-tolerant ones under a
+"Similar results" heading, and "No matching options" when neither exists. Each chip's `href` is the
 canonical URL with that value toggled and page reset, preserving ordinary link
 behavior. Probability uses compact minimum/maximum fields accepting plain
 decimal numbers from 0 through 100; the minimum cannot exceed the maximum, and

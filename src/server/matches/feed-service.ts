@@ -59,9 +59,9 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         // Source writes and these generations commit atomically. Progress-only
         // changes do not reorder a cohort; catalog/date changes conservatively do.
         const tags = ["global:catalog", ...Array.from({ length: sourceRange.dayCount }, (_, day) => `date:${addReportingDays(sourceRange.startDate, day)}`)];
-        const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v3", query: feedQueryKey(query, today),
+        const paginationVersion = evidenceFingerprint({ contract: "feed-pagination-v4", query: feedQueryKey(query, today),
           scope: [...competitionIds].sort((a, b) => a - b), generations: await readPublicCacheGenerations(tx, tags) });
-        const search = await storedFeedSearch(tx, query.search, range, competitionIds);
+        const search = await storedFeedSearch(tx, query.search, range, competitionIds, query.locale);
         const sql = feedSql(query, range, competitionIds, providerOdds, search);
         const [known] = await tx.$queryRaw<{ total: bigint }[]>(Prisma.sql`SELECT COUNT(*) AS total ${sql.joins} WHERE ${sql.scope}`);
         // Options cover the entire date cohort, independently of applied filters/page.
@@ -70,11 +70,15 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           GROUP BY l.id, l.name, l.country, l.logoUrl ORDER BY l.name, l.country, l.id LIMIT 1001`);
         const leagues = leagueRows.map((row) => ({ id: row.id, name: row.name, country: row.country,
           logoUrl: isSafeRemoteImageUrl(row.logoUrl) ? row.logoUrl : null, fixtures: Number(row.fixtures) }));
-        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
-          SELECT COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available ${sql.joins} WHERE ${sql.where}`);
+        const [matching] = await tx.$queryRaw<{ total: bigint; available: bigint | Prisma.Decimal | null; exact: bigint | Prisma.Decimal | null }[]>(Prisma.sql`
+          SELECT COUNT(*) AS total, SUM(CASE WHEN m.available=TRUE THEN 1 ELSE 0 END) AS available,
+            ${sql.exact ? Prisma.sql`SUM(CASE WHEN ${sql.exact} THEN 1 ELSE 0 END)` : Prisma.sql`NULL`} AS exact
+          ${sql.joins} ${sql.searchJoin} WHERE ${sql.where}`);
         if (!known || !matching) throw new MatchFeedError("unavailable");
         const total = Number(matching.total), knownFixtures = Number(known.total), matchingWithMarket = Number(matching.available ?? 0);
-        const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} WHERE ${sql.where}
+        // Exact matches precede similar results, so a record's position on its page tells which kind it is.
+        const exactMatches = sql.exact ? Number(matching.exact ?? 0) : null;
+        const rows = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id ${sql.joins} ${sql.searchJoin} WHERE ${sql.where}
           ORDER BY ${sql.order} LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`);
         const dates = await storedFeedCoverage(tx, sourceRange), partial = dates.some((date) => !date.authoritative);
         const { run, window } = await storedFeedRunContext(tx, reportingToday, range);
@@ -96,13 +100,14 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
         const response = matchFeedResponseSchema.parse({ paginationVersion, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
           links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf, today,
           range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
-          coverage: { partial, knownFixtures, matchingWithMarket, dates }, run });
+          coverage: { partial, knownFixtures, matchingWithMarket, dates }, run,
+          search: query.search ? { exact: exactMatches ?? 0, similar: total - (exactMatches ?? 0) } : null });
         if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
         return freezeEvidence(response);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
-        query: { ...query, projection: 12, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
+        query: { ...query, projection: 13, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
         parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;

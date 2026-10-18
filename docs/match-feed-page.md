@@ -47,7 +47,7 @@ draft and reset page position to one. Four native From date, To date, From time
 and To time inputs share the filter section, which starts collapsed below
 64rem and remains expanded on desktop. Equal date endpoints select a day and equal
 time endpoints select a kickoff minute. Different date
-endpoints select an inclusive range of up to 31 days; time ranges retain inclusive
+endpoints select an inclusive range of up to 366 days; time ranges retain inclusive
 minute bounds and their explicit timezone. Incomplete or invalid ranges remain
 editable and disable Apply. Date steppers, date popovers and time mode menus are
 absent. Historical queries retain the MySQL-supported years 1000–9999. Direct

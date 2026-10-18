@@ -2,6 +2,7 @@ import brandTokens from "../../assets/brand/brand-tokens.json";
 import type { MarketFamily } from "../domain/markets";
 
 export type OutcomeTone = "correct" | "incorrect" | "pending" | "void" | "unavailable";
+export type VerdictTone = "upcoming" | "pending" | "correct" | "incorrect" | "void";
 
 type OutcomeColors = Readonly<{
   text: string;
@@ -57,6 +58,9 @@ export interface GoalHintTheme {
     readonly disabledText: string;
     readonly disabledSurface: string;
     readonly outcome: Readonly<Record<OutcomeTone, OutcomeColors>>;
+    /** Bright result tags on match cards (Upcoming, Pending, Win, Loss, Void): vivid fills with dark text at 4.5:1 or
+     * better in both themes. */
+    readonly verdict: Readonly<Record<VerdictTone, Readonly<{ fill: string; text: string; border: string }>>>;
     readonly market: Readonly<Record<MarketFamily, MarketColors>>;
     readonly live: AccentColors;
     /** Decorative and selection hues; every soft/text pair passes 4.5:1. */
@@ -210,6 +214,14 @@ export const lightTheme: GoalHintTheme = {
       pending: { text: "#8B5700", background: "#FFF3D6", border: "#8B5700" },
       void: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
       unavailable: { text: "#515C6B", background: "#F0F3F6", border: "#515C6B" },
+    },
+    // Shared by both themes (the dark theme inherits it): text on fill is 5.8:1 (Loss) to 12:1 (Void).
+    verdict: {
+      upcoming: { fill: "#FEF3C7", text: "#78350F", border: "#F59E0B" },
+      pending: { fill: "#FBBF24", text: "#451A03", border: "#FBBF24" },
+      correct: { fill: "#22C55E", text: "#052E16", border: "#22C55E" },
+      incorrect: { fill: "#F87171", text: "#450A0A", border: "#F87171" },
+      void: { fill: "#CBD5E1", text: "#0F172A", border: "#CBD5E1" },
     },
     // Each market family keeps one hue on every card, row and filter state: match result emerald, double chance
     // violet, total goals blue, both teams to score orange. Clean tints sit at one lightness (OKLCH L ≈ 0.95). See

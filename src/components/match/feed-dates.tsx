@@ -168,10 +168,12 @@ const CalendarButton = styled.button`
   > svg { font-size: 1rem; }
   > b { font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; text-align: center; }
   ${media.hover} { &:hover { border-color: ${({ theme }) => theme.color.brand}; } }
+  /* The current date range: a solid brand outline on the plain surface, without a blue fill. */
   &[data-current] {
-    color: ${({ theme }) => theme.color.onAction};
-    background: ${({ theme }) => theme.gradient.action};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.gradient.action};
+    color: ${({ theme }) => theme.color.link};
+    background: ${({ theme }) => theme.color.surface};
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
+    > small { color: ${({ theme }) => theme.color.mutedText}; }
   }
   ${focusRing}
 `;

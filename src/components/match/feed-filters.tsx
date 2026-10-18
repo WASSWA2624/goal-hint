@@ -76,7 +76,8 @@ const SearchField = styled.label`
   padding-inline: 10px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  /* The same faint border and hover/focus feedback as the filter selects. */
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   ${controlFeedback}
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
   > input {
@@ -99,9 +100,10 @@ const SearchButton = styled.button`
   gap: 6px;
   min-block-size: 2.75rem;
   padding-inline: 14px;
-  color: ${({ theme }) => theme.color.onAction};
-  background: ${({ theme }) => theme.gradient.action};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.gradient.action};
+  /* No blue fill: brand text on the surface with the same faint border as the search field. */
+  color: ${({ theme }) => theme.color.link};
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 0;
   font: inherit;
   font-size: 0.875rem;
@@ -109,7 +111,7 @@ const SearchButton = styled.button`
   white-space: nowrap;
   cursor: pointer;
   > svg { flex: none; font-size: 1rem; }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.gradient.actionHover}; border-color: ${({ theme }) => theme.gradient.actionHover}; } }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.color.rowHover}; border-color: ${({ theme }) => theme.color.brand}; } }
   ${focusRing}
 `;
 /** Sort, Reset and Advanced filters share one phone row; labels adapt to the available width. */
@@ -205,7 +207,8 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
   }
   ${desktop} {
     position: relative;
-    z-index: 2;
+    /* Open pickers must cover the sticky table column header (10) but stay under the app header (20). */
+    z-index: 11;
     display: grid;
     padding: 4px 8px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
@@ -302,7 +305,7 @@ const MarketToggle = styled.button<{ $family: MarketFamily }>`
 /** One labelled trigger per list; its checklist opens in place inside the sheet. */
 const PhonePicker = styled(OptionPicker)`
   min-inline-size: 0;
-  > button { min-block-size: 2.75rem; padding: 6px 10px; border-color: ${({ theme }) => theme.color.controlBorder}; font-size: 0.8125rem; }
+  > button { min-block-size: 2.75rem; padding: 6px 10px; font-size: 0.8125rem; }
   [data-picker-label] { flex: 0 1 auto; min-inline-size: 0; overflow-wrap: anywhere; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
   [data-picker-value] { display: inline-flex; justify-content: flex-end; align-items: center; gap: 5px; overflow-wrap: anywhere; }
   @container feed-filter-fields (max-width: 14rem) {
@@ -347,7 +350,9 @@ const ProbabilityInputs = styled.div`
     gap: 4px;
     min-inline-size: 0;
     padding-inline: 5px;
-    border: 1px solid ${({ theme }) => theme.color.controlBorder};
+    /* The same faint border and hover/focus feedback as the filter selects. */
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    ${controlFeedback}
     background: ${({ theme }) => theme.color.surface};
     color: ${({ theme }) => theme.color.mutedText};
     font-size: 0.8125rem;
@@ -377,7 +382,8 @@ const ProbabilityInputs = styled.div`
       inline-size: 100%;
       min-block-size: 2.5rem;
       padding: 4px 8px;
-      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+      ${controlFeedback}
       font-size: 16px;
       &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.accent.red.text}; }
     }
@@ -658,7 +664,8 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         {summary}
       </span></>}
       onToggle={(value) => edit({ ...phone, [kind]: toggled(selected, value, kind === "leagues" ? feedQueryRules.maximumLeagues : feedQueryRules.maximumCountries) })}
-      findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")} />;
+      findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")}
+        noMatchLabel={messages.text("feed.filters.noOptionMatches")} similarLabel={messages.text("feed.search.similar")} />;
   }
 
   function multiField(kind: "leagues" | "countries" | "markets", options: FilterOption[]) {
@@ -690,7 +697,8 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
       </ChipLine>
       <OptionPicker title={messages.text("feed.filters.showAll", { label })} options={options} selected={selected}
         searchable={kind !== "markets"} onToggle={(value) => { const next = toggle(value); if (next) edit(next); }}
-        findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")} />
+        findLabel={messages.text("feed.filters.findOption", { label })} emptyLabel={messages.text("feed.filters.noOptions")}
+        noMatchLabel={messages.text("feed.filters.noOptionMatches")} similarLabel={messages.text("feed.search.similar")} />
     </Field>;
   }
 

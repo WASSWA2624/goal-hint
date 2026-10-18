@@ -5,6 +5,7 @@ import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate }
 import type { FeedCheckpoint } from "@/domain/feed-navigation";
 import { appendFeedPage, FeedPaginationError, initialLoadedFeed, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
 import { feedQueryHref, feedQueryKey, type FeedQuery } from "@/domain/feed-query";
+import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
 import { consumeRefresh, refreshApi } from "@/state/refresh-api";
@@ -30,8 +31,13 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   const href = feedQueryHref(query, today), queryKey = feedQueryKey(query, today);
   const announce = useCallback((key: "loading" | "restoring" | "loaded" | "restored" | "refreshed" | "changed" | "failed" | "busy", loaded?: LoadedFeed, added = 0) => {
     const messages = createMessages(query.locale);
-    onStatus(href, messages.text(`feed.pagination.${key}`, { shown: messages.number(loaded?.records.length ?? 0),
-      total: messages.number(loaded?.data.total ?? 0), added: messages.number(added) }));
+    const status = messages.text(`feed.pagination.${key}`, { shown: messages.number(loaded?.records.length ?? 0),
+      total: messages.number(loaded?.data.total ?? 0), added: messages.number(added) });
+    // Focus moves to the first added card, so say when similar search results begin among the added ones.
+    const search = loaded?.data.search, start = loaded ? feedRowNumber(loaded.firstPage, loaded.data.pageSize, loaded.records.length - added) : 0;
+    const similarFrom = search && search.similar > 0 ? search.exact + 1 : null;
+    onStatus(href, similarFrom !== null && key === "loaded" && similarFrom >= start && similarFrom < start + added
+      ? `${status} ${messages.text("feed.search.similarFrom", { position: messages.number(similarFrom) })}` : status);
   }, [href, onStatus, query.locale]);
   const save = useCallback(() => {
     if (!entryId.current || !restored.current) return;

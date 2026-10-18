@@ -135,9 +135,12 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
     await t.test('fuzzy names rank the closest identity before earlier fixtures and paginate the complete cohort', async () => {
       const exact = (await fixture(3060)).id, related = (await fixture(3010)).id;
       const unrelated = [(await fixture(3011)).id, (await fixture(3061)).id];
-      for (const q of ['Manchester United', 'Machester United', 'Man United', 'United Manchester', 'Mankheste Unitited']) {
+      for (const q of ['Manchester United', 'Machester United', 'Man United', 'United Manchester', 'Mankheste Unitited', 'Mchster Untd']) {
         const response = await query({ q, pageSize: '100' });
         assert.equal(response.records[0]?.fixtureId, exact, q);
+        // Aliases and reordered words are exact; corrected spellings and abbreviations are similar results.
+        assert.deepEqual(response.search, ['Machester United', 'Mankheste Unitited', 'Mchster Untd'].includes(q)
+          ? { exact: 0, similar: 2 } : { exact: 2, similar: 0 }, q);
         assert.ok(response.records.some((item) => item.fixtureId === related), `${q}: near matches follow`);
         assert.ok(!response.records.some((item) => unrelated.includes(item.fixtureId)), `${q}: both words must match`);
         const first = await query({ q, pageSize: '1' });
@@ -150,6 +153,15 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal((await query({ q: 'United Manchester', sort: 'probability', dir: 'asc' })).records[0]?.fixtureId, exact);
       assert.equal((await query({ q: 'Mankheste Unitited', country: 'Elsewhere' })).total, 0);
       assert.equal((await query({ q: 'Mankheste Unitited', date: '2026-10-10' })).total, 0);
+      // Two named teams: each one's fixtures are similar results; City is never a mention of United.
+      const pair = await query({ q: 'Manchester United vs Newcastle United', pageSize: '100' });
+      assert.deepEqual(pair.search, { exact: 0, similar: 3 });
+      assert.deepEqual(new Set(pair.records.map((item) => item.fixtureId)), new Set([exact, related, unrelated[0]]));
+      // Home and away together cover every word, so that fixture alone is exact.
+      const both = await query({ q: 'Manchester United vs Synthetic club 6121', pageSize: '100' });
+      assert.deepEqual(both.search, { exact: 1, similar: 0 }); assert.equal(both.records[0]?.fixtureId, exact);
+      assert.deepEqual((await query({ q: 'Manchester United', status: 'finished' })).search, { exact: 0, similar: 0 });
+      assert.equal((await query()).search, null);
     });
     await t.test('selected-family unrounded probability ordering, missing values and stable ties', async () => {
       await publish(3000, 0.600041, 0.55); await publish(3001, 0.600049, 0.51);

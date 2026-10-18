@@ -45,7 +45,8 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
     const read = (parameters, context, clock) => createMatchFeedService({ database: p.a, cache, competitionIds: [39], clock }).query(parameters, context);
     async function capture(name, parameters = {}, at = PUBLICATION_NOW) {
       const day = parseReportingDate(at >= Date.parse('2026-10-20T00:00:00Z') ? '2026-10-20' : '2026-10-09');
-      const query = parseFeedQuery(parameters, { today: day });
+      // These multi-page scenarios pin 30 cards per page; the feed's default page size is 50.
+      const query = parseFeedQuery({ pageSize: '30', ...parameters }, { today: day });
       const result = await loadMatchFeedPage(query, day, { now: () => utcInstantFromEpochMilliseconds(at) }, read);
       assert.equal(result.error, null); captured[name] = { query, today: day, result }; return result.data;
     }
@@ -176,7 +177,7 @@ test('pagination detects genuine cohort changes and supplies consistent multi-pa
     const clock = { now: () => PUBLICATION_NOW }, cache = createMysqlPublicResponseCache(p.a);
     const service = createMatchFeedService({ database: p.a, cache, competitionIds: [39], clock });
     async function capture(prefix, page) {
-      const query = parseFeedQuery({ q: 'Pagination', page: String(page) }, { today });
+      const query = parseFeedQuery({ q: 'Pagination', page: String(page), pageSize: '30' }, { today });
       const result = await loadMatchFeedPage(query, today, clock, (parameters, context) => service.query(parameters, context));
       assert.equal(result.error, null); captured[`${prefix}-${page}`] = { query, today, result }; return result.data;
     }

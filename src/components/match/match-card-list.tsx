@@ -65,9 +65,31 @@ const List = styled.ul`
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
     > li + li { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
-    > li:nth-child(even) { background: ${({ theme }) => theme.color.cardHeader}; }
+    /* A divider row does not shift the stripes of the match rows after it. */
+    > li:nth-child(even of :not([data-list-divider])) { background: ${({ theme }) => theme.color.cardHeader}; }
   }
 `;
+const Divider = styled.li`
+  && {
+    display: grid;
+    gap: 2px;
+    padding: 10px 2px 2px;
+    content-visibility: visible;
+    contain-intrinsic-block-size: none;
+  }
+  > h2 { color: ${({ theme }) => theme.color.text}; font-size: ${({ theme }) => theme.typography.scale.emphasis}; }
+  > p { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
+  ${media.desktop} {
+    && { padding: 10px 16px; background: ${({ theme }) => theme.color.brandSoft}; }
+    > h2 { font-size: 0.9375rem; }
+  }
+`;
+
+/** A titled break inside the list, such as the start of similar search results. Its heading shares the level of the
+ * cards' own titles, so heading navigation meets it between the last exact match and the first similar one. */
+export function MatchListDivider({ title, note }: { title: string; note?: string | null }) {
+  return <Divider data-list-divider=""><h2>{title}</h2>{note && <p>{note}</p>}</Divider>;
+}
 
 /** Cards below 64rem, an aligned match table above it. Source order is also visual and keyboard order. */
 export function MatchCardList({ locale, rowNumberMaximum, ...props }: MatchCardListProps) {

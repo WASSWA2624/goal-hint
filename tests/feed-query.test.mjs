@@ -111,10 +111,16 @@ test("canonical list identity includes filters, order, locale and resolved dates
   assert.equal(resolveFeedDates(query("when=tomorrow"), today).startDate, "2026-10-10");
 });
 
+test("the last 30 days is only the default: explicit ranges may span up to a year", () => {
+  assert.equal(resolveFeedDates(query("from=2026-09-10&to=2026-10-18"), today).dayCount, 39);
+  assert.equal(resolveFeedDates(query("from=2025-10-10&to=2026-10-10"), today).dayCount, 366);
+  assert.throws(() => query("from=2025-10-09&to=2026-10-10"));
+});
+
 test("malformed, ambiguous, unbounded and unsupported URL values are rejected", () => {
   for (const input of ["other=x", "q=a&q=b", "status=live&status=all", "date=2026-02-29", "date=2026-1-01", "date=2026-10-09&when=today",
     "date=2026-10-09&to=2026-10-10", "from=2026-10-09", "to=2026-10-09", "from=2026-10-10&to=2026-10-09",
-    "from=2026-10-09&to=2026-11-09", "when=next-week", "q=%00", "q=%0a", `q=${"a".repeat(121)}`,
+    "from=2026-10-09&to=2027-10-10", "when=next-week", "q=%00", "q=%0a", `q=${"a".repeat(121)}`,
     "league=../x", "league=a,,b", "league=a,", "league=a&league=", `league=${Array.from({ length: 51 }, (_, index) => `l${index}`).join(",")}`,
     "country=Eng%2Fland", "country=+Spain", "country=Spain,", "status=correct", "status=", "market=exact-score", "market=", "market=match-result,match-result",
     "picks=yes", "picks=", "picks=only&picks=only", "prob=50", "prob=60-50", "prob=0-101", "prob=-1-50", "prob=05-50", "sort=asc", "sort=score", "dir=up", "sortMarket=match-result",

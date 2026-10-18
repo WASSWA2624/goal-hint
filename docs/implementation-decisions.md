@@ -3444,3 +3444,40 @@ workflow's; this records the data side.
   flag at the next daily selection (tonight, 11 October 21:00 UTC, if the runner
   is up). Competitions with no fixture in the synced dates get one when they next
   appear. International competitions never get one.
+
+## Search: exact and similar results (18 October 2026)
+
+Supersedes the substring wording of the 9 October feed record and extends the
+ranked matcher of a852296.
+
+- **Normalization.** Case, accents, Unicode compatibility forms, other scripts'
+  decimal digits, invisible format characters, spacing and punctuation fold
+  before matching. Numbers keep their value in the request locale: grouping
+  separators drop ("10,000" = "10000"), a decimal stays one word with trailing
+  fraction zeros removed, and a comma that cannot group thousands separates two
+  numbers ("1,5" is never 15). Numbers never match a neighbouring number.
+- **Spelling tolerance.** One edit up to five letters, two up to eight, three
+  from nine, at most 30% of the word; beyond one slip the first letter must
+  agree. Fallbacks: abbreviations that keep at least 60% of a word in order
+  ("Mchster", "Untd") and equal consonant outlines. Alternate forms (demonyms,
+  "liga"/"pokal" for league/cup, "W" for women) match exactly or as prefixes only.
+- **Aliases.** Established abbreviations apply to whole stored names only; in a
+  query they also apply as phrases. Words that are also ordinary name parts
+  ("Juve", "Wolves", "US", "UK") apply only as a whole query. Nicknames and
+  demonyms are read in queries only, never in stored names. Name articles ("La",
+  "Al", "de") join the club words that never decide a match.
+- **Sentences and several teams.** Filler words are dropped. A name mentioned in a
+  longer query covers only its words, and a fixture combines the words its teams
+  and competition cover. Leftover generic words or numbers in a mentioned name
+  ("City", "U21") may not stand against an unmatched generic word or number of
+  the query, and an alias expansion counts as one team.
+- **Tiers.** Direct matches (exact, alias, reordered, prefix) score 700–1000;
+  corrected, inner-fragment and partial matches score below 700. A fixture is
+  exact when every word is matched directly. Exact fixtures sort first, then
+  wider coverage, then the strongest name, then the chosen sort. The response
+  carries `search: { exact, similar }`; the feed labels the first similar record
+  and the league/country checklists group options the same way.
+- **Unchanged.** Every other filter, counts, league options, pagination by SQL
+  LIMIT/OFFSET, the catalog bounds (50,000 rows, 10,000 identities), the search
+  rate limit and "no broad fallback": a search with no credible match is empty.
+  Feed cache projection 12 → 13 and pagination contract v3 → v4.

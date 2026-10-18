@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useId, useMemo, useState, useTransition, type ReactNode } from "react";
+import { Fragment, memo, useCallback, useEffect, useId, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { FeedActiveFilterSummary, FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
@@ -11,7 +11,7 @@ import { feedRefreshInterval } from "@/domain/live-refresh";
 import { FeedPagination } from "@/components/match/feed-pagination";
 import { useFeedPagination } from "@/components/match/use-feed-pagination";
 import { MatchCard } from "@/components/match/match-card";
-import { MatchCardList } from "@/components/match/match-card-list";
+import { MatchCardList, MatchListDivider } from "@/components/match/match-card-list";
 import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { Stack } from "@/components/ui/layout";
@@ -56,6 +56,8 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
       } else router.refresh();
     } });
   const first = feedRowNumber(view.firstPage, data.pageSize, 0);
+  // Row number of the first similar search result, when this search has any.
+  const similarFrom = data.search && data.search.similar > 0 ? data.search.exact + 1 : null;
   return <FeedStack $gap="sm" ref={root} tabIndex={-1} role="region" aria-label={messages.text("feed.matchList")}
     aria-busy={phase !== null} data-feed-pages data-first-page={view.firstPage} data-last-page={view.lastPage}>
     <ResultsToolbar query={query} today={today} total={data.total} first={first}
@@ -64,14 +66,28 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
     {data.state !== "ready" && data.state !== "insufficient-data" && <EmptyState title={messages.text(`feed.state.${data.state}`)} description={data.message} />}
     {/* Logos stay lazy: an eager image would be hoisted as a third-party preload ahead of the page's own assets. */}
     {records.length > 0 && <MatchCardList aria-label={messages.text("feed.matchList")} locale={query.locale} rowNumberMaximum={first + records.length - 1}>
-      {records.map((fixture, index) => <li key={fixture.fixtureId}>
-        <MatchCard fixture={fixture} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
-          markets={query.markets} locale={query.locale} position={first + index} />
-      </li>)}
+      {records.map((fixture, index) => <Fragment key={fixture.fixtureId}>
+        {/* Exact matches come first, so similar results start right after the last exact position. */}
+        {similarFrom !== null && first + index === Math.max(first, similarFrom) && <MatchListDivider title={messages.text("feed.search.similar")}
+          note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
+        <li>
+          <MatchCard fixture={fixture} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
+            markets={query.markets} locale={query.locale} position={first + index}
+            titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
+        </li>
+      </Fragment>)}
     </MatchCardList>}
     {enabled && <FeedPagination query={query} today={today} data={data} busy={phase !== null} error={error} onRetry={retry} />}
   </FeedStack>;
 });
+
+/** The count, plus whether a search found only similar results or where they begin. */
+function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery, count: string): string {
+  const messages = createMessages(query.locale), search = data.search;
+  if (!search || search.similar === 0) return count;
+  return search.exact === 0 ? `${messages.text("feed.search.noExact", { query: query.search })} ${count}`
+    : `${count}. ${messages.text("feed.search.similarFrom", { position: messages.number(search.exact + 1) })}`;
+}
 
 /** Successful server projections remain visible if a later navigation fails. */
 function FeedSurfaceContent({ query, today, result, controls, pagination }: {
@@ -108,7 +124,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
   const announcement = pending ? messages.text("feed.filters.loading") : result.error
     ? messages.text(result.error === "rate-limited" ? "feed.rateLimited" : "feed.unavailable")
     : paginationStatus?.href === href ? paginationStatus.message
-    : result.data.state === "ready" || result.data.state === "insufficient-data" ? messages.plural("feed.matchCount", result.data.total)
+    : result.data.state === "ready" || result.data.state === "insufficient-data" ? searchAnnouncement(result.data, query, messages.plural("feed.matchCount", result.data.total))
     : messages.text(`feed.state.${result.data.state}`);
   return <FeedStack $gap="sm">
     <FeedHeader query={query} today={today} onApply={apply} />

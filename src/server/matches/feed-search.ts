@@ -1,29 +1,39 @@
 import "server-only";
 
 import type { ReportingDateRange } from "../../domain/calendar.ts";
-import { prepareFootballSearch } from "../../domain/football-search.ts";
+import { prepareFootballSearch, type FootballSearchMatch } from "../../domain/football-search.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { MatchFeedError } from "./feed-error.ts";
 import { publicFixtureCohortScope } from "./feed-read.ts";
 
-export const feedSearchRules = Object.freeze({ maximumCatalogRows: 50_000, maximumIdentities: 10_000 });
-export type RankedFeedIdentity = Readonly<{ id: string; score: number }>;
+export const feedSearchRules = Object.freeze({ maximumCatalogRows: 50_000, maximumIdentities: 10_000, maximumWords: 16 });
+/** `covered` and `direct` hold the query words this identity's names match (directly: exactly, by alias or prefix);
+ * `anchor` holds those matched by a team or competition name or alias rather than by its country. */
+export type RankedFeedIdentity = Readonly<{ id: string; score: number; covered: number; direct: number; anchor: number }>;
 export type FeedSearch = Readonly<{
   query: string;
+  /** Number of query words; bit i of every mask stands for word i. */
+  words: number;
+  /** Words that identify something on their own; see PreparedFootballSearch.distinctive. */
+  distinctive: number;
   teams: readonly RankedFeedIdentity[];
   competitions: readonly RankedFeedIdentity[];
 }>;
 type CatalogRow = { kind: "team" | "competition"; id: string; name: string | null; country: string | null; alias: string | null };
+type Identity = { score: number; covered: number; direct: number; anchor: number };
 
 /** Resolve catalog identities before SQL pagination; fixture rows never enter the fuzzy matcher.
  * Alias joins follow deduplicated entities, so home/away aliases cannot multiply each other.
+ * Partial mentions are kept with the words they cover: a fixture may combine "Barcelona" (home) and "Real Madrid"
+ * (away) into a full match of "Barcelona vs Real Madrid", which feedSql decides per fixture.
  * Explicit bounds fail closed rather than returning a truncated search cohort on a shared host. */
 export async function storedFeedSearch(tx: Prisma.TransactionClient, search: string, range: ReportingDateRange,
-  competitionIds: readonly number[]): Promise<FeedSearch | null> {
+  competitionIds: readonly number[], locale?: string): Promise<FeedSearch | null> {
   if (!search) return null;
-  const prepared = prepareFootballSearch(search);
-  const teams = new Map<string, number>(), competitions = new Map<string, number>();
-  if (prepared.tokens.length > 0) {
+  const prepared = prepareFootballSearch(search, locale);
+  const words = prepared.tokens.length, full = 2 ** Math.min(words, feedSearchRules.maximumWords) - 1;
+  const teams = new Map<string, Identity>(), competitions = new Map<string, Identity>();
+  if (words > 0 && words <= feedSearchRules.maximumWords) {
     const rows = await tx.$queryRaw<CatalogRow[]>(Prisma.sql`
       WITH cohort AS (
         SELECT DISTINCT f.homeTeamId, f.awayTeamId, l.id AS competitionId
@@ -44,29 +54,39 @@ export async function storedFeedSearch(tx: Prisma.TransactionClient, search: str
       LEFT JOIN FootballCompetitionAlias ca ON ca.competitionId=l.id
       LIMIT ${feedSearchRules.maximumCatalogRows + 1}`);
     if (rows.length > feedSearchRules.maximumCatalogRows) throw new MatchFeedError("unavailable");
-    // Countries and canonical names recur across alias rows; score each distinct label once.
-    const scores = new Map<string, number>();
-    const score = (label: string | null) => {
-      if (!label) return 0;
-      let value = scores.get(label);
-      if (value === undefined) {
-        value = prepared.score(label);
-        if (!Number.isInteger(value) || value < 0 || value > 1000) throw new MatchFeedError("unavailable");
-        scores.set(label, value);
+    // Countries and canonical names recur across alias rows; match each distinct label once.
+    const labels = new Map<string, FootballSearchMatch | null>();
+    const match = (label: string | null) => {
+      if (!label) return null;
+      let found = labels.get(label);
+      if (found === undefined) {
+        found = prepared.match(label);
+        if (found && (!Number.isInteger(found.score) || found.score < 1 || found.score > 1000 ||
+          [found.covered, found.direct].some((mask) => !Number.isInteger(mask) || mask < 0 || mask > full) ||
+          found.covered === 0 || (found.direct & ~found.covered) !== 0)) throw new MatchFeedError("unavailable");
+        labels.set(label, found);
       }
-      return value;
+      return found;
     };
     for (const row of rows) {
       if (row.kind !== "team" && row.kind !== "competition") throw new MatchFeedError("unavailable");
-      const value = Math.max(score(row.name), score(row.country), score(row.alias));
-      if (value === 0) continue;
+      const found = [[match(row.name), true], [match(row.alias), true], [match(row.country), false]] as const;
+      if (!found.some(([label]) => label)) continue;
       const matches = row.kind === "team" ? teams : competitions;
-      matches.set(row.id, Math.max(matches.get(row.id) ?? 0, value));
+      const identity = matches.get(row.id) ?? { score: 0, covered: 0, direct: 0, anchor: 0 };
+      for (const [label, named] of found) {
+        if (!label) continue;
+        identity.score = Math.max(identity.score, label.score);
+        identity.covered |= label.covered;
+        identity.direct |= label.direct;
+        if (named) identity.anchor |= label.covered;
+      }
+      matches.set(row.id, identity);
       if (teams.size + competitions.size > feedSearchRules.maximumIdentities) throw new MatchFeedError("unavailable");
     }
   }
-  const ranked = (matches: Map<string, number>) => Object.freeze([...matches]
+  const ranked = (matches: Map<string, Identity>) => Object.freeze([...matches]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([id, score]) => Object.freeze({ id, score })));
-  return Object.freeze({ query: search, teams: ranked(teams), competitions: ranked(competitions) });
+    .map(([id, identity]) => Object.freeze({ id, ...identity })));
+  return Object.freeze({ query: search, words, distinctive: prepared.distinctive, teams: ranked(teams), competitions: ranked(competitions) });
 }

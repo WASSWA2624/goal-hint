@@ -37,6 +37,9 @@ export const matchFeedResponseSchema = z.strictObject({
     dates: z.array(z.strictObject({ date, status: z.enum(["complete", "partial", "degraded", "failed", "unknown", "pending"]),
       observedAt: at.nullable(), authoritative: z.boolean() })).min(1).max(feedQueryRules.maximumDays + 2) }),
   run: dailyRunProgressSchema,
+  /** For a search: matches of every word directly (exact, alias, reordered or prefix) and similar results (spelling
+   * slips, abbreviations, one of several named teams). Exact matches always precede similar ones in record order. */
+  search: z.strictObject({ exact: count, similar: count }).nullable().default(null),
 }).superRefine((value, ctx) => {
   if (value.records.length !== Math.min(value.pageSize, Math.max(0, value.total - (value.page - 1) * value.pageSize)) ||
     new Set(value.leagues.map((league) => league.id)).size !== value.leagues.length ||
@@ -46,7 +49,8 @@ export const matchFeedResponseSchema = z.strictObject({
     (value.links.next === null) !== (value.nextPage === null) || (value.links.previous === null) !== (value.previousPage === null) ||
     value.coverage.partial !== value.coverage.dates.some((entry) => !entry.authoritative) ||
     value.coverage.dates.some((entry) => entry.authoritative !== (entry.status === "complete")) ||
-    value.coverage.matchingWithMarket > value.total || value.total > value.coverage.knownFixtures) {
+    value.coverage.matchingWithMarket > value.total || value.total > value.coverage.knownFixtures ||
+    value.search !== null && value.search.exact + value.search.similar !== value.total) {
     ctx.addIssue({ code: "custom", message: "Incoherent match feed page." });
   }
 });

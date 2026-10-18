@@ -69,49 +69,99 @@ export function feedSql(query: FeedQuery, range: ReportingDateRange, competition
   // Odds stay unread while provider odds are not public, so the feed never depends on the odds tables then
   // (parseFeedQuery already rejects `odds` in that case; this guard keeps a hand-built query from joining).
   if (query.odds && providerOdds) filters.push(Prisma.sql`m.available=TRUE AND op.displayHundredths BETWEEN ${query.odds.min} AND ${query.odds.max}`);
+  let searchJoin = Prisma.empty, exact: Prisma.Sql | null = null, ranking: Prisma.Sql | null = null;
   if (query.search) {
     if (!search || search.query !== query.search) throw new MatchFeedError("unavailable");
-    const matches: Prisma.Sql[] = [];
-    if (search.teams.length > 0) {
-      const ids = Prisma.join(search.teams.map((item) => item.id));
-      matches.push(Prisma.sql`h.id IN (${ids})`, Prisma.sql`a.id IN (${ids})`);
+    // No matching identity is an ordinary empty result; masks need 1–16 words.
+    if (search.teams.length + search.competitions.length === 0) filters.push(Prisma.sql`FALSE`);
+    else if (!Number.isInteger(search.words) || search.words < 1 || search.words > feedSearchWords) throw new MatchFeedError("unavailable");
+    else {
+      const matched = searchMatches(search, range);
+      searchJoin = matched.join;
+      filters.push(matched.stands);
+      exact = matched.exact;
+      ranking = matched.order;
     }
-    if (search.competitions.length > 0) matches.push(Prisma.sql`l.id IN (${Prisma.join(search.competitions.map((item) => item.id))})`);
-    filters.push(matches.length > 0 ? Prisma.sql`(${Prisma.join(matches, " OR ")})` : Prisma.sql`FALSE`);
   }
   const descending = query.sort.direction === "desc";
   const order = query.sort.by === "probability"
     ? Prisma.sql`m.selectedProbability IS NULL ASC, m.selectedProbability ${descending ? Prisma.sql`DESC` : Prisma.sql`ASC`}, f.kickoff ASC, f.id ASC`
     : descending ? Prisma.sql`f.kickoff DESC, f.id DESC` : Prisma.sql`f.kickoff ASC, f.id ASC`;
-  let rankedOrder = order;
-  if (query.search && search && search.teams.length + search.competitions.length > 0) {
-    // Broad country/name matches often share a score. Grouped IN predicates avoid one CASE branch per club.
-    const grouped = (matches: FeedSearch["teams"]) => {
-      const groups = new Map<number, string[]>();
-      for (const { id, score } of matches) {
-        const ids = groups.get(score);
-        if (ids) ids.push(id); else groups.set(score, [id]);
-      }
-      return [...groups].sort(([left], [right]) => right - left);
-    };
-    const rank = (field: Prisma.Sql, groups: ReturnType<typeof grouped>) => groups.length > 0
-      ? Prisma.sql`CASE ${Prisma.join(groups.map(([score, ids]) => Prisma.sql`WHEN ${field} IN (${Prisma.join(ids)}) THEN ${score}`), " ")} ELSE 0 END`
-      : Prisma.sql`0`;
-    const teams = grouped(search.teams), competitions = grouped(search.competitions);
-    rankedOrder = Prisma.sql`GREATEST(${rank(Prisma.sql`h.id`, teams)}, ${rank(Prisma.sql`a.id`, teams)},
-        ${rank(Prisma.sql`l.id`, competitions)}) DESC, ${order}`;
-  }
-  return { joins, scope, where: Prisma.join(filters, " AND "), order: rankedOrder };
+  // `searchJoin` belongs to the filtered reads only: known counts and league options keep the whole date cohort.
+  return { joins, searchJoin, scope, where: Prisma.join(filters, " AND "), order: ranking ? Prisma.sql`${ranking}, ${order}` : order, exact };
 }
 
+const feedSearchWords = 16;
+/** Per-fixture search coverage. Each identity packs its relevance and word masks into one integer (bits 0–15 words its
+ * names cover, 16–31 words they match directly, 32–47 words covered by a name rather than a country, 48+ relevance), so
+ * one derived row per candidate fixture carries its home, away and competition values and the outer query ORs them:
+ * - a fixture qualifies when its names together cover every word, or cover a distinctive word through a team or
+ *   competition name while another distinctive word stays uncovered (one of several named teams);
+ * - it is exact when every word is matched directly, otherwise a similar result;
+ * - exact fixtures come first, then fixtures covering more words, then the best single relevance, then the chosen sort. */
+function searchMatches(search: FeedSearch, range: ReportingDateRange) {
+  const grouped = (identities: FeedSearch["teams"]) => {
+    // Broad country/name matches share values. Grouped IN predicates avoid one CASE branch per club.
+    const groups = new Map<bigint, string[]>();
+    for (const { id, score, covered, direct, anchor } of identities) {
+      const value = BigInt(score) << 48n | BigInt(anchor) << 32n | BigInt(direct) << 16n | BigInt(covered);
+      const ids = groups.get(value);
+      if (ids) ids.push(id); else groups.set(value, [id]);
+    }
+    return [...groups].sort(([left], [right]) => left > right ? -1 : left < right ? 1 : 0);
+  };
+  const packed = (field: Prisma.Sql, groups: ReturnType<typeof grouped>) => groups.length > 0
+    ? Prisma.sql`CASE ${Prisma.join(groups.map(([value, ids]) => Prisma.sql`WHEN ${field} IN (${Prisma.join(ids)}) THEN ${value}`), " ")} ELSE 0 END`
+    : Prisma.sql`0`;
+  const teams = grouped(search.teams), competitions = grouped(search.competitions);
+  const candidates: Prisma.Sql[] = [];
+  if (search.teams.length > 0) {
+    const ids = Prisma.join(search.teams.map((item) => item.id));
+    candidates.push(Prisma.sql`sf.homeTeamId IN (${ids})`, Prisma.sql`sf.awayTeamId IN (${ids})`);
+  }
+  if (search.competitions.length > 0) candidates.push(Prisma.sql`ss.competitionId IN (${Prisma.join(search.competitions.map((item) => item.id))})`);
+  const join = Prisma.sql`JOIN (SELECT sf.id AS fixtureId, ${packed(Prisma.sql`sf.homeTeamId`, teams)} AS home,
+      ${packed(Prisma.sql`sf.awayTeamId`, teams)} AS away, ${packed(Prisma.sql`ss.competitionId`, competitions)} AS competition
+    FROM FootballFixture sf JOIN FootballSeason ss ON ss.id=sf.seasonId
+    WHERE sf.kickoff>=${new Date(range.window.startInclusive)} AND sf.kickoff<${new Date(range.window.endExclusive)}
+      AND (${Prisma.join(candidates, " OR ")})) sm ON sm.fixtureId=f.id`;
+  const all = 2 ** search.words - 1, mask = Prisma.sql`(sm.home | sm.away | sm.competition)`;
+  const covered = Prisma.sql`(${mask} & ${all})`, direct = Prisma.sql`((${mask} >> 16) & ${all})`;
+  const stands = search.distinctive === 0 ? Prisma.sql`${covered}=${all}`
+    : Prisma.sql`(${covered}=${all} OR (((${mask} >> 32) & ${search.distinctive})<>0 AND (${search.distinctive} & ~${mask})<>0))`;
+  const exact = Prisma.sql`${direct}=${all}`;
+  return { join, stands, exact,
+    order: Prisma.sql`${exact} DESC, BIT_COUNT(${covered}) DESC, GREATEST(sm.home >> 48, sm.away >> 48, sm.competition >> 48) DESC` };
+}
+
+/** Three batched reads cover the whole range (latest receipt per day, latest run attempt per day, and which of those
+ * attempts stored a receipt), so long ranges cost the same number of round trips as one day. */
 export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Promise<MatchFeedResponse["coverage"]["dates"]> {
+  const days = Array.from({ length: range.dayCount }, (_, offset) => addReportingDays(range.startDate, offset));
+  const scopeKeys = days.map((date) => catalogScopeKey({ kind: "fixtures", query: { date } }));
+  // Rows arrive newest first, so the first row per day is that day's latest receipt or attempt.
+  const receiptRows = await tx.footballImport.findMany({ where: { scopeKey: { in: scopeKeys } },
+    select: { id: true, scopeKey: true, status: true, observedAt: true }, orderBy: [{ observedAt: "desc" }, { sequence: "desc" }] });
+  const receipts = new Map<string, (typeof receiptRows)[number]>();
+  for (const row of receiptRows) if (!receipts.has(row.scopeKey)) receipts.set(row.scopeKey, row);
+  const attemptRows = await tx.dailyRunImport.findMany({ where: { eatDate: { in: days.map((date) => new Date(`${date}T00:00:00Z`)) } },
+    orderBy: [{ run: { sequence: "desc" } }, { attempt: "desc" }] });
+  const attempts = new Map<string, (typeof attemptRows)[number]>();
+  for (const row of attemptRows) {
+    const date = row.eatDate.toISOString().slice(0, 10);
+    if (!attempts.has(date)) attempts.set(date, row);
+  }
+  const unmatched = days.flatMap((date, index) => {
+    const attempt = attempts.get(date);
+    return attempt && attempt.id !== receipts.get(scopeKeys[index]!)?.id ? [attempt.id] : [];
+  });
+  const stored = new Set(unmatched.length ? (await tx.footballImport.findMany({ where: { id: { in: unmatched } }, select: { id: true } }))
+    .map((row) => row.id) : []);
   const dates: MatchFeedResponse["coverage"]["dates"] = [];
-  for (let offset = 0; offset < range.dayCount; offset++) {
-    const date = addReportingDays(range.startDate, offset), scopeKey = catalogScopeKey({ kind: "fixtures", query: { date } });
-    const receipt = await tx.footballImport.findFirst({ where: { scopeKey }, orderBy: [{ observedAt: "desc" }, { sequence: "desc" }] });
-    const attempt = await tx.dailyRunImport.findFirst({ where: { eatDate: new Date(`${date}T00:00:00Z`) }, orderBy: [{ run: { sequence: "desc" } }, { attempt: "desc" }] });
+  for (const [index, date] of days.entries()) {
+    const receipt = receipts.get(scopeKeys[index]!), attempt = attempts.get(date);
     let status = receipt?.status ?? "unknown", observedAt = receipt?.observedAt.getTime() ?? null;
-    if (attempt && attempt.id !== receipt?.id && !await tx.footballImport.findUnique({ where: { id: attempt.id }, select: { id: true } })) {
+    if (attempt && attempt.id !== receipt?.id && !stored.has(attempt.id)) {
       const request = parseCatalogImportRequest(attempt.requestJson);
       if (attempt.finishedAt === null && (observedAt === null || observedAt < request.bounds.deadlineAt)) status = "pending";
       else if (attempt.failure !== null && attempt.finishedAt !== null && (observedAt === null || attempt.finishedAt.getTime() >= observedAt)) {

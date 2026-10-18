@@ -76,9 +76,12 @@ The mobile card ("Verdict Corner", design 09) has three rows on one grid
    first line and the kickoff moves to a second one instead of running under
    the tag. The result tag
    owns the top-right corner (at least 4.75rem wide, overlapping the card's
-   border): solid green Win with a check, solid red Loss with a cross, solid
-   amber Pending, solid grey Void, and an amber outline for Upcoming. Labels are
-   uppercase words; an unavailable result shows no tag.
+   border). Tags use the bright `theme.color.verdict` palette with dark text
+   (5.8:1 or better in both themes): bright green Win with a check, coral Loss
+   with a cross, amber Pending, light slate Void, and a pale amber tag with an
+   amber border for Upcoming. Labels are uppercase words; an unavailable result
+   shows no tag. The desktop Result column uses the same colours, and every
+   badge fills the column so all results share one width.
 2. **Teams.** Home name and crest, the centre column, away crest and name, with
    each crest beside the centre. The centre shows `vs` (scheduled or halted) or
    the bold score (live red text while live, the losing side muted), with the state

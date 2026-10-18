@@ -4,7 +4,7 @@ import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMillisecon
 import { feedQueryRules, type FeedParameters } from "../../domain/feed-query.ts";
 import { matchFeedResponseSchema, type MatchFeedResponse } from "../../domain/match-feed.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { buildSlips, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
+import { buildSlips, slipBuilderRules, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
 import { slipPricePageSchema, type SlipPricePage } from "../../domain/slip-price-page.ts";
 import type { SlipBuildPageResult } from "../../domain/slip-page.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
@@ -31,7 +31,7 @@ export function createSlipBuildService(options: Readonly<{
     if (!(options.providerOdds ?? publicPolicy.features.providerOdds)) return { ...base, state: "odds-unavailable" };
     try {
       await options.consume();
-      const today = getReportingDate(asOf), range = validateReportingDateRange(criteria.dateFrom, criteria.dateTo, feedQueryRules.maximumDays);
+      const today = getReportingDate(asOf), range = validateReportingDateRange(criteria.dateFrom, criteria.dateTo, slipBuilderRules.maximumDays);
       const parameters = new URLSearchParams({ from: criteria.dateFrom, to: criteria.dateTo,
         status: "scheduled", market: criteria.markets.join(","), sort: "probability", dir: "desc", pageSize: String(slipReadRules.pageSize) });
       if (criteria.timeFrom !== "" || criteria.timeTo !== "") {

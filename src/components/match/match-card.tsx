@@ -35,6 +35,8 @@ export type MatchCardProps = {
   headingLevel?: 2 | 3 | 4;
   eagerLogos?: boolean;
   position?: number;
+  /** Appended to the card's accessible title, such as "similar result" for an approximate search match. */
+  titleNote?: string | undefined;
 };
 
 type TeamResult = "win" | "loss" | null;
@@ -519,6 +521,15 @@ const Likely = styled.span`
 /** Tile: the verdict owns the top-right corner as a solid tag (an outlined one while the match is upcoming), so the
  * result is the first thing read. The table keeps it in the Result column. */
 const Result = styled(OutcomeBadge)`
+  /* Bright result tags on both layouts; an unavailable result uses the neutral Void colours. */
+  color: ${({ theme, $outcome }) => theme.color.verdict[$outcome === "unavailable" ? "void" : $outcome].text};
+  background: ${({ theme, $outcome }) => theme.color.verdict[$outcome === "unavailable" ? "void" : $outcome].fill};
+  border-color: ${({ theme, $outcome }) => theme.color.verdict[$outcome === "unavailable" ? "void" : $outcome].border};
+  &[data-result-badge="upcoming"] {
+    color: ${({ theme }) => theme.color.verdict.upcoming.text};
+    background: ${({ theme }) => theme.color.verdict.upcoming.fill};
+    border-color: ${({ theme }) => theme.color.verdict.upcoming.border};
+  }
   ${tile} {
     grid-area: result;
     justify-self: end;
@@ -528,25 +539,22 @@ const Result = styled(OutcomeBadge)`
     min-block-size: calc(1.25rem + ${({ theme }) => theme.border.width});
     margin: calc(-1 * ${({ theme }) => theme.border.width}) calc(-1 * ${({ theme }) => theme.border.width}) 0 0;
     padding: 0 8px;
-    color: ${({ theme }) => theme.color.surface};
-    background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
     font-size: ${({ theme }) => theme.typography.scale.micro};
     letter-spacing: 0.06em;
     line-height: 1;
     text-transform: uppercase;
     white-space: nowrap;
     > svg { font-size: 0.625rem; }
-    &[data-result-badge="upcoming"] {
-      color: ${({ theme }) => theme.color.outcome.pending.text};
-      background: ${({ theme }) => theme.color.surface};
-    }
     &[data-result-badge="unavailable"] { display: none; }
   }
+  /* Table: every result badge fills the Result column, so Upcoming, Win, Loss, Pending and Void share one width. */
   ${table} {
     grid-column: 10;
     grid-row: 2;
-    justify-self: start;
-    padding: 3px 6px;
+    justify-self: stretch;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    padding: 3px 4px;
     white-space: nowrap;
   }
 `;
@@ -697,7 +705,7 @@ function PredictionCell({ prediction, price, reason, locale, children }: {
 }
 
 function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale: requestedLocale,
-  headingLevel = 2, eagerLogos = false, position }: MatchCardProps) {
+  headingLevel = 2, eagerLogos = false, position, titleNote }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
@@ -732,7 +740,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const pickState = !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={shownFamily}
     data-status={fixture.status}>
-    <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{title}</VisuallyHidden>
+    <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
     <Meta>
       {position !== undefined && <Index $wrap={position > 9_999} aria-hidden="true" data-row-number>{messages.number(position)}</Index>}
       <League title={country ?? undefined}>

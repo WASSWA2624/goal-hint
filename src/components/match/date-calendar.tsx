@@ -137,7 +137,7 @@ const Footer = styled.div`
 `;
 
 /**
- * Month calendar in a phone sheet. The first tap picks a day; a later tap within 31 days ends a
+ * Month calendar in a phone sheet. The first tap picks a day; a later tap within a year ends a
  * range, and any other tap starts again. Apply with one day picked selects that day.
  */
 export function DateCalendar({ locale, today, from, to, onApply, onClose }: {

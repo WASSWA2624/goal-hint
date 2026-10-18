@@ -273,7 +273,8 @@ test('shared public cache, transactional invalidation and recovery on genuine My
         p.setTime(Date.parse('2026-10-09T20:59:59.999Z')); const yesterday = await feed.query(params(''));
         p.setTime(p.now() + 1); const today = await feed.query(params(''));
         assert.equal(yesterday.today, '2026-10-09'); assert.equal(today.today, '2026-10-10');
-        assert.equal(today.range.from, today.today);
+        // The default view is the last 30 days, so the rolled-over range ends on the new day.
+        assert.equal(today.range.to, today.today);
         t.diagnostic('Measured virtual-clock cache age: hit at 4,999 ms, refresh at 5,000 ms; 15/60-second observations plus cache <=20/65 seconds before worker processing.');
       });
       assert.equal(network, 0);

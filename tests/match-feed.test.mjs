@@ -17,7 +17,7 @@ function emptyPage() {
       dates: [{ date: today, status: 'complete', observedAt: Date.parse('2026-10-09T08:00:00Z'), authoritative: true }] }, run: null };
 }
 
-for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'from=2026-10-09&to=2026-11-09',
+for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'from=2026-10-09&to=2027-10-10',
   'from=2026-10-09', 'from=2026-10-10&to=2026-10-09', 'date=2026-10-09&when=today',
   'date=2026-10-09&date=2026-10-10', 'status=FT', 'status=untrusted', 'market=corners',
   'sort=probability&dir=up', 'market=match-result&sort=probability&sortMarket=total-goals', 'sort=score', 'prob=90-10', 'country=x%3Cscript%3E',

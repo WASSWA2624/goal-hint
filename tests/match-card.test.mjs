@@ -218,7 +218,9 @@ test("the phone tile puts the result tag in the top-right corner, outside the de
   assert.match(card, /grid-template-areas: "meta result" "teams teams" "pick pick";/u);
   const result = await styledBlock("Result");
   assert.match(result.tile.split("${table}")[0], /grid-area: result;/u);
-  assert.match(result.tile, /&\[data-result-badge="upcoming"\]/u);
+  // Bright verdict colours apply on both layouts; Upcoming has its own pale tag.
+  assert.match(result.all, /theme\.color\.verdict\[/u);
+  assert.match(result.all, /&\[data-result-badge="upcoming"\] \{\s*color: \$\{\(\{ theme \}\) => theme\.color\.verdict\.upcoming\.text\}/u);
   assert.match(result.tile, /&\[data-result-badge="unavailable"\] \{ display: none; \}/u);
   // The table keeps the result in its own column, right after the three pick columns.
   assert.match(result.tile, /\$\{table\} \{\s*grid-column: 10;\s*grid-row: 2;/u);

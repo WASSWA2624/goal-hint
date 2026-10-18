@@ -6,6 +6,7 @@ import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
 import { analyticsRules } from "@/domain/analytics-settings";
 import { informationHref } from "@/domain/navigation";
+import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { media } from "@/styles/theme";
 import { getConsentState, getServerConsentState, rememberLanding, setConsent, startTracker, stopTracker, subscribeConsent,
   trackPageview, trackSearch } from "./tracker";
@@ -39,7 +40,7 @@ export function AnalyticsTracker({ available }: { available: boolean }) {
   }, [available, consent, excluded, pathname, query]);
 
   if ((consent !== "unset" && consent !== "pending") || excluded || !available) return null;
-  return <ConsentBanner pending={consent === "pending"} />;
+  return <ServerThemeUntilHydrated><ConsentBanner pending={consent === "pending"} /></ServerThemeUntilHydrated>;
 }
 
 function ConsentBanner({ pending }: { pending: boolean }) {

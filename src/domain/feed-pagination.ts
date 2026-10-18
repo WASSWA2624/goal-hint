@@ -36,7 +36,8 @@ export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse): Loade
   if (view.pages >= feedPaginationRules.maximumLoadedPages || page.page !== view.data.nextPage || page.page !== view.lastPage + 1) {
     throw new FeedPaginationError("invalid-response");
   }
-  if (view.data.paginationVersion === null || page.paginationVersion !== view.data.paginationVersion || page.total !== view.data.total) {
+  if (view.data.paginationVersion === null || page.paginationVersion !== view.data.paginationVersion || page.total !== view.data.total ||
+    page.search?.exact !== view.data.search?.exact) {
     throw new FeedPaginationError("changed");
   }
   const known = new Set(view.records.map((record) => record.fixtureId));

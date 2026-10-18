@@ -5,7 +5,8 @@ import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.
 import { observeCache, type CacheOutcome, type ReadFamily } from "../monitoring/server-measurements.ts";
 
 export const publicCacheRules = Object.freeze({ mutableMs: 5000, immutableMs: 6 * 60 * 60 * 1000,
-  maximumBytes: 1024 * 1024, maximumTags: 36, recoveryBatch: 100 });
+  // A year-long feed range (366 days plus two zone-window days) keeps one date tag per day beside the global tags.
+  maximumBytes: 1024 * 1024, maximumTags: 380, recoveryBatch: 100 });
 export type CacheDescriptor<T> = Readonly<{ key: string; tags: readonly string[]; lifetimeMs: number;
   deadlineAt: number; kind?: ReadFamily; validUntil?: () => number; parse(value: unknown): T }>;
 export type CacheSnapshot = Readonly<{ generations: Readonly<Record<string, string>>; value: unknown; createdAt: number | null; expiresAt: number | null }>;

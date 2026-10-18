@@ -12,7 +12,7 @@ import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { providerImageSource } from "@/components/ui/provider-image";
 import { isLocalCountryFlagAsset } from "@/domain/country-flag";
 import type { FilterOption } from "@/domain/feed-presentation";
-import { prepareFootballSearch } from "@/domain/football-search";
+import { footballSearchTiers, prepareFootballSearch } from "@/domain/football-search";
 import { media, type AccentName } from "@/styles/theme";
 
 export const focusRing = css`
@@ -221,10 +221,11 @@ const PickerSearch = styled.input`
   padding-inline: ${({ theme }) => theme.space.sm};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
   border-radius: 0;
   font: inherit;
   font-size: 0.8125rem;
+  ${controlFeedback}
   ${focusRing}
   ${media.desktop} { min-block-size: 2.5rem; font-size: 0.9375rem; }
 `;
@@ -267,14 +268,22 @@ const PickerEmpty = styled.p`
   font-size: 0.75rem;
   ${media.desktop} { font-size: 0.875rem; }
 `;
+const PickerHeading = styled.li`
+  padding: 8px 4px 2px;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: 0.75rem;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+`;
 
-/** Full option list behind a chevron: searchable checkboxes, Escape and outside clicks close it. */
-export function OptionPicker({ title, options, selected, onToggle, findLabel, emptyLabel, searchable = true, trigger, summary, className }: {
+/** Full option list behind a chevron: searchable checkboxes, Escape and outside clicks close it. A text filter lists
+ * direct matches first and spelling-tolerant ones under `similarLabel`. */
+export function OptionPicker({ title, options, selected, onToggle, findLabel, emptyLabel, noMatchLabel, similarLabel, searchable = true, trigger, summary, className }: {
   title: string; options: readonly FilterOption[]; selected: readonly string[]; onToggle: (value: string) => void;
-  findLabel: string; emptyLabel: string; searchable?: boolean; trigger?: ReactNode; summary?: ReactNode; className?: string;
+  findLabel: string; emptyLabel: string; noMatchLabel?: string; similarLabel?: string; searchable?: boolean; trigger?: ReactNode;
+  summary?: ReactNode; className?: string;
 }) {
   const [open, setOpen] = useState(false), [filter, setFilter] = useState("");
-  const root = useRef<HTMLDivElement>(null), button = useRef<HTMLButtonElement>(null), panel = useRef<HTMLDivElement>(null), panelId = useId();
+  const root = useRef<HTMLDivElement>(null), button = useRef<HTMLButtonElement>(null), panel = useRef<HTMLDivElement>(null), panelId = useId(), similarId = useId();
   const close = useCallback(() => setOpen(false), []);
   useOutsideDismiss({ enabled: open, root, onDismiss: close });
   useLayoutEffect(() => {
@@ -348,16 +357,25 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
   }, [open, close]);
   const needle = filter.trim();
   const search = useMemo(() => prepareFootballSearch(needle), [needle]);
-  const visible = useMemo(() => {
-    if (!needle) return options;
-    return options.map((option, index) => ({
+  const { exact, similar } = useMemo(() => {
+    if (!needle) return { exact: options, similar: [] };
+    const ranked = options.map((option, index) => ({
       option, index,
       score: Math.max(search.score(option.label), option.detail ? search.score(option.detail) : 0,
         option.detail ? search.score(`${option.label} ${option.detail}`) : 0),
     })).filter(({ score }) => score > 0)
-      .sort((left, right) => right.score - left.score || left.index - right.index)
-      .map(({ option }) => option);
+      .sort((left, right) => right.score - left.score || left.index - right.index);
+    return { exact: ranked.filter(({ score }) => score >= footballSearchTiers.exact).map(({ option }) => option),
+      similar: ranked.filter(({ score }) => score < footballSearchTiers.exact).map(({ option }) => option) };
   }, [needle, options, search]);
+  // Tabbing between checkboxes skips the heading, so each similar option is described by it.
+  const row = (option: FilterOption, similarOption = false) => <li key={option.value}><label>
+    <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)}
+      aria-describedby={similarOption && similarLabel ? similarId : undefined} />
+    <OptionLogo url={option.logoUrl} />
+    <span>{option.label}{option.detail && <VisuallyHidden>, {option.detail}</VisuallyHidden>}</span>
+    {option.fixtures > 0 && <small aria-hidden="true">{option.fixtures}</small>}
+  </label></li>;
   const Trigger = summary ? PickerSummary : IconButton;
   return <PickerRoot className={className} ref={root} onKeyDown={(event) => {
     if (event.key === "Escape" && open) { event.stopPropagation(); setOpen(false); button.current?.focus(); }
@@ -367,13 +385,10 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
     {open && <PickerPanel ref={panel} id={panelId} role="group" aria-label={title} data-option-picker-panel>
       {searchable && <PickerSearch type="search" value={filter} onChange={(event) => setFilter(event.target.value)}
         aria-label={findLabel} placeholder={findLabel} autoFocus />}
-      {visible.length === 0 ? <PickerEmpty>{emptyLabel}</PickerEmpty> : <PickerList>
-        {visible.map((option) => <li key={option.value}><label>
-          <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)} />
-          <OptionLogo url={option.logoUrl} />
-          <span>{option.label}{option.detail && <VisuallyHidden>, {option.detail}</VisuallyHidden>}</span>
-          {option.fixtures > 0 && <small aria-hidden="true">{option.fixtures}</small>}
-        </label></li>)}
+      {exact.length + similar.length === 0 ? <PickerEmpty>{needle && noMatchLabel ? noMatchLabel : emptyLabel}</PickerEmpty> : <PickerList>
+        {exact.map((option) => row(option))}
+        {similar.length > 0 && similarLabel && <PickerHeading id={similarId}>{similarLabel}</PickerHeading>}
+        {similar.map((option) => row(option, true))}
       </PickerList>}
     </PickerPanel>}
   </PickerRoot>;

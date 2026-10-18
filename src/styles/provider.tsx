@@ -20,6 +20,19 @@ export function StyleProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const subscribeNothing = () => () => {};
+const themes = { light: lightTheme, dark: darkTheme };
+
+/**
+ * A streamed Suspense boundary can hydrate after the root has already switched to the visitor's theme. Its server
+ * HTML carries server-theme class names, so it hydrates under the server theme and only then follows the root theme.
+ */
+export function ServerThemeUntilHydrated({ children }: { children: ReactNode }) {
+  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
+  const theme = useContext(ThemeContext);
+  return <ThemeProvider theme={hydrated && theme ? theme : themes[getServerThemeSnapshot()]}>{children}</ThemeProvider>;
+}
+
 /**
  * Next renders the root not-found page without the root layout when it rejects a URL-encoded
  * Server Action request; supply the root provider only there, never a second one under the layout.

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon, FirstPageIcon, LastPageIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { paginationWindow } from "@/domain/feed-presentation";
 import type { Messages } from "@/i18n/messages";
@@ -11,7 +11,7 @@ import { media } from "@/styles/theme";
 import { paginationControlStyles } from "./pagination-styles";
 
 type Labels = Readonly<{
-  navigation: string; numbers: string; instructions: string; backward: string; forward: string;
+  navigation: string; numbers: string; instructions: string; backward: string; forward: string; first: string; last: string;
   page: (page: number) => string; number: (page: number) => string;
 }>;
 type Navigation = Readonly<{ href: (page: number) => string; onPage?: never }> | Readonly<{ onPage: (page: number) => void; href?: never }>;
@@ -23,6 +23,7 @@ type ScrollHold = HoldInput & { previousTime: number | null; moved: boolean };
 export function numberedPaginationLabels(messages: Pick<Messages, "text" | "number">, navigation: string): Labels {
   return { navigation, numbers: messages.text("pagination.numbers"), instructions: messages.text("pagination.instructions"),
     backward: messages.text("pagination.scrollPrevious"), forward: messages.text("pagination.scrollNext"),
+    first: messages.text("pagination.firstPage"), last: messages.text("pagination.lastPage"),
     page: (page) => messages.text("feed.pagination.pageLink", { page: messages.number(page) }), number: (page) => messages.number(page) };
 }
 
@@ -33,7 +34,8 @@ const Frame = styled.nav<{ $compact: boolean }>`
   --pagination-cell-width: max(var(--pagination-min-cell), calc(var(--pagination-digits) * 1ch + 12px));
   --pagination-step: calc(var(--pagination-cell-width) + var(--pagination-gap));
   display: grid;
-  grid-template-columns: var(--pagination-min-cell) minmax(0, 1fr) var(--pagination-min-cell);
+  /* First page, scroll back, the number rail, scroll forward, last page. */
+  grid-template-columns: var(--pagination-min-cell) var(--pagination-min-cell) minmax(0, 1fr) var(--pagination-min-cell) var(--pagination-min-cell);
   align-items: center;
   gap: var(--pagination-gap);
   inline-size: 100%;
@@ -53,6 +55,21 @@ const ScrollButton = styled.button`
   touch-action: none;
   user-select: none;
 `;
+/** First and last page jumps at the outer ends: links in the feed, buttons where pages change in place. */
+const EndLink = styled(Link)`${paginationControlStyles}`;
+const EndButton = styled.button`${paginationControlStyles}`;
+
+function EndControl({ target, current, label, icon, href, onPage }: Readonly<{
+  target: number; current: number; label: string; icon: ReactNode;
+  href?: ((page: number) => string) | undefined; onPage?: ((page: number) => void) | undefined;
+}>) {
+  const end = target === 1 ? "first" : "last";
+  // Already on that page: a disabled control keeps the layout and is skipped by Tab.
+  if (target === current) return <EndButton type="button" disabled aria-label={label} title={label} data-pagination-end={end}>{icon}</EndButton>;
+  return href
+    ? <EndLink href={href(target)} prefetch={false} aria-label={label} title={label} data-pagination-end={end}>{icon}</EndLink>
+    : <EndButton type="button" onClick={() => onPage?.(target)} aria-label={label} title={label} data-pagination-end={end}>{icon}</EndButton>;
+}
 const Viewport = styled.div`
   min-inline-size: 0;
   max-inline-size: 100%;
@@ -275,6 +292,7 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
     style={{ flexBasis: `calc(var(--pagination-step) * ${amount} - var(--pagination-gap))` }} /> : null;
   return <Frame $compact={compact} className={className} aria-label={labels.navigation} data-numbered-pagination data-page-count={count}
     data-current-page={current} style={{ "--pagination-digits": String(count).length } as CSSProperties}>
+    <EndControl target={1} current={current} label={labels.first} icon={<FirstPageIcon />} href={href} onPage={onPage} />
     <ScrollButton type="button" onClick={(event) => clickScroll(-1, event.detail)} disabled={!bounds.backward} aria-label={labels.backward} title={labels.backward}
       onPointerDown={(event) => startHold(event, -1)} onPointerUp={endHold} onPointerCancel={endHold} onLostPointerCapture={endHold}
       onKeyDown={(event) => keyDownHold(event, -1)} onKeyUp={keyUpHold}
@@ -304,7 +322,8 @@ export function NumberedPagination({ page, pages, labels, compact = false, class
       onKeyDown={(event) => keyDownHold(event, 1)} onKeyUp={keyUpHold}
       onBlur={blurHold} onContextMenu={(event) => { if (held.current) event.preventDefault(); }}
       aria-controls={id} data-pagination-scroll="next"><ChevronRightIcon /></ScrollButton>
+    <EndControl target={count} current={current} label={labels.last} icon={<LastPageIcon />} href={href} onPage={onPage} />
     <VisuallyHidden id={instructionsId}>{labels.instructions}</VisuallyHidden>
-    <noscript><style>{`[data-numbered-pagination]{grid-template-columns:minmax(0,1fr)}[data-numbered-pagination] [data-pagination-spacer],[data-numbered-pagination] [data-pagination-scroll]{display:none}[data-numbered-pagination] [data-pagination-viewport]{overflow:visible}[data-numbered-pagination] ol{inline-size:auto;flex-wrap:wrap}`}</style></noscript>
+    <noscript><style>{`[data-numbered-pagination]{grid-template-columns:var(--pagination-min-cell) minmax(0,1fr) var(--pagination-min-cell)}[data-numbered-pagination] [data-pagination-spacer],[data-numbered-pagination] [data-pagination-scroll]{display:none}[data-numbered-pagination] [data-pagination-viewport]{overflow:visible}[data-numbered-pagination] ol{inline-size:auto;flex-wrap:wrap}`}</style></noscript>
   </Frame>;
 }
