@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { fixture, query as clientQuery, today, now } from './client-state-fixtures.mjs';
-import { resolveFeedDates } from '../../src/domain/feed-query.ts';
+import { feedQueryRules, resolveFeedDates } from '../../src/domain/feed-query.ts';
 import { matchFeedRecordSchema, matchFeedResponseSchema } from '../../src/domain/match-feed.ts';
 import { matchDetailResponseSchema } from '../../src/domain/match-detail.ts';
 import { deMargin, DE_MARGIN_METHOD, parseDecimalOdds } from '../../src/domain/odds.ts';
@@ -26,7 +26,7 @@ export function liveRun(overrides = {}) {
 }
 export function liveFeed(records = [liveRecord()], overrides = {}) {
   const range = resolveFeedDates(query(), today);
-  return matchFeedResponseSchema.parse({ records, page: 1, nextPage: null, previousPage: null, pageSize: 30,
+  return matchFeedResponseSchema.parse({ records, page: 1, nextPage: null, previousPage: null, pageSize: feedQueryRules.pageSize,
     paginationVersion: 'a'.repeat(64), total: records.length, totalPages: records.length ? 1 : 0, links: { next: null, previous: null },
     asOf: now, today, range: { from: today, to: today, ...range.window }, state: records.length ? 'ready' : 'no-fixtures', message: null,
     coverage: { partial: false, knownFixtures: records.length, matchingWithMarket: records.length,

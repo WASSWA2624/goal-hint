@@ -1,7 +1,7 @@
 # Pagination and Back restoration
 
 Prompt 034 enhances ordinary feed pagination with explicit Load more. The initial
-HTML contains approximately 30 cards and crawlable numbered page links.
+HTML contains approximately 50 cards and crawlable numbered page links.
 Every page URL preserves validated filters, selected-market order and page size,
 and pins the resolved reporting date/range so following a link across midnight
 does not silently switch cohorts. Direct later-page visits are independent of

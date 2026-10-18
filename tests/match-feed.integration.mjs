@@ -89,7 +89,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
     });
     await t.test('default pagination uses exact EAT boundaries, stable ties and ordinary links', async () => {
       const first = await query(), repeat = await query();
-      assert.equal(first.total, 72); assert.equal(first.records.length, 30); assert.equal(first.pageSize, 30);
+      assert.equal(first.total, 72); assert.equal(first.records.length, 50); assert.equal(first.pageSize, 50);
       assert.deepEqual(first.records.map((item) => item.fixtureId), repeat.records.map((item) => item.fixtureId));
       assert.equal(first.range.startInclusive, Date.parse('2026-10-08T21:00:00Z'));
       assert.equal(first.range.endExclusive, Date.parse('2026-10-09T21:00:00Z'));
@@ -98,15 +98,14 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal(first.nextPage, 2); assert.equal(first.previousPage, null);
       assert.match(first.links.next, /date=2026-10-09&page=2$/u);
       const second = await service.query(new URL(first.links.next, 'http://localhost').searchParams);
-      const third = await query({ page: '3' });
-      assert.equal(second.records.length, 30); assert.equal(third.records.length, 12);
-      assert.equal(new Set([...first.records, ...second.records, ...third.records].map((item) => item.fixtureId)).size, 72);
-      assert.equal(third.records.at(-1).fixtureId, (await fixture(3070)).id);
+      assert.equal(second.records.length, 22); assert.equal(second.nextPage, null);
+      assert.equal(new Set([...first.records, ...second.records].map((item) => item.fixtureId)).size, 72);
+      assert.equal(second.records.at(-1).fixtureId, (await fixture(3070)).id);
       assert.equal((await query({ date: '2026-10-10' })).records[0].fixtureId, (await fixture(3072)).id);
       const range = await service.query({ from: '2026-10-09', to: '2026-10-10', pageSize: '100' });
       assert.equal(range.total, 73); assert.equal(range.coverage.dates.length, 2);
       const beyond = await query({ page: '10000' });
-      assert.equal(beyond.state, 'page-out-of-range'); assert.equal(beyond.previousPage, 3);
+      assert.equal(beyond.state, 'page-out-of-range'); assert.equal(beyond.previousPage, 2);
       assert.ok(Object.isFrozen(first.records));
     });
     await t.test('case-insensitive team and league aliases and country search precede pagination', async () => {
@@ -119,7 +118,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal((await query({ q: 'FARAWAY LAND' })).total, 1);
       assert.equal((await query({ q: 'SYNTHETIC COMPETITION 39' })).total, 72);
       assert.equal((await query({ q: 'CANONICAL LEAGUE' })).total, 72);
-      assert.equal((await query({ q: 'sYnThEtIc CoUnTrY', page: '3' })).records.length, 12);
+      assert.equal((await query({ q: 'sYnThEtIc CoUnTrY', page: '2' })).records.length, 22);
       assert.equal((await query({ q: '%_!' })).total, 0);
       assert.equal((await query({ q: "' OR 1=1 --" })).state, 'no-filter-matches');
       assert.equal((await query({ league: 'unknown-league' })).state, 'no-filter-matches');

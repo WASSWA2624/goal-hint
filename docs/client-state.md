@@ -55,7 +55,7 @@ validation response, rather than accepting a more permissive query.
 | Status | `all` default; `scheduled`, `live`, `finished`, `postponed`, `canceled`, `abandoned`, `awarded`, `unknown`. Finished groups played finals; provider mapping/query implementation belongs to 028. |
 | Market | Any by default: all supported families (`match-result`, `double-chance`, `total-goals`, `both-teams-to-score`), showing each fixture's highest-probability available pick. |
 | Sort | `kickoff` default, or `probability` requiring an explicit `market`. In state, probability sort carries that market. Optional inbound `sortMarket` must agree; serialization omits this redundant alias. |
-| Position | `page` default 1, maximum 10,000; `pageSize` default 30, maximum 100. Canonical positive decimal integers only. |
+| Position | `page` default 1, maximum 10,000; `pageSize` default 50, maximum 100. Canonical positive decimal integers only. |
 
 Unknown parameters, repeated parameters (including arrays supplied by Next),
 mixed date modes, partial ranges and incompatible market sorts fail closed.

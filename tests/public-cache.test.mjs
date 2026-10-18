@@ -33,9 +33,9 @@ test('canonical keys resolve relative dates and isolate all allowed query and po
     const range = validateReportingDateRange(today, today, 1);
     return descriptor({ query: { ...query, dates: { from: today, to: today } }, range, ...extra }).key;
   };
-  assert.equal(key(''), key('date=2026-10-09&page=1&pageSize=30&status=all'));
+  assert.equal(key(''), key('date=2026-10-09&page=1&pageSize=50&status=all'));
   assert.equal(key('q=%20Club%20%20One%20'), key('q=Club+One'));
-  for (const input of ['page=2','pageSize=50','market=total-goals','status=live','league=abc','q=Club','market=total-goals&sort=probability']) {
+  for (const input of ['page=2','pageSize=30','market=total-goals','status=live','league=abc','q=Club','market=total-goals&sort=probability']) {
     assert.notEqual(key(''), key(input));
   }
   assert.notEqual(key(''), key('', { locale: 'test-long' }));
