@@ -11,7 +11,7 @@ import { auditDetails, auditTextErrors, ownerSignInAudit, UnsafeAuditDetailsErro
 import { createSettingsHandlers } from "../src/server/admin/settings-http.ts";
 import { createPlansService } from "../src/server/members/plans.ts";
 import { accessMode, createSettingsService, settingsCacheRules } from "../src/server/members/settings.ts";
-import { createMemberSignInHandler, createMemberSignOutHandler } from "../src/server/members/member-http.ts";
+import { createMemberCodeHandler, createMemberSignInHandler, createMemberSignOutHandler } from "../src/server/members/member-http.ts";
 import { memberCookieName } from "../src/server/members/member-sessions.ts";
 import { memberReturnPath } from "../src/domain/member-navigation.ts";
 
@@ -71,6 +71,31 @@ test("member sign-out clears the Lax cookie and cache even with mode off or fail
   assert.equal(response.headers.get("location"), "/en/account?status=signed-out");
   assert.equal(response.headers.get("clear-site-data"), '"cache"');
   assert.match(response.headers.get("set-cookie"), /^goal-hint-member=; .*SameSite=Lax; Max-Age=0$/);
+});
+
+test("phone plus code uses the atomic code path, redirects only to safe paths, and retains codes only in request bodies", async () => {
+  const fixture = memberFixture(), calls = [];
+  fixture.services.codes = { async signInWithCode(...args) { calls.push(args); return { status: "accepted", token: "c".repeat(43) }; } };
+  fixture.services.settings.settings.maxUnlockedDevices = 2;
+  let response = await createMemberSignInHandler(fixture.resolve)(memberRequest({ phone: "0772123456", code: "0123-4567-89AB", return: "/en" }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { next: "/en" });
+  assert.equal(fixture.calls.signIn.length, 0);
+  assert.equal(calls[0][0], "256772123456");
+  assert.equal(calls[0][1], "0123-4567-89AB");
+  assert.match(response.headers.get("set-cookie"), /goal-hint-member=c{43}/u);
+  fixture.services.codes.signInWithCode = async () => ({ status: "not-recognized" });
+  response = await createMemberSignInHandler(fixture.resolve)(memberRequest({ phone: "0772123456", code: "0123-4567-89AB" }));
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("set-cookie"), null);
+  assert.equal((await response.json()).message, "Code not recognized. Codes work only on the number they were sent to.");
+  const signed = memberFixture({ member: { blocked: false } });
+  signed.services.codes = { async redeem() { return { status: "ended", endsAt: new Date("2026-10-20T11:30:00Z") }; } };
+  response = await createMemberCodeHandler(signed.resolve)(memberRequest({ code: "0123-4567-89AB", return: "https://evil.test" }, { json: false }));
+  assert.equal(response.status, 303);
+  const target = response.headers.get("location");
+  assert.match(target, /^\/en\/account\?status=code-ended&ended=/u);
+  assert.doesNotMatch(target, /0123|evil/u);
 });
 
 test("settings fields parse to canonical numbers, tested shortcuts, trimmed text and in-range whole numbers", () => {

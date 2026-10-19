@@ -89,7 +89,7 @@
     "analytics:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/analytics.ts purge",
     "test:analytics": "node --conditions=react-server --test tests/analytics.test.mjs tests/analytics.integration.mjs",
     "test:admin": "node --conditions=react-server --test tests/admin.test.mjs tests/admin-routes.test.mjs",
-    "test:members": "node --conditions=react-server --test tests/phone.test.mjs tests/members.test.mjs tests/members.integration.mjs",
+    "test:members": "node --conditions=react-server --test tests/phone.test.mjs tests/access-codes.test.mjs tests/members.test.mjs tests/members.integration.mjs",
     "test:scripts": "python -m unittest discover -s tests -p \"*_test.py\"",
     "test:scripts:integration": "python tests/scripts_integration.py"
   },

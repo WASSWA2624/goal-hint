@@ -4530,3 +4530,44 @@ remain recorded for their owning prompts. Existing 058 local build/drift/backup
 issues remain as previously documented; this prompt changes none of those systems.
 
 **Status:** 059 acceptance passed; tracker row is ☑ Completed. Continue with 060.
+
+## 060 — Access codes, periods and viewer resolution (19 October 2026)
+
+Implemented the pure code and period helpers, transactional code lifecycle and
+shared payment approval services, account-bound code entry, device rotation and
+eviction, phone-plus-code sign-in, and a common page/API viewer resolver. The
+account page now renders unlocked, active, queued, ended and blocked states with
+the existing chrome. Number-only sessions receive no period/device history.
+Code fragments prefill without submission, clear in every state and survive
+Next refresh correctly. Member attribution redirects preserve browser fragments;
+the analytics fragment cleanup also uses `replaceState(null, ...)`.
+
+Changed files: `src/domain/{access-code,subscription-period}.ts`,
+`src/server/members/{access-codes,viewer-access,member-sessions,member-http}.ts`,
+the account code route, account form/page composition, English messages, audit
+actions, discovery proxy and analytics tracker. Extended member/admin/discovery
+tests and the existing production member-rendering fixture; `test:members` now
+includes the pure access-code suite.
+
+| Check | Result |
+| --- | --- |
+| `npm run test:members`, isolated MySQL 8.4.11 | 43 tests pass, no skips, including account binding, concurrent periods, token rotation, device cap, correct code through a locked throttle, renewal entitlement, reissue, cross-network approval race, reversal through number change and trial restrictions. |
+| `npm run test:seo`, isolated MySQL 8.4.11 | 29 pass, no skips; member click-ID redirects have no replacement fragment. |
+| `npm run test:admin` | 25 pass, including code-route origin/mode/member/blocked guard matrix. |
+| Changed-file ESLint and `npm run typecheck` | Pass. |
+| Production build | Pass with the previously recorded process-only `GOAL_HINT_DATABASE_ENABLED=false` override; no env file changed. |
+| `python scripts/verify-member-rendering.py --serve` | Seven production HTML states pass; code fields disable autocomplete, and number-only HTML has no subscription details. |
+
+Manual Browser-pane checks at 375 × 812: closed, unavailable, blocked,
+number-only, active and ended views fit without horizontal overflow; code inputs
+measure 44 px. Code links prefill on load and hash changes without submitting;
+signed-out focus is on the phone with its caret after `256`, signed-in focus is
+on Unlock. After `router.refresh()`, the fragment stays empty and the fixture
+reports `history.state.__PRIVATE_NEXTJS_INTERNALS_TREE` present. Typing only the
+phone and pressing Unlock navigates to the accepted account state with the
+fragment cleared. The viewport override was reset.
+
+Existing 058 local database/build/backup issues remain separate. No deployment,
+real payment, external message, owner mode change or new dependency/env key.
+
+**Status:** 060 acceptance passed; tracker row is ☑ Completed. Continue with 061.

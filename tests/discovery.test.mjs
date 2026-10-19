@@ -67,6 +67,15 @@ test('owner and member pages share the private robots policy by path prefix', ()
   }
 });
 
+test('member attribution redirects set no fragment so browsers retain a private code fragment', () => {
+  const proxy = createDiscoveryProxy(() => approved);
+  for (const route of ['account', 'subscribe']) {
+    const response = proxy(new NextRequest(`https://goalhint.com/en/${route}?fbclid=x`));
+    assert.equal(response.status, 308);
+    assert.equal(response.headers.get('location'), `https://goalhint.com/en/${route}`);
+  }
+});
+
 test('indexing needs an explicit production runtime and verified release; missing or preview configuration fails closed', () => {
   for (const deployment of [undefined, '', 'development', 'staging', 'preview', 'Production', 'production']) {
     for (const runtime of ['development', 'test', 'production']) for (const releaseVerified of [false, true]) {

@@ -15,6 +15,10 @@ import { createPlansService } from "../src/server/members/plans.ts";
 import { accessMode, createSettingsService } from "../src/server/members/settings.ts";
 import { createMemberSessions, memberSessionRules, memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { createMemberRateLimit } from "../src/server/members/rate-limit.ts";
+import { createAccessCodes } from "../src/server/members/access-codes.ts";
+import { createViewerAccess } from "../src/server/members/viewer-access.ts";
+import { remainingDays, subscriptionDayMs as day } from "../src/domain/subscription-period.ts";
+import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
 import { execFile } from "./helpers/command-runtime.mjs";
 import { costTestEnvironment } from "./helpers/cost-fixtures.mjs";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
@@ -487,6 +491,157 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal((await sessions.verify(blockedSignIn.token)).blocked, true);
       await sessions.signOut(blockedSignIn.token);
       assert.equal(await sessions.verify(blockedSignIn.token), null);
+    });
+
+    await t.test("confirmation chains concurrent codes, unlock rotates and caps devices, renewals retain entitlement, and wrong-code throttles never block a correct code", async () => {
+      let instant = now.getTime();
+      const config = { production: false, cookies: { session: "owner" }, key: (purpose, value) => sha256(`${purpose}:${value}`) };
+      const sessions = createMemberSessions({ database, config, now: () => instant });
+      const codes = createAccessCodes({ database, config, now: () => instant });
+      const phone = "256700000711", initial = await sessions.signIn(phone, "unknown"), member = await sessions.verify(initial.token);
+      assert.equal(await codes.accountView(member), null);
+      const first = await codes.manual({ phone, durationDays: 1, amountReceivedUgx: 0, note: "Synthetic daily" }, "owner");
+      assert.equal(first.status, "created");
+      const stored = () => database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: first.ready.id } }));
+      assert.deepEqual([(await stored()).startsAt, (await stored()).endsAt], [now, new Date(+now + day)]);
+      instant += day / 2;
+      const wrongLimit = createMemberRateLimit(database, config, () => instant);
+      for (let n = 0; n < 101; n++) await wrongLimit({ purpose: "wrong-codes", value: "locked-ip", maximum: 100, windowMs: 3_600_000 });
+      assert.equal((await codes.redeem(member, "ZZZZ-ZZZZ-ZZZZ", "locked-ip", 2, "2026-10-19")).status, "busy");
+      const unlocked = await codes.redeem(member, first.ready.code, "locked-ip", 2, "2026-10-19");
+      assert.equal(unlocked.status, "accepted");
+      assert.notEqual(unlocked.token, initial.token);
+      assert.equal(await sessions.verify(initial.token), null);
+      assert.deepEqual([(await stored()).startsAt, (await stored()).endsAt], [now, new Date(+now + day)]);
+      assert.equal((await stored()).termsVersion, "2026-10-19");
+      const memberUnlocked = await sessions.verify(unlocked.token);
+      const renewals = await Promise.all([1, 7].map((durationDays) => codes.manual({ phone, durationDays, amountReceivedUgx: 0, note: "Synthetic renewal" }, "owner")));
+      assert.ok(renewals.every((result) => result.status === "created"));
+      const periods = await database.query((tx) => tx.accessCode.findMany({ where: { accountId: member.accountId }, orderBy: { startsAt: "asc" } }));
+      assert.equal(+periods[1].startsAt, +periods[0].endsAt);
+      assert.equal(+periods[2].startsAt, +periods[1].endsAt);
+      let mode = "on";
+      const resolve = createViewerAccess({ services: async () => ({ config, database, auth: null }), now: () => instant,
+        settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: mode } }) });
+      const access = (token) => resolve((name) => name === "goal-hint-member" ? token : undefined);
+      assert.deepEqual(await access(unlocked.token), { tier: "full", signedIn: true, mode: "on" });
+      instant = +now + day;
+      assert.equal((await access(unlocked.token)).tier, "full", "the entered code expired but the renewal keeps the device entitled");
+      assert.equal((await codes.accountView(memberUnlocked)).devices.length, 1);
+      const numberOnly = await sessions.signIn(phone, "unknown");
+      assert.equal((await access(numberOnly.token)).tier, "free");
+      mode = "test";
+      assert.equal((await access(numberOnly.token)).tier, "free");
+      assert.equal((await access(undefined)).tier, "full");
+      for (let n = 0; n < 2; n++) {
+        instant++;
+        const signedIn = await sessions.signIn(phone, "unknown");
+        assert.equal((await codes.redeem(await sessions.verify(signedIn.token), renewals[1].ready.code, "unknown", 2, "2026-10-19")).status, "accepted");
+      }
+      assert.equal((await sessions.verify(unlocked.token)).codeEnteredAt, null, "the oldest device loses its unlock");
+      assert.equal((await access(unlocked.token)).tier, "free");
+      const evictions = await database.query((tx) => tx.ownerAuditEvent.count({ where: { accountId: member.accountId, action: "device_evicted" } }));
+      assert.equal(evictions, 1);
+      const before = await database.query((tx) => tx.memberAccount.count());
+      const sessionsBefore = await database.query((tx) => tx.memberSession.count());
+      assert.equal((await codes.signInWithCode("256700000799", first.ready.code, "unknown", 2, "2026-10-19")).status, "not-recognized");
+      assert.equal(await database.query((tx) => tx.memberAccount.count()), before);
+      assert.equal(await database.query((tx) => tx.memberSession.count()), sessionsBefore);
+      const other = await sessions.signIn("256700000712", "unknown");
+      assert.equal((await codes.redeem(await sessions.verify(other.token), renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "not-recognized");
+      assert.equal((await codes.signInWithCode("256700000712", renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "not-recognized");
+      const direct = await codes.signInWithCode(phone, renewals[0].ready.code, "unknown", 2, "2026-10-19");
+      assert.equal(direct.status, "accepted");
+      assert.ok((await sessions.verify(direct.token)).codeEnteredAt);
+      assert.equal((await access(direct.token)).tier, "full");
+      await app.query("UPDATE MemberAccount SET blockedAt = ? WHERE id = ?", [new Date(instant), member.accountId]);
+      assert.equal((await access(direct.token)).tier, "free");
+      assert.equal((await codes.redeem(await sessions.verify(direct.token), renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "refused");
+      await app.query("UPDATE MemberAccount SET blockedAt = NULL WHERE id = ?", [member.accountId]);
+      instant = +periods.at(-1).endsAt;
+      mode = "on";
+      assert.equal((await access(unlocked.token)).tier, "free");
+      assert.equal((await codes.redeem(memberUnlocked, first.ready.code, "unknown", 2, "2026-10-19")).status, "ended");
+    });
+
+    await t.test("extend and revoke move queued periods, and reissue copies the period and transfers unlocks without a payment FK", async () => {
+      const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
+      const instant = +now, phone = "256700000721";
+      const codes = createAccessCodes({ database, config, now: () => instant });
+      const sessions = createMemberSessions({ database, config, now: () => instant });
+      const first = await codes.manual({ phone, durationDays: 1, amountReceivedUgx: 0, note: "Synthetic" }, "owner");
+      const second = await codes.manual({ phone, durationDays: 7, amountReceivedUgx: 0, note: "Synthetic" }, "owner");
+      const read = (id) => database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id } }));
+      assert.equal((await codes.extend(first.ready.id, 2, "owner")).status, "saved");
+      assert.equal(+(await read(second.ready.id)).startsAt, instant + 3 * day);
+      const signed = await sessions.signIn(phone, "unknown");
+      const unlocked = await codes.redeem(await sessions.verify(signed.token), first.ready.code, "unknown", 2, "2026-10-19");
+      const replacement = await codes.reissue(first.ready.id, "owner");
+      assert.equal(replacement.status, "created");
+      assert.equal((await read(first.ready.id)).replacedById, replacement.ready.id);
+      const code = await read(replacement.ready.id);
+      assert.equal(code.paymentSubmissionId, null);
+      assert.equal(code.extensionDays, 2);
+      assert.equal(+code.startsAt, instant);
+      assert.equal(+code.endsAt, instant + 3 * day);
+      assert.equal((await sessions.verify(unlocked.token)).accessCodeId, code.id);
+      assert.equal((await codes.revoke(code.id, "owner-request", "owner")).status, "saved");
+      assert.equal((await sessions.verify(unlocked.token)).codeEnteredAt, null);
+      assert.equal(+(await read(second.ready.id)).startsAt, instant);
+      assert.equal((await codes.extend(code.id, 1, "owner")).status, "refused");
+    });
+
+    await t.test("payment approvals race across spelling and network, and reversal follows reissue and number-change replacements", async () => {
+      const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
+      let instant = +now;
+      const codes = createAccessCodes({ database, config, now: () => instant });
+      const firstPhone = "256700000731", otherPhone = "256700000732";
+      const otherAccount = await account(otherPhone), report = await submission(otherAccount, weekly);
+      const outcomes = await Promise.all([
+        codes.manual({ phone: firstPhone, planId: weekly, amountReceivedUgx: 5000, note: "Synthetic payment", network: "mtn", transactionRef: "RACE.100" }, "owner"),
+        codes.approvePayment(report, { network: "airtel", transactionRef: "RACE100", amountReceivedUgx: 5000, planId: weekly }, "owner"),
+      ]);
+      assert.deepEqual(outcomes.map((row) => row.status).sort(), ["created", "duplicate"]);
+      const original = await codes.manual({ phone: "256700000733", planId: weekly, amountReceivedUgx: 5000, note: "Synthetic payment", network: "mtn", transactionRef: "REVERSE.100" }, "owner");
+      const paid = await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: original.ready.id } }));
+      const reissued = await codes.reissue(paid.id, "owner");
+      instant += (3 * 24 + 19) * 3_600_000;
+      await codes.manual({ phone: "256700000733", planId: weekly, amountReceivedUgx: 0, note: "Synthetic queue" }, "owner");
+      const transfer = await codes.changeNumber(paid.accountId, { newPhone: "256700000734", verifiedBy: "old-number" }, "owner");
+      assert.equal(transfer.status, "created");
+      const live = await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: transfer.ready.id } }));
+      assert.equal(live.durationDays, 11, "3 days 5 hours plus 7 days rounds to 11 days");
+      assert.equal(remainingDays([live], new Date(instant)), 11);
+      assert.notEqual(live.accountId, paid.accountId);
+      assert.equal((await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: reissued.ready.id } }))).replacedById, live.id);
+      const reversed = await codes.reversePayment(paid.paymentSubmissionId, "wrong-account", "owner");
+      assert.equal(reversed.status, "saved");
+      assert.equal(reversed.carriedOtherDays, true);
+      const payment = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { id: paid.paymentSubmissionId } }));
+      assert.equal(payment.status, "reversed");
+      assert.equal(payment.approvedTxnKey, "mtn:REVERSE100");
+      assert.equal((await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: live.id } }))).revokedReason, "wrong-account");
+      assert.equal((await codes.manual({ phone: "256700000735", planId: weekly, amountReceivedUgx: 5000, note: "Synthetic duplicate", network: "airtel", transactionRef: "REVERSE100" }, "owner")).status, "duplicate");
+    });
+
+    await t.test("a trial is issued only for a requested account with no prior code and is exactly trialDays from confirmation", async () => {
+      const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
+      const codes = createAccessCodes({ database, config, now: () => +now });
+      const requested = await account("256700000741");
+      assert.equal((await codes.sendTrial(requested, 2, "owner")).status, "refused");
+      await app.query("UPDATE MemberAccount SET trialRequestedAt = ? WHERE id = ?", [now, requested]);
+      const outcome = await codes.sendTrial(requested, 2, "owner");
+      assert.equal(outcome.status, "created");
+      const trial = await database.query((tx) => tx.accessCode.findUniqueOrThrow({ where: { id: outcome.ready.id } }));
+      assert.equal(+trial.endsAt - +trial.startsAt, 2 * day);
+      assert.equal(trial.amountReceivedUgx, 0);
+      assert.equal(trial.source, "trial");
+      assert.equal((await codes.sendTrial(requested, 2, "owner")).status, "refused");
+      assert.equal((await codes.dismissTrial(requested, "owner")).status, "refused");
+      const dismissed = await account("256700000742");
+      await app.query("UPDATE MemberAccount SET trialRequestedAt = ? WHERE id = ?", [now, dismissed]);
+      assert.equal((await codes.dismissTrial(dismissed, "owner")).status, "saved");
+      assert.equal((await codes.sendTrial(dismissed, 2, "owner")).status, "refused");
     });
 
     await t.test("the MariaDB overlay builds the same tables, records Prisma's checksum once and refuses a wrong engine or shape", async () => {

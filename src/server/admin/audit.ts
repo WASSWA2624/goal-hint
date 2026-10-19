@@ -14,6 +14,8 @@ export const ownerAuditActions = Object.freeze([
   "owner_signed_in", "owner_signed_out", "owner_sign_in_refused",
   "settings_changed", "settings_password_refused", "paywall_mode_changed",
   "plan_created", "plan_updated", "plan_activated", "plan_deactivated", "plans_reordered",
+  "code_created", "code_revoked", "code_extended", "code_reissued", "number_changed", "payment_approved", "payment_reversed",
+  "device_unlocked", "device_evicted", "trial_sent", "trial_dismissed",
 ] as const);
 export type OwnerAuditAction = (typeof ownerAuditActions)[number];
 
@@ -27,7 +29,7 @@ export type OwnerAuditEntry = Readonly<{
   action: OwnerAuditAction;
   /** A member account the action concerns (no foreign key, so the row outlives a purge); none in 058. */
   accountId?: string | null;
-  targetType: "owner-session" | "settings" | "plan";
+  targetType: "owner-session" | "settings" | "plan" | "access-code" | "member" | "member-session" | "payment";
   targetId: string;
   details: Readonly<Record<string, unknown>>;
 }>;

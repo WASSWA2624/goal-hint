@@ -6,7 +6,7 @@
 | ◐ Partial | Implementation started or landed, but work, acceptance checks or an external blocker remain. Each partial row has a note below. |
 | ☐ Not started | No implementation yet. |
 
-**Totals:** 45 completed · 6 partial · 16 not started (67 prompts).
+**Totals:** 46 completed · 6 partial · 15 not started (67 prompts).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -69,14 +69,14 @@
 | ☑ Completed   | [057-owner-admin-foundation.md](dev-plan/057-owner-admin-foundation.md)         | —                                                                                                   |
 | ◐ Partial     | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md)       | Existing local build, database drift and backup checks                                              |
 | ☑ Completed   | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md)                           | —                                                                                                   |
-| ☐ Not started | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             | Implementation, after 059                                                                           |
+| ☑ Completed   | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             | —                                                                                                   |
 | ☐ Not started | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md)     | Implementation, after 060                                                                           |
 | ☐ Not started | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md)           | Implementation, after 061                                                                           |
 | ☐ Not started | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               | Implementation, after 062; real SMS samples per network (OP-38)                                     |
 | ☐ Not started | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             | Implementation, after 063                                                                           |
 | ☐ Not started | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       | Implementation, after 064                                                                           |
 | ☐ Not started | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Implementation, after 065; refund policy and legal facts (OP-26/27/39)                              |
-| ☐ Not started | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Implementation, after 066; MTN registered name, menu tests, prefixes, switch-on approval (OP-38/40) |
+| ☐ Not started | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Implementation, after 066; MTN registered name, menu tests, switch-on approval (OP-38/40)           |
 
 ## Partial rows
 
@@ -91,13 +91,14 @@
 
 - **046–049 Staging to production:** blocked by owner decisions on hosting (OP-32), quality qualification (OP-33, which also needs 011, 012 and 014), release signoff (OP-34) and the domain and production operation (OP-35).
 - **053–056:** not started. 055 and 056 now wait for 061–062.
-- **060–067 Paid access:** see below.
+- **061–067 Paid access:** see below.
 
 ## Paid access (057–067)
 
 - **Phase 0 is done (19 October 2026):** specification v1.9, the index section, decisions OP-37–OP-40 and prompts 057–067 are recorded (commits c79a9c9 and 4529d71). Owner choices: Daily (24 hours) UGX 1,000, Weekly UGX 5,000 and Monthly UGX 20,000, all with full access, running from payment confirmation; one free 2-day trial per new number. At Phase 0 no paid-access code existed.
 - **057 (19 October 2026):** ☑ Completed, including the manual 375 px check.
 - **058 (19 October 2026):** ◐ Partial (see Partial rows).
-- **059 (19 October 2026):** ☑ Completed: phone sign-in, hashed sessions, throttles, sign-out/devices and the account states in the existing chrome. MySQL concurrency, 375 px, production headers/build, changed-file lint, typecheck and the full sequential unit suite pass. 060–067 are ☐ Not started.
+- **059 (19 October 2026):** ☑ Completed: phone sign-in, hashed sessions, throttles, sign-out/devices and the account states in the existing chrome. MySQL concurrency, 375 px, production headers/build, changed-file lint, typecheck and the full sequential unit suite pass.
+- **060 (19 October 2026):** ☑ Completed: account-bound access codes, confirmation-time periods, device unlock, viewer resolution and audited owner code services. Member (43), SEO (29) and admin (25) checks pass; production HTML/build, typecheck, changed-file lint and 375 px fragment/refresh/unlock checks pass. 061–067 are ☐ Not started.
 - **Run order:** 057 to 062 in order. 055 and 056 now depend on 061–062, so run them after 062; 063 to 067 follow in order.
 - Paid access ships with the switch `off`. Turning it on needs OP-40, and nothing is deployed unless the owner asks.

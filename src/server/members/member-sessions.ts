@@ -4,18 +4,39 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { isCanonicalPhone } from "../../domain/phone.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
+import type { Prisma } from "../generated/prisma/client.ts";
 import { createMemberRateLimit, memberRateRules, takeMemberLimit } from "./rate-limit.ts";
 import { decide } from "./settings.ts";
 
 export const memberSessionRules = Object.freeze({ expiryMs: 90 * 86_400_000, touchAfterMs: 86_400_000,
   cookieSeconds: 400 * 86_400, maximumSessions: 10 });
 export const memberTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
-const validToken = (token: unknown): token is string => typeof token === "string" && /^[A-Za-z0-9_-]{43}$/u.test(token);
+export const validMemberToken = (token: unknown): token is string => typeof token === "string" && /^[A-Za-z0-9_-]{43}$/u.test(token);
 export const memberCookieName = (production: boolean) => `${production ? "__Host-" : ""}goal-hint-member`;
 
 export type MemberIdentity = Readonly<{ tokenHash: string; accountId: string; phone: string; blocked: boolean;
   codeEnteredAt: Date | null; accessCodeId: string | null; expiresAt: Date }>;
 export type MemberSignIn = Readonly<{ status: "signed-in"; token: string }> | Readonly<{ status: "busy" }>;
+
+/** The caller holds the account lock. Pending reports and unlocked devices are kept ahead of idle number-only sessions. */
+export async function issueMemberSession(tx: Prisma.TransactionClient, accountId: string, at: Date, previous?: string) {
+  if (validMemberToken(previous)) await tx.memberSession.deleteMany({ where: { tokenHash: memberTokenHash(previous) } });
+  await tx.memberSession.deleteMany({ where: { accountId, expiresAt: { lte: at } } });
+  const sessions = await tx.memberSession.findMany({ where: { accountId }, orderBy: [{ createdAt: "asc" }, { tokenHash: "asc" }],
+    select: { tokenHash: true, codeEnteredAt: true } });
+  const reports = await tx.paymentSubmission.findMany({ where: { accountId, status: { in: ["pending", "superseded"] },
+    submittedSessionHash: { not: null } }, select: { submittedSessionHash: true } });
+  const protectedHashes = new Set(reports.map((row) => row.submittedSessionHash));
+  const candidates = sessions.filter((row) => row.codeEnteredAt === null);
+  candidates.sort((a, b) => Number(protectedHashes.has(a.tokenHash)) - Number(protectedHashes.has(b.tokenHash)));
+  const evict = candidates.slice(0, Math.max(0, sessions.length - memberSessionRules.maximumSessions + 1));
+  if (sessions.length - evict.length >= memberSessionRules.maximumSessions) throw new Error("Session capacity is unavailable.");
+  if (evict.length) await tx.memberSession.deleteMany({ where: { tokenHash: { in: evict.map((row) => row.tokenHash) } } });
+  const token = randomBytes(32).toString("base64url");
+  const session = await tx.memberSession.create({ data: { tokenHash: memberTokenHash(token), accountId,
+    createdAt: at, lastSeenAt: at, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } });
+  return { session, token };
+}
 
 export function createMemberSessions({ database, config, now = Date.now }: {
   database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number;
@@ -25,7 +46,7 @@ export function createMemberSessions({ database, config, now = Date.now }: {
     async signIn(phone: string, address: string, previous?: string): Promise<MemberSignIn> {
       if (!isCanonicalPhone(phone)) throw new RangeError("A canonical phone is required.");
       if (!await limit({ purpose: "sign-ins", value: address, maximum: memberRateRules.signIns, windowMs: memberRateRules.hourMs })) return { status: "busy" };
-      const at = new Date(now()), token = randomBytes(32).toString("base64url");
+      const at = new Date(now());
       return decide<MemberSignIn>(database, async (tx, rollback) => {
         // Upsert also handles two simultaneous first sign-ins. The row lock serializes the session cap.
         const newAccountId = randomUUID();
@@ -35,27 +56,13 @@ export function createMemberSessions({ database, config, now = Date.now }: {
         // Identity, rather than affected-row semantics, distinguishes an insert from a duplicate on both MySQL and MariaDB.
         if (account.id === newAccountId && !await takeMemberLimit(tx, config,
           { purpose: "new-accounts", value: address, maximum: memberRateRules.newAccounts, windowMs: memberRateRules.dayMs }, at)) return rollback({ status: "busy" });
-        if (validToken(previous)) await tx.memberSession.deleteMany({ where: { tokenHash: memberTokenHash(previous) } });
-        await tx.memberSession.deleteMany({ where: { accountId: account.id, expiresAt: { lte: at } } });
-        const sessions = await tx.memberSession.findMany({ where: { accountId: account.id }, orderBy: [{ createdAt: "asc" }, { tokenHash: "asc" }],
-          select: { tokenHash: true, codeEnteredAt: true } });
-        const protectedSubmissions = await tx.paymentSubmission.findMany({ where: { accountId: account.id, status: { in: ["pending", "superseded"] },
-          submittedSessionHash: { not: null } }, select: { submittedSessionHash: true } });
-        const protectedHashes = new Set(protectedSubmissions.map((row) => row.submittedSessionHash));
-        const candidates = sessions.filter((row) => row.codeEnteredAt === null);
-        candidates.sort((a, b) => Number(protectedHashes.has(a.tokenHash)) - Number(protectedHashes.has(b.tokenHash)));
-        const evict = candidates.slice(0, Math.max(0, sessions.length - memberSessionRules.maximumSessions + 1));
-        // With the reviewed maximum of five unlocked devices there is always a non-unlocked candidate.
-        if (sessions.length - evict.length >= memberSessionRules.maximumSessions) throw new Error("Session capacity is unavailable.");
-        if (evict.length) await tx.memberSession.deleteMany({ where: { tokenHash: { in: evict.map((row) => row.tokenHash) } } });
-        await tx.memberSession.create({ data: { tokenHash: memberTokenHash(token), accountId: account.id,
-          createdAt: at, lastSeenAt: at, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } });
+        const { token } = await issueMemberSession(tx, account.id, at, previous);
         return { status: "signed-in", token };
       });
     },
 
     async verify(token?: string): Promise<MemberIdentity | null> {
-      if (!validToken(token)) return null;
+      if (!validMemberToken(token)) return null;
       const at = new Date(now()), hash = memberTokenHash(token);
       const row = await database.query((tx) => tx.memberSession.findUnique({ where: { tokenHash: hash }, include: { account: true } }));
       if (!row || row.expiresAt <= at || row.account.erasedAt || !row.account.phone) return null;
@@ -69,7 +76,7 @@ export function createMemberSessions({ database, config, now = Date.now }: {
     },
 
     async signOut(token?: string): Promise<void> {
-      if (validToken(token)) await database.query((tx) => tx.memberSession.deleteMany({ where: { tokenHash: memberTokenHash(token) } }));
+      if (validMemberToken(token)) await database.query((tx) => tx.memberSession.deleteMany({ where: { tokenHash: memberTokenHash(token) } }));
     },
 
     async signOutOthers(member: MemberIdentity): Promise<boolean> {

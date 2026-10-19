@@ -3923,3 +3923,43 @@ no other OP row changes state.
 - Real MySQL concurrency and eviction tests use the existing isolated harness
   and least-privilege application role. Browser scenarios live only in the
   existing rendering-fixture system. Owner mode remains off throughout testing.
+
+## 060 — Access codes and subscription periods (19 October 2026)
+
+- Reuse the existing nine paid-access tables, member session issuer, settings
+  lock, private HTTP helpers and owner audit writer. No migration, dependency,
+  environment key, production setting or external message is needed.
+- Codes use the specified 60-bit Crockford alphabet and versioned salted SHA-256
+  without a secret. References are independent. Database-only transactions may
+  retry a rolled-back reference collision or deadlock up to three times; no
+  external effect occurs inside a retryable callback.
+- Confirmation locks the account and sets its period immediately. Revoke
+  rechains the remaining queue; extend adds the exact number of days to the
+  target end and every later period, including a renewal already in progress.
+  Reissue copies only the three period dates and the specified snapshot fields,
+  never the payment foreign key or another code's identity/storage fields.
+- Both approval paths take the existing singleton settings lock after their
+  account lock. This serializes the owner's confirmations across accounts and
+  networks without another mutex table or a key that changes on secret rotation.
+  Approved/reversed transaction lookup spans both networks. Although the queue
+  describes a cross-network warning, approval refuses that reused ID as required
+  by the plan's explicit rule that a network swap cannot approve one payment
+  twice. Reversal retains its unique key.
+- Number changes lock both accounts in ID order and create a new code; historical
+  account IDs never change. Reversal discovers the replacement-chain account
+  locks, rechecks the chain under them, and retries discovery if a concurrent
+  number change reached another account.
+- Existing number-only sessions rotate on unlock. Phone-plus-code creates and
+  unlocks one fresh session in the same transaction, never creating an account.
+  Wrong-code throttles are checked after matching, so they cannot reject a correct
+  code. Device limits clear the oldest unlock and record an audit event.
+- Both viewer entry points use one resolver. Entitlement reads the session,
+  account and current account period in one indexed SQL read; it does not expire
+  an unlocked device merely because its originally entered code's period ended.
+  Only a daily sliding-session touch may add a conditional write. Owner checks
+  run only with an owner cookie and never touch the owner's idle expiry.
+- Account UI keeps PublicShell, shared fields/actions and the square member
+  panel. A root client boundary consumes private fragments even in refusals.
+  Deferred `replaceState(null, ...)` keeps Next's router state synchronized;
+  subsequent unlock navigation replaces the page. Fixtures alone expose a
+  history-inspection control for browser verification.

@@ -39,7 +39,7 @@ export function createDiscoveryProxy(policy = getDiscoveryPolicy) {
       destination.searchParams.delete(key);
       attribution = true;
     }
-    if (fragment) destination.hash = fragment;
+    if (fragment && !/^\/en\/(?:account|subscribe)\/?$/u.test(destination.pathname)) destination.hash = fragment;
     const response = pathname || attribution ? NextResponse.redirect(destination, pathname ? 307 : 308) : NextResponse.next();
     // Owner dashboards and member pages (and their attribution redirects) are never indexed or followed, under any policy.
     if (isPrivatePage(request.nextUrl.pathname)) response.headers.set("X-Robots-Tag", "noindex, nofollow");

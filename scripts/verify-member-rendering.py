@@ -11,13 +11,14 @@ def main():
     build_fixture(directory, env=env, timeout=240)
     with Server(directory, env=env, ready="/en/account") as server:
         for state, expected in [("off", "Subscriptions are not open yet."), ("signed-out", "Your number"),
-                ("signed-in", "Signed in as 256 700 000 101"), ("unavailable", "Member access is unavailable.")]:
+                ("signed-in", "Signed in as 256 700 000 101"), ("unavailable", "Member access is unavailable."),
+                ("active", "Access until"), ("ended", "Your access ended on"), ("blocked", "We couldn&#x27;t complete this.")]:
             response = request(server.origin, f"/en/account?state={state}")
             assert response.status == 200
             match(expected, response.text)
             match(r'<meta name="robots" content="noindex, follow"', response.text)
             assert response.headers.get("Set-Cookie") is None
-            if state != "signed-in":
+            if state not in ("signed-in", "active", "ended"):
                 no_match("256 700 000 101", response.text)
             if state == "signed-out":
                 match(r'type="tel"', response.text)
@@ -25,7 +26,12 @@ def main():
                 match(r'value="256"', response.text)
             if state == "signed-in":
                 no_match(r'Access until|days left|payment status|accessCodeId|tokenHash', response.text)
-        print("Member initial HTML: four states pass; no anonymous cookies or subscription details.", flush=True)
+            if state in ("signed-in", "signed-out", "active", "ended"):
+                match(r'name="code"', response.text)
+                match(r'autoComplete="off"', response.text)
+            if state in ("active", "ended"):
+                match("Sign out others", response.text)
+        print("Member initial HTML: seven states pass; code fields do not autocomplete; number-only sessions have no subscription details.", flush=True)
         if options.serve:
             server.serve()
 

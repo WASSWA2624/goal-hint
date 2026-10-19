@@ -73,7 +73,7 @@ export function readLandingAttribution(): Attribution | undefined {
       term: pick("utm_term"), content: pick("utm_content"),
       click: click === "google" || click === "microsoft" || click === "meta" ? click : undefined }).filter(([, value]) => value !== undefined)) as Attribution;
   } catch { attribution = undefined; }
-  window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
   return attribution && Object.keys(attribution).length > 0 ? attribution : undefined;
 }
 
