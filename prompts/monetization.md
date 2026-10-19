@@ -951,8 +951,8 @@ None of these block building. Items marked † block switching the paywall on.
 
   Also confirm that accounts may use any country code, while payments go to your Ugandan numbers in UGX.
 - Confirm the free/paid split: finished, canceled and awarded matches (picks, Win/Loss, analysis), factual insights and performance stay free; everything else for unfinished fixtures is for subscribers.
-- Your MTN MoMo number and registered name, and your Airtel Money number and registered name.
-- Your contact and WhatsApp numbers. The Safety tips will say codes come only from these.
+- MTN MoMo number: `256783230321` (received 19 October 2026). Still needed: its registered name. An Airtel Money number and name only if you want Airtel offered; until then the Airtel card is hidden.
+- Contact (calls) and WhatsApp number: `256783230321` for both (received 19 October 2026). The Safety tips will say codes come only from this number.
 - The typical review time, and any extra payment note.
 - Free trial: confirmed 19 October 2026, 2 days (48 hours) for a new number, once, sent by the owner as a code (5.10).
 - Plans and prices: confirmed 19 October 2026. Daily, 24 hours from activation, UGX 1,000; Weekly, 7 days, UGX 5,000; Monthly, 30 days, UGX 20,000. All give full access to every feature; access runs from payment confirmation to expiry.
