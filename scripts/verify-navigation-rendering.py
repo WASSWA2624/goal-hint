@@ -1,5 +1,6 @@
 """Inspect anonymous navigation from the actual local production build."""
 import re
+from html import unescape
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 from lib.policy_rendering import acceptance_origin, assert_navigation, assert_navigation_overflow, notices
@@ -36,7 +37,7 @@ def main() -> None:
         assert len(re.findall(r"<h1[\s>]", html)) == 1
         match(r"<style data-styled[=\s]", html, f"{path}: server-rendered styled-components CSS")
         assert 0 <= html.find("data-styled=") < html.find("<header"), f"{path}: initial shell CSS"
-        visible = visible_html(html, comments=False)
+        visible = unescape(visible_html(html, comments=False))
         assert_navigation_overflow(visible,
             primary=["/en", "/en?status=live", results_path],
             overflow=["/en/slips", *[f"/en/{page}" for page in information_pages]],
@@ -47,10 +48,10 @@ def main() -> None:
             expected = f"/en/{information}"
             assert_navigation(visible, primary=expected, footer=expected, mobile=expected)
             if information == "help":
-                for section in ["dates", "filters", "browsing", "cards", "predictions", "updates", "results"]:
+                for section in ["access", "dates", "filters", "browsing", "cards", "predictions", "updates", "results"]:
                     assert f'id="{section}"' in visible
                     assert f'href="#{section}"' in visible
-                for phrase in ["Choose a day or range", "Your device’s time zone", "Latest first",
+                for phrase in ["Choose a day or range", "Your device’s time zone", "Kickoff (Latest)",
                         "elapsed minutes under it", "a tag in the top-right corner of each card on mobile",
                         "A live match result prediction remains Pending"]:
                     assert phrase in visible
@@ -66,6 +67,7 @@ def main() -> None:
         assert 'href="/en/slips"' in visible, f"{path}: Slips target"
         no_match(r'(?:href|action)="[^"\s]*/(?:sign[-_]?in|log[-_]?in|auth)(?:[/?#]|"|$)', visible, flags=re.I)
         no_match(r'<(?:button|a)\b[^>]*>\s*(?:sign[ -]?in|log[ -]?in)\s*<', visible, flags=re.I)
+        no_match(r'action="/api/account/sign-in"', visible)
         no_match("Brand styling preview", visible, flags=re.I)
         no_match(r'(?:href|action)="[^"\s]*how-it-works', visible)
         for page in information_pages:

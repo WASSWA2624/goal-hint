@@ -168,3 +168,8 @@ neutralised; percentages as 0–100, durations in seconds).
 - MariaDB (local XAMPP 10.4.32, throwaway database): the production apply script ran twice
   (idempotent, one `_prisma_migrations` row) and collection, hourly/daily/weekly reports,
   live counts, sign-in lockout and purge all worked. Production runs MariaDB 11.4.
+
+
+## Paid access (066)
+
+Access goals: subscribe-view (pageview of `/[locale]/subscribe`), trial-requested (`trial_requested`), payment-submitted (`payment_submitted`), code-entered (`code_entered`). All custom names must match `^[a-z][a-z0-9_]{0,47}$`. Payloads accept the name and pageview reference only, never values. Successful JS actions emit through the existing consent-gated tracker; no-JS code entries are not counted. Forms exclude click capture; labels group Account/Get access without phone/code/query values. Long-digit redaction remains unchanged.

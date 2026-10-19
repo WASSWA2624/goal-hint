@@ -4765,3 +4765,14 @@ without horizontal overflow. Screenshots: `.tmp/065-overview-375.png`,
 erased and no real member purge was run.
 
 **Status: Completed.** Paid access remains off. Commit and push before 066.
+
+
+## 066 — Legal, help, policy copy and analytics (20 October 2026)
+
+Implemented mode-independent metadata, footer, privacy/terms/help/contact copy in the existing information chrome. Added member-cookie and phone notices, local SMS/draft boundaries, screenshot/database/backup/Meta handling, retention/erasure limits and payment/refund/data-protection blockers. Terms cover offers, trial timing, manual review, EAT periods, renewals, personal codes/devices, weak phone login, suspension and unresolved legal/refund facts. Original-content reuse excludes unfinished-fixture subscriber material. Contact stays release-ready without database reads.
+
+Added four analytics goals and three successful-action, consent-gated name-only events; strict collection rejects attached payment values/identifiers. Added the owner runbook in subscriptions.md and reconciled database, grants, deployment-overlay, API, SEO and information-page docs. Rendering assertions decode HTML entities and follow current Help wording. The gated slip screen now uses the existing empty-state heading-level option to supply its missing h1. A small information-rendering wrapper reuses production route factories with explicitly synthetic off-mode access, avoiding any real database/settings change.
+
+Validation: npm test passed 1,579 tests with one existing skip (1,580 total); the new name-only analytics check and its suite passed all 19 tests. Typecheck, changed-file lint, whitespace and the production build pass with the previously recorded database-disabled process override. Privacy, terms, contact and navigation production HTML scripts pass against the isolated off-mode fixture; privacy/terms/contact also pass on the local production server. Navigation covers all information pages, no sign-in forms outside member pages, English redirects and invalid-query 404s. Mode-specific account-icon checks remain covered by 062’s nine-viewer rendering fixture. Logs: .tmp/066-tests.log, 066-analytics.log, 066-typecheck.log, 066-lint-final.log, 066-build.log, 066-information.log.
+
+Status: Partial. The owner explicitly chose to keep notices as drafts and paid access off; no legal/refund/hosting/retention/licensing facts or paid-provider rights were supplied. OP-26/27/39/40 remain activation blockers. Nothing was deployed and no live data or settings were changed.

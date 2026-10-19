@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { trackEvent } from "@/components/analytics/tracker";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { Button, ButtonLink, FileInput, PhoneInput, SegmentedChoice, TextInput } from "@/components/ui/controls";
@@ -73,6 +74,7 @@ export function SubscribeSignIn({ locale, returnTo }: { locale: string; returnTo
   }
   return <><MemberForm action="/api/account/sign-in" method="post" onSubmit={submit} data-analytics-ignore>
     <PhoneInput name="phone" label={m.text("account.phone")} required hint={m.text("account.phoneHint")} />
+    <p>{m.text("account.phonePrivacy")} <Link href="/en/privacy">{m.text("navigation.privacy")}</Link>.</p>
     <input type="hidden" name="destination" value="subscribe" />{returnTo && <input type="hidden" name="return" value={returnTo} />}
     {error && <p role="alert">{error}</p>}<Button size="large" type="submit" disabled={busy}>{m.text(busy ? "account.working" : "account.continue")}</Button>
   </MemberForm><Link href={memberNextPath("account", returnTo)} prefetch={false}>{m.text("subscribe.haveCode")}</Link></>;
@@ -81,7 +83,7 @@ export function TrialRequest({ locale, phone, days }: { locale: string; phone: s
   const router = useRouter(), m = createMessages(locale), [state, setState] = useState(""), [busy, setBusy] = useState(false);
   return <div><Button size="large" variant="secondary" disabled={busy || state === "saved"} onClick={async () => {
     setBusy(true);
-    try { const response = await fetch("/api/account/trial", { method: "POST", credentials: "same-origin" }); setState(response.ok ? "saved" : "error"); if (response.ok) router.refresh(); }
+    try { const response = await fetch("/api/account/trial", { method: "POST", credentials: "same-origin" }); setState(response.ok ? "saved" : "error"); if (response.ok) { trackEvent("trial_requested"); router.refresh(); } }
     catch { setState("error"); } finally { setBusy(false); }
   }}>{m.text("subscribe.trial", { days: String(days) })}</Button>
     {state && <p role="status">{m.text(state === "saved" ? "subscribe.trialRequested" : "account.unavailable", { phone: formatPhone(phone) })}</p>}</div>;
@@ -151,7 +153,7 @@ export function SubscribePayment({ locale, settings, plans, account, view, retur
     for (const [key, value] of Object.entries({ planId: plan.id, payerPhone: draft.payerPhone, network: draft.network,
       transactionId: draft.transactionId, amount: draft.amount, accepted: String(draft.accepted) })) body.append(key, value);
     body.append("image", image, "payment.jpg");
-    try { const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); setSent(result.reference); setImage(null); setPreview(""); setSms(""); router.refresh(); }
+    try { const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); trackEvent("payment_submitted"); setSent(result.reference); setImage(null); setPreview(""); setSms(""); router.refresh(); }
     catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); } finally { setBusy(false); }
   }
   if (!plan) return <p>{m.text("subscribe.noPlans")}</p>;

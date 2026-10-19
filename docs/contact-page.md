@@ -50,3 +50,8 @@ single exact mailto, no mail headers, query-injection isolation, owner facts,
 no forms, canonical/noindex behavior and contextual policy links, without sending
 an email. Synthetic approved-production SEO checks include Contact in discovery;
 actual production discovery remains disabled by unfinished global release gates.
+
+
+## Paid access (066)
+
+Contact points to Get access for subscriber plans, reports and codes when open. It stays static without database reads; contactNotice.releaseReady remains true to preserve its existing indexing behavior.

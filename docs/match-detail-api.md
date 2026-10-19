@@ -3,10 +3,9 @@
 `GET /api/matches/{fixtureId}` is an anonymous, stored-data-only Node route.
 `createMatchDetailService({ database, clock? }).query(fixtureId, searchParams?)`
 provides the same response for [server-rendered detail pages](match-detail-page.md).
-API and page use `readPublicMatchDetail` with the shared 031 response cache.
+API and page use gated reads over `readPublicMatchDetail` and the shared server-only raw cache.
 IDs are canonical UUIDs.
-The route validates inputs before initializing the database. No visitor account,
-cookie, provider request, AI invocation, settlement write or refresh job is used.
+The route validates inputs before initializing the database. Optional member cookies resolve entitlement; final responses are private/no-store and vary on Cookie. Anonymous reads remain supported. No provider request, AI invocation, settlement write or refresh job occurs.
 
 ## Selection and history query
 
@@ -137,8 +136,7 @@ never appear in public responses or masquerade as unpublished fixtures.
 The existing aggregate 120-searches/minute policy applies to feed searches.
 ID/revision detail reads do not perform search or consume its persistent counter;
 they are bounded by query size, history limits, response size and a 30-second
-repeatable-read transaction. No visitor identity or authentication cookie is
-introduced. No new table, migration, runtime write grant, cache, worker or
+repeatable-read transaction. Optional member entitlement is resolved outside the raw snapshot. Anonymous reads need no cookie. No new table, migration, runtime write grant, cache, worker or
 scheduler is required. Existing database and upstream provider/model/rights gates
 remain effective. Local synthetic acceptance does not establish live rights,
 forecast quality, production capacity or deployment readiness.

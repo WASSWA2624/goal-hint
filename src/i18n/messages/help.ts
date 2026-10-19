@@ -1,6 +1,6 @@
 /** Server-only help copy; control labels remain in the shared client catalog. */
 export const helpMessages = {
-  "help.intro": "Find a match, narrow the list and open its analysis. Goal Hint is free to browse and does not require an account.",
+  "help.intro": "Find matches, understand the available predictions and manage access with this guide. Public fixtures and scores can be browsed anonymously. Subscriber features appear when paid access is enabled.",
   "help.browse": "Browse matches",
   "help.contents": "Help topics",
   "help.dates.title": "Find matches",
@@ -49,4 +49,11 @@ export const helpMessages = {
   "help.results.corrections.title": "Voids and corrections",
   "help.results.corrections.body": "Ineligible cycles, such as cancellations or formal postponements, can be void. Verified result corrections can change the settled outcome using the same locked pick. While a correction awaits settlement, the outcome returns to Pending.",
   "help.contact": "Contact and correction guidance",
+  "help.access.title": "Get access",
+  "help.access.trial.title": "Try it first",
+  "help.access.trial.body": "When access is open, use Get access and continue with your number. A new number can request one free trial without paying. The initial offer is 2 days from when the owner creates and sends your code, so check the expiry in the message.",
+  "help.access.payment.title": "Report your payment",
+  "help.access.payment.body": "Choose a plan, pay the exact amount to a listed number and check its registered name. Paste the payment SMS to fill the fields in this browser, correct anything needed and attach the screenshot. Choose the network you paid to. Send the report once and wait for the owner to check it; there is no guaranteed review time.",
+  "help.access.code.title": "Unlock and renew",
+  "help.access.code.body": "Tap the code link sent to your number, sign in with that same number and tap Unlock. You can also paste the code or its whole message on Account. A renewal extends an unlocked phone without another code entry; a new browser needs the code. If the link opens inside Facebook, open the page in Chrome and sign in there. In-app browsers use a separate device slot.",
 } as const;

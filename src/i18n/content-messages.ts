@@ -25,7 +25,7 @@ export function createContentMessages(locale?: string): ContentMessages {
   if (existing) return existing;
   const defaults = {
     operator: publicOperator.name, country: publicOperator.country, audience: publicOperator.audience,
-    minimumAge: String(publicOperator.minimumAge), requestsOwner: publicOperator.requestsOwner,
+    paidAccess: publicOperator.paidAccess, minimumAge: String(publicOperator.minimumAge), requestsOwner: publicOperator.requestsOwner,
     plannedLaunchDate: base.reportingDate(parseReportingDate(publicOperator.plannedLaunchOn)),
   };
   const created: ContentMessages = Object.freeze({ ...base, text(key: ContentTextKey, values: Readonly<Record<string, string>> = {}) {

@@ -11,13 +11,13 @@ import { AnalyticsChoices } from "@/components/analytics/analytics-tracker";
 import { InformationNotice } from "./information-notice";
 import { ContentsNav } from "./information-styles";
 
-const sections = ["access", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"] as const;
+const sections = ["access", "payments", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"] as const;
 
 export function PrivacyContent({ locale }: { locale: string }) {
   const messages = createContentMessages(locale);
   const values = { entries: messages.number(restorationRules.maximumEntries), minutes: messages.number(restorationRules.maximumAgeMilliseconds / 60_000),
     seconds: messages.number(publicCacheRules.mutableMs / 1000), hours: messages.number(publicCacheRules.immutableMs / 3_600_000) };
-  const paragraphs = { access: ["body"], requests: ["body", "logs"], search: ["body", "counter", "refresh"], storage: [],
+  const paragraphs = { access: ["body", "cookie"], payments: ["body", "images", "messages", "retention", "basis"], requests: ["body", "logs"], search: ["body", "counter", "refresh"], storage: [],
     tracking: ["body", "data", "minimization", "scope"], images: ["body", "recipients"], football: ["body", "permissions"], retention: ["body", "expiry"],
     choices: ["body", "contact", "correspondence", "correspondenceRetention", "correspondenceScope"], release: ["body"] } as const;
   return <Stack $gap="xl" data-privacy-status={privacyNotice.publication} data-privacy-release-ready={privacyNotice.releaseReady}>

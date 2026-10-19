@@ -190,7 +190,7 @@ synthetic stored projections to exercise generation.
 
 Generation is a read-only server operation. It consumes the existing aggregate
 public search limiter once per build when odds are enabled. It performs no
-provider requests, changes no forecasts, places no bets, requires no account and
+provider requests, changes no forecasts, places no bets, requires subscriber entitlement when paid mode is on and
 persists no saved slips. Existing match detail links remain available in each
 table row.
 

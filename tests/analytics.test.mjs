@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyticsRoute, analyticsRouteLabel, collectPayloadSchema, parseReportParameters, reportParameters } from "../src/domain/analytics.ts";
+import { analyticsGoals, analyticsRoute, analyticsRouteLabel, collectPayloadSchema, parseReportParameters, reportParameters } from "../src/domain/analytics.ts";
 import { classifyChannel, isBotUserAgent, normalizeSearchTerm, sanitizeTarget, screenBucket, summarizeClient } from "../src/domain/analytics-classify.ts";
 import { bucketKeys, comparisonRange, granularityFor, parseDateRange, presetRange, weekStart } from "../src/domain/analytics-range.ts";
 import { csvCell, toCsv } from "../src/domain/analytics-csv.ts";
@@ -402,4 +402,19 @@ test("services without storage disable collection and sign-in instead of failing
   assert.equal((await createReportHandler(async () => services)(request("/api/analytics/report?from=2026-10-01&to=2026-10-14"))).status, 503);
   assert.equal((await createLoginHandler(async () => services)(request("/api/analytics/login", { method: "POST", headers: sameSite, body: "" })))
     .headers.get("location"), "/analytics?login=unavailable");
+});
+
+
+test("every custom goal passes the shared name-only contract and rejects attached payment data", () => {
+  for (const goal of analyticsGoals) {
+    if (goal.kind !== "event" || goal.type !== "custom") continue;
+    const event = { t: "custom", pv: ids.pv, name: goal.name };
+    assert.equal(collectPayloadSchema.safeParse(payload([event])).success, true);
+    for (const extra of [{ amount: 1000 }, { phone: "256700000001" }, { code: "SYNTHETIC" }, { transactionId: "TEST-ID" }]) {
+      assert.equal(collectPayloadSchema.safeParse(payload([{ ...event, ...extra }])).success, false);
+    }
+  }
+  for (const name of ["trial-requested", "Payment_submitted", "code entered", "a".repeat(49)]) {
+    assert.equal(collectPayloadSchema.safeParse(payload([{ t: "custom", pv: ids.pv, name }])).success, false);
+  }
 });

@@ -149,3 +149,8 @@ Throttle writers now record at least the fixed-window end in the existing
 the window and this marker. Older null markers conservatively retain a full
 24-hour window plus a day, since their hashed key cannot reveal the purpose.
 This uses the existing schema and records no raw address or session token.
+
+
+## Paid access (066)
+
+Owner erasure updates phone/support/payer/image fields and deletes sessions; amounts, transaction IDs and code/audit history remain. Real-data purge and erasure need owner authorization. Tests use isolated disposable databases only. See [subscriptions.md](subscriptions.md).

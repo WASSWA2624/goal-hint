@@ -18,7 +18,7 @@ def main(*, indexable: bool = False) -> None:
     for path in paths:
         visible = policy_document(origin, path, page="contact", title="Contact and corrections",
             notice=notice, sections=["report", "corrections", "policies"], patterns=[
-                "Contact Goal Hint",
+                "Contact Goal Hint", "For subscriber plans, payment reports and access codes",
                 "Wilson Wasswa", "Uganda", "aged 18 and over",
                 "no contact-form or email-sending system", "no response time is promised",
                 "Goal Hint match URL",

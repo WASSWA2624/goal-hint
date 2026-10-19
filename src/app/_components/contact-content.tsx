@@ -12,6 +12,7 @@ export function ContactContent({ locale }: { locale: string }) {
   return <Stack $gap="xl" data-contact-status={contactNotice.publication} data-contact-release-ready={contactNotice.releaseReady}>
     <InformationNotice locale={locale} kind="contact" reviewedOn={contactNotice.reviewedOn} />
     <TextLink href={contactNotice.destination} prefetch={false}>{contactNotice.email}</TextLink>
+    <BodyText>{messages.text("contact.access")} <TextLink href={`/${locale}/subscribe`} prefetch={false}>{messages.text("subscribe.title")}</TextLink></BodyText>
     <Stack as="section" id="contact-report" aria-labelledby="contact-report-heading" $gap="md">
       <SectionHeading id="contact-report-heading">{messages.text("contact.report.title")}</SectionHeading>
       <BodyText>{messages.text("contact.report.body")}</BodyText>

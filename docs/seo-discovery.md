@@ -48,11 +48,10 @@ makes Google drop it and recrawl it slowly; failed reads still receive noindex.
 Match pages are indexable only when the displayed revision publishes at least
 one market (`matchPageIndexable`). Fixtures without a published forecast remain
 valid 200 pages with noindex, since every section would read "Not available".
-Their description leads with the stored match-result pick and probability (or
-the first published family) instead of a generic sentence. Information
+Descriptions use fixture facts and access wording; metadata never quotes picks or probabilities. Information
 page query variants also receive noindex. Revision/history variants canonicalize
 to the fixture's main detail page and receive noindex. `robots.txt` allows these
-HTML URLs to be read; only `/api/` is disallowed.
+HTML URLs to be read; `/api/`, `/admin` and `/analytics` are disallowed. Private Account/Get access pages are noindex/no-store and excluded from sitemaps.
 
 Fixture IDs remain the identity authority. Existing permanent redirects update
 stale slugs, retaining revision parameters and the revision-history target. Known
@@ -125,8 +124,8 @@ lock.
 
 ### Owner details needed to finalize publication
 
-The current defaults are English, `https://goalhint.com`, free account-free access,
-no betting or payments, disabled advertising/browser analytics, and provisional
+The current defaults are English, `https://goalhint.com`, anonymous browsing with paid access off,
+no betting or stakes, disabled advertising and consent-gated first-party analytics, and provisional
 forecast labels. Browser preferences/navigation storage and direct third-party
 team-logo requests already exist. Hosting logs and recipients still need actual
 deployment facts. The recorded local provisional forecast approval does not
@@ -165,7 +164,7 @@ then be checked against the actual operator, audience and processing arrangement
   and logo display; this records the owner's statement, not independent contract
   verification. [API-Football's terms](https://www.api-football.com/terms) place
   responsibility for necessary publication/visual-asset permissions on the user.
-  The owner permits unrestricted reuse of Goal Hint's original material; this
+  The owner permits reuse of Goal Hint's original material except unfinished-fixture subscriber material (OP-37); this
   does not relicense provider data, logos or other third-party material.
 - **Publication/release:** Planned launch/effective date: **1 November 2026**.
   This is a future target, not a claim that incomplete notices are effective.

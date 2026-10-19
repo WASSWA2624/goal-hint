@@ -171,3 +171,8 @@ rollback; do not reset job, forecast or quota data.
 | `/api/*` returns 503 (not logged) | Check the approval references, password encoding, `GOAL_HINT_COMPETITION_IDS`, that `DEBUG` is unset, and `db:status` |
 | `Permission denied (publickey)` | The key isn't authorized in cPanel |
 | Release is broken | Run `--rollback` |
+
+
+## Paid access (066)
+
+No deployment or activation is authorized by prompts 057–067. Overlay inventory includes `prisma/mariadb/20261019142209_subscriptions.sql` alongside analytics and existing goal-market/manifest overlays. Stop app and worker writes for verified DDL; check all nine InnoDB tables, checks/FKs and narrow grants before restarting. Preserve paid mode off and complete host checks plus OP-40 approval. See [subscriber operations](../docs/subscriptions.md).

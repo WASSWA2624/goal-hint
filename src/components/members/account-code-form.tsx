@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { trackEvent } from "@/components/analytics/tracker";
 import { Button, PhoneInput, TextInput } from "@/components/ui/controls";
 import { codeFromFragment, extractCode, formatCode } from "@/domain/access-code";
 import { createMessages } from "@/i18n/messages";
@@ -45,12 +46,14 @@ export function AccountCodeForm({ locale, signedIn, inApp, returnTo, initialErro
       const response = await fetch(form.action, { method: "POST", body, headers: { Accept: "application/json" }, credentials: "same-origin" });
       const result = await response.json() as { next?: string; message?: string };
       if (!response.ok || !result.next) { setError(result.message ?? messages.text("account.unavailable")); setBusy(false); return; }
+      if (body.get("code")) trackEvent("code_entered");
       location.replace(result.next);
     } catch { setError(messages.text("account.unavailable")); setBusy(false); }
   }
   return <MemberForm method="post" action={signedIn ? "/api/account/code" : "/api/account/sign-in"} onSubmit={submit} data-analytics-ignore>
     {!signedIn && <PhoneInput ref={phone} name="phone" label={messages.text("account.phone")} required hint={messages.text("account.phoneHint")}
       error={invalidPhone ? messages.text("account.invalidPhone") : undefined} />}
+    <p>{messages.text("account.phonePrivacy")} <Link href="/en/privacy">{messages.text("navigation.privacy")}</Link>.</p>
     <TextInput name="code" label={messages.text("account.code")} value={fragment.code} required={signedIn} maxLength={64}
       autoCapitalize="characters" autoCorrect="off" spellCheck={false} autoComplete="off" data-analytics-ignore
       onChange={(event) => fragment.change(event.currentTarget.value)} onPaste={(event) => {

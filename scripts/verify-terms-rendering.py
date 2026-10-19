@@ -12,10 +12,14 @@ def main() -> None:
     policy_links = ["/en/help#predictions", "/en/help#updates", "/en/help#results", "/en/privacy", "/en/contact"]
     for path in ["/en/terms", "/en/terms?q=%3Cscript%3Euntrusted-query%3C%2Fscript%3E"]:
         visible = policy_document(origin, path, page="terms", title="Terms of use", notice=notice,
-            sections=["service", "estimates", "updates", "outcomes", "use", "sources", "privacy", "release"],
+            sections=["service", "access", "estimates", "updates", "outcomes", "use", "sources", "privacy", "release"],
             patterns=["not completed, effective terms of use", "public release remain blocked",
                 "not legal approval or an effective date",
-                "does not offer betting, accept stakes, process payments or sell visitor subscriptions",
+                "does not offer betting or accept stakes", "payments buy access to information",
+                "UGX 1,000", "UGX 5,000", "UGX 20,000", "one free trial", "2 days",
+                "No approval or code-delivery turnaround is guaranteed", "East Africa Time",
+                "personal and non-transferable", "does not verify that you control the number", "refund", "Ugandan governing law",
+                "except picks and associated subscriber material for unfinished fixtures",
                 "does not guarantee wins, prediction accuracy",
                 "Wilson Wasswa", "Uganda", "aged 18 and over",
                 "handles correction and dispute reports through the email on the Contact page",

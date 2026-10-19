@@ -7,6 +7,7 @@ import { createContentMessages, type ContentTextKey } from "@/i18n/content-messa
 import { ContentsNav, HelpGrid, HelpList, HelpSection } from "./information-styles";
 
 const topics = [
+  { id: "access", items: ["trial", "payment", "code"] },
   { id: "dates", items: ["date", "search", "time"] },
   { id: "filters", items: ["open", "probability", "reset"] },
   { id: "browsing", items: ["sort", "tabs", "more"] },

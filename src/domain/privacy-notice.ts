@@ -4,8 +4,8 @@ import { publicOperator } from "./public-operator.ts";
 export const privacyNotice = Object.freeze({
   publication: "prelaunch-summary",
   releaseReady: false,
-  reviewedOn: "2026-10-12",
+  reviewedOn: "2026-10-20",
   effectiveOn: null,
   plannedEffectiveOn: publicOperator.plannedLaunchOn,
-  blockers: Object.freeze(["logs", "hosting", "sources", "retention"] as const),
+  blockers: Object.freeze(["logs", "hosting", "sources", "retention", "payments", "refunds", "data-protection"] as const),
 });

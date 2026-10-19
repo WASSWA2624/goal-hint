@@ -9,9 +9,8 @@ or competition configuration returns 503. There is no fixture-data fallback.
 
 Reads use one repeatable database snapshot. They never import fixtures, call
 football/research/AI providers, publish forecasts, settle results or enqueue jobs.
-The only public write is the anonymous aggregate search counter described below.
-No account, token, authentication cookie, visitor ID or request signature is
-required. English is the launch HTTP locale; server callers can supply the shared
+The anonymous aggregate search counter is separate from optional member-session touches.
+Anonymous reads need no account or signature. Final routes resolve optional member cookies through gated reads; responses are private/no-store and vary on Cookie. Shared raw caches stay server-side. Unfinished-fixture subscriber fields and probability-dependent filters require entitlement when paid mode is on. English is the launch HTTP locale; server callers can supply the shared
 locale context without changing the URL contract.
 
 ## Parameters and pagination

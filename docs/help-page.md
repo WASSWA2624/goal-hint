@@ -23,3 +23,8 @@ covered by `tests/performance.test.mjs`.
 Help metadata canonically names `/en/help`. Its inclusion in public discovery
 still requires the existing verified release gate. The legacy redirect and new
 metadata/sitemap behavior are covered by the navigation and SEO checks.
+
+
+## Paid access (066)
+
+Get access explains trial eligibility/start time, local SMS parsing/manual correction, payment screenshots, owner review, code-link Unlock, renewals and Facebook-to-Chrome recovery. Conditional wording works with paid mode off and on; the existing help grid/anchors are reused.

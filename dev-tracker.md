@@ -6,7 +6,7 @@
 | ◐ Partial | Implementation started or landed, but work, acceptance checks or an external blocker remain. Each partial row has a note below. |
 | ☐ Not started | No implementation yet. |
 
-**Totals:** 50 completed · 7 partial · 10 not started (67 prompts).
+**Totals:** 50 completed · 8 partial · 9 not started (67 prompts).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -75,7 +75,7 @@
 | ◐ Partial | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               | Real SMS/screenshot and physical phone verification (OP-38/067)                                     |
 | ☑ Completed | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             | — |
 | ☑ Completed | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       | — |
-| ☐ Not started | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Implementation, after 065; refund policy and legal facts (OP-26/27/39)                              |
+| ◐ Partial | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Legal/privacy/refund facts remain pending (OP-26/27/39); owner chose drafts/off                              |
 | ☐ Not started | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Implementation, after 066; MTN registered name, menu tests, switch-on approval (OP-38/40)           |
 
 ## Partial rows
@@ -92,7 +92,7 @@
 - **046–049 Staging to production:** blocked by owner decisions on hosting (OP-32), quality qualification (OP-33, which also needs 011, 012 and 014), release signoff (OP-34) and the domain and production operation (OP-35).
 - **053–056:** not started. 055 and 056 now wait for 061–062.
 - **063 Get access:** local implementation and acceptance pass; drafted synthetic SMS fixtures are labelled. Real SMS/screenshot and physical Android/in-app/slow-network checks remain.
-- **066–067 Paid access:** see below.
+- **067 Paid access:** see below.
 
 ## Paid access (057–067)
 
@@ -111,3 +111,5 @@
 - **064 (19 October 2026):** ☑ Completed: owner review, guarded screenshots, code delivery and code tools. Admin (28), payments (29, real MySQL), production rendering, type/lint and 375 px WhatsApp/return/reload checks pass.
 
 - **065 (20 October 2026):** ☑ Completed: overview/accounting, subscriber operations, audit and hourly retention. Member (50), final focused MySQL (7), admin (29), production rendering, type/lint and 375 px checks pass.
+
+- **066 (20 October 2026):** ◐ Partial: mode-independent copy, owner runbook and name-only analytics implemented; units/type/lint/build and all four production HTML checks pass. Owner chose draft notices/off pending OP-26/27/39 facts.

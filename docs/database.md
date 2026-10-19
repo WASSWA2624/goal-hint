@@ -417,3 +417,8 @@ prompt 052:
 - the public price projection, with column-scoped application updates and no
   DELETE;
 - the NULL-safe CHECKs and the cache triggers keyed on `publicVersion`.
+
+
+## Paid access (066)
+
+Nine paid-access tables store private phone/payment/image data. Verify the MariaDB overlay and restricted grants above; reapply erasure suppression after any restore. Retained submissions, codes and audit have no DELETE grant. See [subscriptions.md](subscriptions.md).

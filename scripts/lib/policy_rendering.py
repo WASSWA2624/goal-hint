@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from html import unescape
 from html.parser import HTMLParser
 import re
 
@@ -128,7 +129,7 @@ def policy_document(origin: str, path: str, *, page: str, title: str,
     response = request(origin, path, redirect=True)
     assert response.status == 200, path
     assert response.headers.get("set-cookie") is None
-    html, visible = response.text, visible_html(response.text, comments=False)
+    html, visible = response.text, unescape(visible_html(response.text, comments=False))
     match(r'<html[^>]*lang="en"', html)
     match(rf'<title>{re.escape(title)} \| Goal Hint</title>', html)
     match(rf'rel="canonical" href="https://goalhint\.com/en/{page}"', html)
@@ -153,4 +154,5 @@ def policy_document(origin: str, path: str, *, page: str, title: str,
     no_match(forbidden, visible, flags=re.I)
     main = match(r"<main\b[^>]*>([\s\S]*?)</main>", visible).group(1)
     no_match(forms, main, flags=re.I)
+    no_match(r"free, account-free|no payments|no visitor account, payment", visible, flags=re.I)
     return visible

@@ -9,7 +9,7 @@ def main() -> None:
     notice = notices()["privacyNotice"]
     for path in ["/en/privacy", "/en/privacy?q=%3Cscript%3Euntrusted-query%3C%2Fscript%3E"]:
         visible = policy_document(origin, path, page="privacy", title="Privacy and data handling",
-            notice=notice, sections=["access", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"],
+            notice=notice, sections=["access", "payments", "requests", "search", "storage", "tracking", "images", "football", "retention", "choices", "release"],
             patterns=["not a completed, effective privacy notice", "not a legal approval or an effective date",
                 "cached pagination links can contain your search text", "not necessarily erased at that exact time",
                 "Wilson Wasswa", "Uganda", "aged 18 and over", "Namecheap",
@@ -23,7 +23,10 @@ def main() -> None:
                 "documented dispute or legal obligation, with each exception reviewed every ninety days",
                 "correspondence under the operator's control, including sent replies and saved attachments",
                 "first-party analytics only if you allow it in the consent banner", "never stores your IP address",
-                "your browser requests them directly from the remote image host",
+                "Your browser requests those versions from Goal Hint",
+                "essential, HttpOnly, SameSite=Lax member cookie", "full pasted SMS is parsed in this browser",
+                "90 days by default", "rejected and superseded screenshots after 7 days",
+                "WhatsApp is provided by Meta", "no automatic deletion period", "PDPO registration",
                 "Current responses can be reused for up to 5 seconds.*up to 6 hours",
                 "At most 20 navigation records.*older than 30 minutes"],
             forbidden=r"TODO|TBD|Lorem ipsum|example\.com|mailto:|untrusted-query|\{(?:date|minutes|seconds|hours|entries|operator|country|audience|minimumAge|requestsOwner)\}",

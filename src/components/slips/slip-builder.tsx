@@ -25,7 +25,7 @@ import { Actions, BuildButton, ClearLink, CriteriaError, CriteriaForm, CriteriaP
 export function SlipAccessRequired({ locale, showAccount = false }: { locale: string; showAccount?: boolean }) {
   const messages = createMessages(locale);
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
-    <EmptyState title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
+    <EmptyState headingLevel={1} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
       action={<ButtonLink size="large" href="/en/subscribe" prefetch={false}>{messages.text("paywall.getAccess")}</ButtonLink>} />
   </SlipStack>;
 }
