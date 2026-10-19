@@ -40,8 +40,8 @@ export function sitemapIndexXml(locations: readonly string[]): string {
 }
 
 /** A match page earns indexing only with a published forecast; empty fixture shells stay noindex and out of sitemaps. */
-export function matchPageIndexable(fixture: { forecast: { markets: readonly unknown[] } | null }): boolean {
-  return (fixture.forecast?.markets.length ?? 0) > 0;
+export function matchPageIndexable(fixture: { forecast: { markets: readonly unknown[] } | { gated: true; families: readonly unknown[] } | null }): boolean {
+  return !!fixture.forecast && ("gated" in fixture.forecast ? fixture.forecast.families : fixture.forecast.markets).length > 0;
 }
 
 export function websiteStructuredData() {

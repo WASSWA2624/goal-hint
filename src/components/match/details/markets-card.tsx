@@ -5,6 +5,8 @@ import styled from "styled-components";
 import { SearchIcon } from "@/components/ui/icons";
 import { PredictionOdds, ProbabilityBar } from "@/components/match/prediction-presentation";
 import { detailAnalysis } from "@/domain/detail-presentation";
+import { fullDetailSnapshot } from "@/domain/detail-snapshot";
+import { SubscriberNotice } from "@/components/members/subscriber-notice";
 import { exclusiveFamily, liveStanding, marketCategoryMembers, marketOutcomes, marketRow, selectedDetailPrice, visibleMarkets } from "@/domain/match-details";
 import { marketCategories, parseMatchView, type MarketCategory } from "@/domain/match-view";
 import type { MarketFamily } from "@/domain/markets";
@@ -147,7 +149,9 @@ function Time({ at }: { at: UtcInstant | null }) {
 /** The revision's generated reasons and key uncertainty, each with its permitted sources linked. */
 export function Explanation() {
   const { data, messages } = useStableDetails();
-  const analysis = data.snapshot ? detailAnalysis(data.snapshot.analysis) : null;
+  const snapshot = fullDetailSnapshot(data);
+  const analysis = snapshot ? detailAnalysis(snapshot.analysis) : null;
+  if ("gated" in data.history) return <SubscriberNotice />;
   const cite = (urls: readonly string[]) => [...new Set(urls)].flatMap((url) => {
     const source = analysis?.sources.find((entry) => entry.url === url);
     return source ? [<a key={url} href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"> {source.publisher}<ExternalIcon /></a>] : [];
@@ -164,6 +168,7 @@ export function Explanation() {
 /** All outcomes, source, timing, settlement and explanation for one market of the applicable revision. */
 function MarketPanel({ family }: { family: MarketFamily }) {
   const { data, messages, update } = useStableDetails();
+  const snapshot = fullDetailSnapshot(data);
   const { item, outcome, reason } = marketRow(data, family);
   const heading = useRevealOnOpen<HTMLHeadingElement>(true, family, "card");
   const close = () => update((current) => ({ ...current, market: null }));
@@ -171,7 +176,7 @@ function MarketPanel({ family }: { family: MarketFamily }) {
     <Crumbs items={[{ label: messages.text("details.title"), onSelect: () => update((current) => ({ ...current, market: null, section: null, item: null })) },
       { label: messages.text("details.markets"), onSelect: close }, { label: marketName(messages, family) }]} />
     <PanelHeading ref={heading} tabIndex={-1}>{marketName(messages, family)}</PanelHeading>
-    {item ? <>
+    {item && snapshot ? <>
       <Facts>
         <dt>{messages.text("details.prediction")}</dt><dd><strong>{pickLabel(messages, item.market.selection)}<PredictionOdds odds={selectedDetailPrice(data, family)} /></strong></dd>
         <dt>{messages.text("details.estimatedProbability")}</dt><dd><b>{percent(messages, item.market.selectedProbability)}</b></dd>
@@ -190,12 +195,12 @@ function MarketPanel({ family }: { family: MarketFamily }) {
       <Facts>
         <dt>{messages.text("details.source")}</dt><dd>{messages.text(`market.source.${item.source.kind}`)}{item.source.provisional && <> · {messages.text("match.provisional")}</>}</dd>
         {item.source.fallbackReason && <><dt>{messages.text("details.fallback")}</dt><dd>{messages.text(`detail.fallback.${item.source.fallbackReason}`)}</dd></>}
-        <dt>{messages.text("match.published")}</dt><dd><Time at={data.snapshot!.publishedAt} /></dd>
-        <dt>{messages.text("detail.evidenceCutoff")}</dt><dd><Time at={data.snapshot!.evidenceCutoffAt} /></dd>
+        <dt>{messages.text("match.published")}</dt><dd><Time at={snapshot.publishedAt} /></dd>
+        <dt>{messages.text("detail.evidenceCutoff")}</dt><dd><Time at={snapshot.evidenceCutoffAt} /></dd>
         <dt>{messages.text("detail.retrieved")}</dt><dd><Time at={item.timestamps.retrievedAt} /></dd>
         <dt>{messages.text("detail.providerUpdated")}</dt><dd><Time at={item.timestamps.providerUpdatedAt} /></dd>
         <dt>{messages.text("details.bookmakerSource")}</dt><dd>{messages.text("details.notAvailable")}</dd>
-        {data.snapshot!.applicability !== "historical" && <><dt>{messages.text("match.outcome")}</dt><dd><DetailOutcome status={outcome?.status ?? "pending"} /></dd></>}
+        {snapshot.applicability !== "historical" && <><dt>{messages.text("match.outcome")}</dt><dd><DetailOutcome status={outcome?.status ?? "pending"} /></dd></>}
       </Facts>
       <SubHeading>{messages.text("details.explanation")}</SubHeading>
       <Explanation />
@@ -240,7 +245,9 @@ export const MarketsCard = memo(function MarketsCard() {
   const list = useRef<HTMLUListElement>(null);
   useReturnFocus(list, view.market);
   const [search, setSearch] = useMarketSearch(view.marketSearch), query = useDeferredValue(search);
-  const published = data.snapshot?.markets.length ?? 0;
+  const snapshot = fullDetailSnapshot(data);
+  if ("gated" in data.history) return <Card><SubscriberNotice /></Card>;
+  const published = snapshot?.markets.length ?? 0;
   const label = (family: MarketFamily) => marketName(messages, family);
   const shown = visibleMarkets(view.marketCategory, query, label);
   const categoryLabel = (category: MarketCategory) => messages.text(`details.category.${category}`);

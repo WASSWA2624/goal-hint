@@ -1,9 +1,10 @@
+import { fullAccess } from '@/../tests/helpers/full-access';
 import { createMatchDetailRoute } from '@/app/_components/match-detail-route';
 import { MatchFeedError } from '@/server/matches/feed-error';
 import { parseMatchDetailQuery } from '@/server/matches/detail-query';
-import type { DetailPageResult } from '@/server/matches/detail-page';
+import type { StoredMatchDetailResponse } from '@/domain/match-detail';
 import cases from '../../../../detail-scenarios.json';
-const scenarios = cases as unknown as Record<string, DetailPageResult & { requestQuery?: string }>;
+const scenarios = cases as unknown as Record<string, { data: StoredMatchDetailResponse | null; error: string | null; requestQuery?: string }>;
 let failNextHistory = true, busyNextHistory = true;
 const route = createMatchDetailRoute(async (id, parameters = new URLSearchParams()) => {
   const query = parseMatchDetailQuery(id, parameters), values = Object.values(scenarios);
@@ -24,7 +25,7 @@ const route = createMatchDetailRoute(async (id, parameters = new URLSearchParams
 }, undefined, async () => {
   // This fixture exercises captured detail/history only; optional section previews remain unavailable.
   throw new MatchFeedError('unavailable');
-});
+}, fullAccess);
 type Props = { params: Promise<{ fixtureId: string; slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 const normalized = (props: Props) => ({ ...props, params: props.params.then(params => ({ ...params, locale: 'en' })) });
 export const dynamic = 'force-dynamic';

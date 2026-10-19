@@ -1,7 +1,7 @@
 import { addReportingDays, calendarRules, parseReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange } from "./calendar.ts";
 import { formatProbabilityValue, parseProbabilityValue, probabilityFraction, type FeedParameters } from "./feed-query.ts";
 import { kickoffTimeWindows, validKickoffTime } from "./kickoff-time.ts";
-import type { MatchFeedRecord } from "./match-feed.ts";
+import type { StoredMatchFeedRecord } from "./match-feed.ts";
 import { isMarketFamily, isMarketSelection, marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
@@ -29,10 +29,10 @@ export const slipInputFields = ["dateFrom", "dateTo", "timeFrom", "timeTo", "tot
   "probMin", "probMax", "teamsMin", "teamsMax", "slips"] as const;
 export type SlipInputs = Partial<Record<typeof slipInputFields[number], string>>;
 /** Slip-only approved outcome prices leave the ordinary selected-pick feed contract intact. */
-export type SlipMatchRecord = MatchFeedRecord & Readonly<{ selectionPrices?: readonly MatchFeedRecord["prices"][number][] }>;
+export type SlipMatchRecord = StoredMatchFeedRecord & Readonly<{ selectionPrices?: readonly StoredMatchFeedRecord["prices"][number][] }>;
 export type SlipSelection = Readonly<{
   fixtureId: string; kickoffAt: number;
-  homeTeam: MatchFeedRecord["homeTeam"]; awayTeam: MatchFeedRecord["awayTeam"]; competition: MatchFeedRecord["competition"];
+  homeTeam: StoredMatchFeedRecord["homeTeam"]; awayTeam: StoredMatchFeedRecord["awayTeam"]; competition: StoredMatchFeedRecord["competition"];
   family: MarketFamily; selection: MarketSelection; probability: number; odds: string; oddsBasis: "bookmaker" | "median";
 }>;
 export type BuiltSlip = Readonly<{

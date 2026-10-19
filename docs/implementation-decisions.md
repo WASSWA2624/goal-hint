@@ -3963,3 +3963,42 @@ no other OP row changes state.
   Deferred `replaceState(null, ...)` keeps Next's router state synchronized;
   subsequent unlock navigation replaces the page. Fixtures alone expose a
   history-inspection control for browser verification.
+
+## 061 — Server prediction gating (19 October 2026)
+
+- Keep full stored/cache schemas separate from strict wire variants. Redaction
+  happens in the shared gated-read boundary after the existing MySQL read. Cache
+  keys, projections and invalidation remain viewer-independent.
+- Every production page/API factory gates its injectable raw reader. Free output
+  must parse the strict wire contract; a malformed output fails unavailable.
+  Finished, canceled and awarded fixtures retain their complete public record.
+  Current fixture status also governs prior revisions/cycles with a null current
+  forecast. Insights reuse the existing detail read for status, without a cache
+  projection change.
+- A gated forecast preserves only publication identity and published family
+  existence in policy order. Detail history is an explicit gated variant, odds
+  are omitted and selected-pick prices are empty. Consumers narrow the full
+  snapshot through a lightweight helper so initial client code still avoids Zod.
+- Reject parsed subscriber oracle filters before any raw read. Free page requests
+  redirect to the same feed with only those filters reset; APIs return private,
+  nonrecoverable 403 JSON. Free oracle validation recognizes odds even while
+  provider odds rights remain disabled; full/off requests keep that rights check.
+- Generic metadata is the same for both tiers, with a subscriber line only in on
+  mode for unfinished fixtures. Family existence keeps legitimate pages indexable.
+- Access changes cannot append full and gated feed pages together. They refresh
+  and remount the feed; detail permission withdrawal wins over observation-clock
+  staleness. Live detail strips analysis from its retained preview and refreshes
+  the page/store when access changes. Shared transport includes same-origin
+  cookies and consumers refresh after subscription-required responses.
+- Preserve existing chrome and full-content assertions. This prompt uses one
+  reusable neutral subscriber notice; the designed access UI belongs to 062.
+  The leak fixture's fake resolver and header exist only under tests. It mounts
+  real factories, inspects raw flight scripts, and uses the production private
+  route headers. Next flight requests include the protocol's empty `_rsc` key;
+  duplicate Vary header lines are combined when verifying Cookie variation.
+
+- Keep acceptance cohorts explicit: feed captures use 30 rows; discovery now
+  seeds 55 fixtures to exercise both pages at the existing 50-row default.
+  Responsive and accessible chrome assertions follow the current UI. Original
+  pick, probability, alternatives, explanation, source and outcome checks remain.
+  All required rendering builds and the 585-response paywall scan pass.

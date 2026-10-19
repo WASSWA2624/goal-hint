@@ -4571,3 +4571,42 @@ Existing 058 local database/build/backup issues remain separate. No deployment,
 real payment, external message, owner mode change or new dependency/env key.
 
 **Status:** 060 acceptance passed; tracker row is ☑ Completed. Continue with 061.
+
+## 061 — Server prediction gating (19 October 2026)
+
+Implemented the shared pure policy, strict stored/wire contracts, fail-closed
+read boundary, page/API factory injection, oracle refusal, generic metadata,
+private API headers, minimal gated consumers and live access-transition handling.
+The existing raw cache projections and viewer-independent keys remain intact.
+Added paywall unit tests and a synthetic production leak fixture covering raw
+HTML, RSC, feed/detail/history/insights APIs, oracle requests, slips and private
+route policy across eight viewer states. Updated legacy fixtures to request
+explicit full access and to keep cache/service assertions on stored schemas.
+
+Changed files include the domain fixture/feed/detail/insights contracts and
+presentation helpers, members gated reads, match services/HTTP/page composition,
+card/detail/live consumers, shared refresh transport, English messages, rendering
+fixtures/checks and package scripts. No dependency, env key, production setting,
+real payment or external message was added. Paid access remains off.
+
+Acceptance passes: `npm test -- --test-concurrency=1` (1,557 pass, one existing
+Windows-specific skip), `npm run typecheck`, changed-file ESLint and
+`npm run test:paywall` (12 tests). `test:paywall:rendering` passes 585 raw-response
+checks. The required card, client-state, feed, live-client, detail, history,
+SEO and slips rendering commands all pass their isolated production builds.
+Feed/detail/history retain 48 feed and 22 detail scenarios plus the revision
+checks. SEO passes 40 staging and 47 synthetic-production HTTP/HTML checks;
+slips retain 10 states. Fresh real MySQL captures pass 20 feed/detail tests and
+one discovery test, with no skips or provider calls.
+
+Repaired stale rendering fixtures/assertions to follow the existing chrome:
+explicit 30-row feed capture cohorts, both responsive Apply controls, published
+predictions in the ascending cohort, full accessible horizon text and the current
+Our prediction label. Added an exact selected-probability check. Expanded SEO's
+cohort from 35 to 55 so its second page remains real at the existing 50-row
+default. No prediction-content assertion was weakened. These script repairs also
+resolve 051's previously recorded rendering failure; its manual checks remain.
+
+**Status:** all 061 acceptance checks pass; tracker 061 is ☑ Completed.
+No deployment or mode change. Existing 058 local build/database/backup blockers
+remain documented separately. Continue with 062 after committing and pushing.

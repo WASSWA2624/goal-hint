@@ -6,8 +6,11 @@ import { publicPolicy } from "@/domain/public-policy";
 import { slipsHref } from "@/domain/navigation";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields, type SlipInputs } from "@/domain/slip-builder";
 import { SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
+import { SubscriberNotice } from "@/components/members/subscriber-notice";
 import { createMessages } from "@/i18n/messages";
 import { readPublicSlipBuild } from "@/server/slips/public-slips";
+import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
+import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { pageMetadata } from "@/server/seo/metadata";
 import { getShellInstant, PublicShell } from "./public-shell";
 
@@ -15,7 +18,7 @@ type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promi
 
 /** Anonymous, read-only GET builds. Invalid drafts remain editable without reading the stored feed. */
 export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShellInstant,
-  completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()) } = {}) {
+  completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()), resolveAccess = resolveViewerAccess } = {}) {
   return {
     async generateMetadata({ params }: Props) {
       const { locale } = await params, messages = createMessages(locale);
@@ -23,6 +26,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
     },
     async Page({ params, searchParams }: Props) {
       const { locale } = await params, query = await searchParams, at = await instant(), today = getReportingDate(at);
+      if ((await contentAccess(resolveAccess)).tier === "free") return <PublicShell locale={locale} today={today} current="slips" app compact search={null}><SubscriberNotice locale={locale} /></PublicShell>;
       const initialInputs: SlipInputs = {};
       for (const field of slipInputFields) {
         const value = query[field];
@@ -48,7 +52,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       }
       let captured = false;
       const clock = { now: () => { if (!captured) { captured = true; return at; } return completionInstant(); } };
-      const result = !error && query.build === "1" ? await read(criteria, clock, locale) : null;
+      const result = !error && query.build === "1" ? await createGatedReads({ readSlips: read, resolveAccess }).slips(criteria, clock, locale) : null;
       const initialReuse = query.reuse === "0" ? false : query.reuse === "1"
         || Array.isArray(query.reuse) && query.reuse.length === 2 && query.reuse[0] === "0" && query.reuse[1] === "1" ? true : criteria.reuse;
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.

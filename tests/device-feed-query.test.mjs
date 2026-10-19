@@ -1,3 +1,5 @@
+import { gateFeedResponse } from '../src/domain/paywall.ts';
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPredictionWindow, getReportingDate, parseReportingDate, parseUtcInstant } from '../src/domain/calendar.ts';
@@ -79,7 +81,7 @@ test('local envelope reports eight overlapping EAT coverage dates and retains op
   const { database, observed } = emptyDatabase(asOf), descriptors = [];
   const service = createMatchFeedService({ database, competitionIds: [39], clock: { now: () => asOf },
     cache: { read: async (descriptor, load) => { descriptors.push(descriptor); return load(); } } });
-  const response = await service.query(new URLSearchParams('when=next-7-days&tz=Asia%2FTehran'));
+  const response = gateFeedResponse(await service.query(new URLSearchParams('when=next-7-days&tz=Asia%2FTehran')), await fullAccess());
   assert.equal(response.today, '2026-10-14'); assert.equal(response.range.from, '2026-10-14'); assert.equal(response.range.to, '2026-10-20');
   assert.equal(text(response.range.startInclusive), '2026-10-13T20:30:00.000Z'); assert.equal(text(response.range.endExclusive), '2026-10-20T20:30:00.000Z');
   assert.deepEqual(response.coverage.dates.map((entry) => entry.date), Array.from({ length: 8 }, (_, index) => `2026-10-${13 + index}`));
@@ -140,7 +142,7 @@ test('HTTP validation and stored reading share exactly one injected request inst
     receivedClock = clock; assert.equal(clock.now(), asOf);
     assert.equal(getFeedToday(parseFeedQuery(parameters, { today: reportingToday, asOf: clock.now() }), clock.now()), '2026-10-14');
     return { ready: true, links: { next: null, previous: null } };
-  }, { now: () => { clockReads++; return asOf; } });
+  }, { now: () => { clockReads++; return asOf; } }, fullAccess);
   const response = await handler(new Request('https://example.test/api/matches?tz=Asia%2FTehran'));
   assert.equal(response.status, 200); assert.equal(clockReads, 1); assert.equal(receivedClock.now(), asOf);
 });

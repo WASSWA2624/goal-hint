@@ -1,3 +1,4 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadMatchDetailPage, matchDetailMetadata, parseMatchDetailPageInput } from '../src/server/matches/detail-page.ts';
@@ -15,18 +16,18 @@ test('detail page validates fixture identity and bounded history queries before 
     assert.throws(() => parseMatchDetailPageInput(id, query), error => error.code === 'invalid-query');
   }
   let reads = 0;
-  assert.equal((await loadMatchDetailPage('invalid', clock, async () => { reads++; })).error, 'not-found');
+  assert.equal((await loadMatchDetailPage('invalid', clock, async () => { reads++; }, undefined, fullAccess)).error, 'not-found');
   assert.equal(reads, 0);
 });
 test('server page preserves the stored projection and request clock; sanitized failures stay distinct', async () => {
   const response = { fixture: { fixtureId: id }, snapshot: null, asOf: 1 };
   const result = await loadMatchDetailPage(id, clock, async (receivedId, parameters, receivedClock) => {
     assert.equal(receivedId, id); assert.equal(parameters.size, 0); assert.equal(receivedClock, clock); return response;
-  });
-  assert.equal(result.data, response); assert.equal(result.data.asOf, 1);
+  }, undefined, fullAccess);
+  assert.deepEqual(result.data, { ...response, access: { tier: "full", signedIn: false } }); assert.equal(result.data.fixture, response.fixture); assert.equal(result.data.asOf, 1);
   for (const [error, expected] of [[new MatchFeedError('not-found'), 'not-found'], [new MatchFeedError('rate-limited'), 'rate-limited'],
     [new Error('mysql://private/provider-secret/internal-prompt'), 'unavailable']]) {
-    const failed = await loadMatchDetailPage(id, clock, async () => { throw error; });
+    const failed = await loadMatchDetailPage(id, clock, async () => { throw error; }, undefined, fullAccess);
     assert.deepEqual(failed, { data: null, error: expected }); assert.doesNotMatch(JSON.stringify(failed), /private|provider-secret|prompt/);
   }
 });

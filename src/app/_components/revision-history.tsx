@@ -9,6 +9,7 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { ButtonLink, TextLink } from "@/components/ui/controls";
 import { BodyText, Inline, MutedText, SectionHeading, Stack, Surface } from "@/components/ui/layout";
 import { DetailTime, HistorySnapshot } from "./match-detail-content";
+import { SubscriberNotice } from "@/components/members/subscriber-notice";
 
 type Cycle = NonNullable<MatchDetailResponse["selectedCycle"]>;
 
@@ -32,7 +33,9 @@ export function RevisionHistory({ current, result, query, locale = "en", open = 
   open?: boolean;
 }) {
   const messages = createMessages(locale), parameters = new URLSearchParams(query);
-  const data = result.data ?? current, { revisions, cycles } = data.history;
+  const data = result.data ?? current;
+  if ("gated" in data.history) return <div id="revision-history"><SubscriberNotice locale={locale} /></div>;
+  const { revisions, cycles } = data.history;
   const selected = result.data && (parameters.has("revision") || parameters.has("cycle")) ? result.data : null;
   const nextRevisions = historyNextHref(data, revisions.next), nextCycles = historyNextHref(data, cycles.next);
   return <Disclosure id="revision-history" open={open || query ? true : undefined} data-revision-history>
@@ -52,7 +55,7 @@ export function RevisionHistory({ current, result, query, locale = "en", open = 
         <summary>{messages.text(selected.snapshot?.historical ? "history.historicalSnapshot" : "history.inspectSnapshot")}</summary>
         <Stack $gap="lg">
           <BodyText>{messages.text("history.snapshotDisclosure")}</BodyText>
-          {selected.snapshot && <>
+          {selected.snapshot && !("gated" in selected.snapshot) && <>
             <SectionHeading as="h3">{messages.text("history.publication", { number: messages.number(selected.snapshot.fixtureRevision) })}</SectionHeading>
             <BodyText>{messages.text(`history.status.${selected.snapshot.applicability}`)}</BodyText>
             <MutedText>{messages.text("history.cycleRevision", { number: messages.number(selected.snapshot.cycleRevision) })}</MutedText>
@@ -105,7 +108,7 @@ export function RevisionHistory({ current, result, query, locale = "en", open = 
           </Stack>}
         {nextCycles && <ButtonLink href={nextCycles} variant="secondary" prefetch={false}>{messages.text("history.olderCycles")}</ButtonLink>}
       </Stack>
-      {query && <TextLink href={historyPageHref(current, new URLSearchParams({ limit: String(current.history.limit) }))}
+      {query && <TextLink href={historyPageHref(current, new URLSearchParams({ limit: String(data.history.limit) }))}
         prefetch={false}>{messages.text("history.latest")}</TextLink>}
     </Stack>
   </Disclosure>;

@@ -6,7 +6,7 @@
 | ◐ Partial | Implementation started or landed, but work, acceptance checks or an external blocker remain. Each partial row has a note below. |
 | ☐ Not started | No implementation yet. |
 
-**Totals:** 46 completed · 6 partial · 15 not started (67 prompts).
+**Totals:** 47 completed · 6 partial · 14 not started (67 prompts).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -70,7 +70,7 @@
 | ◐ Partial     | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md)       | Existing local build, database drift and backup checks                                              |
 | ☑ Completed   | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md)                           | —                                                                                                   |
 | ☑ Completed   | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             | —                                                                                                   |
-| ☐ Not started | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md)     | Implementation, after 060                                                                           |
+| ☑ Completed   | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md)     | —                                                                                                   |
 | ☐ Not started | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md)           | Implementation, after 061                                                                           |
 | ☐ Not started | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               | Implementation, after 062; real SMS samples per network (OP-38)                                     |
 | ☐ Not started | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             | Implementation, after 063                                                                           |
@@ -83,7 +83,7 @@
 - **011 Fixture evidence:** local collection, immutable snapshots and persistence are built. Missing: the licensed research/news provider and the OP-13/14 operating choices, so there is no real news adapter.
 - **012 AI predictor:** the local registry, prompt, validation and cost-controlled flow are built. Missing: the chosen AI provider, model and calibration (OP-15), the provider transport and live integration.
 - **014 Forecast evaluation:** the offline harness, metrics, baselines and report command are built. Missing: the evaluation periods, sample sizes and quality thresholds (OP-16/17) and real forecast observations.
-- **051 Feed screen layout:** the screens are built. Missing: the browser acceptance checks, and `test:detail-page:rendering` failed at its last run (10 October 2026) on the UI-owned detail page.
+- **051 Feed screen layout:** the screens are built. Missing: the browser acceptance checks. The prior stale rendering assertions were repaired within 061 and all required rendering commands now pass (19 October 2026).
 - **052 Provider odds import:** implementation is complete for the rights-off state. Missing: the counted odds trial (it needs the planned API plan upgrade; owner decision 10 October 2026) and odds display rights (OP-36), so `publicPolicy.features.providerOdds` stays off. See [development progress](docs/development-progress.md) and [provider odds](docs/provider-odds.md).
 - **058 Data model, settings, plans and audit:** the nine tables, overlay, phone helpers, settings, plans, audit and the Plans and Settings pages are built, and `test:members` and `test:admin` pass. The owner accepted leaving network auto-selection unset (`networkPrefixes` stays empty); do not re-request that choice. The 375 px check passed. Still failing locally, not because of 058: `npm run check`'s `next build` with `.env.local`; `db:verify` drift from the developer database's out-of-repo `20261015072524_match_facts`; and the `test:backup` restores (trailing `;` on the `20261012153531_goal_market_extension` triggers). The recorded build-only override and fresh isolated database allow independent implementation to continue.
 
@@ -91,7 +91,7 @@
 
 - **046–049 Staging to production:** blocked by owner decisions on hosting (OP-32), quality qualification (OP-33, which also needs 011, 012 and 014), release signoff (OP-34) and the domain and production operation (OP-35).
 - **053–056:** not started. 055 and 056 now wait for 061–062.
-- **061–067 Paid access:** see below.
+- **062–067 Paid access:** see below.
 
 ## Paid access (057–067)
 
@@ -99,6 +99,7 @@
 - **057 (19 October 2026):** ☑ Completed, including the manual 375 px check.
 - **058 (19 October 2026):** ◐ Partial (see Partial rows).
 - **059 (19 October 2026):** ☑ Completed: phone sign-in, hashed sessions, throttles, sign-out/devices and the account states in the existing chrome. MySQL concurrency, 375 px, production headers/build, changed-file lint, typecheck and the full sequential unit suite pass.
-- **060 (19 October 2026):** ☑ Completed: account-bound access codes, confirmation-time periods, device unlock, viewer resolution and audited owner code services. Member (43), SEO (29) and admin (25) checks pass; production HTML/build, typecheck, changed-file lint and 375 px fragment/refresh/unlock checks pass. 061–067 are ☐ Not started.
+- **060 (19 October 2026):** ☑ Completed: account-bound access codes, confirmation-time periods, device unlock, viewer resolution and audited owner code services. Member (43), SEO (29) and admin (25) checks pass; production HTML/build, typecheck, changed-file lint and 375 px fragment/refresh/unlock checks pass.
+- **061 (19 October 2026):** ☑ Completed: strict wire gates after shared raw reads, private responses, oracle refusal, generic metadata and access transitions. Unit/type/lint checks and every required rendering command pass, including 585 HTML/RSC/API leak checks. 062–067 are ☐ Not started.
 - **Run order:** 057 to 062 in order. 055 and 056 now depend on 061–062, so run them after 062; 063 to 067 follow in order.
 - Paid access ships with the switch `off`. Turning it on needs OP-40, and nothing is deployed unless the owner asks.

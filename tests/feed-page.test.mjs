@@ -1,3 +1,4 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getReportingDate, parseReportingDate, parseUtcInstant } from '../src/domain/calendar.ts';
@@ -49,15 +50,15 @@ test('page loader uses the exact URL query, locale and request clock and preserv
   const result = await loadMatchFeedPage(query, today, clock, async (parameters, context, suppliedClock) => {
     reads++; assert.deepEqual(parseFeedQuery(parameters, { today, ...context }), query);
     assert.equal(suppliedClock, clock); return stored;
-  });
-  assert.equal(reads, 1); assert.equal(result.data, stored); assert.equal(result.error, null);
+  }, fullAccess);
+  assert.equal(reads, 1); assert.deepEqual(result.data, { ...stored, access: { tier: "full", signedIn: false } }); assert.equal(result.data.records, stored.records); assert.equal(result.error, null);
   assert.equal(result.data.asOf, clock.now() - 4000);
 });
 
 test('read failures remain distinct from empty data and never disclose private diagnostics', async () => {
   const query = parseFeedQuery({}, { today });
   for (const error of [new Error('mysql://private-password'), new MatchFeedError('unavailable'), new MatchFeedError('rate-limited', 11)]) {
-    const result = await loadMatchFeedPage(query, today, clock, async () => { throw error; });
+    const result = await loadMatchFeedPage(query, today, clock, async () => { throw error; }, fullAccess);
     assert.deepEqual(result, { data: null, error: error.code === 'rate-limited' ? 'rate-limited' : 'unavailable' });
     assert.doesNotMatch(JSON.stringify(result), /private-password|mysql:/);
   }

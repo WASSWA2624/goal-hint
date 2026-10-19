@@ -1,3 +1,4 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import { execFile } from "./helpers/command-runtime.mjs";
 import { promisify } from 'node:util';
@@ -201,7 +202,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
     });
     await t.test('anonymous HTTP shares the card snapshot, references and real sync timestamps', async () => {
       // Inspect the earliest published fixture without assuming it belongs to the default Latest first page.
-      const response = await createMatchFeedHandler((parameters) => service.query(parameters))(new Request('http://localhost/api/matches?date=2026-10-09&dir=asc'));
+      const response = await createMatchFeedHandler((parameters) => service.query(parameters), undefined, fullAccess)(new Request('http://localhost/api/matches?date=2026-10-09&dir=asc'));
       assert.equal(response.status, 200); assert.equal(response.headers.get('set-cookie'), null);
       assert.match(response.headers.get('link'), /rel="next"/u);
       const body = matchFeedResponseSchema.parse(await response.json()), record = body.records.find((item) => item.fixtureId === published.get(3000).fixture.id);
@@ -288,7 +289,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       // Rights off (the public default): no prices and odds= rejected, even though private prices exist.
       assert.ok((await query({ pageSize: '100' })).records.every((item) => item.prices.length === 0));
       await assert.rejects(query({ odds: '1.50-3.00' }), (error) => error.code === 'invalid-query');
-      const http = await createMatchFeedHandler((parameters) => oddsFeed.query(parameters))(
+      const http = await createMatchFeedHandler((parameters) => oddsFeed.query(parameters), undefined, fullAccess)(
         new Request('http://localhost/api/matches?date=2026-10-09&odds=1.50-3.00'));
       assert.equal(http.status, 400, 'the public route parses with the global flag');
       // Pagination identity: a reconfirmation keeps it; a public price change or a withdrawal moves it.
@@ -448,7 +449,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       }
       assert.equal(results.filter((item) => item.status === 'fulfilled').length, 120);
       assert.ok(results.filter((item) => item.status === 'rejected').every((item) => item.reason.code === 'rate-limited'));
-      const handler = createMatchFeedHandler((parameters) => service.query(parameters));
+      const handler = createMatchFeedHandler((parameters) => service.query(parameters), undefined, fullAccess);
       const rejected = await handler(new Request('http://localhost/api/matches?q=club'));
       assert.equal(rejected.status, 429); assert.equal(rejected.headers.get('retry-after'), '60');
       const counter = await p.a.query((tx) => tx.publicSearchLimit.findUniqueOrThrow({ where: { scope: 'matches' } }));
@@ -474,7 +475,7 @@ test('stored public match feed on genuine isolated MySQL', { timeout: 480_000 },
       assert.equal(other.competition.countryFlagUrl, flag, 'the flag belongs to the competition, so every fixture of it shows it');
       assert.deepEqual([after.dataVersion, other.dataVersion], [before.dataVersion, sibling.dataVersion], 'a flag alone versions no fixture');
       // The anonymous HTTP body carries the same field.
-      const http = await createMatchFeedHandler((parameters) => service.query(parameters))(new Request('http://localhost/api/matches?date=2026-10-09&pageSize=100'));
+      const http = await createMatchFeedHandler((parameters) => service.query(parameters), undefined, fullAccess)(new Request('http://localhost/api/matches?date=2026-10-09&pageSize=100'));
       const body = matchFeedResponseSchema.parse(await http.json());
       assert.equal(body.records.find((item) => item.fixtureId === after.fixtureId).competition.countryFlagUrl, flag);
       // International rows send null and recorded rows may omit the key: neither erases the stored flag.

@@ -3,6 +3,7 @@ import { getDateInTimeZone, getDayBoundsInTimeZone } from "./device-calendar.ts"
 import { FeedPaginationError } from "./feed-pagination-error.ts";
 import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliation.ts";
 import type { MatchDetailResponse } from "./match-detail.ts";
+import { fullDetailSnapshot } from "./detail-snapshot.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";
 
 export const liveRefreshRules = Object.freeze({ activeMs: 20_000, quietMs: 60_000, timeoutMs: 30_000, kickoffLeadMs: 30 * 60_000 });
@@ -28,19 +29,26 @@ export function acceptRun(previous: MatchFeedResponse["run"], next: MatchFeedRes
 export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetailResponse): MatchDetailResponse {
   if (next.selection !== "applicable" || previous.selection !== "applicable" || next.snapshot?.historical ||
       next.fixture.fixtureId !== previous.fixture.fixtureId) throw new FeedPaginationError("invalid-response");
+  // Permission withdrawal wins even when the shared raw cache has an older observation clock.
+  if (previous.access.tier === "full" && next.access.tier === "free") return next;
   if (next.asOf < previous.asOf || fixtureAdvance(previous.fixture, next.fixture) < 0) throw new FeedPaginationError("stale-data");
   acceptRun(previous.run, next.run, getReportingDate(next.asOf));
-  if (previous.snapshot && next.snapshot && next.snapshot.cycleId === previous.snapshot.cycleId &&
-      (BigInt(next.snapshot.runSequence) < BigInt(previous.snapshot.runSequence) || next.snapshot.fixtureRevision < previous.snapshot.fixtureRevision)) {
+  if (next.access.tier !== previous.access.tier || next.access.signedIn !== previous.access.signedIn) return next;
+  const oldSnapshot = fullDetailSnapshot(previous), newSnapshot = fullDetailSnapshot(next);
+  if (!!oldSnapshot !== !!newSnapshot) return next;
+  if (oldSnapshot && newSnapshot && newSnapshot.cycleId === oldSnapshot.cycleId &&
+      (BigInt(newSnapshot.runSequence) < BigInt(oldSnapshot.runSequence) || newSnapshot.fixtureRevision < oldSnapshot.fixtureRevision)) {
     throw new FeedPaginationError("stale-data");
   }
   if (next.fixture.dataVersion === previous.fixture.dataVersion) {
     // A permission-expired response may withdraw analysis without a publication.
-    const snapshot = previous.snapshot && next.snapshot?.revisionId === previous.snapshot.revisionId &&
-      previous.snapshot.analysis.state === "available" && next.snapshot.analysis.state === "withheld"
-      ? { ...previous.snapshot, analysis: next.snapshot.analysis } : previous.snapshot;
+    const snapshot = oldSnapshot && newSnapshot
+      ? newSnapshot.revisionId === oldSnapshot.revisionId && oldSnapshot.analysis.state === "available" && newSnapshot.analysis.state === "withheld"
+        ? { ...oldSnapshot, analysis: newSnapshot.analysis } : oldSnapshot
+      : next.snapshot;
     // Odds groups (052) are observation data outside the revision: take the newer envelope's groups.
-    return { ...previous, fixture: mergeFixtureObservation(previous.fixture, next.fixture), snapshot, asOf: next.asOf, run: next.run, odds: next.odds };
+    return { ...previous, fixture: mergeFixtureObservation(previous.fixture, next.fixture), snapshot, asOf: next.asOf, run: next.run,
+      ...(next.odds === undefined ? {} : { odds: next.odds }) };
   }
   return next;
 }

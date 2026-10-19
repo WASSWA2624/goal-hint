@@ -20,6 +20,7 @@ export function probabilityEntry(market: AcceptedMarket, selection: MarketSelect
 /** Present supplied facts only; the card never adjudicates a score or combines families. */
 export function selectedCardPrediction(fixture: FixtureSnapshot, family: MarketFamily = "match-result") {
   const forecast = fixture.forecast;
+  if (forecast && "gated" in forecast) return null;
   const item = forecast?.markets.find((entry) => entry.market.family === family);
   if (!forecast || !item) return null;
   const probability = probabilityEntry(item.market);
@@ -46,6 +47,7 @@ export function cardResultStatus(status: FixtureSnapshot["status"], outcome: Set
  */
 export function sameCardFixture(previous: FixtureSnapshot, next: FixtureSnapshot): boolean {
   return previous === next || previous.fixtureId === next.fixtureId && previous.dataVersion === next.dataVersion &&
+    !!(previous.forecast && "gated" in previous.forecast) === !!(next.forecast && "gated" in next.forecast) &&
     previous.partialCoverage === next.partialCoverage && previous.availabilityMessage === next.availabilityMessage &&
     previous.update?.prediction === next.update?.prediction && previous.update?.result === next.update?.result &&
     previous.forecast?.updateDelayed === next.forecast?.updateDelayed && samePrices(previous.prices, next.prices);
@@ -62,6 +64,7 @@ function samePrices(previous: FixtureSnapshot["prices"], next: FixtureSnapshot["
 /** The market price for exactly the shown pick's family and selection (052). Never falls back to another
  * family, line or selection: no price means none is shown. */
 export function selectedCardPrice(fixture: FixtureSnapshot, family: MarketFamily) {
+  if (fixture.forecast && "gated" in fixture.forecast) return null;
   const pick = fixture.forecast?.markets.find((entry) => entry.market.family === family);
   const price = fixture.prices?.find((entry) => entry.family === family);
   return pick && price && price.selection === pick.market.selection ? price : null;

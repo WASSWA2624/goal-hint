@@ -134,6 +134,11 @@ def verify(origin, cases, *, staging):
     assert urljoin(origin, shared_detail.headers.get("location")) == origin + detail["route"]["path"] + "?revision=" + cases["revision"] + "#gh_attr=click%3Dmeta"
     checks += 1
     html = page(detail["route"]["path"], detail["route"]["path"], not staging)
+    head = match(r"<head>([\s\S]*?)</head>", html).group(1)
+    match("Football predictions, sources and regulation-time results", head)
+    for tag in re.findall(r"<meta\b[^>]*>", head):
+        if "description" in tag:
+            no_match(r"estimate:|Void forecast record|\b\d+%", tag)
     match("Renamed Discovery Club", visible_html(html, comments=False))
     match("data-detail-market=", html)
     record = match(r'<p\b[^>]*data-prediction-record="true"[^>]*>([\s\S]*?)</p>', visible_html(html, comments=False)).group(1)
@@ -193,7 +198,7 @@ def verify(origin, cases, *, staging):
             path = urlsplit(url).path
             page(path, path, True)
         links = set(re.findall(r'href="(/en/matches/[^"?#]+)"', visible_html(first + second, comments=False)))
-        assert len(links) == 35
+        assert len(links) == 55
         for url in locations(matches):
             assert urlsplit(url).path in links
         assert anonymous("/matches/sitemap/1.xml").status == 404

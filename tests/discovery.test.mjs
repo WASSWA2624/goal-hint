@@ -197,7 +197,7 @@ test('the home page stays indexable on an empty or uncovered day; dated archives
     { deployment: 'staging', index: false }).robots.index, false, 'The release gate still applies to the home page.');
 });
 
-test('match pages with a published forecast are indexable and lead their snippet with the stored pick', () => {
+test('match pages with a published forecast are indexable and use generic metadata', () => {
   const forecast = cardFixture();
   assert.equal(matchPageIndexable(forecast), true);
   assert.equal(matchPageIndexable({ forecast: null }), false);
@@ -205,15 +205,14 @@ test('match pages with a published forecast are indexable and lead their snippet
   const data = { fixture: forecast, route: { path: '/en/matches/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/example-home-fc-vs-example-away-fc' } };
   const metadata = matchDetailMetadata({ data, error: null }, 'en', false, approved);
   assert.equal(metadata.robots.index, true);
-  assert.match(metadata.description, /^Example Home FC v Example Away FC, .+ \(EAT\)\. Match result estimate: Home win, 54%\. /);
-  assert.match(metadata.description, /Not a guarantee\.$/);
+  assert.match(metadata.description, /^Football predictions, sources and regulation-time results for Example Home FC v Example Away FC on /);
+  assert.doesNotMatch(metadata.description, /estimate:|54%|Home win/);
   assert.equal(metadata.openGraph.description, metadata.description);
   assert.equal(matchDetailMetadata({ data, error: null }, 'en', true, approved).robots.index, false, 'Revision variants stay noindex.');
   assert.equal(matchDetailMetadata({ data, error: null }, 'en', false, { deployment: 'staging', index: false }).robots.index, false);
   const totals = cardFixture();
   totals.forecast.markets = totals.forecast.markets.filter(item => item.market.family === 'total-goals');
-  assert.match(matchDetailMetadata({ data: { ...data, fixture: totals }, error: null }, 'en', false, approved).description,
-    /Over\/Under 2\.5 goals estimate: Under 2\.5, 70%/);
+  assert.equal(matchDetailMetadata({ data: { ...data, fixture: totals }, error: null }, 'en', false, approved).description, metadata.description);
   const undated = cardFixture({ kickoffAt: null });
   assert.equal(matchDetailMetadata({ data: { ...data, fixture: undated }, error: null }, 'en', false, approved).description,
     'Stored predictions, sources and regulation-time results for Example Home FC v Example Away FC.');

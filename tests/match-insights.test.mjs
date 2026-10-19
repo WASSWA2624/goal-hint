@@ -1,3 +1,4 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -11,7 +12,7 @@ const context = (value = id) => ({ params: Promise.resolve({ id: value }) });
 const request = (query) => new Request(`https://goalhint.test/api/matches/${id}/insights${query}`);
 const handler = (read) => {
   const calls = [];
-  return { calls, GET: createMatchInsightsHandler(async (value) => { calls.push(value); return read(value); }) };
+  return { calls, GET: createMatchInsightsHandler(async (value) => { calls.push(value); return read(value); }, { resolveAccess: fullAccess }) };
 };
 const deferred = () => {
   let resolve, reject;
@@ -38,7 +39,7 @@ test('insights handler returns exactly one requested section', async () => {
   const { calls, GET } = handler(() => insights);
   const response = await GET(request('?section=form'), context());
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { fixtureId: id, asOf: insights.asOf, section: 'form', data: insights.sections.form });
+  assert.deepEqual(await response.json(), { access: { tier: 'full', signedIn: false }, fixtureId: id, asOf: insights.asOf, section: 'form', data: insights.sections.form });
   assert.match(response.headers.get('cache-control'), /no-store/u);
   assert.deepEqual(calls, [id]);
 });

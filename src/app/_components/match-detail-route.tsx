@@ -7,6 +7,8 @@ import { loadMatchDetailPage, matchDetailMetadata, matchDetailPageParameters, ma
 import { serializeStructuredData } from "@/domain/discovery";
 import { readPublicMatchDetail } from "@/server/matches/public-detail";
 import { readPublicMatchInsights } from "@/server/matches/public-insights";
+import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
+import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { insightsPreview, type InsightsPreview } from "@/domain/match-insights";
 import { splitMatchViewParameters } from "@/domain/match-view";
 import { MatchFeedError } from "@/server/matches/feed-error";
@@ -19,22 +21,22 @@ type Props = { params: Promise<{ locale: string; fixtureId: string; slug: string
 
 /** The production route and isolated stored-data acceptance use this same path. */
 export function createMatchDetailRoute(read: typeof readPublicMatchDetail = readPublicMatchDetail, policy = getDiscoveryPolicy,
-  readInsights: typeof readPublicMatchInsights = readPublicMatchInsights) {
+  readInsights: typeof readPublicMatchInsights = readPublicMatchInsights, resolveAccess = resolveViewerAccess) {
   const loadCurrent = cache(async (id: string) => {
     const instant = await getShellInstant();
-    const result = await loadMatchDetailPage(id, { now: () => instant }, read);
+    const result = await loadMatchDetailPage(id, { now: () => instant }, read, new URLSearchParams(), resolveAccess);
     return { result, today: getReportingDate(instant), instant };
   });
   const loadPreview = cache(async (id: string): Promise<InsightsPreview | null> => {
     const instant = await getShellInstant();
     // Optional section previews must not delay metadata; failed reads retain each section's retry.
-    try { return insightsPreview(await readInsights(id, { now: () => instant })); }
+    try { return insightsPreview(await createGatedReads({ readDetail: read, readInsights, resolveAccess }).insights(id, { now: () => instant })); }
     catch { return null; }
   });
   const load = cache(async (id: string, query: string) => {
     const current = await loadCurrent(id);
     const historyResult = query && current.result.data
-      ? await loadMatchDetailPage(id, { now: () => current.instant }, read, new URLSearchParams(query)) : current.result;
+      ? await loadMatchDetailPage(id, { now: () => current.instant }, read, new URLSearchParams(query), resolveAccess) : current.result;
     return { ...current, historyResult, query };
   });
   async function resolve({ params, searchParams }: Props, withPreview = false) {
@@ -54,7 +56,7 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
   return {
     async generateMetadata(props: Props) {
       const { result, route, query } = await resolve(props);
-      return matchDetailMetadata(result, route.locale, query !== "", policy());
+      return matchDetailMetadata(result, route.locale, query !== "", policy(), (await contentAccess(resolveAccess)).mode);
     },
     async Page(props: Props) {
       const { result, historyResult, query, today, route, preview, viewQuery } = await resolve(props, true);

@@ -91,7 +91,9 @@
     "test:admin": "node --conditions=react-server --test tests/admin.test.mjs tests/admin-routes.test.mjs",
     "test:members": "node --conditions=react-server --test tests/phone.test.mjs tests/access-codes.test.mjs tests/members.test.mjs tests/members.integration.mjs",
     "test:scripts": "python -m unittest discover -s tests -p \"*_test.py\"",
-    "test:scripts:integration": "python tests/scripts_integration.py"
+    "test:scripts:integration": "python tests/scripts_integration.py",
+    "test:paywall": "node --conditions=react-server --test tests/paywall.test.mjs",
+    "test:paywall:rendering": "python scripts/verify-paywall-rendering.py"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "7.10.0",

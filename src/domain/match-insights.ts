@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isSafeRemoteImageUrl } from "./remote-image.ts";
 import { matchSections } from "./match-view.ts";
+import { contentAccessSchema } from "./content-access.ts";
 
 /**
  * Match insights are read-only projections of stored data: verified regulation results from
@@ -64,10 +65,12 @@ export const insightSectionsSchema = z.strictObject({
   history: z.strictObject({ state: z.enum(["available"]) }),
 });
 export type InsightSections = z.infer<typeof insightSectionsSchema>;
-export const matchInsightsSchema = z.strictObject({ fixtureId: id, asOf: at,
+export const storedMatchInsightsSchema = z.strictObject({ fixtureId: id, asOf: at,
   home: insightTeamSchema, away: insightTeamSchema, sections: insightSectionsSchema });
+export const matchInsightsSchema = storedMatchInsightsSchema.extend({ access: contentAccessSchema });
+export type StoredMatchInsights = z.infer<typeof storedMatchInsightsSchema>;
 export type MatchInsights = z.infer<typeof matchInsightsSchema>;
-export const insightSectionResponseSchema = z.strictObject({ fixtureId: id, asOf: at, section: z.enum(matchSections), data: z.unknown() });
+export const insightSectionResponseSchema = z.strictObject({ fixtureId: id, asOf: at, section: z.enum(matchSections), data: z.unknown(), access: contentAccessSchema });
 export const insightSectionSchemas = insightSectionsSchema.shape;
 
 const totalsSchema = z.strictObject({ formHome: count, formAway: count, meetings: count, players: count, injuries: count, news: count, stats: count });

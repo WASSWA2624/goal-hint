@@ -1,8 +1,9 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseReportingDate } from '../src/domain/calendar.ts';
 import { defaultMarkets, maximumCompetitionScope } from '../src/domain/feed-query.ts';
-import { matchFeedErrorSchema, matchFeedResponseSchema } from '../src/domain/match-feed.ts';
+import { matchFeedErrorSchema, matchFeedResponseSchema, storedMatchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { parseMatchFeedQuery, createMatchFeedService } from '../src/server/matches/feed-service.ts';
 import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
@@ -28,11 +29,11 @@ for (const query of ['date=2026-02-30', 'date=0999-12-31', 'date=1000-01-01', 'f
   'odds=1.50-3.00', 'odds=', 'odds=1.01-1000.00', 'prob=50-100&odds=1.50-3.00', 'leagues=0&odds=2.00-5.00']) {
   test(`public query rejects ${query.slice(0, 70)}`, async () => {
     let reads = 0;
-    const response = await createMatchFeedHandler(async () => { reads++; return emptyPage(); })(request(query));
+    const response = await createMatchFeedHandler(async () => { reads++; return emptyPage(); }, undefined, fullAccess)(request(query));
     assert.equal(response.status, 400); assert.equal(reads, 0);
     const body = matchFeedErrorSchema.parse(await response.json());
     assert.equal(body.error.code, 'invalid-query'); assert.equal(body.error.recoverable, false);
-    assert.equal(response.headers.get('cache-control'), 'no-store, max-age=0');
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
   });
 }
 test('public parsing preserves shared URL defaults, historical dates and SSR route context', () => {
@@ -50,14 +51,14 @@ test('public parsing preserves shared URL defaults, historical dates and SSR rou
   assert.throws(() => parseMatchFeedQuery(new URLSearchParams('odds=3.00-1.50'), today, { providerOdds: true }), MatchFeedError);
 });
 test('anonymous GET uses no account, authentication cookie, token or cache', async () => {
-  const response = await createMatchFeedHandler(async () => emptyPage())(request('date=2026-10-09'));
+  const response = await createMatchFeedHandler(async () => emptyPage(), undefined, fullAccess)(request('date=2026-10-09'));
   assert.equal(response.status, 200); assert.equal(response.headers.get('set-cookie'), null);
   assert.equal(response.headers.get('cdn-cache-control'), 'no-store');
   assert.equal(matchFeedResponseSchema.parse(await response.json()).state, 'no-fixtures');
 });
 test('leagues=0 omits filter options and never reaches the feed query parser', async () => {
   const league = { id: 'league-a', name: 'Example', country: null, logoUrl: null, fixtures: 1 }, seen = [];
-  const handler = createMatchFeedHandler(async (parameters) => { seen.push(parameters.toString()); return { ...emptyPage(), leagues: [league] }; });
+  const handler = createMatchFeedHandler(async (parameters) => { seen.push(parameters.toString()); return { ...emptyPage(), leagues: [league] }; }, undefined, fullAccess);
   const lean = await handler(request('date=2026-10-09&leagues=0'));
   assert.equal(lean.status, 200); assert.deepEqual(matchFeedResponseSchema.parse(await lean.json()).leagues, []);
   const full = await handler(request('date=2026-10-09'));
@@ -65,7 +66,7 @@ test('leagues=0 omits filter options and never reaches the feed query parser', a
   assert.deepEqual(seen, ['date=2026-10-09', 'date=2026-10-09']);
 });
 test('leagues=0 is not charged to the 2 KiB query limit', async () => {
-  const handler = createMatchFeedHandler(async () => emptyPage());
+  const handler = createMatchFeedHandler(async () => emptyPage(), undefined, fullAccess);
   const base = `date=2026-10-09&league=${Array.from({ length: 19 }, (_, index) => `league-${index}`.padEnd(100, 'x')).join('%2C')}&q=`;
   // "?" plus this query is exactly 2,048 bytes, as sent and as re-serialized.
   const largest = base + 'a'.repeat(2047 - base.length);
@@ -76,7 +77,7 @@ test('leagues=0 is not charged to the 2 KiB query limit', async () => {
 for (const [error, status, code, retry] of [[new Error('mysql://private:password@internal/prompt-log'), 503, 'unavailable', '5'],
   [new MatchFeedError('rate-limited', 17), 429, 'rate-limited', '17']]) {
   test(`HTTP ${status} is structured, recoverable and excludes private diagnostics`, async () => {
-    const response = await createMatchFeedHandler(async () => { throw error; })(request());
+    const response = await createMatchFeedHandler(async () => { throw error; }, undefined, fullAccess)(request());
     assert.equal(response.status, status); assert.equal(response.headers.get('retry-after'), retry);
     const serialized = await response.text(), body = matchFeedErrorSchema.parse(JSON.parse(serialized));
     assert.equal(body.error.code, code); assert.equal(body.error.recoverable, true);
@@ -89,17 +90,17 @@ test('missing competition configuration and database failure never masquerade as
   await assert.rejects(service.query({ date: '2026-10-09' }), (error) => error.code === 'unavailable');
 });
 test('public response schema rejects unknown internals and incoherent counts', () => {
-  assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), workerLogs: [] }).success, false);
-  assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), total: 1 }).success, false);
-  assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), nextPage: 3 }).success, false);
+  assert.equal(storedMatchFeedResponseSchema.safeParse({ ...emptyPage(), workerLogs: [] }).success, false);
+  assert.equal(storedMatchFeedResponseSchema.safeParse({ ...emptyPage(), total: 1 }).success, false);
+  assert.equal(storedMatchFeedResponseSchema.safeParse({ ...emptyPage(), nextPage: 3 }).success, false);
   const league = { id: 'league-a', name: 'Example', country: null };
   // Older cached pages without logos or counts still parse, with explicit defaults.
-  assert.deepEqual(matchFeedResponseSchema.parse({ ...emptyPage(), leagues: [league] }).leagues, [{ ...league, logoUrl: null, fixtures: 0 }]);
+  assert.deepEqual(storedMatchFeedResponseSchema.parse({ ...emptyPage(), leagues: [league] }).leagues, [{ ...league, logoUrl: null, fixtures: 0 }]);
   const logo = { ...league, logoUrl: 'https://media.example.test/league.png', fixtures: 12 };
-  assert.deepEqual(matchFeedResponseSchema.parse({ ...emptyPage(), leagues: [logo] }).leagues, [logo]);
+  assert.deepEqual(storedMatchFeedResponseSchema.parse({ ...emptyPage(), leagues: [logo] }).leagues, [logo]);
   for (const leagues of [[league, league], [{ ...league, providerCredentials: 'private' }], [{ ...league, id: '../x' }],
     [{ ...league, logoUrl: 'http://media.example.test/a.png' }], [{ ...league, fixtures: -1 }],
     Array.from({ length: maximumCompetitionScope + 1 }, (_, index) => ({ ...league, id: `league-${index}` }))]) {
-    assert.equal(matchFeedResponseSchema.safeParse({ ...emptyPage(), leagues }).success, false);
+    assert.equal(storedMatchFeedResponseSchema.safeParse({ ...emptyPage(), leagues }).success, false);
   }
 });

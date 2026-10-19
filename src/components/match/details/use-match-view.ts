@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { InsightSections, InsightsPreview } from "@/domain/match-insights";
 import { previewHoldsSection } from "@/domain/match-insight-presentation";
 import { parseMatchView, serializeMatchView, type MatchSection, type MatchView } from "@/domain/match-view";
@@ -59,9 +59,11 @@ const previewReuseMs = 5 * 60_000;
  */
 export function useInsightSection<S extends MatchSection>(id: string, section: S, enabled: boolean, preview: InsightsPreview | null = null) {
   const dispatch = useDetailDispatch();
+  const router = useRouter();
   const [attempt, setAttempt] = useState(0);
   const select = useMemo(() => detailApi.endpoints.insights.select({ id, section }), [id, section]);
   const state = useDetailSelector(select);
+  useEffect(() => { if (state.error && "code" in state.error && state.error.code === "subscription-required") router.refresh(); }, [router, state.error]);
   const completeAt = preview && previewHoldsSection(preview, section) ? preview.asOf : null;
   const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
   useEffect(() => {

@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation";
 import { MatchDetails } from "@/components/match/details/match-details";
 import type { InsightsPreview } from "@/domain/match-insights";
+import { gateInsights } from "@/domain/paywall";
 import type { ReportingDate } from "@/domain/calendar";
 import { liveRefreshRules, mergeLiveDetail } from "@/domain/live-refresh";
+import { FeedPaginationError } from "@/domain/feed-pagination-error";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import { DetailStateProvider } from "@/state/detail-provider";
 import { useDetailDispatch } from "@/state/detail-hooks";
@@ -46,23 +48,28 @@ function LiveDetail({ initial, today, locale, children, preview = null, historyR
       const result = await consumeRefresh(dispatch(detailApi.endpoints.detail.initiate(initial.fixture.fixtureId,
         { forceRefetch: true })), controller.signal);
       if (controller.signal.aborted || !mounted.current) return;
+      const accessChanged = result.access.tier !== accepted.current.access.tier || result.access.signedIn !== accepted.current.access.signedIn;
       accept(mergeLiveDetail(accepted.current, result));
-    } catch {
+      if (accessChanged) router.refresh();
+    } catch (cause) {
+      if (cause instanceof FeedPaginationError && cause.code === "subscription-required") router.refresh();
       // Keep the accepted snapshot; the next scheduled refresh retries automatically.
     } finally { if (request.current === controller) request.current = null; }
-  }, [accept, dispatch, initial.fixture.fixtureId]);
+  }, [accept, dispatch, initial.fixture.fixtureId, router]);
   // A scheduled match polls fast only near kickoff, judged by the last read clock (no render-time Date.now()).
   const fixture = data.fixture, kickoffAt = fixture.kickoffAt;
   const active = fixture.status === "live" || data.run?.phase === "updating" ||
     (fixture.status === "scheduled" && kickoffAt !== null && Math.abs(kickoffAt - asOf) <= liveRefreshRules.kickoffLeadMs);
   useLiveRefresh({ today, enabled: true, interval: active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs,
     refresh, rollover: () => router.refresh() });
-  return <MatchDetails data={data} preview={preview} locale={locale} history={children} historyRequested={historyRequested} />;
+  const sections = preview ? gateInsights(preview, data.access, data.fixture.status).sections : null;
+  const currentPreview = preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;
+  return <MatchDetails data={data} preview={currentPreview} locale={locale} history={children} historyRequested={historyRequested} />;
 }
 
 /** One explicit server projection initializes a fresh per-page refresh store. */
 export function LiveMatchDetail(props: LiveDetailProps) {
-  return <DetailStateProvider key={props.initial.fixture.fixtureId}>
+  return <DetailStateProvider key={`${props.initial.fixture.fixtureId}:${props.initial.access.tier}:${props.initial.access.signedIn}`}>
     <LiveDetail {...props} />
   </DetailStateProvider>;
 }

@@ -2,7 +2,7 @@
 export const publicPolicy = Object.freeze({
   name: "Goal Hint",
   origin: "https://goalhint.com",
-  access: "free-and-account-free",
+  access: "free-with-subscriber-predictions",
   locales: Object.freeze(["en"] as const),
   defaultLocale: "en",
   theme: "light",

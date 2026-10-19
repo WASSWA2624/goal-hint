@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { MatchDetailResponse } from "../../domain/match-detail.ts";
+import type { MatchDetailResponse, StoredMatchDetailResponse } from "../../domain/match-detail.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { parseMatchDetailQuery } from "./detail-query.ts";
 
@@ -16,6 +16,7 @@ export function historyNextHref(data: MatchDetailResponse, next: string | null) 
   return historyPageHref(data, url.searchParams);
 }
 export function historySelectionHref(data: MatchDetailResponse, parameters: URLSearchParams, kind: "revision" | "cycle", id: string) {
+  if ("gated" in data.history) return data.route.path;
   const query = new URLSearchParams(parameters);
   query.delete("revision"); query.delete("cycle");
   query.set(kind, id);
@@ -24,7 +25,7 @@ export function historySelectionHref(data: MatchDetailResponse, parameters: URLS
   query.set("cycleAnchor", String(data.history.cycles.anchor));
   return historyPageHref(data, query);
 }
-export function publicationStatus(entry: MatchDetailResponse["history"]["revisions"]["entries"][number], currentRevisionId: string | null) {
+export function publicationStatus(entry: StoredMatchDetailResponse["history"]["revisions"]["entries"][number], currentRevisionId: string | null) {
   return { current: entry.cycle.state === "open" && entry.revisionId === currentRevisionId, locked: entry.revisionId === entry.cycle.lockedRevisionId,
     void: entry.cycle.state === "void", superseded: entry.revisionId !== entry.cycle.lockedRevisionId &&
       (entry.cycle.state === "open" ? entry.revisionId !== currentRevisionId : entry.revisionId !== entry.cycle.currentRevisionId) };

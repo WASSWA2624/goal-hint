@@ -86,7 +86,7 @@ test('pagination exposes every page of a complete collection, clamping out-of-ra
 
 function insights() {
   const form = Array.from({ length: 14 }, (_, index) => result(home, other, index % 3, 1));
-  return matchInsightsSchema.parse({ fixtureId: 'fixture-main', asOf: 1, home: team(home), away: team(away), sections: {
+  return matchInsightsSchema.parse({ access: { tier: "full", signedIn: false }, fixtureId: 'fixture-main', asOf: 1, home: team(home), away: team(away), sections: {
     form: { home: form, away: form.slice(0, 3).map((entry) => ({ ...entry, home: team(away) })) },
     h2h: { meetings: Array.from({ length: 8 }, () => result(home, away, 1, 0)) },
     stats: { evidence: Array.from({ length: 9 }, (_, index) => ({ metric: `metric-${index}`, unit: null, home: { average: 1, samples: 2 }, away: null })),
@@ -216,8 +216,8 @@ test('section data loads once per fixture and section, shared by simultaneous co
   const first = store.dispatch(detailApi.endpoints.insights.initiate({ id, section: 'h2h' }));
   const second = store.dispatch(detailApi.endpoints.insights.initiate({ id, section: 'h2h' }));
   assert.equal(calls.length, 1); assert.equal(calls[0].href, `/api/matches/${id}/insights?section=h2h`);
-  assert.equal(calls[0].options.credentials, 'omit');
-  pending.shift()(Response.json({ fixtureId: id, asOf: 7, section: 'h2h', data: { meetings: [] } }));
+  assert.equal(calls[0].options.credentials, 'same-origin');
+  pending.shift()(Response.json({ fixtureId: id, asOf: 7, access: { tier: 'full', signedIn: false }, section: 'h2h', data: { meetings: [] } }));
   assert.deepEqual((await first.unwrap()).data, { meetings: [] }); assert.deepEqual((await second.unwrap()).data, { meetings: [] });
   // A cached section is reused instead of refetched.
   const again = store.dispatch(detailApi.endpoints.insights.initiate({ id, section: 'h2h' }));

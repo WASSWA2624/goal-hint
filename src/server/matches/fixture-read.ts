@@ -4,7 +4,7 @@ import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 import { liveClockFromProvider } from "../../domain/match-card.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
 import type { InstantWindow } from "../../domain/calendar.ts";
-import type { MatchFeedRecord } from "../../domain/match-feed.ts";
+import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
 import { validTeamCode } from "../../domain/team-name.ts";
@@ -28,7 +28,7 @@ export function publicVoidReason(reason: string | null, locale = "en") {
 
 /** `prices` defaults to publicPolicy.features.providerOdds; prices come from the same snapshot as the feed SQL. */
 export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string, partialCoverage: boolean, window: InstantWindow, locale: string,
-  options: Readonly<{ prices?: boolean }> = {}): Promise<MatchFeedRecord> {
+  options: Readonly<{ prices?: boolean }> = {}): Promise<StoredMatchFeedRecord> {
   const fixture = await tx.footballFixture.findUniqueOrThrow({ where: { id }, include: { homeTeam: true, awayTeam: true,
     season: { include: { competition: true } }, resultState: true, lifecycleState: true } });
   const messages = createMessages(locale), display = fixture.activeCycleId ? await storedCycleDisplay(tx, fixture.activeCycleId) : null;
@@ -44,7 +44,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
   const prediction = cycle && cycle.state !== "open" ? "locked" : updating ? "updating" : outside ? "outside-window" : delayed ? "delayed" : revision ? "current" : "unavailable";
   const voidReason = cycle?.state === "void" ? publicVoidReason(cycle.voidReason, locale) : null;
   const available = revision ? Object.values(revision.candidate.markets).filter((item) => item.available) : [];
-  const markets: NonNullable<MatchFeedRecord["forecast"]>["markets"] = available.map((item) => {
+  const markets: NonNullable<StoredMatchFeedRecord["forecast"]>["markets"] = available.map((item) => {
     const active = settlement?.cycles[0]?.markets.find((entry) => entry.base.family === item.market.family);
     const recorded = active?.previous;
     const current = recorded !== undefined && recorded !== null && active?.inputHash === recorded.inputHash && recorded.lockedSetId === revision!.id;
@@ -59,7 +59,7 @@ export async function storedFeedFixture(tx: Prisma.TransactionClient, id: string
     const item = revision?.candidate.markets[family];
     const reason = !revision ? cycle?.state === "closed" ? "no-locked-selection" : "not-published"
       : item && !item.available && ["unsupported-family", "unsupported-markets"].includes(item.reason) ? "unsupported" : "insufficient-data";
-    return { family, reason } as MatchFeedRecord["unavailableMarkets"][number];
+    return { family, reason } as StoredMatchFeedRecord["unavailableMarkets"][number];
   });
   const prices = await storedFixturePrices(tx, id, markets.map((item) => ({ family: item.market.family, selection: item.market.selection })), options.prices);
   const status = resultStatus.parse(fixture.status);

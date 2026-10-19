@@ -1,3 +1,4 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
@@ -17,7 +18,7 @@ import { savePageScenarios } from './helpers/page-capture.mjs';
 test('discovery reads genuine stored identity, historical scope and material change timestamps without provider work', { timeout: 240_000 }, async t => {
   await withPredictionPipeline(t, async p => {
     const today = parseReportingDate('2026-10-09');
-    const rows = Array.from({ length: 35 }, (_, i) => {
+    const rows = Array.from({ length: 55 }, (_, i) => {
       const row = catalogFixture(7000 + i, { homeId: 14000 + i * 2, awayId: 14001 + i * 2,
         kickoff: new Date(Date.parse('2026-10-09T12:00:00Z') + i * 60_000).toISOString() });
       row.teams.home.name = `Discovery Home ${i}`; row.teams.away.name = `Discovery Away ${i}`; return row;
@@ -27,7 +28,7 @@ test('discovery reads genuine stored identity, historical scope and material cha
     assert.equal((await p.publisher.publish(state.input, state.lease)).refresh.outcome, 'published');
     await p.queue.acknowledge(state.lease);
     const discovery = createDiscoveryReader(p.a, [39]);
-    // 35 stored fixtures share the day, but only the one with a published forecast is an indexable match page.
+    // 55 stored fixtures share the day, but only the one with a published forecast is an indexable match page.
     assert.deepEqual(await discovery.inventory(), { matches: 1, dates: 1 });
     const initial = await discovery.matches(0);
     assert.equal(initial.length, 1); assert.deepEqual(await discovery.matches(1), []);
@@ -63,18 +64,18 @@ test('discovery reads genuine stored identity, historical scope and material cha
     for (const parameters of [{}, { page: '2' }, { date: today }, { date: today, page: '2' }, { q: 'Discovery Home 1' },
       { page: '10000' }, { when: 'next-7-days' }]) {
       const query = parseFeedQuery(parameters, { today });
-      const result = await loadMatchFeedPage(query, today, clock, (values, context) => feed.query(values, context));
+      const result = await loadMatchFeedPage(query, today, clock, (values, context) => feed.query(values, context), fullAccess);
       assert.equal(result.error, null); captured.feeds[JSON.stringify(parameters)] = { query, today, result };
     }
     // Capture every sitemap destination so the isolated HTTP crawler can verify each one.
     for (const row of captured.matches) {
       const id = row.path.split('/')[3];
-      const current = await loadMatchDetailPage(id, clock, (value, values) => detail.query(value, values));
+      const current = await loadMatchDetailPage(id, clock, (value, values) => detail.query(value, values), undefined, fullAccess);
       assert.equal(current.error, null); captured.details[id] = { current };
     }
     const revision = captured.details[state.fixture.id].current.data.snapshot.revisionId;
     captured.details[state.fixture.id].revision = await loadMatchDetailPage(state.fixture.id, clock,
-      (value, values) => detail.query(value, values), new URLSearchParams({ revision }));
+      (value, values) => detail.query(value, values), new URLSearchParams({ revision }), fullAccess);
     captured.at = p.now(); captured.revision = revision; captured.publishedId = state.fixture.id;
     assert.equal(captured.details[state.fixture.id].revision.error, null);
     const network = cohort.provider.network.length, originalFetch = globalThis.fetch;

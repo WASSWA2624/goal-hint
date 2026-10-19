@@ -1,14 +1,14 @@
 import "server-only";
 
 import type { FixturePrice } from "../../domain/fixture-snapshot.ts";
-import type { MatchFeedRecord } from "../../domain/match-feed.ts";
+import type { StoredMatchFeedRecord } from "../../domain/match-feed.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { storedFixtureOddsGroups } from "../odds/odds-read.ts";
 
 /** Only the existing public complete-group projection can supply alternative quotes. Source probabilities
  * stay in the published forecast; market-implied probabilities and private bookmaker identifiers never escape. */
-export async function storedSlipPricePools(tx: Prisma.TransactionClient, records: readonly MatchFeedRecord[],
+export async function storedSlipPricePools(tx: Prisma.TransactionClient, records: readonly StoredMatchFeedRecord[],
   enabled: boolean = publicPolicy.features.providerOdds): Promise<Readonly<Record<string, readonly FixturePrice[]>>> {
   return Object.fromEntries(await Promise.all(records.map(async (record) => {
     const markets = record.forecast?.markets.map((item) => item.market) ?? [];

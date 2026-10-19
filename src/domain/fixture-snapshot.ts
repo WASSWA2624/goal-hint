@@ -132,7 +132,7 @@ export const publicForecastSchema = z.strictObject({
 });
 
 /** Visitor-facing projection only. Every field is replaced together at a new version. */
-export const fixtureSnapshotSchema = z.strictObject({
+const fixtureSnapshotBaseSchema = z.strictObject({
   fixtureId: identity,
   dataVersion: version,
   homeTeam: team, awayTeam: team,
@@ -153,9 +153,17 @@ export const fixtureSnapshotSchema = z.strictObject({
   scorePeriod: z.enum(["regulation", "live"]).nullable().optional(),
   liveClock: liveClockSchema.nullable().optional(),
   prices: z.array(fixturePriceSchema).max(4).optional(),
-}).superRefine((value, context) => {
+});
+export const publishedFamiliesSchema = z.array(marketFamilySchema).max(4).refine((families) => families.join() === publicPolicy.markets.filter((family) => families.includes(family)).join(), "Families must be unique and in policy order.");
+export const gatedForecastSchema = z.strictObject({ gated: z.literal(true), runId: identity, revisionId: identity, publishedAt: instant,
+  runSequence: publicForecastSchema.shape.runSequence, provisional: publicForecastSchema.shape.provisional,
+  updateDelayed: publicForecastSchema.shape.updateDelayed, families: publishedFamiliesSchema,
+});
+const wireFixtureBaseSchema = fixtureSnapshotBaseSchema.extend({ forecast: z.union([publicForecastSchema, gatedForecastSchema]).nullable() });
+function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.RefinementCtx) {
+  const forecast = value.forecast && !("gated" in value.forecast) ? value.forecast : null;
   if (value.prices) {
-    const picks = new Map(value.forecast?.markets.map((item) => [item.market.family, item.market.selection]) ?? []);
+    const picks = new Map(forecast?.markets.map((item) => [item.market.family, item.market.selection]) ?? []);
     if (new Set(value.prices.map((item) => item.family)).size !== value.prices.length ||
       value.prices.some((item) => picks.get(item.family) !== item.selection)) {
       context.addIssue({ code: "custom", message: "A price must belong to exactly one published pick of its own family." });
@@ -163,10 +171,10 @@ export const fixtureSnapshotSchema = z.strictObject({
   }
   if (value.liveClock && value.status !== "live") context.addIssue({ code: "custom", message: "A live clock requires a live fixture." });
   if (value.forecast !== null && value.cycleId === null) context.addIssue({ code: "custom", message: "A revision must belong to a cycle." });
-  if (value.forecast?.markets.some((item) => item.outcome && item.outcome.cycleId !== value.cycleId)) {
+  if (forecast?.markets.some((item) => item.outcome && item.outcome.cycleId !== value.cycleId)) {
     context.addIssue({ code: "custom", message: "Outcome must refer to this fixture cycle." });
   }
-  if (!isPlayedFinalStatus(value.status) && value.forecast?.markets.some((item) =>
+  if (!isPlayedFinalStatus(value.status) && forecast?.markets.some((item) =>
     item.outcome?.status === "correct" || item.outcome?.status === "incorrect")) {
     context.addIssue({ code: "custom", message: "Correctness requires a played final fixture." });
   }
@@ -175,12 +183,15 @@ export const fixtureSnapshotSchema = z.strictObject({
   }
   if (value.unavailableMarkets) {
     const unavailable = value.unavailableMarkets.map((item) => item.family);
-    const available = value.forecast?.markets.map((item) => item.market.family) ?? [];
+    const available = value.forecast && "gated" in value.forecast ? value.forecast.families : forecast?.markets.map((item) => item.market.family) ?? [];
     if (new Set([...unavailable, ...available]).size !== 4 || unavailable.length + available.length !== 4) {
       context.addIssue({ code: "custom", message: "Exactly four available or unavailable market families are required." });
     }
   }
-});
+}
+export const storedFixtureSnapshotSchema = fixtureSnapshotBaseSchema.superRefine(refineFixture);
+export const fixtureSnapshotSchema = wireFixtureBaseSchema.superRefine(refineFixture);
+export type StoredFixtureSnapshot = z.infer<typeof storedFixtureSnapshotSchema>;
 export type FixtureSnapshot = z.infer<typeof fixtureSnapshotSchema>;
 
 export function parseFixtureSnapshot(value: unknown): FixtureSnapshot {

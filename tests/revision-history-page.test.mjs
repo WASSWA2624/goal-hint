@@ -1,3 +1,4 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { loadMatchDetailPage, matchDetailPageParameters, matchDetailMetadata } from '../src/server/matches/detail-page.ts';
@@ -33,14 +34,14 @@ test('publication labels follow persisted current/locked references and void sta
   assert.equal(publicationStatus({ ...entry, cycle: { ...cycle, state: 'void' } }, other).void, true);
 });
 test('failed historical loads preserve the independently loaded primary projection and sanitize errors', async () => {
-  const clock = { now: () => 1234 }, primary = await loadMatchDetailPage(id, clock, async () => data);
+  const clock = { now: () => 1234 }, primary = await loadMatchDetailPage(id, clock, async () => data, undefined, fullAccess);
   for (const [error, code] of [[new Error('private prompt mysql://secret'), 'unavailable'], [new MatchFeedError('rate-limited'), 'rate-limited'],
     [new MatchFeedError('not-found'), 'not-found']]) {
     const failed = await loadMatchDetailPage(id, clock, async (fixture, query, receivedClock) => {
       assert.equal(fixture, id); assert.equal(query.get('revision'), other); assert.equal(receivedClock, clock); throw error;
-    }, new URLSearchParams({ revision: other }));
+    }, new URLSearchParams({ revision: other }), fullAccess);
     assert.equal(failed.error, code); assert.doesNotMatch(JSON.stringify(failed), /private|prompt|secret/);
-    assert.equal(primary.data, data);
+    assert.deepEqual(primary.data, { ...data, access: { tier: "full", signedIn: false } });
   }
   const metadata = matchDetailMetadata(primary);
   assert.equal(metadata.robots.index, false); assert.equal(metadata.alternates.canonical, `https://goalhint.com${data.route.path}`);

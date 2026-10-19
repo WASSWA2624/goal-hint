@@ -1,6 +1,8 @@
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  "access.required": "Subscriber access is required.",
+  "detail.subscriberMetadataDescription": "Subscriber access includes Goal Hint predictions for this match.",
   "account.title": "Account",
   "account.description": "Sign in to your Goal Hint account with your phone number.",
   "account.closed": "Subscriptions are not open yet.",

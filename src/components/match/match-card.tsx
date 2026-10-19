@@ -1,5 +1,7 @@
 "use client";
 
+import { SubscriberNotice } from "@/components/members/subscriber-notice";
+
 import Link from "@/components/navigation/navigation-link";
 import { memo, useId, useState, type ReactNode } from "react";
 import styled, { css, keyframes } from "styled-components";
@@ -27,6 +29,8 @@ import { OutcomeBadge, PredictionOdds, ProbabilityBar } from "./prediction-prese
 
 export type MatchCardProps = {
   fixture: FixtureSnapshot;
+  /** Also gates unpublished fixtures, whose forecast has no wire variant to carry this state. */
+  gated?: boolean;
   analysisSlug: string;
   /** Show the most likely available pick among these eligible families. */
   markets?: readonly MarketFamily[];
@@ -704,13 +708,16 @@ function PredictionCell({ prediction, price, reason, locale, children }: {
     data-outcome={prediction?.status ?? "unavailable"} title={details ?? reason ?? undefined}>{children}</Prediction>;
 }
 
-function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale: requestedLocale,
+function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position, titleNote }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
-  const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
+  const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
+  const gated = requiresAccess || gatedForecast !== null;
+  const shownFamily = gated ? gatedForecast?.families.find((family) => eligible.includes(family)) ?? eligible[0]!
+    : bestCardFamily(fixture, eligible) ?? eligible[0]!;
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
   const away = fixture.awayTeam.name?.trim() || messages.text("match.awayUnknown");
   const title = messages.text("match.title", { home, away });
@@ -718,7 +725,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   const country = fixture.competition.country?.trim();
   const countryName = countryDisplayName(country);
   const flagUrl = countryFlagUrl(fixture);
-  const prediction = selectedCardPrediction(fixture, shownFamily);
+  const prediction = gated ? null : selectedCardPrediction(fixture, shownFamily);
   const price = prediction ? selectedCardPrice(fixture, shownFamily) : null;
   const family = messages.text(`market.family.${shownFamily}`);
   const locked = fixture.cycle?.state === "closed";
@@ -735,10 +742,10 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
   // Only a decided final score names a winner; a 90-minute score shown for an extra-time or penalties finish does not.
   const decided = showScore && final && !(fixture.scorePeriod === "regulation" && fixture.status !== "finished-regulation");
   const lead = decided ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
-  const missing = prediction ? null : noPickReason(fixture);
+  const missing = gated || prediction ? null : noPickReason(fixture);
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
   const pickState = !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
-  return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={shownFamily}
+  return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
     data-status={fixture.status}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
     <Meta>
@@ -763,7 +770,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
         <span data-pick-value="" data-mobile-only="">{family}</span>
         <span data-pick-value="" data-desktop-only="">{family}</span>
       </MarketName>
-      <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
+      {gated ? <Prediction $available={false}><SubscriberNotice locale={locale} /></Prediction> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <>
             <span data-pick-value=""><span data-pick-selection="">{predictionLabel(messages, selection)}</span>
@@ -786,7 +793,7 @@ function MatchCardView({ fixture, analysisSlug, markets, selectedFamily, locale:
           {locked && `. ${messages.text("match.lockedPrediction")}`}. {messages.text("match.outcome")}: {resultLabel}
         </VisuallyHidden> : <VisuallyHidden>{messages.text("match.noPickLabel", { market: family })}: {reason}
           {result === "upcoming" && `. ${messages.text("match.outcome")}: ${resultLabel}`}</VisuallyHidden>}
-      </PredictionCell>
+      </PredictionCell>}
       {prediction && <VisuallyHidden>{messages.text("details.odds")}: {price?.price ?? messages.text("outcome.unavailable")}</VisuallyHidden>}
     </Pick>
     <Result aria-hidden="true" $outcome={result === "upcoming" ? "pending" : result} data-result-badge={result}>

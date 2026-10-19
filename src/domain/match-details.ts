@@ -1,6 +1,7 @@
 import type { InsightResult } from "./match-insights.ts";
 import type { MarketCategory } from "./match-view.ts";
 import type { MatchDetailResponse } from "./match-detail.ts";
+import { fullDetailSnapshot } from "./detail-snapshot.ts";
 import { marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { publicPolicy } from "./public-policy.ts";
 import { bestPublishedFamily } from "./market-ranking.ts";
@@ -32,7 +33,7 @@ export const marketCategoryMembers: Readonly<Record<MarketCategory, readonly Mar
 
 /** The market row for one family in the applicable revision, or why it is missing. */
 export function marketRow(data: MatchDetailResponse, family: MarketFamily) {
-  const snapshot = data.snapshot;
+  const snapshot = fullDetailSnapshot(data);
   const item = snapshot?.markets.find((entry) => entry.market.family === family) ?? null;
   const reason = (snapshot?.unavailableMarkets ?? data.fixture.unavailableMarkets ?? []).find((entry) => entry.family === family)?.reason ?? "not-published";
   const outcome = item && snapshot ? snapshot.outcomes.find((entry) => entry.family === family && entry.selection === item.market.selection &&
@@ -42,7 +43,7 @@ export function marketRow(data: MatchDetailResponse, family: MarketFamily) {
 
 /** Current public odds for the exact displayed pick; historical publications never inherit live prices. */
 export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFamily): string | null {
-  const { fixture, snapshot } = data;
+  const fixture = data.fixture, snapshot = fullDetailSnapshot(data);
   if (!snapshot || (snapshot.applicability !== "current" && snapshot.applicability !== "locked") ||
     fixture.forecast?.revisionId !== snapshot.revisionId || fixture.cycleId !== snapshot.cycleId) return null;
   const item = snapshot.markets.find((entry) => entry.market.family === family);
@@ -54,11 +55,13 @@ export function selectedDetailPrice(data: MatchDetailResponse, family: MarketFam
 
 /** Rank the displayed revision's published picks by unrounded probability, exact fresh odds, then policy order. */
 export function featuredFamily(data: MatchDetailResponse): MarketFamily | null {
+  const snapshot = fullDetailSnapshot(data);
+  if (!snapshot) return null;
   // The fixture carries applicable-pick prices; the complete detail envelope also covers historical selections.
   const prices = [...(data.fixture.prices ?? []), ...(data.odds ?? []).flatMap((group) => group.selections.map((price) => ({
     family: group.family, selection: price.selection, price: price.price,
   })))];
-  return bestPublishedFamily(data.snapshot?.markets, prices);
+  return bestPublishedFamily(snapshot.markets, prices);
 }
 
 export type LiveStanding = "on-track" | "off-track";
@@ -67,7 +70,7 @@ export type LiveStanding = "on-track" | "off-track";
  * publication is tracked, never a historical one, and settlement still waits for the verified regulation result.
  */
 export function liveStanding(data: MatchDetailResponse, family: MarketFamily): LiveStanding | null {
-  const { fixture, snapshot } = data;
+  const fixture = data.fixture, snapshot = fullDetailSnapshot(data);
   if (fixture.status !== "live" || !fixture.score || !snapshot || (snapshot.applicability !== "current" && snapshot.applicability !== "locked")) return null;
   const item = snapshot.markets.find((entry) => entry.market.family === family);
   if (!item) return null;
@@ -80,7 +83,7 @@ type ResultSelection = "home-win" | "draw" | "away-win";
  * percentages names neither side of it; no published match-result group gives null.
  */
 export function resultOutlook(data: MatchDetailResponse) {
-  const item = data.snapshot?.markets.find((entry) => entry.market.family === "match-result");
+  const item = fullDetailSnapshot(data)?.markets.find((entry) => entry.market.family === "match-result");
   if (!item) return null;
   const probabilities = item.market.probabilities as Readonly<Record<string, number>>;
   const chances = (["home-win", "draw", "away-win"] as const).map((selection) => ({ selection, probability: probabilities[selection] ?? 0 }));

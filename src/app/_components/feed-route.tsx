@@ -1,13 +1,17 @@
 import "server-only";
 
 import { cache } from "react";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getReportingDate, type UtcInstant } from "@/domain/calendar";
 import { breadcrumbStructuredData, feedDiscovery, homeStructuredData, serializeStructuredData } from "@/domain/discovery";
 import { homeHref } from "@/domain/navigation";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { getFeedToday, serializeFeedQuery } from "@/domain/feed-query";
+import { feedQueryHref } from "@/domain/feed-query";
+import { withoutSubscriberFeedOracle } from "@/domain/paywall";
+import { resolveViewerAccess } from "@/server/members/viewer-access";
+import { contentAccess } from "@/server/members/gated-reads";
 import { parseMatchFeedQuery } from "@/server/matches/feed-service";
 import { loadMatchFeedPage } from "@/server/matches/feed-page";
 import { readPublicMatchFeed } from "@/server/matches/public-feed";
@@ -21,11 +25,12 @@ type Props = { params: Promise<{ locale: string; date?: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** Metadata and initial HTML share the same stored read and request-owned clock. */
-export function createFeedRoute({ dated = false, read = readPublicMatchFeed, instant = getShellInstant, policy = getDiscoveryPolicy } = {}) {
+export function createFeedRoute({ dated = false, read = readPublicMatchFeed, instant = getShellInstant, policy = getDiscoveryPolicy, resolveAccess = resolveViewerAccess } = {}) {
   const load = cache(async (parameters: string, locale: string, at: UtcInstant) => {
-    const query = parseMatchFeedQuery(new URLSearchParams(parameters), getReportingDate(at), { locale, asOf: at });
+    const query = parseMatchFeedQuery(new URLSearchParams(parameters), getReportingDate(at), { locale, asOf: at,
+      ...((await contentAccess(resolveAccess)).tier === "free" ? { providerOdds: true } : {}) });
     const today = getFeedToday(query, at);
-    return loadMatchFeedPage(query, today, { now: () => at }, read);
+    return loadMatchFeedPage(query, today, { now: () => at }, read, resolveAccess);
   });
   async function resolve({ params, searchParams }: Props) {
     const route = await params, at = await instant();
@@ -33,9 +38,11 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
     // The canonical re-parse inside load() also enforces the byte limit, so it must map to 404 too.
     try {
       query = parseMatchFeedQuery(await searchParams, getReportingDate(at), { locale: route.locale, asOf: at,
+        ...((await contentAccess(resolveAccess)).tier === "free" ? { providerOdds: true } : {}),
         ...(dated ? { routeDate: route.date } : {}) });
       today = getFeedToday(query, at);
       result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
+      if (result.error === "subscription-required") redirect(feedQueryHref(withoutSubscriberFeedOracle(query), today));
     } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
     return { query, today, result };
   }

@@ -44,7 +44,7 @@ test('detail stores isolate caches and deduplicate live reads while a canceled c
   assert.equal(calls.length, 1);
   assert.equal(calls[0].href, `/api/matches/${ids.fixture}`);
   assert.equal(calls[0].options.signal.aborted, false);
-  assert.equal(calls[0].options.credentials, 'omit');
+  assert.equal(calls[0].options.credentials, 'same-origin');
   assert.equal(calls[0].options.cache, 'no-store');
   const detail = liveDetail();
   pending.shift()(Response.json(detail));
@@ -60,7 +60,7 @@ test('detail stores isolate caches and deduplicate live reads while a canceled c
 test('detail-only caches retain validated insight data and reject invalid or failed refreshes', async (t) => {
   const original = globalThis.fetch, store = makeDetailStore();
   t.after(() => { globalThis.fetch = original; store.dispatch(publicRefreshApi.util.resetApiState()); });
-  const args = { id: ids.fixture, section: 'h2h' }, valid = { fixtureId: ids.fixture, asOf: 7, section: 'h2h', data: { meetings: [] } };
+  const args = { id: ids.fixture, section: 'h2h' }, valid = { access: { tier: 'full', signedIn: false }, fixtureId: ids.fixture, asOf: 7, section: 'h2h', data: { meetings: [] } };
   globalThis.fetch = async () => Response.json(valid);
   const first = store.dispatch(detailApi.endpoints.insights.initiate(args));
   assert.deepEqual(await first.unwrap(), { asOf: 7, section: 'h2h', data: { meetings: [] } });

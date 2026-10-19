@@ -26,7 +26,7 @@ export function liveRun(overrides = {}) {
 }
 export function liveFeed(records = [liveRecord()], overrides = {}) {
   const range = resolveFeedDates(query(), today);
-  return matchFeedResponseSchema.parse({ records, page: 1, nextPage: null, previousPage: null, pageSize: feedQueryRules.pageSize,
+  return matchFeedResponseSchema.parse({ access: { tier: "full", signedIn: false }, records, page: 1, nextPage: null, previousPage: null, pageSize: feedQueryRules.pageSize,
     paginationVersion: 'a'.repeat(64), total: records.length, totalPages: records.length ? 1 : 0, links: { next: null, previous: null },
     asOf: now, today, range: { from: today, to: today, ...range.window }, state: records.length ? 'ready' : 'no-fixtures', message: null,
     coverage: { partial: false, knownFixtures: records.length, matchingWithMarket: records.length,
@@ -46,7 +46,7 @@ export function liveDetail(record = liveRecord(), overrides = {}) {
       source: { kind: item.market.source, provisional: false, fallbackReason: null, sourceIds: [] },
       timestamps: { generatedAt: now - 5000, retrievedAt: now - 5000, providerUpdatedAt: null } })),
     unavailableMarkets: record.unavailableMarkets, analysis: { state: 'withheld', reasons: [], uncertainty: null, limitedNews: false, sources: [] }, outcomes: [] } : null;
-  return matchDetailResponseSchema.parse({ fixture: record, asOf: now, run: liveRun(), route: { fixtureId: ids.fixture,
+  return matchDetailResponseSchema.parse({ odds: [], access: { tier: "full", signedIn: false }, fixture: record, asOf: now, run: liveRun(), route: { fixtureId: ids.fixture,
     slug: 'synthetic-a-v-synthetic-b', path: `/en/matches/${ids.fixture}/synthetic-a-v-synthetic-b` }, currentRevisionId: record.forecast?.revisionId ?? null,
     selection: 'applicable', selectedCycle: cycle, snapshot,
     history: { limit: 10, revisions: { anchor: 1, entries: [], next: null }, cycles: { anchor: 1, entries: [], next: null } }, ...overrides });

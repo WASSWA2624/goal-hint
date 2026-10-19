@@ -2,7 +2,7 @@ import "server-only";
 
 import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
 import { feedQueryRules, type FeedParameters } from "../../domain/feed-query.ts";
-import { matchFeedResponseSchema, type MatchFeedResponse } from "../../domain/match-feed.ts";
+import { storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import { buildSlips, slipBuilderRules, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
 import { slipPricePageSchema, type SlipPricePage } from "../../domain/slip-price-page.ts";
@@ -11,7 +11,7 @@ import { MatchFeedError } from "../matches/feed-error.ts";
 
 export const slipReadRules = Object.freeze({ pageSize: feedQueryRules.maximumPageSize, maximumRecords: 500 });
 export type { SlipBuildPageResult } from "../../domain/slip-page.ts";
-export type SlipFeedReader = (parameters: FeedParameters, context: Readonly<{ locale?: string }>, clock: Clock) => Promise<MatchFeedResponse | SlipPricePage>;
+export type SlipFeedReader = (parameters: FeedParameters, context: Readonly<{ locale?: string }>, clock: Clock) => Promise<StoredMatchFeedResponse | SlipPricePage>;
 
 /** One bounded stored cohort, never a provider request. Feed bounds apply to its best displayed family;
  * per-selection odds/probability bounds therefore belong to the builder, which considers every chosen family. */
@@ -38,14 +38,14 @@ export function createSlipBuildService(options: Readonly<{
         parameters.set("timeFrom", criteria.timeFrom); parameters.set("timeTo", criteria.timeTo); parameters.set("tz", publicPolicy.reportingTimeZone);
       }
       const records: SlipMatchRecord[] = [], pages: SlipPricePage[] = [], seen = new Set<string>();
-      let first: MatchFeedResponse | null = null, partialCoverage = false, searchLimited = false;
+      let first: StoredMatchFeedResponse | null = null, partialCoverage = false, searchLimited = false;
       const checked = async (pageNumber: number) => {
         const query = new URLSearchParams(parameters); query.set("page", String(pageNumber));
         const value = await options.read(query, { locale }, pinnedClock);
         // Production supplements the ordinary feed with full approved outcome prices. Legacy injected
         // readers remain useful with only selected-pick prices; the regular feed contract is unchanged.
         const source = "feed" in value ? slipPricePageSchema.parse(value) : (() => {
-          const feed = matchFeedResponseSchema.parse(value);
+          const feed = storedMatchFeedResponseSchema.parse(value);
           return slipPricePageSchema.parse({ feed, selectionPrices: Object.fromEntries(feed.records.map((record) => [record.fixtureId, record.prices])) });
         })();
         const page = source.feed;

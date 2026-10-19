@@ -1,3 +1,4 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
@@ -47,7 +48,7 @@ test('match page handoff uses genuine stored fixtures, cache, coverage and locke
       const day = parseReportingDate(at >= Date.parse('2026-10-20T00:00:00Z') ? '2026-10-20' : '2026-10-09');
       // These multi-page scenarios pin 30 cards per page; the feed's default page size is 50.
       const query = parseFeedQuery({ pageSize: '30', ...parameters }, { today: day });
-      const result = await loadMatchFeedPage(query, day, { now: () => utcInstantFromEpochMilliseconds(at) }, read);
+      const result = await loadMatchFeedPage(query, day, { now: () => utcInstantFromEpochMilliseconds(at) }, read, fullAccess);
       assert.equal(result.error, null); captured[name] = { query, today: day, result }; return result.data;
     }
     let importAt = CATALOG_NOW + 1000;
@@ -178,7 +179,7 @@ test('pagination detects genuine cohort changes and supplies consistent multi-pa
     const service = createMatchFeedService({ database: p.a, cache, competitionIds: [39], clock });
     async function capture(prefix, page) {
       const query = parseFeedQuery({ q: 'Pagination', page: String(page), pageSize: '30' }, { today });
-      const result = await loadMatchFeedPage(query, today, clock, (parameters, context) => service.query(parameters, context));
+      const result = await loadMatchFeedPage(query, today, clock, (parameters, context) => service.query(parameters, context), fullAccess);
       assert.equal(result.error, null); captured[`${prefix}-${page}`] = { query, today, result }; return result.data;
     }
     const pages = [];
@@ -190,7 +191,7 @@ test('pagination detects genuine cohort changes and supplies consistent multi-pa
     assert.equal((await capture('pagination-repeat',1)).paginationVersion,pages[0].paginationVersion);
 
     const destination = pages[2].records[10], detail = createMatchDetailService({ database: p.a, cache, clock });
-    const navigation = await loadMatchDetailPage(destination.fixtureId, clock, (id, parameters) => detail.query(id, parameters));
+    const navigation = await loadMatchDetailPage(destination.fixtureId, clock, (id, parameters) => detail.query(id, parameters), undefined, fullAccess);
     assert.equal(navigation.error, null); assert.deepEqual(navigation.data.fixture.homeTeam, destination.homeTeam);
     assert.equal(navigation.data.fixture.fixtureId, destination.fixtureId);
     await savePageScenarios(t, 'MATCH_DETAIL_PAGE_CAPTURE', { navigation });

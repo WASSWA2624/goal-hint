@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import type { FeedCheckpoint } from "@/domain/feed-navigation";
 import { appendFeedPage, FeedPaginationError, initialLoadedFeed, replaceFeedPages, type LoadedFeed } from "@/domain/feed-pagination";
@@ -20,6 +21,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
   onStatus: (href: string, message: string) => void;
 }) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
   const [view, setView] = useState(() => initialLoadedFeed(data));
   const [phase, setPhase] = useState<Mode | null>(null), [error, setError] = useState<FeedPaginationError["code"] | null>(null);
   // A refreshed server query with the same canonical href must not tear down the listeners below.
@@ -83,8 +85,9 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       else if (mode !== "background") announce(mode === "append" ? "loaded" : "refreshed", next, next.records.length - base.records.length);
     } catch (cause) {
       if (!mounted.current || !enabledRef.current || controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
-      if (mode === "background") return;
       const code = cause instanceof FeedPaginationError ? cause.code : "unavailable";
+      if (code === "subscription-required") { router.refresh(); return; }
+      if (mode === "background") return;
       failedMode.current = mode; retryCheckpoint.current = checkpoint ?? null; setError(code);
       focusTarget.current = { fixtureId: null, retry: true };
       announce(code === "changed" || code === "stale-data" ? "changed" : code === "rate-limited" ? "busy" : "failed");
@@ -92,7 +95,7 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
       clearTimeout(deadline);
       if (request.current === controller) { request.current = null; if (mounted.current) setPhase(null); }
     }
-  }, [announce, dispatch, today]);
+  }, [announce, dispatch, router, today]);
 
   useLayoutEffect(() => { queryRef.current = query; }, [query]);
   useLayoutEffect(() => {

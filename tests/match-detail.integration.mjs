@@ -1,7 +1,8 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { matchDetailResponseSchema } from '../src/domain/match-detail.ts';
+import { storedMatchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { getReportingDate, validateReportingDateRange } from '../src/domain/calendar.ts';
 import { marketSelections } from '../src/domain/markets.ts';
 import { deMargin, parseDecimalOdds } from '../src/domain/odds.ts';
@@ -35,7 +36,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
     let readAt = PUBLICATION_NOW;
     const service = createMatchDetailService({ database: p.a, clock: { now: () => readAt } });
     const states = new Map();
-    const captured = {}, capture = (name, data, requestQuery = '') => { captured[name] = { data, error: null, requestQuery }; };
+    const captured = {}, capture = (name, data, requestQuery = '') => { captured[name] = { data: { ...data, access: { tier: "full", signedIn: false } }, error: null, requestQuery }; };
     async function publish(id, options = {}) {
       p.setTime(PUBLICATION_NOW); readAt = p.now();
       const state = await p.setup(id);
@@ -66,7 +67,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       assert.equal((await read(first)).snapshot.revisionId, first.revision.id);
     });
     await t.test('open snapshot preserves complete probabilities, alternatives, identity, source and original clocks', async () => {
-      const state = states.get(3000), response = matchDetailResponseSchema.parse(await read(state)), snapshot = response.snapshot;
+      const state = states.get(3000), response = storedMatchDetailResponseSchema.parse(await read(state)), snapshot = response.snapshot;
       assert.equal(snapshot.applicability, 'current'); assert.equal(snapshot.historical, false); assert.equal(snapshot.markets.length, 4);
       const date = getReportingDate(response.fixture.kickoffAt);
       const sharedRun = await p.a.query(tx => storedFeedRun(tx, getReportingDate(readAt), validateReportingDateRange(date, date, 1)));
@@ -80,7 +81,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
         assert.ok(item.alternatives.every((a) => a.selection !== item.market.selection && a.probability === item.market.probabilities[a.selection]));
       }
       assert.ok(snapshot.outcomes.every((o) => o.status === 'pending'));
-      assert.equal(matchDetailResponseSchema.safeParse({ ...response, privatePrompt: 'secret' }).success, false);
+      assert.equal(storedMatchDetailResponseSchema.safeParse({ ...response, privatePrompt: 'secret' }).success, false);
       assert.doesNotMatch(JSON.stringify(response), /candidateJson|evidenceRef|transportEvidence|requestHash|observationHash|invocationId|promptVersion|rawJson|claims/u);
       capture('open', response);
     });
@@ -99,9 +100,9 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       const summary = await importer.importDate(oddsRequest('prices', slot, { date: getReportingDate(fixture.kickoff), policy,
         id: oddsHash('match-detail-odds:prices') }));
       assert.equal(summary.status, 'complete'); assert.equal(summary.outcomes.changed, 1);
-      const rightsOff = matchDetailResponseSchema.parse(await read(state));
+      const rightsOff = storedMatchDetailResponseSchema.parse(await read(state));
       assert.deepEqual(rightsOff.odds, []); assert.deepEqual(rightsOff.fixture.prices, []);
-      const priced = matchDetailResponseSchema.parse(await createMatchDetailService({ database: p.a, clock: { now: () => readAt }, providerOdds: true })
+      const priced = storedMatchDetailResponseSchema.parse(await createMatchDetailService({ database: p.a, clock: { now: () => readAt }, providerOdds: true })
         .query(state.fixture.id));
       assert.deepEqual(priced.snapshot, rightsOff.snapshot, 'odds never enter the immutable revision');
       assert.deepEqual(priced.fixture.forecast, rightsOff.fixture.forecast, 'AI probabilities are not replaced by market-implied ones');
@@ -293,7 +294,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       const reader = createMatchDetailService({ database, clock: { now: () => readAt } });
       globalThis.fetch = async () => { outbound++; throw new Error('Unexpected network'); };
       try {
-        const state = states.get(3000), handler = createMatchDetailHandler((id, parameters) => reader.query(id, parameters));
+        const state = states.get(3000), handler = createMatchDetailHandler((id, parameters) => reader.query(id, parameters), fullAccess);
         const response = await handler(new Request(`http://localhost/api/matches/${state.fixture.id}?revision=${state.revision.id}`), { params: Promise.resolve({ id: state.fixture.id }) });
         assert.equal(response.status, 200); assert.equal(response.headers.get('set-cookie'), null);
         capture('history-locked-selection', await response.json(), `revision=${state.revision.id}`);
@@ -319,7 +320,7 @@ test('stored anonymous match detail and history on genuine isolated MySQL', { ti
       const after = await read(state);
       assert.equal(after.fixture.competition.countryFlagUrl, flag);
       assert.equal(after.fixture.dataVersion, before.fixture.dataVersion, 'decoration only: no fixture version moves');
-      assert.equal(matchDetailResponseSchema.parse(JSON.parse(JSON.stringify(after))).fixture.competition.countryFlagUrl, flag);
+      assert.equal(storedMatchDetailResponseSchema.parse(JSON.parse(JSON.stringify(after))).fixture.competition.countryFlagUrl, flag);
     });
     await savePageScenarios(t, 'MATCH_DETAIL_PAGE_CAPTURE', captured);
   });

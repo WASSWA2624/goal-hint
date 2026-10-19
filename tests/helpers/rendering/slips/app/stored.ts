@@ -1,6 +1,6 @@
 import { addReportingDays, getReportingDate, parseUtcInstant } from "@/domain/calendar";
 import { parseFeedQuery, resolveFeedDates, type FeedParameters } from "@/domain/feed-query";
-import { matchFeedRecordSchema, matchFeedResponseSchema } from "@/domain/match-feed";
+import { storedMatchFeedRecordSchema, storedMatchFeedResponseSchema } from "@/domain/match-feed";
 import { marketRules, validateMarketSnapshot, type MarketFamily } from "@/domain/markets";
 import { buildSlips, defaultSlipCriteria, type SlipCriteria, type SlipMatchRecord } from "@/domain/slip-builder";
 import type { SlipBuildPageResult } from "@/server/slips/slip-service";
@@ -29,7 +29,7 @@ export function syntheticRecord(index: number, longNames = false, manualHome = f
   const home = longNames ? `Synthetic Metropolitan International Athletic Football Club ${index + 1}` : `Synthetic Home ${index + 1}`;
   const away = longNames ? `Synthetic Coastal Union Championship Sporting Association ${index + 1}` : `Synthetic Away ${index + 1}`;
   const selectedPrice = manualHome ? "1.30" : ["1.70", "1.80", "2.00", "2.20", "2.40", "2.50"][index % 6]!;
-  const record = matchFeedRecordSchema.parse({ fixtureId, dataVersion: "9", homeTeam: { id: `${fixtureId}-home`, name: home },
+  const record = storedMatchFeedRecordSchema.parse({ fixtureId, dataVersion: "9", homeTeam: { id: `${fixtureId}-home`, name: home },
     awayTeam: { id: `${fixtureId}-away`, name: away },
     competition: { id: "synthetic-league", name: longNames ? "Synthetic International Championship of Metropolitan Associations" : "Synthetic League", country: "Synthetic Country" },
     kickoffAt: now + (index + 1) * 3600000, syncedAt: now - 1000, status: "scheduled", score: null, cycleId,
@@ -55,7 +55,7 @@ export function syntheticFeed(parameters: FeedParameters, asOf = now) {
   const query = parseFeedQuery(parameters, { today }), range = resolveFeedDates(query, today), total = records.length;
   const totalPages = Math.ceil(total / query.pageSize), nextPage = query.page < totalPages ? query.page + 1 : null;
   const previousPage = query.page > 1 ? query.page - 1 : null;
-  return matchFeedResponseSchema.parse({ paginationVersion: "a".repeat(64),
+  return storedMatchFeedResponseSchema.parse({ paginationVersion: "a".repeat(64),
     records: records.slice((query.page - 1) * query.pageSize, query.page * query.pageSize).map((record) => {
       const metadata = { ...record }; delete metadata.selectionPrices; return metadata;
     }),

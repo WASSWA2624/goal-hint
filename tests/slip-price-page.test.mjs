@@ -9,7 +9,8 @@ function price(family = 'match-result', selection = 'draw', overrides = {}) {
   return { family, selection, price: '2.00', basis: 'bookmaker', retrievedAt: now - 1000, providerUpdatedAt: null, ...overrides };
 }
 function page(prices = [price()], record = liveRecord({ fixtureId: 'fixture-a' })) {
-  return { feed: liveFeed([record]), selectionPrices: { [record.fixtureId]: prices } };
+  const feed = { ...liveFeed([record]) }; delete feed.access;
+  return { feed, selectionPrices: { [record.fixtureId]: prices } };
 }
 
 test('supplemental prices preserve full published alternatives without changing selected-pick feed prices', () => {
@@ -41,12 +42,14 @@ test('each fixture has its own pool, including empty pools for unpriced or unpub
   const a = liveRecord({ fixtureId: 'fixture-a' }), b = liveRecord({ fixtureId: 'fixture-b', forecast: null,
     unavailableMarkets: Object.keys(marketSelections).map(family => ({ family, reason: 'not-published' })),
   });
-  const input = { feed: liveFeed([a, b]), selectionPrices: { 'fixture-a': [price()], 'fixture-b': [] } };
+  const feed = { ...liveFeed([a, b]) }; delete feed.access;
+  const input = { feed, selectionPrices: { 'fixture-a': [price()], 'fixture-b': [] } };
   assert.equal(slipPricePageSchema.safeParse(input).success, true);
   assert.equal(slipPricePageSchema.safeParse({ ...input, selectionPrices: { 'fixture-a': [price()] } }).success, false);
   assert.equal(slipPricePageSchema.safeParse({ ...input, selectionPrices: { ...input.selectionPrices, extra: [] } }).success, false);
   assert.equal(slipPricePageSchema.safeParse({ ...input, selectionPrices: { ...input.selectionPrices, 'fixture-b': [price()] } }).success, false);
-  assert.equal(slipPricePageSchema.safeParse({ feed: liveFeed([]), selectionPrices: {} }).success, true);
+  const emptyFeed = { ...liveFeed([]) }; delete emptyFeed.access;
+  assert.equal(slipPricePageSchema.safeParse({ feed: emptyFeed, selectionPrices: {} }).success, true);
 });
 
 test('pool membership checks use own keys even for fixture identities shared with object properties', () => {

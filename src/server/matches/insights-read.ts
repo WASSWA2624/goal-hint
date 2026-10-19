@@ -1,7 +1,7 @@
 import "server-only";
 
 import { canonicalMatchSlug } from "../../domain/match-slug.ts";
-import { injuryStatus, matchInsightsSchema, type InsightResult, type MatchInsights } from "../../domain/match-insights.ts";
+import { injuryStatus, storedMatchInsightsSchema, type InsightResult, type StoredMatchInsights } from "../../domain/match-insights.ts";
 import { isSafeRemoteImageUrl } from "../../domain/remote-image.ts";
 import type { EvidenceSnapshot, EvidenceSource } from "../evidence/evidence-contract.ts";
 import { isSafeEvidenceUrl } from "../evidence/evidence-network.ts";
@@ -37,7 +37,7 @@ function permitted(snapshot: EvidenceSnapshot | null, asOf: number): readonly Ev
 }
 
 export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureId: string, asOf: number,
-  evidenceStore: ReturnType<typeof createMysqlEvidenceStore>): Promise<MatchInsights> {
+  evidenceStore: ReturnType<typeof createMysqlEvidenceStore>): Promise<StoredMatchInsights> {
   const fixture = await tx.footballFixture.findUnique({ where: { id: fixtureId }, include: fixtureInclude });
   if (!fixture) throw new MatchFeedError("not-found");
   const homeId = fixture.homeTeamId, awayId = fixture.awayTeamId;
@@ -78,9 +78,9 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
   const string = (value: unknown) => typeof value === "string" ? value.slice(0, 256) : null;
   const integer = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) ? value : null;
 
-  const lineups: MatchInsights["sections"]["lineups"] = { home: null, away: null };
-  const players = new Map<string, MatchInsights["sections"]["players"]["players"][number]>();
-  const injuries: MatchInsights["sections"]["injuries"]["injuries"] = [];
+  const lineups: StoredMatchInsights["sections"]["lineups"] = { home: null, away: null };
+  const players = new Map<string, StoredMatchInsights["sections"]["players"]["players"][number]>();
+  const injuries: StoredMatchInsights["sections"]["injuries"]["injuries"] = [];
   const metrics = new Map<string, { unit: string | null; home: number[]; away: number[] }>();
   let statisticsAt: number | null = null;
   for (const source of sources) {
@@ -118,7 +118,7 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
     }
   }
   const average = (values: number[]) => values.length ? { average: values.reduce((a, b) => a + b, 0) / values.length, samples: values.length } : null;
-  const news: MatchInsights["sections"]["news"]["items"] = sources.filter((source) => source.kind === "news").slice(0, 60).map((source) => ({
+  const news: StoredMatchInsights["sections"]["news"]["items"] = sources.filter((source) => source.kind === "news").slice(0, 60).map((source) => ({
     id: source.id.slice(0, 128), kind: "report" as const, publisher: source.publisher.slice(0, 512), title: source.title.slice(0, 2048),
     url: isSafeEvidenceUrl(source.sourceUrl) ? source.sourceUrl : null, publishedAt: source.publishedAt, retrievedAt: source.retrievedAt,
     details: source.claims.map((claim) => claim.summary.slice(0, 2048)).slice(0, 20) }));
@@ -133,7 +133,7 @@ export async function storedMatchInsights(tx: Prisma.TransactionClient, fixtureI
     }
   }
   const competition = fixture.season.competition;
-  return matchInsightsSchema.parse({ fixtureId, asOf, home: team(fixture.homeTeam), away: team(fixture.awayTeam), sections: {
+  return storedMatchInsightsSchema.parse({ fixtureId, asOf, home: team(fixture.homeTeam), away: team(fixture.awayTeam), sections: {
     form: { home: homeForm, away: awayForm },
     h2h: { meetings },
     stats: { evidence: [...metrics].sort(([a], [b]) => a.localeCompare(b)).slice(0, 40).map(([metric, entry]) => ({ metric: metric.slice(0, 64), unit: entry.unit,

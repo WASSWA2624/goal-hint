@@ -1,5 +1,7 @@
 "use client";
 
+import { SubscriberNotice } from "@/components/members/subscriber-notice";
+
 import Link from "@/components/navigation/navigation-link";
 import { memo, useRef } from "react";
 import styled from "styled-components";
@@ -183,6 +185,7 @@ export const RefereeSection = memo(function RefereeSection() {
 /** The existing locked revision history, opened inside this match view. */
 export const HistorySection = memo(function HistorySection() {
   const { data, messages, history } = useStableDetails();
+  if ("gated" in data.history) return <SectionCard section="history" icon={<HistoryIcon />} title={messages.text("details.section.history")}><SubscriberNotice /></SectionCard>;
   const count = data.history.revisions.entries.length;
   return <SectionCard section="history" icon={<HistoryIcon />} title={messages.text("details.section.history")}
     meta={count ? messages.plural("details.revisionCount", count) + (data.history.revisions.next ? "+" : "") : messages.text("details.summary.noRevisions")}>

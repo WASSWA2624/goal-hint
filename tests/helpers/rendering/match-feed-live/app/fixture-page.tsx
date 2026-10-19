@@ -15,8 +15,9 @@ export default async function FixturePage({ params, searchParams }: {
   const { date, scenario } = await params, input = await searchParams;
   if (!scenario) {
     const instant = await readClock(), today = getReportingDate(utcInstantFromEpochMilliseconds(instant)); const originalToday = parseReportingDate('2026-10-09');
+    // Captured SQL pagination uses 30 rows even when the application default changes.
     let query;
-    try { query = parseFeedQuery(input, { today, ...(date ? { routeDate: date } : {}) }); } catch { notFound(); }
+    try { query = parseFeedQuery({ pageSize: "30", ...input }, { today, ...(date ? { routeDate: date } : {}) }); } catch { notFound(); }
     // Deliberate test-only delay/error for navigation races and failed refreshes.
     if (query.search === 'Slow query') await new Promise((resolve) => setTimeout(resolve, 1800));
     if (['Unavailable query', 'Slow query', 'Busy query'].includes(query.search)) {

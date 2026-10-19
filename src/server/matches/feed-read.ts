@@ -4,7 +4,7 @@ import { kickoffTimeWindows } from "../../domain/kickoff-time.ts";
 import { addReportingDays, createPredictionWindow, type PredictionWindow, type ReportingDateRange, type ReportingDate } from "../../domain/calendar.ts";
 import { isAnyProbability, probabilityFraction, type FeedQuery } from "../../domain/feed-query.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import type { MatchFeedResponse } from "../../domain/match-feed.ts";
+import type { StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { catalogScopeKey, parseCatalogImportRequest } from "../football/catalog-input.ts";
 import { oddsPriceJoin } from "../odds/odds-read.ts";
@@ -139,7 +139,7 @@ function searchMatches(search: FeedSearch, range: ReportingDateRange) {
 
 /** Three batched reads cover the whole range (latest receipt per day, latest run attempt per day, and which of those
  * attempts stored a receipt), so long ranges cost the same number of round trips as one day. */
-export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Promise<MatchFeedResponse["coverage"]["dates"]> {
+export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Promise<StoredMatchFeedResponse["coverage"]["dates"]> {
   const days = Array.from({ length: range.dayCount }, (_, offset) => addReportingDays(range.startDate, offset));
   const scopeKeys = days.map((date) => catalogScopeKey({ kind: "fixtures", query: { date } }));
   // Rows arrive newest first, so the first row per day is that day's latest receipt or attempt.
@@ -160,7 +160,7 @@ export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Pro
   });
   const stored = new Set(unmatched.length ? (await tx.footballImport.findMany({ where: { id: { in: unmatched } }, select: { id: true } }))
     .map((row) => row.id) : []);
-  const dates: MatchFeedResponse["coverage"]["dates"] = [];
+  const dates: StoredMatchFeedResponse["coverage"]["dates"] = [];
   for (const [index, date] of days.entries()) {
     const receipt = receipts.get(scopeKeys[index]!), attempt = attempts.get(date);
     let status = receipt?.status ?? "unknown", observedAt = receipt?.observedAt.getTime() ?? null;
@@ -179,11 +179,11 @@ export async function storedFeedCoverage(tx: Tx, range: ReportingDateRange): Pro
 
 /** The frozen current run authorizes its projection horizon; a deployment cannot extend an old seven-day run. */
 export async function storedFeedRunContext(tx: Tx, today: ReportingDate, range: ReportingDateRange): Promise<Readonly<{
-  window: PredictionWindow; run: MatchFeedResponse["run"];
+  window: PredictionWindow; run: StoredMatchFeedResponse["run"];
 }>> {
   const row = await tx.dailyRun.findUnique({ where: { eatDate: new Date(`${today}T00:00:00Z`) } });
   const window = row ? selectionRunWindow(row) : createPredictionWindow(today);
-  const result = (run: MatchFeedResponse["run"]) => ({ window, run });
+  const result = (run: StoredMatchFeedResponse["run"]) => ({ window, run });
   if (range.window.endExclusive <= window.startInclusive || range.window.startInclusive >= window.endExclusive) return result(null);
   if (!row) return result({ id: null, sequence: null, date: today, phase: "not-started", total: null, completed: 0, terminal: 0, failed: 0, published: 0, partialCoverage: false, message: null });
   const manifest = await storedSelectionManifest(tx, row);
@@ -200,6 +200,6 @@ export async function storedFeedRunContext(tx: Tx, today: ReportingDate, range: 
     total: entries.length, completed, terminal, failed, published, partialCoverage: manifest.partial, message: null });
 }
 
-export async function storedFeedRun(tx: Tx, today: ReportingDate, range: ReportingDateRange): Promise<MatchFeedResponse["run"]> {
+export async function storedFeedRun(tx: Tx, today: ReportingDate, range: ReportingDateRange): Promise<StoredMatchFeedResponse["run"]> {
   return (await storedFeedRunContext(tx, today, range)).run;
 }

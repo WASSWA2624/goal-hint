@@ -1,13 +1,15 @@
 import "server-only";
 
-import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
-import { matchFeedRules, type MatchFeedResponse } from "../../domain/match-feed.ts";
+import { utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
+import { matchFeedRules } from "../../domain/match-feed.ts";
 import { MatchFeedError } from "./feed-error.ts";
-import { parseMatchFeedQuery } from "./feed-service.ts";
-import { publicMatchFailure, publicMatchHeaders } from "./public-http.ts";
+import { publicMatchFailure, privateMatchHeaders } from "./public-http.ts";
+import { readPublicMatchFeed } from "./public-feed.ts";
+import { createGatedReads } from "../members/gated-reads.ts";
+import { viewerAccessFromRequest } from "../members/viewer-access.ts";
 
-export function createMatchFeedHandler(read: (parameters: URLSearchParams, context?: Readonly<{ locale?: string }>, clock?: Clock) => Promise<MatchFeedResponse>,
-  clock: Clock = { now: () => utcInstantFromEpochMilliseconds(Date.now()) }) {
+export function createMatchFeedHandler(read: typeof readPublicMatchFeed,
+  clock: Clock = { now: () => utcInstantFromEpochMilliseconds(Date.now()) }, resolveAccess = viewerAccessFromRequest) {
   return async function GET(request: Request): Promise<Response> {
     try {
       const asOf = clock.now(), url = new URL(request.url);
@@ -17,13 +19,12 @@ export function createMatchFeedHandler(read: (parameters: URLSearchParams, conte
       if (options.length > 1 || options.length === 1 && options[0] !== "0") throw new MatchFeedError("invalid-query");
       if (Buffer.byteLength(url.search, "utf8") > matchFeedRules.maximumQueryBytes + options.length * "&leagues=0".length) throw new MatchFeedError("invalid-query");
       url.searchParams.delete("leagues");
-      parseMatchFeedQuery(url.searchParams, getReportingDate(asOf), { asOf });
-      const result = await read(url.searchParams, {}, { now: () => asOf });
+      const result = await createGatedReads({ readFeed: read, resolveAccess: () => resolveAccess(request) }).feed(url.searchParams, {}, { now: () => asOf });
       const links = [result.links.next ? `<${result.links.next}>; rel="next"` : null, result.links.previous ? `<${result.links.previous}>; rel="prev"` : null].filter(Boolean).join(", ");
       return Response.json(options.length > 0 ? { ...result, leagues: [] } : result,
-        { headers: { ...publicMatchHeaders, ...(links ? { link: links } : {}) } });
+        { headers: { ...privateMatchHeaders, ...(links ? { link: links } : {}) } });
     } catch (error) {
-      return publicMatchFailure(error);
+      return publicMatchFailure(error, privateMatchHeaders);
     }
   };
 }

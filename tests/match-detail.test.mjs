@@ -1,3 +1,4 @@
+import { fullAccess } from './helpers/full-access.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -5,7 +6,7 @@ import { createMatchDetailHandler } from '../src/server/matches/detail-http.ts';
 import { createMatchDetailService, canonicalMatchSlug } from '../src/server/matches/detail-service.ts';
 import { parseMatchDetailQuery, detailHistoryLink } from '../src/server/matches/detail-query.ts';
 import { publicRevisionAnalysis } from '../src/server/matches/detail-read.ts';
-import { detailOddsGroupSchema, detailRevisionSchema, matchDetailResponseSchema } from '../src/domain/match-detail.ts';
+import { detailOddsGroupSchema, detailRevisionSchema, matchDetailResponseSchema, storedMatchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 import { predictorSnapshot } from './helpers/predictor-output-fixtures.mjs';
@@ -20,21 +21,21 @@ for (const query of ['limit=0', 'limit=21', 'limit=01', 'limit=1&limit=2', 'revi
   `unknown=${'x'.repeat(2048)}`]) {
   test(`detail rejects invalid query before reading: ${query.slice(0, 75)}`, async () => {
     let reads = 0;
-    const response = await createMatchDetailHandler(async () => { reads++; })(new Request(`http://localhost/api/matches/${id}?${query}`), { params: Promise.resolve({ id }) });
+    const response = await createMatchDetailHandler(async () => { reads++; }, fullAccess)(new Request(`http://localhost/api/matches/${id}?${query}`), { params: Promise.resolve({ id }) });
     assert.equal(response.status, 400); assert.equal(reads, 0);
     assert.equal(response.headers.get('set-cookie'), null);
   });
 }
 test('invalid fixture identity is rejected before lazy database initialization', async () => {
-  const handler = createMatchDetailHandler(async () => { throw new Error('should not run'); });
+  const handler = createMatchDetailHandler(async () => { throw new Error('should not run'); }, fullAccess);
   assert.equal((await handler(new Request('http://localhost/api/matches/invalid'), { params: Promise.resolve({ id: 'invalid' }) })).status, 400);
 });
 test('shared HTTP errors redact internals and retain retry policy', async () => {
   for (const [error, status, retry] of [[new MatchFeedError('not-found'), 404, null], [new MatchFeedError('rate-limited', 17), 429, '17'],
     [new Error('mysql://secret/raw-model-prompt'), 503, '5']]) {
-    const response = await createMatchDetailHandler(async () => { throw error; })(new Request(`http://localhost/api/matches/${id}`), { params: Promise.resolve({ id }) });
+    const response = await createMatchDetailHandler(async () => { throw error; }, fullAccess)(new Request(`http://localhost/api/matches/${id}`), { params: Promise.resolve({ id }) });
     assert.equal(response.status, status); assert.equal(response.headers.get('retry-after'), retry);
-    assert.equal(response.headers.get('cache-control'), 'no-store, max-age=0');
+    assert.equal(response.headers.get('cache-control'), 'private, no-store');
     assert.equal(response.headers.get('cdn-cache-control'), 'no-store');
     assert.equal(response.headers.get('set-cookie'), null); assert.doesNotMatch(await response.text(), /secret|raw-model|mysql:/u);
   }
@@ -79,8 +80,8 @@ test('database errors become a structured unavailable failure', async () => {
 test('market-implied odds groups (052) are labelled, complete, one per family and empty by default', () => {
   const detail = liveDetail();
   assert.deepEqual(detail.odds, [], 'no odds envelope without recorded display rights');
-  const legacy = { ...detail }; delete legacy.odds;
-  assert.deepEqual(matchDetailResponseSchema.parse(legacy).odds, [], 'older cached envelopes parse with an explicit empty default');
+  const legacy = { ...detail }; delete legacy.odds; delete legacy.access;
+  assert.deepEqual(storedMatchDetailResponseSchema.parse(legacy).odds, [], 'older cached envelopes parse with an explicit empty default');
   const groups = [marketImpliedGroup(), marketImpliedGroup('double-chance', { 'home-or-draw': '1.25', 'away-or-draw': '1.80', 'home-or-away': '1.30' }),
     marketImpliedGroup('total-goals', { 'over-2.5': '1.90', 'under-2.5': '1.95' }), marketImpliedGroup('both-teams-to-score', { yes: '1.80', no: '2.00' })];
   assert.equal(matchDetailResponseSchema.parse({ ...detail, odds: groups }).odds.length, 4);

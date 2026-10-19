@@ -111,7 +111,9 @@ def verify_feed(origin, directory, scenarios):
         form_id = match(r'\bid="([^"]+)"', filter_form).group(1)
         submit_buttons = [button for button in re.findall(r'<button\b[^>]*>', visible)
             if 'type="submit"' in button and f'form="{form_id}"' in button]
-        assert len(submit_buttons) == 1
+        # The existing chrome has desktop actions and the phone sheet footer, sharing one form.
+        assert len(submit_buttons) == 2
+        assert all('aria-label="Apply filters"' in button for button in submit_buttons)
         no_match('role="slider"|Picks only|With predictions|Any time|Specific time', visible)
         articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
         data = scenario["result"].get("data")
@@ -137,7 +139,8 @@ def verify_feed(origin, directory, scenarios):
             if record.get("forecast"):
                 match(r"Published: [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} EAT", article)
             no_match(r"/_next/image|\s\$[\w-]+=", article)
-        if name == "today":
+        # The ascending cohort contains the two published fixtures; the latest-first page does not.
+        if name == "earliest":
             match(r'data-prediction="(?!none)', visible)
             match("No prediction locked", visible)
         no_match("prediction jobs completed|Partial fixture coverage|Prediction data unavailable|Score and result updates delayed", visible)
@@ -154,7 +157,9 @@ def verify_feed(origin, directory, scenarios):
             no_match("No fixtures confirmed|prediction jobs completed", visible)
         if name == "outside":
             match("Predictions start within 7 days", visible)
-        no_match("Predictions become available within seven days of the match", visible)
+            match("Predictions become available within seven days of the match", visible)  # Accessible full reason.
+        else:
+            no_match("Predictions become available within seven days of the match", visible)
         if name in ("not-started", "selecting"):
             no_match(r"of \d+ prediction jobs completed", visible)
     print(f"PASS {len(scenarios)} anonymous server-rendered scenarios: stored cards/clocks, initial CSS, coverage/errors, current/locked forecasts and EAT window.")
@@ -199,7 +204,9 @@ def verify_detail(origin, directory, scenarios):
                 _, panel = get(origin, f"/detail-cases/{name}?market={family}")
                 match(f'data-market-panel="{family}"', panel)
                 prediction = re.escape(PREDICTION_LABELS[item["market"]["selection"]])
-                match(r'>Prediction</dt><dd><strong>' + prediction + r'(?:<|$)', panel)
+                match(r'>Our prediction</dt><dd><strong>' + prediction + r'(?:<|$)', panel)
+                rounded = int(item["market"]["selectedProbability"] * 100 + 0.5)
+                match(r'>Estimated probability</dt><dd><b>' + str(rounded) + r'%</b>', panel)
                 for selection in item["market"]["probabilities"]:
                     match(r'<li\b[^>]*><span>' + re.escape(PREDICTION_LABELS[selection]) + r'(?:<| ·)', panel)
                 assert iso(snapshot["publishedAt"]) in panel

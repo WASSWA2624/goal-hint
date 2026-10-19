@@ -105,7 +105,7 @@ test('RTK Query deduplicates consumers, cancels an obsolete consumer, and only m
   assert.equal(calls.length, 1); assert.equal(calls[0].options.signal.aborted, false);
   const response = liveFeed(); pending.shift()(Response.json(response));
   assert.deepEqual(await second.unwrap(), response); second.unsubscribe();
-  assert.match(calls[0].href, /^\/api\/matches\?date=.*&leagues=0$/); assert.equal(calls[0].options.credentials, 'omit');
+  assert.match(calls[0].href, /^\/api\/matches\?date=.*&leagues=0$/); assert.equal(calls[0].options.credentials, 'same-origin');
   assert.equal(calls[0].options.cache, 'no-store'); assert.equal(calls[0].options.method, undefined); assert.equal(calls[0].options.body, undefined);
   assert.equal(makeStore({ today, query: query(), data: null }).getState().publicRefresh.queries[calls[0].href], undefined);
 });

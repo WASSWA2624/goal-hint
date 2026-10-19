@@ -16,8 +16,8 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
 }
 export async function readJson(href: string, signal: AbortSignal): Promise<unknown> {
   const response = await fetch(href, { signal: anySignal([signal, AbortSignal.timeout(liveRefreshRules.timeoutMs)]),
-    cache: "no-store", credentials: "omit" });
-  if (!response.ok) throw new FeedPaginationError(response.status === 429 ? "rate-limited" : "unavailable");
+    cache: "no-store", credentials: "same-origin" });
+  if (!response.ok) throw new FeedPaginationError(response.status === 403 ? "subscription-required" : response.status === 429 ? "rate-limited" : "unavailable");
   const text = await response.text(), max = matchFeedRules.maximumResponseBytes;
   // A UTF-16 code unit encodes to at most 3 UTF-8 bytes, so only a possibly oversized body is encoded.
   if (text.length > max || (text.length * 3 > max && new TextEncoder().encode(text).length > max)) {

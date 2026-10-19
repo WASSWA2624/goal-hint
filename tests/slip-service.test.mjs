@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolveFeedDates, parseFeedQuery } from '../src/domain/feed-query.ts';
-import { matchFeedResponseSchema } from '../src/domain/match-feed.ts';
+import { storedMatchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { defaultSlipCriteria } from '../src/domain/slip-builder.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
@@ -25,7 +25,7 @@ function page(parameters, records, overrides = {}) {
   const query = parseFeedQuery(parameters, { today }), range = resolveFeedDates(query, today), total = records.length;
   const totalPages = Math.ceil(total / query.pageSize), nextPage = query.page < totalPages ? query.page + 1 : null;
   const previousPage = query.page > 1 ? query.page - 1 : null;
-  return matchFeedResponseSchema.parse({ paginationVersion: token,
+  return storedMatchFeedResponseSchema.parse({ paginationVersion: token,
     records: records.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
     page: query.page, pageSize: query.pageSize, total, totalPages, nextPage, previousPage,
     links: { next: nextPage ? `/api/matches?page=${nextPage}` : null, previous: previousPage ? `/api/matches?page=${previousPage}` : null },

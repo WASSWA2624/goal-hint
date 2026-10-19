@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { fixturePriceSchema, type FixturePrice } from "./fixture-snapshot.ts";
-import { matchFeedResponseSchema, type MatchFeedResponse } from "./match-feed.ts";
+import { storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "./match-feed.ts";
 import { isMarketSelection, marketSelections } from "./markets.ts";
 
 export const slipPricePageRules = Object.freeze({
@@ -10,7 +10,7 @@ export const slipPricePageRules = Object.freeze({
 /** Supplemental prices for published alternatives. The ordinary feed's selected-pick prices remain unchanged.
  * Freshness and public display permission come from the stored projection, not a browser age heuristic. */
 export const slipPricePageSchema = z.strictObject({
-  feed: matchFeedResponseSchema,
+  feed: storedMatchFeedResponseSchema,
   selectionPrices: z.record(z.string(), z.array(fixturePriceSchema).max(slipPricePageRules.maximumPricesPerFixture)),
 }).superRefine(({ feed, selectionPrices }, context) => {
   const fixtures = new Map(feed.records.map((record) => [record.fixtureId, record]));
@@ -45,6 +45,6 @@ export const slipPricePageSchema = z.strictObject({
 });
 
 export type SlipPricePage = Readonly<{
-  feed: MatchFeedResponse;
+  feed: StoredMatchFeedResponse;
   selectionPrices: Readonly<Record<string, readonly FixturePrice[]>>;
 }>;

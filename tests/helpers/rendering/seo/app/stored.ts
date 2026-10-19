@@ -4,15 +4,15 @@ import {getReportingDate,utcInstantFromEpochMilliseconds} from '@/domain/calenda
 import {parseMatchDetailQuery} from '@/server/matches/detail-query';
 import {MatchFeedError} from '@/server/matches/feed-error';
 import {createDiscoveryRoutes} from '@/server/seo/discovery-routes';
-import type {MatchFeedResponse} from '@/domain/match-feed';
-import type {MatchDetailResponse} from '@/domain/match-detail';
+import type {StoredMatchFeedResponse} from '@/domain/match-feed';
+import type {StoredMatchDetailResponse} from '@/domain/match-detail';
 import type {FeedQuery,FeedParameters} from '@/domain/feed-query';
 import data from '../scenarios.json';
 import {policy} from './policy';
 export const instant=async()=>utcInstantFromEpochMilliseconds(data.at);
 const today=getReportingDate(utcInstantFromEpochMilliseconds(data.at));
-const feeds=Object.values(data.feeds) as unknown as {query:FeedQuery;result:{data:MatchFeedResponse}}[];
-const details=data.details as unknown as Record<string,{current:{data:MatchDetailResponse};revision?:{data:MatchDetailResponse}}>;
+const feeds=Object.values(data.feeds) as unknown as {query:FeedQuery;result:{data:StoredMatchFeedResponse}}[];
+const details=data.details as unknown as Record<string,{current:{data:StoredMatchDetailResponse};revision?:{data:StoredMatchDetailResponse}}>;
 export const readFeed=async(parameters:FeedParameters)=>{
  const query=parseFeedQuery(parameters,{today});
  const selected=feeds.find(item=>item.query.page===query.page&&feedQueryKey(item.query,today)===feedQueryKey(query,today));

@@ -1,7 +1,7 @@
 import "server-only";
 
 export class MatchFeedError extends Error {
-  readonly code: "invalid-query" | "not-found" | "rate-limited" | "unavailable";
+  readonly code: "invalid-query" | "not-found" | "rate-limited" | "unavailable" | "subscription-required";
   readonly retryAfterSeconds: number | null;
   constructor(code: MatchFeedError["code"], retryAfterSeconds: number | null = null) {
     super("Match feed request refused or temporarily unavailable.");

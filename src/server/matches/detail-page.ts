@@ -6,8 +6,10 @@ import type { MatchDetailResponse } from "../../domain/match-detail.ts";
 import { breadcrumbStructuredData, matchPageIndexable, type DiscoveryPolicy } from "../../domain/discovery.ts";
 import { feedDefaults, feedHref, homeHref } from "../../domain/navigation.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { selectedCardPrediction } from "../../domain/match-card.ts";
-import { predictionLabel } from "../../domain/prediction-label.ts";
+import { isFreeFixture } from "../../domain/paywall.ts";
+import type { ViewerAccess } from "../members/viewer-access.ts";
+import { resolveViewerAccess } from "../members/viewer-access.ts";
+import { createGatedReads, type AccessResolver } from "../members/gated-reads.ts";
 import { createMessages } from "../../i18n/messages.ts";
 import { parseMatchDetailQuery } from "./detail-query.ts";
 import { MatchFeedError } from "./feed-error.ts";
@@ -33,16 +35,16 @@ export function parseMatchDetailPageInput(id: string, parameters: Record<string,
   return id.toLowerCase();
 }
 export async function loadMatchDetailPage(id: string, clock: Clock, read: typeof readPublicMatchDetail = readPublicMatchDetail,
-  parameters = new URLSearchParams()): Promise<DetailPageResult> {
+  parameters = new URLSearchParams(), resolveAccess: AccessResolver = resolveViewerAccess): Promise<DetailPageResult> {
   try {
     parseMatchDetailQuery(id, parameters);
-    return { data: await read(id, parameters, clock), error: null };
+    return { data: await createGatedReads({ readDetail: read, resolveAccess }).detail(id, parameters, clock), error: null };
   } catch (error) {
     return { data: null, error: error instanceof MatchFeedError && ["invalid-query", "not-found"].includes(error.code) ? "not-found"
       : error instanceof MatchFeedError && error.code === "rate-limited" ? "rate-limited" : "unavailable" };
   }
 }
-export function matchDetailMetadata(result: DetailPageResult, locale = "en", variant = false, policy: DiscoveryPolicy = getDiscoveryPolicy()): Metadata {
+export function matchDetailMetadata(result: DetailPageResult, locale = "en", variant = false, policy: DiscoveryPolicy = getDiscoveryPolicy(), mode: ViewerAccess["mode"] = "off"): Metadata {
   const messages = createMessages(locale), data = result.data;
   if (!data) return pageMetadata({ title: messages.text("detail.unavailableTitle"), description: messages.text("detail.unavailable") });
   const title = messages.text("match.title", { home: data.fixture.homeTeam.name || messages.text("match.homeUnknown"),
@@ -50,16 +52,9 @@ export function matchDetailMetadata(result: DetailPageResult, locale = "en", var
   const date = data.fixture.kickoffAt == null ? null : getReportingDate(utcInstantFromEpochMilliseconds(data.fixture.kickoffAt));
   const pageTitle = date ? messages.text("detail.datedMetadataTitle", { match: title.slice(0, 180), date: messages.reportingDateMedium(date) })
     : messages.text("detail.metadataTitle", { match: title.slice(0, 180) });
-  const lead = leadForecast(data.fixture);
-  const description = date && lead ? messages.text("detail.forecastMetadataDescription", { match: title.slice(0, 240),
-    date: messages.reportingDate(date), market: messages.text(`details.market.${lead.item.market.family}`),
-    pick: predictionLabel(messages, lead.item.market.selection),
-    probability: messages.number(lead.probability.roundedPercent / 100, { style: "percent" }) })
-    : date ? messages.text("detail.datedMetadataDescription", { match: title.slice(0, 240), date: messages.reportingDate(date) })
+  const description = date ? messages.text("detail.datedMetadataDescription", { match: title.slice(0, 240), date: messages.reportingDate(date) })
     : messages.text("detail.metadataDescription", { match: title.slice(0, 240) });
-  // A void cycle is still an auditable record, but must not be previewed as a usable prediction.
-  // selectedCardPrediction verifies the outcome's revision, cycle and selection before exposing this status.
-  const preview = lead?.status === "void" ? messages.text("detail.voidForecastMetadataDescription", { description }) : description;
+  const preview = mode === "on" && !isFreeFixture(data.fixture.status) ? `${description} ${messages.text("detail.subscriberMetadataDescription")}` : description;
   return pageMetadata({ title: pageTitle, description: preview, path: data.route.path,
     index: policy.index && !variant && matchPageIndexable(data.fixture) });
 }
@@ -74,11 +69,4 @@ export function matchStructuredData(data: MatchDetailResponse, locale = "en") {
     ...(date ? [{ name: messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(date) }),
       path: feedHref({ date, status: feedDefaults.today.status }, locale) }] : []),
     { name: match }]);
-}
-
-/** The snippet leads with the published match-result pick (the card default), else the first published family. */
-function leadForecast(fixture: MatchDetailResponse["fixture"]) {
-  const family = fixture.forecast?.markets.find((item) => item.market.family === "match-result")?.market.family
-    ?? fixture.forecast?.markets[0]?.market.family;
-  return family ? selectedCardPrediction(fixture, family) : null;
 }

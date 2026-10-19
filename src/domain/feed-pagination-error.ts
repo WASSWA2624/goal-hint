@@ -1,5 +1,5 @@
 export class FeedPaginationError extends Error {
-  readonly code: "changed" | "invalid-response" | "stale-data" | "unavailable" | "rate-limited";
+  readonly code: "changed" | "invalid-response" | "stale-data" | "unavailable" | "rate-limited" | "subscription-required";
   constructor(code: FeedPaginationError["code"]) {
     super("Match pagination could not be completed."); this.name = "FeedPaginationError"; this.code = code;
   }

@@ -1,5 +1,7 @@
 "use client";
 
+import { SubscriberNotice } from "@/components/members/subscriber-notice";
+
 import { memo } from "react";
 import styled from "styled-components";
 import { PredictionOdds } from "@/components/match/prediction-presentation";
@@ -116,6 +118,7 @@ function PredictionRecord() {
 export const Verdict = memo(function Verdict() {
   const { data, messages, home, away, update } = useStableDetails();
   const fixture = data.fixture, snapshot = data.snapshot;
+  if ("gated" in data.history) return <Box><SubscriberNotice /></Box>;
   const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
   const outlook = resultOutlook(data);
   if (!featured || !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">

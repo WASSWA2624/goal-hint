@@ -22,6 +22,7 @@ export function fixtureAdvance(previous: FixtureSnapshot, next: FixtureSnapshot)
 /** Observation/job metadata can change without a material fixture-version bump.
  * Its enclosing read clock is checked by the caller; forecast content stays atomic. */
 export function mergeFixtureObservation<T extends FixtureSnapshot>(previous: T, next: T): T {
+  if (!!(previous.forecast && "gated" in previous.forecast) !== !!(next.forecast && "gated" in next.forecast)) return next;
   if (next.cycleId !== previous.cycleId || next.forecast?.revisionId !== previous.forecast?.revisionId ||
       next.forecast?.runId !== previous.forecast?.runId) return previous;
   return { ...previous, syncedAt: next.syncedAt !== null && (previous.syncedAt === null || next.syncedAt >= previous.syncedAt)

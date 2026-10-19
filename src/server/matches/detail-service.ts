@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock } from "../../domain/calendar.ts";
-import { matchDetailResponseSchema, type MatchDetailResponse } from "../../domain/match-detail.ts";
+import { storedMatchDetailResponseSchema, type StoredMatchDetailResponse } from "../../domain/match-detail.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
 import { matchHref } from "../../domain/navigation.ts";
 import { canonicalMatchSlug } from "../../domain/match-slug.ts";
@@ -25,7 +25,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
   const evidenceStore = createMysqlEvidenceStore(options.database);
-  return Object.freeze({ async query(id: string, parameters = new URLSearchParams()): Promise<MatchDetailResponse> {
+  return Object.freeze({ async query(id: string, parameters = new URLSearchParams()): Promise<StoredMatchDetailResponse> {
     const query = parseMatchDetailQuery(id, parameters), asOf = clock.now(), today = getReportingDate(asOf);
     let refused: MatchFeedError | undefined;
     let permissionDeadline = Number.MAX_SAFE_INTEGER;
@@ -84,7 +84,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
             cycle: publicDetailCycle(await cycleFor(entry.cycleId)) });
           for (const row of cycles.slice(0, query.limit)) cycleHistory.push(publicDetailCycle(await cycleFor(row.id)));
           const slug = canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name);
-          const response = matchDetailResponseSchema.parse({ fixture, asOf, run, odds, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
+          const response = storedMatchDetailResponseSchema.parse({ fixture, asOf, run, odds, route: { fixtureId: id, slug, path: matchHref(id, slug, "en") },
             currentRevisionId, selection: query.revision ? "revision" : query.cycle ? "cycle" : "applicable", selectedCycle: display ? publicDetailCycle(display.cycle) : null, snapshot,
             history: { limit: query.limit, revisions: { anchor: anchors.revision, entries: revisions,
               next: detailHistoryLink(id, parameters, anchors, "revision", rows.length > query.limit ? revisions.at(-1)!.fixtureRevision : null) },
@@ -95,7 +95,7 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 7, ...query }, parse: (value) => matchDetailResponseSchema.parse(value) });
+        query: { id, projection: 7, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
       return options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
     } catch (error) {
       if (refused) throw refused;

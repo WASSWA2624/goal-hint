@@ -32,6 +32,7 @@ export function initialLoadedFeed(data: MatchFeedResponse): LoadedFeed {
 }
 /** All membership and whole-record replacements commit together, never partially. */
 export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse): LoadedFeed {
+  if (view.data.access.tier !== page.access.tier || view.data.access.signedIn !== page.access.signedIn) throw new FeedPaginationError("subscription-required");
   if (view.pages >= feedPaginationRules.maximumLoadedPages || page.page !== view.data.nextPage || page.page !== view.lastPage + 1) {
     throw new FeedPaginationError("invalid-response");
   }
@@ -45,6 +46,7 @@ export function appendFeedPage(view: LoadedFeed, page: MatchFeedResponse): Loade
   return { ...view, data: page, records: [...view.records, ...page.records], lastPage: page.page, pages: view.pages + 1 };
 }
 export function replaceFeedPages(previous: LoadedFeed, pages: readonly MatchFeedResponse[]): LoadedFeed {
+  if (pages.some((page) => page.access.tier !== previous.data.access.tier || page.access.signedIn !== previous.data.access.signedIn)) throw new FeedPaginationError("subscription-required");
   if (pages.some((page) => page.asOf < previous.data.asOf)) throw new FeedPaginationError("stale-data");
   const first = pages[0];
   if (!first || first.page !== previous.firstPage) throw new FeedPaginationError("invalid-response");

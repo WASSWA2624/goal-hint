@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getDayBoundsInTimeZone } from "../../domain/device-calendar.ts";
 import { addReportingDays, getReportingDate, utcInstantFromEpochMilliseconds, validateReportingDateRange, type Clock, type ReportingDate } from "../../domain/calendar.ts";
 import { feedQueryKey, getFeedToday, parseFeedQuery, resolveFeedDates, serializeFeedQuery, feedQueryRules, maximumCompetitionScope, type FeedParameters, type FeedQuery } from "../../domain/feed-query.ts";
-import { matchFeedRules, matchFeedResponseSchema, type MatchFeedResponse } from "../../domain/match-feed.ts";
+import { matchFeedRules, storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { createMessages, type TextKey } from "../../i18n/messages.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -45,7 +45,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
   const { database } = options, competitionIds = Object.freeze(parsedIds.data), limiter = createMysqlPublicSearchLimiter(database);
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
-  return Object.freeze({ async query(input: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}): Promise<MatchFeedResponse> {
+  return Object.freeze({ async query(input: FeedParameters, context: Readonly<{ locale?: string; routeDate?: string }> = {}): Promise<StoredMatchFeedResponse> {
     const asOf = clock.now(), reportingToday = getReportingDate(asOf);
     const query = parseMatchFeedQuery(input, reportingToday, { ...context, providerOdds, asOf });
     const today = getFeedToday(query, asOf), range = resolveFeedDates(query, today);
@@ -97,7 +97,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
           : total === 0 ? "no-filter-matches" : records.length === 0 ? "page-out-of-range" : matchingWithMarket === 0 ? "insufficient-data" : "ready";
         const keys: Partial<Record<typeof state, TextKey>> = { "data-unavailable": "feed.dataUnavailable", "no-fixtures": "feed.noFixtures",
           "no-filter-matches": "feed.noFilterMatches", "page-out-of-range": "feed.pageOutOfRange", "insufficient-data": "feed.insufficientData" };
-        const response = matchFeedResponseSchema.parse({ paginationVersion, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
+        const response = storedMatchFeedResponseSchema.parse({ paginationVersion, leagues, records, page: query.page, nextPage, previousPage, pageSize: query.pageSize, total, totalPages,
           links: { next: pageLink(query, today, nextPage), previous: pageLink(query, today, previousPage) }, asOf, today,
           range: { from: range.startDate, to: range.endDate, ...range.window }, state, message: keys[state] ? messages.text(keys[state]!) : null,
           coverage: { partial, knownFixtures, matchingWithMarket, dates }, run,
@@ -108,7 +108,7 @@ export function createMatchFeedService(options: Readonly<{ database: DatabaseRun
       return options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "feed", locale: query.locale, now: asOf, range: sourceRange,
         deadlineAt: getDayBoundsInTimeZone(today, query.zone ?? query.time?.zone ?? publicPolicy.reportingTimeZone).endExclusive,
         query: { ...query, projection: 13, today, dates: { from: range.startDate, to: range.endDate } }, scope: [...competitionIds].sort((a, b) => a - b),
-        parse: (value) => matchFeedResponseSchema.parse(value) }), read) : await read();
+        parse: (value) => storedMatchFeedResponseSchema.parse(value) }), read) : await read();
     } catch (error) {
       if (error instanceof MatchFeedError) throw error;
       throw new MatchFeedError("unavailable");
