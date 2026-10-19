@@ -109,7 +109,8 @@ export function createPayments({ database, config, now = Date.now }: {
           || !await takeMemberLimit(tx, config, { purpose: "trial-ip", value: address, maximum: 20, windowMs: memberRateRules.dayMs }, at)) return "busy" as const;
         await tx.memberAccount.update({ where: { id: member.accountId }, data: { trialRequestedAt: at } });
         await writeOwnerAudit(tx, { at, actor: "member", action: "trial_requested", accountId: member.accountId,
-          targetType: "member", targetId: member.accountId, details: {} });
+          targetType: "member", targetId: member.accountId, details: address === "unknown" ? {} : { ipKey: config.key("member-trial-ip", address),
+            ipCount: (await tx.rateLimitBucket.findUniqueOrThrow({ where: { key: config.key("member-trial-ip", address) } })).count } });
         return "saved" as const;
       });
     },

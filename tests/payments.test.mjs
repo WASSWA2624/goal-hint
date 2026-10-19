@@ -73,3 +73,21 @@ test("browser upload reports progress, sets its deadline and preserves multipart
   assert.deepEqual(await uploadPayment(body, (value) => progress.push(value)), { reference: "P-TEST" });
   assert.deepEqual(progress, [50, 50]); assert.ok(observed.filter((entry) => entry.timeout).every((entry) => entry.timeout === 90_000 && entry.body === body));
 });
+
+test("owner checks flag each companion and code messages encode complete masked delivery", async () => {
+  const { paymentChecks, codeDelivery } = await import("../src/domain/code-delivery.ts");
+  const base = { amount:5000,price:5000,approved:null,pending:null,image:null,payerAccount:false,payerDiffers:false };
+  assert.equal(paymentChecks(base).filter(c=>c.tone==="warning").length,0);
+  const all = paymentChecks({...base,amount:1000,approved:"P-AAAA",pending:"P-BBBB",image:"P-CCCC",payerAccount:true,payerDiffers:true});
+  assert.equal(all.filter(c=>c.tone==="warning").length,6);
+  assert.equal(paymentChecks({...base,payerDiffers:true})[5].tone,"info");
+  for (const companion of [{image:"P-CCCC"},{payerAccount:true}]) assert.equal(paymentChecks({...base,payerDiffers:true,...companion})[5].tone,"warning");
+  for (const source of ["payment","trial"]) for (const renewal of [false,true]) {
+    const delivery = codeDelivery({code:"0123-4567-89AB",reference:"C-TEST",phone:"256700000101",planName:"Weekly & Daily",endsAt:new Date("2026-11-01T18:00:00Z"),renewal,source},"https://synthetic.example/local");
+    assert.equal(new URL(delivery.whatsapp).searchParams.get("text"),delivery.message);
+    assert.equal(new URL(delivery.sms).searchParams.get("body"),delivery.message);
+    assert.match(delivery.message,/https:\/\/synthetic.example\/en\/account#code=0123-4567-89AB/);
+    assert.match(delivery.message,/ending 101/); assert.ok(!delivery.message.includes(delivery.phone)); assert.match(delivery.message,/21:00 EAT/);
+    if (source==="trial") assert.match(delivery.message,/free trial code/i); else assert.equal(delivery.message.includes("updates by itself"),renewal);
+  }
+});

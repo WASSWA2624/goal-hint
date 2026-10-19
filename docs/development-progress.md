@@ -4695,3 +4695,36 @@ MTN registered name, optional Airtel channel and tested copy/menu/review details
 long-press, tab discard and 200 kbit/s upload checks remain OP-38/067 inputs.
 No production setting or data changed; paid access remains off. Continue with
 064 after committing and pushing 063.
+
+
+### 064 — owner payments queue and codes (19 October 2026)
+
+Added Payments/Codes pages, their guarded routes and owner-only JPEG route;
+`payment-review.ts` supplies safe DTOs, checks, trial cards, search and rejection.
+The existing 060 service supplies approval, trial send/dismiss and all code
+management. Shared CodeReadyPanel, ManualCodeForm, CodeActions and useCodeAction
+are available to 065. The shell now has Payments/Codes tabs and polls the pending
+count at 60 seconds. The Payments page's guarded metadata keeps the document
+count correct through refresh. No automatic approval or plaintext-code read API.
+
+Validation: `npm run test:admin` passes 28 tests, including every new route/page,
+owner screenshot sandbox headers and POST fallbacks. `npm run test:payments`
+passes 29 checks with no skips: real MySQL approval races, punctuation and
+cross-network/manual duplicates, edited final values, confirmation-time periods,
+renewal without code re-entry, trial send/dismiss, screenshot rejection/purge,
+once-only HTTP code delivery, immutable snapshots and audit actions. The
+stolen-ID recovery counts UGX 5,000 once and keeps the reversed ID reserved.
+Typecheck, changed-file lint and whitespace checks pass. The production rendering
+fixture passes both owner pages, private headers and the pending title count.
+
+Manual Browser pane (375 x 812), synthetic services only: owner SMS suggests
+UGX 5,500 and its ID, matches the sender to the payer, and leaves fields editable;
+approval opens the masked code message. Tapping WhatsApp, returning and reloading
+preserves the panel. Done, sent removes it across reload; another creation cannot
+replace an unsent panel. Manual generation on Codes uses the same panel. Both
+pages fit without horizontal overflow, with the existing square chrome and a
+48 px wallet-confirmation button. Evidence: `.tmp/064-code-ready-375.png` and
+`.tmp/064-codes-375.png`. No message was sent and no real wallet was used.
+
+**Status: Completed.** No production setting/data changed; paid access stays off.
+Commit and push 064 before starting 065.

@@ -4068,3 +4068,27 @@ no other OP row changes state.
   SMS network default. That default wins over a later pay-card default, followed
   by a prefix only while no network is selected. Explicit radio edits stay open
   to preserve keyboard focus. Existing PageMain section-anchor clearance is reused.
+
+
+### 064 — owner payment review and code delivery (19 October 2026)
+
+Payments and Codes reuse the 057 admin guard, dashboard chrome/form controls,
+060 account-locked approval/code lifecycle and existing phone/message helpers.
+Read DTOs omit salts, hashes, images and plain codes. Payment checks are advisory;
+only the explicit wallet-confirmation action approves. All approved IDs remain
+reserved across networks and reversal. Rejection audits the preset, never the
+owner's free text; optional image deletion happens in the same transaction.
+
+A shared code-ready panel consumes only a creation POST reply. It stores that
+reply in the owner's tab sessionStorage until Done, sent, clears on sign-out,
+and prevents another code creation from replacing an unsent code. Delivery is to
+the account number; message text shows only its last three digits. Production
+unlock links use publicPolicy.origin; local links use the request origin. The
+existing EAT period formatter supplies the end time. Codes have explicit POST
+fallbacks so disabling JavaScript cannot put phone searches or manual-code
+numbers in query strings. The server still requires JSON for every owner action.
+
+Trial request audits now retain the address bucket's HMAC identifier and count,
+never the raw IP. The queue reads its current-day bucket for the trial warning.
+The pending-count metadata is itself owner guarded, so signed-out metadata does
+not disclose the queue size. No schema, env key, dependency or setting changed.

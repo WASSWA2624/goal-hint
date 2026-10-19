@@ -1,0 +1,75 @@
+import "server-only";
+import type { PaymentQueue, OwnerCode } from "../../domain/owner-members.ts";
+import { paymentChecks } from "../../domain/code-delivery.ts";
+import { normalizePhone } from "../../domain/phone.ts";
+import { codeStatus } from "../../domain/subscription-period.ts";
+import type { DatabaseRuntime } from "../database/client.ts";
+import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
+import { decide } from "../members/settings.ts";
+import { writeOwnerAudit } from "./audit.ts";
+
+export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
+export function createPaymentReview(database: DatabaseRuntime, now = Date.now) {
+  return {
+    async list(tab = "pending"): Promise<PaymentQueue> {
+      return database.query(async tx => {
+        const at = new Date(now());
+        const rows = await tx.paymentSubmission.findMany({ where: { status: tab === "approved" ? { in: ["approved", "reversed"] } : tab === "rejected" ? "rejected" : { in: ["pending", "superseded"] } },
+          orderBy: [{ submittedAt: tab === "pending" ? "asc" : "desc" }, { id: "asc" }], take: 100, include: { account: { select: { phone: true } }, screenshot: { select: { submissionId: true } } } });
+        const keys = [...new Set(rows.map(r => r.claimedTxnKey))], hashes = rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []), phones = rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []);
+        const [related, payers, trials, pendingCount] = await Promise.all([
+          tx.paymentSubmission.findMany({ where: { OR: [{ claimedTxnKey: { in: keys } }, { approvedTxnKey: { in: keys.flatMap(k => [`mtn:${k}`, `airtel:${k}`]) } }, { imageSha256: { in: hashes } }] },
+            select: { id: true, accountId: true, reference: true, status: true, claimedTxnKey: true, approvedTxnKey: true, imageSha256: true } }),
+          tx.memberAccount.findMany({ where: { phone: { in: phones } }, select: { id: true, phone: true } }),
+          tx.memberAccount.findMany({ where: { trialRequestedAt: { not: null }, trialDismissedAt: null, blockedAt: null, erasedAt: null, codes: { none: {} } },
+            orderBy: { trialRequestedAt: "asc" }, take: 100, select: { id: true, phone: true, trialRequestedAt: true } }),
+          tx.paymentSubmission.count({ where: { status: "pending" } }),
+        ]);
+        const events = await tx.ownerAuditEvent.findMany({ where: { action: "trial_requested", accountId: { in: trials.map(t => t.id) } }, orderBy: { at: "desc" } });
+        const ipKeys = events.flatMap(e => { const d = e.details as { ipKey?: string }; return d.ipKey ? [d.ipKey] : []; });
+        const buckets = await tx.rateLimitBucket.findMany({ where: { key: { in: ipKeys }, windowStartedAt: new Date(Math.floor(+at / 86_400_000) * 86_400_000) } });
+        return { pendingCount, trials: trials.map(t => {
+          const details = events.find(e => e.accountId === t.id)?.details as { ipKey?: string; ipCount?: number } | undefined;
+          return { ...t, trialRequestedAt: t.trialRequestedAt!.toISOString(), ipCount: details?.ipKey ? buckets.find(b => b.key === details.ipKey)?.count ?? 0 : null };
+        }), payments: rows.map(r => ({ id: r.id, reference: `P-${r.reference}`, accountId: r.accountId, accountPhone: r.account.phone,
+          payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: r.claimedTxnRef, amount: r.claimedAmountUgx, planId: r.planId,
+          planName: r.planName, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,
+          final: r.transactionRef ? { network: r.network, transactionId: r.transactionRef, amount: r.amountReceivedUgx } : null,
+          checks: paymentChecks({ amount: r.claimedAmountUgx, price: r.priceUgx,
+            approved: related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)?.reference ? `P-${related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)!.reference}` : null,
+            pending: related.find(s => s.accountId !== r.accountId && s.status === "pending" && s.claimedTxnKey === r.claimedTxnKey)?.reference ? `P-${related.find(s => s.accountId !== r.accountId && s.status === "pending" && s.claimedTxnKey === r.claimedTxnKey)!.reference}` : null,
+            image: r.imageSha256 ? related.filter(s => s.id !== r.id && s.imageSha256 === r.imageSha256).map(s => `P-${s.reference}`)[0] ?? null : null,
+            payerAccount: payers.some(p => p.phone === r.payerPhone && p.id !== r.accountId), payerDiffers: !!r.payerPhone && r.payerPhone !== r.account.phone }) })) };
+      });
+    },
+    async screenshot(id: string) { return database.query(tx => tx.paymentScreenshot.findUnique({ where: { submissionId: id }, select: { data: true } })); },
+    async reject(id: string, reason: unknown, text: unknown, deleteImage: boolean, actor: string): Promise<CodeOutcome> {
+      if (!rejectionReasons.includes(reason as typeof rejectionReasons[number]) || typeof text !== "string" || text.length > 200) return { status: "invalid", message: "Choose a rejection reason and keep text within 200 characters." };
+      return decide<CodeOutcome>(database, async (tx, rollback) => {
+        const initial = await tx.paymentSubmission.findUnique({ where: { id } });
+        if (!initial) return rollback({ status: "refused", message: "This payment cannot be rejected." });
+        await lockMemberAccount(tx, initial.accountId);
+        const row = await tx.paymentSubmission.findUniqueOrThrow({ where: { id } });
+        if (!["pending", "superseded"].includes(row.status)) return rollback({ status: "refused", message: "This payment cannot be rejected." });
+        const at = new Date(now());
+        await tx.paymentSubmission.update({ where: { id }, data: { status: "rejected", rejectReason: reason as string, rejectText: text.trim() || null, decidedAt: at, decidedBy: actor,
+          ...(deleteImage ? { imagePurgedAt: at } : {}) } });
+        if (deleteImage) await tx.paymentScreenshot.deleteMany({ where: { submissionId: id } });
+        await writeOwnerAudit(tx, { at, actor, action: "payment_rejected", accountId: row.accountId, targetType: "payment", targetId: id, details: { reason, deleteImage } });
+        return { status: "saved" };
+      });
+    },
+    async codes(search = "", status = "all", accountId?: string): Promise<readonly OwnerCode[]> {
+      const phone = normalizePhone(search), ref = search.trim().toUpperCase().replace(/^[PC]-/u, "");
+      return database.query(async tx => {
+        const at = new Date(now());
+        const statusWhere = status === "revoked" ? { revokedAt: { not: null } } : status === "active" ? { revokedAt: null, startsAt: { lte: at }, endsAt: { gt: at } }
+          : status === "queued" ? { revokedAt: null, startsAt: { gt: at } } : status === "expired" ? { revokedAt: null, endsAt: { lte: at } } : {};
+        const codes = await tx.accessCode.findMany({ where: { ...statusWhere, ...(accountId ? { accountId } : {}), ...(search ? { OR: [{ account: { phone: phone ?? "" } }, { reference: ref }, { paymentSubmission: { reference: ref } }] } : {}) }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100,
+          select: { id: true, accountId: true, reference: true, planName: true, durationDays: true, extensionDays: true, startsAt: true, endsAt: true, revokedAt: true, source: true, account: { select: { phone: true } } } });
+        return codes.map(c => ({ id: c.id, accountId: c.accountId, reference: `C-${c.reference}`, phone: c.account.phone, planName: c.planName, source: c.source,
+          startsAt: c.startsAt.toISOString(), endsAt: c.endsAt.toISOString(), status: codeStatus(c, new Date(now())), daysLeft: Math.max(0, Math.ceil((+c.endsAt - Math.max(now(), +c.startsAt)) / 86_400_000)) })).filter(c => status === "all" || c.status === status);
+      });
+    },
+  };
+}

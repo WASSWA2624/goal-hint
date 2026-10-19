@@ -1,7 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import styled from "styled-components";
+import { useRouter } from "next/navigation";
+import { clearOwnerCodes } from "./code-ready";
 import { SkipLink } from "@/components/navigation/shell-styles";
 import { Brand, BrandImage, HeaderButton, HeaderLink, Main, Notice, Shell, Tab, Tabs, TopActions, TopBar,
   TopBarContent } from "@/components/analytics/dashboard/dashboard-styles";
@@ -9,6 +11,8 @@ import { Brand, BrandImage, HeaderButton, HeaderLink, Main, Notice, Shell, Tab, 
 /** Owner dashboard sections, in tab order. Later prompts add their pages here (and the pending count). */
 const sections = [
   { key: "overview", href: "/admin", label: "Overview" },
+  { key: "payments", href: "/admin/payments", label: "Payments" },
+  { key: "codes", href: "/admin/codes", label: "Codes" },
   { key: "plans", href: "/admin/plans", label: "Plans" },
   { key: "settings", href: "/admin/settings", label: "Settings" },
 ] as const;
@@ -18,11 +22,22 @@ export type AdminSection = (typeof sections)[number]["key"];
  * Phone-first owner shell: one column, 44 px targets and a top tab strip. Signing out is a plain form POST, so it works
  * without JavaScript. Owner copy is English only.
  */
-export function AdminShell({ current, username, developmentCredentials, children }: {
-  current: AdminSection; username: string; developmentCredentials: boolean; children: ReactNode;
+export function AdminShell({ current, username, developmentCredentials, children, pendingCount }: {
+  current: AdminSection; username: string; developmentCredentials: boolean; children: ReactNode; pendingCount?: number;
 }) {
+  const router = useRouter(), [count, setCount] = useState(pendingCount);
+  useEffect(() => {
+    const refreshCount = () => {
+      void fetch("/api/admin/payments?count=1", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then((v: { pendingCount: number } | null) => {
+        if (v) { setCount(v.pendingCount); if (current === "payments") router.refresh(); }
+      }).catch(() => {});
+    };
+    if (pendingCount === undefined) refreshCount();
+    const timer = setInterval(refreshCount, 60000);
+    return () => clearInterval(timer);
+  }, [current, pendingCount, router]);
   return (
-    <Shell>
+    <Shell data-analytics-ignore>
       <SkipLink href="#main-content">Skip to admin</SkipLink>
       <TopBar>
         <TopBarContent>
@@ -30,7 +45,7 @@ export function AdminShell({ current, username, developmentCredentials, children
           <Actions>
             <span>Signed in as <strong>{username}</strong></span>
             <HeaderLink href="/analytics">Analytics</HeaderLink>
-            <form method="post" action="/api/admin/logout"><HeaderButton type="submit">Sign out</HeaderButton></form>
+            <form method="post" action="/api/admin/logout" onSubmit={clearOwnerCodes}><HeaderButton type="submit">Sign out</HeaderButton></form>
           </Actions>
         </TopBarContent>
       </TopBar>
@@ -38,7 +53,7 @@ export function AdminShell({ current, username, developmentCredentials, children
         <Tabs as="nav" aria-label="Owner dashboard">
           {sections.map((section) => (
             <SectionTab key={section.key} as="a" href={section.href} $selected={section.key === current}
-              aria-current={section.key === current ? "page" : undefined}>{section.label}</SectionTab>
+              aria-current={section.key === current ? "page" : undefined}>{section.label}{section.key === "payments" && (pendingCount ?? count) !== undefined ? ` (${pendingCount ?? count})` : ""}</SectionTab>
           ))}
         </Tabs>
       </Strip>

@@ -63,7 +63,7 @@ test("code entry requires same origin, an open mode and a nonblocked member, wit
 });
 
 test("the scan sees the admin shell, sign-in and sign-out, and the Plans and Settings pages and routes", () => {
-  for (const page of ["src/app/admin/page.tsx", "src/app/admin/plans/page.tsx", "src/app/admin/settings/page.tsx"]) assert.ok(pages.includes(page), pages.join());
+  for (const page of ["src/app/admin/page.tsx", "src/app/admin/plans/page.tsx", "src/app/admin/settings/page.tsx", "src/app/admin/payments/page.tsx", "src/app/admin/codes/page.tsx"]) assert.ok(pages.includes(page), pages.join());
   for (const route of [loginRoute, signOutRoute, plansRoute, settingsRoute]) assert.ok(routes.includes(route), routes.join());
 });
 
@@ -120,6 +120,7 @@ const calls = { login: [], logout: [], verify: [], audit: [], confirm: [] };
 const client = {
   subscriptionPlan: { async findMany() { return []; }, async count() { return 0; } },
   subscriptionSettings: { async findUnique() { return null; } },
+  paymentScreenshot: { async findUnique() { return { data: new Uint8Array([255,216,255,217]) }; } },
   ownerAuditEvent: { async create({ data }) { calls.audit.push(data); return data; } },
 };
 globalThis.goalHintAnalytics = Promise.resolve({
@@ -277,5 +278,23 @@ test("payment and trial writes guard origin, mode, session and blocked accounts 
       if (denied) assert.equal(request.bodyUsed, false);
       if (member?.blocked && mode !== "off" && site === "same-origin") assert.equal((await response.json()).message, "We couldn't complete this. Please contact us.");
     }
+  }
+});
+
+test("owner screenshot is private JPEG with a sandbox and cannot return data without the owner", async () => {
+  const route = "src/app/api/admin/payments/[id]/screenshot/route.ts";
+  const { GET } = await import(pathToFileURL(path.join(root, route)).href);
+  const url = "http://localhost:3000/api/admin/payments/00000000-0000-4000-8000-000000000001/screenshot";
+  assert.equal((await GET(new Request(url))).status,401);
+  const r = await GET(new Request(url,{headers:signedIn})); assert.equal(r.status,200);
+  for (const [key,value] of Object.entries({"content-type":"image/jpeg","content-disposition":"inline","cache-control":"no-store","x-content-type-options":"nosniff","content-security-policy":"sandbox; default-src 'none'","cross-origin-resource-policy":"same-origin","x-robots-tag":"noindex, nofollow"})) assert.equal(r.headers.get(key),value,key);
+  assert.deepEqual([...new Uint8Array(await r.arrayBuffer())],[255,216,255,217]);
+});
+
+test("owner phone forms have POST fallbacks so disabled JavaScript cannot put phones in URLs",async()=>{
+  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payments-editor.tsx"]){
+    const text=await source(file);
+    const forms=[...text.matchAll(/<form\b[^>]*?onSubmit=/gu)];assert.ok(forms.length>0);
+    for(const [form] of forms)assert.match(form,/method="post"/u,file);
   }
 });

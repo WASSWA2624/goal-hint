@@ -93,7 +93,7 @@
     "test:scripts": "python -m unittest discover -s tests -p \"*_test.py\"",
     "test:scripts:integration": "python tests/scripts_integration.py",
     "test:payments:rendering": "python scripts/verify-payments-rendering.py",
-    "test:payments": "node --conditions=react-server --test --test-concurrency=1 tests/payment-sms.test.mjs tests/payments.test.mjs tests/payments.integration.mjs",
+    "test:payments": "node --conditions=react-server --test --test-concurrency=1 tests/payment-sms.test.mjs tests/payments.test.mjs tests/payments.integration.mjs tests/payments-admin.integration.mjs",
     "test:paywall": "node --conditions=react-server --test tests/paywall.test.mjs",
     "test:paywall:rendering": "python scripts/verify-paywall-rendering.py"
   },
