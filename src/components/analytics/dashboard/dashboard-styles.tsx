@@ -75,7 +75,7 @@ export const LivePill = styled.span`
   }
   @media (prefers-reduced-motion: reduce) { &::before { animation: none; } }
 `;
-export const HeaderButton = styled.button`
+const headerControl = css`
   min-block-size: 32px;
   padding: 4px 12px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
@@ -83,8 +83,16 @@ export const HeaderButton = styled.button`
   background: ${({ theme }) => theme.header.controlFill};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   cursor: pointer;
-  @media (hover: hover) { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
+  @media (hover: hover) { &:hover { color: ${({ theme }) => theme.header.text}; background: ${({ theme }) => theme.header.controlHover}; } }
   &:focus-visible { outline: 2px solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
+`;
+export const HeaderButton = styled.button`${headerControl}`;
+/** A header link that looks like HeaderButton, e.g. between the analytics and owner dashboards. */
+export const HeaderLink = styled.a`
+  ${headerControl}
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 `;
 export const Main = styled.main`
   display: grid;

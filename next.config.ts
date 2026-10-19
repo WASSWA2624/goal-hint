@@ -12,7 +12,8 @@ const nextConfig: NextConfig = {
   ...(process.env.BUILD_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // Readable `file__Component` class names only in development; production emits bare `sc-` ids.
   compiler: { styledComponents: { displayName: process.env.NODE_ENV !== "production", ssr: true } },
-  // Every response: no MIME sniffing. The private analytics dashboard and its APIs: never cached, framed or indexed.
+  // Every response: no MIME sniffing. The private owner dashboards (/analytics, /admin), the member account and Get access
+  // pages, and their APIs: never cached, framed or indexed (the same list as `privateHeaders` in src/server/http/private-http.ts).
   async headers() {
     const privateHeaders = [
       { key: "Cache-Control", value: "no-store" },
@@ -21,9 +22,11 @@ const nextConfig: NextConfig = {
       { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
       { key: "Referrer-Policy", value: "same-origin" },
     ];
+    const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*",
+      "/en/account", "/en/subscribe", "/api/account/:path*"];
     // The global rule stays first: when a key repeats, the last matching rule wins.
     return [{ source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] },
-      { source: "/analytics", headers: privateHeaders }, { source: "/api/analytics/:path*", headers: privateHeaders }];
+      ...privateSources.map((source) => ({ source, headers: privateHeaders }))];
   },
   async redirects() {
     return [

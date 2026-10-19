@@ -9,10 +9,15 @@ import { parseDateRange } from "../../domain/analytics-range.ts";
 import { CalendarValidationError } from "../../domain/calendar.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "./analytics-config.ts";
-import { adminSessionRules, createAdminAuth, type Admin, type AdminAuth } from "./analytics-auth.ts";
+import { adminSessionRules, createAdminAuth, type Admin, type AdminAuth, type VerifyOptions } from "./analytics-auth.ts";
 import { createAnalyticsCollector, createCollectLimiter, type AnalyticsCollector } from "./analytics-collector.ts";
 import { createAnalyticsReporter, type AnalyticsReporter } from "./analytics-report.ts";
 import { createAnalyticsRetention, isRetentionDays, type AnalyticsRetention } from "./analytics-retention.ts";
+import type { LoginProblem, LoginStatus } from "../../components/analytics/dashboard/analytics-login.tsx";
+import { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect } from "../http/private-http.ts";
+
+// Moved to the shared private helpers; re-exported so analytics callers are unchanged.
+export { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect };
 
 export type AnalyticsServices = Readonly<{
   config: AnalyticsConfig;
@@ -48,63 +53,19 @@ export function getAnalyticsServices(): Promise<AnalyticsServices> {
   return processState.goalHintAnalytics;
 }
 
-const privateHeaders = Object.freeze({ "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "X-Content-Type-Options": "nosniff" });
-const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
-  Response.json(body, { status, headers: { ...privateHeaders, ...headers } });
-const empty = (status: number) => new Response(null, { status, headers: privateHeaders });
-
-export function readCookie(request: Request, name: string): string | undefined {
-  for (const part of (request.headers.get("cookie") ?? "").split(";")) {
-    const index = part.indexOf("=");
-    if (index > 0 && part.slice(0, index).trim() === name) {
-      // A malformed escape still counts as present; the raw value never verifies as a session token.
-      const raw = part.slice(index + 1).trim();
-      try { return decodeURIComponent(raw); } catch { return raw; }
-    }
-  }
-  return undefined;
-}
-
-/** Reads at most `limit` body bytes, or null when the body is larger; chunked requests carry no Content-Length to check first. */
-async function readLimitedBody(request: Request, limit: number): Promise<Uint8Array<ArrayBuffer> | null> {
-  if (!request.body) return new Uint8Array(0);
-  const reader = request.body.getReader(), chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
-      if (size > limit) return null;
-      chunks.push(value);
-    }
-    return new Uint8Array(Buffer.concat(chunks));
-  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-}
-
-export function cookie(config: AnalyticsConfig, name: string, value: string, maxAgeSeconds: number): string {
-  return `${name}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSeconds}${config.cookies.secure ? "; Secure" : ""}`;
-}
-
-/** State-changing requests must come from this site's own pages (Fetch Metadata, then Origin). */
-export function isSameOrigin(request: Request): boolean {
-  const site = request.headers.get("sec-fetch-site");
-  if (site !== null) return site === "same-origin";
-  const origin = request.headers.get("origin");
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-  if (origin === null || host === null) return false;
-  try { return new URL(origin).host === host; } catch { return false; }
-}
-
-/** The address seen by the nearest proxy (the last X-Forwarded-For entry); used only as an HMAC throttle key. */
-export function clientAddress(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for")?.split(",").map((value) => value.trim()).filter(Boolean);
-  return forwarded?.at(-1) ?? headers.get("x-real-ip")?.trim() ?? "unknown";
-}
-
-export async function requireAdmin(services: AnalyticsServices, request: Request): Promise<Admin | null> {
+export async function requireAdmin(services: AnalyticsServices, request: Request, options?: VerifyOptions): Promise<Admin | null> {
   if (!services.auth) return null;
-  try { return await services.auth.verify(readCookie(request, services.config.cookies.session)); } catch { return null; }
+  try { return await services.auth.verify(readCookie(request, services.config.cookies.session), options); } catch { return null; }
+}
+
+const loginStatuses: readonly LoginStatus[] = ["invalid", "locked", "unavailable", "signed-out"];
+
+/** What a sign-in page shows: a configuration problem, or the outcome named by the sign-in handler's fixed redirect. */
+export function loginNotice(services: AnalyticsServices, parameters: Record<string, string | string[] | undefined>) {
+  const status = typeof parameters.login === "string" && (loginStatuses as readonly string[]).includes(parameters.login) ? parameters.login as LoginStatus : null;
+  const retryAfterSeconds = typeof parameters.retry === "string" && /^\d{1,5}$/.test(parameters.retry) ? Number(parameters.retry) : null;
+  const problem: LoginProblem = services.config.adminProblem ?? (services.auth ? null : "storage");
+  return { status, problem, retryAfterSeconds };
 }
 
 function edgeLocation(config: AnalyticsConfig, headers: Headers) {
@@ -152,17 +113,32 @@ export function createCollectStatusHandler(services: () => Promise<AnalyticsServ
   };
 }
 
-const redirect = (location: string, cookies: string[] = []) => {
-  const headers = new Headers({ ...privateHeaders, Location: location });
-  for (const value of cookies) headers.append("Set-Cookie", value);
-  return new Response(null, { status: 303, headers });
-};
+/**
+ * Sign-in outcomes for the owner audit trail (058 writes them). A refusal never carries the typed username or password.
+ * It arrives only when the typed username is the owner's and the attempt was counted: each wrong password and the attempt
+ * that started a lock. The username-wide limit then bounds refusals to about 50 an hour however many addresses send them;
+ * other usernames, and attempts refused during a lock, write nothing.
+ */
+export type SignInAuditEvent =
+  | Readonly<{ action: "sign-in" | "sign-out"; username: string }>
+  | Readonly<{ action: "sign-in-refused"; reason: "invalid" | "locked" }>;
+export type SignInOptions = Readonly<{
+  /** Where every outcome lands, fixed by the route: never taken from the request. */
+  home?: string;
+  audit?: ((event: SignInAuditEvent) => Promise<void> | void) | undefined;
+}>;
 
-export function createLoginHandler(services: () => Promise<AnalyticsServices> = getAnalyticsServices) {
+/** An audit failure never blocks signing in or out. */
+async function report(audit: SignInOptions["audit"], event: SignInAuditEvent) {
+  try { await audit?.(event); } catch { /* Best effort. */ }
+}
+
+export function createLoginHandler(services: () => Promise<AnalyticsServices> = getAnalyticsServices,
+  { home = analyticsRules.dashboardPath, audit }: SignInOptions = {}) {
   return async function POST(request: Request): Promise<Response> {
     const { config, auth } = await services();
     if (!isSameOrigin(request)) return empty(403);
-    if (!auth) return redirect(`${analyticsRules.dashboardPath}?login=unavailable`);
+    if (!auth) return redirect(`${home}?login=unavailable`);
     if (Number(request.headers.get("content-length") ?? 0) > 4_096) return empty(413);
     let username = "", password = "";
     try {
@@ -173,25 +149,37 @@ export function createLoginHandler(services: () => Promise<AnalyticsServices> = 
       const form = await new Response(bytes, type === null ? {} : { headers: { "content-type": type } }).formData();
       username = String(form.get("username") ?? "").slice(0, 128);
       password = String(form.get("password") ?? "").slice(0, 1024);
-    } catch { return redirect(`${analyticsRules.dashboardPath}?login=invalid`); }
+    } catch { return redirect(`${home}?login=invalid`); }
     let result;
     try { result = await auth.login(username, password, clientAddress(request.headers)); }
-    catch { return redirect(`${analyticsRules.dashboardPath}?login=unavailable`); }
-    if (result.status === "locked") return redirect(`${analyticsRules.dashboardPath}?login=locked&retry=${result.retryAfterSeconds}`);
-    if (result.status !== "signed-in") return redirect(`${analyticsRules.dashboardPath}?login=${result.status}`);
-    return redirect(analyticsRules.dashboardPath, [
+    catch { return redirect(`${home}?login=unavailable`); }
+    if ((result.status === "invalid" || (result.status === "locked" && result.newlyLocked)) && result.ownerUsername) {
+      // Not awaited, so the response time never shows whether the typed username was the owner's.
+      void report(audit, { action: "sign-in-refused", reason: result.status });
+    }
+    if (result.status === "locked") return redirect(`${home}?login=locked&retry=${result.retryAfterSeconds}`);
+    if (result.status !== "signed-in") return redirect(`${home}?login=${result.status}`);
+    await report(audit, { action: "sign-in", username: result.username });
+    return redirect(home, [
       cookie(config, config.cookies.session, result.token, Math.floor(adminSessionRules.absoluteMs / 1000)),
       cookie(config, config.cookies.exclude, "1", adminSessionRules.excludeMaxAgeSeconds),
     ]);
   };
 }
 
-export function createLogoutHandler(services: () => Promise<AnalyticsServices> = getAnalyticsServices) {
+export function createLogoutHandler(services: () => Promise<AnalyticsServices> = getAnalyticsServices,
+  { home = analyticsRules.dashboardPath, audit }: SignInOptions = {}) {
   return async function POST(request: Request): Promise<Response> {
     const { config, auth } = await services();
     if (!isSameOrigin(request)) return empty(403);
-    try { await auth?.logout(readCookie(request, config.cookies.session)); } catch { /* The cookie is cleared regardless. */ }
-    return redirect(`${analyticsRules.dashboardPath}?login=signed-out`, [cookie(config, config.cookies.session, "", 0)]);
+    const token = readCookie(request, config.cookies.session);
+    // The audit names whose session ended; reading it must not extend the session about to be deleted.
+    const admin = audit && auth ? await auth.verify(token, { touch: false }).catch(() => null) : null;
+    try {
+      await auth?.logout(token);
+      if (admin) await report(audit, { action: "sign-out", username: admin.username });
+    } catch { /* The cookie is cleared regardless. */ }
+    return redirect(`${home}?login=signed-out`, [cookie(config, config.cookies.session, "", 0)]);
   };
 }
 

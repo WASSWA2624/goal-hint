@@ -13,8 +13,13 @@ const problems: Record<Exclude<LoginProblem, null>, string> = {
   storage: "Analytics storage is unavailable, so sign-in is disabled. Check the database configuration.",
 };
 
-/** A plain form POST: works without JavaScript and never embeds credentials in the page. */
-export function AnalyticsLogin({ status, problem, retryAfterSeconds }: { status: LoginStatus; problem: LoginProblem; retryAfterSeconds: number | null }) {
+/**
+ * A plain form POST: works without JavaScript and never embeds credentials in the page. `/analytics` and `/admin` share
+ * the one owner login; each posts to its own fixed sign-in route, which lands back on that page.
+ */
+export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/api/analytics/login", title = "Analytics sign-in" }: {
+  status: LoginStatus; problem: LoginProblem; retryAfterSeconds: number | null; action?: string; title?: string;
+}) {
   const message = problem ? problems[problem]
     : status === "invalid" ? "Incorrect username or password."
     : status === "locked" ? `Too many failed attempts. Try again in ${Math.max(1, Math.ceil((retryAfterSeconds ?? 900) / 60))} minutes.`
@@ -25,17 +30,20 @@ export function AnalyticsLogin({ status, problem, retryAfterSeconds }: { status:
       <Panel aria-labelledby="login-title">
         <BrandImage src="/brand/goal-hint-logo-primary.svg" alt="Goal Hint" width={112} height={26} />
         <div>
-          <h1 id="login-title">Analytics sign-in</h1>
+          <h1 id="login-title">{title}</h1>
           <p>Private dashboard for the Goal Hint operator.</p>
         </div>
         {status === "signed-out" && !problem && <Notice role="status">You have signed out.</Notice>}
         {message && <Notice $tone={problem || status === "locked" ? "warning" : "error"} role="alert">{message}</Notice>}
-        <Form method="post" action="/api/analytics/login">
+        <Form method="post" action={action}>
           <label>Username<input name="username" autoComplete="username" required maxLength={64} autoCapitalize="none" spellCheck={false} disabled={problem !== null} /></label>
           <label>Password<input name="password" type="password" autoComplete="current-password" required maxLength={1024} disabled={problem !== null} /></label>
           <button type="submit" disabled={problem !== null}>Sign in</button>
         </Form>
-        <small>Five failed attempts lock sign-in for 15 minutes. Sessions end after 2 idle hours or 12 hours in total.</small>
+        <small>
+          Five failed attempts from one network pause sign-in there for 15 minutes; 50 in an hour pause it everywhere.
+          Sessions end after 2 idle hours or 12 hours in total.
+        </small>
       </Panel>
     </Page>
   );

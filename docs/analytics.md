@@ -105,11 +105,16 @@ neutralised; percentages as 0–100, durations in seconds).
 - Sessions: 32 random bytes in an HttpOnly, `SameSite=Strict` cookie (`__Host-` and
   `Secure` in production); only a SHA-256 of the token is stored. They end after 2 idle
   hours or 12 hours in total, or on sign-out.
-- Five failures within 15 minutes lock the username **and** the client address for
-  15 minutes (keys are HMACs; no address is stored). Every attempt runs scrypt, so an
+- Five failures within 15 minutes from one client address lock that address, and that
+  username on that address, for 15 minutes. The username alone locks only after 50
+  failures within an hour, so failures from one network never lock the owner out from
+  another (keys are HMACs; no address is stored). Every attempt runs scrypt, so an
   unknown username takes as long as a wrong password.
+- The private owner dashboard at `/admin` (paid access, prompts 057–067) shares this
+  login, session and cookie; it posts to `/api/admin/login` and lands back on `/admin`.
 - State-changing requests require same-origin Fetch Metadata or `Origin`. Dashboard
-  responses are `no-store`, `noindex`, un-frameable; `robots.txt` disallows `/analytics`.
+  responses are `no-store`, `noindex`, un-frameable; `robots.txt` disallows `/analytics`
+  and `/admin`.
 
 ## Setup
 

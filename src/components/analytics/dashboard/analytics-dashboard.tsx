@@ -11,7 +11,7 @@ import { SkipLink } from "@/components/navigation/shell-styles";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from "./charts";
 import { DataTable } from "./data-table";
-import { Brand, BrandImage, Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, HeaderButton, LiveList, LivePill, Main,
+import { Brand, BrandImage, Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, HeaderButton, HeaderLink, LiveList, LivePill, Main,
   Muted, Notice, PageTitle, Panel, PanelHeader, SegmentButton, Segmented, SeriesTable, SettingsRow, Shell, Skeleton, Tab, Tabs, ToolButton,
   TopActions, TopBar, TopBarContent, WidePanel } from "./dashboard-styles";
 
@@ -219,6 +219,7 @@ export function AnalyticsDashboard({ username, today, developmentCredentials }: 
           <TopActions>
             <LivePill aria-live="polite" title="Distinct visitors active in the last five minutes">{live ? count(live.visitors) : "–"} live</LivePill>
             <span>Signed in as <strong>{username}</strong></span>
+            <HeaderLink href="/admin">Admin</HeaderLink>
             <form method="post" action="/api/analytics/logout"><HeaderButton type="submit">Sign out</HeaderButton></form>
           </TopActions>
         </TopBarContent>

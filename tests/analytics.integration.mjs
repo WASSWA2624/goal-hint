@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "./helpers/command-runtime.mjs";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -205,21 +205,48 @@ test("consent-gated analytics records, reports, authenticates and expires agains
         true, "Only a hash of the session token is stored.");
       assert.equal((await auth.verify(signedIn.token)).username, "owner");
       assert.equal(await auth.verify("x".repeat(43)), null);
-      for (let attempt = 1; attempt <= 4; attempt++) assert.equal((await auth.login("owner", `guess-${attempt}`, `192.0.2.${attempt}`)).status, "invalid");
-      const locked = await auth.login("owner", "guess-5", "192.0.2.5");
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        assert.equal((await auth.login("owner", `guess-${attempt}`, `192.0.2.${attempt}`)).status, "invalid", "Failures spread over addresses lock nothing yet.");
+      }
+      for (let attempt = 1; attempt <= 4; attempt++) assert.equal((await auth.login("owner", `guess-${attempt}`, "192.0.2.50")).status, "invalid");
+      const locked = await auth.login("owner", "guess-5", "192.0.2.50");
       assert.equal(locked.status, "locked");
-      assert.equal((await auth.login("owner", "a long test passphrase", "192.0.2.99")).status, "locked", "The username lock holds even with the right password.");
+      assert.equal((await auth.login("owner", "a long test passphrase", "192.0.2.50")).status, "locked", "The address lock holds even with the right password.");
+      assert.equal((await auth.login("owner", "a long test passphrase", "192.0.2.99")).status, "signed-in",
+        "Failures from one address never lock the owner out from another.");
       for (let attempt = 1; attempt <= 5; attempt++) await auth.login(`user${attempt}`, "x", "203.0.113.7");
       assert.equal((await auth.login("someone", "x", "203.0.113.7")).status, "locked", "One address cannot spray usernames.");
+      // Concurrent attempts queue on the locked throttle rows: only the address's first five reach the password check.
+      const burst = await Promise.all(Array.from({ length: 30 }, (_, attempt) => auth.login("owner", `burst-${attempt}`, "198.51.100.77")));
+      const tally = (status, newlyLocked) => burst.filter((result) => result.status === status && (newlyLocked === undefined || result.newlyLocked === newlyLocked)).length;
+      assert.deepEqual([tally("invalid"), tally("locked", true), tally("locked", false)], [4, 1, 25], "A concurrent burst cannot outrun the address lock.");
+      assert.equal((await auth.login("owner", "a long test passphrase", "198.51.100.77")).status, "locked");
       clock.now += adminSessionRules.lockMs + 1;
-      const again = await auth.login("owner", "a long test passphrase", "192.0.2.99");
+      const again = await auth.login("owner", "a long test passphrase", "192.0.2.50");
       assert.equal(again.status, "signed-in", "Locks expire.");
-      clock.now += adminSessionRules.idleMs;
+      const lastSeen = async (token) => (await database.query((client) => client.analyticsAdminSession.findUnique({
+        where: { tokenHash: createHash("sha256").update(token).digest("hex") } }))).lastSeenAt.getTime();
+      const signedInAt = await lastSeen(again.token);
+      clock.now += 30 * 60_000;
+      assert.equal((await auth.verify(again.token, { touch: false })).username, "owner");
+      assert.equal(await lastSeen(again.token), signedInAt, "verify({ touch: false }) leaves lastSeenAt unchanged.");
+      clock.now += adminSessionRules.idleMs - 30 * 60_000;
+      assert.equal(await auth.verify(again.token, { touch: false }), null, "Untouched checks never keep an idle session alive.");
       assert.equal(await auth.verify(again.token), null, "Idle sessions expire.");
       const fresh = await auth.login("owner", "a long test passphrase", "192.0.2.99");
       for (let hour = 1; hour <= 12; hour++) { clock.now += 3_600_000; if (hour < 12) assert.ok(await auth.verify(fresh.token), `hour ${hour}`); }
       assert.equal(await auth.verify(fresh.token), null, "Sessions end 12 hours after sign-in regardless of activity.");
-      const last = await auth.login("owner", "a long test passphrase", "192.0.2.99");
+      // A fresh hour: 49 failures from 49 addresses lock nothing; the 50th locks the username on every address for 15 minutes.
+      for (let attempt = 1; attempt < adminSessionRules.usernameMaximumFailures; attempt++) {
+        assert.equal((await auth.login("owner", "guess", `198.18.${attempt}.1`)).status, "invalid", `failure ${attempt}`);
+      }
+      assert.equal((await auth.login("owner", "guess", "198.18.100.1")).status, "locked");
+      assert.equal((await auth.login("owner", "a long test passphrase", "198.18.200.1")).status, "locked", "The username-wide lock holds on any address.");
+      clock.now += adminSessionRules.lockMs + 1;
+      const last = await auth.login("owner", "a long test passphrase", "198.18.200.1");
+      assert.equal(last.status, "signed-in");
+      assert.equal((await auth.login("owner", "a long test passphrase", "198.18.201.1")).status, "signed-in",
+        "A right password hands back its counted attempt, with the lock that attempt started.");
       await auth.logout(last.token);
       assert.equal(await auth.verify(last.token), null);
     });

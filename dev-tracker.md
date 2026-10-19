@@ -6,7 +6,7 @@
 | ◐ Partial | Implementation started or landed, but work, acceptance checks or an external blocker remain. Each partial row has a note below. |
 | ☐ Not started | No implementation yet. |
 
-**Totals:** 43 completed · 5 partial · 19 not started (67 prompts).
+**Totals:** 44 completed · 5 partial · 18 not started (67 prompts).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -66,7 +66,7 @@
 | ☐ Not started | [054-market-implied-markets.md](dev-plan/054-market-implied-markets.md)         | Implementation; waits on 052 and 053                                                                |
 | ☐ Not started | [055-on-device-picks.md](dev-plan/055-on-device-picks.md)                       | Implementation; run after 061–062                                                                   |
 | ☐ Not started | [056-leagues-and-tips-pages.md](dev-plan/056-leagues-and-tips-pages.md)         | Implementation; run after 061–062                                                                   |
-| ☐ Not started | [057-owner-admin-foundation.md](dev-plan/057-owner-admin-foundation.md)         | Implementation (first paid-access prompt)                                                           |
+| ☑ Completed   | [057-owner-admin-foundation.md](dev-plan/057-owner-admin-foundation.md)         | —                                                                                                   |
 | ☐ Not started | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md)       | Implementation, after 057                                                                           |
 | ☐ Not started | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md)                           | Implementation, after 058                                                                           |
 | ☐ Not started | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             | Implementation, after 059                                                                           |
@@ -90,10 +90,11 @@
 
 - **046–049 Staging to production:** blocked by owner decisions on hosting (OP-32), quality qualification (OP-33, which also needs 011, 012 and 014), release signoff (OP-34) and the domain and production operation (OP-35).
 - **053–056:** not started. 055 and 056 now wait for 061–062.
-- **057–067 Paid access:** see below.
+- **058–067 Paid access:** see below.
 
 ## Paid access (057–067)
 
-- **Phase 0 is done (19 October 2026):** specification v1.9, the index section, decisions OP-37–OP-40 and prompts 057–067 are recorded (commits c79a9c9 and 4529d71). Owner choices: Daily (24 hours) UGX 1,000, Weekly UGX 5,000 and Monthly UGX 20,000, all with full access, running from payment confirmation; one free 2-day trial per new number. No paid-access code exists yet, so every row is ☐ Not started.
+- **Phase 0 is done (19 October 2026):** specification v1.9, the index section, decisions OP-37–OP-40 and prompts 057–067 are recorded (commits c79a9c9 and 4529d71). Owner choices: Daily (24 hours) UGX 1,000, Weekly UGX 5,000 and Monthly UGX 20,000, all with full access, running from payment confirmation; one free 2-day trial per new number. At Phase 0 no paid-access code existed.
+- **057 (19 October 2026):** ☑ Completed, including the manual 375 px check. 058–067 are ☐ Not started.
 - **Run order:** 057 to 062 in order. 055 and 056 now depend on 061–062, so run them after 062; 063 to 067 follow in order.
 - Paid access ships with the switch `off`. Turning it on needs OP-40, and nothing is deployed unless the owner asks.

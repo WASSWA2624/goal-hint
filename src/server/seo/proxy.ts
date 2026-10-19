@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse, type NextRequest } from "next/server.js";
-import { analyticsRules } from "../../domain/analytics-settings.ts";
+import { isPrivatePage } from "../../domain/private-paths.ts";
 import { getLocaleRedirect } from "../../i18n/locales.ts";
 import { getDiscoveryPolicy } from "./policy.ts";
 
@@ -41,7 +41,8 @@ export function createDiscoveryProxy(policy = getDiscoveryPolicy) {
     }
     if (fragment) destination.hash = fragment;
     const response = pathname || attribution ? NextResponse.redirect(destination, pathname ? 307 : 308) : NextResponse.next();
-    if (request.nextUrl.pathname === analyticsRules.dashboardPath) response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    // Owner dashboards and member pages (and their attribution redirects) are never indexed or followed, under any policy.
+    if (isPrivatePage(request.nextUrl.pathname)) response.headers.set("X-Robots-Tag", "noindex, nofollow");
     else if (!policy().index) response.headers.set("X-Robots-Tag", "noindex, follow");
     return response;
   };

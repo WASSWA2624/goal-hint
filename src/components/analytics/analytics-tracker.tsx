@@ -4,8 +4,8 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import styled from "styled-components";
 import { Button } from "@/components/ui/controls";
-import { analyticsRules } from "@/domain/analytics-settings";
 import { informationHref } from "@/domain/navigation-paths";
+import { isOwnerPage } from "@/domain/private-paths";
 import { ServerThemeUntilHydrated } from "@/styles/provider";
 import { media } from "@/styles/theme";
 import { getConsentState, getServerConsentState, rememberLanding, setConsent, startTracker, stopTracker, subscribeConsent,
@@ -15,12 +15,12 @@ export function useConsentState() {
   return useSyncExternalStore(subscribeConsent, getConsentState, getServerConsentState);
 }
 
-/** Root-level page-view tracking plus the first-visit consent banner. The dashboard itself is never tracked. */
+/** Root-level page-view tracking plus the first-visit consent banner. The owner dashboards are never tracked. */
 export function AnalyticsTracker({ available }: { available: boolean }) {
   const pathname = usePathname();
   const query = useSearchParams().get("q") ?? "";
   const consent = useConsentState();
-  const excluded = pathname.startsWith(analyticsRules.dashboardPath);
+  const excluded = isOwnerPage(pathname);
   const last = useRef<string | null>(null);
 
   useEffect(() => { rememberLanding(); }, []);

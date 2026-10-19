@@ -2,6 +2,7 @@ import "server-only";
 import type { MetadataRoute } from "next";
 import { canonicalUrl, discoveryRules, sitemapIndexXml, sitemapPage } from "../../domain/discovery.ts";
 import { informationPages } from "../../domain/navigation.ts";
+import { ownerPagePaths } from "../../domain/private-paths.ts";
 import { getDiscoveryPolicy } from "./policy.ts";
 import { informationPublicationReady } from "./metadata.ts";
 import { readPublicDiscovery } from "./discovery-read.ts";
@@ -34,8 +35,9 @@ export function createDiscoveryRoutes({ policy = getDiscoveryPolicy, reader = re
   }
   return {
     async robots(): Promise<MetadataRoute.Robots> {
-      // The private analytics dashboard is never crawled; it also answers noindex and requires sign-in.
-      const rules = { userAgent: "*", allow: "/", disallow: ["/api/", "/analytics"] };
+      // The private owner dashboards (/analytics, /admin) are never crawled; they also answer noindex and require sign-in.
+      // Member pages stay crawlable here so crawlers can read their noindex.
+      const rules = { userAgent: "*", allow: "/", disallow: ["/api/", ...ownerPagePaths] };
       if (!policy().index) return { rules };
       // One index URL covers every shard, so Search Console needs a single submission.
       return { rules, sitemap: canonicalUrl("/sitemap-index.xml") };

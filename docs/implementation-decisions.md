@@ -3602,3 +3602,116 @@ and specification v1.9. Phase 0 records the change; it adds no application code.
   sent by the owner as a code (plan 5.10).
 - **Unchanged:** no code, schema, copy or deployment. The public site behaves as
   before. Nothing is deployed to production unless the owner explicitly asks.
+
+## 057 — Owner admin foundation (19 October 2026)
+
+**Status:** implemented in the working tree; the manual 375 px Browser pane check
+is pending, so tracker 057 is ◐ Partial. The owner foundation only: no member
+tables, settings, sign-in or payments, and `paywallMode` does not exist yet
+(058). No env key, npm dependency or migration. No OP row changes state: 057
+needs no owner input. The owner's sign-in length choice (plan §12) is still
+open, so the 12 h / 2 h limits stay as the prompt requires.
+
+- **One owner login.** `/admin` reuses the analytics administrator: one login,
+  session table, Strict cookie, 12 h / 2 h limits and the existing
+  `GOAL_HINT_ANALYTICS_ADMIN_*` keys. `src/server/admin/owner-auth.ts` names it
+  `Owner` and holds the fixed `ownerRoutes`, so later prompts import owner names
+  instead of analytics internals. `tests/admin-routes.test.mjs` checks that the
+  admin foundation reads no environment variable.
+- **Shared helpers.** The nine helpers move to `src/server/http/private-http.ts`
+  and `analytics-http.ts` re-exports them, so analytics callers are unchanged.
+  `privateHeaders` now also carries `X-Frame-Options: DENY`,
+  `frame-ancestors 'none'` and `Referrer-Policy: same-origin`, the values
+  `next.config.ts` already added by path, so a private response carries them
+  even from a route outside that list. `cookie` gains `sameSite` (default
+  Strict; member cookies may use Lax so links from WhatsApp keep the session).
+  `readLimitedBody` gains an optional deadline that rejects with
+  `BodyDeadlineError` and cancels the reader (063's 90 s upload read); the
+  existing login and collector reads pass none, so their behaviour is unchanged.
+- **Fixed landing.** `createLoginHandler` and `createLogoutHandler` take `home`
+  from the route, never from the request, so no outcome can redirect elsewhere.
+  The defaults stay `/analytics` with no audit. `loginNotice` moves from the
+  analytics page into `analytics-http.ts`, so both sign-in pages accept only the
+  redirect's known `login` and `retry` values.
+- **One guard, two forms.** `adminRoute` checks same-origin first for every
+  request that is not a read, so a cross-site post never reaches the database,
+  then answers 503 without storage and 401 without an owner session.
+  `adminPageGate` is the page side, built on the server gate of
+  `src/app/analytics/page.tsx`. The route-guard test checks that every `/admin`
+  page uses the gate and every `/api/admin` route except login is wrapped.
+- **Sign-out needs no live session (departure).** The prompt puts every route
+  except login behind the owner-session guard. Review found that a guarded
+  sign-out after the session lapsed, or while storage failed, answered 401 and
+  left the cookie behind, while the page said the session had ended. Sign-out is
+  therefore wrapped with `session: "optional"`: still same-origin only, but it
+  neither checks nor extends the session, and always clears the cookie. The
+  route-guard test allows the option for sign-out alone.
+- **One private-path list.** New `src/domain/private-paths.ts` names the owner
+  pages (`/analytics`, `/admin`) and the member pages (`/en/account`,
+  `/en/subscribe`). A prefix matches the path itself or a path below it, so
+  `/administrator` is not under `/admin`. The proxy, robots.txt and the tracker
+  read it. robots.txt disallows the owner pages only, so crawlers can still read
+  the member pages' noindex. The proxy sends `noindex, nofollow` for every
+  private page, and its attribution redirects, under any discovery policy.
+  `next.config.ts` keeps its own literal list of the eight header sources, and
+  `tests/admin.test.mjs` asserts that list and each rule's headers.
+- **Three throttle keys.** Per address and per (username, address): the fifth
+  failure inside 15 minutes locks that key for 15 minutes. Username-wide: only
+  the 50th failure inside an hour locks it, also for 15 minutes. The old
+  username key locked everywhere after five failures, so one network could lock
+  the owner out of every other. Keys are HMACs (`config.key`), so no username or
+  address is stored; the (username, address) key joins the two with a NUL.
+- **Each attempt is counted before scrypt.** Review found that the lock check
+  was a plain read before the password check, so a concurrent burst all passed
+  it. `reserve()` now counts the attempt in one ReadCommitted transaction before
+  the check. It takes the three rows with `SELECT ... FOR UPDATE` in one fixed
+  key order, so concurrent sign-ins queue instead of deadlocking. A preceding
+  `INSERT ... ON DUPLICATE KEY UPDATE` creates a missing row, so that row is
+  locked too. A key that is already locked refuses the attempt uncounted. The
+  read-only `lockedFor` check stays as a fast path, so attempts during a lock
+  usually write nothing. A 30-attempt burst from one address now gives 4
+  invalid, 1 newly locked and 25 locked, in the unit test and on MySQL 8.4.
+- **A right password hands its attempt back.** Since every attempt is counted
+  first, a success would otherwise count as a failure. The success transaction
+  (same key order) deletes the address and (username, address) keys. It
+  decrements the username-wide key by one in the same window, and clears a lock
+  that attempt started. "50 failures an hour" stays exact, and the owner's own
+  sign-in never locks the username. Other failures on the username-wide key run
+  out their hour, so a success does not reset an attack's count.
+  `newlyLocked` is true only for the attempt whose reservation started a lock.
+- **Audit hook, bounded.** `SignInAuditEvent` is `sign-in` or `sign-out` with
+  the username, or `sign-in-refused` with a reason only, never the typed
+  username or password. 057 connects no writer; 058 does. A refusal is reported
+  only when the typed username, trimmed and lowercased, is the owner's
+  (`ownerUsername`) and the attempt was counted (a wrong password, or the attempt
+  that started a lock). The username-wide limit then bounds refusals to 50 an
+  hour, plus one each time a lapsed lock re-locks inside the hour. Random
+  usernames from rotating addresses write nothing. Review found that auditing
+  every refusal let them grow the never-purged audit without limit (OP-26 keeps
+  audit rows unpurged). The refusal report is not awaited, so response timing
+  never shows whether the typed username was the owner's. Success and sign-out
+  reports are awaited. An audit failure never blocks signing in or out. 058's
+  writer must be self-contained, because refusal writes finish after the
+  response.
+- **`verify({ touch: false })`.** Checks a session without writing `lastSeenAt`,
+  for the sign-out audit read and for 060's viewer-access check, so pages and
+  polls never extend the owner's 2 h idle window. The idle limit still expires
+  an untouched session.
+- **Phone-first shell.** `AdminShell` reuses `dashboard-styles.tsx`: one column
+  up to 48rem, a top tab strip (Overview only; later prompts add tabs and the
+  pending count) and 44 px targets (`theme.control.minHeight`) for the brand
+  link, header actions and tabs. Review found the brand link was about 26 px
+  tall. Sign-out is a plain form POST, so it works without JavaScript. The new
+  `HeaderLink` shares `HeaderButton`'s styles and joins the two dashboards'
+  top bars. Owner copy is hard-coded English. The empty Overview says which
+  sections arrive as each part lands.
+- **Login form.** `AnalyticsLogin` takes `action` and `title` (defaults
+  `/api/analytics/login` and "Analytics sign-in"); `/admin` passes "Owner
+  sign-in". The small print now reads "Five failed attempts from one network
+  pause sign-in there for 15 minutes; 50 in an hour pause it everywhere." The
+  `username` and `current-password` autocomplete stay.
+- **Unchanged.** Cookie names and attributes, the session limits, the session
+  table, the collector's owner-cookie exclusion and every analytics route. The
+  throttle reuses `AnalyticsLoginThrottle`, whose rows `analytics:purge` still
+  deletes once their window is a day old and any lock has passed, so there is no
+  migration.

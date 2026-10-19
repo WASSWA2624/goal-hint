@@ -4130,3 +4130,146 @@ catalog writes fail on the missing column. Then restart the live runner. Flags
 fill in at the next daily selection (21:00 UTC, or at runner start when that
 night's run is missing) for every competition with a fixture in its seven
 dates. International competitions have no flag.
+
+## 057 — Owner admin foundation (19 October 2026)
+
+**Status:** implemented; every acceptance check passes, including the manual
+375 px Browser pane check. Tracker 057 is ☑ **Completed**. This is the
+first paid-access prompt and builds the owner foundation only: no member tables,
+settings, sign-in or payments, and `paywallMode` does not exist yet (058). The
+public site behaves as before. No migration, env key or npm dependency was
+added, and nothing was deployed. Decisions are in
+[implementation decisions](implementation-decisions.md) (057 section).
+
+### Changed behavior and files
+
+- **Shared private helpers** (new `src/server/http/private-http.ts`):
+  `readCookie`, `cookie` (gains `sameSite`, default Strict), `isSameOrigin`,
+  `clientAddress`, `readLimitedBody` (gains an optional deadline and
+  `BodyDeadlineError`), `privateHeaders` (now also `X-Frame-Options: DENY`,
+  `frame-ancestors 'none'` and `Referrer-Policy: same-origin`), `json`, `empty`
+  and `redirect`. `src/server/analytics/analytics-http.ts` re-exports them.
+- **Private paths** (new `src/domain/private-paths.ts`): the owner pages
+  (`/analytics`, `/admin`) and member pages (`/en/account`, `/en/subscribe`), with
+  prefix checks that stop at a segment boundary (`/administrator` is not under
+  `/admin`).
+- **Owner auth and guard** (new `src/server/admin/owner-auth.ts`,
+  `src/server/admin/admin-http.ts`): `Owner`, the fixed `ownerRoutes`,
+  `verifyOwner`, `requireOwner`, the owner sign-in and sign-out handlers, and
+  the one guard. `adminRoute` refuses cross-site writes with 403 before any
+  lookup, then answers 503 without storage and 401 without an owner session;
+  sign-out alone uses `session: "optional"`. `adminPageGate` is the page side.
+- **Login and logout** (`analytics-http.ts`): `createLoginHandler` and
+  `createLogoutHandler` gain a fixed `home` and an `audit` callback (defaults
+  `/analytics` and none). `SignInAuditEvent` reports sign-in and sign-out with
+  the username, and a refusal with its reason only, for counted attempts on the
+  owner's username. 058 connects the writer. `loginNotice` moves here from
+  `src/app/analytics/page.tsx`. Routes: new `src/app/api/admin/login/route.ts`
+  (unguarded) and `src/app/api/admin/logout/route.ts`.
+- **Throttle and verify** (`src/server/analytics/analytics-auth.ts`): HMAC keys
+  per address and per (username, address) lock after 5 failures in 15 minutes;
+  the username-wide key locks only after 50 in an hour. Each lock lasts 15
+  minutes. Every attempt is reserved under `FOR UPDATE` row locks, in one key
+  order, before scrypt runs. A right password clears the address keys and hands
+  its attempt back to the username-wide key. `LoginResult` gains `username`,
+  `ownerUsername` and `newlyLocked`. `verify(token, { touch: false })` never
+  writes `lastSeenAt`. The cookie, the 12 h / 2 h limits and every env key are
+  unchanged.
+- **Shell** (new `src/app/admin/layout.tsx`, `src/app/admin/page.tsx`,
+  `src/components/admin/admin-shell.tsx`): robots noindex for every `/admin`
+  page. "Owner sign-in" when signed out; when signed in, an empty Overview in one
+  column with a top tab strip, 44 px targets, a skip link, a no-JavaScript
+  Sign out and the development-credentials warning. `dashboard-styles.tsx`
+  gains `HeaderLink`. The analytics top bar
+  (`analytics-dashboard.tsx`) links to `/admin`, and the admin top bar links back.
+- **Login form** (`analytics-login.tsx`): takes `action` and `title` (defaults
+  unchanged); new small print "Five failed attempts from one network pause
+  sign-in there for 15 minutes; 50 in an hour pause it everywhere." The
+  `username` and `current-password` autocomplete stay.
+- **Private exclusion points:** `next.config.ts` `headers()` applies the private
+  headers to `/analytics`, `/api/analytics/:path*`, `/admin`, `/admin/:path*`,
+  `/api/admin/:path*`, `/en/account`, `/en/subscribe` and `/api/account/:path*`.
+  `src/server/seo/proxy.ts` sends `noindex, nofollow` for every private page by
+  prefix. robots.txt (`src/server/seo/discovery-routes.ts`) disallows `/api/`,
+  `/analytics` and `/admin`. `src/components/analytics/analytics-tracker.tsx`
+  skips every owner page.
+- **Tests:** new `tests/admin.test.mjs` (15 tests) and
+  `tests/admin-routes.test.mjs` (6 tests: the structural scan, the env-key
+  check, and table-driven 401/403 cases); `tests/discovery.test.mjs` (prefix
+  test and the robots line); `tests/analytics.integration.mjs` (per-address
+  lock, sign-in from another address, a 30-attempt concurrent burst,
+  `touch: false`, the 50-an-hour username lock and the hand-back);
+  `package.json` gains `test:admin`.
+- **Docs:** `docs/analytics.md` (new throttle wording, `/admin` shares the login,
+  robots).
+
+### Acceptance checks
+
+- **Sign-in from `/admin` lands on `/admin` under "Owner sign-in": passed.**
+  `tests/admin.test.mjs`: the right password gives a 303 to `/admin` with the
+  Strict owner cookies, and every refusal lands on `/admin?login=...`. A source
+  check asserts the page renders `action={ownerRoutes.login}
+  title="Owner sign-in"`.
+- **`/analytics` is unchanged apart from its small print: passed.** The analytics
+  suite passes unchanged; `createLoginHandler` still defaults to `/analytics`, and
+  `AnalyticsLogin` keeps its action and "Analytics sign-in" title by default. The
+  new throttle applies to the shared owner login, as the prompt requires.
+- **`/admin` is no-store, noindex and DENY, and robots.txt disallows it: passed.**
+  `tests/admin.test.mjs` checks the eight `headers()` sources and their headers,
+  the proxy's `noindex, nofollow`, the robots disallow list and the layout's
+  robots metadata.
+- **Failures from one IP do not lock the owner out from another: passed.** Unit
+  and MySQL: an address locked after 5 failures still lets the owner sign in from
+  another address. A concurrent burst of 30 from one address gives 4 invalid,
+  1 newly locked and 25 locked.
+- **`verify({ touch: false })` leaves `lastSeenAt` unchanged: passed.** Unit, and
+  on MySQL `lastSeenAt` reads back unchanged and the idle limit still expires the
+  session.
+- **The route-guard test passes, and no new env key exists: passed.**
+  `tests/admin-routes.test.mjs`; no env key or npm dependency was added.
+- **Manual: owner sign-in and the empty shell work at 375 px in the Browser
+  pane:** see below.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm). The MySQL integration tests start their own isolated
+MySQL 8.4.11 and skip themselves unless `MYSQL_TEST_SERVER_BINARY` points at
+`mysqld`; these runs used `%LOCALAPPDATA%\GoalHint\mysql-8.4.11\bin\mysqld.exe`.
+The developer database on 127.0.0.1:3307 was not used.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:admin` | 21/21 pass, including the concurrent burst, the audit bound, the hand-back and the route-guard suite. |
+| `npm run test:analytics` (MySQL) | 27/27 pass, 0 skipped. The integration run includes the burst ([4, 1, 25]) and the second sign-in after the username-wide lock. |
+| `npm run test:seo` (MySQL) | 28/28 pass, 0 skipped. |
+| `npm run lint` | `eslint . --max-warnings=0` exit 0. |
+| `npm run typecheck` | `next typegen && tsc --noEmit` exit 0. |
+| `npm test` (unit suite) | 1,517 tests: 1,516 pass, 0 fail, 1 skipped (the existing Windows-only POSIX-mode check in `tests/provider-trial-journal.test.mjs`, unrelated to 057). |
+
+These were rerun on 19 October 2026 after the review fixes; the implementer's
+final round reported the same results.
+
+**Manual checks:**
+
+- Manual 375 px Browser pane check (19 October 2026, local dev server): passed.
+  Signed out, `/admin` shows "Owner sign-in" with the new small print. With a
+  throwaway local owner session, the empty shell shows the brand bar, "Signed in
+  as admin", Analytics and Sign out, and the Overview tab. The page has no
+  horizontal scroll at 375 px, and every target is 44 px tall. Sign out lands
+  on `/admin?login=signed-out`.
+- Throttled desktop Chrome (DevTools device mode, Slow 3G or 200 kbit/s): not
+  run; 057's acceptance does not require it. It must run in desktop Chrome,
+  because the Browser pane cannot throttle.
+- Real Android phone (password-manager autofill of the owner sign-in): not run;
+  057's acceptance does not require it. It must run on a real Android phone over
+  HTTPS dev (`npx next dev --experimental-https`, its CA trusted on the phone),
+  or in test mode after an owner-requested deploy.
+
+**Not run:** `next build`, the rendering scripts, and anything against the
+developer database or goalhint.com.
+
+**Outstanding inputs:** none block 057. The owner's choice of sign-in length
+(plan §12: keep the 2 h idle limit, or a longer session that also applies to
+`/analytics`) is still open, so the 12 h / 2 h limits stay. 058 must connect the
+audit writer, and keep it self-contained: refusal reports finish after the
+response.

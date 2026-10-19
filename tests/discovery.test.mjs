@@ -53,6 +53,20 @@ test('analytics retains its private robots policy on responses and attribution r
   }
 });
 
+test('owner and member pages share the private robots policy by path prefix', () => {
+  for (const policy of [approved, { deployment: 'staging', index: false }]) {
+    const proxy = createDiscoveryProxy(() => policy);
+    for (const path of ['/admin', '/admin/payments', '/admin?login=invalid', '/en/account', '/en/subscribe', '/en/subscribe?utm_source=shared']) {
+      const response = proxy(new NextRequest(`https://goalhint.com${path}`));
+      assert.equal(response.headers.get('x-robots-tag'), 'noindex, nofollow', path);
+    }
+  }
+  const proxy = createDiscoveryProxy(() => approved);
+  for (const path of ['/administrator', '/en/accounts', '/en/help']) {
+    assert.equal(proxy(new NextRequest(`https://goalhint.com${path}`)).headers.get('x-robots-tag'), null, `${path} is not under a private prefix`);
+  }
+});
+
 test('indexing needs an explicit production runtime and verified release; missing or preview configuration fails closed', () => {
   for (const deployment of [undefined, '', 'development', 'staging', 'preview', 'Production', 'production']) {
     for (const runtime of ['development', 'test', 'production']) for (const releaseVerified of [false, true]) {
@@ -117,7 +131,8 @@ test('disabled discovery never reads a database and robots allows noindex varian
   assert.deepEqual(await routes.sitemap(), []); assert.deepEqual(await routes.matches({ id: Promise.resolve('0') }), []);
   await assert.rejects(routes.matches({ id: Promise.resolve('1') }), RangeError);
   assert.deepEqual(await routes.matchIds(), [{ id: 0 }]);
-  assert.deepEqual(await routes.robots(), { rules: { userAgent: '*', allow: '/', disallow: ['/api/', '/analytics'] } });
+  // The owner dashboards are disallowed; member pages (/en/account, /en/subscribe) stay readable so crawlers see their noindex.
+  assert.deepEqual(await routes.robots(), { rules: { userAgent: '*', allow: '/', disallow: ['/api/', '/analytics', '/admin'] } });
   assert.doesNotMatch(await routes.sitemapIndex(), /<loc>/, 'The prelaunch index advertises no URL.');
 });
 
