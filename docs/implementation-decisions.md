@@ -268,7 +268,7 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-28 Verified public contact route | **Unresolved release blocker; unavailable page implemented** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. Existing owner deferrals persist; 041 displays unavailable status and report guidance, not an operational intake. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
 | OP-29 Recovery watchdog ownership and thresholds | **Unresolved / live activation blocked** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Prompt 043 implements private CLI inspection, reviewed durable recovery and an operator runbook; synthetic settings do not approve live thresholds. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization, independent invocation frequency and recovery/incident owner | **043** |
 | OP-30 Alerts, destinations and monitoring service | **Local verification only; live activation blocked by owner decision** | Prompt 044 implements authenticated private aggregate inspection, bounded MySQL alert state/fenced delivery and a local test sink. The owner explicitly keeps incident ownership, destinations, thresholds and retention unresolved. Approve the authorized monitoring service, actual outage/staleness/latency/quota/cost/expiry thresholds, recipients, privacy/retention and independent supervision before live activation; no external test message is authorized. §§11, 13–15. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget; see `docs/operations-monitoring.md` | **044** |
-| OP-31 Recovery objectives, backups and history retention | **Local verification only; live recovery blocked by owner decision** | For 045 the owner explicitly keeps ownership, RPO/RTO, retention and hosted storage/PITR unresolved. Implement encrypted private snapshots, isolated restoration/log replay, integrity/access and conservative worker/quota acceptance locally. No live schedule, production restore, deletion period, approved objective or hosted DR proof is inferred. See `docs/backup-restore.md`. §§13, 15. **Paid access (19 October 2026):** backups and restores must cover payment submissions, access codes, settings and audit rows; screenshots copied into backups persist until those backups expire. Take and verify a private backup before applying the paid-access overlay. A production backup schedule and retention covering the new tables blocks paid switch-on (OP-40). **058 (19 October 2026):** the snapshot inventory covers the 90 tables, but local restore verification fails; a stale table count had hidden this. The append-only triggers of `20261012153531_goal_market_extension` end with `;`, so the mysqldump output does not import (ERROR 1064). Until a reviewed forward migration recreates them (owner approval pending), no backup counts as verified, including the one the paid-access overlay needs first. | Unassigned; user decision/evidence required for live recovery | Deferred: approved RPO/RTO, backup/PITR hosting, key escrow/access, snapshot/archive cadence and per-class source/history/backup retention | **045 local scope**; hosted proof **046/048**; source permissions **009/011**, visitor notice **039**; paid-access tables **058**, switch-on **067** |
+| OP-31 Recovery objectives, backups and history retention | **Local verification only; live recovery blocked by owner decision** | For 045 the owner explicitly keeps ownership, RPO/RTO, retention and hosted storage/PITR unresolved. Implement encrypted private snapshots, isolated restoration/log replay, integrity/access and conservative worker/quota acceptance locally. No live schedule, production restore, deletion period, approved objective or hosted DR proof is inferred. See `docs/backup-restore.md`. §§13, 15. **Paid access (19 October 2026):** backups and restores must cover payment submissions, access codes, settings and audit rows; screenshots copied into backups persist until those backups expire. Take and verify a private backup before applying the paid-access overlay. A production backup schedule and retention covering the new tables blocks paid switch-on (OP-40). **058 (19 October 2026):** the snapshot inventory covers the 90 tables, but local restore verification fails; a stale table count had hidden this. The append-only triggers of `20261012153531_goal_market_extension` end with `;`, so the mysqldump output does not import (ERROR 1064). **Trigger repair (19 October 2026):** forward migration `20261019174619_append_only_trigger_blocks` recreates them as `BEGIN … END` blocks, and local restore verification passes again (9/9, 90 tables). Production still needs that migration's MariaDB overlay, then a fresh verified backup, before the paid-access overlay. | Unassigned; user decision/evidence required for live recovery | Deferred: approved RPO/RTO, backup/PITR hosting, key escrow/access, snapshot/archive cadence and per-class source/history/backup retention | **045 local scope**; hosted proof **046/048**; source permissions **009/011**, visitor notice **039**; paid-access tables **058**, switch-on **067** |
 | OP-32 Hosted deployment and account isolation | **Unresolved / evidence required** | Confirm actual web/database/queue/long-lived worker/poller infrastructure, scheduler/workload identity and authorized access. Choose account sharing vs genuinely separate provider accounts, durable cross-environment limits and poller observation/ownership transfer. Separate databases cannot create extra provider capacity. §§9, 11, 14–15; prompt 046. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE`, infrastructure/provider/budget references; Deferred: environment isolation, hosted runtime and poller ownership plan | **046**; database/queue choices earlier **003/020** |
 | OP-33 Quality qualification and measured commitments | **Evidence required** | Accumulate real prospective samples under the frozen protocol; prove market/source/horizon quality and coverage, calibrated-claim eligibility, full-slate cost/capacity and cadence/latency targets. Simulated load is not elapsed shadow observation or unapproved paid-call authority. §§8, 14–15; prompt 047. | Unassigned; user evidence/commitment decision required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: qualification report and approved measurement-supported commitments | **047**, with protocol choices fixed **014** |
 | OP-34 Release decision and signoff | **Unresolved / evidence required** | Assign production release authority and record actual go/no-go evidence tied to build/configuration. All required rights/account/budget/quality/recovery/monitoring/legal gates must pass; an environment reference cannot substitute for missing evidence or owner approval. §§14–15; prompt 048. | Unassigned; user decision/evidence required | `GOAL_HINT_RELEASE_APPROVAL_REF`, `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_OPERATION_SCOPE=production`; Deferred: release owner and readiness report | **048** |
@@ -3877,7 +3877,8 @@ no other OP row changes state.
   and had hidden it. A fix needs a new forward migration that recreates the
   triggers, or restore-side handling. That is outside 058 and waits for owner
   approval (OP-31). A real restore of a database migrated the same way would
-  probably fail too.
+  probably fail too. Fixed later the same day by a forward migration; see
+  "Append-only trigger repair" below.
 - **`npm run check` fails at `next build` with the local `.env.local`.** The
   database capability is on, and in production mode it needs TLS, access and
   budget refs. The build passes with `GOAL_HINT_DATABASE_ENABLED=false` set on
@@ -3886,3 +3887,51 @@ no other OP row changes state.
   `20261015072524_match_facts` (`fixturefacts`, `footballvenue`,
   `seasonstandings`) is not in the repository. Removing it would be a destructive
   change to the developer database, so it waits for the owner.
+
+## Append-only trigger repair (19 October 2026)
+
+**Status:** fixed locally; `npm run test:backup` passes 9/9 with 90 tables.
+Not deployed. One migration (`20261019174619_append_only_trigger_blocks`) and
+its MariaDB overlay. No env key or npm dependency. OP-31 gains a note; no OP
+row changes state.
+
+- **Root cause.** Prisma applies a migration as one multi-statement script.
+  MySQL then stores a single-statement trigger body with its closing `;` (a
+  `BEGIN … END` body ends at `END`). 9 of the 10 append-only triggers of
+  `20261012153531_goal_market_extension` were stored that way; the file's last
+  statement was not. mysqldump writes `/*!50003 … ; */;;`, and the mysql
+  client stops at ` */` with ERROR 1064.
+- **Fix in the schema, not in restore.** A forward migration recreates the
+  ten triggers as `BEGIN … END` blocks, with the same names, tables, timing,
+  events and messages. The applied migration stays unchanged. Rewriting the
+  dump during restore was rejected. The restore verifier compares every
+  trigger body with the source, so a rewritten body would fail as an integrity
+  mismatch. Dumps made with other tools (mysqldump by hand, phpMyAdmin) would
+  also still break.
+- **Block bodies.** `BEGIN … END` is how the 32 cache triggers are already
+  written, and it works however the SQL is sent. A single-statement body
+  without `;` would only work as a script's last statement.
+- **MySQL migration.** `DROP TRIGGER IF EXISTS` then `CREATE TRIGGER` for each,
+  so a rerun after a partial failure is safe. MySQL 8.4 has no
+  `CREATE OR REPLACE TRIGGER`. Each table is unguarded only between its own
+  two statements. That is acceptable because writers pause during schema
+  changes and the application never updates or deletes these rows.
+  `LOCK TABLES` around the script was rejected: if a statement failed, Prisma
+  could not write the failure to `_prisma_migrations` under the lock.
+- **MariaDB overlay.** `CREATE OR REPLACE TRIGGER` swaps each trigger in one
+  statement, so production has no unguarded window and a rerun is a no-op. A
+  guard first requires the goal-market migration to be recorded and its five
+  tables to exist. A verification requires ten `BEGIN … END` bodies before the
+  checksum is recorded. The importing account becomes the definer, as with the
+  original overlay. Whether production's bodies end in `;` depends on how that
+  overlay was imported, so the runbook gives a check query first.
+- **Regression guard.** `tests/append_only_trigger_migration_test.py` refuses a
+  single-statement trigger in any other migration. It also checks that the
+  migration and overlay reproduce the original ten exactly and that the
+  overlay records the committed SHA-256 only after verifying. A guard inside
+  the backup engine (refusing to capture a `;`-terminated body) was not added.
+  The restore drill already fails on such a body, and a schema rule caught by a
+  static test stops it before any migration ships.
+- **Not run.** The overlay on MariaDB 11.4 (its logic ran on MySQL with the
+  MariaDB-only statements translated), `db:deploy` on the developer database,
+  and anything in production.

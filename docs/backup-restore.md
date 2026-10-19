@@ -149,6 +149,20 @@ asserting 68 tables. The two restores took 16,116 ms and 20,459 ms. Both matched
 complete-row hashes, schema, foreign keys and triggers, including the two
 `FixtureOddsState` cache triggers. Private record: `.tmp/052-stage2-backup.log`.
 
+Prompt 058 raised the count to **90 tables** (89 application models plus Prisma
+migration history), and that exposed a restore failure the stale 68-table
+assertion had hidden. The ten append-only triggers of
+`20261012153531_goal_market_extension` had single-statement bodies, which MySQL
+stores with their closing `;` when Prisma applies the migration. mysqldump then
+writes `/*!50003 … ; */;;`, and the import stopped with ERROR 1064. Migration
+`20261019174619_append_only_trigger_blocks` recreates them as `BEGIN … END`
+blocks (see [database](database.md), "Append-only trigger repair on MariaDB").
+Any new trigger needs a block body; `tests/append_only_trigger_migration_test.py`
+refuses a single-statement one. On 19 October 2026, `npm run test:backup` passed
+all **9 checks** on MySQL 8.4.11 with no skips, asserting 90 tables. The two
+restores took 28,295 ms and 32,200 ms, and both matched complete-row hashes,
+schema, foreign keys and all 42 triggers.
+
 ## PITR and hosted infrastructure qualification
 
 The owned drill explicitly uses ROW binlogs, `sync_binlog=1`,

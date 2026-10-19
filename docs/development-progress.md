@@ -4459,7 +4459,83 @@ goalhint.com or cPanel.
   destructive).
 - Owner approval: a separate forward migration that recreates the
   `20261012153531_goal_market_extension` triggers without the trailing `;`, so
-  backups restore again (OP-31).
+  backups restore again (OP-31). Done: see the next section.
 - Owner decision: how `npm run check` runs `next build` locally, for example
   with the database capability off for the build only.
 - Still open from 057: the owner's sign-in length choice (plan §12).
+
+## Append-only trigger repair for backup restores (19 October 2026)
+
+**Status:** fixed locally on a side branch; not deployed, and the developer
+database is not migrated yet. `npm run test:backup`
+now passes all 9 checks with 90 tables. This closes the pre-058 restore failure
+flagged above, which plan §10 needs fixed before the paid-access overlay goes to
+production (OP-31). One migration and its MariaDB overlay; no env key or npm
+dependency.
+
+**Root cause.** Prisma applies a migration as one multi-statement script. In
+that mode MySQL stores a single-statement trigger body with its closing `;`. A
+`BEGIN … END` body ends at `END`, and the last statement of a script has no
+following `;`. So 9 of the 10 append-only triggers of
+`20261012153531_goal_market_extension` were stored as `SIGNAL …;`; only
+`ExtendedMarketPublishedPick_no_delete`, the file's last statement, was clean.
+mysqldump writes a trigger as `/*!50003 … */;;`, the stored `;` closes the
+statement inside the comment, and the mysql client refuses ` */` (ERROR 1064).
+Reproduced on a throwaway MySQL 8.4.11 by sending the original trigger SQL as
+one batch: 9 bodies ended in `;`, and the dump failed to import at the first.
+
+### Changed behavior and files
+
+- **Migration** (new
+  `prisma/migrations/20261019174619_append_only_trigger_blocks/migration.sql`):
+  `DROP TRIGGER IF EXISTS` and `CREATE TRIGGER` for each of the ten, with a
+  `BEGIN … END` body and the same name, table, timing, event and message. The
+  applied `20261012153531` migration is unchanged. A rerun after a partial
+  failure is safe. Each table is unguarded only between its own `DROP` and
+  `CREATE`, so writers pause while it runs, as for any schema change.
+- **MariaDB overlay** (new
+  `prisma/mariadb/20261019174619_append_only_trigger_blocks.sql`): a guard that
+  the goal-market migration is recorded and its five tables exist, then
+  `CREATE OR REPLACE TRIGGER` for each (one statement per trigger, so no gap),
+  a check that all ten are `BEGIN … END` blocks, the `_prisma_migrations`
+  insert with the committed checksum (once), and a closing list.
+- **Regression test** (new `tests/append_only_trigger_migration_test.py`, run by
+  `npm run test:scripts`): the migration and overlay recreate exactly the
+  original ten triggers as blocks, the overlay records the migration's SHA-256
+  only after verifying, and no other migration creates a single-statement
+  trigger.
+- **Docs:** [database](database.md) ("Append-only trigger repair on MariaDB",
+  with the production check query), [backup and restore](backup-restore.md)
+  (90-table evidence and the block-body rule), the
+  [deployment guide](../deploy/how-to-deploy.md) overlay list, and
+  [implementation decisions](implementation-decisions.md) (OP-31 and the new
+  section).
+
+The restore side (`src/server/backup/`, `scripts/lib/`) is unchanged.
+Rewriting the dump would still be wrong, because the verifier compares every
+trigger body after restore, and other dump tools would still fail.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm). `MYSQL_TEST_SERVER_BINARY` pointed at
+`%LOCALAPPDATA%\GoalHint\mysql-8.4.11\bin\mysqld.exe`.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:backup` (MySQL 8.4.11) | **9/9 pass**, 0 skipped. 90 tables. Base restore 28,295 ms, two-log restore 32,200 ms; both matched row hashes, schema, foreign keys and the 42 triggers. Tampering was refused. |
+| `npm run test:scripts` | 15 tests OK, the 4 new ones included. |
+| `npm run db:validate` | Pass. |
+| `npm run lint` | `eslint . --max-warnings=0` exit 0. |
+| `npm run typecheck` | `next typegen && tsc --noEmit` exit 0. |
+| Overlay on a throwaway MySQL 8.4.11 (`CREATE OR REPLACE` as `DROP`/`CREATE`, each `BEGIN NOT ATOMIC` block as a procedure) | Starting from the broken bodies: two imports, checksum recorded once, no body ends in `;`, and its mysqldump restored all 10 triggers, which still refused `UPDATE` and `DELETE`. Without the goal-market record the guard stopped the import and changed nothing. |
+
+**Not run:** the overlay on MariaDB 11.4, `db:deploy` on the developer
+database (the main checkout's agents share it, and the migration is not on
+`main` yet), and anything against goalhint.com or cPanel.
+
+**Outstanding inputs:**
+
+- Owner, when production is next migrated: run the check query in
+  [database](database.md), import the overlay, then take and verify the backup
+  that the paid-access overlay needs first.
+- After merge: `npm run db:deploy` on the developer database.
