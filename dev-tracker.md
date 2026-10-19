@@ -73,6 +73,12 @@
 | ☐         | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 |
 | ☐         | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     |
 
+## Paid access (057–067)
+
+- **Phase 0 is done (19 October 2026):** specification v1.9, the index section, decisions OP-37–OP-40 and prompts 057–067 are recorded (commits c79a9c9 and 4529d71). Owner choices: Daily (24 hours) UGX 1,000, Weekly UGX 5,000 and Monthly UGX 20,000, all with full access, running from payment confirmation; one free 2-day trial per new number. No paid-access code exists yet, so every row stays unchecked.
+- **Run order:** 057 to 062 in order. 055 and 056 now depend on 061–062, so run them after 062; 063 to 067 follow in order.
+- Paid access ships with the switch `off`. Turning it on needs OP-40, and nothing is deployed unless the owner asks.
+
 ## Blocked rows
 
 - **052** stays unchecked although its implementation is complete for the rights-off state. Blockers: the counted odds trial has not run (it needs the planned API plan upgrade; owner decision 10 October 2026), and odds display rights are unconfirmed (OP-36), so `publicPolicy.features.providerOdds` stays off. See [development progress](docs/development-progress.md) and [provider odds](docs/provider-odds.md).
