@@ -61,6 +61,17 @@
 | ☐         | [054-market-implied-markets.md](dev-plan/054-market-implied-markets.md)         |
 | ☐         | [055-on-device-picks.md](dev-plan/055-on-device-picks.md)                       |
 | ☐         | [056-leagues-and-tips-pages.md](dev-plan/056-leagues-and-tips-pages.md)         |
+| ☐         | [057-owner-admin-foundation.md](dev-plan/057-owner-admin-foundation.md)         |
+| ☐         | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md)       |
+| ☐         | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md)                           |
+| ☐         | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             |
+| ☐         | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md)     |
+| ☐         | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md)           |
+| ☐         | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               |
+| ☐         | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             |
+| ☐         | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       |
+| ☐         | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 |
+| ☐         | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     |
 
 ## Blocked rows
 

@@ -1,8 +1,8 @@
 # Monetization: phone accounts and manual mobile-money subscriptions
 
-**Status:** Plan only, not implemented. **Date:** 2026-10-19. **File:** `prompts/monetization.md`.
+**Status:** Plan only, not implemented. **Date:** 2026-10-19 (plans and period start set by the owner the same day). **File:** `prompts/monetization.md`.
 
-Visitors sign in with their phone number only and pay the owner by MTN MoMo or Airtel Money. On one simple "Get access" page they report the payment: the number they paid from, the transaction ID, the amount and a screenshot, mostly filled in for them. The owner finds the money in their own mobile-money account, approves with one tap on a phone-friendly `/admin` dashboard, and sends a 12-character access code by WhatsApp or SMS. The message carries a one-tap unlock link. The code works only on the account that paid. It shows picks, probabilities and AI analysis for upcoming and live matches until the paid period ends (for example 7 days for UGX 2,000). A renewal paid from an unlocked phone extends that phone by itself. Fixtures, scores, factual insights and finished-match results stay free. Everything ships behind a dashboard switch that stays **off** until the owner turns it on.
+Visitors sign in with their phone number only and pay the owner by MTN MoMo or Airtel Money. On one simple "Get access" page they report the payment: the number they paid from, the transaction ID, the amount and a screenshot, mostly filled in for them. The owner finds the money in their own mobile-money account, approves with one tap on a phone-friendly `/admin` dashboard, and sends a 12-character access code by WhatsApp or SMS. The message carries a one-tap unlock link. The code works only on the account that paid. It shows picks, probabilities and AI analysis for upcoming and live matches from the moment the payment is confirmed until the paid period ends: Daily (24 hours) UGX 1,000, Weekly (7 days) UGX 5,000 or Monthly (30 days) UGX 20,000. Every plan gives full access to every feature; only the length differs. A renewal paid from an unlocked phone extends that phone by itself. Fixtures, scores, factual insights and finished-match results stay free. Everything ships behind a dashboard switch that stays **off** until the owner turns it on.
 
 **Reading guide.** Owner: sections 1–4 for what changes and what you do, section 12 for what you must confirm. Sections 5–11 are the engineering appendix that prompts 057–067 carry.
 
@@ -28,11 +28,11 @@ Visitors sign in with their phone number only and pay the owner by MTN MoMo or A
 **Subscriber journey.** Everything happens on one scrolling page, `/en/subscribe`, titled "Get access".
 1. A match card says "Pick for subscribers". The feed banner and the match page panel link to Get access; the panel also offers "Have a code?".
 2. **Your number** (skipped when signed in). The box starts with `256`. Typing `0772 123 456`, `+256…` or `00256…` turns into `256 772 123 456`, shown under the box. Tap Continue. A new number creates an account.
-3. **Choose a plan.** The first plan (for example Weekly, 7 days, UGX 2,000) is already picked.
+3. **Choose a plan.** Daily (24 hours, UGX 1,000), Weekly (7 days, UGX 5,000) or Monthly (30 days, UGX 20,000), all with the same full access. The first plan in the owner's order is already picked.
 4. **Pay.** The page shows our MTN and Airtel numbers with their registered names and a Copy button. On Android it also shows an "Open MoMo menu" button, when the owner has set one. One "Need help? Call · WhatsApp" row sits below.
-5. **Tell us about your payment.** Paste the confirmation SMS into the box (or tap Paste): the transaction ID, amount and network fill in. One line reads "Paid UGX 2,000 to MTN from 256 772 123 456 · Change". Add the screenshot, tick "18 or older, I accept the Terms" (not needed again when renewing from an unlocked phone), and tap Send. If you leave the page to copy the SMS or take the screenshot, what you typed is kept.
+5. **Tell us about your payment.** Paste the confirmation SMS into the box (or tap Paste): the transaction ID, amount and network fill in. One line reads "Paid UGX 5,000 to MTN from 256 772 123 456 · Change". Add the screenshot, tick "18 or older, I accept the Terms" (not needed again when renewing from an unlocked phone), and tap Send. If you leave the page to copy the SMS or take the screenshot, what you typed is kept.
 6. The page now says "Checking your payment. Your code will come by WhatsApp or SMS to 256 772 123 456." A code box sits below.
-7. The code message has a link. Tap it and tap **Unlock**. On a phone that is not signed in, type your number first. The period starts now, or when your current access ends.
+7. The code message has a link. Tap it and tap **Unlock**. On a phone that is not signed in, type your number first. Access already runs from when the owner confirmed the payment (or from when your current access ends); unlocking does not change the end time.
 8. Renewing from a phone that is already unlocked: when the owner approves, that phone's access extends by itself. Picks show until the paid time runs out. A new phone or browser needs the code once (2 devices by default). The code works only on the account that paid.
 
 **Owner journey**
@@ -60,12 +60,12 @@ Visitors sign in with their phone number only and pay the owner by MTN MoMo or A
 | Security model | The number **identifies**; the access code is the **secret**. A session sees picks only if (a) the account has a paid period running now and (b) one of the account's valid codes was entered in that session. Without (b): no picks, no payment status, no subscription details. | Anyone can type any number. |
 | Code binding | A code works only on its account: the one that submitted the payment, or for a manual or number-change code the account of the number the owner typed. Any other account gets the generic "Code not recognized". Nothing moves codes between accounts. | Owner requirement: a code cannot activate another account. |
 | Device unlock | Entering a valid code unlocks the session. It stays entitled across renewals while any period of the account runs. Cleared by sign-out, eviction, owner sign-out, a block, or revoking the code that was entered. | Code entered "once on that device". |
-| Renewal | A code approved for an account that already has an unlocked session is activated at approval. Its period starts when the current one ends, or now. The message still carries the code for new devices. | Automate where possible; a renewal never waits on a forgotten tap. |
+| Renewal | Like every code, a renewal's period starts at payment confirmation, or when the current period ends. A session that is already unlocked stays entitled, so a renewal needs no code entry. The message still carries the code for new devices. | Automate where possible; a renewal never waits on a forgotten tap. |
 | Device cap | At most N unlocked sessions per account (default 2); a new unlock evicts the oldest. The owner sees unlock counts. | Limits sharing, simply. |
 | Code delivery | The owner sends it to the **account's** number by WhatsApp (wa.me), SMS or Copy. The message carries `https://goalhint.com/en/account#code=XXXX-XXXX-XXXX` and names the number only as "ending 456". The fragment never reaches a server; the page prefills the code, clears the fragment and waits for a tap on Unlock. The code is never shown in the account. | One tap for the subscriber. A forwarded message lacks the full number. |
-| Code format | 12 Crockford base32 characters, `XXXX-XXXX-XXXX` (~60 bits). Case-insensitive; spaces and dashes ignored; O→0, I/L→1. Single activation. | Easy to read and type. |
+| Code format | 12 Crockford base32 characters, `XXXX-XXXX-XXXX` (~60 bits). Case-insensitive; spaces and dashes ignored; O→0, I/L→1. Its period is set once, at payment confirmation. | Easy to read and type. |
 | Code storage | Random 16-byte salt per code; store SHA-256 of `goal-hint-access-code:v1:` + salt + code. Entry compares only with the session account's codes. A separate random reference `C-XXXX` identifies it in support. Shown to the owner once. | A leaked database still needs ~2^60 guesses per code. No key, so rotating `GOAL_HINT_ANALYTICS_SECRET` cannot break codes. |
-| Period | Starts at activation: code entry, or approval for a renewal. No deadline to unlock. Lasts `(durationDays + extensionDays) × 24 h`; a month is 30 days. A code activated while another period runs starts when the last one ends. Checked on every request. Times shown in EAT. | No lost days; no job; fail-closed. |
+| Period | Starts when the payment is confirmed: the owner's approval of a reported payment, or the owner creating a manual or number-change code. Code entry never starts or moves it. Lasts `(durationDays + extensionDays) × 24 h`: a day is 24 hours from activation, never a calendar day or midnight, and a month is 30 such days. A code confirmed while another period runs starts when the last one ends. Checked on every request. Times shown in EAT. | Owner decision (19 October 2026): access runs from payment confirmation to the expiry time. No job; fail-closed. |
 | Payment report | The subscriber sends payer number (prefilled), network (auto), transaction ID, amount (prefilled with the price) and a screenshot. A pasted payment SMS fills the ID, amount and network. Payer, network and amount sit behind one "Change" line. | Owner requirement: payer number, transaction ID, amount and screenshot, as easy as possible. |
 | Payment proof | Approve only after finding the money, from the right sender, in the owner's **own** MTN or Airtel account. Claims are prefilled and editable. Automatic checks help but never replace that look. Never auto-approve. | Edited screenshots and false claims pass every automatic check. The wallet does not lie. |
 | Transaction ID | Shown upper-case without spaces; matched by `txnKey` (upper-case, every non-letter, non-digit removed). (network, `txnKey`) is unique among approved payments, enforced in the approval transaction; owner-recorded payments use the same key. An ID approved on either network is refused at submission; an ID pending in another submission is accepted and flagged. | A stranger cannot block the real payer; punctuation or a network swap cannot approve one payment twice. |
@@ -83,7 +83,8 @@ Visitors sign in with their phone number only and pay the owner by MTN MoMo or A
 | Currency | Whole UGX as unsigned integers, snapshotted into submissions and codes. | Price edits never rewrite history. |
 
 **Design notes** (choices that differ from the first draft, and why)
-- **Unlock and renewals.** Unlock is per session and per account, not per code. A renewal approved for an account with an unlocked session activates at approval, so renewals need no re-entry. There is no per-account code-failure lock, because a stranger could use it to block a new subscriber's first code. The device cap with eviction is the only sharing control. The 7-day unlock budget and the redemption window are dropped, and the owner sees unlock counts.
+- **Unlock and renewals.** Unlock is per session and per account, not per code. Every period starts at payment confirmation (owner decision, 19 October 2026), so an unlocked session stays entitled across renewals with no re-entry, and code entry only unlocks a device. There is no per-account code-failure lock, because a stranger could use it to block a new subscriber's first code. The device cap with eviction is the only sharing control. The 7-day unlock budget and the redemption window are dropped, and the owner sees unlock counts.
+- **Plans (owner decision, 19 October 2026).** Daily, 24 hours from activation, UGX 1,000; Weekly, 7 days, UGX 5,000; Monthly, 30 days, UGX 20,000. Every plan unlocks every feature and section; plans differ only in length and price, so there are no feature tiers. Days count from payment confirmation, so a code entered late gets no extra time: the owner sends codes promptly, the message states the end time, and Extend compensates a slow delivery.
 - **Code message.** The code goes to the **account's** number, not the payer's; a payer may pay from another phone. The message shows only the last three digits. The reference is independent of the code (a suffix would give away 20 of 60 bits). Hashes are salted per code.
 - **Number changes.** Codes never move between accounts. A number change is one audited owner action that revokes the old codes and issues a new code. "Move to another number" is removed.
 - **Free fixtures.** Canceled and awarded fixtures are free: never played, picks void. Which families have a published pick is free (existence only, policy order). It lets the card and Verdict name the subscriber pick and keeps the family-count invariant and `matchPageIndexable` working.
@@ -136,12 +137,12 @@ All tables are new. Every `CREATE TABLE` states `ENGINE=InnoDB`. Instants are `D
 | `SubscriptionPlan` | `id`, `name VarChar(40)`, `durationDays UnsignedSmallInt` (1–366), `priceUgx UnsignedInt` (100–10,000,000), `active`, `sortOrder`, timestamps | Never deleted; deactivate instead. |
 | `PaymentSubmission` | `id`, `reference Char(4)` (`P-XXXX`), `source` (`report`/`owner`), `accountId` FK, `planId` FK, snapshot `planName`, `durationDays`, `priceUgx`; claims `payerPhone VarChar(15)?`, `claimedNetwork` (`mtn`/`airtel`), `claimedTxnRef VarChar(40)`, `claimedTxnKey VarChar(40)`, `claimedAmountUgx UnsignedInt`; `status` (`pending`/`superseded`/`approved`/`rejected`/`reversed`), `submittedAt`, `submittedSessionHash Char(64)?`, `termsVersion VarChar(16)?`, `acceptedAt?`; `decidedAt?`, `decidedBy?`, `rejectReason?`, `rejectText VarChar(200)?`; approved `network?`, `transactionRef VarChar(40)?`, `amountReceivedUgx?`, `approvedTxnKey VarChar(48)?`; `imageSha256 Char(64)?`, `imageBytes?`, `imagePurgedAt?`, `reversedAt?`, `reverseReason?` (`network-reversal`/`wrong-account`) | `owner` rows (5.3 manual code with an ID) have no image, session or terms fields. `approvedTxnKey` = `network:txnKey`, set only at approval and kept after reversal; unique (many NULLs allowed). Index `claimedTxnKey`, (`status`,`submittedAt`), (`accountId`,`submittedAt`), `imageSha256`. |
 | `PaymentScreenshot` | `submissionId` PK/FK (cascade), `width`, `height`, `bytes`, `data Bytes @db.MediumBlob` | JPEG only. Separate so lists never load bytes. Deleted on purge. |
-| `AccessCode` | `id`, `accountId` FK, `codeSalt Binary(16)`, `codeHash Char(64)`, `reference Char(4)` (`C-XXXX`), `source` (`payment`/`manual`/`reissue`/`number-change`), `paymentSubmissionId?`, `replacedById?`, `planId?`, snapshot `planName`, `durationDays`, `priceUgx` (0 allowed), `amountReceivedUgx?` (manual only), `extensionDays` (default 0), `createdAt`, `createdBy`, `activatedAt?`, `startsAt?`, `endsAt?`, `termsVersion?`, `revokedAt?`, `revokedReason?`, `note VarChar(200)?` | `paymentSubmissionId` unique, set only on the code created at approval. `replacedById` points from a reissued or number-changed code to its successor. Index `accountId`, (`accountId`,`endsAt`), `replacedById`. |
+| `AccessCode` | `id`, `accountId` FK, `codeSalt Binary(16)`, `codeHash Char(64)`, `reference Char(4)` (`C-XXXX`), `source` (`payment`/`manual`/`reissue`/`number-change`), `paymentSubmissionId?`, `replacedById?`, `planId?`, snapshot `planName`, `durationDays`, `priceUgx` (0 allowed), `amountReceivedUgx?` (manual only), `extensionDays` (default 0), `createdAt`, `createdBy`, `activatedAt`, `startsAt`, `endsAt` (all set at creation), `termsVersion?`, `revokedAt?`, `revokedReason?`, `note VarChar(200)?` | `paymentSubmissionId` unique, set only on the code created at approval. `replacedById` points from a reissued or number-changed code to its successor. Index `accountId`, (`accountId`,`endsAt`), `replacedById`. |
 | `SubscriptionSettings` | Single row `id = 1`; columns in 5.7; `paymentNumbersChangedAt?`, `lastMembersPurgeAt?`, `updatedAt`, `updatedBy` | A missing row means defaults (`paywallMode = off`). |
 | `RateLimitBucket` | `key Char(64)` PK (HMAC of purpose + value), `count`, `bytes`, `windowStartedAt`, `lockedUntil?` | Atomic `INSERT … ON DUPLICATE KEY UPDATE`. Do not copy the read-then-create of `AnalyticsLoginThrottle`, which races under ReadCommitted. |
 | `OwnerAuditEvent` | `id BigInt` autoincrement, `at`, `actor`, `action VarChar(48)`, `accountId?` (no FK), `targetType`, `targetId`, `details Json` | Index (`accountId`,`action`,`at`) for unlock counts. Never holds a subscriber phone, a full code or an image. Operational, not tamper-proof: the app account has `ALL PRIVILEGES` (`deploy/how-to-deploy.md:87`). |
 
-Code status, in order: `revoked`; `unused` (not activated); `queued` (now < `startsAt`); `active` (now < `endsAt`); else `expired`.
+Code status, in order: `revoked`; `queued` (now < `startsAt`); `active` (now < `endsAt`); else `expired`. There is no unused state: every code gets its period when it is created.
 
 **Migration workflow**
 1. `npm run db:migrate -- --name subscriptions` (diffs `prisma/schema.snapshot.prisma`). Add `ENGINE=InnoDB` and collations to every `CREATE TABLE`. Commit migration and snapshot together.
@@ -189,16 +190,16 @@ Code status, in order: `revoked`; `unused` (not activated); `queued` (now < `sta
   - `codeFromFragment(hash)` accepts only `#code=` plus a valid code;
   - the code field uses `autocapitalize=characters`, `autocorrect=off`, `spellcheck=false`, `autoComplete=off`.
 - `src/server/members/access-codes.ts` (new): `generateCode()` (`crypto.randomInt(32)` × 12), `newSalt()`, `hashCode(salt, code)`, `newReference()`, `activate(code, account, now, termsVersion)`. `src/domain/subscription-period.ts` (new, pure): `codeStatus(code, now)`, `chainPeriods(codes, now)`, `remainingDays(codes, now)`.
-- **Activation** sets:
-  - `activatedAt = now` and `termsVersion`;
+- **Activation** happens when the payment is confirmed, in the transaction that creates the code: approval of a reported payment, or the owner creating a manual or number-change code. It sets:
+  - `activatedAt = now`, and `termsVersion` from the submission when there is one;
   - `startsAt = max(now, latest endsAt of the account's non-revoked codes)`;
   - `endsAt = startsAt + (durationDays + extensionDays) × 24 h`.
 
-  It happens at code entry, or for a renewal at approval of a reported payment. A renewal is an account that has a session with `codeEnteredAt` set; its `termsVersion` comes from the submission.
+  Code entry never activates or moves a period; it only unlocks the device.
 - **Code entry** (`POST /api/account/code`, new; the sign-in code path reuses it), one transaction with `SELECT … FOR UPDATE` on the account row:
   1. Compare `hashCode(salt, input)` in constant time with each code **of the session's account** only. A correct code works even while the IP throttle is locked.
-  2. `unused`: activate, recording `termsVersion`. A line above Unlock reads "By unlocking you confirm you are 18+ and accept the Terms"; there is no checkbox.
-  3. `active` or `queued`: period unchanged. `expired` or `revoked`: a clear message, no unlock.
+  2. `active` or `queued`: unlock; the period is unchanged. A line above Unlock reads "By unlocking you confirm you are 18+ and accept the Terms"; there is no checkbox. A code without `termsVersion` (manual and number-change codes) records it now.
+  3. `expired` or `revoked`: a clear message ("This code's access ended on …"), no unlock.
   4. Not yet unlocked: issue a **new** token, insert a session with `codeEnteredAt` and `accessCodeId`, delete the old row, set the cookie, audit `device_unlocked` (prevents fixation). Above N unlocked sessions, clear the oldest unlock and audit `device_evicted`.
   5. Not found (a wrong code, or another account's code): "Code not recognized. Codes work only on the number they were sent to." with a "Not your number? Sign out" link; count a wrong attempt for the IP.
   6. Audit. JS gets JSON naming the next path: the validated `return`, else `/en/account?status=code-accepted`. The page then does a full `location.replace` to it; no-JS gets a 303 there. The code-accepted state shows a primary "See today's picks" button.
@@ -219,7 +220,7 @@ Code status, in order: `revoked`; `unused` (not activated); `queued` (now < `sta
   - **Reissue** (lost code), same account only:
     - revoke the old code (`replacedById` = new);
     - create one with the same snapshot and `extensionDays`, and `paymentSubmissionId = NULL`;
-    - copy `activatedAt`, `startsAt` and `endsAt` if the old code was activated;
+    - copy `activatedAt`, `startsAt` and `endsAt`;
     - move sessions that entered the old code to the new one.
 
     The panel adds "If the code was shared, also tap Sign out all devices."
@@ -228,14 +229,14 @@ Code status, in order: `revoked`; `unused` (not activated); `queued` (now < `sta
     - The live code at the end of its chain (followed through `replacedById`) is revoked. `approvedTxnKey` stays.
     - If that code also carried other days (a number change), the panel says so and offers Generate code.
     - For `wrong-account`, the panel offers a manual code for the real payer's number, with the amount and the note "for P-XXXX". It has no ID, because the reversed row keeps it, so revenue counts the money once.
-  - **Manual code:** number (creates the account if missing), plan or a day count (1–366), amount received (0 allowed), required note. It binds to that number's account.
+  - **Manual code:** number (creates the account if missing), plan or a day count (1–366), amount received (0 allowed), required note. It binds to that number's account, and its period starts when the owner creates it, because that is when the payment is confirmed.
     - Network and transaction ID are optional, for a mobile-money payment received outside the form. A plan is then required.
-    - With an ID, one transaction records an approved `owner` submission (no image; `amountReceivedUgx` on the submission, not the code). It creates the code through the approve path (source `payment`, activated at entry), so the same unique key applies.
+    - With an ID, one transaction records an approved `owner` submission (no image; `amountReceivedUgx` on the submission, not the code). It creates the code through the approve path (source `payment`, activated at creation), so the same unique key applies.
   - **Change number** takes `newPhone` and `verifiedBy` (`old-number` or `payment-details`). One transaction:
     1. locks both accounts in id order;
-    2. revokes every active, queued and unused code of the old account (reason `number-change`, `replacedById` = new);
-    3. computes the remaining time: the active remainder rounded up to whole days, plus the full days of queued and unused codes (1–366);
-    4. creates one `number-change` code (no amount) on the new number's account, creating the account if missing;
+    2. revokes every active and queued code of the old account (reason `number-change`, `replacedById` = new);
+    3. computes the remaining time: the active remainder rounded up to whole days, plus the full days of queued codes (1–366);
+    4. creates one `number-change` code (no amount) on the new number's account, creating the account if missing; its period starts now, or when that account's current period ends;
     5. audits each revoke and the new code with `verifiedBy`.
 
     It then opens the code ready panel for the new number. Old-account sessions lose entitlement.
@@ -259,7 +260,7 @@ Per-IP limits are high on purpose: MTN and Airtel put many users behind shared (
 | Field | Default and behaviour |
 | --- | --- |
 | SMS box | Visible one-line box at the top: "Paste the payment SMS here (optional)". Parsed on input. A Paste button appears only where `navigator.clipboard.readText` exists. |
-| Summary line | "Paid UGX 2,000 to MTN from 256 772 123 456 · Change". Change reveals the next three fields; all three are always sent. |
+| Summary line | "Paid UGX 5,000 to MTN from 256 772 123 456 · Change". Change reveals the next three fields; all three are always sent. |
 | Paid from | `PhoneInput`, prefilled with the account number |
 | Paid to our | Two 3rem buttons, MTN and Airtel. Default: the SMS recipient matched to the owner's numbers, else the pay card the subscriber used (Copy or menu), else `networkForPrefix(payer)`. Hidden when only one network has a number. |
 | Amount paid (UGX) | The selected plan's price, following plan changes until edited; whole number, 100–10,000,000 |
@@ -297,14 +298,14 @@ Per-IP limits are high on purpose: MTN and Airtel put many users behind shared (
 - **After submission:**
   - The page shows "Checking your payment. Your code will come by WhatsApp or SMS to 256 772 123 456." and the code box.
   - The help row's WhatsApp text now carries the reference: "I have paid UGX {price} for {plan}. My Goal Hint number: 256 772 123 456. Ref P-{reference}."
-  - The status can be checking; approved; or rejected with the reason. Approved shows "Access until …" when the code activated at approval, otherwise "We sent your code to 256 772 123 456".
+  - The status can be checking; approved; or rejected with the reason. Approved shows "Access until …" and, for a session that is not unlocked, "We sent your code to 256 772 123 456".
   - Status shows only to the submitting session and to unlocked sessions of the account.
 - **Owner viewing:** `GET /api/admin/payments/[id]/screenshot` (new) needs an owner session and sends `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`, `Content-Disposition: inline`, `Cross-Origin-Resource-Policy: same-origin`, `X-Robots-Tag: noindex, nofollow`, `Content-Type: image/jpeg`.
 - **Approve** (`POST /api/admin/payments/[id]`, pending or superseded): the body holds the final network, transaction ID, amount and plan, prefilled from the claims. One transaction:
   - sets those values and `approvedTxnKey = network:txnKey(ID)`;
   - approves the submission;
   - creates the `AccessCode` (`paymentSubmissionId` set);
-  - activates it when the account has an unlocked session (5.3).
+  - activates it, so its period starts now or when the current one ends (5.3).
 
   A unique violation refuses with a link to the earlier submission. The no-store response carries the plain code once and which message to use.
 - **Reject:** preset reason (`unreadable`, `amount-mismatch`, `not-received`, `duplicate`, `wrong-number`, `other`), optional text, optional "delete image now", then "Tell them" links. **Reverse:** 5.3.
@@ -409,15 +410,15 @@ Below the checks:
 - It warns: "If it is lost, use Reissue; the old code stops working."
 - The link origin is `publicPolicy.origin` (`src/domain/public-policy.ts`) in production and the request's own origin locally.
 
-Messages make no accuracy claims. New code:
+Messages make no accuracy claims. New code (the account has no unlocked device):
 
 ```
 Goal Hint code: XXXX-XXXX-XXXX
 Tap to unlock: https://goalhint.com/en/account#code=XXXX-XXXX-XXXX
-Weekly, 7 days from when you unlock (or when your current access ends). Works only on your Goal Hint number ending 456. Keep this message for a new phone.
+Weekly: access until Sun 1 Nov, 21:00 EAT. Works only on your Goal Hint number ending 456. Keep this message for a new phone.
 ```
 
-Renewal activated at approval:
+Renewal (the account has an unlocked device):
 
 ```
 Goal Hint: renewed until Sun 1 Nov, 21:00 EAT. Your unlocked phone updates by itself.
@@ -501,8 +502,8 @@ Works only on your Goal Hint number ending 456.
 | Step | Shows |
 | --- | --- |
 | 1 Your number | Signed out: `PhoneInput` (256 prefilled, live "256 772 123 456" preview), Continue (inline sign-in, JSON; plain form post without JS), and "Have a code? Enter it". Signed in: "Signed in as 256 772 123 456 · Sign out"; when active, "Access until {date}. Paying now adds {days} days after that." |
-| 2 Choose a plan | Big radio cards: name, days, price (`messages.number(value, { style: "currency", currency: "UGX", maximumFractionDigits: 0 })`). The only or first plan is preselected. |
-| 3 Pay | Per network: "MTN MoMo · 256 772 000 000 · JANE DOE" with Copy number and, where shown, "Open MoMo menu" with the shortcut text; "Send exactly UGX 2,000"; extra payment note. Then one help row: "Need help? Call · WhatsApp". |
+| 2 Choose a plan | Big radio cards: name, days, price (`messages.number(value, { style: "currency", currency: "UGX", maximumFractionDigits: 0 })`). The only or first plan in the owner's order is preselected; every plan gives the same full access. |
+| 3 Pay | Per network: "MTN MoMo · 256 772 000 000 · JANE DOE" with Copy number and, where shown, "Open MoMo menu" with the shortcut text; "Send exactly UGX 5,000"; extra payment note. Then one help row: "Need help? Call · WhatsApp". |
 | 4 Tell us | The form in 5.4: SMS box, summary line, transaction ID, screenshot, checkbox, Send. Without JS: Call and WhatsApp fallback. |
 | After sending | Status line and "Got your code? Enter it here" with Unlock. Rejected: the reason and the form again. |
 
@@ -528,7 +529,7 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
   It is labelled "Account" and shown only when the mode is `on`, through a `showAccount` prop from routes that already resolve access. Information pages show no icon and stay free of DB reads. No new tab-bar item.
 - **Card pick line:** plain "Pick for subscribers" with a new `SubscriberIcon` (star or key), never a padlock ("Locked prediction"). The tile still opens the match.
 - **Feed banner** for free viewers: "Picks are for subscribers · Get access".
-- **Verdict gated panel:** "Picks and probabilities for this match are for subscribers. From UGX {price} for {days} days.", using the cheapest active plan. It always shows two buttons: "Get access" and "Have a code?" (to `/en/account` with `return` = this match).
+- **Verdict gated panel:** "Picks and probabilities for this match are for subscribers. From UGX {price} for {days}.", with a plural-aware day count, using the cheapest active plan ("From UGX 1,000 for 1 day."). It always shows two buttons: "Get access" and "Have a code?" (to `/en/account` with `return` = this match).
 - **Markets, Analysis, History drawers:** one plain line each. **Slip builder:** an `EmptyState` with Get access.
 - **Feed filters:** probability range, probability sort and picks-only disabled with "Subscribers only" (`src/components/match/feed-filters.tsx`, `feed-controls.tsx`, sort options at `feed-header.tsx:163`).
 - **Controls** in `src/components/ui/controls.tsx`:
@@ -537,7 +538,7 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
   - `SegmentedChoice`: two 3rem buttons (`choice-picker.tsx` is a small dropdown and does not fit);
   - a `size="large"` option on `Button` and `ButtonLink` (3rem, body font) for Get access and the approve button. Phone buttons are 2.25rem today (`theme.control.compactHeight`, `src/styles/theme.ts:274`).
 - **Copy:**
-  - New `account.*`, `subscribe.*` and `paywall.*` keys in `src/i18n/messages/en.ts`, with `{price}`, `{days}`, `{expiresAt}`, `{phone}` and plural `account.daysLeft`.
+  - New `account.*`, `subscribe.*` and `paywall.*` keys in `src/i18n/messages/en.ts`, with `{price}`, `{days}`, `{expiresAt}`, `{phone}` and plural `account.daysLeft` and verdict day count.
   - Short sentences. "Subscriber" and "gated", never "locked". References keep their `P-`/`C-` prefix. Phones always as `256 772 123 456`.
   - No accuracy, win-rate, ROI or "sure win" claims anywhere.
 
@@ -591,7 +592,7 @@ One collapsed `Disclosure` (`src/components/ui/disclosure.tsx`), "Safety tips": 
 - **Terms** (`src/i18n/messages/terms.ts`, `terms-content.tsx`, `terms-notice.ts`) cover:
   - plans and prices, and that changes apply only to new purchases;
   - manual approval with no guaranteed turnaround;
-  - activation (at unlock, or at approval for a renewal) and expiry in EAT;
+  - access from payment confirmation (or the end of the current period) to expiry, in EAT; plans differ only in length;
   - personal use, codes valid only on the paying account, number changes, and the device limit (in-app browsers count);
   - refunds, extensions and compensation;
   - suspension, revocation and blocking;
@@ -663,7 +664,7 @@ Manual checks are recorded in `docs/development-progress.md`:
 **060 Access codes, periods and access resolution.** Depends on 059.
 - Scope:
   - code format, extraction and `codeFromFragment`; salted hashing and reference;
-  - activation with recorded assent (no checkbox), queueing, unlock, token rotation, device cap; entitlement;
+  - periods that start at payment confirmation, queueing, unlock with recorded assent (no checkbox), token rotation, device cap; entitlement;
   - `resolveViewerAccess` with the mode and owner preview;
   - the activate, revoke, extend, reissue, reverse, manual-code and change-number services;
   - the signed-out phone-plus-code path;
@@ -671,7 +672,7 @@ Manual checks are recorded in `docs/development-progress.md`:
   - the proxy's fragment exception; the code-accepted state; status visibility.
 - Files: `src/domain/access-code.ts`, `src/domain/subscription-period.ts`, `src/server/members/access-codes.ts`, `src/server/members/viewer-access.ts`, `src/app/api/account/code/route.ts` (new); `account-route.tsx`, `src/server/seo/proxy.ts`, `tests/discovery.test.mjs`, `src/components/analytics/tracker.ts` (line 76, same `replaceState` fix for `#gh_attr=`).
 - Checks (`npm run test:members`, `npm run test:seo`):
-  - Activation: a concurrent double activation yields one period; activation records `termsVersion`; a queued period starts at the previous end; an unused code stays usable with no deadline.
+  - Periods: a code's period starts when it is created (approval or owner creation), never at unlock; two codes created concurrently for one account chain without overlap; a queued period starts at the previous end; a code entered late unlocks only the remaining time; unlock records `termsVersion` on a code without one.
   - Unlock: a device unlocked once stays entitled across renewals; the cap evicts the oldest unlock; unlock issues a new token; a correct code works while the IP bucket is locked; expiry flips without a job.
   - Reissue: the new code has `paymentSubmissionId = NULL` and takes over the sessions, and the old code's `replacedById` points to it.
   - Reverse: it revokes the live code at the end of the chain, including a number-change code.
@@ -733,7 +734,7 @@ Manual checks are recorded in `docs/development-progress.md`:
 
 **064 Owner payments queue and codes.** Depends on 060 and 063.
 - Scope:
-  - the Payments page: cards, automatic checks, Paste my SMS, editable values, the receiving-number line, one-tap approve with renewal activation, reject, and reverse with reason;
+  - the Payments page: cards, automatic checks, Paste my SMS, editable values, the receiving-number line, one-tap approve that starts the period, reject, and reverse with reason;
   - the Codes page and the screenshot route;
   - the code ready panel with both messages and `sessionStorage`;
   - manual codes with a day count, or with network and ID (owner payment);
@@ -827,10 +828,10 @@ Manual checks are recorded in `docs/development-progress.md`:
 - No code path rewrites `accountId` after insert (065).
 
 **Integration tests** run on an isolated MySQL 8.4 (`tests/members.integration.mjs`, `tests/payments.integration.mjs`). They cover:
-- concurrent activation; concurrent first sign-ins and throttle upserts; supersede under concurrency;
+- periods chained by concurrent approvals; concurrent first sign-ins and throttle upserts; supersede under concurrency;
 - approved-key uniqueness under concurrent approvals, across punctuation variants and between owner-recorded and reported payments;
 - pending duplicates accepted, and approved IDs refused at submission on either network;
-- the stolen-ID flow; renewal activation at approval;
+- the stolen-ID flow; periods that start at approval, with an unlocked device renewed without code entry;
 - code binding: another account's code fails, and phone-plus-code with the wrong number creates nothing;
 - Change number: days, entitlement, and Reverse through the chain;
 - the device cap;
@@ -899,7 +900,7 @@ The running app has no test clock; exact timing is covered by injected-clock tes
 | Fake payments, false claims or a stolen transaction ID | The owner checks their own wallet and the sender; approved-key uniqueness across punctuation and networks; pending-duplicate, image and payer-account warnings; Reverse with reason and a manual code for the real payer. |
 | SMS formats differ or change | Tolerant parser built from real samples; a failed parse changes nothing; manual entry always works. |
 | Typing mistakes (network, ID, number) or lost codes | Prefills, paste and the live phone preview reduce typing. The owner corrects values before approving, and uniqueness applies to the final values. The approve button names the receiving number. The panel survives reloads. Reissue; one-step Change number. |
-| A renewal is paid but never entered | Activation at approval when the account has an unlocked device; no unlock deadline for first codes. |
+| A renewal is paid but never entered, or a code is entered late | Every period starts at approval, so an unlocked device renews by itself. Days run from confirmation (owner decision), so the owner sends codes promptly, the message states the end time, and Extend compensates a slow delivery. |
 | Code link loses `#code`, opens in an in-app browser that uses up the device cap, or stays in browser history | The proxy keeps the fragment; the message also shows the code; "Open in Chrome or Safari" with Copy code on the account page and in Help; binding and the device cap limit misuse. |
 | Copy-number or menu-shortcut formats do not work in the network menus | Owner tests both before switch-on (section 12); copy format setting; the menu button is optional and Android-only; the number is always shown. |
 | Live polling keeps old picks after expiry, or hides them after unlock | Tier in every response; refresh on change; tier-keyed providers and pagination checks. |
@@ -929,7 +930,7 @@ None of these block building. Items marked † block switching the paywall on.
 - Your MTN MoMo number and registered name, and your Airtel Money number and registered name.
 - Your contact and WhatsApp numbers. The Safety tips will say codes come only from these.
 - The typical review time, and any extra payment note.
-- Plans and prices: Weekly, 7 days, UGX 2,000 is confirmed; the monthly (30-day) price and any other plans are still needed.
+- Plans and prices: confirmed 19 October 2026. Daily, 24 hours from activation, UGX 1,000; Weekly, 7 days, UGX 5,000; Monthly, 30 days, UGX 20,000. All give full access to every feature; access runs from payment confirmation to expiry.
 - † **Real anonymized SMS samples**, at least three per network: the payer's "you have sent" message for MTN MoMo and Airtel Money, and your own "you have received" message. Replace names and digits but keep the layout, labels and punctuation exactly.
 - **Screenshot samples** (anonymized) from the MoMo and Airtel apps and SMS, for testing the form.
 - † **Network menu tests:**
@@ -937,7 +938,7 @@ None of these block building. Items marked † block switching the paywall on.
   - the menu shortcuts (USSD strings) you want shown, tested on your phone, with where the amount goes;
   - the number prefixes of each network, written in full (for example MTN 25676, 25677, 25678; Airtel 25670, 25674, 25675), used to pre-pick the network.
 - † Refund, extension, reversal and outage policy, including what you do when a payment was approved for the wrong account.
-- Confirm the defaults: 2 devices (an in-app browser counts as one), 90-day screenshot retention, no deadline to enter a first code. Set retention for payment records, payer numbers and audit rows (for example, the tax-record period).
+- Confirm the defaults: 2 devices (an in-app browser counts as one), 90-day screenshot retention. Set retention for payment records, payer numbers and audit rows (for example, the tax-record period).
 - **Owner sign-in length on your phone.** Choose one:
   - keep today's 2-hour idle limit: you will sign in again before most approvals, and your phone's password manager fills it in;
   - use a longer `/admin` session, for example 7 days idle and 30 days maximum. This also applies to `/analytics`, which shares the login.

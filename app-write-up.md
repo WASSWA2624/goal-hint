@@ -2,7 +2,7 @@
 
 **Product requirements and technical design**
 
-Prepared for Wasswa Wilson • 7 October 2026 • Version 1.8 (owner-approved feed redesign, 10 October 2026)
+Prepared for Wasswa Wilson • 7 October 2026 • Version 1.9 (owner-approved paid access, 19 October 2026; version 1.8 feed redesign, 10 October 2026)
 
 | Product setting | Decision |
 | --- | --- |
@@ -35,7 +35,7 @@ Use “Goal Hint” consistently in the interface, metadata and public copy. Dom
 
 ## 1 Product purpose
 
-Goal Hint is a free, mobile-first football prediction website. Visitors find fixtures for today and the next six days, read estimated probabilities and supporting analysis, and later verify prediction outcomes. Launch with one match feed, reusable match detail pages and a methodology page.
+Goal Hint is a mobile-first football prediction website. Visitors find fixtures for today and the next six days, read estimated probabilities and supporting analysis, and later verify prediction outcomes. Fixtures, scores, factual insights and finished-match results are always free; when paid access is on, picks, probabilities and AI analysis for unfinished fixtures are for subscribers (see Paid access below). Launch with one match feed, reusable match detail pages and a methodology page.
 
 AI is the primary predictor; validated API-Football predictions provide fallback for supported markets. A daily midnight East Africa run refreshes eligible fixtures in the seven-day window. New valid revisions replace displayed predictions until the publication cutoff; immutable history supports settlement and performance reporting.
 
@@ -43,11 +43,23 @@ AI is the primary predictor; validated API-Football predictions provide fallback
 
 | At launch | Prepared for later | Outside scope |
 | --- | --- | --- |
-| Seven-day daily predictions; fixture browsing up to 31 days<br>Search and multi-value filters<br>Four market families with probabilities and explanations<br>Revision history, results and performance<br>English and a light, colourful theme | Additional languages<br>Dark theme<br>Advertising<br>Provider odds display and filtering<br>Every provider market (section 4)<br>Anonymous on-device picks, alerts and preferences | Betting and payments<br>Visitor accounts or subscriptions<br>Social feeds and comments<br>AI chat, native apps or an admin dashboard |
+| Seven-day daily predictions; fixture browsing up to 31 days<br>Search and multi-value filters<br>Four market families with probabilities and explanations<br>Revision history, results and performance<br>English and a light, colourful theme | Additional languages<br>Dark theme<br>Advertising<br>Provider odds display and filtering<br>Every provider market (section 4)<br>Anonymous on-device picks, alerts and preferences<br>Paid access: phone-number accounts, manual mobile-money subscriptions and a private owner dashboard, off until the owner switches it on | Betting, stakes and bookmaker links<br>Automatic payment collection, in-app refunds, passwords, OTP and visitor profiles<br>Social feeds and comments<br>AI chat or native apps |
 
 Use stable Next.js with the App Router and TypeScript, Prisma, MySQL, Redux Toolkit and styled-components. Server code and durable workers own business logic.
 
-Every public feature and read endpoint works without registration, sign-in, visitor tokens or authentication cookies. Do not add account screens, an auth SDK or user/session tables. Store anonymous preferences in the URL or browser storage. "My Picks", match alerts and the Profile screen in the layout templates are on-device features of this kind: starred matches and preferences live in browser storage, alerts appear only while the site is open, and nothing identifies a visitor to the server. Private jobs use service credentials or hosting controls.
+Every public page and read endpoint works without registration or sign-in, and anonymous visitors receive no cookies. The only visitor identity is the optional phone-number account of paid access (below); do not add an auth SDK, passwords, OTP, emails or visitor profiles. Store anonymous preferences in the URL or browser storage. "My Picks", match alerts and the Profile screen in the layout templates are on-device features of this kind: starred matches and preferences live in browser storage, alerts appear only while the site is open, and nothing identifies a visitor to the server. Private jobs use service credentials or hosting controls.
+
+### Paid access (owner decision, 19 October 2026)
+
+Version 1.9 adds optional paid access. It ships behind a dashboard switch (`off`, `test`, `on`) that stays **off** until the owner turns it on; while off, visitors see the free service unchanged apart from generic match metadata (section 12).
+
+- **Accounts.** Visitors sign in with a phone number only: digits with the country code and no plus (`256772123456`), shown as `256 772 123 456`. There is no password, OTP, name, email or profile. A number identifies an account; on its own it never shows picks, payment status or subscription details.
+- **Payment.** On one mobile-first "Get access" page the visitor picks a plan, pays the owner's MTN MoMo or Airtel Money number and reports the payment: payer number, transaction ID, amount and a screenshot, mostly filled in for them. The plans are Daily (24 hours from activation, UGX 1,000), Weekly (7 days, UGX 5,000) and Monthly (30 days, UGX 20,000); every plan gives full access to every feature and section, and only the length differs. A day is 24 hours from activation (payment confirmation), never a calendar day or midnight EAT. Payments are whole UGX to the owner's Ugandan wallets; accounts may use any country code.
+- **Approval and codes.** The owner finds the money in their own wallet and approves it on a private, phone-friendly `/admin` dashboard that reuses the analytics owner login. Payments are never approved automatically. Approval issues a 12-character access code (`XXXX-XXXX-XXXX`) that works only on the paying account; the owner sends it by WhatsApp or SMS with a one-tap unlock link.
+- **Periods and devices.** A paid period starts when the owner confirms the payment (for a renewal, when the current period ends) and ends by itself at its expiry date and time; entering the code later does not move it. When it ends, subscriber content is hidden again until the next payment. Entering the code once unlocks that browser; an account has at most two unlocked devices by default.
+- **Free and subscriber content.** Fixtures, scores, the live clock, search, factual insights, which market families have a pick, performance aggregates and everything about finished, canceled and awarded fixtures (picks, outcomes, analysis, history) stay free; the owner confirms this split under OP-37. For unfinished fixtures, picks, probabilities, alternatives, prices, AI analysis, revision history, slip results and probability filters are for entitled viewers. Gating happens on the server: nothing subscriber-only reaches anonymous HTML, page data, API responses or metadata.
+
+The detailed design is [the monetization plan](prompts/monetization.md); prompts 057–067 implement it. Betting, stakes, bookmaker links and automatic payment collection remain outside scope.
 
 Cover enabled competitions available through the selected plan, expanding only as data quality and operating budgets allow. Do not promise worldwide coverage, guaranteed wins or search rankings. Keep one canonical record per team. Third-party images load from remote URLs; original Goal Hint branding may be bundled locally as described in section 6.
 
@@ -61,18 +73,19 @@ The homepage opens directly to today’s matches in `Africa/Kampala` time, with 
 | Match detail | Teams, kickoff, markets, analysis, sources, revisions and final outcomes; one tap from a card. |
 | How it works | Probability explanations, sources, timing, settlement and measured performance; linked from the footer and probability help. |
 | Utility pages | Privacy, terms and contact information in the footer. |
+| Account and Get access | Phone sign-in, plan choice, payment report and code entry; linked from the interface only when paid access is on and never indexed. |
 
 ### Search and filters
 
-The feed screens follow the layout templates in `dev-plan/templates/` on phones and desktops; the templates fix layout, while theme tokens and stored data supply branding and content. Search team, league and country names, including aliases and case-insensitive matches, across the entire selected date/range. Offer a single date or a range of up to 31 days with Today, Next 3 days, Next 7 days and Next 30 days presets; multi-select league, country and market filters; a probability range; and an odds range once provider odds are stored. Use clear active states, Reset and an Apply action that shows the matching count. Live and Results are navigation sections over the same feed.
+The feed screens follow the layout templates in `dev-plan/templates/` on phones and desktops; the templates fix layout, while theme tokens and stored data supply branding and content. Search team, league and country names, including aliases and case-insensitive matches, across the entire selected date/range. Offer a single date or a range of up to 31 days with Today, Next 3 days, Next 7 days and Next 30 days presets; multi-select league, country and market filters; a probability range; and an odds range once provider odds are stored. Use clear active states, Reset and an Apply action that shows the matching count. Live and Results are navigation sections over the same feed. When paid access is on, the probability range, probability sort, picks-only and odds filters are for entitled viewers: other viewers see them disabled with "Subscribers only", pages drop them with a redirect and the API refuses them with 403 `subscription-required`.
 
-Each card shows one pick: the most likely available pick among the selected markets, ties broken in policy order. Probability sorting and the probability range use that shown pick, so different markets may be ranked together; the card always names the market. Default to kickoff order with fixture ID as a stable tie-breaker; either order can be reversed, and missing probabilities sort last.
+Each card shows one pick: the most likely available pick among the selected markets, ties broken in policy order. Probability sorting and the probability range use that shown pick, so different markets may be ranked together; the card always names the market. Default to kickoff order with fixture ID as a stable tie-breaker; either order can be reversed, and missing probabilities sort last. When paid access is on and the viewer is not entitled, a card for an unfinished fixture shows "Pick for subscribers" for the first market family with a published pick, in policy order, instead of the pick and probability.
 
 Show available forecasts throughout today plus six days. Beyond that window, display “Predictions become available within seven days of the match.” Preserve applied filters in URLs and restore position and scroll on Back. Paginate with numbered page links (`‹ 1 2 3 4 … N ›`); row numbering continues across pages.
 
 ### Detail and feedback
 
-Put teams, kickoff, prediction and estimated probability first. Show each market’s source, last publication time and refresh status. Other markets follow, then two to four reasons, one uncertainty, source links and the result. Sources and earlier revisions may expand in place; core predictions remain visible.
+Put teams, kickoff, prediction and estimated probability first. Show each market’s source, last publication time and refresh status. Other markets follow, then two to four reasons, one uncertainty, source links and the result. Sources and earlier revisions may expand in place; core predictions remain visible. When paid access is on, viewers who are not entitled see, for an unfinished fixture, a subscriber panel with "Get access" and "Have a code?" in place of the prediction, probabilities, alternatives, analysis, prices and revision history; teams, kickoff, factual insights, sourced news, scores and results stay visible.
 
 During a run, show “Updating predictions for the next 7 days” with completed/total jobs while retaining existing forecasts and publishing finished jobs progressively. Distinguish no fixtures, no filter matches, insufficient data and temporary data failure. Label degraded imports as partial coverage; missing data cannot establish “No fixtures”. Keep loaded cards on refresh failure, use compact placeholders for initial loading and display actual update times.
 
@@ -80,9 +93,9 @@ During a run, show “Updating predictions for the next 7 days” with completed
 
 ### Reusable match cards
 
-Use an article with this reading order: competition and kickoff, home team, away team, selected prediction, probability, outcome and “View analysis”. On phones, show separate Home and Away rows with logos beside names and aligned scores.
+Use an article with this reading order: competition and kickoff, home team, away team, selected prediction, probability, outcome and “View analysis”. On phones, show separate Home and Away rows with logos beside names and aligned scores. A gated card (paid access on, viewer not entitled, unfinished fixture) keeps that order with the market name and “Pick for subscribers” in place of the selected prediction and probability. Its markup carries no pick, probability or outcome value, and the tile still opens the match.
 
-For example: “Home win · 54% estimated probability”, followed by “AI prediction · Updated 00:18 EAT”. A final score and the prediction outcome are separate labels. Any illustrative probabilities must be identified as examples.
+For example: “Home win · 54% estimated probability”, followed by “AI prediction · Updated 00:18 EAT”; gated: “Match result · Pick for subscribers”. A final score and the prediction outcome are separate labels. Any illustrative probabilities must be identified as examples.
 
 - Use one column on phones, two on tablets and an aligned table on desktops; keep cards compact with 24–34 px logos and touch targets of at least 36 px.
 - Allow long names to wrap without overflow. Team names provide identity; broken logos fall back to styled initials.
@@ -398,9 +411,9 @@ Use `https://goalhint.com` as the metadata base and canonical origin; redirect `
 
 Routes: `/en`, `/en/predictions/YYYY-MM-DD`, `/en/matches/fixture-id/home-v-away` and `/en/how-it-works`. Redirect `/` consistently to `/en`. Fixture IDs establish identity; changed slugs redirect to the canonical page. Results shares the dated feed.
 
-- Server-render names, kickoff, probabilities, explanations and results. Use Next.js metadata APIs for unique titles, descriptions, canonical URLs and social previews; include valid canonical pages in the sitemap. [8]
+- Server-render names, kickoff, factual insights and results. Server-render probabilities and explanations only for entitled viewers or free fixtures (finished, canceled, awarded); crawlers get exactly the anonymous view, with no user-agent branching. Use Next.js metadata APIs for unique titles, descriptions, canonical URLs and social previews; include valid canonical pages in the sitemap. Metadata is generic and viewer-independent: it never quotes a pick or probability. [8]
 - Retain historical match pages with locked predictions, source/evidence timestamps, scores and outcomes. Show revisions within that page and canonicalize revision URLs to it.
-- Keep search, arbitrary filters and revision variants out of the index. Allow crawlers to read `noindex`; do not hide it behind a robots.txt block. Avoid thin team, league, keyword or AI article pages.
+- Keep search, arbitrary filters and revision variants out of the index. Account and Get access pages are noindex, no-store and outside sitemaps; robots.txt blocks only `/admin`. Allow crawlers to read `noindex`; do not hide it behind a robots.txt block. Avoid thin team, league, keyword or AI article pages.
 - Provide crawlable archive, pagination and detail links. Unknown fixtures return 404; known fixtures may show unavailable states. Supported structured data must match visible content and does not guarantee rich results. [10]
 
 ### Content that earns repeat visits
@@ -435,7 +448,7 @@ Launch in light mode; shared tokens should accommodate dark mode later. Any them
 
 Store provider, database and AI credentials in server-only secrets. Public access follows section 1; internal mutations require validated service credentials or workload identity.
 
-Schema-validate inputs and outputs, sanitize text, allow safe link schemes, block server fetches to internal addresses, rate-limit public search, redact logs and grant least database privilege. Minimize visitor data and document analytics/retention. Resolve applicable audience and service consent requirements before enabling advertising.
+Schema-validate inputs and outputs, sanitize text, allow safe link schemes, block server fetches to internal addresses, rate-limit public search, redact logs and grant least database privilege. Minimize visitor data and document analytics/retention. Paid access keeps only a phone number per account, hashed session tokens, salted code hashes and payment reports (payer number, transaction ID, amount, screenshot) with documented purge periods; pasted SMS text and form drafts stay in the browser. Codes and phone numbers never appear in URLs, titles, analytics or logs, and every member or owner state change needs a same-origin request. Resolve applicable audience and service consent requirements before enabling advertising.
 
 ### Backups and recovery
 
@@ -488,7 +501,11 @@ Benchmark 100, 500 and 1,000 refreshes, then the expected seven-day volume. Meas
 
 ### Future advertising readiness
 
-Keep ads disabled behind a feature flag at launch. Future labeled slots belong between card groups with reserved space, preserving navigation and free access. No advertising portal or payment system is in scope.
+Keep ads disabled behind a feature flag at launch. Future labeled slots belong between card groups with reserved space, preserving navigation and the free tier. No advertising portal is in scope.
+
+### Manual paid access
+
+Paid access (section 1) is manual and adds no paid service: subscribers pay the owner's MTN MoMo or Airtel Money numbers in UGX and report the payment, the owner approves it against their own wallet, and the owner sends codes from their own phone. No payment provider API, automatic collection, SMS gateway, in-app refund or new environment key is in scope. Payment screenshots are stored in the existing database within the hosting budget. Revenue is reported on the private owner dashboard only.
 
 ## 15 Acceptance criteria and launch decisions
 
@@ -496,7 +513,8 @@ These handoff requirements need recorded evidence. Confirm proposed workload and
 
 | Area | Required evidence |
 | --- | --- |
-| Navigation and access | Today’s picks appear immediately; search includes unloaded cards and a card opens analysis in one tap. Fresh-session public pages/read endpoints need no account/token/cookie; no visitor auth screens, SDK or user/session tables exist. Unauthorized job triggers are rejected. |
+| Navigation and access | Today’s picks appear immediately; search includes unloaded cards and a card opens analysis in one tap. Fresh-session public pages/read endpoints need no account, token or cookie and set no cookie. Visitor identity is limited to paid-access phone accounts: no auth SDK, passwords, OTP or profiles. Unauthorized job triggers and unauthenticated `/admin` requests are rejected. |
+| Paid access | Phone sign-in turns every documented input into canonical digits (`256772123456`) or refuses it. A manual payment report (payer number, transaction ID, amount, screenshot) reaches the owner queue, and one owner approval issues one code that works only on the paying account; an approved transaction ID can never be approved again. Periods start at payment confirmation, chain without overlap and expire without a job; the device cap holds. With the switch `on`, anonymous visitors, crawlers and sessions that are not entitled (no unlock, or no running period) get no pick, probability, reason, alternative, price or analysis for unfinished fixtures in any HTML, page data, API response or metadata (leak scan). With it `off`, the public site matches the free service apart from generic metadata. |
 | Layout and rendering | At 320, 360, 390 and 430 px, long names, broken logos, keyboard use and zoom remain usable. Shared components follow the layout templates with consistent Goal Hint branding. Match HTML and styled-components CSS exist before hydration without flashes/errors. |
 | Images and teams | Third-party images remain URL-only and load directly without app storage/proxy/cache; first-party brand assets may be bundled. Broken or throttled logos show text. Concurrent/repeated imports across competitions/seasons produce one canonical team; ambiguous identities are held for resolution. |
 | Schedule | Prove today plus six days, exclusive day-seven boundary, 21:00 UTC trigger, midnight rollover and rejection outside eligibility. Prior-day predictions remain usable for eligible early kickoffs. |
@@ -510,7 +528,7 @@ These handoff requirements need recorded evidence. Confirm proposed workload and
 
 ### Confirmed product choices
 
-Goal Hint and goalhint.com, free account-free access, direct Mega with the US$45 cap, four launch market families, the seven-day/daily EAT schedule, AI priority with fallback, five-minute publication cutoff, English and a light theme are settled requirements.
+Goal Hint and goalhint.com, free anonymous browsing with optional phone-number paid access (manual mobile-money payments, owner-approved codes, off until the owner switches it on), direct Mega with the US$45 cap, four launch market families, the seven-day/daily EAT schedule, AI priority with fallback, five-minute publication cutoff, English and a light theme are settled requirements.
 
 ### Decisions needed before implementation
 
@@ -522,7 +540,7 @@ Goal Hint and goalhint.com, free account-free access, direct Mega with the US$45
 
 ### Checks required before launch
 
-Register the domain; configure DNS, HTTPS and canonical redirects. Verify Mega checkout, coverage, active limits/reset/expiry, fallback markets, freshness and remote-logo/reuse rights, including independent media-host throttling. Pin compatible framework versions, configure secrets/scheduling, and test backups, restoration, monitoring and quota/cost alerts. Complete shadow evaluation and acceptance checks; publish methodology, daily-cadence limitations, correction policy, privacy, terms and contact information.
+Register the domain; configure DNS, HTTPS and canonical redirects. Verify Mega checkout, coverage, active limits/reset/expiry, fallback markets, freshness and remote-logo/reuse rights, including independent media-host throttling. Pin compatible framework versions, configure secrets/scheduling, and test backups, restoration, monitoring and quota/cost alerts. Complete shadow evaluation and acceptance checks; publish methodology, daily-cadence limitations, correction policy, privacy, terms and contact information. Switching paid access on also needs the owner's paid-launch approval (OP-40), release-ready privacy and terms covering it, and the host checks of prompt 067.
 
 ## 16 Sources and implementation references
 
