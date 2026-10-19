@@ -3603,6 +3603,14 @@ and specification v1.9. Phase 0 records the change; it adds no application code.
 - **Unchanged:** no code, schema, copy or deployment. The public site behaves as
   before. Nothing is deployed to production unless the owner explicitly asks.
 
+### OP-38 follow-up — network selection (19 October 2026)
+
+The owner accepted leaving network auto-selection unset until full prefixes are
+confirmed. Keep `networkPrefixes` empty and let the payer choose the receiving
+network; do not guess prefixes or ask for this same choice again. This does not
+block independent member-session implementation. The other recorded payment,
+SMS, menu and legal inputs remain outstanding.
+
 ## 057 — Owner admin foundation (19 October 2026)
 
 **Status:** implemented in the working tree; the manual 375 px Browser pane check
@@ -3886,3 +3894,32 @@ no other OP row changes state.
   `20261015072524_match_facts` (`fixturefacts`, `footballvenue`,
   `seasonstandings`) is not in the repository. Removing it would be a destructive
   change to the developer database, so it waits for the owner.
+
+## 059 — Phone sign-in and member sessions (19 October 2026)
+
+- Reuse 058's database tables, cached settings and the analytics keying config;
+  no new auth package, secret or settings row. Production missing-secret behavior
+  stays unavailable; analytics' existing development defaults remain local only.
+- Atomic account upsert holds the account row while the ten-session cap is
+  enforced. Compare the inserted UUID with the stored UUID to count new accounts
+  once, without relying on MySQL/MariaDB affected-row flags. A refused new-account
+  budget rolls back its account and session together.
+- Fixed UTC hour/day throttle windows use `INSERT … ON DUPLICATE KEY UPDATE`
+  with a capped counter, read in the same transaction. HMAC purpose strings
+  separate member buckets from analytics. Unknown addresses create no bucket.
+- Expired sessions cannot slide. A conditional daily update prevents concurrent
+  readers from repeatedly touching one session. No browser/user-agent record is
+  added. Codes, entitlement and account-period output belong to 060.
+- Member cookie names are independent of owner analytics cookies. Lax keeps
+  link navigation signed in. Sign-out clears the cookie even if deleting its
+  server row temporarily fails, matching the existing owner sign-out behavior.
+- `/en/account` uses `PublicShell` as a non-app page. Its shared controls retain
+  existing chrome; the member panel supplies 44 px actions, 16 px inputs and
+  square corners. Initial HTML includes the native form; JavaScript supplies
+  preview, paste replacement, draft clearing and back/forward-cache recovery.
+- Native form redirects only select Account/Get access plus a validated English
+  feed or canonical match return path. Neither a request URL nor an arbitrary
+  destination is trusted. JSON replies contain only the next path.
+- Real MySQL concurrency and eviction tests use the existing isolated harness
+  and least-privilege application role. Browser scenarios live only in the
+  existing rendering-fixture system. Owner mode remains off throughout testing.

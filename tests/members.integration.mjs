@@ -13,6 +13,8 @@ import { parseRuntimePolicy } from "../src/server/config/runtime-policy.ts";
 import { createDatabase } from "../src/server/database/client.ts";
 import { createPlansService } from "../src/server/members/plans.ts";
 import { accessMode, createSettingsService } from "../src/server/members/settings.ts";
+import { createMemberSessions, memberSessionRules, memberTokenHash } from "../src/server/members/member-sessions.ts";
+import { createMemberRateLimit } from "../src/server/members/rate-limit.ts";
 import { execFile } from "./helpers/command-runtime.mjs";
 import { costTestEnvironment } from "./helpers/cost-fixtures.mjs";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
@@ -420,6 +422,71 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.ok(memberNumbers.length > 10);
       const trail = JSON.stringify((await database.query((client) => client.ownerAuditEvent.findMany())).map(({ details }) => details));
       for (const phone of memberNumbers) assert.equal(trail.includes(phone), false, phone);
+    });
+
+    await t.test("concurrent phone sign-ins and first throttle upserts serialize; session expiry slides at most daily", async () => {
+      const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
+      let instant = Date.parse("2026-10-19T09:00:00Z");
+      const sessions = createMemberSessions({ database, config, now: () => instant });
+      const results = await Promise.all([sessions.signIn("256700000701", "test-address"), sessions.signIn("256700000701", "test-address")]);
+      assert.ok(results.every((result) => result.status === "signed-in"));
+      assert.notEqual(results[0].token, results[1].token);
+      const first = await sessions.verify(results[0].token);
+      const other = await sessions.verify(results[1].token);
+      assert.equal(first.accountId, other.accountId);
+      const newAccounts = await database.query((tx) => tx.rateLimitBucket.findUniqueOrThrow({ where: { key: config.key("member-new-accounts", "test-address") } }));
+      assert.equal(newAccounts.count, 1, "the concurrent first sign-ins create and count only one account");
+      assert.equal(first.codeEnteredAt, null);
+      assert.equal(first.tokenHash, memberTokenHash(results[0].token));
+      const row = () => database.query((tx) => tx.memberSession.findUniqueOrThrow({ where: { tokenHash: first.tokenHash } }));
+      assert.equal((await row()).expiresAt.getTime(), instant + memberSessionRules.expiryMs);
+      instant += memberSessionRules.touchAfterMs - 1;
+      await sessions.verify(results[0].token);
+      assert.equal((await row()).lastSeenAt.getTime(), instant - memberSessionRules.touchAfterMs + 1);
+      instant++;
+      await sessions.verify(results[0].token);
+      assert.equal((await row()).lastSeenAt.getTime(), instant);
+      instant += memberSessionRules.expiryMs;
+      assert.equal(await sessions.verify(results[0].token), null);
+      const limit = createMemberRateLimit(database, config, () => instant);
+      const rule = { purpose: "concurrency-test", value: "test-address", maximum: 1, windowMs: 3_600_000 };
+      assert.deepEqual((await Promise.all([limit(rule), limit(rule)])).sort(), [false, true]);
+      instant += rule.windowMs;
+      assert.equal(await limit(rule), true);
+      const before = await database.query((tx) => tx.rateLimitBucket.count());
+      assert.equal(await limit({ ...rule, value: "unknown" }), true);
+      assert.equal(await database.query((tx) => tx.rateLimitBucket.count()), before);
+    });
+
+    await t.test("a sign-in flood preserves unlocked devices and evicts pending and superseded payment sessions last", async () => {
+      const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
+      let instant = now.getTime();
+      const sessions = createMemberSessions({ database, config, now: () => ++instant });
+      const phone = "256700000702", tokens = [];
+      for (let index = 0; index < 10; index++) tokens.push((await sessions.signIn(phone, "unknown")).token);
+      const member = await sessions.verify(tokens[0]);
+      for (const [index, status] of [[0, "pending"], [1, "superseded"]]) await submission(member.accountId, weekly,
+        { status, submittedSessionHash: memberTokenHash(tokens[index]) });
+      const codeId = await code(member.accountId, { endsAt: new Date(now.getTime() - 1), startsAt: new Date(now.getTime() - 86_400_000) });
+      await app.query("UPDATE MemberSession SET codeEnteredAt = ?, accessCodeId = ? WHERE tokenHash = ?", [now, codeId, memberTokenHash(tokens[2])]);
+      await sessions.signIn(phone, "unknown");
+      assert.ok(await sessions.verify(tokens[0]));
+      assert.ok(await sessions.verify(tokens[1]));
+      assert.ok(await sessions.verify(tokens[2]));
+      assert.equal(await sessions.verify(tokens[3]), null);
+      assert.equal(await database.query((tx) => tx.memberSession.count({ where: { accountId: member.accountId } })), 10);
+      assert.equal(await sessions.signOutOthers(member), false);
+      assert.equal(await sessions.signOutOthers(await sessions.verify(tokens[2])), true, "an ended period can still sign out other devices");
+      assert.equal(await sessions.verify(tokens[0]), null);
+      const replacement = await sessions.signIn(phone, "unknown", tokens[2]);
+      assert.equal(await sessions.verify(tokens[2]), null, "sign-in replaces the previous browser token");
+      assert.equal((await sessions.verify(replacement.token)).codeEnteredAt, null);
+      await app.query("UPDATE MemberAccount SET blockedAt = ? WHERE id = ?", [now, member.accountId]);
+      const blockedSignIn = await sessions.signIn(phone, "unknown");
+      assert.equal(blockedSignIn.status, "signed-in");
+      assert.equal((await sessions.verify(blockedSignIn.token)).blocked, true);
+      await sessions.signOut(blockedSignIn.token);
+      assert.equal(await sessions.verify(blockedSignIn.token), null);
     });
 
     await t.test("the MariaDB overlay builds the same tables, records Prisma's checksum once and refuses a wrong engine or shape", async () => {

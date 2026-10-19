@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "@/components/navigation/navigation-link";
-import { useId, type ComponentPropsWithRef, type ReactNode } from "react";
+import { useId, useState, type ComponentPropsWithRef, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
+import { formatPhone, normalizePhone, outsideUgandaHint, phoneHint } from "@/domain/phone";
 
 export type ButtonVariant = "primary" | "secondary" | "quiet";
 
@@ -291,6 +292,23 @@ export function TextInput({ label, hint, error, type = "text", ...props }: TextI
       )}
     </Field>
   );
+}
+
+export type PhoneInputProps = Omit<TextInputProps, "type" | "inputMode" | "autoComplete" | "value" | "defaultValue" | "onChange" | "onPaste"> & {
+  value?: string;
+  defaultValue?: string;
+  onValueChange?: (value: string) => void;
+};
+
+/** The same phone field for sign-in, payer details and owner tools. Paste always replaces the country-code prefill. */
+export function PhoneInput({ value, defaultValue = "256", onValueChange, hint, ...props }: PhoneInputProps) {
+  const [input, setInput] = useState(defaultValue);
+  const current = value ?? input, canonical = normalizePhone(current);
+  const change = (next: string) => { setInput(next); onValueChange?.(next); };
+  return <TextInput {...props} type="tel" inputMode="tel" autoComplete="tel" value={current} maxLength={64} data-analytics-ignore
+    onChange={(event) => change(event.currentTarget.value)}
+    onPaste={(event) => { event.preventDefault(); change(event.clipboardData.getData("text")); }}
+    hint={canonical ? formatPhone(canonical) : phoneHint(current) ? outsideUgandaHint : hint} />;
 }
 
 export function SelectInput({ label, hint, error, children, ...props }: SelectInputProps) {

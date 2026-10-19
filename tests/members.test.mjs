@@ -11,11 +11,67 @@ import { auditDetails, auditTextErrors, ownerSignInAudit, UnsafeAuditDetailsErro
 import { createSettingsHandlers } from "../src/server/admin/settings-http.ts";
 import { createPlansService } from "../src/server/members/plans.ts";
 import { accessMode, createSettingsService, settingsCacheRules } from "../src/server/members/settings.ts";
+import { createMemberSignInHandler, createMemberSignOutHandler } from "../src/server/members/member-http.ts";
+import { memberCookieName } from "../src/server/members/member-sessions.ts";
+import { memberReturnPath } from "../src/domain/member-navigation.ts";
 
 // Synthetic owner numbers only; real numbers are typed by the owner on the dashboard.
 const OWNER_MTN = "256700000901", OWNER_CONTACT = "256700000902";
 const settingsWith = (fields) => Object.freeze({ ...defaultSubscriptionSettings, ...fields });
 const ready = { activePlans: 1, privacyReleaseReady: true, termsReleaseReady: true };
+
+function memberFixture({ mode = "test", production = false, member = null } = {}) {
+  const calls = { signIn: [], signOut: [], devices: [] };
+  const services = { config: { production, cookies: { secure: production } }, settings: { settings: { ...defaultSubscriptionSettings, paywallMode: mode } },
+    sessions: { async signIn(...args) { calls.signIn.push(args); return { status: "signed-in", token: "t".repeat(43) }; },
+      async verify() { return member; }, async signOut(token) { calls.signOut.push(token); },
+      async signOutOthers(value) { calls.devices.push(value); return true; } } };
+  return { services, resolve: async () => services, calls };
+}
+const memberRequest = (fields, { json = true, headers = {} } = {}) => new Request("http://localhost:3000/api/account/sign-in", { method: "POST",
+  headers: { host: "localhost:3000", "sec-fetch-site": "same-origin", "content-type": json ? "application/json" : "application/x-www-form-urlencoded", ...headers },
+  body: json ? JSON.stringify(fields) : new URLSearchParams(fields) });
+
+test("member sign-in normalizes the complete phone table, bounds and whitelists input, and never puts a phone in a URL", async () => {
+  const { resolve, calls } = memberFixture(), handler = createMemberSignInHandler(resolve);
+  for (const input of ["0772123456", "772123456", "+256772123456", "00256772123456", "256 772-123 456", "2560772123456",
+    "256256772123456", "256+256772123456", "25600256772123456", "256 0772 123 456", "254712345678", "256+254712345678", "25600254712345678"]) {
+    const response = await handler(memberRequest({ phone: input, destination: "subscribe", return: "/en/matches/test-id/home-away" }));
+    assert.equal(response.status, 200, input);
+    assert.equal(calls.signIn.at(-1)[0], input.includes("254") ? "254712345678" : "256772123456");
+    const body = await response.json();
+    assert.equal(body.next, "/en/subscribe?return=%2Fen%2Fmatches%2Ftest-id%2Fhome-away");
+    assert.doesNotMatch(JSON.stringify(body), /256772|254712/);
+    assert.match(response.headers.get("set-cookie"), /^goal-hint-member=t{43}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=34560000$/);
+  }
+  for (const phone of ["256254712345678", "25677212345", "256672123456", "0201234567", "012345678901"]) {
+    const response = await handler(memberRequest({ phone }, { json: false }));
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "/en/account?status=invalid-phone");
+    assert.equal(response.headers.get("set-cookie"), null);
+  }
+  for (const fields of [{ phone: "0772123456", accountId: "other" }, { phone: "x".repeat(3000) }]) {
+    assert.equal((await handler(memberRequest(fields))).status, 400);
+  }
+  const secure = await createMemberSignInHandler(memberFixture({ production: true }).resolve)(memberRequest({ phone: "0772123456" }));
+  assert.match(secure.headers.get("set-cookie"), /^__Host-goal-hint-member=.*; HttpOnly; SameSite=Lax; Max-Age=34560000; Secure$/);
+  assert.equal(memberCookieName(true), "__Host-goal-hint-member");
+  for (const path of ["https://evil.test", "//evil.test", "/en?phone=256772123456", "/en#code=x", "/en/matches/a/b?x=1", "/en/matches/a/%2f", "/en/../admin"]) {
+    assert.equal(memberReturnPath(path), null, path);
+    const response = await handler(memberRequest({ phone: "0772123456", destination: path, return: path }, { json: false }));
+    assert.equal(response.headers.get("location"), "/en/account");
+  }
+});
+
+test("member sign-out clears the Lax cookie and cache even with mode off or failing storage", async () => {
+  const fixture = memberFixture({ mode: "off" });
+  fixture.services.sessions.signOut = async () => { throw new Error("down"); };
+  const response = await createMemberSignOutHandler(fixture.resolve)(memberRequest({}));
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), "/en/account?status=signed-out");
+  assert.equal(response.headers.get("clear-site-data"), '"cache"');
+  assert.match(response.headers.get("set-cookie"), /^goal-hint-member=; .*SameSite=Lax; Max-Age=0$/);
+});
 
 test("settings fields parse to canonical numbers, tested shortcuts, trimmed text and in-range whole numbers", () => {
   const parsed = parseSettingsChanges({ mtnNumber: "0700 000 901", airtelNumber: "+256 700-000-903", contactPhone: "2560700000902",

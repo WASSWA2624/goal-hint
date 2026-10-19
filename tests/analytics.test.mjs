@@ -292,6 +292,9 @@ test("the collector honours origin, privacy signals, admin browsers, bots, size 
   assert.equal((await send({ cookie: "goal-hint-analytics=%" })).status, 204, "A malformed cookie value still marks an admin browser.");
   assert.equal((await send({ "user-agent": "Googlebot/2.1" })).status, 204);
   assert.equal(calls.collect.length, 0, "Excluded requests never reach storage.");
+  assert.equal((await send({ cookie: "goal-hint-member=member-token" })).status, 204);
+  assert.equal(calls.collect.length, 1, "Member cookies do not exclude visitors from consented analytics.");
+  calls.collect.length = 0;
   assert.equal((await send({}, "{not json")).status, 400);
   assert.equal((await send({}, JSON.stringify(payload([{ t: "pageview", id: ids.pv, path: "/en?q=x" }])))).status, 400);
   assert.equal((await send({}, "x".repeat(20_000))).status, 413);

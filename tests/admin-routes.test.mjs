@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { createMemberSignInHandler, createMemberDevicesHandler } from "../src/server/members/member-http.ts";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Every later prompt that adds an /admin page or an /api/admin route is covered here automatically: the scan finds it,
@@ -23,8 +24,29 @@ async function find(directory, name) {
   return found.sort();
 }
 const pages = await find("src/app/admin", "page.tsx");
+const memberRoutes = await find("src/app/api/account", "route.ts");
 const routes = await find("src/app/api/admin", "route.ts");
 const source = (file) => readFile(path.join(root, file), "utf8");
+
+test("member write routes use the shared factories; sign-in and devices enforce origin, mode and device unlock", async () => {
+  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"]]) {
+    const route = `src/app/api/account/${segment}/route.ts`;
+    assert.ok(memberRoutes.includes(route));
+    assert.match(await source(route), new RegExp(`export const POST = ${factory}\\(\\);`));
+  }
+  for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null }, { codeEnteredAt: new Date(0), blocked: false }]) {
+    const services = async () => ({ config: { production: false, cookies: { secure: false } }, settings: { settings: { paywallMode: mode } }, sessions: {
+      verify: async () => member, signIn: async () => ({ status: "signed-in", token: "t".repeat(43) }), signOutOthers: async () => true,
+    } });
+    for (const [factory, devices] of [[createMemberSignInHandler, false], [createMemberDevicesHandler, true]]) {
+      for (const site of ["same-origin", "cross-site"]) {
+        const response = await factory(services)(new Request("http://localhost:3000/api/account/test", { method: "POST", headers: {
+          "sec-fetch-site": site, "content-type": "application/json" }, body: JSON.stringify({ phone: "256700000101" }) }));
+        assert.equal(response.status, site === "cross-site" || mode === "off" || devices && !member?.codeEnteredAt ? 403 : devices ? 303 : 200);
+      }
+    }
+  }
+});
 
 test("the scan sees the admin shell, sign-in and sign-out, and the Plans and Settings pages and routes", () => {
   for (const page of ["src/app/admin/page.tsx", "src/app/admin/plans/page.tsx", "src/app/admin/settings/page.tsx"]) assert.ok(pages.includes(page), pages.join());

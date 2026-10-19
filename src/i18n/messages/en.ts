@@ -1,6 +1,19 @@
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  "account.title": "Account",
+  "account.description": "Sign in to your Goal Hint account with your phone number.",
+  "account.closed": "Subscriptions are not open yet.",
+  "account.unavailable": "Member access is unavailable. Try again later.",
+  "account.phone": "Your number",
+  "account.phoneHint": "Use your phone number with its country code.",
+  "account.invalidPhone": "Enter a valid phone number with its country code.",
+  "account.continue": "Continue",
+  "account.signedInAs": "Signed in as {phone}",
+  "account.signedOut": "Signed out.",
+  "account.signOut": "Sign out",
+  "account.getAccess": "Get access",
+  "account.inAppBrowser": "Open this page in Chrome or Safari",
   "navigation.loading": "Loading page",
   "feed.date.zone": "Match dates: {zone}",
   "feed.date.useLocal": "Use my local dates",

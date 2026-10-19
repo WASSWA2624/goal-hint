@@ -4463,3 +4463,70 @@ goalhint.com or cPanel.
 - Owner decision: how `npm run check` runs `next build` locally, for example
   with the database capability off for the build only.
 - Still open from 057: the owner's sign-in length choice (plan §12).
+
+## 059 — Phone sign-in and member sessions (19 October 2026)
+
+Implemented on the existing 057–058 foundation, with the public shell, shared
+navy/teal controls, square panels and translated `account.*` copy. No migration,
+npm dependency, environment key, deployment or paywall setting change.
+
+### Behavior and files
+
+- `member-sessions.ts` creates random 32-byte tokens and stores only SHA-256
+  hashes. Account upserts serialize concurrent first sign-ins and the ten-session
+  cap. Old, non-unlocked sessions without a pending/superseded payment go first;
+  those with payment reports go last. Sign-in replaces the browser's prior
+  session. Server expiry slides by 90 days at most once daily.
+- `rate-limit.ts` reuses the analytics HMAC key and atomic MySQL upserts for
+  1,000 sign-ins/hour and 1,000 newly created accounts/day per known IP.
+  Concurrent first sign-ins count one new account. Unknown addresses skip the
+  per-IP buckets. Missing keying/storage refuses member operations.
+- `member-http.ts` shares the existing private HTTP helpers and settings cache.
+  All three account POST routes check same origin; sign-in refuses mode off;
+  devices additionally requires an unlocked session, even after access ended.
+  JSON and native form sign-ins normalize the same phone inputs. Bodies are
+  bounded, timed and restricted to named fields. Destinations and return paths
+  are validated; no phone is placed in a URL.
+- Member cookies are HttpOnly, Lax, Path=/, 400 days, with Secure and the
+  `__Host-` prefix in production. Sign-out clears the tab's payment draft first,
+  deletes the session, clears the cookie and cache, then navigates fully.
+- `/en/account` is dynamic, noindex, outside information-page navigation and
+  sitemaps, and inherits 057's private path headers. It renders mode off, signed
+  out, unavailable and number-only signed-in states. The latter shows only the
+  number, Get access and Sign out. It never exposes periods or payment details.
+  The render-time in-app-browser hint stores no user agent. Restored pages
+  reload on `pageshow` to recheck the session.
+- `PhoneInput` extends the existing labeled field in `controls.tsx`; paste
+  replaces the prefill, and normalization supplies its accessible preview/hint.
+  The account panel and actions reuse existing UI primitives with 44 px targets.
+  `tests/helpers/rendering/members/` and `verify-member-rendering.py` exercise
+  synthetic states separately from the real application and developer database.
+
+### Verification
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:members` with isolated MySQL 8.4.11 | 34/34 pass, none skipped. Includes concurrent first sign-ins, concurrent first throttle hits, one account counted, daily session touch, expiry, cookie replacement, payment-aware eviction and ended-device sign-out. Initial concurrent-build run timed out during migration deployment; the next isolated run passed deploy, status, verify and all tests. |
+| `npm run test:admin` | 24/24 pass, including member route factories and table-driven origin/mode/unlock refusals. |
+| `npm run test:analytics` | 18 pass, one MySQL integration skip because this invocation did not supply the binary. Added assertion that a member cookie does not exclude consented visitors. |
+| Lint | Initial full scan found one static-component issue in the isolated fixture. Moved its route factories outside render; lint passes on every changed source and test file. |
+| `npm run typecheck` | Pass. |
+| Production build with command-line `GOAL_HINT_DATABASE_ENABLED=false` | Pass; nine static pages and the new dynamic account page and account routes. Uses 058's recorded build-only override; no environment file changed. |
+| Local production `GET /en/account` | 200; `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow`, `X-Frame-Options: DENY`, noindex HTML and no `Set-Cookie`. |
+| `python scripts/verify-member-rendering.py --serve` | Four initial-HTML states pass, with no anonymous cookies, noindex metadata, the native tel field and no number-only subscription details. |
+| Full unit suite, `node --conditions=react-server --test --test-concurrency=1 tests/*.test.mjs` | 1,541 tests: 1,540 pass, none fail, one existing Windows skip. The parallel run had five timing failures in the existing database-boundary/predictor tests; all 15 tests in those files and then the entire suite passed sequentially after the production build finished. |
+
+Manual Browser-pane checks at **375 × 812**: mode off, signed out,
+number-only signed in and unavailable states fit without horizontal scrolling.
+Account inputs/actions measure 44 px. All thirteen valid phone-table inputs show
+the expected preview; the foreign-number hint appears on the refused prefixed
+input; clipboard paste replaces `256`. The temporary viewport override was reset.
+Throttled desktop Chrome and real Android were not required by 059 and were not
+run. No production requests or owner settings were changed.
+
+**Owner follow-up:** the owner accepted leaving network auto-selection unset.
+Keep `networkPrefixes` empty; do not re-request this choice. OP-38's other inputs
+remain recorded for their owning prompts. Existing 058 local build/drift/backup
+issues remain as previously documented; this prompt changes none of those systems.
+
+**Status:** 059 acceptance passed; tracker row is ☑ Completed. Continue with 060.
