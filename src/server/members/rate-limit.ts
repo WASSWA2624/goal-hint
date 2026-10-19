@@ -13,11 +13,13 @@ export async function takeMemberLimit(tx: Prisma.TransactionClient, config: Pick
   if (limit.value === "unknown") return true;
   const key = config.key(`member-${limit.purpose}`, limit.value);
   const start = new Date(Math.floor(at.getTime() / limit.windowMs) * limit.windowMs);
+  const end = new Date(+start + limit.windowMs);
   // Assignment order matters in MySQL: compare the old window before replacing it.
-  await tx.$executeRaw`INSERT INTO RateLimitBucket (\`key\`, count, bytes, windowStartedAt)
-    VALUES (${key}, 1, 0, ${start}) ON DUPLICATE KEY UPDATE
+  await tx.$executeRaw`INSERT INTO RateLimitBucket (\`key\`, count, bytes, windowStartedAt, lockedUntil)
+    VALUES (${key}, 1, 0, ${start}, ${end}) ON DUPLICATE KEY UPDATE
     count = IF(windowStartedAt = ${start}, LEAST(count + 1, ${limit.maximum + 1}), 1),
-    bytes = IF(windowStartedAt = ${start}, bytes, 0), windowStartedAt = ${start}`;
+    bytes = IF(windowStartedAt = ${start}, bytes, 0), windowStartedAt = ${start},
+    lockedUntil = GREATEST(COALESCE(lockedUntil, ${end}), ${end})`;
   const row = await tx.rateLimitBucket.findUniqueOrThrow({ where: { key }, select: { count: true } });
   return row.count <= limit.maximum;
 }

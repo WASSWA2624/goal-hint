@@ -1,5 +1,6 @@
 import "server-only";
 
+import { membersPurgeFor } from "../members/purge.ts";
 import { cookies } from "next/headers.js";
 import { connection } from "next/server.js";
 import { getAnalyticsServices, loginNotice, type AnalyticsServices } from "../analytics/analytics-http.ts";
@@ -53,7 +54,7 @@ export async function adminPageGate(searchParams: Promise<Record<string, string 
   await connection();
   const resolved = await services();
   const owner = await verifyOwner(resolved, (await cookies()).get(resolved.config.cookies.session)?.value);
-  if (owner) return { owner, services: resolved };
+  if (owner) { if (resolved.database) membersPurgeFor(resolved.database).maybePurge(); return { owner, services: resolved }; }
   return { owner: null, services: resolved, login: loginNotice(resolved, await searchParams) };
 }
 

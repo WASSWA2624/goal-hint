@@ -124,3 +124,28 @@ unselected; this happens before feed SQL executes. Configure only owner-approved
 competitions and complete the existing provider/forecast prerequisites before
 expecting populated feeds. No sample fixture or prediction rows were inserted
 to conceal that missing configuration.
+
+
+### Member retention worker (065)
+
+The application/worker account needs DELETE only on `MemberAccount`,
+`MemberSession`, `PaymentScreenshot` and `RateLimitBucket`, as already listed in
+section (H) of the grants. No DELETE is granted on submissions, codes or audit.
+The live maintenance loop and cPanel cron invoke the same hourly, conditional
+`lastMembersPurgeAt` claim; authenticated admin page loads and
+`npm run members:purge` are fallback triggers. The command performs deletion;
+run it only on the intended database with the owner's approval. This feature's
+checks use owned throwaway engines; no purge was run against the developer or
+production database.
+
+Batches contain at most 100 rows, with a 100,000-row cap per category per claim;
+any remainder is handled by a later hourly run. Screenshot selection is
+rechecked while holding account locks. Pending images are never eligible;
+approved/reversed images use the configured decision-age retention (90 days by
+default), rejected/superseded images use seven days. Metadata remains.
+
+Throttle writers now record at least the fixed-window end in the existing
+`lockedUntil` column, preserving any longer lock. Purge waits a day after both
+the window and this marker. Older null markers conservatively retain a full
+24-hour window plus a day, since their hashed key cannot reveal the purpose.
+This uses the existing schema and records no raw address or session token.

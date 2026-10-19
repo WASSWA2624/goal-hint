@@ -24,9 +24,11 @@ export function createPayments({ database, config, now = Date.now }: {
 }) {
   async function bucket(tx: Prisma.TransactionClient, purpose: string, value: string, at: Date): Promise<Bucket> {
     const key = config.key(`member-${purpose}`, value), start = new Date(Math.floor(+at / memberRateRules.dayMs) * memberRateRules.dayMs);
-    await tx.$executeRaw`INSERT INTO RateLimitBucket (\`key\`, count, bytes, windowStartedAt) VALUES (${key}, 0, 0, ${start})
+    const end = new Date(+start + memberRateRules.dayMs);
+    await tx.$executeRaw`INSERT INTO RateLimitBucket (\`key\`, count, bytes, windowStartedAt, lockedUntil) VALUES (${key}, 0, 0, ${start}, ${end})
       ON DUPLICATE KEY UPDATE count = IF(windowStartedAt = ${start}, count, 0),
-      bytes = IF(windowStartedAt = ${start}, bytes, 0), windowStartedAt = ${start}`;
+      bytes = IF(windowStartedAt = ${start}, bytes, 0), windowStartedAt = ${start},
+      lockedUntil = GREATEST(COALESCE(lockedUntil, ${end}), ${end})`;
     return tx.rateLimitBucket.findUniqueOrThrow({ where: { key }, select: { key: true, count: true, bytes: true } });
   }
   const busyAudit = (tx: Prisma.TransactionClient, at: Date) => writeOwnerAudit(tx, { at, actor: "system", action: "uploads_busy",

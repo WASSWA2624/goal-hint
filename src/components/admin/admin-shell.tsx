@@ -13,8 +13,10 @@ const sections = [
   { key: "overview", href: "/admin", label: "Overview" },
   { key: "payments", href: "/admin/payments", label: "Payments" },
   { key: "codes", href: "/admin/codes", label: "Codes" },
+  { key: "subscribers", href: "/admin/subscribers", label: "Subscribers" },
   { key: "plans", href: "/admin/plans", label: "Plans" },
   { key: "settings", href: "/admin/settings", label: "Settings" },
+  { key: "audit", href: "/admin/audit", label: "Audit" },
 ] as const;
 export type AdminSection = (typeof sections)[number]["key"];
 

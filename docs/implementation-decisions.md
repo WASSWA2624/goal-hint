@@ -4092,3 +4092,27 @@ Trial request audits now retain the address bucket's HMAC identifier and count,
 never the raw IP. The queue reads its current-day bucket for the trial warning.
 The pending-count metadata is itself owner guarded, so signed-out metadata does
 not disclose the queue size. No schema, env key, dependency or setting changed.
+
+
+### 065 — subscriber operations, accounting and retention (20 October 2026)
+
+Overview uses the existing Kampala calendar bounds for EAT weeks and months.
+Revenue sums approved non-reversed submissions (report and owner) plus original
+manual-code money. Active paid access follows replacement-code links, including
+reissue and number change, to a paid origin; a trial alone never counts as paid.
+Subscriber details reuse 064 code tools and 060 verified number transfers.
+Notes stay private and only their length is audited. Block/unblock reasons are
+audited and reject phone/code-shaped text using the existing audit validator.
+Erasure clears account and code notes, sessions, screenshots, payer numbers and
+rejection text while retaining accounting amounts, IDs and snapshots. Audit
+views expose metadata only, without details that could hold owner settings.
+
+One members purge module is shared by authenticated admin loads, the live
+maintenance loop, the cPanel cron and the CLI. A conditional settings UPDATE
+claims it hourly across processes; deletions use batches of 100, rechecking image
+eligibility under account locks. No migration, new grant, dependency or env key
+was needed. For exact throttle retention, writers record the window end as a
+minimum in the existing lockedUntil marker, preserving longer locks. Legacy
+null markers conservatively use the largest existing (daily) window. Metadata,
+codes and audits are retained pending OP-26. Tests run only on owned isolated
+databases; no developer/production purge or deployment was performed.

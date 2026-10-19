@@ -346,3 +346,9 @@ test("a committed save or mode switch answers saved even when the page data cann
     }
   }
 });
+
+test("owner revenue periods use Kampala civil month/week boundaries",async()=>{
+ const {revenueBounds}=await import("../src/server/admin/subscribers.ts");
+ const before=revenueBounds(Date.parse("2026-11-01T20:59:59Z"));assert.equal(before.week.toISOString(),"2026-10-25T21:00:00.000Z");
+ const after=revenueBounds(Date.parse("2026-11-01T21:00:00Z"));assert.equal(after.week.toISOString(),"2026-11-01T21:00:00.000Z");assert.equal(after.month.toISOString(),"2026-10-31T21:00:00.000Z");
+});

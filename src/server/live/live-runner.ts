@@ -1,5 +1,6 @@
 import "server-only";
 
+import { membersPurgeFor } from "../members/purge.ts";
 import { randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import { calendarRules } from "../../domain/calendar.ts";
@@ -34,6 +35,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
   const plan = runtime.day.status.plan, dailyLimit = runtime.day.status.dailyLimit;
   try {
     while (!signal.aborted) {
+      membersPurgeFor(runtime.database).maybePurge();
       const now = Date.now(), day = runtime.quota.current();
       if (!day || now - accountCheckedAt >= 10 * MINUTE) {
         try {

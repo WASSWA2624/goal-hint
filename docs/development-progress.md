@@ -4728,3 +4728,40 @@ pages fit without horizontal overflow, with the existing square chrome and a
 
 **Status: Completed.** No production setting/data changed; paid access stays off.
 Commit and push 064 before starting 065.
+
+
+### 065 — overview, subscribers, audit and members purge (20 October 2026)
+
+Replaced the empty Overview and added Subscribers and Audit in the existing
+admin shell. New guarded subscriber routes provide POST phone search, notes,
+block/unblock, sign out all, confirmed number change and confirmed erasure.
+The read services return explicit browser DTOs; code generation and delivery
+reuse 064. Added the shared hourly members purge, worker/CLI entry, maintenance,
+cron and admin fallback triggers. Existing grants already cover the four purged
+tables; local-database documentation describes scheduling and the command.
+
+`npm run test:members` passes 50 checks with no skips, including the complete
+migration chain, genuine MySQL grants/constraints, member/code concurrency and
+new accounting/retention tests. The final focused seven-check real MySQL run also
+covers HTTP verification/confirmation, reason privacy and a 101-session batch.
+Every retention rule has injected-clock coverage; concurrent claims purge once,
+repeated runs are idempotent, pending screenshots survive, and configurable
+retention applies. Revenue is EAT-aligned, excludes reversals and trial/reissue/
+number-change amounts, and paid-active counts survive replacement chains.
+Erasure retains amounts/IDs while clearing personal fields and images.
+
+`npm run test:admin` passes 29 checks, including every new page/route, POST
+fallbacks and a TypeScript-AST scan of all handwritten application updates that
+forbids ownership-key mutation after insert. Typecheck, changed-file ESLint
+(with zero warnings) and whitespace checks pass. Production rendering verifies
+Overview/Subscribers/Audit alongside Payments/Codes and private headers.
+The payment suite passes all 29 checks after bucket writers gained window-end markers.
+
+Manual Browser pane, 375 x 812, synthetic services: Overview values and EAT
+labels, subscriber POST search without a phone URL, ID-only detail links, device
+and code tools, verification/erasure controls, and action-filtered Audit all fit
+without horizontal overflow. Screenshots: `.tmp/065-overview-375.png`,
+`.tmp/065-subscribers-375.png`, `.tmp/065-audit-375.png`. No real personal data was
+erased and no real member purge was run.
+
+**Status: Completed.** Paid access remains off. Commit and push before 066.

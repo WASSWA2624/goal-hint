@@ -63,7 +63,7 @@ test("code entry requires same origin, an open mode and a nonblocked member, wit
 });
 
 test("the scan sees the admin shell, sign-in and sign-out, and the Plans and Settings pages and routes", () => {
-  for (const page of ["src/app/admin/page.tsx", "src/app/admin/plans/page.tsx", "src/app/admin/settings/page.tsx", "src/app/admin/payments/page.tsx", "src/app/admin/codes/page.tsx"]) assert.ok(pages.includes(page), pages.join());
+  for (const page of ["src/app/admin/page.tsx", "src/app/admin/plans/page.tsx", "src/app/admin/settings/page.tsx", "src/app/admin/payments/page.tsx", "src/app/admin/codes/page.tsx", "src/app/admin/subscribers/page.tsx", "src/app/admin/audit/page.tsx"]) assert.ok(pages.includes(page), pages.join());
   for (const route of [loginRoute, signOutRoute, plansRoute, settingsRoute]) assert.ok(routes.includes(route), routes.join());
 });
 
@@ -292,9 +292,31 @@ test("owner screenshot is private JPEG with a sandbox and cannot return data wit
 });
 
 test("owner phone forms have POST fallbacks so disabled JavaScript cannot put phones in URLs",async()=>{
-  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payments-editor.tsx"]){
+  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payments-editor.tsx","src/components/admin/subscribers-editor.tsx"]){
     const text=await source(file);
     const forms=[...text.matchAll(/<form\b[^>]*?onSubmit=/gu)];assert.ok(forms.length>0);
     for(const [form] of forms)assert.match(form,/method="post"/u,file);
   }
+});
+
+test("member ownership keys are immutable after insert in every handwritten server module",async()=>{
+ const ts=(await import("typescript")).default;
+ async function sources(dir){const result=[];for(const e of await readdir(path.join(root,dir),{withFileTypes:true})){if(e.name==="generated")continue;const rel=`${dir}/${e.name}`;if(e.isDirectory())result.push(...await sources(rel));else if(/\.tsx?$/u.test(e.name))result.push(rel);}return result;}
+ let checked=0;
+ for(const file of await sources("src")){
+  const text=await source(file);
+  for(const match of text.matchAll(/\bUPDATE\s+`?(?:AccessCode|PaymentSubmission|MemberSession)`?\s+SET([\s\S]*?)\bWHERE\b/giu))assert.doesNotMatch(match[1],/\baccountId\s*=/iu,file);
+  const tree=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true);const vars=new Map();
+  function collect(n){if(ts.isVariableDeclaration(n)&&ts.isIdentifier(n.name)&&n.initializer){const list=vars.get(n.name.text)??[];list.push(n.initializer);vars.set(n.name.text,list);}ts.forEachChild(n,collect);}collect(tree);
+  function inspectData(n,seen=new Set()){
+   if(ts.isParenthesizedExpression(n)||ts.isAsExpression(n)||ts.isSatisfiesExpression(n)){inspectData(n.expression,seen);return;}
+   if(ts.isConditionalExpression(n)){inspectData(n.whenTrue,new Set(seen));inspectData(n.whenFalse,new Set(seen));return;}
+   if(ts.isIdentifier(n)){assert.ok(vars.has(n.text),`${file}: unresolved update data ${n.text}`);if(seen.has(n.text))return;seen.add(n.text);for(const v of vars.get(n.text))inspectData(v,new Set(seen));return;}
+   assert.ok(ts.isObjectLiteralExpression(n),`${file}: update data must have statically reviewable fields`);
+   for(const p of n.properties){if(ts.isSpreadAssignment(p)){inspectData(p.expression,new Set(seen));continue;}assert.notEqual(p.name?.getText(tree).replace(/["']/g,""),"accountId",`${file}: ownership mutation`);}
+  }
+  function visit(n){if(ts.isCallExpression(n)&&ts.isPropertyAccessExpression(n.expression)&&["update","updateMany","upsert"].includes(n.expression.name.text)&&ts.isPropertyAccessExpression(n.expression.expression)&&["accessCode","paymentSubmission","memberSession"].includes(n.expression.expression.name.text)){
+   checked++;const args=n.arguments[0];assert.ok(args&&ts.isObjectLiteralExpression(args),file);for(const prop of args.properties)if(ts.isPropertyAssignment(prop)&&["data","update"].includes(prop.name.getText(tree)))inspectData(prop.initializer);
+  }ts.forEachChild(n,visit);}visit(tree);
+ }assert.ok(checked>=15,`checked ${checked} ownership-sensitive updates`);
 });
