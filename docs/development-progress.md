@@ -4645,3 +4645,53 @@ Viewport override reset; screenshot: `.tmp/062-gated-feed-375.png`.
 **Status:** every 062 acceptance check passes; tracker 062 is ☑ Completed.
 No deployment, production setting, dependency or env-key change. Paid access
 remains off. Continue with 063 after committing and pushing.
+
+
+## 063 — Get access and payment reporting (19 October 2026)
+
+Added the thin /en/subscribe route and its existing-PublicShell page factory,
+numbered steps, owner-ordered plans, configured payment channels, safe Android
+menu links, shared help/Safety tips, inline/plain-post sign-in, account trial
+request and restricted payment status. Shared PhoneInput, AccountCodeForm,
+MemberPanel, controls, native segmented radios and Disclosure are reused;
+FileInput is added to the shared control module. Actions are 48 px and square.
+
+The client-only SMS parser has six explicitly synthetic owner-requested MTN and
+Airtel label examples. Amount/ID/network suggestions never block edits or take a
+fee/balance as the paid amount. Browser-only SMS/image handling, account-scoped
+scalar drafts, canvas JPEG preparation and XHR progress/retry live in small
+payment modules. The API uses the existing member guard and bounded body reader,
+a generalized badge signature reader, atomic budgets, account/confirmation locks,
+plan/terms snapshots and original JPEG/hash storage. Added a reusable owned
+throwaway paid-database helper and isolated production payment rendering app.
+
+Checks: required `npm run test:payments` passes 21 checks, including real MySQL
+concurrency/caps, duplicate IDs across networks, snapshots, assent, restricted
+status and trials; no skips. `tests/admin-routes.test.mjs` passes all 10 guard
+checks. The full unit suite passes 1,573 tests with its one existing Windows
+skip; the subsequently added client progress/retry test passes in the targeted
+16-test payment/guard run. `npm run typecheck`, changed-file ESLint and whitespace
+checks pass. Production payment rendering covers eight states and five user
+agents, including mode off, blocked, pre-hydration sign-in, no-name SMS, current
+assent, three ordered plans and private headers. No dependency or env key added.
+
+Browser pane at 375x812, synthetic services only: inline sign-in; canonical
+number; SMS suggests UGX 5,000 and TEST-MTN-001 while ignoring fee/balance; reload
+restores the plan/network/amount/ID/checkbox with empty SMS and no image. A real
+file-picker upload re-encodes a 1080x2400 synthetic image to 330 KB. A rejected
+send shows 100% progress and retains the fields and preview; correcting the ID
+and retrying reaches P-TEST/Checking with the reference-bearing WhatsApp link.
+The code control's Unlock is 48 px. Real Account -> Renew opens the production
+Get access page's visible #plans heading below the existing sticky header.
+A browser canvas probe prepares another 1080x2400 receipt at 393,307 bytes;
+1080x6000 becomes 737x4096 at 610,735 bytes, preserving the required 700 px width.
+Screenshot: `.tmp/063-payment-status-375.png`. Final browser checks confirm that
+sign-out clears the account draft, a matched SMS recipient takes precedence over
+another pay card, an edited amount survives plan changes, and the 320 px page has
+no horizontal overflow (`.tmp/063-get-access-320.png`).
+
+**Status: Partial.** Real anonymized network SMS/screenshot verification, the
+MTN registered name, optional Airtel channel and tested copy/menu/review details and physical Android/FB
+long-press, tab discard and 200 kbit/s upload checks remain OP-38/067 inputs.
+No production setting or data changed; paid access remains off. Continue with
+064 after committing and pushing 063.

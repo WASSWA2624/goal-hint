@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { accessCodeAlphabet, extractCode, formatCode, normalizeCode } from "../../domain/access-code.ts";
+import { transactionKey } from "../../domain/payment.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import { chainPeriods, codeStatus, extendPeriods, remainingDays, subscriptionDayMs } from "../../domain/subscription-period.ts";
 import { auditTextErrors, writeOwnerAudit, type OwnerAuditAction } from "../admin/audit.ts";
@@ -20,7 +21,7 @@ export function hashCode(salt: Uint8Array, code: string): string {
   return createHash("sha256").update("goal-hint-access-code:v1:").update(salt).update(normalized).digest("hex");
 }
 export const newReference = () => `C-${Array.from({ length: 4 }, () => accessCodeAlphabet[randomInt(32)]).join("")}`;
-export const transactionKey = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/gu, "");
+export { transactionKey } from "../../domain/payment.ts";
 export const wrongCodeMessage = "Code not recognized. Codes work only on the number they were sent to.";
 const options = { isolationLevel: "ReadCommitted", timeout: 15_000 } as const;
 const validDays = (days: number, maximum = 366) => Number.isInteger(days) && days >= 1 && days <= maximum;

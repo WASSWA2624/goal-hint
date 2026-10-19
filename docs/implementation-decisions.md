@@ -4027,3 +4027,44 @@ no other OP row changes state.
   caption that the existing no-pick CSS hides. It exposes no prediction values.
   Browser measurements confirm 75.5/74.3 px at 320/375 px and native 48 px radio
   keyboard selection. The 660-response scan and complete serial unit suite pass.
+
+
+## 063 — Get access and payment reporting (19 October 2026)
+
+- Reused PublicShell, phone and code forms, MemberPanel, large buttons, native
+  segmented radios, Disclosure, the existing same-origin member guard, account
+  locks and the nine paid-access tables. Added a shared FileInput. No dependency,
+  env key, schema change, real payment number or default plan was added.
+- The owner requested drafted SMS samples. Six explicitly synthetic MTN/Airtel
+  payer/owner label examples live in `tests/fixtures/payment-sms/synthetic.json`.
+  They are not network captures. Real anonymized SMS/screenshot verification
+  remains an OP-38/067 activation input; the parser always permits manual edits.
+  The earlier accepted decision keeps network prefixes empty and presents an
+  explicit receiving-network choice; no repeated prefix question is needed.
+- Browser drafts use a key scoped to the account id, store only the whitelisted
+  scalar fields, restore through useSyncExternalStore, and are removed on Send
+  and Sign out. The SMS has no name and is outside the payment form. Images stay
+  only in memory. Clipboard reads happen directly on Paste, without a Permissions
+  query. The submitted multipart contains exactly six fields and one JPEG.
+- Generalized the existing bounded raster-signature reader for payment JPEGs;
+  provider badges retain PNG/JPEG, 1 MiB and 2048 px limits. No server decoder or
+  OCR was added. Client canvas encoding strips metadata and bounds dimensions.
+- Attempt and declared-byte IP budgets are charged before body reads. Failed
+  reads do not consume the three stored uploads. An unknown address skips only
+  the IP bucket. Actual storage rechecks session/site budgets under row locks;
+  the site ceiling writes uploads_busy for the owner dashboard alert in 065.
+  The shared confirmation lock also serializes submission duplicate checks with
+  owner approval. Only approved/reversed transaction keys block reuse.
+- Account-locked insertion supersedes the earlier pending report, records terms,
+  plan snapshots, submitting session hash and the original received JPEG/hash,
+  and commits its counters and audit together. Payment status queries enforce
+  the submitting session or a currently unlocked session of the same account.
+- Local browser checks use only synthetic services and numbers. Real Android
+  long-press, Facebook WebView, forced tab discard, owner-tested shortcuts/copy
+  format and a phone upload at 200 kbit/s remain physical-device checks for 067.
+
+- Final 063 review: received-message drafts expose the sender as counterparty
+  without a foreign-recipient warning; only a matched owner number supplies the
+  SMS network default. That default wins over a later pay-card default, followed
+  by a prefix only while no network is selected. Explicit radio edits stay open
+  to preserve keyboard focus. Existing PageMain section-anchor clearance is reused.

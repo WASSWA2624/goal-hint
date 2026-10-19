@@ -388,3 +388,8 @@ export function SegmentedChoice<Value extends string>({ label, name, value, opti
     </label>)}
   </Segments>;
 }
+
+/** Native file picker with the same labelled error and hint treatment as other fields. */
+export function FileInput(props: Omit<TextInputProps, "type" | "value" | "defaultValue">) {
+  return <TextInput {...props} type="file" />;
+}

@@ -1,0 +1,69 @@
+{
+  "provenance": "Synthetic drafts requested by the owner on 19 October 2026. These are invented label examples, not captured network SMS. Real MTN/Airtel payer and owner samples still require verification before activation.",
+  "ownerNumbers": {
+    "mtn": "256700000901",
+    "airtel": "256700000902"
+  },
+  "samples": [
+    {
+      "label": "MTN payer draft",
+      "text": "MTN MoMo: You have sent UGX 5,000 to TEST PAYEE 0700000901. Fee UGX 500. Balance UGX 20,000. Transaction ID: TEST-MTN-001.",
+      "expected": {
+        "amount": 5000,
+        "transactionId": "TEST-MTN-001",
+        "network": "mtn",
+        "counterparty": "256700000901"
+      }
+    },
+    {
+      "label": "MTN owner draft",
+      "text": "MTN: You received UGX 1,000 from TEST PAYER 0700000101. TID: TEST-MTN-002. Balance UGX 40,000. Fee UGX 0.",
+      "expected": {
+        "amount": 1000,
+        "transactionId": "TEST-MTN-002",
+        "network": "mtn",
+        "counterparty": "256700000101"
+      }
+    },
+    {
+      "label": "MTN abbreviated draft",
+      "text": "MoMo. Paid UGX 20,000 to 256700000901. Trans ID TEST.MTN.003. Fee UGX 300. Balance UGX 10,000.",
+      "expected": {
+        "amount": 20000,
+        "transactionId": "TEST.MTN.003",
+        "network": "mtn",
+        "counterparty": "256700000901"
+      }
+    },
+    {
+      "label": "Airtel payer draft",
+      "text": "Airtel Money: Sent UGX 5,000 to TEST PAYEE 0700000902. Transaction ID: TEST-AIR-001. Fee UGX 200. Balance UGX 30,000.",
+      "expected": {
+        "amount": 5000,
+        "transactionId": "TEST-AIR-001",
+        "network": "airtel",
+        "counterparty": "256700000902"
+      }
+    },
+    {
+      "label": "Airtel owner draft",
+      "text": "Airtel Money: Received UGX 1,000 from TEST PAYER 0700000102. TID: TEST-AIR-002. Balance UGX 11,000. Fee UGX 0.",
+      "expected": {
+        "amount": 1000,
+        "transactionId": "TEST-AIR-002",
+        "network": "airtel",
+        "counterparty": "256700000102"
+      }
+    },
+    {
+      "label": "Airtel abbreviated draft",
+      "text": "Airtel: Paid UGX 20,000 to 256700000902. Trans ID TEST.AIR.003. Fee UGX 100. Balance UGX 9,000.",
+      "expected": {
+        "amount": 20000,
+        "transactionId": "TEST.AIR.003",
+        "network": "airtel",
+        "counterparty": "256700000902"
+      }
+    }
+  ]
+}

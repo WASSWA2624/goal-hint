@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createPayments, type Payments } from "./payments.ts";
 import { memberNextPath } from "../../domain/member-navigation.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import { memberReturnPath } from "../../domain/member-navigation.ts";
@@ -13,7 +14,7 @@ import { settingsServiceFor, type SettingsState } from "./settings.ts";
 import { createAccessCodes, wrongCodeMessage, type AccessCodes, type RedeemOutcome } from "./access-codes.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
-export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; codes?: AccessCodes | null }>;
+export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
 export async function getMemberServices(): Promise<MemberServices> {
@@ -22,6 +23,7 @@ export async function getMemberServices(): Promise<MemberServices> {
   try { config.key("member-readiness", "ready"); } catch { keyed = false; }
   return { config, settings: database ? await settingsServiceFor(database).current() : { settings: null, source: "unavailable" },
     sessions: database && keyed ? createMemberSessions({ database, config }) : null,
+    payments: database && keyed ? createPayments({ database, config }) : null,
     codes: database && keyed ? createAccessCodes({ database, config }) : null };
 }
 

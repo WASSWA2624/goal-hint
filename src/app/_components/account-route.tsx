@@ -11,6 +11,7 @@ import { codeStatus, formatPeriodEnd, remainingDays } from "@/domain/subscriptio
 import { createMessages } from "@/i18n/messages";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
 import { memberCookieName, type MemberIdentity } from "@/server/members/member-sessions";
+import { TrialRequest, PaymentStatusPanel } from "@/components/members/subscribe-controls";
 import { PublicShell } from "./public-shell";
 
 export function createAccountRoute({ services = getMemberServices }: { services?: MemberServicesSource } = {}) {
@@ -29,6 +30,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
     const returnTo = memberReturnPath(parameters.return);
     const now = new Date();
     const view = member?.codeEnteredAt && !member.blocked ? await resolved.codes?.accountView(member).catch(() => null) : null;
+    const paymentView = member && !member.blocked && resolved.settings.settings ? await resolved.payments?.view(member, resolved.settings.settings).catch(() => null) : null;
     const active = view?.codes.find((code) => codeStatus(code, now) === "active");
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.at(-1);
@@ -53,6 +55,8 @@ export function createAccountRoute({ services = getMemberServices }: { services?
                 : last && <p>{messages.text("account.accessEnded", { end: formatPeriodEnd(last.endsAt) })}</p>}
               {queued.map((code) => <p key={code.id}>{messages.text("account.queued", { plan: code.planName, start: formatPeriodEnd(code.startsAt), end: formatPeriodEnd(code.endsAt) })}</p>)}
             </>}
+            {paymentView?.trialEligible && <TrialRequest locale={locale} phone={member.phone} days={resolved.settings.settings!.trialDays} />}
+            <PaymentStatusPanel locale={locale} status={paymentView?.status ?? null} phone={member.phone} unlocked={!!member.codeEnteredAt} />
             <ButtonLink size="large" href={`${memberNextPath("subscribe", returnTo)}#plans`} prefetch={false}>{messages.text(view ? "account.renew" : "account.getAccess")}</ButtonLink>
             <AccountCodeForm locale={locale} signedIn inApp={inApp} returnTo={returnTo} initialError={codeError} />
             {!member.codeEnteredAt && <p>{messages.text("account.notYourNumber")}</p>}

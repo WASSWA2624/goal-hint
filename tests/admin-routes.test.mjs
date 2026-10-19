@@ -29,7 +29,7 @@ const routes = await find("src/app/api/admin", "route.ts");
 const source = (file) => readFile(path.join(root, file), "utf8");
 
 test("member write routes use the shared factories; sign-in and devices enforce origin, mode and device unlock", async () => {
-  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"], ["code", "createMemberCodeHandler"]]) {
+  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"], ["code", "createMemberCodeHandler"], ["payments", "createPaymentHandler"], ["trial", "createTrialHandler"]]) {
     const route = `src/app/api/account/${segment}/route.ts`;
     assert.ok(memberRoutes.includes(route));
     assert.match(await source(route), new RegExp(`export const POST = ${factory}\\(\\);`));
@@ -261,4 +261,21 @@ test("Plans and Settings: reads show stored data, writes are JSON only, protecte
   assert.equal(unknown.status, 400, "The mode is never part of a save."); assert.match((await unknown.json()).errors.changes, /Unknown setting/);
   const down = await settings.POST(postJson(settingsRoute, { action: "mode", mode: "test" }));
   assert.equal(down.status, 503, "A mode change runs in a transaction; storage that is down answers 503, never 500.");
+});
+
+// Payments and trials intentionally require a number-only member, rather than an unlocked device.
+test("payment and trial writes guard origin, mode, session and blocked accounts before body or storage", async () => {
+  const { createPaymentHandler, createTrialHandler } = await import("../src/server/members/payment-http.ts");
+  const { paymentRequest } = await import("./helpers/payment-fixtures.mjs");
+  for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null, blocked: false }, { codeEnteredAt: new Date(), blocked: true }]) for (const site of ["same-origin", "cross-site"]) {
+    const services = async () => ({ config: { production: false }, settings: { settings: { paywallMode: mode } }, sessions: { verify: async () => member },
+      payments: { begin: async () => true, submit: async () => ({ status: "saved", reference: "P-TEST" }), trial: async () => "saved" } });
+    const denied = mode === "off" || !member || member.blocked || site === "cross-site";
+    for (const [handler, request, status] of [[createPaymentHandler(services), await paymentRequest({ headers: { "sec-fetch-site": site } }), 201],
+      [createTrialHandler(services), new Request("http://localhost/api/account/trial", { method: "POST", headers: { "sec-fetch-site": site } }), 200]]) {
+      const response = await handler(request); assert.equal(response.status, denied ? 403 : status);
+      if (denied) assert.equal(request.bodyUsed, false);
+      if (member?.blocked && mode !== "off" && site === "same-origin") assert.equal((await response.json()).message, "We couldn't complete this. Please contact us.");
+    }
+  }
 });
