@@ -9,6 +9,8 @@ import { Brand, BrandImage, HeaderButton, HeaderLink, Main, Notice, Shell, Tab, 
 /** Owner dashboard sections, in tab order. Later prompts add their pages here (and the pending count). */
 const sections = [
   { key: "overview", href: "/admin", label: "Overview" },
+  { key: "plans", href: "/admin/plans", label: "Plans" },
+  { key: "settings", href: "/admin/settings", label: "Settings" },
 ] as const;
 export type AdminSection = (typeof sections)[number]["key"];
 

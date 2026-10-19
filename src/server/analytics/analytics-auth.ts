@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { DatabaseRuntime } from "../database/client.ts";
+import type { Prisma } from "../generated/prisma/client.ts";
 import type { AnalyticsConfig } from "./analytics-config.ts";
 import { verifyPassword } from "./analytics-password.ts";
 
@@ -33,6 +34,13 @@ export type LoginResult =
   | Readonly<{ status: "locked"; retryAfterSeconds: number; newlyLocked: boolean; ownerUsername: boolean }>;
 /** `touch: false` checks a session without extending it (public pages previewing as the owner). */
 export type VerifyOptions = Readonly<{ touch?: boolean }>;
+/** A login refusal: storage or configuration is unavailable, the credentials were wrong, or a throttle key is locked. */
+export type LoginRefusal = Exclude<LoginResult, Readonly<{ status: "signed-in" }>>;
+/**
+ * Password re-entry (owner settings): the login check and throttle, without a session. `confirmed` means the password is
+ * the owner's; every refusal is the login's own.
+ */
+export type PasswordCheck = Readonly<{ status: "confirmed"; username: string }> | LoginRefusal;
 
 type Clock = () => number;
 type ThrottleKey = Readonly<{ key: string; maximumFailures: number; windowMs: number }>;
@@ -100,37 +108,67 @@ export function createAdminAuth({ database, config, now = Date.now }: { database
     }, { isolationLevel: "ReadCommitted", timeout: 10_000 });
   }
 
+  type Matched = Readonly<{ status: "matched"; at: Date; username: string; keys: ReturnType<typeof throttleKeys>;
+    reserved: Extract<Reservation, { status: "reserved" }> }>;
+
+  /**
+   * The login check shared by sign-in and password re-entry: a lock in place refuses first, then the attempt is counted
+   * against every key, then the username and password are compared.
+   */
+  async function check(username: string, password: string, address: string): Promise<Matched | LoginRefusal> {
+    const admin = config.admin;
+    if (admin === null) return { status: "unavailable" };
+    const at = new Date(now());
+    const keys = throttleKeys(username, address);
+    const ownerUsername = keys.user.key === config.key("login-user", admin.username.trim().toLowerCase());
+    // A lock already in place refuses cheaply, without a write; the reservation rechecks it under the row locks.
+    const retryAfterSeconds = await lockedFor(keys.all.map(({ key }) => key), at);
+    if (retryAfterSeconds > 0) return { status: "locked", retryAfterSeconds, newlyLocked: false, ownerUsername };
+    const reserved = await reserve(keys.all, keys.user.key, at);
+    if (reserved.status === "locked") return { ...reserved, newlyLocked: false, ownerUsername };
+    // Always derive the password key, so an unknown username costs the same time as a wrong password.
+    const usernameMatches = timingSafeEqual(Buffer.from(config.key("username", username.trim())), Buffer.from(config.key("username", admin.username)));
+    const passwordMatches = await verifyPassword(password, admin.passwordHash);
+    if (!usernameMatches || !passwordMatches) {
+      return reserved.lockSeconds > 0 ? { status: "locked", retryAfterSeconds: reserved.lockSeconds, newlyLocked: true, ownerUsername }
+        : { status: "invalid", ownerUsername };
+    }
+    return { status: "matched", at, username: admin.username, keys, reserved };
+  }
+
+  /** A right password clears the address keys and hands its counted attempt back to the username-wide key. */
+  async function release(tx: Prisma.TransactionClient, { keys, reserved }: Matched) {
+    for (const { key } of inLockOrder(keys.all)) {
+      if (key !== keys.user.key) await tx.analyticsLoginThrottle.deleteMany({ where: { key } });
+      // The username-wide key also loses any lock that this attempt started.
+      else await tx.analyticsLoginThrottle.updateMany({ where: { key, windowStartedAt: reserved.user.windowStartedAt },
+        data: { failures: { decrement: 1 }, ...(reserved.user.lockedUntil ? { lockedUntil: null } : {}) } });
+    }
+  }
+
   return Object.freeze({
     async login(username: string, password: string, address: string): Promise<LoginResult> {
-      const admin = config.admin;
-      if (admin === null) return { status: "unavailable" };
-      const at = new Date(now());
-      const keys = throttleKeys(username, address);
-      const ownerUsername = keys.user.key === config.key("login-user", admin.username.trim().toLowerCase());
-      // A lock already in place refuses cheaply, without a write; the reservation rechecks it under the row locks.
-      const retryAfterSeconds = await lockedFor(keys.all.map(({ key }) => key), at);
-      if (retryAfterSeconds > 0) return { status: "locked", retryAfterSeconds, newlyLocked: false, ownerUsername };
-      const reserved = await reserve(keys.all, keys.user.key, at);
-      if (reserved.status === "locked") return { ...reserved, newlyLocked: false, ownerUsername };
-      // Always derive the password key, so an unknown username costs the same time as a wrong password.
-      const usernameMatches = timingSafeEqual(Buffer.from(config.key("username", username.trim())), Buffer.from(config.key("username", admin.username)));
-      const passwordMatches = await verifyPassword(password, admin.passwordHash);
-      if (!usernameMatches || !passwordMatches) {
-        return reserved.lockSeconds > 0 ? { status: "locked", retryAfterSeconds: reserved.lockSeconds, newlyLocked: true, ownerUsername }
-          : { status: "invalid", ownerUsername };
-      }
+      const checked = await check(username, password, address);
+      if (checked.status !== "matched") return checked;
       const token = randomBytes(32).toString("base64url");
-      const expiresAt = new Date(at.getTime() + adminSessionRules.absoluteMs);
+      const expiresAt = new Date(checked.at.getTime() + adminSessionRules.absoluteMs);
       await database.transaction(async (tx) => {
-        for (const { key } of inLockOrder(keys.all)) {
-          if (key !== keys.user.key) await tx.analyticsLoginThrottle.deleteMany({ where: { key } });
-          // The right password hands its counted attempt back to the username-wide key, with any lock that attempt started.
-          else await tx.analyticsLoginThrottle.updateMany({ where: { key, windowStartedAt: reserved.user.windowStartedAt },
-            data: { failures: { decrement: 1 }, ...(reserved.user.lockedUntil ? { lockedUntil: null } : {}) } });
-        }
-        await tx.analyticsAdminSession.create({ data: { tokenHash: tokenHash(token), username: admin.username, createdAt: at, lastSeenAt: at, expiresAt } });
+        await release(tx, checked);
+        await tx.analyticsAdminSession.create({ data: { tokenHash: tokenHash(token), username: checked.username, createdAt: checked.at,
+          lastSeenAt: checked.at, expiresAt } });
       }, { isolationLevel: "ReadCommitted", timeout: 10_000 });
-      return { status: "signed-in", token, expiresAt, username: admin.username };
+      return { status: "signed-in", token, expiresAt, username: checked.username };
+    },
+
+    /**
+     * Password re-entry for a signed-in owner: the same check, keys and limits as sign-in, so a stolen session cannot guess
+     * faster than a stranger at the login form. It creates no session and never extends one.
+     */
+    async confirmPassword(username: string, password: string, address: string): Promise<PasswordCheck> {
+      const checked = await check(username, password, address);
+      if (checked.status !== "matched") return checked;
+      await database.transaction((tx) => release(tx, checked), { isolationLevel: "ReadCommitted", timeout: 10_000 });
+      return { status: "confirmed", username: checked.username };
     },
 
     /** A valid session within both its absolute and idle limits; otherwise null. Only a touching check extends the idle limit. */

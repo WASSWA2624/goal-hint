@@ -4,6 +4,7 @@ import { privatePaths } from "../../domain/private-paths.ts";
 import type { Admin, VerifyOptions } from "../analytics/analytics-auth.ts";
 import { createLoginHandler, createLogoutHandler, getAnalyticsServices, requireAdmin, type AnalyticsServices,
   type SignInOptions } from "../analytics/analytics-http.ts";
+import { ownerSignInAudit } from "./audit.ts";
 
 /**
  * The owner is the analytics administrator: one login, session table, Strict cookie, 12 h / 2 h limits and the existing
@@ -26,12 +27,14 @@ export function requireOwner(services: AnalyticsServices, request: Request, opti
   return requireAdmin(services, request, options);
 }
 
-/** `POST /api/admin/login`: the analytics sign-in handler, landing on `/admin`. 058 passes the audit writer. */
-export function createOwnerLoginHandler({ services = getAnalyticsServices, audit }: { services?: OwnerServices; audit?: SignInOptions["audit"] } = {}) {
+/** `POST /api/admin/login`: the analytics sign-in handler, landing on `/admin`, audited in OwnerAuditEvent by default. */
+export function createOwnerLoginHandler({ services = getAnalyticsServices, audit = ownerSignInAudit(services, "admin") }:
+  { services?: OwnerServices; audit?: SignInOptions["audit"] } = {}) {
   return createLoginHandler(services, { home: ownerRoutes.home, audit });
 }
 
-/** `POST /api/admin/logout`: deletes the session and lands on `/admin?login=signed-out`. */
-export function createOwnerLogoutHandler({ services = getAnalyticsServices, audit }: { services?: OwnerServices; audit?: SignInOptions["audit"] } = {}) {
+/** `POST /api/admin/logout`: deletes the session and lands on `/admin?login=signed-out`, audited by default. */
+export function createOwnerLogoutHandler({ services = getAnalyticsServices, audit = ownerSignInAudit(services, "admin") }:
+  { services?: OwnerServices; audit?: SignInOptions["audit"] } = {}) {
   return createLogoutHandler(services, { home: ownerRoutes.home, audit });
 }

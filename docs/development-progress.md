@@ -4273,3 +4273,193 @@ developer database or goalhint.com.
 `/analytics`) is still open, so the 12 h / 2 h limits stay. 058 must connect the
 audit writer, and keep it self-contained: refusal reports finish after the
 response.
+
+## 058 — Data model, settings, plans and audit (19 October 2026)
+
+**Status:** implemented; tracker 058 is ◐ **Partial** only because the owner
+has not yet confirmed each network's prefixes (OP-38), so
+`networkPrefixes` ships empty. Three local commands fail for reasons that
+predate 058: `npm run check` (at `next build`), `db:verify` on the developer
+database, and the restores in `test:backup`. Every 058-specific check passes.
+Paid access stays `off`: nothing is seeded, and a missing settings row reads
+`off` with a 2-day trial. One migration (`20261019142209_subscriptions`) and its
+MariaDB overlay; no env key or npm dependency; nothing deployed. Decisions are
+in [implementation decisions](implementation-decisions.md) (058 section). The
+overlay steps are in [database](database.md) ("Paid-access tables on MariaDB").
+
+### Changed behavior and files
+
+- **Tables** (`prisma/schema.prisma`, `prisma/schema.snapshot.prisma`, new
+  `prisma/migrations/20261019142209_subscriptions/migration.sql`):
+  `MemberAccount` (unique canonical `phone`, nullable on erase,
+  `trialRequestedAt`, `trialDismissedAt`), `MemberSession`, `SubscriptionPlan`,
+  `PaymentSubmission` (`source`, claim columns with `claimedTxnKey`, unique
+  nullable `approvedTxnKey`), `PaymentScreenshot`, `AccessCode` (`source`,
+  `replacedById`, plan snapshot, unique `paymentSubmissionId`, `activatedAt`,
+  `startsAt`, `endsAt`), `SubscriptionSettings`, `RateLimitBucket` and
+  `OwnerAuditEvent`, each with a privacy comment. Every `CREATE TABLE` states
+  `ENGINE=InnoDB` and `utf8mb4_bin`. There are 9 foreign keys and 11 named
+  checks; a session's code is a composite foreign key to its own account's code.
+  Schema: 89 models.
+- **MariaDB overlay** (new `prisma/mariadb/20261019142209_subscriptions.sql`):
+  the failing engine guard, `CREATE TABLE IF NOT EXISTS … ENGINE=InnoDB` with
+  foreign keys and checks inline, a shape verification before anything is
+  recorded, the `_prisma_migrations` insert with the committed checksum (once),
+  and the closing check. Runbook in `docs/database.md`.
+- **Engine test** (new `tests/subscription_migration_test.py`, run by
+  `test:scripts`): InnoDB and `utf8mb4_bin` on every `CREATE TABLE` in both
+  files, the overlay matches the migration it records, guard first and record
+  after verification, and a privacy comment on every paid-access model.
+- **Grants** (`docs/local-database.md`): SELECT, INSERT and UPDATE on all nine;
+  DELETE only on `MemberAccount`, `MemberSession`, `PaymentScreenshot` and
+  `RateLimitBucket`. Applied to the developer database on 19 October 2026 as
+  section (H) of the local `application-grants.sql`.
+- **Phones** (new `src/domain/phone.ts`): `normalizePhone` (the five steps,
+  including a number typed after the `256` prefill), `isCanonicalPhone`,
+  `phoneHint` with the outside-Uganda hint, `formatPhone`, `maskPhone`,
+  `localUgandaPhone`, `networkForPrefix` (longest prefix; empty table until the
+  owner confirms it), `telHref`, `waHref` and `smsHref`.
+- **Settings** (new `src/domain/subscription-settings.ts`,
+  `src/server/members/settings.ts`): the row `id = 1` with the plan 5.7 fields,
+  defaults for a missing row, a 30 s per-process cache with the last good value
+  on failure (and `free` with none), mode requirements, menu shortcuts, copy
+  format, the device, trial and retention ranges, the eight protected fields
+  with password re-entry, and `paymentNumbersChangedAt`.
+- **Plans** (new `src/domain/subscription-plans.ts`,
+  `src/server/members/plans.ts`): create, edit, deactivate, reactivate and
+  reorder; no delete. Nothing is seeded.
+- **Audit** (new `src/server/admin/audit.ts`): the `OwnerAuditEvent` writer and
+  its details filter, connected to the 057 sign-in callback on both
+  `/api/admin/login|logout` (`owner-auth.ts` defaults) and
+  `/api/analytics/login|logout`, since they share the owner login.
+- **Password re-entry** (`src/server/analytics/analytics-auth.ts`): the sign-in
+  check is extracted into `check` and `release`. New `confirmPassword` uses
+  the same check and throttle keys and creates no session.
+- **Owner routes and pages** (new `src/server/admin/plans-http.ts`,
+  `src/server/admin/settings-http.ts`, `src/app/api/admin/plans/route.ts`,
+  `src/app/api/admin/settings/route.ts`, `src/app/admin/plans/page.tsx`,
+  `src/app/admin/settings/page.tsx`, `src/components/admin/admin-form.tsx`,
+  `plans-editor.tsx`, `settings-editor.tsx`): JSON POSTs behind the 057 guard
+  (`readJsonBody` in `admin-http.ts`: JSON only, 16 KiB, 15 s). Plans and
+  Settings tabs in `admin-shell.tsx`; new Overview copy in
+  `src/app/admin/page.tsx`. Settings shows the client-address diagnostics
+  (`clientAddressDiagnostics` in `src/server/http/private-http.ts`).
+- **Tests:** new `tests/phone.test.mjs` (7), `tests/members.test.mjs` (12) and
+  `tests/members.integration.mjs` (1 test, 10 subtests);
+  `tests/admin.test.mjs` (password re-entry) and `tests/admin-routes.test.mjs`
+  (Plans and Settings scan, env-key list, audited sign-in and sign-out, JSON
+  and protected-field cases); `tests/backup-restore.integration.mjs` line 68
+  now expects 90 tables; `package.json` gains `test:members`.
+- **Review fixes** (19 October 2026): the audit's access-code and phone patterns
+  no longer match inside a UUID. About 1 random plan id in 120 read as a code,
+  so Reorder failed permanently with 503 for that plan. A committed save or
+  mode switch now answers 200 even when the follow-up page read fails; it was
+  a 503. The overlay runbook says to apply the tables before the 058 release,
+  which already reads and writes them, not from 059. And `test:backup`'s
+  remaining failure is recorded below as pre-existing.
+
+### Acceptance checks
+
+- **`db:deploy`, `db:status`, `db:verify` and the engine test pass: not met
+  locally.** `db:deploy` and `db:status` pass on the developer database, and the
+  engine test passes. `db:verify` there reports drift only from the local-only
+  migration `20261015072524_match_facts` (tables `fixturefacts`,
+  `footballvenue` and `seasonstandings`), which is not in the repository. The
+  058 tables show no drift. Inside `test:members`, deploy, status and verify all
+  pass on a clean isolated MySQL 8.4.11.
+- **`tests/phone.test.mjs` covers the section 9 table and the helpers, and the
+  links round-trip: passed.** Every row of the table, `formatPhone`,
+  `maskPhone`, `localUgandaPhone`, `telHref` and `networkForPrefix`. `waHref`
+  and `smsHref` round-trip a message with `#code=`, `&` and line breaks.
+- **A missing settings row reads `off`, with a 2-day trial: passed.**
+  `tests/admin-routes.test.mjs` and the integration subtest "settings default to
+  off with a 2-day trial".
+- **`test` and `on` are refused without their preconditions, and `on` until
+  privacy and terms are release-ready: passed.** Unit and MySQL. Both notices
+  are still not release-ready, so `on` is refused today.
+- **Settings numbers are stored as canonical digits: passed.** Unit parse test
+  and the integration subtest on the settings and plans services.
+- **The eight protected fields need the password, are throttled, and are
+  audited with old and new values: passed.** Unit, MySQL and the `test:admin`
+  re-entry test (re-entry failures lock sign-in from that address; another
+  address is unaffected).
+- **A payment-number change clears its menu shortcut: passed.**
+- **Plans are never deleted: passed.** No code path deletes a plan, settings or
+  audit row; the route answers 400 to `delete`; on MySQL the application role
+  has no DELETE on plans.
+- **`npm run test:members`, `npm run test:admin` and `npm run check`: not all
+  met.** The first two pass. `npm run check` fails at `next build` (below).
+- **Manual: the Plans and Settings pages work at 375 px in the Browser pane:**
+  see below.
+
+### Verification
+
+Pinned Node 24.18.1 (fnm). `MYSQL_TEST_SERVER_BINARY` pointed at
+`%LOCALAPPDATA%\GoalHint\mysql-8.4.11\bin\mysqld.exe`, so the integration tests
+ran on their own isolated MySQL 8.4.11. The `db:*` commands used the developer
+database on 127.0.0.1:3307.
+
+| Check | Actual result |
+| --- | --- |
+| `npm run test:members` (MySQL) | 30/30 pass, 0 skipped. Includes the new saved-reply test, the grants, constraints, concurrent upserts and the overlay run on MySQL. |
+| `npm run test:admin` | 23/23 pass. |
+| `npm run test:analytics` (MySQL) | 27/27 pass, 0 skipped. |
+| `npm run test:scripts` | 11 tests OK, including the engine test. |
+| `npm run db:validate` | Pass. |
+| `npm run lint` | `eslint . --max-warnings=0` exit 0. |
+| `npm run typecheck` | `next typegen && tsc --noEmit` exit 0. |
+| `npm test` (unit suite) | 1,538 tests: 1,537 pass, 0 fail, 1 skipped (the existing Windows-only POSIX-mode check). No flaky reruns were needed. |
+| `npm run check` | **Fail.** `db:generate`, `db:validate`, lint, typecheck, `npm test` and `test:scripts` pass. `next build` compiles and type-checks, then fails prerendering `/` with a `RuntimePolicyError`: `.env.local` turns the database capability on, and production mode then needs TLS, access and budget refs (via `analytics-provider` → `analytics-config`). Not caused by 058; the 057 run did not run `next build`. |
+| `GOAL_HINT_DATABASE_ENABLED=false npm run build` (command-line override only) | Exit 0; 9/9 static pages. `/admin/plans`, `/admin/settings`, `/api/admin/plans` and `/api/admin/settings` build as dynamic routes. |
+| `npm run db:deploy` (developer database) | Pass. `20261019142209_subscriptions` finished; all nine tables are InnoDB. |
+| `npm run db:status` | Pass. |
+| `npm run db:verify` | **Fail:** drift from the out-of-repo `20261015072524_match_facts` tables only (see above). |
+| `npm run test:backup` (MySQL) | **Fail**, 6/9 pass, reproduced on a second run. The 90-table snapshot assertion passes; both restores and the parent test fail with ERROR 1064 at dump line 993 (`ExtendedMarketPublishedPick_no_update`). The single-statement append-only triggers in `prisma/migrations/20261012153531_goal_market_extension/migration.sql` are stored with a trailing `;`, so mysqldump writes `…'append-only'; */;;` and the import stops. A throwaway load of the captured dump gave 9 errors, all on these triggers; without the semicolons it loaded cleanly (90 tables, 42 triggers, 11 paid-access checks). The stale 68-table assertion had hidden this. Not caused by 058. |
+| Read-only requests to the running dev server | `/admin/settings` 200 (the sign-in page) and `/api/admin/settings` 401 without a session. |
+
+**Manual checks:**
+
+- Manual 375 px Browser pane check (19 October 2026, local dev server, a
+  throwaway local owner session): passed. Plans and Settings have no horizontal
+  scroll and no target under 44 px. Adding "Test Daily" (1 day, UGX 1,000) on
+  Plans stored it and listed "24 hours · UGX 1,000" with Edit, Up, Down and
+  Deactivate (local dev data only). Settings shows the Off/Test/On switch with
+  the unmet requirements for Test and On, the password-protected numbers, and
+  the client-address diagnostics (`::1` locally).
+- How the orchestrator treats the three pre-058 local failures: the build stage
+  of `npm run check` is run as `GOAL_HINT_DATABASE_ENABLED=false npm run build`
+  (a command-line override, because `.env.local` enables the database without
+  the production TLS and access refs; no env key added). `db:deploy`, `db:status`
+  and `db:verify` pass with no drift on the fresh isolated MySQL in
+  `tests/members.integration.mjs`; the developer database drifts only by the
+  owner's stashed match-facts migration. The `test:backup` restore failure is
+  a separate pre-existing bug, proposed as its own session.
+- Throttled desktop Chrome (DevTools device mode, Slow 3G or 200 kbit/s): not
+  run; 058's acceptance does not require it. It must run in desktop Chrome,
+  because the Browser pane cannot throttle.
+- Real Android phone: not run; 058's acceptance does not require it. It must
+  run on a real Android phone over HTTPS dev (`npx next dev
+  --experimental-https`, its CA trusted on the phone), or in test mode after an
+  owner-requested deploy. The owner's own menu-shortcut and copy-format tests
+  (OP-38) also run on their phone.
+
+**Not run:** the rendering scripts, the overlay on MariaDB 11.4 (its
+`BEGIN NOT ATOMIC` blocks ran on MySQL as procedures), and anything against
+goalhint.com or cPanel.
+
+**Outstanding inputs:**
+
+- Owner (OP-38): each network's prefixes in full, for `networkPrefixes`. Until
+  then no number pre-picks a network. This keeps 058 ◐ Partial.
+- Owner, on the dashboard rather than in code: the three plans and the payment
+  and contact numbers. The MTN registered name, the Airtel details and the
+  tested menu shortcuts stay OP-38 blockers for 067.
+- Owner decision: what to do with the developer database's out-of-repo
+  `20261015072524_match_facts` migration and tables (removing them is
+  destructive).
+- Owner approval: a separate forward migration that recreates the
+  `20261012153531_goal_market_extension` triggers without the trailing `;`, so
+  backups restore again (OP-31).
+- Owner decision: how `npm run check` runs `next build` locally, for example
+  with the database capability off for the build only.
+- Still open from 057: the owner's sign-in length choice (plan §12).

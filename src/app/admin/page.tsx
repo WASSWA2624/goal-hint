@@ -15,7 +15,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <AdminShell current="overview" username={page.owner.username} developmentCredentials={page.services.config.usingDevelopmentCredentials}>
       <PageTitle><h1>Overview</h1></PageTitle>
       <Panel>
-        <Muted>Paid access is not built yet. Payments, codes, subscribers, plans and settings will appear here as each part is added.</Muted>
+        <Muted>Plans and Settings (with the paid-access switch, which stays off until you change it) are in the tabs above. Payments, codes and subscribers will appear here as each part is added.</Muted>
       </Panel>
     </AdminShell>
   );

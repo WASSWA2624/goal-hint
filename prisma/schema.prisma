@@ -1514,3 +1514,209 @@ model AnalyticsSetting {
   value     String   @db.VarChar(256)
   updatedAt DateTime @db.DateTime(3)
 }
+
+// Paid access (prompts/monetization.md 5.1). Phones are canonical digits (`256772123456`, src/domain/phone.ts); session
+// tokens and codes are stored only as hashes. Instants are UTC. The switch in SubscriptionSettings stays off by default.
+// A phone-number account and nothing else: no name, email, password, profile or user agent. The number is unique and not
+// hashed, because the owner matches payers by number; erasure sets it NULL with erasedAt and keeps the row for its payment
+// and code records. Every account change locks this row first.
+model MemberAccount {
+  id               String              @id @db.Char(36)
+  phone            String?             @unique @db.VarChar(15)
+  createdAt        DateTime            @db.DateTime(3)
+  lastSignInAt     DateTime            @db.DateTime(3)
+  blockedAt        DateTime?           @db.DateTime(3)
+  blockedReason    String?             @db.VarChar(200)
+  ownerNote        String?             @db.VarChar(500)
+  trialRequestedAt DateTime?           @db.DateTime(3)
+  trialDismissedAt DateTime?           @db.DateTime(3)
+  erasedAt         DateTime?           @db.DateTime(3)
+  sessions         MemberSession[]
+  submissions      PaymentSubmission[]
+  codes            AccessCode[]
+}
+
+// Member sign-ins: only a SHA-256 of each random session token is stored, with no user agent or address. A session is
+// unlocked once a valid code was entered in it; the composite key keeps that code on the session's own account.
+model MemberSession {
+  tokenHash     String        @id @db.Char(64)
+  accountId     String        @db.Char(36)
+  createdAt     DateTime      @db.DateTime(3)
+  lastSeenAt    DateTime      @db.DateTime(3)
+  expiresAt     DateTime      @db.DateTime(3)
+  codeEnteredAt DateTime?     @db.DateTime(3)
+  accessCodeId  String?       @db.Char(36)
+  account       MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  accessCode    AccessCode?   @relation(fields: [accessCodeId, accountId], references: [id, accountId], onDelete: Restrict, onUpdate: Restrict, map: "MemberSession_accessCode_fkey")
+
+  @@index([accountId])
+  @@index([expiresAt])
+  @@index([accessCodeId, accountId])
+}
+
+// Owner-defined plans, no personal data. Every plan unlocks every feature; plans differ only in length (24-hour blocks
+// from activation) and whole-UGX price. Never deleted, only deactivated, because submissions and codes reference them.
+model SubscriptionPlan {
+  id           String              @id @db.Char(36)
+  name         String              @db.VarChar(40)
+  durationDays Int                 @db.UnsignedSmallInt
+  priceUgx     Int                 @db.UnsignedInt
+  active       Boolean
+  sortOrder    Int                 @db.UnsignedSmallInt
+  createdAt    DateTime            @db.DateTime(3)
+  updatedAt    DateTime            @db.DateTime(3)
+  submissions  PaymentSubmission[]
+  codes        AccessCode[]
+}
+
+// A subscriber's payment report (`report`), or a mobile-money payment the owner recorded with a manual code (`owner`: no
+// image, session or terms). Claims are what the subscriber says; the approved columns hold the owner's final values. Plan
+// name, days and price are snapshots. payerPhone and rejectText are personal data that erasure clears; amounts and
+// transaction IDs stay for accounting. approvedTxnKey (`network:txnKey`) is set only at approval and kept after reversal,
+// so one payment is approved at most once; the unique key allows any number of NULLs.
+model PaymentSubmission {
+  id                   String             @id @db.Char(36)
+  reference            String             @unique @db.Char(4)
+  source               String             @db.VarChar(8)
+  accountId            String             @db.Char(36)
+  planId               String             @db.Char(36)
+  planName             String             @db.VarChar(40)
+  durationDays         Int                @db.UnsignedSmallInt
+  priceUgx             Int                @db.UnsignedInt
+  payerPhone           String?            @db.VarChar(15)
+  claimedNetwork       String             @db.VarChar(8)
+  claimedTxnRef        String             @db.VarChar(40)
+  claimedTxnKey        String             @db.VarChar(40)
+  claimedAmountUgx     Int                @db.UnsignedInt
+  status               String             @db.VarChar(16)
+  submittedAt          DateTime           @db.DateTime(3)
+  submittedSessionHash String?            @db.Char(64)
+  termsVersion         String?            @db.VarChar(16)
+  acceptedAt           DateTime?          @db.DateTime(3)
+  decidedAt            DateTime?          @db.DateTime(3)
+  decidedBy            String?            @db.VarChar(64)
+  rejectReason         String?            @db.VarChar(16)
+  rejectText           String?            @db.VarChar(200)
+  network              String?            @db.VarChar(8)
+  transactionRef       String?            @db.VarChar(40)
+  amountReceivedUgx    Int?               @db.UnsignedInt
+  approvedTxnKey       String?            @unique @db.VarChar(48)
+  imageSha256          String?            @db.Char(64)
+  imageBytes           Int?               @db.UnsignedInt
+  imagePurgedAt        DateTime?          @db.DateTime(3)
+  reversedAt           DateTime?          @db.DateTime(3)
+  reverseReason        String?            @db.VarChar(16)
+  account              MemberAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  plan                 SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  screenshot           PaymentScreenshot?
+  code                 AccessCode?
+
+  @@index([claimedTxnKey])
+  @@index([status, submittedAt])
+  @@index([accountId, submittedAt])
+  @@index([imageSha256])
+  @@index([planId])
+}
+
+// Screenshot bytes (JPEG only), apart from the submission so lists never load them. Served only to the owner; the members
+// purge deletes them 90 days after approval or 7 after rejection or supersede, and erasure deletes them at once.
+model PaymentScreenshot {
+  submissionId String            @id @db.Char(36)
+  width        Int               @db.UnsignedSmallInt
+  height       Int               @db.UnsignedSmallInt
+  bytes        Int               @db.UnsignedInt
+  data         Bytes             @db.MediumBlob
+  submission   PaymentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+}
+
+// Access codes, each bound to one account. Only a salted SHA-256 of a code is stored (a random salt per code, no key); the
+// plain code is shown to the owner once. The period (activatedAt, startsAt, endsAt) is set when the code is created, at
+// payment confirmation, and code entry never moves it. Plan name, days and price are snapshots (price 0 for trial,
+// reissue and number-change codes). replacedById points from a reissued or number-changed code to its successor.
+model AccessCode {
+  id                  String             @id @db.Char(36)
+  accountId           String             @db.Char(36)
+  codeSalt            Bytes              @db.Binary(16)
+  codeHash            String             @db.Char(64)
+  reference           String             @unique @db.Char(4)
+  source              String             @db.VarChar(16)
+  paymentSubmissionId String?            @unique @db.Char(36)
+  replacedById        String?            @db.Char(36)
+  planId              String?            @db.Char(36)
+  planName            String             @db.VarChar(40)
+  durationDays        Int                @db.UnsignedSmallInt
+  priceUgx            Int                @db.UnsignedInt
+  amountReceivedUgx   Int?               @db.UnsignedInt
+  extensionDays       Int                @default(0) @db.UnsignedSmallInt
+  createdAt           DateTime           @db.DateTime(3)
+  createdBy           String             @db.VarChar(64)
+  activatedAt         DateTime           @db.DateTime(3)
+  startsAt            DateTime           @db.DateTime(3)
+  endsAt              DateTime           @db.DateTime(3)
+  termsVersion        String?            @db.VarChar(16)
+  revokedAt           DateTime?          @db.DateTime(3)
+  revokedReason       String?            @db.VarChar(32)
+  note                String?            @db.VarChar(200)
+  account             MemberAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentSubmission   PaymentSubmission? @relation(fields: [paymentSubmissionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replacedBy          AccessCode?        @relation("AccessCodeReplacement", fields: [replacedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replaces            AccessCode[]       @relation("AccessCodeReplacement")
+  plan                SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sessions            MemberSession[]
+
+  @@unique([id, accountId])
+  @@index([accountId, endsAt])
+  @@index([replacedById])
+  @@index([planId])
+}
+
+// The owner's paid-access settings: a single row, id = 1, and a missing row means these defaults (paywallMode off). The
+// numbers are the owner's own payment, contact and WhatsApp numbers (canonical digits) with registered names, entered on
+// the dashboard; never a subscriber's.
+model SubscriptionSettings {
+  id                      Int       @id @db.UnsignedTinyInt
+  paywallMode             String    @default("off") @db.VarChar(8)
+  mtnNumber               String?   @db.VarChar(15)
+  mtnName                 String?   @db.VarChar(64)
+  mtnMenuShortcut         String?   @db.VarChar(60)
+  airtelNumber            String?   @db.VarChar(15)
+  airtelName              String?   @db.VarChar(64)
+  airtelMenuShortcut      String?   @db.VarChar(60)
+  copyFormat              String    @default("international") @db.VarChar(16)
+  contactPhone            String?   @db.VarChar(15)
+  whatsappPhone           String?   @db.VarChar(15)
+  paymentNote             String?   @db.VarChar(300)
+  reviewTime              String?   @db.VarChar(60)
+  maxUnlockedDevices      Int       @default(2) @db.UnsignedTinyInt
+  trialDays               Int       @default(2) @db.UnsignedTinyInt
+  screenshotRetentionDays Int       @default(90) @db.UnsignedSmallInt
+  paymentNumbersChangedAt DateTime? @db.DateTime(3)
+  lastMembersPurgeAt      DateTime? @db.DateTime(3)
+  updatedAt               DateTime  @db.DateTime(3)
+  updatedBy               String    @db.VarChar(64)
+}
+
+// Throttle counters keyed by an HMAC of purpose and value (address, session or account); never the raw value. Written only
+// by one atomic INSERT ... ON DUPLICATE KEY UPDATE, never read-then-create like AnalyticsLoginThrottle, which races.
+model RateLimitBucket {
+  key             String    @id @db.Char(64)
+  count           Int       @default(0) @db.UnsignedInt
+  bytes           Int       @default(0) @db.UnsignedInt
+  windowStartedAt DateTime  @db.DateTime(3)
+  lockedUntil     DateTime? @db.DateTime(3)
+}
+
+// Owner actions and sign-ins. Never a subscriber phone, a full code or an image in details. accountId has no foreign key,
+// so rows outlive a purged account. Operational, not tamper-proof: the application role writes it.
+model OwnerAuditEvent {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  at         DateTime @db.DateTime(3)
+  actor      String   @db.VarChar(64)
+  action     String   @db.VarChar(48)
+  accountId  String?  @db.Char(36)
+  targetType String   @db.VarChar(32)
+  targetId   String   @db.VarChar(64)
+  details    Json
+
+  @@index([accountId, action, at])
+}

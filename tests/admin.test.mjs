@@ -328,6 +328,29 @@ test("refusals are audited only for the owner's username, so rotating addresses 
   assert.equal(events.length, adminSessionRules.usernameMaximumFailures + 1, "Once the lock lapses inside the hour, the next attempt locks it again.");
 });
 
+test("password re-entry is the login check and throttle without a session: it shares the locks and creates nothing", async () => {
+  const clock = { now: Date.parse("2026-10-19T07:00:00.000Z") };
+  const right = "a long test passphrase";
+  const memory = memoryDatabase();
+  const config = { admin: { username: "owner", passwordHash: await hashPassword(right) }, key: hmacKey };
+  const auth = createAdminAuth({ database: memory.database, config, now: () => clock.now });
+  const fail = async (address) => {
+    const real = config.admin.passwordHash;
+    config.admin = { username: "owner", passwordHash: "unverifiable" };
+    try { return await auth.confirmPassword("owner", "guess", address); } finally { config.admin = { username: "owner", passwordHash: real }; }
+  };
+  assert.deepEqual(await auth.confirmPassword("owner", right, "198.51.100.7"), { status: "confirmed", username: "owner" });
+  assert.equal(memory.sessions.size, 0, "A confirmed re-entry creates no session.");
+  for (let attempt = 1; attempt <= 4; attempt++) assert.equal((await fail("198.51.100.7")).status, "invalid");
+  assert.deepEqual(await fail("198.51.100.7"), { status: "locked", retryAfterSeconds: adminSessionRules.lockMs / 1000, newlyLocked: true, ownerUsername: true });
+  assert.equal((await auth.confirmPassword("owner", right, "198.51.100.7")).status, "locked", "The address lock holds for the right password too.");
+  assert.equal((await auth.login("owner", right, "198.51.100.7")).status, "locked", "Re-entry failures lock sign-in from that address: one throttle.");
+  assert.equal((await auth.confirmPassword("owner", right, "203.0.113.20")).status, "confirmed", "Another address is unaffected.");
+  assert.equal(memory.sessions.size, 0);
+  config.admin = null;
+  assert.deepEqual(await auth.confirmPassword("owner", right, "203.0.113.20"), { status: "unavailable" });
+});
+
 test("verify({ touch: false }) checks a session without extending it", async () => {
   const clock = { now: Date.parse("2026-10-19T07:00:00.000Z") };
   const memory = memoryDatabase();

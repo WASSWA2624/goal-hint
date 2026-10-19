@@ -83,3 +83,16 @@ export function clientAddress(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for")?.split(",").map((value) => value.trim()).filter(Boolean);
   return forwarded?.at(-1) ?? headers.get("x-real-ip")?.trim() ?? "unknown";
 }
+
+/** Headers that can carry a visitor's address, as proxies and CDNs commonly name them. */
+export const clientAddressHeaders = Object.freeze(["x-forwarded-for", "x-real-ip", "forwarded", "cf-connecting-ip", "true-client-ip",
+  "x-client-ip", "x-cluster-client-ip"] as const);
+export type ClientAddressDiagnostics = Readonly<{ address: string; headers: readonly Readonly<{ name: string; value: string | null }>[] }>;
+
+/**
+ * Which address headers reached the app and the address the throttles key on (owner Settings, plan section 10). Compared
+ * with a request that forges `X-Forwarded-For`, it shows whether the host's proxy appends the real address last.
+ */
+export function clientAddressDiagnostics(headers: Headers): ClientAddressDiagnostics {
+  return { address: clientAddress(headers), headers: clientAddressHeaders.map((name) => ({ name, value: headers.get(name)?.slice(0, 300) ?? null })) };
+}

@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers.js";
 import { connection } from "next/server.js";
 import { getAnalyticsServices, loginNotice, type AnalyticsServices } from "../analytics/analytics-http.ts";
-import { isSameOrigin, json } from "../http/private-http.ts";
+import { BodyDeadlineError, isSameOrigin, json, readLimitedBody } from "../http/private-http.ts";
 import { verifyOwner, requireOwner, type Owner, type OwnerServices } from "./owner-auth.ts";
 
 /**
@@ -55,4 +55,32 @@ export async function adminPageGate(searchParams: Promise<Record<string, string 
   const owner = await verifyOwner(resolved, (await cookies()).get(resolved.config.cookies.session)?.value);
   if (owner) return { owner, services: resolved };
   return { owner: null, services: resolved, login: loginNotice(resolved, await searchParams) };
+}
+
+/** Owner actions send small JSON; a larger or slower body is refused before it is parsed. */
+export const adminBodyRules = Object.freeze({ maximumBytes: 16_384, deadlineMs: 15_000 });
+
+/**
+ * The JSON object an owner action sent, or the response that refuses it. Requiring `application/json` also means a
+ * cross-site page could only send it after a CORS preflight, behind the guard's same-origin check.
+ */
+export async function readJsonBody(request: Request): Promise<Readonly<{ body: Record<string, unknown> }> | Readonly<{ refusal: Response }>> {
+  if (!/^application\/json\s*(;|$)/iu.test(request.headers.get("content-type") ?? "")) {
+    return { refusal: json({ error: "invalid-request", message: "Send the change as JSON." }, 415) };
+  }
+  const tooLarge = { refusal: json({ error: "too-large", message: "The request is too large." }, 413) };
+  if (Number(request.headers.get("content-length") ?? 0) > adminBodyRules.maximumBytes) return tooLarge;
+  let bytes: Uint8Array | null;
+  try { bytes = await readLimitedBody(request, adminBodyRules.maximumBytes, { deadlineMs: adminBodyRules.deadlineMs }); }
+  catch (error) {
+    if (error instanceof BodyDeadlineError) return { refusal: json({ error: "timeout", message: "The request took too long. Try again." }, 408) };
+    // An aborted or broken upload is the sender's problem, never a server error.
+    return { refusal: json({ error: "invalid-request", message: "The request did not arrive. Try again." }, 400) };
+  }
+  if (bytes === null) return tooLarge;
+  try {
+    const body: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    if (body !== null && typeof body === "object" && !Array.isArray(body)) return { body: body as Record<string, unknown> };
+  } catch { /* Answered below. */ }
+  return { refusal: json({ error: "invalid-request", message: "Send the change as a JSON object." }, 400) };
 }

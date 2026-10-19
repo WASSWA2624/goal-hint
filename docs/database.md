@@ -249,6 +249,66 @@ roll back. Inspect migration records and actual table/constraint state, then
 prepare a reviewed forward repair or an accurately recorded migration resolution.
 Do not mark a failure resolved merely to suppress a deployment error.
 
+### Paid-access tables on MariaDB (058)
+
+Migration `20261019142209_subscriptions` adds `MemberAccount`, `MemberSession`,
+`SubscriptionPlan`, `PaymentSubmission`, `PaymentScreenshot`, `AccessCode`,
+`SubscriptionSettings`, `RateLimitBucket` and `OwnerAuditEvent`. Every table
+states `ENGINE=InnoDB` and `utf8mb4_bin`. There are 9 foreign keys and 11 named
+checks: canonical phone digits, the documented states, sources, networks and
+reasons, the owner's plan and setting ranges, an approval key that exists
+exactly for approved and reversed payments, an unlock that always names its
+code, and a submission only on `payment` codes. A session's code must belong to
+the session's own account (composite foreign key).
+
+`db:deploy` cannot run on the production MariaDB yet (the earlier
+`20261013093000` migration uses MySQL-only `DROP CHECK`). Apply the reviewed
+overlay `prisma/mariadb/20261019142209_subscriptions.sql` instead:
+
+1. Take and verify a private backup ([deployment guide](../deploy/how-to-deploy.md),
+   step 2).
+2. Run the guard query by hand. On a first import it returns no rows. On a
+   rerun, every row it returns must say `InnoDB`; convert any other table first.
+
+   ```sql
+   SELECT TABLE_NAME, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()
+     AND TABLE_NAME IN ('MemberAccount', 'MemberSession', 'SubscriptionPlan', 'PaymentSubmission',
+       'PaymentScreenshot', 'AccessCode', 'SubscriptionSettings', 'RateLimitBucket', 'OwnerAuditEvent');
+   ```
+
+3. Import the overlay with phpMyAdmin or `mariadb <database> < file`. It runs
+   in order:
+   - the same guard, which stops the import (`SQLSTATE 45000`) before anything
+     is created;
+   - `CREATE TABLE IF NOT EXISTS … ENGINE=InnoDB` for each table in foreign-key
+     order, with its foreign keys and checks inline;
+   - a verification that stops the import, before anything is recorded, unless
+     there are nine InnoDB tables in `utf8mb4_bin`, 9 foreign keys and 11 checks;
+   - the `_prisma_migrations` insert with the committed checksum, once;
+   - the closing check: nine InnoDB `utf8mb4_bin` rows, `foreign_keys = 9`,
+     `checks = 11`.
+4. Confirm `_prisma_migrations` lists `20261019142209_subscriptions` once, with
+   `finished_at` set.
+5. Apply it before deploying the 058 release or any later one: from 058 the
+   owner audit and the Plans and Settings pages read and write these tables.
+   Without them owner sign-ins, refusals and sign-outs go unaudited (the failed
+   write is swallowed, so nothing shows it), and Plans and Settings show only
+   "unavailable". Without `SubscriptionSettings`, access resolution fails
+   closed. Paid access stays off until the owner switches it on.
+
+The overlay creates only these nine tables and alters nothing else. A rerun is a
+no-op, because existing tables are skipped and the migration is recorded only
+once. `npm run test:scripts` (`tests/subscription_migration_test.py`) checks that
+every `CREATE TABLE` in both files states InnoDB and `utf8mb4_bin`, that the guard
+comes first and that the record follows the verification and carries the
+migration's SHA-256. `npm run test:members` (`tests/members.integration.mjs`)
+applies the overlay to an isolated MySQL 8.4, running each `BEGIN NOT ATOMIC`
+block as a procedure. There it must produce tables identical to the deployed
+migration (`SHOW CREATE TABLE`) and record Prisma's own checksum once, and a
+MyISAM or wrongly collated leftover must stop the import before anything is
+recorded. The MariaDB-only syntax (`BEGIN NOT ATOMIC`, `DELIMITER` through
+phpMyAdmin) has not been run on MariaDB 11.4 locally.
+
 ## Privileges and storage conventions
 
 Separate application and migration accounts. Grant the application account only

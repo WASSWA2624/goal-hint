@@ -268,14 +268,14 @@ values or references only; a referenced policy must resolve all listed details.
 | OP-28 Verified public contact route | **Unresolved release blocker; unavailable page implemented** | Supply a verified owner-approved public email or established destination, publication-approved operator details and correction recipient. Existing owner deferrals persist; 041 displays unavailable status and report guidance, not an operational intake. No mailbox creation, test message, form backend or response commitment is authorized by the plan. §15; prompts 039/041. | Unassigned; user decision/evidence required | Deferred: public contact destination and correction recipient/content | **039** lawful notice contact; contact page **041** |
 | OP-29 Recovery watchdog ownership and thresholds | **Unresolved / live activation blocked** | Assign recovery/incident responsibility and approved detection/lease-staleness/stalled-job/missed-run/missing-lock thresholds, repair authority and independent scheduler-failure route. Prompt 043 implements private CLI inspection, reviewed durable recovery and an operator runbook; synthetic settings do not approve live thresholds. Recovery may not bypass cutoff, immutable manifests, budgets or quota. §§11, 13, 15. | Unassigned; user decision/evidence required | Deferred: watchdog thresholds, repair authorization, independent invocation frequency and recovery/incident owner | **043** |
 | OP-30 Alerts, destinations and monitoring service | **Local verification only; live activation blocked by owner decision** | Prompt 044 implements authenticated private aggregate inspection, bounded MySQL alert state/fenced delivery and a local test sink. The owner explicitly keeps incident ownership, destinations, thresholds and retention unresolved. Approve the authorized monitoring service, actual outage/staleness/latency/quota/cost/expiry thresholds, recipients, privacy/retention and independent supervision before live activation; no external test message is authorized. §§11, 13–15. | Unassigned; user decision/evidence required | Deferred: monitoring provider, alert thresholds/destinations, telemetry retention and runbook ownership; infrastructure budget; see `docs/operations-monitoring.md` | **044** |
-| OP-31 Recovery objectives, backups and history retention | **Local verification only; live recovery blocked by owner decision** | For 045 the owner explicitly keeps ownership, RPO/RTO, retention and hosted storage/PITR unresolved. Implement encrypted private snapshots, isolated restoration/log replay, integrity/access and conservative worker/quota acceptance locally. No live schedule, production restore, deletion period, approved objective or hosted DR proof is inferred. See `docs/backup-restore.md`. §§13, 15. **Paid access (19 October 2026):** backups and restores must cover payment submissions, access codes, settings and audit rows; screenshots copied into backups persist until those backups expire. Take and verify a private backup before applying the paid-access overlay. A production backup schedule and retention covering the new tables blocks paid switch-on (OP-40). | Unassigned; user decision/evidence required for live recovery | Deferred: approved RPO/RTO, backup/PITR hosting, key escrow/access, snapshot/archive cadence and per-class source/history/backup retention | **045 local scope**; hosted proof **046/048**; source permissions **009/011**, visitor notice **039**; paid-access tables **058**, switch-on **067** |
+| OP-31 Recovery objectives, backups and history retention | **Local verification only; live recovery blocked by owner decision** | For 045 the owner explicitly keeps ownership, RPO/RTO, retention and hosted storage/PITR unresolved. Implement encrypted private snapshots, isolated restoration/log replay, integrity/access and conservative worker/quota acceptance locally. No live schedule, production restore, deletion period, approved objective or hosted DR proof is inferred. See `docs/backup-restore.md`. §§13, 15. **Paid access (19 October 2026):** backups and restores must cover payment submissions, access codes, settings and audit rows; screenshots copied into backups persist until those backups expire. Take and verify a private backup before applying the paid-access overlay. A production backup schedule and retention covering the new tables blocks paid switch-on (OP-40). **058 (19 October 2026):** the snapshot inventory covers the 90 tables, but local restore verification fails; a stale table count had hidden this. The append-only triggers of `20261012153531_goal_market_extension` end with `;`, so the mysqldump output does not import (ERROR 1064). Until a reviewed forward migration recreates them (owner approval pending), no backup counts as verified, including the one the paid-access overlay needs first. | Unassigned; user decision/evidence required for live recovery | Deferred: approved RPO/RTO, backup/PITR hosting, key escrow/access, snapshot/archive cadence and per-class source/history/backup retention | **045 local scope**; hosted proof **046/048**; source permissions **009/011**, visitor notice **039**; paid-access tables **058**, switch-on **067** |
 | OP-32 Hosted deployment and account isolation | **Unresolved / evidence required** | Confirm actual web/database/queue/long-lived worker/poller infrastructure, scheduler/workload identity and authorized access. Choose account sharing vs genuinely separate provider accounts, durable cross-environment limits and poller observation/ownership transfer. Separate databases cannot create extra provider capacity. §§9, 11, 14–15; prompt 046. | Unassigned; user decision/evidence required | `GOAL_HINT_OPERATION_SCOPE`, infrastructure/provider/budget references; Deferred: environment isolation, hosted runtime and poller ownership plan | **046**; database/queue choices earlier **003/020** |
 | OP-33 Quality qualification and measured commitments | **Evidence required** | Accumulate real prospective samples under the frozen protocol; prove market/source/horizon quality and coverage, calibrated-claim eligibility, full-slate cost/capacity and cadence/latency targets. Simulated load is not elapsed shadow observation or unapproved paid-call authority. §§8, 14–15; prompt 047. | Unassigned; user evidence/commitment decision required | `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_SHADOW_PROTOCOL_REF`; Deferred: qualification report and approved measurement-supported commitments | **047**, with protocol choices fixed **014** |
 | OP-34 Release decision and signoff | **Unresolved / evidence required** | Assign production release authority and record actual go/no-go evidence tied to build/configuration. All required rights/account/budget/quality/recovery/monitoring/legal gates must pass; an environment reference cannot substitute for missing evidence or owner approval. §§14–15; prompt 048. | Unassigned; user decision/evidence required | `GOAL_HINT_RELEASE_APPROVAL_REF`, `GOAL_HINT_QUALITY_QUALIFICATION_REF`, `GOAL_HINT_OPERATION_SCOPE=production`; Deferred: release owner and readiness report | **048** |
 | OP-35 Domain and production operation | **Evidence required** | Verify authorized domain registration/DNS/HTTPS/canonical redirects, current payable/account/budget state, deployment access and approved release/rollback/observation ownership. No purchase, deployment, production URL or successful scheduler run is established by the specification. §§12, 14–15; prompt 049. | Unassigned; user decision/evidence required | Public canonical origin remains fixed; server production scope/release references; Deferred: authorized domain/DNS/deployment and rollback evidence | **049** |
 | OP-36 Odds display rights and odds operation | **Owner decisions recorded 10 October 2026; display rights and trial evidence required** | Public bookmaker prices, the `odds=` filter and market-implied probabilities need recorded evidence that the API-Football/API-Sports terms permit public display of odds (and, separately, bookmaker names or logos), plus the operator jurisdiction's gambling-advertising rules (OP-27). Until then odds are imported and kept privately, `publicPolicy.features.providerOdds` stays false, the public projection stays empty and `odds=` is an unknown key. The owner accepted the technical defaults: one documented bookmaker, `proportional-v1` de-margin per complete group, `DECIMAL(10,4)` with half-up hundredths, a 1.01–1000.00 range with a "20.00+" top stop, 12-hour freshness with write-time staleness and a frozen closing price, and normalized-only retention to kickoff + 30 days. Still open: the counted odds trial (needs the plan upgrade), the bookmaker id it selects, confirmation that the private-use reference covers odds history, and the rights evidence. No betting, bet slips, affiliate or bookmaker links are ever in scope. §§1, 6, 11, 14–15; prompt 052. **Paid access (19 October 2026):** when `providerOdds` is on, bookmaker prices, the `odds=` filter and market-implied probabilities are subscriber-only for unfinished fixtures; free viewers get `subscription-required` for `odds=`. | Owner (decisions recorded); evidence required | `GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF` (`football-odds-rights`), `GOAL_HINT_ODDS_IMPORT_ENABLED`, `GOAL_HINT_ODDS_BOOKMAKER_ID`, `publicPolicy.features.providerOdds` | **052**; gating **061** |
 | OP-37 Paid-access scope and free/paid split | **Owner approved 19 October 2026 (spec v1.9); split confirmation pending** | Paid access adds phone-number accounts, manual mobile-money payment reports, owner-approved access codes bound to the paying account and a private `/admin` dashboard, behind `paywallMode` (`off` by default, `test`, `on`). Free: fixtures, scores, live clock, search, factual insights, which families have a published pick, performance aggregates, and finished, canceled and awarded fixtures (picks, outcomes, analysis, history). Subscriber-only for unfinished fixtures (scheduled, live, postponed, abandoned, unknown): picks, probabilities, alternatives, prices, AI analysis, revision history, slip results and probability filters and sort. The owner still confirms the split for finished, canceled and awarded fixtures (plan §§4, 12). It also removes unfinished-fixture picks from the reuse licence in `terms.use.body`, reversing the 12 October 2026 decision recorded in [terms-page.md](terms-page.md). Supersedes the Settled "Access and product scope" row. Spec §§1–3, 12, 15; [monetization plan](../prompts/monetization.md) §§3–4. | Owner (scope approved); split confirmation required | `paywallMode` (058); `src/domain/paywall.ts` (061); `publicPolicy.access` → `free-with-subscriber-predictions` (061); `terms.use.body` (066) | **061**; copy **066** |
-| OP-38 Plans, prices and payment channels | **Plans decided 19 October 2026; payment channels pending** | Plans (owner, 19 October 2026): Daily, 24 hours from activation, UGX 1,000; Weekly, 7 days, UGX 5,000; Monthly, 30 days, UGX 20,000. Every plan gives full access to every feature and section; plans differ only in length and price, so there are no feature tiers. A day is 24 hours from activation (payment confirmation), never a calendar day or midnight EAT. Free trial (owner, 19 October 2026): a new number (no code ever) can ask once for 2 days (48 hours) free; the owner sends it as a `trial` code, which starts when sent and is never revenue. Access runs from payment confirmation (the owner's approval, or the owner creating a manual or number-change code), or from the end of the current period, to the expiry time; code entry only unlocks a device, and a code entered late gets no extra time. Payments are whole UGX to the owner's Ugandan MTN MoMo and Airtel Money numbers; accounts accept any country code as canonical digits (`256` numbers must be `2567` + 8 digits). Received 19 October 2026: the MTN MoMo number `256783230321`, which is also the contact (calls) and WhatsApp number; the owner enters it in Settings. Still needed: the MTN registered name; an Airtel Money number and name if Airtel is offered (until then the Airtel card stays hidden); the typical review time and any extra payment note; whether each network's send-money menu accepts `256…` or needs `07…` (the copy format); the tested menu shortcuts; each network's prefixes in full; and at least three real anonymized SMS samples per network (payer "sent" and owner "received") plus anonymized screenshot samples. Plan §12. | Owner | Dashboard plans and settings (058); `networkForPrefix` (058); `tests/fixtures/payment-sms/` (063) | **058**; SMS fixtures **063**, blocker at **067** |
+| OP-38 Plans, prices and payment channels | **Plans decided 19 October 2026; payment channels pending** | Plans (owner, 19 October 2026): Daily, 24 hours from activation, UGX 1,000; Weekly, 7 days, UGX 5,000; Monthly, 30 days, UGX 20,000. Every plan gives full access to every feature and section; plans differ only in length and price, so there are no feature tiers. A day is 24 hours from activation (payment confirmation), never a calendar day or midnight EAT. Free trial (owner, 19 October 2026): a new number (no code ever) can ask once for 2 days (48 hours) free; the owner sends it as a `trial` code, which starts when sent and is never revenue. Access runs from payment confirmation (the owner's approval, or the owner creating a manual or number-change code), or from the end of the current period, to the expiry time; code entry only unlocks a device, and a code entered late gets no extra time. Payments are whole UGX to the owner's Ugandan MTN MoMo and Airtel Money numbers; accounts accept any country code as canonical digits (`256` numbers must be `2567` + 8 digits). Received 19 October 2026: the MTN MoMo number `256783230321`, which is also the contact (calls) and WhatsApp number; the owner enters it in Settings. Still needed: the MTN registered name; an Airtel Money number and name if Airtel is offered (until then the Airtel card stays hidden); the typical review time and any extra payment note; whether each network's send-money menu accepts `256…` or needs `07…` (the copy format); the tested menu shortcuts; each network's prefixes in full; and at least three real anonymized SMS samples per network (payer "sent" and owner "received") plus anonymized screenshot samples. Plan §12. **058 (19 October 2026):** the Plans and Settings pages are built; the owner enters the plans, numbers, names and shortcuts there (nothing is seeded). `networkPrefixes` ships empty, so no number pre-picks a network until the owner confirms each network's prefixes; that input keeps 058 ◐ Partial. | Owner | Dashboard plans and settings (058); `networkForPrefix` (058); `tests/fixtures/payment-sms/` (063) | **058**; SMS fixtures **063**, blocker at **067** |
 | OP-39 Refunds, extensions, reversals and consumer duties | **Unresolved; blocks paid switch-on** | Decide the refund, extension, reversal and outage-compensation policy, including what happens when a payment was approved for the wrong account, and confirm Electronic Transactions Act 2011 disclosure and cooling-off duties. The app has no in-app refunds; the owner's tools are Extend, Reverse (`network-reversal`, `wrong-account`) and manual codes. Until resolved, the privacy and terms notices carry the `payments` and `refunds` blockers, so `on` stays refused. Plan §§5.3, 7, 12. | Owner; legal review required | Terms copy and `termsNotice` / `privacyNotice` blockers (066) | Owner tools **060/064**; copy **066** |
 | OP-40 Paid launch approval | **Unresolved; blocks `paywallMode = on`** | Switching paid access on needs the owner's approval and date; privacy and terms release-ready and effective; the plan §12 legal confirmations (PDPO registration, cross-border basis and breach procedure, any tipping licence, API-Football's terms for paid access, Electronic Transactions Act 2011 duties, 18+ and personal non-transferable use); the host checks of plan §10; and decisions on OP-06, OP-08, OP-17, OP-26, OP-27, OP-31, OP-34 and OP-36. Building, local tests and `test` mode do not need it. Nothing is deployed to production unless the owner explicitly asks. | Owner | `paywallMode` (058); `scripts/verify-production-paywall.py` (067) | **067** |
 
@@ -3715,3 +3715,174 @@ open, so the 12 h / 2 h limits stay as the prompt requires.
   throttle reuses `AnalyticsLoginThrottle`, whose rows `analytics:purge` still
   deletes once their window is a day old and any lock has passed, so there is no
   migration.
+
+## 058 — Data model, settings, plans and audit (19 October 2026)
+
+**Status:** implemented in the working tree; tracker 058 is ◐ Partial. Still
+missing: the manual 375 px check, each network's prefixes from the owner
+(OP-38), and three local failures that predate 058 (see Flagged, not changed).
+Paid access stays `off`: nothing is seeded, and a missing settings row reads
+`off` with a 2-day trial. One migration (`20261019142209_subscriptions`) and its
+MariaDB overlay. No env key or npm dependency. OP-38 and OP-31 gain a 058 note;
+no other OP row changes state.
+
+- **Nine tables, stated engine and collation.** Every `CREATE TABLE` in the
+  migration and the overlay states `ENGINE=InnoDB` and `utf8mb4_bin`. The host
+  can default to MyISAM, which has no transactions, row locks or foreign keys.
+  Phones, hashes, codes and references must compare exactly. Prisma cannot
+  express CHECK constraints, so 11 named checks repeat the validators:
+  - canonical phone digits;
+  - the documented states, sources, networks and reasons;
+  - the plan and settings ranges;
+  - an approval key that exists exactly for approved and reversed payments;
+  - an unlock that always names its code;
+  - a submission only on `payment` codes.
+
+  A session's code is a composite foreign key `(accessCodeId, accountId)` →
+  `AccessCode(id, accountId)`, so the database itself stops one account's code
+  from unlocking another account's session.
+- **Later prompts' tables land now.** `MemberSession`, `PaymentSubmission`,
+  `PaymentScreenshot`, `AccessCode` and `RateLimitBucket` are created but not yet
+  written; 059–064 write them. The `RateLimitBucket` comment forbids
+  read-then-create, and the integration test counts every hit of a concurrent
+  burst through one atomic upsert.
+- **Overlay: verify before recording.** The order is:
+  1. the guard;
+  2. the tables in foreign-key order, with keys and checks inline (the prompt
+     allowed inline or `ADD CONSTRAINT … IF NOT EXISTS`; inline means a table
+     never exists without them);
+  3. a verification block, an addition to the prompt;
+  4. the `_prisma_migrations` insert with the committed checksum, once, skipped
+     when Prisma's table is absent;
+  5. the closing check.
+
+  The verification refuses unless there are nine InnoDB `utf8mb4_bin` tables, 9
+  foreign keys and 11 checks. `CREATE TABLE IF NOT EXISTS` skips a leftover table
+  without checking its shape, and without this block that leftover would be
+  recorded as migrated. The MariaDB syntax was not run locally. On MySQL, each
+  `BEGIN NOT ATOMIC` block runs as a procedure. The overlay builds tables
+  identical to the deployed migration (`SHOW CREATE TABLE`), and a rerun
+  records nothing. A MyISAM or wrongly collated leftover stops the import. Review
+  fix: the runbook applies the overlay before the 058 release, not from 059. The
+  owner audit and the Plans and Settings pages already use these tables, and a
+  missing table loses audit rows silently.
+- **Least privilege.** The application gets SELECT, INSERT and UPDATE on all
+  nine. DELETE is granted only where a purge or sign-out removes rows:
+  `MemberAccount`, `MemberSession`, `PaymentScreenshot` and `RateLimitBucket`.
+  Plans, settings, payments, codes and audit rows are never deleted (OP-26 keeps
+  them unpurged).
+- **Phones.** Canonical digits with the country code and no plus; a `256`
+  number must be `2567` plus 8 digits. Input over 64 characters is refused
+  before parsing. `networkPrefixes` ships empty until the owner confirms each
+  network's prefixes (OP-38), so no number pre-picks a network.
+  `networkForPrefix` takes the longest matching prefix and returns null when two
+  networks tie. `smsHref` uses `?&body=`, the form both Android and iOS messaging
+  apps read. The plus appears only inside `tel:` and `sms:` links.
+- **Settings: one row behind a cache.** `current()` keeps a value for 30 s.
+  After a failed read it serves the last good value and retries after 5 s. With
+  no good value it reports `unavailable`, and `accessMode` resolves that to
+  `free`, so a settings outage never opens subscriber content. There is one
+  service per database runtime per process, kept across development reloads. A
+  generation counter stops a read that started before a save from replacing the
+  saved value. The owner's page reads uncached (`overview`).
+- **One lock serializes owner decisions.** `lockSettings` creates the defaults
+  row with `INSERT … ON DUPLICATE KEY UPDATE`, then takes `SELECT … FOR UPDATE`.
+  Saves, mode switches and plan activation all take it first, so none decides on
+  a stale mode or plan count. `decide()` rolls back a refused or empty change,
+  so it writes nothing, not even the defaults row.
+- **Mode rules.** `test` and `on` need three things: an active plan, a payment
+  number with its registered name, and a contact or WhatsApp number. `on` also
+  needs release-ready privacy and terms notices; neither is ready, so `on` is
+  refused today. While the mode is `test` or `on`, two changes answer 409: a
+  save that breaks a requirement the current settings meet, and deactivating
+  the last active plan. A requirement that is already unmet (a notice withdrawn
+  after switch-on) blocks no other save. The mode is never part of a save. It
+  has its own control, which needs a second tap within 8 s.
+- **Shortcuts follow their numbers.** The owner tested a menu shortcut against
+  the old number, so changing a payment number clears its shortcut, unless the
+  same save sets a new one. A shortcut without its number is refused.
+  Shortcuts lose their spaces and accept `[0-9*#]` and `{amount}`, at most 60
+  characters.
+- **Password re-entry is the login's own check.** The sign-in path is split into
+  `check` and `release`. `confirmPassword` uses the same lock check, reservation,
+  keys and limits. It creates no session and never extends one. A stolen
+  session therefore guesses no faster than the login form, and failed
+  re-entries lock sign-in from that address too. The password is checked before
+  the row lock, because scrypt is slow. The transaction then applies the change
+  again to the locked row, and answers `password-required` if it now touches an
+  unconfirmed protected field. Answers: 429 with `Retry-After` when locked, 403
+  for a wrong password, 503 when sign-in is unavailable. A refused re-entry is
+  audited (`settings_password_refused`) only when it was counted, so the
+  throttle bounds those rows.
+- **The audit trail.** `writeOwnerAudit` writes inside the caller's transaction,
+  so a change and its row commit together. `auditDetails` accepts plain JSON
+  only. It refuses binary data, access-code shapes, and phone-shaped digit runs
+  outside an owner settings field (where the owner's own numbers may appear). A
+  save of owner-typed text the trail would refuse answers 400 before its
+  transaction (`auditTextErrors`), instead of failing inside it as a 503. The
+  trail is operational, not tamper-proof: the application role writes it.
+  `accountId` has no foreign key, so rows outlive a purged account. Review fix:
+  both patterns now need no letter, digit or dash beside them. About 1 random
+  plan UUID in 120 has all-digit middle groups that read as a code, and Reorder
+  failed with a permanent 503 for those plans. The integration test uses such a
+  UUID.
+- **Sign-in audit on both surfaces.** `ownerSignInAudit` is the 057 callback,
+  connected by default in `createOwnerLoginHandler` and
+  `createOwnerLogoutHandler`. It also runs on `/api/analytics/login` and
+  `/logout`: the analytics dashboard shares the owner login, so its sign-ins are
+  owner sign-ins. `details.surface` says which. The callback resolves its own
+  services, so the unawaited refusal write can finish after the response, and
+  the login's wrapper swallows its failures. With the writer connected,
+  sign-out reads the session once with `verify({ touch: false })` to name the
+  owner. It still never extends the session, and a session that storage cannot
+  read writes no row. The 057 route test now asserts "never extends" instead of
+  "no session read".
+- **JSON-only owner actions.** `readJsonBody` accepts only `application/json`
+  (415 otherwise), at most 16 KiB within 15 s, and only a JSON object (400
+  otherwise). A cross-site page cannot send JSON without a CORS preflight, so
+  this backs the guard's same-origin check. The routes export only GET and
+  POST. The plans `delete` action answers 400 "Plans are never deleted.
+  Deactivate it instead."
+- **A committed change is never reported as a failure (review fix).** After a
+  save or mode switch commits, the reply reads the page data again. If that read
+  fails, `savedReply` still answers 200 with the saved settings, `changed`,
+  `cleared`, `protectedFields` and the diagnostics, without `source` and
+  `requirements`. The page keeps what each mode needs and asks for a reload.
+  Before the fix, the failed read reached the handler-wide 503, so the owner saw
+  a failure for a change that was already stored and audited.
+- **Plans.** Nothing is seeded: the owner enters Daily, Weekly and Monthly on
+  the Plans page (OP-38). A name has at most 40 plain characters, a length 1–366
+  whole days, a price UGX 100–10,000,000. There are no feature tiers. Edits never
+  rewrite history, because codes and submissions keep their own snapshots. A
+  new plan goes last. Reorder must name every plan once, and it locks every plan
+  row in id order. Equal positions fall back to creation time, then id.
+- **Pages.** Both pages render stored data on the server before any script
+  runs. If the read fails, they show an "unavailable" notice, and Settings adds
+  that paid access stays as it was. Settings shows the client-address
+  diagnostics: seven common address headers, and the address the throttles key
+  on. Comparing them with a request that forges `X-Forwarded-For` answers the
+  plan section 10 host check. The password field appears once a protected field
+  changes. Fields use 16 px text, so phones do not zoom on focus. Targets are
+  44 px, and the layout is one column on phones. Owner copy is English.
+- **Backup count.** `tests/backup-restore.integration.mjs` line 68 now expects
+  90 tables: 89 models plus `_prisma_migrations`. The prompt expected 81 → 90.
+
+### Flagged, not changed
+
+- **`test:backup` restores fail (pre-existing).** The append-only triggers in
+  `prisma/migrations/20261012153531_goal_market_extension/migration.sql` (lines
+  197–216) end with `;`. mysqldump writes them as `…'append-only'; */;;`, and the
+  mysql client import stops with ERROR 1064. The restore step reports this as
+  "artifact-authentication-failed" from its decrypt step. The stale 68-table assertion failed first
+  and had hidden it. A fix needs a new forward migration that recreates the
+  triggers, or restore-side handling. That is outside 058 and waits for owner
+  approval (OP-31). A real restore of a database migrated the same way would
+  probably fail too.
+- **`npm run check` fails at `next build` with the local `.env.local`.** The
+  database capability is on, and in production mode it needs TLS, access and
+  budget refs. The build passes with `GOAL_HINT_DATABASE_ENABLED=false` set on
+  the command line only. No env key or file was changed.
+- **`db:verify` drift on the developer database.** The local-only migration
+  `20261015072524_match_facts` (`fixturefacts`, `footballvenue`,
+  `seasonstandings`) is not in the repository. Removing it would be a destructive
+  change to the developer database, so it waits for the owner.

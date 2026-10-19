@@ -49,6 +49,23 @@ Odds imports remain off (`GOAL_HINT_ODDS_IMPORT_ENABLED=false`).
 writes each receipt and audit once, with final values, so the live runner needs no
 additional grant.
 
+Prompt 058 adds the nine paid-access tables (migration
+`20261019142209_subscriptions`), bringing the schema to 89 models. The
+application receives:
+
+- SELECT, INSERT and UPDATE on `MemberAccount`, `MemberSession`,
+  `SubscriptionPlan`, `PaymentSubmission`, `PaymentScreenshot`, `AccessCode`,
+  `SubscriptionSettings`, `RateLimitBucket` and `OwnerAuditEvent`;
+- DELETE only on `MemberAccount` (the never-paid purge), `MemberSession`
+  (sign-out, eviction and expiry), `PaymentScreenshot` (screenshot purge and
+  erasure) and `RateLimitBucket` (throttle purge).
+
+Payments, codes, plans, settings and audit rows are never deleted by the
+application; plans are deactivated instead. As with the odds tables, apply the
+grants after `npm run db:deploy`. They were applied locally on 19 October 2026
+and are recorded as section (H) of `application-grants.sql`. Paid access stays
+off (`paywallMode = off`, the default when `SubscriptionSettings` has no row).
+
 Prompt 044 adds the seeded `OperationsMonitorState` singleton and time-window
 indexes. The local application receives only SELECT and UPDATE (`stateJson`) on
 that table; INSERT/DELETE/DDL remain denied. Its empty initial state enables no
