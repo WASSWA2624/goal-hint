@@ -10,7 +10,7 @@
 
 Read `dev-plan/000-index.md`, the source sections and existing code before implementing this feature. Every page and route uses the 057 guard, every action is a same-origin JSON POST and every action is audited.
 
-- **Overview** (`/admin`, replacing the 057 empty shell): pending count; active subscribers; revenue this EAT week and month, summing `amountReceivedUgx` of approved, non-reversed submissions of both sources plus manual-code amounts, never reissue or number-change codes; Busy alerts (`uploads_busy`); "Payment numbers last changed …" from `paymentNumbersChangedAt`.
+- **Overview** (`/admin`, replacing the 057 empty shell): pending count; active subscribers; revenue this EAT week and month, summing `amountReceivedUgx` of approved, non-reversed submissions of both sources plus manual-code amounts, never reissue, number-change or trial codes; trials sent this week; Busy alerts (`uploads_busy`); "Payment numbers last changed …" from `paymentNumbersChangedAt`.
 - **Subscribers** (`src/app/admin/subscribers/`, `POST /api/admin/subscribers`, `POST /api/admin/subscribers/[id]`): search by phone (the number travels in the POST body; links use `accountId` only). Per account: status, codes, submissions, unlocked devices, unlocks in the last 30 days (from `device_unlocked` audit rows, index (`accountId`,`action`,`at`)) and the owner note. Actions:
   - **Sign out all devices**; **Block/Unblock** with a reason (a block deletes every session); edit note (≤ 500 characters); **Generate code** (the 064 manual code panel);
   - **Change number** through the 060 service: first confirm the request from the old number or by the payment details, then record `verifiedBy`; it opens the code ready panel for the new number;
@@ -30,7 +30,7 @@ Read `dev-plan/000-index.md`, the source sections and existing code before imple
 
 Run `npm run test:admin` and `npm run test:members`.
 
-- Revenue sums approved, non-reversed amounts of both sources plus manual amounts by EAT week and month, never reissue or number-change codes.
+- Revenue sums approved, non-reversed amounts of both sources plus manual amounts by EAT week and month, never reissue, number-change or trial codes; trial accounts never count as paid subscribers.
 - Unlock counts match `device_unlocked` rows; block signs out every device.
 - Change number requires `verifiedBy`, writes one audit row per revoke plus one for the new code, and opens the panel for the new number.
 - A structural test in `tests/admin-routes.test.mjs` finds no code path that updates `accountId` on `AccessCode`, `PaymentSubmission` or `MemberSession` after insert.
