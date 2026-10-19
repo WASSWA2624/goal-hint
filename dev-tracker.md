@@ -6,7 +6,7 @@
 | ◐ Partial | Implementation started or landed, but work, acceptance checks or an external blocker remain. Each partial row has a note below. |
 | ☐ Not started | No implementation yet. |
 
-**Totals:** 50 completed · 8 partial · 9 not started (67 prompts).
+**Totals:** 50 completed · 9 partial · 8 not started (67 prompts).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -60,7 +60,7 @@
 | ☐ Not started | [048-release-readiness.md](dev-plan/048-release-readiness.md)                   | Release signoff (OP-34)                                                                             |
 | ☐ Not started | [049-production-deployment.md](dev-plan/049-production-deployment.md)           | Domain and production operation (OP-35)                                                             |
 | ☑ Completed   | [050-feed-query-extensions.md](dev-plan/050-feed-query-extensions.md)           | —                                                                                                   |
-| ◐ Partial     | [051-feed-screen-layout.md](dev-plan/051-feed-screen-layout.md)                 | Browser acceptance checks; failing detail-page rendering check                                      |
+| ◐ Partial     | [051-feed-screen-layout.md](dev-plan/051-feed-screen-layout.md)                 | Remaining browser acceptance checks                                                                |
 | ◐ Partial     | [052-provider-odds-import.md](dev-plan/052-provider-odds-import.md)             | Odds trial (API plan upgrade); odds display rights (OP-36)                                          |
 | ☐ Not started | [053-score-distribution-markets.md](dev-plan/053-score-distribution-markets.md) | Implementation; waits on 012 and 052                                                                |
 | ☐ Not started | [054-market-implied-markets.md](dev-plan/054-market-implied-markets.md)         | Implementation; waits on 052 and 053                                                                |
@@ -76,7 +76,7 @@
 | ☑ Completed | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             | — |
 | ☑ Completed | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       | — |
 | ◐ Partial | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Legal/privacy/refund facts remain pending (OP-26/27/39); owner chose drafts/off                              |
-| ☐ Not started | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Implementation, after 066; MTN registered name, menu tests, switch-on approval (OP-38/40)           |
+| ◐ Partial | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Real samples, phone/host/legal evidence and activation approval pending                              |
 
 ## Partial rows
 
@@ -87,12 +87,15 @@
 - **052 Provider odds import:** implementation is complete for the rights-off state. Missing: the counted odds trial (it needs the planned API plan upgrade; owner decision 10 October 2026) and odds display rights (OP-36), so `publicPolicy.features.providerOdds` stays off. See [development progress](docs/development-progress.md) and [provider odds](docs/provider-odds.md).
 - **058 Data model, settings, plans and audit:** the nine tables, overlay, phone helpers, settings, plans, audit and the Plans and Settings pages are built, and `test:members` and `test:admin` pass. The owner accepted leaving network auto-selection unset (`networkPrefixes` stays empty); do not re-request that choice. The 375 px check passed. Still failing locally, not because of 058: `npm run check`'s `next build` with `.env.local`; `db:verify` drift from the developer database's out-of-repo `20261015072524_match_facts`; and the `test:backup` restores (trailing `;` on the `20261012153531_goal_market_extension` triggers). The recorded build-only override and fresh isolated database allow independent implementation to continue.
 
+- **063 Get access:** local implementation and acceptance pass; drafted SMS fixtures are synthetic. Real messages/screenshots and physical Android/in-app/slow-network verification remain.
+- **066 Policy copy:** all local checks pass; owner chose draft notices/off pending legal, privacy and refund facts.
+- **067 Launch readiness:** verifiers and checklist are implemented; all required local regression checks and both local production verifiers pass. Real-message, owner/host/phone and activation evidence remains pending.
+
 ## Not started rows
 
 - **046–049 Staging to production:** blocked by owner decisions on hosting (OP-32), quality qualification (OP-33, which also needs 011, 012 and 014), release signoff (OP-34) and the domain and production operation (OP-35).
 - **053–056:** not started. 055 and 056 now wait for 061–062.
-- **063 Get access:** local implementation and acceptance pass; drafted synthetic SMS fixtures are labelled. Real SMS/screenshot and physical Android/in-app/slow-network checks remain.
-- **067 Paid access:** see below.
+
 
 ## Paid access (057–067)
 
@@ -113,3 +116,5 @@
 - **065 (20 October 2026):** ☑ Completed: overview/accounting, subscriber operations, audit and hourly retention. Member (50), final focused MySQL (7), admin (29), production rendering, type/lint and 375 px checks pass.
 
 - **066 (20 October 2026):** ◐ Partial: mode-independent copy, owner runbook and name-only analytics implemented; units/type/lint/build and all four production HTML checks pass. Owner chose draft notices/off pending OP-26/27/39 facts.
+
+- **067 (20 October 2026):** ◐ Partial: read-only production verifiers and host/owner checklist implemented; npm run check (recorded local build override), all named service/rendering/HTML checks and both local production verifiers pass. Real SMS/screenshots, phone/menu/host checks and legal/launch approval remain pending.

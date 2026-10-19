@@ -32,7 +32,7 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   const v=await members.overview();assert.equal(v.weekRevenue,15000);assert.equal(v.monthRevenue,17000);assert.equal(v.active,4);assert.equal(v.trials,1);assert.equal(v.busy,1);assert.equal(v.paymentNumbersChangedAt,new Date(base).toISOString());
  });
  await t.test("unlock counts, notes, blocking and erasure preserve accounting while removing personal data",async()=>{
-  const who=await member(),ready=await manual(who);const accepted=await codes.redeem(who,ready.code,"unknown",2,"2026-10-19");const unlocked=await sessions.verify(accepted.token);await sessions.signIn(who.phone,"unknown");
+  const who=await member(),ready=await manual(who);const accepted=await codes.redeem(who,ready.code,"unknown",2,"2026-10-19");assert.ok(await sessions.verify(accepted.token));await sessions.signIn(who.phone,"unknown");
   await db.query(tx=>tx.ownerAuditEvent.create({data:{at:new Date(base-31*DAY),actor:"member",action:"device_unlocked",accountId:who.accountId,targetType:"member-session",targetId:"old",details:{}}}));
   assert.equal((await members.detail(who.accountId)).unlocks,1);assert.equal((await members.detail(who.accountId)).devices.length,1);
   assert.equal((await members.action(who.accountId,"note","x".repeat(501),"owner")).status,"invalid");assert.equal((await members.action(who.accountId,"note","Synthetic private note","owner")).status,"saved");

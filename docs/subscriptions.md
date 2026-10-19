@@ -127,3 +127,108 @@ copy-format checks, Facebook-to-Chrome return, tab discard and slow upload need
 evidence. Six committed SMS drafts are synthetic and prove parser behavior only.
 OP-40 must approve activation and date after every gate passes. These prompts
 authorize neither deployment nor switching paid access on.
+
+## Rollout and host evidence (067)
+
+This is a future operator procedure, **not deployment authorization**. The owner
+explicitly chose draft notices and paid access off on 20 October 2026.
+
+1. Build and verify locally with paid mode off. Use isolated databases for
+   integration tests. The known developer runtime-policy/migration drift and
+   append-only-trigger restore failure remain separate recorded repair gates
+   (058); a database-disabled build does not resolve them.
+2. Only after an explicit owner deployment request, pause app/worker writers,
+   take a private MariaDB backup including triggers, record its checksum and
+   verify restoration to a separate authorized target. Include all nine member
+   tables and reapply erasure suppression before reconnecting users. Record the
+   production backup schedule, retention, locations, recovery owner/objectives,
+   key custody/access and restore evidence (OP-31).
+3. Run the overlay's engine pre-check **by hand**, before the release reads the
+   tables. The query in database.md must return no non-InnoDB paid tables. Apply
+   the reviewed subscriptions overlay with the migration role, then verify all
+   nine engines, columns, unique keys, checks, foreign keys and original migration
+   checksum/history. `CREATE TABLE IF NOT EXISTS` does not validate old objects.
+   Missing/unavailable settings fail closed and can hide picks site-wide.
+4. Record read-only host evidence first (OP-32/40):
+   - `curl -I https://goalhint.com/en` and a canonical match URL must return
+     `Cache-Control: private, no-store`, no `Set-Cookie`, and no LiteSpeed/CDN hit,
+     shared-cache or positive Age header. Confirm proxy/CDN bypass for both pages
+     and APIs, including cookies and RSC; headers alone are not a cache purge.
+   - `SHOW VARIABLES LIKE 'max_allowed_packet'`: at least 8 MB (8,388,608 bytes).
+     `SHOW VARIABLES LIKE 'innodb_log_file_size'`: greater than ten times the
+     3 MB screenshot cap (greater than 31,457,280 bytes). Record version-specific
+     redo capacity as well if the server replaces this variable.
+   - After the approved deploy, use Settings diagnostics to record the actual
+     trusted client-address header and proxy entry. A forged external
+     `X-Forwarded-For` must not choose the address used by throttles; verify header
+     replacement/ordering at the ingress. Current application parsing trusts the
+     last forwarded address, so unverified ingress behavior is a blocker.
+   - Verify LiteSpeed/Passenger accept a 3 MB JPEG plus multipart overhead and a
+     slow upload survives the 90-second application read deadline. Lower the cap
+     in a reviewed change if the host cannot support it. Do not silently raise
+     app limits, logging or storage allowances.
+   - Owner signs in on their physical phone, verifies idle-session behavior,
+     reviews a screenshot and returns from WhatsApp with the unsent code panel
+     intact. No verifier script signs in or uploads.
+5. Deploy both app and worker only when authorized, with paid mode off. Worker
+   deployment uses the existing `scripts/deploy-worker-cpanel.py`. Both database
+   roles need the documented narrow DELETE grants on MemberAccount, MemberSession,
+   PaymentScreenshot and RateLimitBucket; no DELETE on reports/codes/audit.
+6. The owner enters approved plans, payment numbers and registered names,
+   contact/sender, copy format and tested optional menu shortcuts. Do not seed real
+   credentials or wallet values into source. Switch to test only under that
+   approved exercise. In a browser without the owner session, open `/en/account`
+   directly (its icon is hidden in test mode). Test gated to unlocked on the
+   phone, the fragment code link, a renewal, a second browser/device, expiry,
+   Facebook-to-Chrome recovery, file picker/clipboard, Messages return, forced tab
+   discard, retry and upload at about 200 kbit/s. A real small payment requires
+   separate spending authorization; a manual synthetic/test code avoids spending.
+7. Require OP-40 approval and date, release-ready **effective** privacy/terms and
+   all legal items below. Then the authorized owner switches on and runs:
+
+   ```text
+   python scripts/verify-production-paywall.py
+   python scripts/verify-production-seo.py
+   ```
+
+   Both scripts make cookie-less GETs only and never sign in, upload, approve or
+   change settings. They refuse cookies, cached/private-page regressions and gate
+   leaks. Paywall verification needs a published scheduled forecast within the
+   upcoming week; no qualifying fixture is an incomplete check, not a pass. Free
+   finished-fixture predictions are intentionally allowed. Before deployment,
+   `python scripts/verify-launch-rendering.py` exercises the same verifiers against
+   local production route factories and explicitly synthetic data.
+8. If verification fails, the authorized owner switches back off. Watch pending
+   payments, upload Busy events, error reports, review backlog and code delivery
+   throughout the first week; assign the owner responsible for responding.
+9. Rollback is mode off, effective across settings caches within 30 seconds.
+   Prefer a forward fix and owner-approved extensions for affected periods.
+   Rolling code back before 061 removes enforcement while paid periods continue
+   and restores obsolete policy copy. Do not roll schema or delete paid history
+   as routine rollback. No new environment keys or npm dependencies were added.
+
+Host evidence has **not** been collected: trusted header/entry, forged-header
+result, packet/redo sizes, CDN behavior, upload limits/deadline, physical owner
+login, backup/restore and deployed worker grants are all pending OP-32/40.
+
+## Owner-input reconciliation and activation checklist
+
+† means required before paid activation; ordinary implementation is allowed.
+
+| Input | Evidence/status | Decision row |
+| --- | --- | --- |
+| Approved implementation scope/security | v1.9 followed: phone-only login, account-bound code for each new browser, automatic renewal on unlocked devices, any country-code account and UGX to Ugandan wallets. No security redesign is proposed. | OP-37/38 |
+| Plans and trial | Supplied: Daily 1 day/1,000; Weekly 7 days/5,000; Monthly 30 days/20,000 UGX, equal content; one free 2-day trial per new number. Owner enters Settings/Plans. | OP-38 |
+| Receiving/sender/contact number | MTN, calls and WhatsApp supplied: `256783230321`. Never seeded into committed settings. † MTN registered name still needed. Airtel number/name needed only if offered; otherwise leave Airtel hidden. | OP-38 |
+| † Final free/paid split | Implementation preserves public finished/canceled/awarded picks, factual insights and performance; confirm the remaining split decision before activation. | OP-37 |
+| Review expectation and note | Supply typical review time and any extra note, or explicitly choose no estimate/note; there is no guaranteed SLA. | OP-38 |
+| † Real message/image verification | Six SMS drafts are intentionally synthetic, per owner request. Still need at least three real anonymized messages per offered network covering payer-sent and owner-received layouts, and anonymized app/SMS screenshots. Retain exact punctuation/labels while replacing names/digits. | OP-38 |
+| † Phone/menu evidence | Confirm whether each offered menu accepts international or local pasted numbers; test optional menu shortcuts and amount placement, or leave shortcuts absent. Physical Android/in-app, clipboard/file picker, tab discard, 200 kbit/s retry and 90-second upload evidence remains pending. | OP-38/40, 063 |
+| Prefix lists | Owner accepted empty prefixes and explicit receiving-network choice. No prefix list is required to activate; future auto-selection needs verified lists. | OP-38 |
+| Device/image defaults and owner session | Current defaults: 2 unlocked devices, 90-day approved/reversed image retention; confirm or configure them. Shared owner login keeps its existing 2-hour idle policy. A longer idle period is optional and needs a separately reviewed change; password re-entry for protected settings remains. | OP-26/38 |
+| † Refund/consumer policy | Approve refunds, extensions, network reversals, wrong-account approvals and outage compensation; confirm required disclosures and cooling-off duties. App does not execute refunds. | OP-39/27 |
+| † Data protection and retention | Hosting/backup countries; log/backup/payment-record/payer/audit retention; lawful bases; PDPO registration position; Meta/WhatsApp cross-border safeguards and phone/linked-device copies; erasure/restore suppression and breach procedure. No new facts supplied; drafts/off explicitly retained. | OP-26/27/31 |
+| † Legal/operator publication | Existing operator Wilson Wasswa/Uganda, 18+ and public contact are recorded. Paid-service Ugandan governing-law/dispute arrangements, tipping/licensing position and consumer duties still require verified approval. No licence or exemption is claimed. | OP-27/39 |
+| † Provider/source permissions | Confirm paid fallback-prediction access rights, source retention and reporting reuse. Resolve rights/evidence under OP-06/08 and retain odds hidden unless OP-36 display/advertising/history rights and trial qualify it. | OP-06/08/36 |
+| † Existing release gates | Resolve performance-claim policy (OP-17), source retention (OP-08), production backup schedule/retention/storage, recovery ownership/RPO/RTO, key custody/access and restore evidence (OP-31), broader release signoff (OP-34), plus the host/grants/cache/upload evidence above. Synthetic counts never approve performance or production capacity. | OP-08/17/31/32/34/40 |
+| † Final notices, deployment and activation | Supply final privacy/terms facts and effective dates, explicit deployment request, then separate paid-activation approval/date and first-week monitoring owner. Current instruction: no deployment, drafts, paid mode off. | OP-26/27/39/40 |
