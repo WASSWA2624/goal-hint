@@ -27,6 +27,6 @@ Distinguish private shadow eligibility from production qualification. A bounded 
 
 ## Handoff
 
-Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by ticking this file's row (☐ → ☑). Leave the checkbox empty while work or required checks remain incomplete.
+Required: when this feature's implementation and acceptance checks are complete, update [dev-tracker.md](../dev-tracker.md) by marking this file's row ☑ Completed. While work or required checks remain incomplete, mark it ◐ Partial once implementation has started, and leave it ☐ Not started until then.
 
 Record changed files and meaningful validation results in `docs/development-progress.md`. Link the decision register and enumerate only actual unresolved dependencies, including their first affected prompts. Never record a proposed external choice as confirmed.

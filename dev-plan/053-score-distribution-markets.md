@@ -22,4 +22,4 @@ Generalize the four-family invariant to `publicPolicy.markets`: the "Exactly fou
 
 ## Handoff
 
-Required: tick this row in [dev-tracker.md](../dev-tracker.md) only when implementation and checks are complete. Update `docs/development-progress.md` and `docs/implementation-decisions.md`.
+Required: mark this row ☑ Completed in [dev-tracker.md](../dev-tracker.md) only when implementation and checks are complete; mark it ◐ Partial while either remains after work has started, and leave it ☐ Not started before that. Update `docs/development-progress.md` and `docs/implementation-decisions.md`.
