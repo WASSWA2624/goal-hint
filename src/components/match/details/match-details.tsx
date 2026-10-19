@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "@/components/navigation/navigation-link";
+import type { SubscriptionOffer } from "@/domain/subscription-offer";
+import { AccountLink } from "@/components/members/account-link";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { CloseIcon, SearchIcon } from "@/components/ui/icons";
@@ -49,10 +51,10 @@ const PhoneHeaderGroup = styled.div`
  * The phone top bar matches the feed's solid branded bar and teal edge, full bleed
  * past the page gutter and up through the app page's 10px top padding, with white text and icons.
  */
-const PhoneBar = styled.div`
+const PhoneBar = styled.div<{ $showAccount: boolean }>`
   position: relative;
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) 2rem 2rem;
+  grid-template-columns: 2rem minmax(0, 1fr) 2rem 2rem ${({ $showAccount }) => $showAccount ? "2rem" : ""};
   align-items: center;
   gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
@@ -159,7 +161,7 @@ function DesktopBackLink() {
 }
 /** Phone header with back and search; opening search re-renders only this header. */
 function PhoneHeader() {
-  const { locale, messages } = useStableDetails();
+  const { locale, messages, showAccount } = useStableDetails();
   const backHref = useBackHref(locale);
   const [searching, setSearching] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -174,9 +176,10 @@ function PhoneHeader() {
     dismiss();
     toggle.current?.focus();
   }}>
-    <PhoneBar>
+    <PhoneBar $showAccount={showAccount === true}>
       <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
       <p>{messages.text("details.title")}</p>
+      {showAccount && <AccountLink locale={locale} />}
       <ThemeToggle />
       <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-controls="details-search" aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
         onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => searchInput.current?.focus()); }}>
@@ -233,8 +236,8 @@ function SectionView({ section, view, closed, byDefault, children }: {
   </DetailsProvider>;
 }
 
-export const MatchDetails = memo(function MatchDetails({ data, preview, locale = "en", history, historyRequested = false }: {
-  data: MatchDetailResponse; preview: InsightsPreview | null; locale?: string; history?: ReactNode; historyRequested?: boolean;
+export const MatchDetails = memo(function MatchDetails({ data, preview, locale = "en", history, historyRequested = false, showAccount = false, offer = null }: {
+  data: MatchDetailResponse; preview: InsightsPreview | null; locale?: string; history?: ReactNode; historyRequested?: boolean; showAccount?: boolean; offer?: SubscriptionOffer | null;
 }) {
   const { view, go, update } = useMatchView();
   const byDefault = useOpenByDefault();
@@ -248,8 +251,8 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
     opened.current = true;
     if (historyRequested && view.section === null) go({ ...view, section: "history" }, "replace");
   }, [go, historyRequested, view]);
-  const value = useMemo(() => ({ data, preview, locale, messages, go, update, home, away, fixtureId: fixture.fixtureId, history }),
-    [away, data, fixture.fixtureId, go, history, home, locale, messages, preview, update]);
+  const value = useMemo(() => ({ data, preview, locale, messages, go, update, home, away, fixtureId: fixture.fixtureId, history, showAccount, offer }),
+    [away, data, fixture.fixtureId, go, history, home, locale, messages, preview, update, showAccount, offer]);
   const closed = useMemo(() => ({ ...defaultMatchView, section: view.section }), [view.section]);
   const { marketsOpen, market, marketCategory, marketSearch } = view;
   const markets = useMemo(() => ({ ...defaultMatchView, marketsOpen, market, marketCategory, marketSearch }),

@@ -21,7 +21,7 @@ import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { draftChanged, queryApplied } from "@/state/feed";
 import { useAppDispatch, useAppSelector } from "@/state/hooks";
-import { FeedDraftStatus } from "./feed-controls";
+import { FeedDraftStatus, PicksOnlyFilter } from "./feed-controls";
 import { feedSortOptions } from "./feed-header";
 import { FeedTimeFilter } from "./feed-time";
 import { DateRangePicker, DayStrip } from "./feed-dates";
@@ -568,14 +568,14 @@ export function FeedFilterActions({ formId, locale, status }: {
 }
 
 /** Shared decimal entry on every screen; incomplete drafts never become an applied filter. */
-function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, messages }: {
+function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, messages, disabled = false }: {
   values: { min: string; max: string }; onChange: (bound: "min" | "max", value: string) => void;
-  invalid: boolean; descriptionId: string; messages: Messages;
+  invalid: boolean; descriptionId: string; messages: Messages; disabled?: boolean;
 }) {
   return <ProbabilityInputs>
     {(["min", "max"] as const).map((bound) => <Fragment key={bound}><label>
       <span data-bound-label>{messages.text(bound === "min" ? "feed.filters.minimumPercent" : "feed.filters.maximumPercent")}</span>
-      <input type="text" inputMode="decimal" autoComplete="off" value={values[bound]} placeholder={messages.text("feed.filters.any")}
+      <input disabled={disabled} type="text" inputMode="decimal" autoComplete="off" value={values[bound]} placeholder={messages.text("feed.filters.any")}
         aria-label={messages.text(bound === "min" ? "feed.filters.minimum" : "feed.filters.maximum", { label: messages.text("feed.filters.probabilityLabel") })}
         aria-invalid={invalid} aria-describedby={invalid ? descriptionId : undefined}
         onChange={(event) => { if (/^\d*(?:\.\d*)?$/u.test(event.target.value)) onChange(bound, event.target.value); }} />
@@ -585,14 +585,14 @@ function ProbabilityRangeInputs({ values, onChange, invalid, descriptionId, mess
 
 type FeedFiltersProps = {
   query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (query: FeedQuery) => void;
-  formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void;
+  subscriberOnly?: boolean; formId: string; onDraftStatus: (status: FeedFilterDraftStatus) => void;
   open: boolean; panelId: string; onOpenChange: (open: boolean) => void; controls: ReactNode;
 };
 export function FeedFilters(props: FeedFiltersProps) {
   const range = resolveFeedDates(props.query, props.today);
   return <FilterFields key={`${feedQueryHref(props.query, props.today)}:${range.startDate}:${range.endDate}`} {...props} />;
 }
-function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, open, panelId, onOpenChange, controls }: FeedFiltersProps) {
+function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, open, panelId, onOpenChange, controls, subscriberOnly = false }: FeedFiltersProps) {
   const storedDraft = useAppSelector((state) => state.feed.draft), dispatch = useAppDispatch();
   useEffect(() => { dispatch(queryApplied(query)); }, [dispatch, query]);
   const draft = valid(storedDraft, today) ? storedDraft : query;
@@ -704,7 +704,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
 
   const oddsLabel = messages.text("feed.filters.oddsLabel"), probabilityLabel = messages.text("feed.filters.probabilityLabel");
   const probabilityErrorId = `${formId}-probability-error`, titleId = `${panelId}-title`, marketsId = `${panelId}-markets`;
-  const probabilityFields = <ProbabilityRangeInputs values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
+  const probabilityFields = <ProbabilityRangeInputs disabled={subscriberOnly} values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
     onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
   const count = panelFilterCount(query), filtersLabel = messages.text("feed.filters.toggle");
@@ -742,8 +742,8 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         <SortIcon />
         <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => {
           const sort = feedSortOptions.find((option) => `${option.by}-${option.direction}` === event.target.value);
-          if (sort) onApply({ ...query, sort, page: 1 });
-        }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
+          if (sort && (!subscriberOnly || sort.by !== "probability")) onApply({ ...query, sort, page: 1 });
+        }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, disabled: subscriberOnly && sort.by === "probability", label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) + (subscriberOnly && sort.by === "probability" ? ` · ${messages.text("paywall.subscribersOnly")}` : "") }))} />
       </SortField>
       <PhoneClear type="reset" aria-label={messages.text("feed.filters.clear")} title={messages.text("feed.filters.clear")}>
         <FilterActionLabel label={messages.text("feed.filters.clear")} />
@@ -799,7 +799,8 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
           <ProbabilityGroup role="group" aria-label={probabilityLabel}>
             <span>{messages.text("feed.filters.predictionProbability")}</span>{probabilityFields}
           </ProbabilityGroup>
-          <ProbabilityHelp>{messages.text("feed.filters.probabilityExplanation")}</ProbabilityHelp>
+          <PicksOnlyFilter locale={query.locale} checked={draft.picks === "only"} disabled={subscriberOnly} onChange={(checked) => edit({ ...draft, picks: checked ? "only" : "all" })} />
+          <ProbabilityHelp>{messages.text(subscriberOnly ? "paywall.subscribersOnly" : "feed.filters.probabilityExplanation")}</ProbabilityHelp>
         </PhoneSection>
         {probability === null && <ProbabilityError id={probabilityErrorId}>{messages.text("feed.filters.probabilityInvalid")}</ProbabilityError>}
         <PhoneSection>
@@ -816,12 +817,14 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
               <ChipLine><span data-placeholder aria-disabled="true">{messages.text("feed.filters.any")}</span></ChipLine>
               <VisuallyHidden>{messages.text("feed.filters.oddsPending")}</VisuallyHidden>
             </Field>
-            <Field $accent="pink" role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
+            <Field $accent="pink" $disabled={subscriberOnly} role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
               <FieldName id="filters-probability" $accent="pink">{probabilityLabel}</FieldName>
               {probabilityFields}%
+              {subscriberOnly && <span>{messages.text("paywall.subscribersOnly")}</span>}
               <VisuallyHidden>{messages.text("feed.filters.probabilityHelp")}</VisuallyHidden>
             </Field>
           </DesktopGrid>
+          <PicksOnlyFilter locale={query.locale} checked={draft.picks === "only"} disabled={subscriberOnly} onChange={(checked) => edit({ ...draft, picks: checked ? "only" : "all" })} />
         </DesktopOnly>
       </SheetBody>
       <SheetFooter>

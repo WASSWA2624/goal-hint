@@ -6,7 +6,7 @@ import type { MatchDetailResponse } from "@/domain/match-detail";
 import { fullDetailSnapshot } from "@/domain/detail-snapshot";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
 import { ReasonIcon } from "./details-icons";
-import { Card, CardHeader, Note, Panel, useStableDetails, type Messages } from "./details-ui";
+import { Card, CardHeader, SubscriberRow, Note, Panel, useStableDetails, type Messages } from "./details-ui";
 import { Explanation } from "./markets-card";
 import { useOpenByDefault } from "./use-match-view";
 
@@ -25,7 +25,7 @@ export const AnalysisDrawer = memo(function AnalysisDrawer() {
   const byDefault = useOpenByDefault();
   const [choice, setChoice] = useState<boolean | null>(null);
   const open = choice ?? byDefault;
-  if ("gated" in data.history) return <Card><SubscriberNotice /></Card>;
+  if ("gated" in data.history) return <SubscriberRow><SubscriberNotice kind="analysis" /></SubscriberRow>;
   return <Card data-section="analysis" data-open={open || undefined} data-open-by-default={(choice === null && byDefault) || undefined}
     aria-labelledby="section-analysis-title">
     <CardHeader icon={<ReasonIcon />} title={messages.text("details.why")} meta={summary(messages, data)} open={open} controls="section-analysis"

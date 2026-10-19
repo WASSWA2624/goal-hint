@@ -9,6 +9,9 @@ import { appendFeedPage, initialLoadedFeed, replaceFeedPages } from '../src/doma
 import { createGatedReads } from '../src/server/members/gated-reads.ts';
 import { createMatchFeedHandler } from '../src/server/matches/feed-http.ts';
 import { publicMatchFailure } from '../src/server/matches/public-http.ts';
+import { sameCardFixture } from '../src/domain/match-card.ts';
+import { cheapestActivePlan } from '../src/domain/subscription-offer.ts';
+import { createMessages } from '../src/i18n/messages.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { scenarios, today, sentinel, now } from './helpers/paywall-fixtures.mjs';
 
@@ -78,6 +81,24 @@ test('equal-version expiry or revocation withdraws all accepted prediction conte
   assert.deepEqual(merged, after); assert.doesNotMatch(JSON.stringify(merged), /SENTINEL-|0\.6173|7\.73/);
   assert.deepEqual(mergeLiveDetail(before, { ...after, asOf: after.asOf - 1 }), { ...after, asOf: after.asOf - 1 });
   const view = initialLoadedFeed(gateFeedResponse(scenarios.scheduled.feed, full)), page = gateFeedResponse(scenarios.scheduled.feed, free);
-  assert.throws(() => appendFeedPage(view, page), e => e.code === 'subscription-required');
-  assert.throws(() => replaceFeedPages(view, [page]), e => e.code === 'subscription-required');
+  assert.throws(() => appendFeedPage(view, page), e => e.code === 'changed');
+  assert.throws(() => replaceFeedPages(view, [page]), e => e.code === 'changed');
+});
+
+
+test('equal-version card variants invalidate memoization in both directions', () => {
+  const full = scenarios.scheduled.feed.records[0];
+  const gated = { ...full, forecast: gateFeedResponse(scenarios.scheduled.feed, free).records[0].forecast };
+  assert.equal(sameCardFixture(full, gated), false);
+  assert.equal(sameCardFixture(gated, full), false);
+  assert.equal(sameCardFixture(gated, { ...gated }), true);
+});
+test('public offer uses the cheapest active purchase, retains owner ordering for ties, and exposes only price and days', () => {
+  const plan = (priceUgx, durationDays, active = true) => ({ priceUgx, durationDays, active, id: 'private', name: 'Owner plan' });
+  assert.equal(cheapestActivePlan([]), null);
+  assert.equal(cheapestActivePlan([plan(100, 1, false)]), null);
+  assert.deepEqual(cheapestActivePlan([plan(5000, 7), plan(100, 30, false), plan(1000, 1), plan(1000, 2)]), { priceUgx: 1000, durationDays: 1 });
+  const messages = createMessages('en');
+  assert.equal(messages.text('paywall.from', { price: messages.number(1000), days: messages.plural('paywall.days', 1) }), 'From UGX 1,000 for 1 day.');
+  assert.equal(messages.plural('paywall.days', 2), '2 days');
 });

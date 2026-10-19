@@ -8,6 +8,7 @@ import { serializeStructuredData } from "@/domain/discovery";
 import { readPublicMatchDetail } from "@/server/matches/public-detail";
 import { readPublicMatchInsights } from "@/server/matches/public-insights";
 import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
+import { readSubscriptionOffer } from "@/server/members/public-offer";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { insightsPreview, type InsightsPreview } from "@/domain/match-insights";
 import { splitMatchViewParameters } from "@/domain/match-view";
@@ -21,7 +22,7 @@ type Props = { params: Promise<{ locale: string; fixtureId: string; slug: string
 
 /** The production route and isolated stored-data acceptance use this same path. */
 export function createMatchDetailRoute(read: typeof readPublicMatchDetail = readPublicMatchDetail, policy = getDiscoveryPolicy,
-  readInsights: typeof readPublicMatchInsights = readPublicMatchInsights, resolveAccess = resolveViewerAccess) {
+  readInsights: typeof readPublicMatchInsights = readPublicMatchInsights, resolveAccess = resolveViewerAccess, readOffer = readSubscriptionOffer) {
   const loadCurrent = cache(async (id: string) => {
     const instant = await getShellInstant();
     const result = await loadMatchDetailPage(id, { now: () => instant }, read, new URLSearchParams(), resolveAccess);
@@ -63,10 +64,12 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       if (result.data && (route.slug !== result.data.route.slug || route.fixtureId !== result.data.route.fixtureId)) {
         permanentRedirect(`${result.data.route.path}${viewQuery ? `?${viewQuery}` : ""}${query ? "#revision-history" : ""}`);
       }
+      const access = await contentAccess(resolveAccess);
+      const offer = access.tier === "free" ? await readOffer() : null;
       return <>
         {result.data && !query && <script type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeStructuredData(matchStructuredData(result.data, route.locale)) }} />}
-        <MatchDetailPage result={result} today={today} locale={route.locale} preview={preview}
+        <MatchDetailPage showAccount={access.mode === "on"} offer={offer} result={result} today={today} locale={route.locale} preview={preview}
           historyResult={historyResult} historyQuery={query}
           retryHref={`/en/matches/${encodeURIComponent(route.fixtureId)}/${encodeURIComponent(route.slug)}`} />
       </>;

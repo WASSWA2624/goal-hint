@@ -150,13 +150,13 @@ const SelectFace = styled.span`
   }
   &:has(select:disabled) { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; }
 `;
-export type CompactSelectOption = Readonly<{ value: string; label: string }>;
+export type CompactSelectOption = Readonly<{ value: string; label: string; disabled?: boolean }>;
 export function CompactSelect({ options, value, className, ...props }: Omit<ComponentPropsWithoutRef<"select">, "children" | "value"> & {
   options: readonly CompactSelectOption[]; value: string;
 }) {
   return <SelectFace className={className}>
     <span aria-hidden="true">{options.map((option) => <span key={option.value} data-current={option.value === value || undefined}>{option.label}</span>)}</span>
-    <select value={value} {...props}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+    <select value={value} {...props}>{options.map((option) => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}</select>
     <ChevronDownIcon />
   </SelectFace>;
 }

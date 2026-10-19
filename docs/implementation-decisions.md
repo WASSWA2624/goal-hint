@@ -4002,3 +4002,28 @@ no other OP row changes state.
   Responsive and accessible chrome assertions follow the current UI. Original
   pick, probability, alternatives, explanation, source and outcome checks remain.
   All required rendering builds and the 585-response paywall scan pass.
+
+
+## 062 — Gated UI and entry points (19 October 2026)
+
+- Reuse the title-bar/theme-control sizing for one square AccountLink; routes
+  already resolving access pass showAccount. Information pages add no DB read.
+- Public price comes from the cheapest active plan in owner order, via the existing
+  plans service. Only price and duration reach the client; missing plans produce
+  no price claim. Both access buttons always render and preserve the match return.
+- Large buttons and native radio segments share the existing theme, borders and
+  focus treatment. Subscriber cards retain the existing tile layout and a star,
+  with no premium attributes or tooltip. Only the gated tile's narrow spacing
+  changes to keep its compact height at 320 px.
+- Use the established changed signal for feed tier mismatches and refresh for it
+  or a subscription-required API response. Provider keys isolate tiers; app pages
+  reuse MemberNavigationRecovery for persisted pageshow restoration.
+- Extend the isolated paywall fixture with cookie-backed fake viewers and real
+  account/code/sign-out factories for browser transitions. Its plan destination
+  is explicitly synthetic until the production Get access page arrives in 063;
+  no fake plan or payment number is committed to application settings or copy.
+
+- The gated tile uses a subscriber state, preserving the policy-order family
+  caption that the existing no-pick CSS hides. It exposes no prediction values.
+  Browser measurements confirm 75.5/74.3 px at 320/375 px and native 48 px radio
+  keyboard selection. The 660-response scan and complete serial unit suite pass.

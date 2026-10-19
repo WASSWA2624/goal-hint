@@ -6,7 +6,7 @@ from lib.rendering import ROOT, Server, build_fixture, create_fixture, environme
 from lib.runtime import main_guard
 
 SENTINELS = r"SENTINEL-|(?<![\d.])(?:0\.6173|61\.73|62%|7\.73)(?!\d)"
-VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "off"]
+VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "test", "off"]
 
 
 def main():
@@ -17,15 +17,16 @@ def main():
     scenarios = json.loads(generated.stdout)
     write_json(directory / "app/scenarios.json", scenarios)
     # Exercise the production private-route headers alongside isolated member/owner pages.
-    for route, source in [("en/account", "src/app/[locale]/account/page.tsx"), ("admin", "src/app/admin/page.tsx")]:
+    for route, source in [("admin", "src/app/admin/page.tsx")]:
         target = directory / "app" / route / "page.tsx"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(f'export {{default, metadata}} from "@/{source.removeprefix("src/").removesuffix(".tsx")}";\n' if route == "admin"
             else 'export {default, generateMetadata} from "@/app/[locale]/account/page";\nexport const dynamic = "force-dynamic";\n', encoding="utf-8")
     (directory / "app/admin/layout.tsx").write_text('export {default, metadata} from "@/app/admin/layout";\n', encoding="utf-8")
-    subscribe = directory / "app/en/subscribe/page.tsx"
-    subscribe.parent.mkdir(parents=True, exist_ok=True)
-    subscribe.write_text('export {default, generateMetadata} from "@/app/[locale]/account/page";\nexport const dynamic = "force-dynamic";\n', encoding="utf-8")
+    (directory / "app/layout.tsx").write_text(
+        'import Root from "@/app/layout";\nexport {metadata} from "@/app/layout";\n'
+        'import {FixtureControls} from "./fixture-controls";\n'
+        'export default function Layout({children}:{children:React.ReactNode}){return <Root><FixtureControls/>{children}</Root>;}\n', encoding="utf-8")
     config = directory / "next.config.mjs"
     config.write_text(config.read_text(encoding="utf-8").replace("export default {", 'import production from "../../next.config.ts";\nexport default { headers: production.headers,'), encoding="utf-8")
     env = environment(GOAL_HINT_DATABASE_ENABLED="false")
@@ -58,6 +59,17 @@ def main():
                         if not full and not free_fixture:
                             assert not re.search(SENTINELS, text), (viewer, url, "premium sentinel leaked")
                             assert not re.search(r'data-(?:prediction|outcome|featured-pick|verdict|market)="', text), (viewer, url, "prediction attribute leaked")
+                        if not url.startswith("/api/") and "RSC" not in request_headers:
+                            if url.startswith("/en?q=") and not full:
+                                assert 'data-subscriber-banner' in text and 'href="/en/subscribe"' in text
+                                assert 'Subscribers only' in text
+                                assert re.search(r'<option[^>]*value="probability-desc"[^>]*disabled', text) or re.search(r'<option[^>]*disabled[^>]*value="probability-desc"', text)
+                            if not full and not free_fixture and not url.startswith("/en?q="):
+                                assert 'Picks and probabilities for this match are for subscribers.' in text
+                                assert 'From UGX 1,000 for 1 day.' in text
+                                assert 'Have a code?' in text and 'return=%2Fen%2Fmatches%2F' in text
+                            if url.startswith("/en?q="):
+                                assert ('aria-label="Account"' in text) == (viewer not in ("off", "test"))
                         if url.startswith("/api/"):
                             assert response.headers.get("Cache-Control") == "private, no-store"
                             assert "cookie" in {item.strip().lower() for header in response.headers.get_all("Vary", []) for item in header.split(",")}
@@ -88,7 +100,7 @@ def main():
             assert "no-store" in page.headers.get("Cache-Control", ""), path
             assert "noindex" in page.headers.get("X-Robots-Tag", ""), path
             checks += 1
-        print(f"PASS {checks} raw HTML/RSC/API, history, insights, oracle, slips and private-route checks across eight viewer states.", flush=True)
+        print(f"PASS {checks} raw HTML/RSC/API, history, insights, oracle, slips and private-route checks across nine viewer states.", flush=True)
         if args.serve: server.serve()
 
 

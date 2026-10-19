@@ -4610,3 +4610,38 @@ resolve 051's previously recorded rendering failure; its manual checks remain.
 **Status:** all 061 acceptance checks pass; tracker 061 is ☑ Completed.
 No deployment or mode change. Existing 058 local build/database/backup blockers
 remain documented separately. Continue with 062 after committing and pushing.
+
+
+## 062 — Gated UI and entry points (19 October 2026)
+
+Implemented subscriber cards, the feed banner and filters, verdict offer and both
+return links, plain drawer rows and slip EmptyState. Added shared AccountLink,
+UserIcon/SubscriberIcon, large buttons and native-radio SegmentedChoice. Existing
+routes pass showAccount only for on mode; information pages do not resolve it.
+The cheapest active plan uses the existing plan service; absent plans expose no
+invented public price. Tier changes refresh and remount the feed. App pages use
+the existing pageshow recovery so Back rechecks the member session.
+
+Acceptance passes: `npm test -- --test-concurrency=1` (1,559 pass, one existing
+Windows-specific skip), `npm run typecheck`, changed-file ESLint, `test:card`
+(21), `test:live-client` (31), `test:state` (38), and `test:paywall` (14).
+`test:card:rendering` preserves all 13 full-content examples. The final isolated
+production `test:paywall:rendering -- --serve` passes 660 raw HTML/RSC/API checks
+across nine viewers. Parallel checks initially hit timing limits; the complete
+unit suite and card rendering pass when rerun sequentially without changed limits.
+
+Manual Browser-pane checks at 320×800 and 375×812: gated cards measure 75.5 px
+and 74.3 px respectively, show the first eligible family and subscriber line,
+open the match and have no premium attributes or horizontal overflow. Access
+buttons and both radio segments measure 48 px; native ArrowRight selects Airtel.
+The sheet disables probability bounds and Picks only and labels probability sort
+options. The real account/code factories with synthetic services return to the
+match after Unlock and reveal picks. Changing only the fake period to expired
+hides picks on the next poll; Back after real Sign out shows the gated panel with
+zero featured-pick attributes. Account → Renew reaches the explicitly synthetic
+063 plan destination in two taps. The production destination is verified in 063.
+Viewport override reset; screenshot: `.tmp/062-gated-feed-375.png`.
+
+**Status:** every 062 acceptance check passes; tracker 062 is ☑ Completed.
+No deployment, production setting, dependency or env-key change. Paid access
+remains off. Continue with 063 after committing and pushing.

@@ -8,6 +8,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { ClockIcon } from "@/components/match/match-icons";
 import { TeamLogo } from "@/components/match/team-logo";
 import type { FormLetter, LiveStanding } from "@/domain/match-details";
+import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
 import { defaultMatchView, type MatchView } from "@/domain/match-view";
@@ -18,6 +19,7 @@ import type { ViewNavigation, ViewUpdate } from "./use-match-view";
 export type Messages = ReturnType<typeof createMessages>;
 /** Values that change only with the data, never with the view. */
 export type StableDetails = Readonly<{
+  showAccount?: boolean; offer?: SubscriptionOffer | null;
   data: MatchDetailResponse; preview: InsightsPreview | null; locale: string; messages: Messages;
   go: (next: MatchView, mode?: ViewNavigation) => void; update: ViewUpdate;
   home: string; away: string; fixtureId: string; history: ReactNode;
@@ -73,6 +75,9 @@ export const Card = styled.section`
     &[data-open] { padding-block-end: 16px; }
   }
 `;
+
+/** A subscriber drawer keeps the established row height and rule, with one plain line. */
+export const SubscriberRow = styled(Card)`min-block-size: 2.875rem; align-content: center;`;
 
 const HeadRow = styled.div`
   display: flex;

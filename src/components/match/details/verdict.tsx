@@ -1,6 +1,6 @@
 "use client";
 
-import { SubscriberNotice } from "@/components/members/subscriber-notice";
+import { SubscriberPanel } from "@/components/members/subscriber-panel";
 
 import { memo } from "react";
 import styled from "styled-components";
@@ -116,9 +116,9 @@ function PredictionRecord() {
  * home/draw/away split. Tapping the pick opens that market's full details.
  */
 export const Verdict = memo(function Verdict() {
-  const { data, messages, home, away, update } = useStableDetails();
+  const { data, messages, home, away, update, locale, offer } = useStableDetails();
   const fixture = data.fixture, snapshot = data.snapshot;
-  if ("gated" in data.history) return <Box><SubscriberNotice /></Box>;
+  if ("gated" in data.history) return <Box><SubscriberPanel locale={locale} offer={offer ?? null} returnTo={data.route.path} /></Box>;
   const featured = featuredFamily(data), row = featured ? marketRow(data, featured) : null;
   const outlook = resultOutlook(data);
   if (!featured || !row?.item) return <Box aria-labelledby="verdict-title" data-featured-pick="none">

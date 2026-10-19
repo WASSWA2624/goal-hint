@@ -3,6 +3,7 @@
 import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
+import { AccountLink } from "@/components/members/account-link";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
@@ -39,12 +40,14 @@ const Home = styled(Link)`
   }
 `;
 
-export function AppBrandBar({ locale }: { locale: string }) {
+const Actions = styled.div`display: flex; align-items: center; gap: 4px;`;
+
+export function AppBrandBar({ locale, showAccount = false }: { locale: string; showAccount?: boolean }) {
   return <Bar>
     <Home href={homeHref(locale)} prefetch={false} aria-label={createMessages(locale).text("navigation.home")}>
       <BrandLogo alt="" variant="inverse" />
     </Home>
-    <ThemeToggle />
+    <Actions>{showAccount && <AccountLink locale={locale} />}<ThemeToggle /></Actions>
     <NavigationProgress label={createMessages(locale).text("navigation.loading")} />
   </Bar>;
 }

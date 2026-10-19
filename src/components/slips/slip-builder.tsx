@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, useTransition, type FormEvent } fro
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/components/analytics/tracker";
 import { AppBrandBar } from "@/components/navigation/app-brand-bar";
-import { TextInput, type TextInputProps } from "@/components/ui/controls";
+import { ButtonLink, TextInput, type TextInputProps } from "@/components/ui/controls";
 import { ChoicePicker } from "@/components/ui/choice-picker";
 import { CriteriaAccordion } from "@/components/ui/criteria-accordion";
 import { EmptyState } from "@/components/ui/feedback";
@@ -22,16 +22,24 @@ import { SlipTable } from "./slip-table";
 import { Actions, BuildButton, ClearLink, CriteriaError, CriteriaForm, CriteriaPanel, FieldGroup,
   Fields, HeadingRow, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipStack, TargetGroups } from "./slip-styles";
 
+export function SlipAccessRequired({ locale, showAccount = false }: { locale: string; showAccount?: boolean }) {
+  const messages = createMessages(locale);
+  return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
+    <EmptyState title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
+      action={<ButtonLink size="large" href="/en/subscribe" prefetch={false}>{messages.text("paywall.getAccess")}</ButtonLink>} />
+  </SlipStack>;
+}
+
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type Props = Readonly<{
   locale: string; today: ReportingDate; criteria: SlipCriteria; result: SlipBuildPageResult | null;
   error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialMarkets?: readonly MarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
-  initialReuse?: boolean;
+  initialReuse?: boolean; showAccount?: boolean;
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse }: Props) {
+export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
   const [validationVersion, setValidationVersion] = useState(0);
@@ -116,7 +124,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const emptyState = result?.state === "generated" ? "data-unavailable" : result?.state;
 
   return <SlipStack aria-busy={pending}>
-    <AppBrandBar locale={locale} />
+    <AppBrandBar locale={locale} showAccount={showAccount} />
     <SlipHeading>{messages.text("slips.title")}</SlipHeading>
     <CriteriaPanel aria-labelledby={`${prefix}-criteria`}>
       <VisuallyHidden as="h2" id={`${prefix}-criteria`}>{messages.text("slips.criteria")}</VisuallyHidden>

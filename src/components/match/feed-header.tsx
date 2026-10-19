@@ -57,14 +57,14 @@ const DesktopActions = styled.div`
 
 
 /** The brand bar carries page-level controls; search and filters belong in the body. */
-export function FeedHeader({ query, today, onApply }: {
-  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void;
+export function FeedHeader({ query, today, onApply, showAccount = false }: {
+  query: FeedQuery; today: ReportingDate; onApply: (next: FeedQuery) => void; showAccount?: boolean;
 }) {
   const messages = createMessages(query.locale);
   const heading = feedHeading(query, today, messages);
   return <HeaderContent>
     <Row>
-      <BrandContainer><AppBrandBar locale={query.locale} /></BrandContainer>
+      <BrandContainer><AppBrandBar locale={query.locale} showAccount={showAccount} /></BrandContainer>
       <PageHeading as="h1">{heading}</PageHeading>
       <DesktopActions>
         <DatePresets query={query} today={today} onApply={onApply} />
@@ -166,15 +166,15 @@ export const feedSortOptions: readonly FeedSort[] = [
 ];
 
 /** One independent sort menu retains the established immediate sort behavior. */
-export function FeedFilterToolbar({ query, onApply, actions, summary }: {
-  query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode;
+export function FeedFilterToolbar({ query, onApply, actions, summary, subscriberOnly = false }: {
+  query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode; subscriberOnly?: boolean;
 }) {
   const messages = createMessages(query.locale);
   const sortKey = `${query.sort.by}-${query.sort.direction}`;
   const choose = (sort: FeedSort) => onApply({ ...query, sort, page: 1 });
   const chooseKey = (key: string) => {
     const selected = feedSortOptions.find((sort) => `${sort.by}-${sort.direction}` === key);
-    if (selected) choose(selected);
+    if (selected && (!subscriberOnly || selected.by !== "probability")) choose(selected);
   };
   return <FilterToolbar>
     {summary}
@@ -182,8 +182,8 @@ export function FeedFilterToolbar({ query, onApply, actions, summary }: {
       <DesktopSortLabel htmlFor="feed-sort-desktop">{messages.text("feed.sort.label")}</DesktopSortLabel>
       <SelectWrap>
         <select id="feed-sort-desktop" value={sortKey} onChange={(event) => chooseKey(event.target.value)}>
-          {feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
-            {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
+          {feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`} disabled={subscriberOnly && sort.by === "probability"}>
+            {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}{subscriberOnly && sort.by === "probability" ? ` · ${messages.text("paywall.subscribersOnly")}` : ""}
           </option>)}
         </select>
         <ChevronDownIcon />

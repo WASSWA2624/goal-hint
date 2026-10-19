@@ -86,11 +86,11 @@ export function useFeedPagination({ query, today, data, enabled, onStatus }: {
     } catch (cause) {
       if (!mounted.current || !enabledRef.current || controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
       const code = cause instanceof FeedPaginationError ? cause.code : "unavailable";
-      if (code === "subscription-required") { router.refresh(); return; }
+      if (code === "subscription-required" || code === "changed") { router.refresh(); return; }
       if (mode === "background") return;
       failedMode.current = mode; retryCheckpoint.current = checkpoint ?? null; setError(code);
       focusTarget.current = { fixtureId: null, retry: true };
-      announce(code === "changed" || code === "stale-data" ? "changed" : code === "rate-limited" ? "busy" : "failed");
+      announce(code === "stale-data" ? "changed" : code === "rate-limited" ? "busy" : "failed");
     } finally {
       clearTimeout(deadline);
       if (request.current === controller) { request.current = null; if (mounted.current) setPhase(null); }

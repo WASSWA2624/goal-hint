@@ -1,5 +1,6 @@
 "use client";
 
+import { SubscriberIcon } from "@/components/ui/icons";
 import { SubscriberNotice } from "@/components/members/subscriber-notice";
 
 import Link from "@/components/navigation/navigation-link";
@@ -254,7 +255,7 @@ const FlagFallback = styled.span`
   ${tile} { margin-inline-end: 0; }
 `;
 
-const Teams = styled.div`
+const Teams = styled.div<{ $gated: boolean }>`
   --gh-logo-size: 16px;
   --gh-logo-radius: 0;
   --gh-logo-font: 0.5rem;
@@ -274,6 +275,7 @@ const Teams = styled.div`
     min-block-size: 1.75rem;
     padding: 2px 10px 0;
     ${narrowTile} { grid-row: 3; }
+    ${narrowTile} { min-block-size: ${({ $gated }) => $gated ? "1.25rem" : "1.75rem"}; padding-block-start: ${({ $gated }) => $gated ? "0" : "2px"}; }
   }
   /* Desktop cells share the league row; elapsed/final status shares the country row above it. */
   ${table} { --gh-logo-size: 22px; --gh-logo-font: 0.625rem; display: contents; }
@@ -386,7 +388,7 @@ const LiveDot = styled.span`
 
 /** Tile: one right-aligned pick line under the teams: market caption, bold pick, its own odds and the probability. The "likely" word
  * drops first and the market caption shortens next, so the pick and its numbers stay whole at narrow widths. */
-const Pick = styled.div`
+const Pick = styled.div<{ $gated: boolean }>`
   ${tile} {
     grid-area: pick;
     display: flex;
@@ -398,6 +400,7 @@ const Pick = styled.div`
     line-height: 1rem;
     white-space: nowrap;
     ${narrowTile} { grid-row: 4; }
+    ${narrowTile} { padding-block: ${({ $gated }) => $gated ? "1px 3px" : "3px 6px"}; }
   }
   ${table} { display: grid; grid-column: 7 / span 3; grid-row: 2; grid-template-columns: subgrid; align-items: center; }
 `;
@@ -436,6 +439,17 @@ const MarketName = styled(PickCell)<{ $family: MarketFamily }>`
     font-size: 0.75rem;
     font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
+`;
+const GatedPick = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  grid-column: 2 / -1;
+  min-inline-size: 0;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  line-height: 1rem;
+  > svg { flex: none; }
 `;
 const Prediction = styled.span<{ $available: boolean }>`
   display: contents;
@@ -744,7 +758,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
   const lead = decided ? Math.sign(fixture.score!.home - fixture.score!.away) : 0;
   const missing = gated || prediction ? null : noPickReason(fixture);
   const reason = missing ? messages.text(`match.noPickReason.${missing}`) : null;
-  const pickState = !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
+  const pickState = gated ? "subscriber" : !prediction ? "none" : settledOutcome(outcome) ? "settled" : "open";
   return <Card tabIndex={-1} aria-labelledby={titleId} data-fixture-id={fixture.fixtureId} data-market={gated ? undefined : shownFamily}
     data-status={fixture.status}>
     <VisuallyHidden as={`h${headingLevel}`} id={titleId}>{titleNote ? `${title}, ${titleNote}` : title}</VisuallyHidden>
@@ -760,17 +774,17 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       <MetaDot aria-hidden="true">·</MetaDot>
       <CardKickoff kickoff={fixture.kickoffAt} locale={locale} />
     </Meta>
-    <Teams>
+    <Teams $gated={gated}>
       <CardTeam team={fixture.homeTeam} side="home" name={home} eager={eagerLogos} result={lead > 0 ? "win" : lead < 0 ? "loss" : null} />
       <MatchState fixture={fixture} home={home} away={away} lead={lead} messages={messages} />
       <CardTeam team={fixture.awayTeam} side="away" name={away} eager={eagerLogos} result={lead < 0 ? "win" : lead > 0 ? "loss" : null} />
     </Teams>
-    <Pick data-pick-state={pickState} data-result={result}>
-      <MarketName $family={shownFamily} aria-hidden="true">
+    <Pick $gated={gated} data-pick-state={pickState} data-result={result}>
+      <MarketName $family={shownFamily} aria-hidden={gated ? undefined : true}>
         <span data-pick-value="" data-mobile-only="">{family}</span>
         <span data-pick-value="" data-desktop-only="">{family}</span>
       </MarketName>
-      {gated ? <Prediction $available={false}><SubscriberNotice locale={locale} /></Prediction> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
+      {gated ? <GatedPick><SubscriberIcon /><SubscriberNotice locale={locale} kind="card" /></GatedPick> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <>
             <span data-pick-value=""><span data-pick-selection="">{predictionLabel(messages, selection)}</span>

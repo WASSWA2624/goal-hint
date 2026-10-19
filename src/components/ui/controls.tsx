@@ -10,10 +10,12 @@ export type ButtonVariant = "primary" | "secondary" | "quiet";
 
 export type ButtonProps = ComponentPropsWithRef<"button"> & {
   variant?: ButtonVariant;
+  size?: "normal" | "large";
 };
 
 export type ButtonLinkProps = ComponentPropsWithRef<typeof Link> & {
   variant?: ButtonVariant;
+  size?: "normal" | "large";
 };
 
 export type TextLinkProps = ComponentPropsWithRef<typeof Link>;
@@ -35,7 +37,7 @@ const focusTreatment = css`
 `;
 
 /** Compact 36px controls on phones and tablets; the 44px desktop treatment from `lg`. */
-const buttonTreatment = css<{ $variant: ButtonVariant }>`
+const buttonTreatment = css<{ $variant: ButtonVariant; $large?: boolean }>`
   display: inline-flex;
   box-sizing: border-box;
   align-items: center;
@@ -108,10 +110,16 @@ const buttonTreatment = css<{ $variant: ButtonVariant }>`
     }
   }}
 
+  ${({ $large, theme }) => $large && css`
+    min-block-size: 3rem;
+    min-inline-size: 3rem;
+    font-size: ${theme.typography.scale.body};
+    ${media.desktop} { min-block-size: 3rem; font-size: ${theme.typography.scale.body}; }
+  `}
   ${focusTreatment}
 `;
 
-const ButtonControl = styled.button<{ $variant: ButtonVariant }>`
+const ButtonControl = styled.button<{ $variant: ButtonVariant; $large?: boolean }>`
   ${buttonTreatment}
 
   &:disabled {
@@ -122,7 +130,7 @@ const ButtonControl = styled.button<{ $variant: ButtonVariant }>`
   }
 `;
 
-const ButtonAnchor = styled(Link)<{ $variant: ButtonVariant }>`
+const ButtonAnchor = styled(Link)<{ $variant: ButtonVariant; $large?: boolean }>`
   ${buttonTreatment}
 `;
 
@@ -257,13 +265,13 @@ function useFieldAccessibility(props: FieldAccessibility) {
 }
 
 /** A native button: disabled controls leave the tab order; type defaults to button. */
-export function Button({ variant = "primary", type = "button", ...props }: ButtonProps) {
-  return <ButtonControl {...props} type={type} $variant={variant} />;
+export function Button({ variant = "primary", size = "normal", type = "button", ...props }: ButtonProps) {
+  return <ButtonControl {...props} type={type} $variant={variant} $large={size === "large"} />;
 }
 
 /** Navigation retains native link semantics, including Next.js navigation behavior. */
-export function ButtonLink({ variant = "primary", ...props }: ButtonLinkProps) {
-  return <ButtonAnchor {...props} $variant={variant} />;
+export function ButtonLink({ variant = "primary", size = "normal", ...props }: ButtonLinkProps) {
+  return <ButtonAnchor {...props} $variant={variant} $large={size === "large"} />;
 }
 
 export function TextLink(props: TextLinkProps) {
@@ -334,4 +342,49 @@ export function SelectInput({ label, hint, error, children, ...props }: SelectIn
       )}
     </Field>
   );
+}
+
+
+const Segments = styled.fieldset`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  > legend { margin-block-end: 6px; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  > label { position: relative; min-inline-size: 0; }
+  input { position: absolute; opacity: 0; inline-size: 1px; block-size: 1px; }
+  span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-block-size: 3rem;
+    padding: 8px;
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    color: ${({ theme }) => theme.color.text};
+    background: ${({ theme }) => theme.color.surface};
+    font-size: ${({ theme }) => theme.typography.scale.body};
+    cursor: pointer;
+  }
+  label + label > span { border-inline-start: 0; }
+  input:checked + span { color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action}; }
+  input:focus-visible + span { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  &:disabled span { cursor: not-allowed; opacity: 0.6; }
+`;
+
+/** Two full-size choices, with native radio keyboard and form behavior. */
+export function SegmentedChoice<Value extends string>({ label, name, value, options, onValueChange, disabled = false }: {
+  label: string; name?: string; value: Value; options: readonly { value: Value; label: string }[];
+  onValueChange: (value: Value) => void; disabled?: boolean;
+}) {
+  const id = useId();
+  return <Segments disabled={disabled}><legend>{label}</legend>
+    {options.map((option) => <label key={option.value}>
+      <input type="radio" name={name ?? id} value={option.value} checked={value === option.value} onChange={() => onValueChange(option.value)} />
+      <span>{option.label}</span>
+    </label>)}
+  </Segments>;
 }

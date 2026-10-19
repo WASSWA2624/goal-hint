@@ -6,7 +6,7 @@
 | ◐ Partial | Implementation started or landed, but work, acceptance checks or an external blocker remain. Each partial row has a note below. |
 | ☐ Not started | No implementation yet. |
 
-**Totals:** 47 completed · 6 partial · 14 not started (67 prompts).
+**Totals:** 48 completed · 6 partial · 13 not started (67 prompts).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -71,7 +71,7 @@
 | ☑ Completed   | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md)                           | —                                                                                                   |
 | ☑ Completed   | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             | —                                                                                                   |
 | ☑ Completed   | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md)     | —                                                                                                   |
-| ☐ Not started | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md)           | Implementation, after 061                                                                           |
+| ☑ Completed   | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md)           | —                                                                                                   |
 | ☐ Not started | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               | Implementation, after 062; real SMS samples per network (OP-38)                                     |
 | ☐ Not started | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             | Implementation, after 063                                                                           |
 | ☐ Not started | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       | Implementation, after 064                                                                           |
@@ -91,7 +91,7 @@
 
 - **046–049 Staging to production:** blocked by owner decisions on hosting (OP-32), quality qualification (OP-33, which also needs 011, 012 and 014), release signoff (OP-34) and the domain and production operation (OP-35).
 - **053–056:** not started. 055 and 056 now wait for 061–062.
-- **062–067 Paid access:** see below.
+- **063–067 Paid access:** see below.
 
 ## Paid access (057–067)
 
@@ -100,6 +100,7 @@
 - **058 (19 October 2026):** ◐ Partial (see Partial rows).
 - **059 (19 October 2026):** ☑ Completed: phone sign-in, hashed sessions, throttles, sign-out/devices and the account states in the existing chrome. MySQL concurrency, 375 px, production headers/build, changed-file lint, typecheck and the full sequential unit suite pass.
 - **060 (19 October 2026):** ☑ Completed: account-bound access codes, confirmation-time periods, device unlock, viewer resolution and audited owner code services. Member (43), SEO (29) and admin (25) checks pass; production HTML/build, typecheck, changed-file lint and 375 px fragment/refresh/unlock checks pass.
-- **061 (19 October 2026):** ☑ Completed: strict wire gates after shared raw reads, private responses, oracle refusal, generic metadata and access transitions. Unit/type/lint checks and every required rendering command pass, including 585 HTML/RSC/API leak checks. 062–067 are ☐ Not started.
-- **Run order:** 057 to 062 in order. 055 and 056 now depend on 061–062, so run them after 062; 063 to 067 follow in order.
+- **061 (19 October 2026):** ☑ Completed: strict wire gates after shared raw reads, private responses, oracle refusal, generic metadata and access transitions. Unit/type/lint checks and every required rendering command pass, including 585 HTML/RSC/API leak checks. 063–067 are ☐ Not started.
+- **062 (19 October 2026):** ☑ Completed: designed gated states and filters, shared account icons, large controls and tier transitions. All checks pass, including 1,559 units, 660 leak responses and 320/375 px navigation, expiry and Back checks.
+- **Requested run order:** 057–067 in numeric order. Dependencies 061–062 are now satisfied for 055/056, which remain outside this requested paid-access run.
 - Paid access ships with the switch `off`. Turning it on needs OP-40, and nothing is deployed unless the owner asks.

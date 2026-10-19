@@ -3,7 +3,7 @@
 import { Fragment, memo, useCallback, useEffect, useId, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styled from "styled-components";
-import { FeedActiveFilterSummary, FeedAppliedSummary, FeedNote } from "@/components/match/feed-controls";
+import { FeedActiveFilterSummary, FeedAppliedSummary, FeedNote, SubscriberFeedBanner } from "@/components/match/feed-controls";
 import { FeedFilterActions, FeedFilters, type FeedFilterDraftStatus } from "@/components/match/feed-filters";
 import { FeedFilterToolbar, FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
 import { plainClick } from "@/components/match/filter-parts";
@@ -92,8 +92,8 @@ function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery, count: st
 }
 
 /** Successful server projections remain visible if a later navigation fails. */
-function FeedSurfaceContent({ query, today, result, controls, pagination }: {
-  query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode;
+function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free" }: {
+  query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
   // Phones edit filters in a sheet; search, days, sort and the applied summary stay in the page.
@@ -129,10 +129,11 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? searchAnnouncement(result.data, query, messages.plural("feed.matchCount", result.data.total))
     : messages.text(`feed.state.${result.data.state}`);
   return <FeedStack $gap="sm">
-    <FeedHeader query={query} today={today} onApply={apply} />
-    <FeedFilters query={query} today={today} leagues={leagues} onApply={apply}
+    <FeedHeader query={query} today={today} onApply={apply} showAccount={showAccount} />
+    {subscriberOnly && <SubscriberFeedBanner locale={query.locale} />}
+    <FeedFilters subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={apply}
       open={filtersOpen} panelId={filtersId} onOpenChange={setFiltersOpen} formId={filtersFormId} onDraftStatus={setFilterStatus}
-      controls={<FeedFilterToolbar query={query} onApply={apply} actions={filterActions}
+      controls={<FeedFilterToolbar subscriberOnly={subscriberOnly} query={query} onApply={apply} actions={filterActions}
         summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
@@ -156,7 +157,7 @@ function FeedSurfaceContent({ query, today, result, controls, pagination }: {
 export function FeedSurface(props: Parameters<typeof FeedSurfaceContent>[0]) {
   // Cards render from server props and the store reads only the draft, so the bootstrap skips
   // validating the page's records again during hydration.
-  return <FeedStateProvider key={`${props.query.locale}:${props.query.zone ?? props.query.time?.zone ?? "reporting"}`} initial={{ query: props.query, today: props.today, data: null }}>
+  return <FeedStateProvider key={`${props.result.data?.access.tier}:${props.result.data?.access.signedIn}:${props.query.locale}:${props.query.zone ?? props.query.time?.zone ?? "reporting"}`} initial={{ query: props.query, today: props.today, data: null }}>
     <FeedSurfaceContent {...props} />
   </FeedStateProvider>;
 }

@@ -5,8 +5,7 @@ import { isMarketFamily, isMarketSelection, type MarketFamily, type MarketSelect
 import { publicPolicy } from "@/domain/public-policy";
 import { slipsHref } from "@/domain/navigation";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields, type SlipInputs } from "@/domain/slip-builder";
-import { SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
-import { SubscriberNotice } from "@/components/members/subscriber-notice";
+import { SlipAccessRequired, SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
 import { createMessages } from "@/i18n/messages";
 import { readPublicSlipBuild } from "@/server/slips/public-slips";
 import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
@@ -26,7 +25,8 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
     },
     async Page({ params, searchParams }: Props) {
       const { locale } = await params, query = await searchParams, at = await instant(), today = getReportingDate(at);
-      if ((await contentAccess(resolveAccess)).tier === "free") return <PublicShell locale={locale} today={today} current="slips" app compact search={null}><SubscriberNotice locale={locale} /></PublicShell>;
+      const access = await contentAccess(resolveAccess), showAccount = access.mode === "on";
+      if (access.tier === "free") return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact search={null}><SlipAccessRequired locale={locale} showAccount={showAccount} /></PublicShell>;
       const initialInputs: SlipInputs = {};
       for (const field of slipInputFields) {
         const value = query[field];
@@ -57,8 +57,8 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
         || Array.isArray(query.reuse) && query.reuse.length === 2 && query.reuse[0] === "0" && query.reuse[1] === "1" ? true : criteria.reuse;
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
       const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}`;
-      return <PublicShell locale={locale} today={today} current="slips" app compact search={null}>
-        <SlipBuilder key={key} locale={locale} today={today} criteria={criteria} result={result}
+      return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact search={null}>
+        <SlipBuilder showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
           error={error} initialInputs={initialInputs} initialOutcomes={initialOutcomes} initialReuse={initialReuse} {...(initialMarkets ? { initialMarkets } : {})} />
       </PublicShell>;
     },

@@ -36,7 +36,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
     const codeError = parameters.status === "code-not-recognized" ? messages.text("account.codeNotRecognized")
       : parameters.status === "code-ended" && ended && Number.isFinite(+ended) ? messages.text("account.codeEnded", { end: formatPeriodEnd(ended) })
       : parameters.status === "code-busy" ? messages.text("account.tryLater") : undefined;
-    return <PublicShell locale={locale}><AccountCodeRoot><Stack $gap="md">
+    return <PublicShell locale={locale} showAccount={mode === "on"}><AccountCodeRoot><Stack $gap="md">
       <PageHeading>{messages.text("account.title")}</PageHeading>
       <MemberNavigationRecovery />
       <MemberPanel><Stack $gap="md">
@@ -53,7 +53,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
                 : last && <p>{messages.text("account.accessEnded", { end: formatPeriodEnd(last.endsAt) })}</p>}
               {queued.map((code) => <p key={code.id}>{messages.text("account.queued", { plan: code.planName, start: formatPeriodEnd(code.startsAt), end: formatPeriodEnd(code.endsAt) })}</p>)}
             </>}
-            <ButtonLink href={memberNextPath("subscribe", returnTo)} prefetch={false}>{messages.text(view ? "account.renew" : "account.getAccess")}</ButtonLink>
+            <ButtonLink size="large" href={`${memberNextPath("subscribe", returnTo)}#plans`} prefetch={false}>{messages.text(view ? "account.renew" : "account.getAccess")}</ButtonLink>
             <AccountCodeForm locale={locale} signedIn inApp={inApp} returnTo={returnTo} initialError={codeError} />
             {!member.codeEnteredAt && <p>{messages.text("account.notYourNumber")}</p>}
             {view && <><h2>{messages.text("account.devices")}</h2>

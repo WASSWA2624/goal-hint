@@ -44,7 +44,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
       result = await load(serializeFeedQuery(query, today).toString(), route.locale, at);
       if (result.error === "subscription-required") redirect(feedQueryHref(withoutSubscriberFeedOracle(query), today));
     } catch (error) { if (error instanceof MatchFeedError && error.code === "invalid-query") notFound(); throw error; }
-    return { query, today, result };
+    return { query, today, result, access: await contentAccess(resolveAccess) };
   }
   return {
     async generateMetadata(props: Props) {
@@ -52,7 +52,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
       return feedMetadata(query, today, result, policy());
     },
     async Page(props: Props) {
-      const { query, today, result } = await resolve(props), discovery = feedDiscovery(query, today);
+      const { query, today, result, access } = await resolve(props), discovery = feedDiscovery(query, today);
       const messages = createMessages(query.locale);
       // Identity on the plain home page; a breadcrumb on each unfiltered dated collection.
       const structured = !discovery.eligible ? null : !dated && discovery.home ? homeStructuredData()
@@ -60,7 +60,7 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
           { name: messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) }]) : null;
       return <>
         {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
-        <MatchFeedPage query={query} today={today} result={result} />
+        <MatchFeedPage query={query} today={today} result={result} showAccount={access.mode === "on"} subscriberOnly={access.tier === "free"} />
       </>;
     },
   };

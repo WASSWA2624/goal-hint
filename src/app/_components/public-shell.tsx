@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { cache } from "react";
 import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
+import { AccountLink } from "@/components/members/account-link";
+import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SearchIcon } from "@/components/ui/icons";
 import { ResponsiveNavigation, type NavigationDestination } from "@/components/navigation/responsive-navigation";
@@ -29,7 +31,7 @@ export const getShellInstant = cache(async () => {
 });
 export const getShellDate = cache(async () => getReportingDate(await getShellInstant()));
 
-export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, search }: {
+export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, search, showAccount = false }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
@@ -42,6 +44,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
   compact?: boolean;
   /** null lets a page own its body search without a duplicate shell field. */
   search?: null;
+  showAccount?: boolean;
 }) {
   const language = resolveLocale(locale);
   const messages = createMessages(language);
@@ -61,6 +64,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
 
   return (
     <ShellFrame>
+      {app && <MemberNavigationRecovery />}
       <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
       <Header $app={app}>
         <HeaderContent $wide={app}>
@@ -75,7 +79,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
             <input type="search" name="q" defaultValue="" maxLength={feedQueryRules.maximumSearchLength}
               placeholder={messages.text("navigation.search")} aria-label={messages.text("navigation.searchLabel")} autoComplete="off" />
           </HeaderSearch>}
-          <HeaderActions><ThemeToggle /></HeaderActions>
+          <HeaderActions>{showAccount && <AccountLink locale={language} />}<ThemeToggle /></HeaderActions>
         </HeaderContent>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>

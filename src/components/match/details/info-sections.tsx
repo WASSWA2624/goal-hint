@@ -185,7 +185,7 @@ export const RefereeSection = memo(function RefereeSection() {
 /** The existing locked revision history, opened inside this match view. */
 export const HistorySection = memo(function HistorySection() {
   const { data, messages, history } = useStableDetails();
-  if ("gated" in data.history) return <SectionCard section="history" icon={<HistoryIcon />} title={messages.text("details.section.history")}><SubscriberNotice /></SectionCard>;
+  if ("gated" in data.history) return <SectionCard section="history" icon={<HistoryIcon />} title={messages.text("details.section.history")}><SubscriberNotice kind="history" /></SectionCard>;
   const count = data.history.revisions.entries.length;
   return <SectionCard section="history" icon={<HistoryIcon />} title={messages.text("details.section.history")}
     meta={count ? messages.plural("details.revisionCount", count) + (data.history.revisions.next ? "+" : "") : messages.text("details.summary.noRevisions")}>

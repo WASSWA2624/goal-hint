@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { MutedText } from "@/components/ui/layout";
 import { formatProbabilityValue, isAnyMarkets, panelFilterCount, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
@@ -15,6 +16,30 @@ export const FeedNote = styled(MutedText)`
   line-height: 1.4;
   ${media.desktop} { font-size: inherit; line-height: inherit; }
 `;
+
+export function SubscriberFeedBanner({ locale }: { locale: string }) {
+  const messages = createMessages(locale);
+  return <FeedNote data-subscriber-banner>{messages.text("paywall.banner")} · <Link href="/en/subscribe" prefetch={false}>{messages.text("paywall.getAccess")}</Link></FeedNote>;
+}
+
+const PicksLabel = styled.label`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 2.25rem;
+  color: ${({ theme }) => theme.color.text};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  &:has(input:disabled) { color: ${({ theme }) => theme.color.mutedText}; }
+`;
+export function PicksOnlyFilter({ locale, checked, disabled, onChange }: {
+  locale: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void;
+}) {
+  const messages = createMessages(locale);
+  return <PicksLabel><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+    {messages.text("paywall.picksOnly")}{disabled && <span>· {messages.text("paywall.subscribersOnly")}</span>}
+  </PicksLabel>;
+}
 
 const SummaryList = styled.ul`
   min-inline-size: 0;

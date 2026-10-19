@@ -1,6 +1,20 @@
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  "paywall.card": "Pick for subscribers",
+  "paywall.banner": "Picks are for subscribers",
+  "paywall.getAccess": "Get access",
+  "paywall.haveCode": "Have a code?",
+  "paywall.verdict": "Picks and probabilities for this match are for subscribers.",
+  "paywall.from": "From UGX {price} for {days}.",
+  "paywall.days": { one: "{count} day", other: "{count} days" },
+  "paywall.markets": "Market picks and probabilities are for subscribers.",
+  "paywall.analysis": "Goal Hint analysis is for subscribers.",
+  "paywall.history": "Prediction history for this match is for subscribers.",
+  "paywall.slips": "Slip builder is for subscribers",
+  "paywall.slipsDescription": "Get access to build slips from Goal Hint picks.",
+  "paywall.subscribersOnly": "Subscribers only",
+  "paywall.picksOnly": "Picks only",
   "access.required": "Subscriber access is required.",
   "detail.subscriberMetadataDescription": "Subscriber access includes Goal Hint predictions for this match.",
   "account.title": "Account",
