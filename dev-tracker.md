@@ -8,75 +8,75 @@
 
 **Totals:** 43 completed · 5 partial · 19 not started (67 prompts).
 
-| Status        | Dev file                                                                        |
-| ------------- | ------------------------------------------------------------------------------- |
-| ☑ Completed   | [001-project-foundation.md](dev-plan/001-project-foundation.md)                 |
-| ☑ Completed   | [002-runtime-policy.md](dev-plan/002-runtime-policy.md)                         |
-| ☑ Completed   | [003-mysql-prisma.md](dev-plan/003-mysql-prisma.md)                             |
-| ☑ Completed   | [004-eat-calendar.md](dev-plan/004-eat-calendar.md)                             |
-| ☑ Completed   | [005-market-domain.md](dev-plan/005-market-domain.md)                           |
-| ☑ Completed   | [006-api-quota-limiter.md](dev-plan/006-api-quota-limiter.md)                   |
-| ☑ Completed   | [007-api-football-adapter.md](dev-plan/007-api-football-adapter.md)             |
-| ☑ Completed   | [008-football-provider-trial.md](dev-plan/008-football-provider-trial.md)       |
-| ☑ Completed   | [009-canonical-football-catalog.md](dev-plan/009-canonical-football-catalog.md) |
-| ☑ Completed   | [010-research-cost-control.md](dev-plan/010-research-cost-control.md)           |
-| ◐ Partial     | [011-fixture-evidence.md](dev-plan/011-fixture-evidence.md)                     |
-| ◐ Partial     | [012-ai-predictor.md](dev-plan/012-ai-predictor.md)                             |
-| ☑ Completed   | [013-provider-fallback.md](dev-plan/013-provider-fallback.md)                   |
-| ◐ Partial     | [014-forecast-evaluation.md](dev-plan/014-forecast-evaluation.md)               |
-| ☑ Completed   | [015-brand-styling.md](dev-plan/015-brand-styling.md)                           |
-| ☑ Completed   | [016-locale-navigation.md](dev-plan/016-locale-navigation.md)                   |
-| ☑ Completed   | [017-client-state.md](dev-plan/017-client-state.md)                             |
-| ☑ Completed   | [018-match-card.md](dev-plan/018-match-card.md)                                 |
-| ☑ Completed   | [019-prediction-history.md](dev-plan/019-prediction-history.md)                 |
-| ☑ Completed   | [020-durable-jobs.md](dev-plan/020-durable-jobs.md)                             |
-| ☑ Completed   | [021-daily-selection.md](dev-plan/021-daily-selection.md)                       |
-| ☑ Completed   | [022-revision-publication.md](dev-plan/022-revision-publication.md)             |
-| ☑ Completed   | [023-cutoff-locking.md](dev-plan/023-cutoff-locking.md)                         |
-| ☑ Completed   | [024-schedule-lifecycle.md](dev-plan/024-schedule-lifecycle.md)                 |
-| ☑ Completed   | [025-prediction-refresh-worker.md](dev-plan/025-prediction-refresh-worker.md)   |
-| ☑ Completed   | [026-fixture-result-sync.md](dev-plan/026-fixture-result-sync.md)               |
-| ☑ Completed   | [027-market-settlement.md](dev-plan/027-market-settlement.md)                   |
-| ☑ Completed   | [028-match-feed-api.md](dev-plan/028-match-feed-api.md)                         |
-| ☑ Completed   | [029-match-detail-api.md](dev-plan/029-match-detail-api.md)                     |
-| ☑ Completed   | [030-performance-api.md](dev-plan/030-performance-api.md)                       |
-| ☑ Completed   | [031-public-response-cache.md](dev-plan/031-public-response-cache.md)           |
-| ☑ Completed   | [032-match-feed-page.md](dev-plan/032-match-feed-page.md)                       |
-| ☑ Completed   | [033-search-filter-controls.md](dev-plan/033-search-filter-controls.md)         |
-| ☑ Completed   | [034-pagination-navigation.md](dev-plan/034-pagination-navigation.md)           |
-| ☑ Completed   | [035-match-detail-page.md](dev-plan/035-match-detail-page.md)                   |
-| ☑ Completed   | [036-revision-history.md](dev-plan/036-revision-history.md)                     |
-| ☑ Completed   | [037-live-client-refresh.md](dev-plan/037-live-client-refresh.md)               |
-| ☑ Completed   | [038-methodology-performance.md](dev-plan/038-methodology-performance.md)       |
-| ☑ Completed   | [039-privacy-page.md](dev-plan/039-privacy-page.md)                             |
-| ☑ Completed   | [040-terms-page.md](dev-plan/040-terms-page.md)                                 |
-| ☑ Completed   | [041-contact-page.md](dev-plan/041-contact-page.md)                             |
-| ☑ Completed   | [042-seo-discovery.md](dev-plan/042-seo-discovery.md)                           |
-| ☑ Completed   | [043-recovery-watchdog.md](dev-plan/043-recovery-watchdog.md)                   |
-| ☑ Completed   | [044-operations-monitoring.md](dev-plan/044-operations-monitoring.md)           |
-| ☑ Completed   | [045-backup-restore.md](dev-plan/045-backup-restore.md)                         |
-| ☐ Not started | [046-staging-deployment.md](dev-plan/046-staging-deployment.md)                 |
-| ☐ Not started | [047-shadow-qualification.md](dev-plan/047-shadow-qualification.md)             |
-| ☐ Not started | [048-release-readiness.md](dev-plan/048-release-readiness.md)                   |
-| ☐ Not started | [049-production-deployment.md](dev-plan/049-production-deployment.md)           |
-| ☑ Completed   | [050-feed-query-extensions.md](dev-plan/050-feed-query-extensions.md)           |
-| ◐ Partial     | [051-feed-screen-layout.md](dev-plan/051-feed-screen-layout.md)                 |
-| ◐ Partial     | [052-provider-odds-import.md](dev-plan/052-provider-odds-import.md)             |
-| ☐ Not started | [053-score-distribution-markets.md](dev-plan/053-score-distribution-markets.md) |
-| ☐ Not started | [054-market-implied-markets.md](dev-plan/054-market-implied-markets.md)         |
-| ☐ Not started | [055-on-device-picks.md](dev-plan/055-on-device-picks.md)                       |
-| ☐ Not started | [056-leagues-and-tips-pages.md](dev-plan/056-leagues-and-tips-pages.md)         |
-| ☐ Not started | [057-owner-admin-foundation.md](dev-plan/057-owner-admin-foundation.md)         |
-| ☐ Not started | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md)       |
-| ☐ Not started | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md)                           |
-| ☐ Not started | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             |
-| ☐ Not started | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md)     |
-| ☐ Not started | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md)           |
-| ☐ Not started | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               |
-| ☐ Not started | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             |
-| ☐ Not started | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       |
-| ☐ Not started | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 |
-| ☐ Not started | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     |
+| Status        | Dev file                                                                        | Pending                                                                                             |
+| ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| ☑ Completed   | [001-project-foundation.md](dev-plan/001-project-foundation.md)                 | —                                                                                                   |
+| ☑ Completed   | [002-runtime-policy.md](dev-plan/002-runtime-policy.md)                         | —                                                                                                   |
+| ☑ Completed   | [003-mysql-prisma.md](dev-plan/003-mysql-prisma.md)                             | —                                                                                                   |
+| ☑ Completed   | [004-eat-calendar.md](dev-plan/004-eat-calendar.md)                             | —                                                                                                   |
+| ☑ Completed   | [005-market-domain.md](dev-plan/005-market-domain.md)                           | —                                                                                                   |
+| ☑ Completed   | [006-api-quota-limiter.md](dev-plan/006-api-quota-limiter.md)                   | —                                                                                                   |
+| ☑ Completed   | [007-api-football-adapter.md](dev-plan/007-api-football-adapter.md)             | —                                                                                                   |
+| ☑ Completed   | [008-football-provider-trial.md](dev-plan/008-football-provider-trial.md)       | —                                                                                                   |
+| ☑ Completed   | [009-canonical-football-catalog.md](dev-plan/009-canonical-football-catalog.md) | —                                                                                                   |
+| ☑ Completed   | [010-research-cost-control.md](dev-plan/010-research-cost-control.md)           | —                                                                                                   |
+| ◐ Partial     | [011-fixture-evidence.md](dev-plan/011-fixture-evidence.md)                     | Licensed news provider; OP-13/14 choices                                                            |
+| ◐ Partial     | [012-ai-predictor.md](dev-plan/012-ai-predictor.md)                             | AI provider, model and calibration (OP-15); live transport                                          |
+| ☑ Completed   | [013-provider-fallback.md](dev-plan/013-provider-fallback.md)                   | —                                                                                                   |
+| ◐ Partial     | [014-forecast-evaluation.md](dev-plan/014-forecast-evaluation.md)               | Evaluation periods and thresholds (OP-16/17); real forecasts                                        |
+| ☑ Completed   | [015-brand-styling.md](dev-plan/015-brand-styling.md)                           | —                                                                                                   |
+| ☑ Completed   | [016-locale-navigation.md](dev-plan/016-locale-navigation.md)                   | —                                                                                                   |
+| ☑ Completed   | [017-client-state.md](dev-plan/017-client-state.md)                             | —                                                                                                   |
+| ☑ Completed   | [018-match-card.md](dev-plan/018-match-card.md)                                 | —                                                                                                   |
+| ☑ Completed   | [019-prediction-history.md](dev-plan/019-prediction-history.md)                 | —                                                                                                   |
+| ☑ Completed   | [020-durable-jobs.md](dev-plan/020-durable-jobs.md)                             | —                                                                                                   |
+| ☑ Completed   | [021-daily-selection.md](dev-plan/021-daily-selection.md)                       | —                                                                                                   |
+| ☑ Completed   | [022-revision-publication.md](dev-plan/022-revision-publication.md)             | —                                                                                                   |
+| ☑ Completed   | [023-cutoff-locking.md](dev-plan/023-cutoff-locking.md)                         | —                                                                                                   |
+| ☑ Completed   | [024-schedule-lifecycle.md](dev-plan/024-schedule-lifecycle.md)                 | —                                                                                                   |
+| ☑ Completed   | [025-prediction-refresh-worker.md](dev-plan/025-prediction-refresh-worker.md)   | —                                                                                                   |
+| ☑ Completed   | [026-fixture-result-sync.md](dev-plan/026-fixture-result-sync.md)               | —                                                                                                   |
+| ☑ Completed   | [027-market-settlement.md](dev-plan/027-market-settlement.md)                   | —                                                                                                   |
+| ☑ Completed   | [028-match-feed-api.md](dev-plan/028-match-feed-api.md)                         | —                                                                                                   |
+| ☑ Completed   | [029-match-detail-api.md](dev-plan/029-match-detail-api.md)                     | —                                                                                                   |
+| ☑ Completed   | [030-performance-api.md](dev-plan/030-performance-api.md)                       | —                                                                                                   |
+| ☑ Completed   | [031-public-response-cache.md](dev-plan/031-public-response-cache.md)           | —                                                                                                   |
+| ☑ Completed   | [032-match-feed-page.md](dev-plan/032-match-feed-page.md)                       | —                                                                                                   |
+| ☑ Completed   | [033-search-filter-controls.md](dev-plan/033-search-filter-controls.md)         | —                                                                                                   |
+| ☑ Completed   | [034-pagination-navigation.md](dev-plan/034-pagination-navigation.md)           | —                                                                                                   |
+| ☑ Completed   | [035-match-detail-page.md](dev-plan/035-match-detail-page.md)                   | —                                                                                                   |
+| ☑ Completed   | [036-revision-history.md](dev-plan/036-revision-history.md)                     | —                                                                                                   |
+| ☑ Completed   | [037-live-client-refresh.md](dev-plan/037-live-client-refresh.md)               | —                                                                                                   |
+| ☑ Completed   | [038-methodology-performance.md](dev-plan/038-methodology-performance.md)       | —                                                                                                   |
+| ☑ Completed   | [039-privacy-page.md](dev-plan/039-privacy-page.md)                             | —                                                                                                   |
+| ☑ Completed   | [040-terms-page.md](dev-plan/040-terms-page.md)                                 | —                                                                                                   |
+| ☑ Completed   | [041-contact-page.md](dev-plan/041-contact-page.md)                             | —                                                                                                   |
+| ☑ Completed   | [042-seo-discovery.md](dev-plan/042-seo-discovery.md)                           | —                                                                                                   |
+| ☑ Completed   | [043-recovery-watchdog.md](dev-plan/043-recovery-watchdog.md)                   | —                                                                                                   |
+| ☑ Completed   | [044-operations-monitoring.md](dev-plan/044-operations-monitoring.md)           | —                                                                                                   |
+| ☑ Completed   | [045-backup-restore.md](dev-plan/045-backup-restore.md)                         | —                                                                                                   |
+| ☐ Not started | [046-staging-deployment.md](dev-plan/046-staging-deployment.md)                 | Hosting decision (OP-32)                                                                            |
+| ☐ Not started | [047-shadow-qualification.md](dev-plan/047-shadow-qualification.md)             | Quality qualification (OP-33); needs 011, 012 and 014                                               |
+| ☐ Not started | [048-release-readiness.md](dev-plan/048-release-readiness.md)                   | Release signoff (OP-34)                                                                             |
+| ☐ Not started | [049-production-deployment.md](dev-plan/049-production-deployment.md)           | Domain and production operation (OP-35)                                                             |
+| ☑ Completed   | [050-feed-query-extensions.md](dev-plan/050-feed-query-extensions.md)           | —                                                                                                   |
+| ◐ Partial     | [051-feed-screen-layout.md](dev-plan/051-feed-screen-layout.md)                 | Browser acceptance checks; failing detail-page rendering check                                      |
+| ◐ Partial     | [052-provider-odds-import.md](dev-plan/052-provider-odds-import.md)             | Odds trial (API plan upgrade); odds display rights (OP-36)                                          |
+| ☐ Not started | [053-score-distribution-markets.md](dev-plan/053-score-distribution-markets.md) | Implementation; waits on 012 and 052                                                                |
+| ☐ Not started | [054-market-implied-markets.md](dev-plan/054-market-implied-markets.md)         | Implementation; waits on 052 and 053                                                                |
+| ☐ Not started | [055-on-device-picks.md](dev-plan/055-on-device-picks.md)                       | Implementation; run after 061–062                                                                   |
+| ☐ Not started | [056-leagues-and-tips-pages.md](dev-plan/056-leagues-and-tips-pages.md)         | Implementation; run after 061–062                                                                   |
+| ☐ Not started | [057-owner-admin-foundation.md](dev-plan/057-owner-admin-foundation.md)         | Implementation (first paid-access prompt)                                                           |
+| ☐ Not started | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md)       | Implementation, after 057                                                                           |
+| ☐ Not started | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md)                           | Implementation, after 058                                                                           |
+| ☐ Not started | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             | Implementation, after 059                                                                           |
+| ☐ Not started | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md)     | Implementation, after 060                                                                           |
+| ☐ Not started | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md)           | Implementation, after 061                                                                           |
+| ☐ Not started | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               | Implementation, after 062; real SMS samples per network (OP-38)                                     |
+| ☐ Not started | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             | Implementation, after 063                                                                           |
+| ☐ Not started | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       | Implementation, after 064                                                                           |
+| ☐ Not started | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Implementation, after 065; refund policy and legal facts (OP-26/27/39)                              |
+| ☐ Not started | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Implementation, after 066; MTN registered name, menu tests, prefixes, switch-on approval (OP-38/40) |
 
 ## Partial rows
 
