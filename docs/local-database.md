@@ -66,6 +66,16 @@ grants after `npm run db:deploy`. They were applied locally on 19 October 2026
 and are recorded as section (H) of `application-grants.sql`. Paid access stays
 off (`paywallMode = off`, the default when `SubscriptionSettings` has no row).
 
+Member password and SMS authentication adds `MemberVerification` and nullable password/authentication fields in
+`20261020193000_member_password_sms`. Apply that migration before running the new account flows, then grant the
+application role SELECT, INSERT, UPDATE and DELETE on `MemberVerification`. The migration was applied to the local
+MySQL target on 20 October 2026 and schema verification passes. The existing local administration credentials were
+initially read from an MSIX-shadowed configuration; the real saved administrative configuration worked from an
+out-of-package helper. The narrow application grant is now applied and recorded in the real private
+`application-grants.sql`. Application SELECT/INSERT/UPDATE/DELETE were verified with a rolled-back synthetic transaction,
+the verification table stayed empty, and database health reports `ready`. No production database was changed. See
+[member-authentication.md](member-authentication.md) for SMS gateway configuration, recovery and expiry rules.
+
 Prompt 044 adds the seeded `OperationsMonitorState` singleton and time-window
 indexes. The local application receives only SELECT and UPDATE (`stateJson`) on
 that table; INSERT/DELETE/DDL remain denied. Its empty initial state enables no
@@ -212,13 +222,33 @@ migration-history access remains excluded. The existing launcher and credentials
 remain in use. The local subscribe page reads the three existing plans in test
 mode. Nothing was deployed.
 
-The active datadir selected by `mysql.ini` is now
-`%LOCALAPPDATA%\GoalHint\repairs\subscribe-recovery-20261020T093154Z\extracted-data`.
-The original `data` directory, verified `original-data` cold copy, preservation
-manifest, encrypted checkpoints and recovery evidence remain private.
-**Do not delete or relocate this recovery directory: it contains the active
-database.** Any later relocation requires a clean shutdown, verified copy and
-updated `mysql.ini` before restarting.
+The recovered directory
+`%LOCALAPPDATA%\GoalHint\repairs\subscribe-recovery-20261020T093154Z\extracted-data`
+and its evidence remain preserved. A later native file-handle and SQL identity check established that the current
+unvirtualized server actually uses **`%LOCALAPPDATA%\GoalHint\data`**, with server UUID
+`2f3984e9-c6e2-11f1-9e3a-6c2408f48ddb`. Its real `mysql.ini`, existing startup task and administrative credentials agree
+with that instance. Do not move or replace either directory based on a packaged application's apparent file contents.
+The original preservation manifests, encrypted checkpoints and recovery evidence remain private.
+
+## MSIX filesystem virtualization during local administration
+
+The Microsoft Store Codex app can read an older private AppData shadow before the real directory. The same apparent
+`%LOCALAPPDATA%\GoalHint` path then resolves into
+`%LOCALAPPDATA%\Packages\OpenAI.Codex_2p2nqsd0c76g0\LocalCache\Local\GoalHint`. This shadow contained different config,
+credentials, server identity and physical database files; a clone of it was not the live database. See Microsoft's
+[AppData virtualization behavior](https://learn.microsoft.com/en-us/windows/msix/desktop/flexible-virtualization).
+
+For administration, tie the exact IPv4 listener to its executable/monitor process and verify SQL port, UUID and datadir.
+Use native final file-handle paths to distinguish real files from a package shadow; matching path text alone is
+insufficient. Run the existing `GoalHintMySQL84` scheduled launcher to start the unvirtualized instance. An explicitly
+authorized one-time scheduled helper under the same interactive user can read its real private administrative config
+without exposing a password. Remove that temporary task after it finishes; preserve the normal startup task.
+
+On 20 October, the actual instance was restored through its existing launcher and verified against the pre-shutdown
+inventory: the same UUID/datadir, all 93 application table definitions, 32 migration-history rows and unchanged member,
+session, verification, payment, access-code and settings counts. Normal startup has no init-file flag. The SMS table's
+narrow grant was then applied directly using the real saved credentials, without changing passwords, data, schema or
+the real startup configuration. Shadow clones were shut down cleanly and their cold copies/evidence preserved.
 
 ## XAMPP phpMyAdmin access
 

@@ -13,7 +13,8 @@ import { parseRuntimePolicy } from "../src/server/config/runtime-policy.ts";
 import { createDatabase } from "../src/server/database/client.ts";
 import { createPlansService } from "../src/server/members/plans.ts";
 import { accessMode, createSettingsService } from "../src/server/members/settings.ts";
-import { createMemberSessions, memberSessionRules, memberTokenHash } from "../src/server/members/member-sessions.ts";
+import { memberSessionRules, memberTokenHash } from "../src/server/members/member-sessions.ts";
+import { createAuthenticatedTestSessions as createMemberSessions } from "./helpers/member-fixtures.mjs";
 import { createMemberRateLimit } from "../src/server/members/rate-limit.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
 import { createViewerAccess } from "../src/server/members/viewer-access.ts";
@@ -29,10 +30,10 @@ const databaseScript = fileURLToPath(new URL("../scripts/database.py", import.me
 const migrationName = "20261019142209_subscriptions";
 const migrationFile = new URL(`../prisma/migrations/${migrationName}/migration.sql`, import.meta.url);
 const overlayFile = new URL(`../prisma/mariadb/${migrationName}.sql`, import.meta.url);
-const tables = ["MemberAccount", "MemberSession", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode",
+const tables = ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode",
   "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent"];
 // docs/local-database.md: SELECT, INSERT and UPDATE on all nine; DELETE only where a purge or sign-out removes rows.
-const deletable = new Set(["MemberAccount", "MemberSession", "PaymentScreenshot", "RateLimitBucket"]);
+const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentScreenshot", "RateLimitBucket"]);
 const DENIED = 1142, DUPLICATE = 1062, NO_PARENT = 1452, HAS_CHILDREN = 1451, CHECK = 3819;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
@@ -454,7 +455,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       for (const phone of memberNumbers) assert.equal(trail.includes(phone), false, phone);
     });
 
-    await t.test("concurrent phone sign-ins and first throttle upserts serialize; session expiry slides at most daily", async () => {
+    await t.test("concurrent authenticated-session issuance and first throttle upserts serialize; session expiry slides at most daily", async () => {
       const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
       let instant = Date.parse("2026-10-19T09:00:00Z");
       const sessions = createMemberSessions({ database, config, now: () => instant });
@@ -464,8 +465,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       const first = await sessions.verify(results[0].token);
       const other = await sessions.verify(results[1].token);
       assert.equal(first.accountId, other.accountId);
-      const newAccounts = await database.query((tx) => tx.rateLimitBucket.findUniqueOrThrow({ where: { key: config.key("member-new-accounts", "test-address") } }));
-      assert.equal(newAccounts.count, 1, "the concurrent first sign-ins create and count only one account");
+      assert.equal(await database.query((tx) => tx.memberAccount.count({ where: { phone: "256700000701" } })), 1, "Concurrent authenticated issuance keeps one account per phone");
       assert.equal(first.codeEnteredAt, null);
       assert.equal(first.tokenHash, memberTokenHash(results[0].token));
       const row = () => database.query((tx) => tx.memberSession.findUniqueOrThrow({ where: { tokenHash: first.tokenHash } }));
@@ -582,11 +582,14 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal((await codes.signInWithCode("256700000712", renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "not-recognized");
       const direct = await codes.signInWithCode(phone, renewals[0].ready.code, "unknown", 2, "2026-10-19");
       assert.equal(direct.status, "accepted");
-      assert.ok((await sessions.verify(direct.token)).codeEnteredAt);
-      assert.equal((await access(direct.token)).tier, "full");
-      await app.query("UPDATE MemberAccount SET blockedAt = ? WHERE id = ?", [new Date(instant), member.accountId]);
+      assert.equal(await sessions.verify(direct.token), null, "Legacy subscription-code issuance cannot authenticate a password account");
       assert.equal((await access(direct.token)).tier, "free");
-      assert.equal((await codes.redeem(await sessions.verify(direct.token), renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "refused");
+      const authenticated = await sessions.signIn(phone, "unknown");
+      const redeemed = await codes.redeem(await sessions.verify(authenticated.token), renewals[0].ready.code, "unknown", 2, "2026-10-19");
+      assert.equal((await access(redeemed.token)).tier, "full");
+      await app.query("UPDATE MemberAccount SET blockedAt = ? WHERE id = ?", [new Date(instant), member.accountId]);
+      assert.equal((await access(redeemed.token)).tier, "free");
+      assert.equal((await codes.redeem(await sessions.verify(redeemed.token), renewals[0].ready.code, "unknown", 2, "2026-10-19")).status, "refused");
       await app.query("UPDATE MemberAccount SET blockedAt = NULL WHERE id = ?", [member.accountId]);
       instant = +periods.at(-1).endsAt;
       mode = "on";
@@ -687,6 +690,8 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       await root.query("USE goal_hint_overlay");
       await root.query(overlay);
       await root.query(overlay);
+      // Layer the later auth migration onto both storage paths before comparing their current table shapes.
+      await root.query(await readFile(new URL("../prisma/migrations/20261020193000_member_password_sms/migration.sql", import.meta.url), "utf8"));
       assert.deepEqual(await showCreate("goal_hint_overlay"), await showCreate("goal_hint_test"));
       const records = await root.query("SELECT checksum, finished_at, rolled_back_at, applied_steps_count FROM _prisma_migrations WHERE migration_name = ?", [migrationName]);
       assert.equal(records.length, 1, "a second import records nothing");

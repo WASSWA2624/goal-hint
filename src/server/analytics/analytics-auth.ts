@@ -22,7 +22,7 @@ export const adminSessionRules = Object.freeze({
   excludeMaxAgeSeconds: 400 * 86_400,
 });
 
-export type Admin = Readonly<{ username: string; expiresAt: Date }>;
+export type Admin = Readonly<{ username: string; expiresAt: Date; memberAccountId?: string }>;
 /**
  * `ownerUsername`: the typed username is the owner's, case and spaces aside, so the attempt counts against the owner's
  * username-wide limit. `newlyLocked` marks the attempt that started a lock; attempts refused during one are not counted.

@@ -7,6 +7,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { createMemberRateLimit, memberRateRules, takeMemberLimit } from "./rate-limit.ts";
 import { decide } from "./settings.ts";
+import { isMemberAdminPhone } from "./member-admin.ts";
 
 export const memberSessionRules = Object.freeze({ expiryMs: 90 * 86_400_000, touchAfterMs: 86_400_000,
   cookieSeconds: 400 * 86_400, maximumSessions: 10 });
@@ -19,7 +20,7 @@ export type MemberIdentity = Readonly<{ tokenHash: string; accountId: string; ph
 export type MemberSignIn = Readonly<{ status: "signed-in"; token: string }> | Readonly<{ status: "busy" }>;
 
 /** The caller holds the account lock. Pending reports and unlocked devices are kept ahead of idle number-only sessions. */
-export async function issueMemberSession(tx: Prisma.TransactionClient, accountId: string, at: Date, previous?: string) {
+export async function issueMemberSession(tx: Prisma.TransactionClient, accountId: string, at: Date, previous?: string, authenticated = false) {
   if (validMemberToken(previous)) await tx.memberSession.deleteMany({ where: { tokenHash: memberTokenHash(previous) } });
   await tx.memberSession.deleteMany({ where: { accountId, expiresAt: { lte: at } } });
   const sessions = await tx.memberSession.findMany({ where: { accountId }, orderBy: [{ createdAt: "asc" }, { tokenHash: "asc" }],
@@ -34,12 +35,12 @@ export async function issueMemberSession(tx: Prisma.TransactionClient, accountId
   if (evict.length) await tx.memberSession.deleteMany({ where: { tokenHash: { in: evict.map((row) => row.tokenHash) } } });
   const token = randomBytes(32).toString("base64url");
   const session = await tx.memberSession.create({ data: { tokenHash: memberTokenHash(token), accountId,
-    createdAt: at, lastSeenAt: at, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } });
+    createdAt: at, lastSeenAt: at, authenticatedAt: authenticated ? at : null, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } });
   return { session, token };
 }
 
-export function createMemberSessions({ database, config, now = Date.now }: {
-  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number;
+export function createMemberSessions({ database, config, now = Date.now, adminPhone = isMemberAdminPhone }: {
+  database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number; adminPhone?: (phone: string) => boolean;
 }) {
   const limit = createMemberRateLimit(database, config, now);
   return Object.freeze({
@@ -65,7 +66,8 @@ export function createMemberSessions({ database, config, now = Date.now }: {
       if (!validMemberToken(token)) return null;
       const at = new Date(now()), hash = memberTokenHash(token);
       const row = await database.query((tx) => tx.memberSession.findUnique({ where: { tokenHash: hash }, include: { account: true } }));
-      if (!row || row.expiresAt <= at || row.account.erasedAt || !row.account.phone) return null;
+      if (!row || !row.authenticatedAt || row.expiresAt <= at || row.account.erasedAt || !row.account.phone
+        || !row.account.passwordHash && !adminPhone(row.account.phone)) return null;
       if (at.getTime() - row.lastSeenAt.getTime() >= memberSessionRules.touchAfterMs) {
         await database.query((tx) => tx.memberSession.updateMany({ where: { tokenHash: hash, expiresAt: { gt: at },
           lastSeenAt: { lte: new Date(at.getTime() - memberSessionRules.touchAfterMs) } },

@@ -2,6 +2,16 @@
 
 **Product requirements and technical design**
 
+**Account update:** The owner selected Single Rail for desktop and mobile. Headers always show the full app name, compact
+Login/Register buttons and a bordered icon-only theme toggle; authenticated members see a generic avatar with their registered phone,
+Account and Log out. Account details include phone/password changes and a bottom Log out action. Password login and
+verified registration/recovery supersede the historical phone-only/no-password/no-OTP passages below. WhatsApp is the
+default verification channel, with SMS selectable. Either account change requires a code sent to the registered phone,
+valid for five minutes; no old password or different new password is required. Private environment-listed administrator
+numbers use a code instead of a password, retain their verified session until logout/expiry and receive both full member
+content and dashboard access without a subscription. See [member authentication](docs/member-authentication.md) and
+[gateway setup](docs/message-gateway-setup.md).
+
 Prepared for Wasswa Wilson • 7 October 2026 • Version 1.11 (Best Slips home, all-status subscription gates and open local test flows, 20 October 2026; paid access 1.9, 19 October 2026)
 
 | Product setting | Decision |

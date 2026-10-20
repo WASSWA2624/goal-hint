@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { adminDisplayName } from "@/domain/admin-identity";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { AnalyticsLogin } from "@/components/analytics/dashboard/analytics-login";
 import { OverviewReport } from "@/components/admin/owner-reports";
@@ -15,7 +16,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
   const value = page.services.database ? await createSubscribers(page.services.database).overview().catch(() => null) : null;
   return (
-    <AdminShell current="overview" username={page.owner.username} developmentCredentials={page.services.config.usingDevelopmentCredentials}>
+    <AdminShell current="overview" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}>
       <PageTitle><h1>Overview</h1></PageTitle>
       {value ? <OverviewReport value={value} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}
     </AdminShell>

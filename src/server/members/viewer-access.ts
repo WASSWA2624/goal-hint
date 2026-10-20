@@ -6,10 +6,12 @@ import type { PaywallMode } from "../../domain/subscription-settings.ts";
 import { getAnalyticsServices, type AnalyticsServices } from "../analytics/analytics-http.ts";
 import { readCookie } from "../http/private-http.ts";
 import { memberCookieName, memberSessionRules, memberTokenHash, validMemberToken } from "./member-sessions.ts";
+import { isMemberAdminPhone } from "./member-admin.ts";
 import { accessMode, settingsServiceFor, type SettingsState } from "./settings.ts";
 
 export type ViewerAccess = Readonly<{ tier: "full" | "free"; signedIn: boolean; mode: PaywallMode | "free" }>;
-type AccessRow = { accountId: string; lastSeenAt: Date; entitled: number | bigint };
+type AccessRow = { accountId: string; phone: string; passwordHash: string | null; blockedAt: Date | null;
+  lastSeenAt: Date; entitled: number | bigint };
 
 export function createViewerAccess({ services = getAnalyticsServices, settings, now = Date.now }: {
   services?: () => Promise<AnalyticsServices>; settings?: () => Promise<SettingsState>; now?: () => number;
@@ -22,26 +24,29 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
       mode = accessMode(state);
       const owner = cookieValue(resolved.config.cookies.session);
       if (owner && await resolved.auth?.verify(owner, { touch: false })) return { tier: "full", signedIn: false, mode };
-      if (!state.settings || !resolved.database) return { tier: "free", signedIn: false, mode };
+      if (!resolved.database) return { tier: "free", signedIn: false, mode };
       const token = cookieValue(memberCookieName(resolved.config.production)), at = new Date(now());
       let row: AccessRow | undefined;
       if (validMemberToken(token)) {
         const hash = memberTokenHash(token);
         const rows = await resolved.database.query((tx) => tx.$queryRaw<AccessRow[]>`
-          SELECT s.accountId, s.lastSeenAt,
+          SELECT s.accountId, s.lastSeenAt, a.phone, a.passwordHash, a.blockedAt,
             (a.blockedAt IS NULL AND s.codeEnteredAt IS NOT NULL AND EXISTS (
               SELECT 1 FROM AccessCode c WHERE c.accountId = s.accountId AND c.revokedAt IS NULL AND c.startsAt <= ${at} AND c.endsAt > ${at}
             )) AS entitled
           FROM MemberSession s JOIN MemberAccount a ON a.id = s.accountId
-          WHERE s.tokenHash = ${hash} AND s.expiresAt > ${at} AND a.erasedAt IS NULL AND a.phone IS NOT NULL LIMIT 1`);
+          WHERE s.tokenHash = ${hash} AND s.expiresAt > ${at} AND s.authenticatedAt IS NOT NULL
+            AND a.erasedAt IS NULL AND a.phone IS NOT NULL LIMIT 1`);
         row = rows[0];
+        if (row && !row.passwordHash && !isMemberAdminPhone(row.phone)) row = undefined;
         if (row && +at - +row.lastSeenAt >= memberSessionRules.touchAfterMs) {
           await resolved.database.query((tx) => tx.memberSession.updateMany({ where: { tokenHash: hash, expiresAt: { gt: at },
             lastSeenAt: { lte: new Date(+at - memberSessionRules.touchAfterMs) } },
           data: { lastSeenAt: at, expiresAt: new Date(+at + memberSessionRules.expiryMs) } }));
         }
       }
-      return { tier: row?.entitled ? "full" : "free", signedIn: !!row, mode };
+      const administrator = !!row && !row.blockedAt && isMemberAdminPhone(row.phone);
+      return { tier: administrator || state.settings && row?.entitled ? "full" : "free", signedIn: !!row, mode };
     } catch { return { tier: "free", signedIn: false, mode }; }
   };
 }

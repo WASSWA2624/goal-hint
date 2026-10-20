@@ -5,6 +5,7 @@ import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { TextLink } from "@/components/ui/controls";
 import { Container } from "@/components/ui/layout";
+import { compactHeaderBrand } from "@/components/ui/header-controls";
 import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { media, type AccentName } from "@/styles/theme";
 
@@ -85,7 +86,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
 export const HeaderContent = styled(Container)`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.space.sm};
+  gap: 6px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   ${desktop} { flex-wrap: nowrap; gap: 12px; min-block-size: var(--app-header-content-height, 4rem); }
   ${media.wide} { gap: ${({ theme }) => theme.space.md}; }
@@ -97,11 +98,7 @@ export const HeaderActions = styled.div`
   margin-inline-start: auto;
 `;
 
-/**
- * Desktop keeps the logo's 12px clear space, and the focus ring sits inside it. Below desktop the
- * logo sits at the brand-kit minimum (160px) on the page gutter, like the feed's phone bar: the
- * artwork's own margin plus the bar's 7.5px above and below exceed a quarter of the displayed mark.
- */
+/** The complete wordmark scales down alongside compact phone authentication controls. */
 export const HomeLink = styled(TextLink)`
   flex: none;
   display: inline-flex;
@@ -112,8 +109,7 @@ export const HomeLink = styled(TextLink)`
     outline-offset: -6px;
   }
   ${media.belowDesktop} {
-    > span { padding: 0; }
-    > span > img { inline-size: 160px; }
+    ${compactHeaderBrand}
     &&:focus-visible { outline-offset: 2px; }
   }
 `;

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { adminDisplayName } from "@/domain/admin-identity";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { PaymentsEditor } from "@/components/admin/payments-editor";
 import { AnalyticsLogin } from "@/components/analytics/dashboard/analytics-login";
@@ -19,5 +20,5 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
   const db = page.services.database;
   const data = db ? await createPaymentReview(db).list(tab).catch(() => null) : null;
   const plans = db ? await plansServiceFor(db).list().catch(() => []) : [];
-  return <AdminShell current="payments" username={page.owner.username} developmentCredentials={page.services.config.usingDevelopmentCredentials} {...(data ? { pendingCount: data.pendingCount } : {})}><PageTitle><h1>Payments</h1></PageTitle>{data ? <PaymentsEditor owner={page.owner.username} queue={data} tab={tab} plans={plans} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}</AdminShell>;
+  return <AdminShell current="payments" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials} {...(data ? { pendingCount: data.pendingCount } : {})}><PageTitle><h1>Payments</h1></PageTitle>{data ? <PaymentsEditor owner={page.owner.username} queue={data} tab={tab} plans={plans} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}</AdminShell>;
 }

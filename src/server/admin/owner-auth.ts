@@ -2,13 +2,13 @@ import "server-only";
 
 import { privatePaths } from "../../domain/private-paths.ts";
 import type { Admin, VerifyOptions } from "../analytics/analytics-auth.ts";
-import { createLoginHandler, createLogoutHandler, getAnalyticsServices, requireAdmin, type AnalyticsServices,
+import { createLoginHandler, createLogoutHandler, getAnalyticsServices, requireAdmin, verifyAdminSession, type AnalyticsServices,
   type SignInOptions } from "../analytics/analytics-http.ts";
 import { ownerSignInAudit } from "./audit.ts";
 
 /**
- * The owner is the analytics administrator: one login, session table, Strict cookie, 12 h / 2 h limits and the existing
- * `GOAL_HINT_ANALYTICS_ADMIN_*` keys, so the owner dashboard adds no env key.
+ * Dashboards accept the existing analytics owner session or a currently allowlisted, verified member session.
+ * The latter retains its own member cookie and uses the account ID as its audit actor.
  */
 export type Owner = Admin;
 export type OwnerServices = () => Promise<AnalyticsServices>;
@@ -17,9 +17,8 @@ export type OwnerServices = () => Promise<AnalyticsServices>;
 export const ownerRoutes = Object.freeze({ home: privatePaths.admin, login: "/api/admin/login", logout: "/api/admin/logout" });
 
 /** The owner named by a session token (Server Components read it from the cookie store), or null when absent or unavailable. */
-export async function verifyOwner(services: AnalyticsServices, token: string | undefined, options?: VerifyOptions): Promise<Owner | null> {
-  if (!services.auth) return null;
-  try { return await services.auth.verify(token, options); } catch { return null; }
+export function verifyOwner(services: AnalyticsServices, token: string | undefined, options?: VerifyOptions, memberToken?: string): Promise<Owner | null> {
+  return verifyAdminSession(services, token, memberToken, options);
 }
 
 /** The owner signed in on this request, or null. `touch: false` checks without extending the session. */

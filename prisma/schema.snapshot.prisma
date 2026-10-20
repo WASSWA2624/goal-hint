@@ -1519,12 +1519,13 @@ model AnalyticsSetting {
 
 // Paid access (prompts/monetization.md 5.1). Phones are canonical digits (`256772123456`, src/domain/phone.ts); session
 // tokens and codes are stored only as hashes. Instants are UTC. The switch in SubscriptionSettings stays off by default.
-// A phone-number account and nothing else: no name, email, password, profile or user agent. The number is unique and not
+// A phone-number account with a salted password hash: no name, email, photo, profile or user agent. The number is unique and not
 // hashed, because the owner matches payers by number; erasure sets it NULL with erasedAt and keeps the row for its payment
 // and code records. Every account change locks this row first.
 model MemberAccount {
   id               String              @id @db.Char(36)
   phone            String?             @unique @db.VarChar(15)
+  passwordHash     String?             @db.VarChar(255)
   createdAt        DateTime            @db.DateTime(3)
   lastSignInAt     DateTime            @db.DateTime(3)
   blockedAt        DateTime?           @db.DateTime(3)
@@ -1536,6 +1537,7 @@ model MemberAccount {
   sessions         MemberSession[]
   submissions      PaymentSubmission[]
   codes            AccessCode[]
+  verifications    MemberVerification[]
 }
 
 // Member sign-ins: only a SHA-256 of each random session token is stored, with no user agent or address. A session is
@@ -1546,6 +1548,7 @@ model MemberSession {
   createdAt     DateTime      @db.DateTime(3)
   lastSeenAt    DateTime      @db.DateTime(3)
   expiresAt     DateTime      @db.DateTime(3)
+  authenticatedAt DateTime?   @db.DateTime(3)
   codeEnteredAt DateTime?     @db.DateTime(3)
   accessCodeId  String?       @db.Char(36)
   account       MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
@@ -1554,6 +1557,30 @@ model MemberSession {
   @@index([accountId])
   @@index([expiresAt])
   @@index([accessCodeId, accountId])
+}
+
+// SMS challenges are short lived and bound to a browser/session, purpose and original registered number. Codes and
+// one-use verification proofs are HMACs, never plaintext; confirming a code never extends its five-minute lifetime.
+model MemberVerification {
+  id           String         @id @db.Char(36)
+  accountId    String?        @db.Char(36)
+  phone        String         @db.VarChar(15)
+  purpose      String         @db.VarChar(12)
+  bindingHash  String         @db.Char(64)
+  codeHash     String         @db.Char(64)
+  proofHash    String?        @db.Char(64)
+  attempts     Int            @default(0) @db.UnsignedTinyInt
+  createdAt    DateTime       @db.DateTime(3)
+  expiresAt    DateTime       @db.DateTime(3)
+  sentAt       DateTime?      @db.DateTime(3)
+  confirmedAt  DateTime?      @db.DateTime(3)
+  consumedAt   DateTime?      @db.DateTime(3)
+  account      MemberAccount? @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@index([phone, createdAt])
+  @@index([accountId])
+  @@index([bindingHash, purpose])
+  @@index([expiresAt])
 }
 
 // Owner-defined plans, no personal data. Every plan unlocks every feature; plans differ only in length (24-hour blocks

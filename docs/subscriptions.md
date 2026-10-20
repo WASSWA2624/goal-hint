@@ -1,13 +1,20 @@
 # Subscriber access and owner operations
 
+The owner's Single Rail account update supersedes historical number-only sign-in instructions: member authentication
+now uses a password, with WhatsApp (default) or SMS verification for registration/recovery and phone/password changes.
+Configured administrator phone numbers sign in with a verification code instead of a password, gain full content and
+dashboard access without a subscription, and retain their session until logout/expiry. Ordinary subscription codes
+unlock an already authenticated device. See [member-authentication.md](member-authentication.md) and
+[message-gateway-setup.md](message-gateway-setup.md); live delivery requires the chosen provider's operator setup.
+
 Local development now uses **test** mode at the owner's request: account, trial, code and payment-report flows are open. Production was not deployed or activated. Local fixtures do not approve production activation.
 See OP-26/27/37/38/39/40 in implementation-decisions.md and the deployment runbook.
 
 ## Model and terminology
 
-Nine tables hold settings, plans, phone accounts, hashed member sessions, payment
+Member tables hold settings, plans, phone accounts, hashed member sessions, payment
 submissions, JPEG screenshots, hashed codes, keyed-hash throttle buckets and owner
-audit rows. Phones are canonical country-code digits. A code belongs permanently
+audit rows and expiring verification challenges. Phones are canonical country-code digits. A code belongs permanently
 to its account. Payment transaction keys remain unique after reversal, including
 manual entries; replacement chains preserve the original payment attribution.
 

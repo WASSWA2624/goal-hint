@@ -3,6 +3,8 @@
 import Link from "@/components/navigation/navigation-link";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import { AccountLinks } from "@/components/members/account-link";
+import { BrandLogo } from "@/components/ui/brand";
+import { compactHeaderBrand } from "@/components/ui/header-controls";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
@@ -51,18 +53,24 @@ const PhoneHeaderGroup = styled.div`
 const PhoneBar = styled.div`
   position: relative;
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   margin-block-start: -10px;
   margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
-  padding-inline: ${({ theme }) => theme.layout.gutter};
+  padding-inline: 8px;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.gradient};
   border-block-end: 2px solid ${({ theme }) => theme.header.accent};
   ${desktop} { display: none; }
-  > p { margin: 0; font-size: ${size("title")}; font-weight: ${({ theme }) => theme.typography.weight.bold}; text-align: center; }
+`;
+const PhoneHome = styled(Link)`
+  ${compactHeaderBrand}
+  justify-self: start;
+  @media (max-width: 479px) { img { inline-size: 112px; } }
+  @media (max-width: 359px) { img { inline-size: 80px; } }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent}; outline-offset: 2px; }
 `;
 /** Inverse-teal focus rings read on every stop of the bar. */
 const barFocus = css`
@@ -71,7 +79,7 @@ const barFocus = css`
 const RoundLink = styled(Link)`
   display: grid;
   place-items: center;
-  inline-size: 2rem;
+  inline-size: 1.5rem;
   block-size: 2rem;
   color: ${({ theme }) => theme.header.text};
   border-radius: 0;
@@ -132,7 +140,7 @@ function PhoneHeader() {
   return <PhoneHeaderGroup>
     <PhoneBar>
       <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
-      <p>{messages.text("details.title")}</p>
+      <PhoneHome href={homeHref(locale)} prefetch={false} aria-label={messages.text("navigation.home")}><BrandLogo alt="" variant="inverse" /></PhoneHome>
       <AccountLinks locale={locale} showAccount={showAccount === true} />
       <NavigationProgress label={messages.text("navigation.loading")} />
     </PhoneBar>

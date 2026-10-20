@@ -1,5 +1,62 @@
 # Development progress
 
+## Gateway choice, administrator code login and compact headers
+
+The full Goal Hint wordmark now remains visible on mobile, including match details. Shared square header controls are
+32px high on phones and 36px on desktop; Login/Register use less vertical padding and the theme icon has a visible border.
+Verification forms default to WhatsApp and offer explicit SMS selection, with shared resend/rate limits and the same
+five-minute code/proof lifetime. The official Meta adapter sends approved authentication copy-code templates; SMS uses
+the existing Android gateway adapter. Neither falls back silently or claims a delivery receipt.
+
+Added a private JSON administrator phone allowlist. Fresh admin logins require a phone-ownership code instead of a
+password, even for accounts that previously had a password. Current allowlisted, unblocked authenticated members receive
+full subscriber content and dashboard access; dashboard settings use this verified session without a password prompt.
+Removing a number removes its privilege. Normal phone changes cannot claim another configured administrator number.
+Dashboard and Account logout revoke the member session. Admin labels remain readable while audits retain opaque actors.
+Account and Subscribe omit purchase prompts for these administrators.
+
+The supplied administrator number is saved only in the existing ignored .env.local. A private .env.development.local
+contains the hosted SMS endpoint and empty provider credential fields. Gateway installation/credentials and Meta
+onboarding/template approval remain operator steps; no live verification message has been sent. See message-gateway-setup.md.
+
+Validation: production build, full zero-warning ESLint and typecheck pass; 1,626 Node tests pass with one existing skip.
+Twelve real isolated MySQL integration cases include passwordless admin identity/session persistence, whitelist removal,
+shared delivery limits, escalation refusal and protected settings/audit writes under the restricted application role.
+Browser checks pass 24 header combinations plus 48 verification observations (60 intercepted requests), covering phone
+widths, both themes, expiry/resend, selected channels, phone/password changes and admin redirects. Main-app registration
+and theme interaction also pass a local browser smoke check. Logs: .tmp/member-channels-admin-*; screenshots: output/playwright/.
+
+## 20 October 2026 — Single Rail member accounts
+
+Implemented the owner-selected Single Rail header for desktop, mobile feeds, match details and information pages.
+Login/Register retain icons and labels beside the persistent icon-only theme toggle; authenticated members see a
+generic avatar, registered number, Account and Log out. Account details use the compact shared square surface, phone
+and password actions, and a second Log out button at the bottom. Subscription/device controls remain available in a
+collapsed Subscription & access section.
+
+Added password login, SMS registration/recovery and a reusable verification flow for either account change. Codes and
+their single-use proofs expire at the same original five-minute deadline, including database lock waits; no old
+password or password-history restriction applies. Passwords reuse salted scrypt, challenges use keyed hashes and
+durable throttles, and successful changes rotate sessions while retaining account/payment identity and this device's
+subscription unlock. Historical number-only cookies are rejected by both session verification and gated SQL reads.
+Existing accounts establish their first password through SMS recovery. No credentials enter URLs or browser storage.
+
+The outbound adapter supports the owner-requested open-source SMS Gateway for Android through its verified HTTPS
+messages contract. Gateway installation, Android phone/SIM pairing and server-only credentials are still needed for
+real delivery; missing setup fails closed. No external SMS was sent. See member-authentication.md.
+
+Validation: full Node suite passes sequentially (1,606 passed, one existing skip); full zero-warning ESLint, typecheck,
+18 Python tests and the production build pass. Auth/member/payment checks include real isolated MySQL migration,
+registration, phone identity preservation, same-password changes, replay/concurrency, five-minute expiry and legacy
+session rejection. Account HTML passes seven injected viewer states. Browser checks cover both themes at 320/375/768/
+1440px, guest controls, signed-in dropdown dismissal/focus and the full SMS UI flows using explicitly synthetic API
+responses, including invalid codes, expiry, resend and password mismatch. Logs are under .tmp/account-*; screenshots
+are under output/playwright/single-rail-*. The local forward migration and narrow verification-table CRUD grant are
+applied. A rolled-back application-role CRUD probe passed and database readiness reports ready. The local service was
+restored through its existing launcher after identifying MSIX filesystem redirection to a stale shadow directory;
+the actual database required no reconstruction. Its identity, 93 application-table schemas, 32 migration-history rows
+and core account/payment counts match the inventory taken before shutdown. See local-database.md for the path caveat.
+
 ## 20 October 2026 — local repair and Best Slips follow-up
 
 Owner authorized non-destructive drift/restore repair, visible auth/access entry

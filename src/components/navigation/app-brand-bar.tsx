@@ -3,6 +3,7 @@
 import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
+import { compactHeaderBrand } from "@/components/ui/header-controls";
 import { AccountLinks } from "@/components/members/account-link";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
@@ -27,12 +28,7 @@ const Bar = styled.div`
   ${media.desktop} { display: none; }
 `;
 const Home = styled(Link)`
-  display: inline-flex;
-  flex: 0 1 160px;
-  min-inline-size: 0;
-  text-decoration: none;
-  > span { padding: 0; }
-  img { inline-size: 160px; max-inline-size: 100%; block-size: auto; }
+  ${compactHeaderBrand}
   &:focus-visible {
     outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.accent};
     outline-offset: 2px;

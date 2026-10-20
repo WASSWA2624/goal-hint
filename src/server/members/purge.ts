@@ -3,6 +3,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import { lockMemberAccount } from "./access-codes.ts";
+import { memberAdminPhones } from "./member-admin.ts";
 const DAY = 86_400_000, HOUR = 3_600_000, BATCH = 100;
 export type MembersPurgeResult = Readonly<{ claimed: boolean; images: number; sessions: number; buckets: number; accounts: number }>;
 /** The database claim is shared by the web, CLI and every worker; no member metadata is deleted. */
@@ -31,12 +32,15 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
         return removed.count;
       }, { isolationLevel: "ReadCommitted" }));
       result.sessions = await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM MemberSession WHERE expiresAt <= ${at} LIMIT ${BATCH}`));
+      await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM MemberVerification WHERE expiresAt <= ${at} LIMIT ${BATCH}`));
       // New buckets carry their window end in lockedUntil. Legacy null markers retain a full day-sized window.
       result.buckets = await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM RateLimitBucket
         WHERE windowStartedAt <= ${new Date(+at - DAY)} AND ((lockedUntil IS NOT NULL AND lockedUntil <= ${new Date(+at - DAY)})
           OR (lockedUntil IS NULL AND windowStartedAt <= ${new Date(+at - 2 * DAY)})) LIMIT ${BATCH}`));
       result.accounts = await drain(() => database.transaction(async tx => {
-        const where: Prisma.MemberAccountWhereInput = { lastSignInAt: { lte: new Date(+at - 30 * DAY) }, submissions: { none: {} }, codes: { none: {} } };
+        const admins = memberAdminPhones();
+        const where: Prisma.MemberAccountWhereInput = { passwordHash: null, ...(admins.length ? { phone: { notIn: [...admins] } } : {}),
+          lastSignInAt: { lte: new Date(+at - 30 * DAY) }, submissions: { none: {} }, codes: { none: {} } };
         const rows = await tx.memberAccount.findMany({ where, select: { id: true }, orderBy: { id: "asc" }, take: BATCH });
         for (const row of rows) await lockMemberAccount(tx, row.id);
         return (await tx.memberAccount.deleteMany({ where: { ...where, id: { in: rows.map(r => r.id) } } })).count;

@@ -17,6 +17,8 @@ import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
 import { AccountCodeForm } from "./account-code-form";
+import { PasswordInput } from "./account-security";
+import { refreshMemberSession } from "./member-session";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
@@ -54,23 +56,24 @@ function PaymentHelp({ settings, text, locale }: { settings: HelpSettings; text?
 }
 function SubscribeSignIn({ locale, returnTo, showCode = true }: { locale: string; returnTo: string | null; showCode?: boolean }) {
   const router = useRouter(), m = createMessages(locale), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const [password, setPassword] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     const data = new FormData(event.currentTarget);
     try {
-      const response = await fetch("/api/account/sign-in", { method: "POST", credentials: "same-origin", headers: { Accept: "application/json", "Content-Type": "application/json" },
+      const response = await fetch("/api/account/login", { method: "POST", credentials: "same-origin", headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify(Object.fromEntries(data)) });
       const result = await response.json() as { message?: string };
       if (!response.ok) setError(result.message ?? m.text("account.unavailable"));
-      else router.refresh();
+      else { await refreshMemberSession(); router.refresh(); }
     } catch { setError(m.text("account.unavailable")); } finally { setBusy(false); }
   }
   return <Panel>
-    <SignInForm action="/api/account/sign-in" method="post" onSubmit={submit} data-analytics-ignore>
-      <FieldWithAction>
+    <SignInForm action="/api/account/login" method="post" onSubmit={submit} data-analytics-ignore>
         <PhoneInput name="phone" label={m.text("account.phone")} required hint={m.text("account.phoneHint")} />
-        <Button type="submit" disabled={busy}>{m.text(busy ? "account.working" : "account.continue")}</Button>
-      </FieldWithAction>
+        <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current />
+        <Button type="submit" disabled={busy}>{m.text(busy ? "account.working" : "account.login")}</Button>
+        <RowLink variant="quiet" href={`${memberNextPath("account", returnTo)}${returnTo ? "&" : "?"}view=register`} prefetch={false}>{m.text("account.register")}</RowLink>
       <Note>{m.text("subscribe.numberPrivacy")} <Link href="/en/privacy">{m.text("navigation.privacy")}</Link>.</Note>
       <input type="hidden" name="destination" value="subscribe" />{returnTo && <input type="hidden" name="return" value={returnTo} />}
       {error && <p role="alert">{error}</p>}

@@ -58,7 +58,7 @@ const eat = (iso: string | null) => iso === null ? null : `${new Intl.DateTimeFo
  * The Settings page (prompts/monetization.md 5.7). The paywall mode switches only after a second tap. The other settings
  * save together; environment-managed identity fields are read-only. Historical fixture edits retain password re-entry.
  */
-export function SettingsEditor({ initial, username }: { initial: SettingsPageData; username: string }) {
+export function SettingsEditor({ initial, username, sessionAuthorized = false }: { initial: SettingsPageData; username: string; sessionAuthorized?: boolean }) {
   const [view, setView] = useState(initial);
   const [draft, setDraft] = useState<Draft>(() => draftOf(initial.settings));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -71,7 +71,7 @@ export function SettingsEditor({ initial, username }: { initial: SettingsPageDat
   const environmentFields: readonly string[] = view.environmentFields ?? [];
   const changes = changesOf(draft, settings);
   const changed = Object.keys(changes) as EditableSettingField[];
-  const needsPassword = askPassword || changed.some(isProtectedSettingField);
+  const needsPassword = !sessionAuthorized && (askPassword || changed.some(isProtectedSettingField));
 
   useEffect(() => {
     if (!armed) return;

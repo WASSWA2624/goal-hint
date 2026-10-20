@@ -14,6 +14,7 @@ import { accessMode, createSettingsService, settingsCacheRules } from "../src/se
 import { createMemberCodeHandler, createMemberSignInHandler, createMemberSignOutHandler } from "../src/server/members/member-http.ts";
 import { memberCookieName } from "../src/server/members/member-sessions.ts";
 import { memberReturnPath } from "../src/domain/member-navigation.ts";
+import { normalizePhone } from "../src/domain/phone.ts";
 
 // Synthetic owner numbers only; real receiving and support identity comes from server environment configuration.
 const OWNER_MTN = "256700000901", OWNER_CONTACT = "256700000902";
@@ -23,6 +24,7 @@ const ready = { activePlans: 1, privacyReleaseReady: true, termsReleaseReady: tr
 function memberFixture({ mode = "test", production = false, member = null } = {}) {
   const calls = { signIn: [], signOut: [], devices: [] };
   const services = { config: { production, cookies: { secure: production } }, settings: { settings: { ...defaultSubscriptionSettings, paywallMode: mode } },
+    auth: { async login(phone, password, ...args) { const normalized = normalizePhone(phone); if (!normalized || !password) return { status: "unauthorized", message: "Enter your phone and password." }; calls.signIn.push([normalized, password, ...args]); return { status: "authenticated", token: "t".repeat(43), phone: normalized }; } },
     sessions: { async signIn(...args) { calls.signIn.push(args); return { status: "signed-in", token: "t".repeat(43) }; },
       async verify() { return member; }, async signOut(token) { calls.signOut.push(token); },
       async signOutOthers(value) { calls.devices.push(value); return true; } } };
@@ -32,34 +34,33 @@ const memberRequest = (fields, { json = true, headers = {} } = {}) => new Reques
   headers: { host: "localhost:3000", "sec-fetch-site": "same-origin", "content-type": json ? "application/json" : "application/x-www-form-urlencoded", ...headers },
   body: json ? JSON.stringify(fields) : new URLSearchParams(fields) });
 
-test("member sign-in normalizes the complete phone table, bounds and whitelists input, and never puts a phone in a URL", async () => {
+test("member password sign-in preserves phone normalization, bounds/whitelists input, and never puts a phone in a URL", async () => {
   const { resolve, calls } = memberFixture(), handler = createMemberSignInHandler(resolve);
   for (const input of ["0772123456", "772123456", "+256772123456", "00256772123456", "256 772-123 456", "2560772123456",
     "256256772123456", "256+256772123456", "25600256772123456", "256 0772 123 456", "254712345678", "256+254712345678", "25600254712345678"]) {
-    const response = await handler(memberRequest({ phone: input, destination: "subscribe", return: "/en/matches/test-id/home-away" }));
+    const response = await handler(memberRequest({ phone: input, password: "test password", destination: "subscribe", return: "/en/matches/test-id/home-away" }));
     assert.equal(response.status, 200, input);
     assert.equal(calls.signIn.at(-1)[0], input.includes("254") ? "254712345678" : "256772123456");
     const body = await response.json();
-    assert.equal(body.next, "/en/subscribe?return=%2Fen%2Fmatches%2Ftest-id%2Fhome-away");
-    assert.doesNotMatch(JSON.stringify(body), /256772|254712/);
-    assert.match(response.headers.get("set-cookie"), /^goal-hint-member=t{43}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=34560000$/);
+    assert.equal(body.next, "/en/matches/test-id/home-away");
+    assert.doesNotMatch(body.next, /256772|254712/);
+    assert.match(response.headers.getSetCookie()[0], /^goal-hint-member=t{43}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=34560000$/);
   }
   for (const phone of ["256254712345678", "25677212345", "256672123456", "0201234567", "012345678901"]) {
-    const response = await handler(memberRequest({ phone }, { json: false }));
-    assert.equal(response.status, 303);
-    assert.equal(response.headers.get("location"), "/en/account?status=invalid-phone");
+    const response = await handler(memberRequest({ phone, password: "test password" }, { json: false }));
+    assert.equal(response.status, 401);
     assert.equal(response.headers.get("set-cookie"), null);
   }
   for (const fields of [{ phone: "0772123456", accountId: "other" }, { phone: "x".repeat(3000) }]) {
     assert.equal((await handler(memberRequest(fields))).status, 400);
   }
-  const secure = await createMemberSignInHandler(memberFixture({ production: true }).resolve)(memberRequest({ phone: "0772123456" }));
-  assert.match(secure.headers.get("set-cookie"), /^__Host-goal-hint-member=.*; HttpOnly; SameSite=Lax; Max-Age=34560000; Secure$/);
+  const secure = await createMemberSignInHandler(memberFixture({ production: true }).resolve)(memberRequest({ phone: "0772123456", password: "test password" }));
+  assert.match(secure.headers.getSetCookie()[0], /^__Host-goal-hint-member=.*; HttpOnly; SameSite=Lax; Max-Age=34560000; Secure$/);
   assert.equal(memberCookieName(true), "__Host-goal-hint-member");
   for (const path of ["https://evil.test", "//evil.test", "/en?phone=256772123456", "/en#code=x", "/en/matches/a/b?x=1", "/en/matches/a/%2f", "/en/../admin"]) {
     assert.equal(memberReturnPath(path), null, path);
-    const response = await handler(memberRequest({ phone: "0772123456", destination: path, return: path }, { json: false }));
-    assert.equal(response.headers.get("location"), "/en/account");
+    const response = await handler(memberRequest({ phone: "0772123456", password: "test password", destination: path, return: path }, { json: false }));
+    assert.equal((await response.json()).next, "/en/account");
   }
 });
 
@@ -67,38 +68,36 @@ test("member sign-out clears the Lax cookie and cache even with mode off or fail
   const fixture = memberFixture({ mode: "off" });
   fixture.services.sessions.signOut = async () => { throw new Error("down"); };
   const response = await createMemberSignOutHandler(fixture.resolve)(memberRequest({}));
-  assert.equal(response.status, 303);
-  assert.equal(response.headers.get("location"), "/en/account?status=signed-out");
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).next, "/en/account?status=signed-out");
   assert.equal(response.headers.get("clear-site-data"), '"cache"');
   assert.match(response.headers.get("set-cookie"), /^goal-hint-member=; .*SameSite=Lax; Max-Age=0$/);
 });
 
-test("closed subscriptions allow phone sign-in but never activate a code", async () => {
+test("closed subscriptions allow password sign-in but never activate a subscription code", async () => {
   const fixture = memberFixture({ mode: "off" });
   const handler = createMemberSignInHandler(fixture.resolve);
-  assert.equal((await handler(memberRequest({ phone: "256700000999" }))).status, 200);
+  assert.equal((await handler(memberRequest({ phone: "256700000999" }))).status, 401);
+  assert.equal((await handler(memberRequest({ phone: "256700000999", password: "test password" }))).status, 200);
   assert.equal(fixture.calls.signIn.length, 1);
-  assert.equal((await handler(memberRequest({ phone: "256700000999", code: "0123-4567-89AB" }))).status, 403);
+  assert.equal((await handler(memberRequest({ phone: "256700000999", code: "0123-4567-89AB" }))).status, 400);
   assert.equal(fixture.calls.signIn.length, 1);
   assert.equal((await createMemberCodeHandler(fixture.resolve)(memberRequest({ code: "0123-4567-89AB" }))).status, 403);
 });
 
-test("phone plus code uses the atomic code path, redirects only to safe paths, and retains codes only in request bodies", async () => {
+test("a subscription code cannot bypass password authentication; authenticated redemption retains safe redirects", async () => {
   const fixture = memberFixture(), calls = [];
   fixture.services.codes = { async signInWithCode(...args) { calls.push(args); return { status: "accepted", token: "c".repeat(43) }; } };
   fixture.services.settings.settings.maxUnlockedDevices = 2;
   let response = await createMemberSignInHandler(fixture.resolve)(memberRequest({ phone: "0772123456", code: "0123-4567-89AB", return: "/en" }));
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { next: "/en" });
+  assert.equal(response.status, 400);
   assert.equal(fixture.calls.signIn.length, 0);
-  assert.equal(calls[0][0], "256772123456");
-  assert.equal(calls[0][1], "0123-4567-89AB");
-  assert.match(response.headers.get("set-cookie"), /goal-hint-member=c{43}/u);
+  assert.equal(calls.length, 0);
+  assert.equal(response.headers.get("set-cookie"), null);
   fixture.services.codes.signInWithCode = async () => ({ status: "not-recognized" });
   response = await createMemberSignInHandler(fixture.resolve)(memberRequest({ phone: "0772123456", code: "0123-4567-89AB" }));
   assert.equal(response.status, 400);
   assert.equal(response.headers.get("set-cookie"), null);
-  assert.equal((await response.json()).message, "Code not recognized. Codes work only on the number they were sent to.");
   const signed = memberFixture({ member: { blocked: false } });
   signed.services.codes = { async redeem() { return { status: "ended", endsAt: new Date("2026-10-20T11:30:00Z") }; } };
   response = await createMemberCodeHandler(signed.resolve)(memberRequest({ code: "0123-4567-89AB", return: "https://evil.test" }, { json: false }));

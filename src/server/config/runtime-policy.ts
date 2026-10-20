@@ -7,6 +7,7 @@ import { publicPolicy } from "../../domain/public-policy.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import { menuShortcutPattern } from "../../domain/subscription-settings.ts";
 import { deepFreeze } from "../shared/deep-freeze.ts";
+import { parseMemberAdminPhones } from "../members/member-admin.ts";
 
 type Environment = Readonly<Record<string, string | undefined>>;
 type DeepReadonly<T> = T extends (...args: never[]) => unknown ? T : T extends object
@@ -195,6 +196,20 @@ const environmentSchema = z.object({
   GOAL_HINT_ANALYTICS_RETENTION_DAYS: optional(integer.pipe(z.int().min(1).max(1_095))).describe("Use whole days from 1 to 1095; the dashboard can override it. Defaults to 395 (13 months)."),
   GOAL_HINT_ANALYTICS_GEO_SOURCE: optional(z.enum(["timezone", "cloudflare", "vercel"])).transform((value) => value ?? "timezone")
     .describe("Use timezone (default), cloudflare or vercel; edge headers are trusted only when the site is served through that edge."),
+  GOAL_HINT_SMS_GATEWAY_URL: optional(z.string().url().refine((value) => {
+    const target = new URL(value);
+    return target.protocol === "https:" && !target.username && !target.password && !target.hash;
+  })).describe("Use the exact HTTPS SMS Gateway messages endpoint without embedded credentials or a fragment."),
+  GOAL_HINT_SMS_TOKEN: token.describe("Supply a private SMS gateway bearer token, or configure its username and password."),
+  GOAL_HINT_SMS_USERNAME: optional(z.string().trim().min(1).max(256).regex(/^[^:\r\n\0]+$/u)).describe("Use the private SMS gateway Basic authentication username."),
+  GOAL_HINT_SMS_PASSWORD: optional(z.string().min(1).max(1024).regex(/^[^\r\n\0]+$/u)).describe("Use the private SMS gateway Basic authentication password."),
+  GOAL_HINT_WHATSAPP_ACCESS_TOKEN: optional(z.string().trim().min(1).max(8192).regex(/^[^\s\0]+$/u)).describe("Supply a private Meta Cloud API access token with WhatsApp messaging permission."),
+  GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID: optional(z.string().trim().regex(/^[1-9]\d{0,31}$/u)).describe("Supply the Meta WhatsApp Business phone number ID, not a telephone number."),
+  GOAL_HINT_WHATSAPP_TEMPLATE_NAME: optional(z.string().trim().regex(/^[a-z0-9_]{1,512}$/u)).describe("Use an approved authentication copy-code template with five-minute code expiration and 300-second delivery TTL."),
+  GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: optional(z.string().trim().regex(/^[a-z]{2,3}(?:_[A-Z]{2})?$/u)).describe("Use the exact approved authentication template language, for example en_US."),
+  GOAL_HINT_WHATSAPP_API_VERSION: optional(z.string().trim().regex(/^v[1-9]\d{0,2}\.0$/u)).describe("Optionally pin a supported Meta Graph API version; the adapter defaults to v25.0."),
+  GOAL_HINT_ADMIN_PHONES: optional(z.string().max(4096).refine((value) => parseMemberAdminPhones(value) !== null))
+    .describe("Use a private JSON array of canonical country-code phone strings for verified passwordless member access."),
   GOAL_HINT_ADS_ENABLED: disabledFeature.describe("Advertising is disabled at launch; approval and consent requirements remain unresolved."),
   GOAL_HINT_DARK_MODE_ENABLED: disabledFeature.describe("Dark mode is disabled at launch."),
   GOAL_HINT_EXACT_SCORES_ENABLED: disabledFeature.describe("Exact scores are excluded until explicit approval and score-distribution validation."),
@@ -236,6 +251,16 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       researchKey: secret(settings.RESEARCH_API_KEY),
       analyticsSecret: secret(settings.GOAL_HINT_ANALYTICS_SECRET),
       analyticsPasswordHash: secret(settings.GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH),
+      smsGatewayUrl: secret(settings.GOAL_HINT_SMS_GATEWAY_URL),
+      smsToken: secret(settings.GOAL_HINT_SMS_TOKEN),
+      smsUsername: secret(settings.GOAL_HINT_SMS_USERNAME),
+      smsPassword: secret(settings.GOAL_HINT_SMS_PASSWORD),
+      whatsappAccessToken: secret(settings.GOAL_HINT_WHATSAPP_ACCESS_TOKEN),
+      whatsappPhoneNumberId: secret(settings.GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID),
+      whatsappTemplateName: secret(settings.GOAL_HINT_WHATSAPP_TEMPLATE_NAME),
+      whatsappTemplateLanguage: secret(settings.GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE),
+      whatsappApiVersion: secret(settings.GOAL_HINT_WHATSAPP_API_VERSION),
+      adminPhones: secret(settings.GOAL_HINT_ADMIN_PHONES),
     },
     choices: {
       subscriptionIdentity: {

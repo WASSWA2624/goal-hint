@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
-import { createMemberSessions } from "../src/server/members/member-sessions.ts";
+import { createAuthenticatedTestSessions as createMemberSessions } from "./helpers/member-fixtures.mjs";
 import { createPayments } from "../src/server/members/payments.ts";
 import { createPaymentReview } from "../src/server/admin/payment-review.ts";
 import { codeDelivery } from "../src/domain/code-delivery.ts";

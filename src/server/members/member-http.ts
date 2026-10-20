@@ -2,7 +2,6 @@ import "server-only";
 
 import { createPayments, type Payments } from "./payments.ts";
 import { memberNextPath } from "../../domain/member-navigation.ts";
-import { normalizePhone } from "../../domain/phone.ts";
 import { memberReturnPath } from "../../domain/member-navigation.ts";
 import { formatPeriodEnd } from "../../domain/subscription-period.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
@@ -12,9 +11,11 @@ import { clientAddress, cookie, isSameOrigin, json, privateHeaders, readCookie, 
 import { createMemberSessions, memberCookieName, memberSessionRules, type MemberIdentity, type MemberSessions } from "./member-sessions.ts";
 import { settingsServiceFor, type SettingsState } from "./settings.ts";
 import { createAccessCodes, wrongCodeMessage, type AccessCodes, type RedeemOutcome } from "./access-codes.ts";
+import { createMemberAuth, type MemberAuth } from "./member-auth.ts";
+import { createMemberVerificationSender } from "./member-verification-delivery.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
-export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null }>;
+export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
 export async function getMemberServices(): Promise<MemberServices> {
@@ -24,7 +25,8 @@ export async function getMemberServices(): Promise<MemberServices> {
   return { config, settings: database ? await settingsServiceFor(database).current() : { settings: null, source: "unavailable" },
     sessions: database && keyed ? createMemberSessions({ database, config }) : null,
     payments: database && keyed ? createPayments({ database, config }) : null,
-    codes: database && keyed ? createAccessCodes({ database, config }) : null };
+    codes: database && keyed ? createAccessCodes({ database, config }) : null,
+    auth: database && keyed ? createMemberAuth({ database, config, sendVerification: createMemberVerificationSender() }) : null };
 }
 
 export type MemberContext = Readonly<{ request: Request; services: MemberServices; member: MemberIdentity | null }>;
@@ -82,26 +84,8 @@ function codeResponse(request: Request, services: MemberServices, result: Redeem
 }
 
 export function createMemberSignInHandler(services: MemberServicesSource = getMemberServices) {
-  return memberRoute(async ({ request, services: resolved }) => {
-    let body;
-    try { body = await memberBody(request, ["phone", "code", "destination", "return"]); } catch { body = null; }
-    if (!body) return json({ error: "invalid-request", message: memberRefusal }, 400);
-    const phone = normalizePhone(body.phone);
-    if (!phone) return wantsJson(request) ? json({ error: "invalid-phone", message: "Enter a valid phone number with its country code." }, 400)
-      : redirect(memberNextPath(body.destination, body.return, "invalid-phone"));
-    const name = memberCookieName(resolved.config.production);
-    if (body.code !== undefined && body.code !== "") {
-      if (resolved.settings.settings!.paywallMode === "off") return json({ error: "closed", message: "Subscriptions are not open yet." }, 403);
-      if (!resolved.codes) return json({ error: "unavailable", message: memberRefusal }, 503);
-      return codeResponse(request, resolved, await resolved.codes.signInWithCode(phone, body.code, clientAddress(request.headers),
-        resolved.settings.settings!.maxUnlockedDevices, termsNotice.reviewedOn, readCookie(request, name)), body.return);
-    }
-    const result = await resolved.sessions!.signIn(phone, clientAddress(request.headers), readCookie(request, name));
-    if (result.status === "busy") return json({ error: "busy", message: "Busy, try again later." }, 429, { "Retry-After": "3600" });
-    const next = memberNextPath(body.destination, body.return);
-    const sessionCookie = cookie(resolved.config, name, result.token, memberSessionRules.cookieSeconds, "Lax");
-    return wantsJson(request) ? json({ next }, 200, { "Set-Cookie": sessionCookie }) : redirect(next, [sessionCookie]);
-  }, { services, access: "sign-in" });
+  // Keep the legacy endpoint as an alias, without retaining number-only or subscription-code authentication.
+  return async (request: Request) => (await import("./member-auth-http.ts")).createMemberAuthHandler("login", services)(request);
 }
 
 export function createMemberCodeHandler(services: MemberServicesSource = getMemberServices) {
@@ -120,7 +104,9 @@ export function createMemberSignOutHandler(services: MemberServicesSource = getM
   return memberRoute(async ({ request, services: resolved }) => {
     const name = memberCookieName(resolved.config.production);
     try { await resolved.sessions?.signOut(readCookie(request, name)); } catch { /* Clear the local cookie even during a storage outage. */ }
-    const response = redirect("/en/account?status=signed-out", [cookie(resolved.config, name, "", 0, "Lax")]);
+    const cleared = cookie(resolved.config, name, "", 0, "Lax");
+    const response = wantsJson(request) ? json({ next: "/en/account?status=signed-out", phone: null }, 200, { "Set-Cookie": cleared })
+      : redirect("/en/account?status=signed-out", [cleared]);
     response.headers.set("Clear-Site-Data", '"cache"');
     return response;
   }, { services, access: "sign-out" });

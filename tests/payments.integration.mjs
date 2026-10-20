@@ -5,7 +5,7 @@ import { paymentRules } from "../src/domain/payment.ts";
 import { termsNotice } from "../src/domain/terms-notice.ts";
 import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
-import { createMemberSessions } from "../src/server/members/member-sessions.ts";
+import { createAuthenticatedTestSessions as createMemberSessions } from "./helpers/member-fixtures.mjs";
 import { createPayments } from "../src/server/members/payments.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { jpeg } from "./helpers/payment-fixtures.mjs";

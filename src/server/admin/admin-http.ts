@@ -4,7 +4,8 @@ import { membersPurgeFor } from "../members/purge.ts";
 import { cookies } from "next/headers.js";
 import { connection } from "next/server.js";
 import { getAnalyticsServices, loginNotice, type AnalyticsServices } from "../analytics/analytics-http.ts";
-import { BodyDeadlineError, isSameOrigin, json, readLimitedBody } from "../http/private-http.ts";
+import { BodyDeadlineError, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
+import { memberCookieName, validMemberToken } from "../members/member-sessions.ts";
 import { verifyOwner, requireOwner, type Owner, type OwnerServices } from "./owner-auth.ts";
 
 /**
@@ -34,7 +35,9 @@ export function adminRoute(handler: (context: AdminContext) => Promise<Response>
     }
     const resolved = await services();
     if (session === "optional") return (handler as (context: SignOutContext) => Promise<Response>)({ request, services: resolved });
-    if (!resolved.auth) return json({ error: "unavailable", message: "Owner sign-in is unavailable." }, 503);
+    if (!resolved.auth && !(resolved.database && validMemberToken(readCookie(request, memberCookieName(resolved.config.production))))) {
+      return json({ error: "unavailable", message: "Owner sign-in is unavailable." }, 503);
+    }
     const owner = await requireOwner(resolved, request);
     if (!owner) return json({ error: "unauthorized", message: "Your owner session has ended. Sign in again on /admin." }, 401);
     return handler({ request, owner, services: resolved });
@@ -53,7 +56,9 @@ export async function adminPageGate(searchParams: Promise<Record<string, string 
   { services = getAnalyticsServices }: { services?: OwnerServices } = {}): Promise<AdminPage> {
   await connection();
   const resolved = await services();
-  const owner = await verifyOwner(resolved, (await cookies()).get(resolved.config.cookies.session)?.value);
+  const jar = await cookies();
+  const owner = await verifyOwner(resolved, jar.get(resolved.config.cookies.session)?.value, undefined,
+    jar.get(memberCookieName(resolved.config.production))?.value);
   if (owner) { if (resolved.database) membersPurgeFor(resolved.database).maybePurge(); return { owner, services: resolved }; }
   return { owner: null, services: resolved, login: loginNotice(resolved, await searchParams) };
 }

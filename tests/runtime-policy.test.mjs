@@ -168,6 +168,11 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_ADMIN_USERNAME",
     "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
+    // Verification credentials are private configuration and do not grant forecast or provider capabilities.
+    "GOAL_HINT_SMS_GATEWAY_URL", "GOAL_HINT_SMS_TOKEN", "GOAL_HINT_SMS_USERNAME", "GOAL_HINT_SMS_PASSWORD",
+    "GOAL_HINT_WHATSAPP_ACCESS_TOKEN", "GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID", "GOAL_HINT_WHATSAPP_TEMPLATE_NAME",
+    "GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE", "GOAL_HINT_WHATSAPP_API_VERSION",
+    "GOAL_HINT_ADMIN_PHONES",
   ]);
   documentedKeys.delete("NODE_ENV");
   assert.deepEqual(Object.keys(env).sort(), [...documentedKeys].sort());
@@ -364,20 +369,32 @@ test("unknown policy keys and public environment overrides fail without exposing
 test("secret serialization and validation errors stay redacted while explicit reads work", () => {
   const sentinels = ["synthetic-football-secret-sentinel", "synthetic-ai-secret-sentinel", "synthetic-research-secret-sentinel"];
   const databaseSentinels = ["synthetic-database-password-sentinel", "synthetic-test-database-password-sentinel", "synthetic-migration-database-password-sentinel"];
+  const smsSentinels = ["synthetic-sms-token-sentinel", "synthetic-sms-user-sentinel", "synthetic-sms-password-sentinel"];
+  const whatsappSentinel = "synthetic-whatsapp-access-token-sentinel";
+  const adminSentinel = "256700009999";
   const policy = parseRuntimePolicy({
     API_FOOTBALL_KEY: sentinels[0], AI_API_KEY: sentinels[1], RESEARCH_API_KEY: sentinels[2],
     DATABASE_URL: `mysql://synthetic:${databaseSentinels[0]}@synthetic.invalid/synthetic_main`,
     TEST_DATABASE_URL: `mysql://synthetic:${databaseSentinels[1]}@synthetic.invalid/synthetic_test`,
     MIGRATION_DATABASE_URL: `mysql://synthetic-migrator:${databaseSentinels[2]}@synthetic.invalid/synthetic_main`,
+    GOAL_HINT_SMS_GATEWAY_URL: "https://sms.synthetic.invalid/api/3rdparty/v1/messages",
+    GOAL_HINT_SMS_TOKEN: smsSentinels[0], GOAL_HINT_SMS_USERNAME: smsSentinels[1], GOAL_HINT_SMS_PASSWORD: smsSentinels[2],
+    GOAL_HINT_WHATSAPP_ACCESS_TOKEN: whatsappSentinel, GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID: "123456789012345",
+    GOAL_HINT_WHATSAPP_TEMPLATE_NAME: "goal_hint_verification", GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: "en_US",
+    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0",
+    GOAL_HINT_ADMIN_PHONES: JSON.stringify([adminSentinel]),
   });
   assert.equal(policy.secrets.footballKey.read(), sentinels[0]);
   assert.equal(policy.secrets.aiKey.read(), sentinels[1]);
   assert.equal(policy.secrets.researchKey.read(), sentinels[2]);
+  for (const [index, key] of ["smsToken", "smsUsername", "smsPassword"].entries()) assert.equal(policy.secrets[key].read(), smsSentinels[index]);
+  assert.equal(policy.secrets.whatsappAccessToken.read(), whatsappSentinel);
+  assert.equal(policy.secrets.adminPhones.read(), JSON.stringify([adminSentinel]));
   for (const [index, key] of ["databaseUrl", "testDatabaseUrl", "migrationDatabaseUrl"].entries()) {
     assert.ok(policy.secrets[key].read().includes(databaseSentinels[index]));
   }
   for (const output of [JSON.stringify(policy), inspect(policy, { depth: null }), String(policy.secrets.footballKey)]) {
-    for (const sentinel of [...sentinels, ...databaseSentinels]) assert.ok(!output.includes(sentinel));
+    for (const sentinel of [...sentinels, ...databaseSentinels, ...smsSentinels, whatsappSentinel, adminSentinel]) assert.ok(!output.includes(sentinel));
   }
   assert.equal(JSON.parse(JSON.stringify(policy)).secrets.aiKey, "[REDACTED]");
 
@@ -393,6 +410,20 @@ test("secret serialization and validation errors stay redacted while explicit re
       assert.ok(!output.includes(malformedSentinel));
     }
     assertDeepFrozen(error.issues);
+  }
+});
+
+test("WhatsApp and admin configuration validate privately without enabling unrelated capabilities", () => {
+  const valid = parseRuntimePolicy({ GOAL_HINT_WHATSAPP_ACCESS_TOKEN: "synthetic-private-token", GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID: "1234567890",
+    GOAL_HINT_WHATSAPP_TEMPLATE_NAME: "goal_hint_verification", GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: "en_US",
+    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0", GOAL_HINT_ADMIN_PHONES: '["256700009999"]' });
+  assert.equal(valid.secrets.whatsappTemplateLanguage.read(), "en_US");
+  assert.ok(Object.values(valid.capabilities).every((value) => value === false));
+  for (const [name, value] of Object.entries({ GOAL_HINT_WHATSAPP_ACCESS_TOKEN: "synthetic token\nsecret", GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID: "synthetic-private-id",
+    GOAL_HINT_WHATSAPP_TEMPLATE_NAME: "synthetic-private/template", GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: "synthetic_private",
+    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0/private", GOAL_HINT_ADMIN_PHONES: '["+256700009999"]' })) {
+    const error = policyError(() => parseRuntimePolicy({ [name]: value }), [name]);
+    for (const output of [error.message, JSON.stringify(error), inspect(error)]) assert.ok(!output.includes(value));
   }
 });
 

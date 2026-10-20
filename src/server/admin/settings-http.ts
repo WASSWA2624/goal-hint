@@ -66,6 +66,7 @@ export function createSettingsHandlers({ service = settingsServiceFor }: { servi
         const password = typeof read.body.password === "string" && read.body.password !== "" ? read.body.password.slice(0, 1024) : null;
         const auth = services.auth;
         return await answer(await settings.save(owner.username, read.body.changes, { password,
+          ...(owner.memberAccountId ? { sessionAuthorized: true } : {}),
           confirm: (typed) => auth ? auth.confirmPassword(owner.username, typed, clientAddress(request.headers)) : Promise.resolve({ status: "unavailable" }) }),
         settings, request);
       } catch { return unavailable(); }

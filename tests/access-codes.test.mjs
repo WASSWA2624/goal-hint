@@ -69,7 +69,8 @@ test("viewer access resolves in order, avoids absent owner cookies, checks a mem
   assert.deepEqual(calls.owner, [{ touch: false }]);
   mode = "test";
   assert.equal((await resolver(cookies({}))).tier, "free");
-  row = { accountId: "account", lastSeenAt: new Date("2026-10-19T09:00:00Z"), entitled: 0 };
+  row = { accountId: "account", phone: "256700000901", passwordHash: "stored-password-hash", blockedAt: null,
+    lastSeenAt: new Date("2026-10-19T09:00:00Z"), entitled: 0 };
   assert.deepEqual(await resolver(cookies({ "goal-hint-member": "t".repeat(43) })), { tier: "free", signedIn: true, mode: "test" });
   assert.equal(calls.reads, 1);
   row.entitled = 1n;

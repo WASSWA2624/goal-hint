@@ -5,6 +5,7 @@ import { createMessages } from "@/i18n/messages";
 import { MoonIcon, SunIcon } from "./icons";
 import { setThemePreference } from "@/styles/theme-preference";
 import { media } from "@/styles/theme";
+import { compactHeaderControl } from "./header-controls";
 
 const Appearance = styled.div`
   display: grid;
@@ -34,7 +35,29 @@ const Option = styled.button`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
 `;
 
-/** Appearance stays in the shared menu and preserves the existing persisted preference. */
+const Toggle = styled.button`
+  ${compactHeaderControl}
+  inline-size: 2rem;
+  padding: 4px;
+  color: ${({ theme }) => theme.header.text};
+  background: transparent;
+  > svg { font-size: 1rem; }
+  ${media.desktop} { inline-size: 2.25rem; }
+  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
+`;
+
+/** One visible, named header action uses the same persisted theme preference on every screen. */
+export function ThemeToggle({ locale = "en" }: { locale?: string }) {
+  const { mode } = useTheme();
+  const nextMode = mode === "light" ? "dark" : "light";
+  const messages = createMessages(locale);
+  const label = messages.text(nextMode === "light" ? "navigation.switchToLight" : "navigation.switchToDark");
+  return <Toggle type="button" aria-label={label} title={label} onClick={() => setThemePreference(nextMode)} data-theme-toggle>
+    {nextMode === "light" ? <SunIcon /> : <MoonIcon />}
+  </Toggle>;
+}
+
+/** Retained for appearance settings outside the header. */
 export function ThemeSelector({ locale = "en" }: { locale?: string }) {
   const { mode } = useTheme();
   const messages = createMessages(locale);

@@ -15,6 +15,8 @@ import { createAnalyticsReporter, type AnalyticsReporter } from "./analytics-rep
 import { createAnalyticsRetention, isRetentionDays, type AnalyticsRetention } from "./analytics-retention.ts";
 import type { LoginProblem, LoginStatus } from "../../components/analytics/dashboard/analytics-login.tsx";
 import { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect } from "../http/private-http.ts";
+import { verifyMemberAdminSession } from "../members/member-admin-access.ts";
+import { createMemberSessions, memberCookieName } from "../members/member-sessions.ts";
 
 // Moved to the shared private helpers; re-exported so analytics callers are unchanged.
 export { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect };
@@ -53,9 +55,20 @@ export function getAnalyticsServices(): Promise<AnalyticsServices> {
   return processState.goalHintAnalytics;
 }
 
-export async function requireAdmin(services: AnalyticsServices, request: Request, options?: VerifyOptions): Promise<Admin | null> {
-  if (!services.auth) return null;
-  try { return await services.auth.verify(readCookie(request, services.config.cookies.session), options); } catch { return null; }
+/** Shared page/API policy: existing owner login, or a verified member whose number is currently allowlisted. */
+export async function verifyAdminSession(services: AnalyticsServices, ownerToken: string | undefined,
+  memberToken?: string, options?: VerifyOptions): Promise<Admin | null> {
+  try {
+    const owner = await services.auth?.verify(ownerToken, options);
+    if (owner) return owner;
+  } catch { /* Member authorization is independent of the owner password configuration. */ }
+  const member = await verifyMemberAdminSession(services, memberToken);
+  return member ? { username: `member-admin:${member.accountId}`, expiresAt: member.expiresAt, memberAccountId: member.accountId } : null;
+}
+
+export function requireAdmin(services: AnalyticsServices, request: Request, options?: VerifyOptions): Promise<Admin | null> {
+  return verifyAdminSession(services, readCookie(request, services.config.cookies.session),
+    readCookie(request, memberCookieName(services.config.production)), options);
 }
 
 const loginStatuses: readonly LoginStatus[] = ["invalid", "locked", "unavailable", "signed-out"];
@@ -170,16 +183,21 @@ export function createLoginHandler(services: () => Promise<AnalyticsServices> = 
 export function createLogoutHandler(services: () => Promise<AnalyticsServices> = getAnalyticsServices,
   { home = analyticsRules.dashboardPath, audit }: SignInOptions = {}) {
   return async function POST(request: Request): Promise<Response> {
-    const { config, auth } = await services();
+    const resolved = await services(), { config, auth } = resolved;
     if (!isSameOrigin(request)) return empty(403);
     const token = readCookie(request, config.cookies.session);
     // The audit names whose session ended; reading it must not extend the session about to be deleted.
-    const admin = audit && auth ? await auth.verify(token, { touch: false }).catch(() => null) : null;
+    const memberName = memberCookieName(config.production), memberToken = readCookie(request, memberName);
+    const admin = audit ? await verifyAdminSession(resolved, token, memberToken, { touch: false }) : null;
     try {
       await auth?.logout(token);
       if (admin) await report(audit, { action: "sign-out", username: admin.username });
     } catch { /* The cookie is cleared regardless. */ }
-    return redirect(`${home}?login=signed-out`, [cookie(config, config.cookies.session, "", 0)]);
+    if (memberToken && resolved.database) {
+      try { await createMemberSessions({ database: resolved.database, config }).signOut(memberToken); } catch { /* Clear the cookie during an outage too. */ }
+    }
+    return redirect(`${home}?login=signed-out`, [cookie(config, config.cookies.session, "", 0),
+      ...(memberToken ? [cookie(config, memberName, "", 0, "Lax")] : [])]);
   };
 }
 

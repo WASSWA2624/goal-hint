@@ -11,6 +11,7 @@ import { createMessages } from "@/i18n/messages";
 import { getAnalyticsServices } from "@/server/analytics/analytics-http";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
 import { memberCookieName } from "@/server/members/member-sessions";
+import { isMemberAdminPhone } from "@/server/members/member-admin";
 import { createPlansService } from "@/server/members/plans";
 import { PublicShell } from "./public-shell";
 
@@ -28,20 +29,24 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const parameters = await searchParams, returnTo = memberReturnPath(parameters.return);
     const userAgent = (await headers()).get("user-agent") ?? "";
     let member = null, view = null, activeUntil = null, offers: readonly SubscriptionPlanView[] = [], unavailable = !settings || !resolved.sessions;
-    if (settings && settings.paywallMode !== "off" && resolved.sessions) {
+    if (resolved.sessions) {
       try {
         member = await resolved.sessions.verify((await cookies()).get(memberCookieName(resolved.config.production))?.value);
-        offers = (await plans()).filter((plan) => plan.active);
-        if (member && !member.blocked) {
-          view = await resolved.payments?.view(member, settings) ?? null;
-          const periods = member.codeEnteredAt ? await resolved.codes?.accountView(member) : null;
-          activeUntil = periods?.codes.filter((code) => code.endsAt > new Date()).at(-1)?.endsAt.toISOString() ?? null;
+        if (settings && settings.paywallMode !== "off" && !(member && !member.blocked && isMemberAdminPhone(member.phone))) {
+          offers = (await plans()).filter((plan) => plan.active);
+          if (member && !member.blocked) {
+            view = await resolved.payments?.view(member, settings) ?? null;
+            const periods = member.codeEnteredAt ? await resolved.codes?.accountView(member) : null;
+            activeUntil = periods?.codes.filter((code) => code.endsAt > new Date()).at(-1)?.endsAt.toISOString() ?? null;
+          }
         }
       } catch { unavailable = true; }
     }
+    const administrator = !!member && !member.blocked && isMemberAdminPhone(member.phone);
     return <PublicShell locale={locale} showAccount><AccountCodeRoot><SubscribeLayout>
       <SubscribeIntro locale={locale} /><MemberNavigationRecovery />
-      {settings?.paywallMode === "off" ? <><p>{m.text("account.closed")}</p><div><ButtonLink href="/en/account" prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
+      {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href="/admin" prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>
+        : settings?.paywallMode === "off" ? <><p>{m.text("account.closed")}</p><div><ButtonLink href="/en/account" prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
         : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
           : member?.blocked ? <p role="status">{m.text("account.refused")}</p>
             : <SubscribeFlow key={member?.tokenHash ?? "signed-out"} locale={locale} settings={settings!} plans={offers}

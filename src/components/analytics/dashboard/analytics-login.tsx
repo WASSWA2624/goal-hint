@@ -2,6 +2,8 @@
 
 import styled from "styled-components";
 import { BrandImage, Notice } from "./dashboard-styles";
+import { ButtonLink } from "@/components/ui/controls";
+import { SignInIcon } from "@/components/ui/icons";
 
 export type LoginStatus = "invalid" | "locked" | "unavailable" | "signed-out" | null;
 export type LoginProblem = "not-configured" | "insecure-default" | "missing-secret" | "storage" | null;
@@ -35,6 +37,7 @@ export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/
         </div>
         {status === "signed-out" && !problem && <Notice role="status">You have signed out.</Notice>}
         {message && <Notice $tone={problem || status === "locked" ? "warning" : "error"} role="alert">{message}</Notice>}
+        <ButtonLink href="/en/account?view=code" prefetch={false}><SignInIcon />Sign in with a code</ButtonLink>
         <Form method="post" action={action}>
           <label>Username<input name="username" autoComplete="username" required maxLength={64} autoCapitalize="none" spellCheck={false} disabled={problem !== null} /></label>
           <label>Password<input name="password" type="password" autoComplete="current-password" required maxLength={1024} disabled={problem !== null} /></label>

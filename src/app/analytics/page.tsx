@@ -4,7 +4,9 @@ import { connection } from "next/server";
 import { AnalyticsDashboard } from "@/components/analytics/dashboard/analytics-dashboard";
 import { AnalyticsLogin } from "@/components/analytics/dashboard/analytics-login";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
-import { getAnalyticsServices, loginNotice } from "@/server/analytics/analytics-http";
+import { getAnalyticsServices, loginNotice, verifyAdminSession } from "@/server/analytics/analytics-http";
+import { memberCookieName } from "@/server/members/member-sessions";
+import { adminDisplayName } from "@/domain/admin-identity";
 
 export const metadata: Metadata = {
   title: "Analytics · Goal Hint",
@@ -17,10 +19,11 @@ const currentReportingDate = () => getReportingDate(utcInstantFromEpochMilliseco
 export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await connection();
   const services = await getAnalyticsServices();
-  const token = (await cookies()).get(services.config.cookies.session)?.value;
-  const admin = services.auth ? await services.auth.verify(token).catch(() => null) : null;
+  const jar = await cookies();
+  const admin = await verifyAdminSession(services, jar.get(services.config.cookies.session)?.value,
+    jar.get(memberCookieName(services.config.production))?.value);
   if (admin) {
-    return <AnalyticsDashboard username={admin.username} today={currentReportingDate()}
+    return <AnalyticsDashboard username={adminDisplayName(admin)} today={currentReportingDate()}
       developmentCredentials={services.config.usingDevelopmentCredentials} />;
   }
   return <AnalyticsLogin {...loginNotice(services, await searchParams)} />;

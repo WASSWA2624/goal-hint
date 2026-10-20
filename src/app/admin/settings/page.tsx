@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { adminDisplayName } from "@/domain/admin-identity";
 import { headers } from "next/headers";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { SettingsEditor } from "@/components/admin/settings-editor";
@@ -18,9 +19,9 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   const { database } = page.services;
   const view = database ? await settingsView(settingsServiceFor(database), await headers()).catch(() => null) : null;
   return (
-    <AdminShell current="settings" username={page.owner.username} developmentCredentials={page.services.config.usingDevelopmentCredentials}>
+    <AdminShell current="settings" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}>
       <PageTitle><h1>Settings</h1><p>Paid access switch, payment numbers and limits</p></PageTitle>
-      {view ? <SettingsEditor initial={view} username={page.owner.username} />
+      {view ? <SettingsEditor initial={view} username={page.owner.username} sessionAuthorized={!!page.owner.memberAccountId} />
         : <Notice $tone="error" role="alert">Settings are unavailable because the database cannot be read. Paid access stays as it was.</Notice>}
     </AdminShell>
   );

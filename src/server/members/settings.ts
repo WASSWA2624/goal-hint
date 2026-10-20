@@ -105,8 +105,10 @@ export type SettingsOverview = Readonly<{
   requirements: Readonly<Record<Exclude<PaywallMode, "off">, readonly ModeRequirement[]>>;
 }>;
 
-/** A save of the eight protected fields: the password typed again, checked by the owner login (its check and throttle). */
-export type PasswordReentry = Readonly<{ password: string | null; confirm: (password: string) => Promise<PasswordCheck> }>;
+/** Protected fields require owner password re-entry or an already verified administrative member session. */
+export type PasswordReentry = Readonly<{ password: string | null; confirm: (password: string) => Promise<PasswordCheck>;
+  /** Supplied only by the dashboard guard after verifying an allowlisted member session. Never taken from a request body. */
+  sessionAuthorized?: boolean }>;
 
 /** Overlay identity for reads and transaction decisions without changing stored history. Null is for historical fixtures. */
 export function configuredSubscriptionSettings(settings: SubscriptionSettings, environment: SubscriptionIdentity | null): SubscriptionSettings {
@@ -187,8 +189,8 @@ export function createSettingsService(database: DatabaseRuntime,
     },
 
     /**
-     * Saves the fields the form changed. Phones are stored as canonical digits. A protected field needs the password,
-     * checked before any row is locked because the hash is slow; the change and its audit row (old and new values) commit
+     * Saves the fields the form changed. Phones are stored as canonical digits. Protected fields need an authorized
+     * member session or owner password re-entry before row locks; the change and its audit row (old and new values) commit
      * together. While the mode is `test` or `on`, a save that would break one of its requirements is refused.
      */
     async save(actor: string, input: unknown, reentry: PasswordReentry): Promise<SettingsOutcome> {
@@ -201,8 +203,8 @@ export function createSettingsService(database: DatabaseRuntime,
       const preview = applySettingsChanges((await stored()).settings, parsed.changes);
       if (!preview.ok) return { status: "invalid", errors: preview.errors };
       if (preview.change.changed.length === 0) return { status: "saved", settings: preview.change.next, changed: [], cleared: [] };
-      let confirmed = false;
-      if (preview.change.protectedChanged.length > 0) {
+      let confirmed = reentry.sessionAuthorized === true;
+      if (preview.change.protectedChanged.length > 0 && !confirmed) {
         if (!reentry.password) return { status: "password-required", fields: preview.change.protectedChanged };
         const check = await reentry.confirm(reentry.password);
         if (check.status !== "confirmed") {
@@ -234,7 +236,8 @@ export function createSettingsService(database: DatabaseRuntime,
         } });
         await writeOwnerAudit(tx, { at, actor, action: "settings_changed", targetType: "settings", targetId: String(settingsId), details: {
           changes: Object.fromEntries(change.changed.map((field) => [field, { from: current[field], to: change.next[field] }])),
-          cleared: change.cleared, passwordConfirmed: confirmed,
+          cleared: change.cleared, passwordConfirmed: confirmed && !reentry.sessionAuthorized,
+          ...(reentry.sessionAuthorized ? { sessionAuthorized: true } : {}),
         } });
         return { status: "saved", settings: effective(settingsFromRow(row)), changed: change.changed, cleared: change.cleared };
       });

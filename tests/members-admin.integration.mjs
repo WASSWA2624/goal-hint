@@ -4,7 +4,7 @@ import test from "node:test";
 import {createSubscribers,revenueBounds} from "../src/server/admin/subscribers.ts";
 import {createMembersPurge} from "../src/server/members/purge.ts";
 import {createAccessCodes} from "../src/server/members/access-codes.ts";
-import {createMemberSessions} from "../src/server/members/member-sessions.ts";
+import {createAuthenticatedTestSessions as createMemberSessions} from "./helpers/member-fixtures.mjs";
 import {createPayments} from "../src/server/members/payments.ts";
 import {createPaymentReview} from "../src/server/admin/payment-review.ts";
 import {takeMemberLimit} from "../src/server/members/rate-limit.ts";
@@ -57,7 +57,7 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   for(const [tokenHash,expiry] of [[expired,base-1],[valid,base+DAY]])await db.query(tx=>tx.memberSession.create({data:{tokenHash,accountId:holder.accountId,createdAt:new Date(base-DAY),lastSeenAt:new Date(base-DAY),expiresAt:new Date(expiry)}}));
   await db.query(tx=>tx.memberSession.createMany({data:Array.from({length:101},(_,i)=>({tokenHash:createHash("sha256").update(`batch-expired-${i}`).digest("hex"),accountId:holder.accountId,createdAt:new Date(base-DAY),lastSeenAt:new Date(base-DAY),expiresAt:new Date(base-1)}))}));
   const keys={};for(const [name,start,end] of [["expired",base-25*HOUR,base-24*HOUR],["locked",base-3*DAY,base+DAY],["new",base-HOUR,base],["legacy",base-2*DAY,null],["legacyNew",base-DAY,null]]){const key=createHash("sha256").update(name).digest("hex");keys[name]=key;await db.query(tx=>tx.rateLimitBucket.create({data:{key,windowStartedAt:new Date(start),lockedUntil:end===null?null:new Date(end)}}));}
-  clock=base-31*DAY;const unused=await member(),withCode=await member();await manual(withCode,0);clock=base;
+  clock=base-31*DAY;const unused=await member(),withCode=await member();await manual(withCode,0);await db.query(tx=>tx.memberAccount.update({where:{id:unused.accountId},data:{passwordHash:null}}));clock=base;
   const outcomes=await Promise.all([purge.run(),createMembersPurge(db,now).run()]);assert.equal(outcomes.filter(r=>r.claimed).length,1);assert.equal(outcomes.reduce((sum,r)=>sum+r.images,0),4);assert.ok(outcomes.reduce((sum,r)=>sum+r.sessions,0)>=102);
   for(const id of remove){assert.equal(await review.screenshot(id),null);assert.ok((await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id}}))).imagePurgedAt);}for(const id of keep)assert.ok(await review.screenshot(id));
   assert.equal(await db.query(tx=>tx.memberSession.findUnique({where:{tokenHash:expired}})),null);assert.ok(await db.query(tx=>tx.memberSession.findUnique({where:{tokenHash:valid}})));

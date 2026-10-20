@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { adminDisplayName } from "@/domain/admin-identity";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { PlansEditor } from "@/components/admin/plans-editor";
 import { AnalyticsLogin } from "@/components/analytics/dashboard/analytics-login";
@@ -16,7 +17,7 @@ export default async function AdminPlansPage({ searchParams }: { searchParams: P
   const { database } = page.services;
   const plans = database ? await plansServiceFor(database).list().catch(() => null) : null;
   return (
-    <AdminShell current="plans" username={page.owner.username} developmentCredentials={page.services.config.usingDevelopmentCredentials}>
+    <AdminShell current="plans" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}>
       <PageTitle><h1>Plans</h1><p>Length and price of each paid period</p></PageTitle>
       {plans ? <PlansEditor initialPlans={plans} />
         : <Notice $tone="error" role="alert">Plans are unavailable because the database cannot be read. Try again shortly.</Notice>}

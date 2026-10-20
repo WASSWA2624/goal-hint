@@ -35,13 +35,14 @@ test("member write routes use the shared factories; sign-in and devices enforce 
     assert.match(await source(route), new RegExp(`export const POST = ${factory}\\(\\);`));
   }
   for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null }, { codeEnteredAt: new Date(0), blocked: false }]) {
-    const services = async () => ({ config: { production: false, cookies: { secure: false } }, settings: { settings: { paywallMode: mode } }, sessions: {
+    const services = async () => ({ config: { production: false, cookies: { secure: false } }, settings: { settings: { paywallMode: mode } },
+    auth: { login: async (_phone, password) => password ? ({ status: "authenticated", token: "t".repeat(43), phone: "256700000101" }) : ({ status: "unauthorized", message: "Enter your password." }) }, sessions: {
       verify: async () => member, signIn: async () => ({ status: "signed-in", token: "t".repeat(43) }), signOutOthers: async () => true,
     } });
     for (const [factory, devices] of [[createMemberSignInHandler, false], [createMemberDevicesHandler, true]]) {
       for (const site of ["same-origin", "cross-site"]) {
         const response = await factory(services)(new Request("http://localhost:3000/api/account/test", { method: "POST", headers: {
-          "sec-fetch-site": site, "content-type": "application/json" }, body: JSON.stringify({ phone: "256700000101" }) }));
+          "sec-fetch-site": site, "content-type": "application/json" }, body: JSON.stringify({ phone: "256700000101", password: "test password" }) }));
         assert.equal(response.status, site === "cross-site" || devices && !member?.codeEnteredAt ? 403 : devices ? 303 : 200);
       }
     }
@@ -265,7 +266,7 @@ test("Plans and Settings: reads expose managed identity, writes are JSON only, e
   assert.equal(down.status, 503, "A mode change runs in a transaction; storage that is down answers 503, never 500.");
 });
 
-// Payments and trials intentionally require a number-only member, rather than an unlocked device.
+// Payments and trials require an authenticated member, without requiring an unlocked subscription device.
 test("payment and trial writes guard origin, mode, session and blocked accounts before body or storage", async () => {
   const { createPaymentHandler, createTrialHandler } = await import("../src/server/members/payment-http.ts");
   const { paymentRequest } = await import("./helpers/payment-fixtures.mjs");

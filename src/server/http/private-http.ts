@@ -44,7 +44,7 @@ export class BodyDeadlineError extends Error {
  * Reads at most `limit` body bytes, or null when the body is larger; chunked requests carry no Content-Length to check first.
  * With `deadlineMs`, a body not fully received by then rejects with BodyDeadlineError.
  */
-export async function readLimitedBody(request: Request, limit: number, { deadlineMs }: { deadlineMs?: number } = {}): Promise<Uint8Array<ArrayBuffer> | null> {
+export async function readLimitedBody(request: Pick<Request, "body">, limit: number, { deadlineMs }: { deadlineMs?: number } = {}): Promise<Uint8Array<ArrayBuffer> | null> {
   if (!request.body) return new Uint8Array(0);
   const reader = request.body.getReader(), chunks: Uint8Array[] = [];
   let size = 0, timer: ReturnType<typeof setTimeout> | undefined;

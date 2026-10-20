@@ -84,7 +84,8 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now) {
             if (account.phone) await tx.paymentSubmission.updateMany({ where: { payerPhone: account.phone }, data: { payerPhone: null } });
             await tx.accessCode.updateMany({ where: { accountId: id }, data: { note: null } });
             deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
-            await tx.memberAccount.update({ where: { id }, data: { phone: null, ownerNote: null, blockedReason: null, erasedAt: at } });
+            await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, ownerNote: null, blockedReason: null, erasedAt: at } });
+            await tx.memberVerification.deleteMany({ where: { accountId: id } });
             break;
           }
           default: return rollback({ status: "invalid", message: "Unknown subscriber action." });
