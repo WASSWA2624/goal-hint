@@ -66,10 +66,9 @@ export const FieldWithAction = styled.div`
 `;
 export const Optional = styled.span`font-weight: 400; color: ${({ theme }) => theme.color.mutedText};`;
 
-/** One reading order: plans, transfer, proof. Only the last two share a row on wider screens. */
+/** Keep payment confirmation below the recipient details at every screen size. */
 export const Sheet = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-inline-size: 0;
-  ${media.tablet} { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; > section:first-child { grid-column: 1 / -1; } }
 `;
 export const Step = styled.section`display: grid; align-content: start; gap: 10px; min-inline-size: 0;`;
 export const StepHeading = styled.div`display: flex; align-items: baseline; gap: 8px; min-inline-size: 0;`;
@@ -95,21 +94,28 @@ export const PlanName = styled.span`font-size: 12px; line-height: 18px; font-wei
 export const PlanPrice = styled.span`grid-column: 1 / -1; font-size: 18px; line-height: 24px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;`;
 export const PlanDays = styled.span`grid-column: 1 / -1; ${smallText}`;
 export const WalletChoices = styled.fieldset`
-  display: flex; min-inline-size: 0; margin: 0; padding: 0; border: 1px solid ${({ theme }) => theme.color.controlBorder};
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  min-inline-size: 0; margin: 0; padding: 0; border: 0;
 `;
 export const WalletChoice = styled.label`
-  position: relative; flex: 1; min-inline-size: 0; cursor: pointer;
-  & + & { border-inline-start: 1px solid ${({ theme }) => theme.color.controlBorder}; }
+  position: relative; min-inline-size: 0; cursor: pointer;
+  border: 1px solid ${({ theme }) => theme.color.controlBorder};
+  &:has(input:checked) { border-color: ${({ theme }) => theme.color.brand}; }
   input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
-  > span { display: flex; align-items: center; justify-content: center; min-block-size: 44px; padding: 6px; font-size: 12px; line-height: 18px; background: ${({ theme }) => theme.color.surface}; }
+  > span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-block-size: 88px; padding: 8px; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
+  > span > svg { position: absolute; inset-block-start: 4px; inset-inline-end: 4px; inline-size: 14px; block-size: 14px; visibility: hidden; }
   input:checked + span { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link}; box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand}; }
+  input:checked + span > svg { visibility: visible; }
   input:focus-visible + span { ${focusRing}; outline-offset: -3px; }
 `;
 export const Wallet = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: center; min-inline-size: 0; padding: 10px;
   background: ${({ theme }) => theme.color.surfaceMuted}; border: 1px solid ${({ theme }) => theme.color.border};
 `;
-export const WalletNumber = styled.span`grid-column: 1; font-size: 18px; line-height: 24px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; white-space: nowrap;`;
+export const WalletNumber = styled.span`
+  grid-column: 1; min-inline-size: 0; font-size: 18px; line-height: 24px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums;
+  > span:last-child { display: inline-block; white-space: nowrap; }
+`;
 export const WalletMeta = styled.span`grid-column: 1; min-inline-size: 0; overflow-wrap: anywhere; ${smallText}`;
 export const PaymentTransfer = styled.div`
   display: flex; flex-wrap: wrap; gap: 8px; min-inline-size: 0;
@@ -129,13 +135,10 @@ export const ReportForm = styled.form`
   input:not([type="checkbox"], [type="radio"]) { min-block-size: 44px; }
   > div { min-inline-size: 0; }
 `;
-export const Summary = styled.div`
-  display: flex; align-items: center; gap: 6px; padding-inline: 10px 2px;
-  border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surfaceMuted};
-  p { flex: 1; min-inline-size: 0; padding-block: 8px; font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
-  button { flex-shrink: 0; font-size: 12px; padding-inline: 8px; min-block-size: 44px; }
+export const PaymentFields = styled.div`
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: end; min-inline-size: 0;
+  > div { min-inline-size: 0; }
 `;
-export const ChangeFields = styled.div`display: grid; gap: 10px; min-inline-size: 0;`;
 export const FileField = styled.div`display: grid; gap: 4px; min-inline-size: 0;`;
 export const FileBox = styled.label`
   position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding: 8px; cursor: pointer;

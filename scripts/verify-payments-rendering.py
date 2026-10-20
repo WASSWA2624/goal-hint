@@ -21,10 +21,10 @@ def main():
             elif state == "blocked": assert "We couldn" in html and "TEST MTN" not in html
             else:
                 assert "MTN MoMo" in html and "Airtel Money" in html and "momoapi" not in html and "airtelstream" not in html
-                for label in ["Choose access", "Send payment", 'data-subscribe-layout="compact-split"', "256 700 000 901", "256 700 000 902", "TEST MTN PAYEE",
+                for label in ["Choose access", "Send payment", 'data-subscribe-layout="compact-stacked"', "Pay to:", "Names:", "0700000901", "0700000902", "TEST MTN PAYEE",
                               "Daily", "Weekly", "Monthly", "Safety tips", "Need help?", "1,000", "5,000", "20,000"]: assert label in html, (state, label)
                 interactive = re.sub(r"<noscript\b[^>]*>[\s\S]*?</noscript>", "", html)
-                assert "256 700 000 901" in interactive and "256 700 000 902" not in interactive, state
+                assert "0700000901" in interactive and "0700000902" not in interactive, state
                 assert ("Confirm payment" in html) != (state in ["pending", "approved"]), state
                 assert ("Enter your code" in html) == (state in ["pending", "approved"]), state
                 if state == "signed-out":

@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { trackEvent } from "@/components/analytics/tracker";
 import { useRouter } from "next/navigation";
-import { Button, PhoneInput, SegmentedChoice, TextInput } from "@/components/ui/controls";
+import { Button, PhoneInput, TextInput } from "@/components/ui/controls";
 import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ClipboardIcon, CopyIcon, DialpadIcon, GiftIcon, HelpIcon, ImageIcon, KeyIcon, LockIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
 import { PageHeading } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { memberNextPath } from "@/domain/member-navigation";
-import { formatPhone, localUgandaPhone, networkForPrefix, normalizePhone, telHref, waHref, type MobileNetwork } from "@/domain/phone";
+import { formatPhone, localUgandaPhone, networkForPrefix, telHref, waHref, type MobileNetwork } from "@/domain/phone";
 import { canOpenMoneyMenu, normalizeTransactionId, type PaymentView } from "@/domain/payment";
 import { parsePaymentSms } from "@/domain/payment-sms";
 import { formatPeriodEnd } from "@/domain/subscription-period";
@@ -17,14 +17,15 @@ import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
 import { AccountCodeForm } from "./account-code-form";
+import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
 
 import {
-  AccountRow, Action, ActionLink, Assent, ChangeFields, CopyButton, Disclosure, FieldWithAction, FileBox, FileField,
-  HelpActions, HelpTitle, Identity, Intro, Lead, Locked, MenuLink, Note, Optional, PageFooter, Panel, PaymentTransfer, Plan, PlanDays,
-  PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowLink, RowNote, Sheet, SignInForm, StatusBox,
-  Step, StepHeading, StepNumber, StepTitle, Submit, Summary, Unit, Wallet, WalletChoice, WalletChoices,
+  AccountRow, Action, ActionLink, Assent, CopyButton, Disclosure, FieldWithAction, FileBox, FileField,
+  HelpActions, HelpTitle, Identity, Intro, Lead, Locked, MenuLink, Note, Optional, PageFooter, Panel, PaymentFields, PaymentTransfer,
+  Plan, PlanDays, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowLink, RowNote, Sheet, SignInForm, StatusBox,
+  Step, StepHeading, StepNumber, StepTitle, Submit, Unit, Wallet, WalletChoice, WalletChoices,
   WalletMeta, WalletNumber,
 } from "./subscribe-styles";
 
@@ -37,14 +38,6 @@ const wallets = {
   mtn: { name: "MTN MoMo", short: "MTN", menu: "subscribe.openMtn" },
   airtel: { name: "Airtel Money", short: "Airtel", menu: "subscribe.openAirtel" },
 } as const;
-
-/** Fills a message's {placeholders} with emphasized values, keeping the translated word order. */
-function emphasize(template: string, values: Readonly<Record<string, string>>): ReactNode[] {
-  return template.split(/(\{\w+\})/u).map((part, index) => {
-    const name = /^\{(\w+)\}$/u.exec(part)?.[1];
-    return name && values[name] !== undefined ? <strong key={index}>{values[name]}</strong> : part;
-  });
-}
 
 export function SubscribeIntro({ locale }: { locale: string }) {
   const m = createMessages(locale);
@@ -126,10 +119,10 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     const base = edited ?? (recovered && plans.some((item) => item.id === recovered.planId) ? { ...recovered,
       network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial);
     const selected = plans.find((item) => item.id === base.planId);
-    return base.amountEdited || !selected ? base : { ...base, amount: String(selected.priceUgx) };
+    return selected ? { ...base, amount: String(selected.priceUgx), amountEdited: false } : base;
   }, [edited, recovered, plans, networks, initial]);
   const setDraft = (change: (old: PaymentDraft) => PaymentDraft) => setEdited((old) => change(old ?? draft));
-  const [change, setChange] = useState(false), [sms, setSms] = useState("");
+  const [sms, setSms] = useState("");
   const [changingAccount, setChangingAccount] = useState(false);
   const [foreign, setForeign] = useState(""), smsInput = useRef<HTMLInputElement>(null);
   const [image, setImage] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [busy, setBusy] = useState(false), [percentage, setPercentage] = useState<number | null>(null);
@@ -139,7 +132,6 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const clipboard = restored && typeof navigator.clipboard?.readText === "function";
   const plan = plans.find((candidate) => candidate.id === draft.planId) ?? plans[0];
   const update = (values: Partial<PaymentDraft>) => setDraft((old) => ({ ...old, ...values }));
-  const money = (value: number) => m.number(value, { style: "currency", currency: "UGX", maximumFractionDigits: 0 });
   const status = view?.status;
   const checking = sent && !status || status && ["pending", "superseded", "approved"].includes(status.status);
   useEffect(() => {
@@ -152,8 +144,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     setSms(text);
     const parsed = parsePaymentSms(text, { mtn: settings.mtnNumber, airtel: settings.airtelNumber });
     const matchedNetwork = networks.find((network) => settings[network === "mtn" ? "mtnNumber" : "airtelNumber"] === parsed.counterparty) ?? null;
-    update({ ...(parsed.amount === undefined ? {} : { amount: String(parsed.amount), amountEdited: true }),
-      ...(parsed.transactionId ? { transactionId: parsed.transactionId } : {}), ...(matchedNetwork ? { network: matchedNetwork, payCard: matchedNetwork } : {}) });
+    update({ ...(parsed.transactionId ? { transactionId: parsed.transactionId } : {}), ...(matchedNetwork ? { network: matchedNetwork, payCard: matchedNetwork } : {}) });
     setForeign(parsed.foreignRecipient ? m.text("subscribe.foreign", { phone: formatPhone(parsed.foreignRecipient) }) : "");
   }
   function selectPayCard(network: MobileNetwork) { update({ payCard: network, network }); }
@@ -163,7 +154,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     setBusy(true); setPercentage(0);
     const body = new FormData();
     for (const [key, value] of Object.entries({ planId: plan.id, payerPhone: draft.payerPhone, network: draft.network,
-      transactionId: draft.transactionId, amount: draft.amount, accepted: String(draft.accepted) })) body.append(key, value);
+      transactionId: draft.transactionId, amount: String(plan.priceUgx), accepted: String(draft.accepted) })) body.append(key, value);
     body.append("image", image, "payment.jpg");
     try { const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); trackEvent("payment_submitted"); setSent(result.reference); setImage(null); setPreview(""); setSms(""); router.refresh(); }
     catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); } finally { setBusy(false); }
@@ -200,11 +191,11 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const shortcut = settings[payNetwork === "mtn" ? "mtnMenuShortcut" : "airtelMenuShortcut"]?.replaceAll("{amount}", String(plan.priceUgx));
   return <>
     {accountPanel}
-    <Sheet data-subscribe-layout="compact-split">
+    <Sheet data-subscribe-layout="compact-stacked">
       <Step id="plans" aria-labelledby={`${ids}-plan`}>
         <StepHeading><StepNumber aria-hidden="true">1</StepNumber><StepTitle id={`${ids}-plan`}>{m.text("subscribe.pickPlan")}</StepTitle><Unit>UGX</Unit></StepHeading>
         <Plans aria-labelledby={`${ids}-plan`} $columns={Math.min(plans.length, 3)}>{plans.map((item) => <Plan key={item.id}>
-          <input type="radio" name="plan" value={item.id} checked={draft.planId === item.id} onChange={() => update({ planId: item.id, ...(!draft.amountEdited ? { amount: String(item.priceUgx) } : {}) })} />
+          <input type="radio" name="plan" value={item.id} checked={draft.planId === item.id} onChange={() => update({ planId: item.id })} />
           <PlanName>{item.name}</PlanName><PlanPrice>{m.number(item.priceUgx)}</PlanPrice><PlanDays>{m.plural("paywall.days", item.durationDays)}</PlanDays>
         </Plan>)}</Plans>
         {activeUntil && <Note>{m.text("subscribe.renewal", { end: formatPeriodEnd(new Date(activeUntil)), days: String(plan.durationDays) })}</Note>}
@@ -214,14 +205,14 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
         <PaymentTransfer>
           {networks.length > 1 ? <WalletChoices><VisuallyHidden as="legend">{m.text("subscribe.network")}</VisuallyHidden>{networks.map((network) => <WalletChoice key={network}>
             <input type="radio" name={`${ids}-wallet`} value={network} checked={payNetwork === network} onChange={() => { selectPayCard(network); setCopied(""); }} />
-            <span>{wallets[network].name}</span>
+            <span><MobileMoneyLogo network={network} /><span>{wallets[network].name}</span><CheckIcon /></span>
           </WalletChoice>)}</WalletChoices> : <Note>{wallet.name}</Note>}
           <Wallet>
-            <WalletNumber><VisuallyHidden>{wallet.name} </VisuallyHidden>{formatPhone(number)}</WalletNumber>
-            <WalletMeta>{name}</WalletMeta>
+            <WalletNumber><VisuallyHidden>{wallet.name} </VisuallyHidden><WalletMeta>{m.text("subscribe.payTo")}</WalletMeta> <span>{localUgandaPhone(number)}</span></WalletNumber>
+            <WalletMeta>{m.text("subscribe.payeeNames")} {name}</WalletMeta>
             <CopyButton variant="secondary" data-analytics-ignore onClick={async () => {
               selectPayCard(payNetwork);
-              try { await navigator.clipboard.writeText(settings.copyFormat === "local" ? localUgandaPhone(number) : number); setCopied(payNetwork); }
+              try { await navigator.clipboard.writeText(localUgandaPhone(number)); setCopied(payNetwork); }
               catch { setError(m.text("account.copyFailed")); }
             }}>
               {copied === payNetwork ? <CheckIcon /> : <CopyIcon />}<span aria-hidden="true">{m.text(copied === payNetwork ? "account.copied" : "subscribe.copy")}</span>
@@ -232,7 +223,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
         <Note>{m.text("subscribe.transferHint")}</Note>
         {shortcut && (menu ? <MenuLink variant="quiet" data-analytics-ignore href={`tel:${shortcut.replaceAll("#", "%23")}`} onClick={() => selectPayCard(payNetwork)}><DialpadIcon />{m.text(wallet.menu)}</MenuLink>
           : <Note>{m.text("subscribe.dial")} <strong>{shortcut}</strong></Note>)}
-        <noscript>{networks.filter((network) => network !== payNetwork).map((network) => <p key={network}>{wallets[network].name}: {formatPhone(settings[network === "mtn" ? "mtnNumber" : "airtelNumber"]!)} · {settings[network === "mtn" ? "mtnName" : "airtelName"]}</p>)}</noscript>
+        <noscript>{networks.filter((network) => network !== payNetwork).map((network) => <p key={network}>{wallets[network].name}: {localUgandaPhone(settings[network === "mtn" ? "mtnNumber" : "airtelNumber"]!)} · {settings[network === "mtn" ? "mtnName" : "airtelName"]}</p>)}</noscript>
         {settings.paymentNote && <Note>{settings.paymentNote}</Note>}
       </Step>
       <Step aria-labelledby={`${ids}-report`}>
@@ -241,15 +232,10 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
           {status ? <StatusBox><PaymentStatusPanel locale={locale} status={status} phone={account.phone} unlocked={account.unlocked} /></StatusBox>
             : sent && <StatusBox role="status"><p>{sent}</p><p>{m.text("subscribe.checking", { phone: formatPhone(account.phone) })}</p></StatusBox>}
           {checking ? <AccountCodeForm locale={locale} signedIn inApp={/FBAN|FBAV|Instagram/iu.test(userAgent)} returnTo={returnTo} /> : <ReportForm onSubmit={submit} data-analytics-ignore>
-            <Summary><p>{emphasize(m.text("subscribe.summary"), { amount: money(Number(draft.amount) || 0), network: draft.network.toUpperCase() || "—", phone: formatPhone(normalizePhone(draft.payerPhone) ?? draft.payerPhone) })}</p>
-              <Button variant="quiet" onClick={() => setChange(!change)} aria-expanded={change || !draft.network} aria-controls={`${ids}-payment-details`}>{m.text("subscribe.change")}</Button></Summary>
-            {(change || !draft.network) && <ChangeFields id={`${ids}-payment-details`}>
-              <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} required onValueChange={(value) => update({ payerPhone: value })} />
-              {networks.length > 1 && <SegmentedChoice label={m.text("subscribe.network")} name="network" value={draft.network} options={networks.map((value) => ({ value, label: wallets[value].name }))} onValueChange={(value) => selectPayCard(value as MobileNetwork)} />}
-              <TextInput label={m.text("subscribe.amount")} type="number" inputMode="numeric" min={100} max={10_000_000} step={1} value={draft.amount} required onChange={(event) => update({ amount: event.currentTarget.value, amountEdited: true })} />
-            </ChangeFields>}
-            {foreign && <p role="alert">{foreign}</p>}
-            <TextInput label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId} required minLength={4} maxLength={40} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false} onChange={(event) => update({ transactionId: normalizeTransactionId(event.currentTarget.value) })} />
+            <PaymentFields>
+              <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} hint={false} required onValueChange={(value) => update({ payerPhone: value })} />
+              <TextInput label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId} required minLength={4} maxLength={40} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false} onChange={(event) => update({ transactionId: normalizeTransactionId(event.currentTarget.value) })} />
+            </PaymentFields>
             <FileField>
               <FileBox><ImageIcon /><span id={`${ids}-shot`}>{image ? m.text("subscribe.imageSize", { size: String(Math.ceil(image.size / 1000)) }) : m.text("subscribe.chooseScreenshot")}</span>
                 <input type="file" accept="image/*" required={!image} aria-labelledby={`${ids}-shot`} aria-describedby={`${ids}-shot-hint`} onChange={async (event) => {
@@ -258,8 +244,9 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
                   catch (failure) { setImage(null); setError(failure instanceof Error ? failure.message : m.text("subscribe.chooseImage")); } finally { setBusy(false); }
                 }} /></FileBox>
               <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
-              {image && <Preview src={preview} alt={m.text("subscribe.preview")} />}
             </FileField>
+            {image && <Preview src={preview} alt={m.text("subscribe.preview")} />}
+            {foreign && <p role="alert">{foreign}</p>}
             <Disclosure>
               <summary><ClipboardIcon /><span>{m.text("subscribe.sms")} <Optional>{m.text("subscribe.optional")}</Optional></span><ChevronDownIcon /></summary>
               <div><FieldWithAction data-analytics-ignore>
