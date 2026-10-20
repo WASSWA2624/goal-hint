@@ -75,13 +75,26 @@ monitoring remains blocked by the owner's local-verification-only decision; see
 
 ## Start, stop and verify
 
-`GoalHintMySQL84` in the current user's Windows `Run` registry key starts the
-server when that user signs in. It runs `start-mysql.ps1` with a hidden PowerShell
-window. The launcher returns when the same server already owns port 3307 and
-refuses to start over an unrelated listener. This is a local development process;
-it is not a Windows system service or hosted worker.
+The per-user Windows scheduled task `GoalHintMySQL84` starts the server when the
+current user signs in. It runs `start-mysql.ps1` in a hidden PowerShell window,
+without administrator privileges or a stored password. This starts after Windows
+sign-in, rather than before sign-in as a Windows system service would.
+
+The task allows startup on battery, has no execution time limit, prevents
+overlapping task runs and retries a failed launch up to three times at one-minute
+intervals. The launcher serializes concurrent starts, waits up to 60 seconds for
+port 3307, verifies that the listener belongs to the configured MySQL binary and
+configuration, and records readiness in the private `startup.log`. The previous
+duplicate Windows `Run` entry was removed after the task passed an actual
+shutdown/start check on 20 October 2026. This remains a local development process.
 
 Start it manually:
+
+```powershell
+Start-ScheduledTask -TaskName 'GoalHintMySQL84'
+```
+
+The same private launcher can also be run directly:
 
 ```powershell
 & "$env:LOCALAPPDATA/GoalHint/start-mysql.ps1"
@@ -206,3 +219,16 @@ manifest, encrypted checkpoints and recovery evidence remain private.
 **Do not delete or relocate this recovery directory: it contains the active
 database.** Any later relocation requires a clean shutdown, verified copy and
 updated `mysql.ini` before restarting.
+
+## XAMPP phpMyAdmin access
+
+XAMPP's Apache serves [phpMyAdmin](http://127.0.0.1/phpmyadmin/index.php?server=2).
+Choose **GoalHint MySQL 8.4 (3307)** and sign in with `goal_hint_app` and its existing
+private database password. The cookie-authenticated server entry in
+`C:\xampp\phpMyAdmin\config.inc.php` points to `127.0.0.1:3307`; no password is
+stored in that entry. Its application permissions also apply in phpMyAdmin.
+
+On 20 October 2026, a browser login with the existing application credentials
+listed `goal_hint_db`, including its member, session, payment and settings tables.
+Application database health returned `ready`, and `/en/account` displayed its
+account form again. XAMPP's separate MariaDB service continues to use port 3306.
