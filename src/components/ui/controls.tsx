@@ -23,7 +23,7 @@ export type ButtonLinkProps = ComponentPropsWithRef<typeof Link> & {
 export type TextLinkProps = ComponentPropsWithRef<typeof Link>;
 
 type FieldContent = {
-  label: string;
+  label: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
 };
