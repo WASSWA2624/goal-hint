@@ -5,10 +5,7 @@ import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import { AccountLinks } from "@/components/members/account-link";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
-import { CloseIcon, SearchIcon } from "@/components/ui/icons";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
-import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
 import { defaultMatchView, openSection, type MatchSection, type MatchView } from "@/domain/match-view";
@@ -51,10 +48,10 @@ const PhoneHeaderGroup = styled.div`
  * The phone top bar matches the feed's solid branded bar and teal edge, full bleed
  * past the page gutter and up through the app page's 10px top padding, with white text and icons.
  */
-const PhoneBar = styled.div<{ $showAccount: boolean }>`
+const PhoneBar = styled.div`
   position: relative;
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) 2rem 2rem ${({ $showAccount }) => $showAccount ? "auto 2rem" : ""};
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
@@ -81,37 +78,6 @@ const RoundLink = styled(Link)`
   font-size: 1.375rem;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlFill}; } }
   ${barFocus}
-`;
-/** Square title-bar control; open search uses inverse teal. */
-const RoundButton = styled.button`
-  display: grid;
-  place-items: center;
-  inline-size: 2rem;
-  block-size: 2rem;
-  padding: 0;
-  color: ${({ theme }) => theme.header.text};
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  font-size: 1.375rem;
-  cursor: pointer;
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }
-  &[aria-expanded="true"] { color: ${({ theme }) => theme.header.onAccent}; background: ${({ theme }) => theme.header.accent}; }
-  ${barFocus}
-`;
-const SearchForm = styled.form`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-block-size: 2.5rem;
-  padding-inline: 10px 6px;
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.brand};
-  border-radius: 0;
-  ${desktop} { display: none; }
-  > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; }
-  > input { flex: 1; min-inline-size: 0; color: ${({ theme }) => theme.color.text}; background: none; border: 0; font: inherit; font-size: ${size("emphasis")}; outline: none; }
-  > button { padding: 4px 8px; color: ${({ theme }) => theme.color.onAction}; background: ${({ theme }) => theme.gradient.action}; border: 0; border-radius: 0; font: inherit; font-size: ${size("secondary")}; cursor: pointer; ${focusRing} }
 `;
 const BackLink = styled(Link)`
   display: none;
@@ -159,40 +125,17 @@ function DesktopBackLink() {
   const { locale, messages } = useStableDetails();
   return <BackLink href={useBackHref(locale)} prefetch={false}><BackIcon />{messages.text("details.backToPredictions")}</BackLink>;
 }
-/** Phone header with back and search; opening search re-renders only this header. */
+/** Phone header keeps back navigation and the same account menu as the app shell. */
 function PhoneHeader() {
   const { locale, messages, showAccount } = useStableDetails();
   const backHref = useBackHref(locale);
-  const [searching, setSearching] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const toggle = useRef<HTMLButtonElement>(null);
-  const searchInput = useRef<HTMLInputElement>(null);
-  const dismiss = useCallback(() => setSearching(false), []);
-  useOutsideDismiss({ enabled: searching, root, onDismiss: dismiss });
-  return <PhoneHeaderGroup ref={root} onKeyDown={(event) => {
-    if (event.key !== "Escape" || !searching) return;
-    event.preventDefault();
-    event.stopPropagation();
-    dismiss();
-    toggle.current?.focus();
-  }}>
-    <PhoneBar $showAccount={showAccount === true}>
+  return <PhoneHeaderGroup>
+    <PhoneBar>
       <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
       <p>{messages.text("details.title")}</p>
-      {showAccount && <AccountLinks locale={locale} />}
-      <ThemeToggle />
-      <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-controls="details-search" aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
-        onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => searchInput.current?.focus()); }}>
-        {searching ? <CloseIcon /> : <SearchIcon />}
-      </RoundButton>
+      <AccountLinks locale={locale} showAccount={showAccount === true} />
       <NavigationProgress label={messages.text("navigation.loading")} />
     </PhoneBar>
-    {searching && <SearchForm id="details-search" action={matchesHref(locale)} method="get" role="search" aria-label={messages.text("feed.search.open")}>
-      <SearchIcon aria-hidden="true" />
-      <input ref={searchInput} type="search" name="q" maxLength={100} autoComplete="off" placeholder={messages.text("navigation.search")}
-        aria-label={messages.text("feed.filters.search")} />
-      <button type="submit">{messages.text("feed.search.submit")}</button>
-    </SearchForm>}
   </PhoneHeaderGroup>;
 }
 

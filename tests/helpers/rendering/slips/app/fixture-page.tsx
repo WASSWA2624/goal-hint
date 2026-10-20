@@ -11,7 +11,7 @@ export default async function FixturePage({ params, searchParams }: {
   const { scenario } = await params, input = await searchParams;
   if (scenario) {
     const selected = cases[scenario]; if (!selected) notFound();
-    return <PublicShell locale="en" today={today} current="slips" app compact search={null}>
+    return <PublicShell locale="en" today={today} current="slips" app compact>
       <SlipBuilder locale="en" today={today} {...selected} />
     </PublicShell>;
   }
@@ -24,7 +24,7 @@ export default async function FixturePage({ params, searchParams }: {
     if (!(failure instanceof SlipCriteriaError)) throw failure;
     error = { code: failure.code, field: failure.field };
   }
-  return <PublicShell locale="en" today={today} current="slips" app compact search={null}>
+  return <PublicShell locale="en" today={today} current="slips" app compact>
     <SlipBuilder locale="en" today={today} criteria={selected} result={result} error={error} />
   </PublicShell>;
 }

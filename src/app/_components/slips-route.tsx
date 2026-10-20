@@ -56,7 +56,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
         || Array.isArray(query.reuse) && query.reuse.length === 2 && query.reuse[0] === "0" && query.reuse[1] === "1" ? true : criteria.reuse;
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
       const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}`;
-      return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact search={null}>
+      return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact>
         <SlipBuilder subscriberOnly={access.tier === "free"} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
           error={error} initialInputs={initialInputs} initialOutcomes={initialOutcomes} initialReuse={initialReuse} {...(initialMarkets ? { initialMarkets } : {})} />
       </PublicShell>;

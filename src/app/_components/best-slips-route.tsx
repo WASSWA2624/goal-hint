@@ -27,7 +27,7 @@ export function createBestSlipsRoute({ read = readBestSlips, access = resolveVie
         redirect(`${matchesHref(locale)}?${parameters}`);
       }
       const result = gateBestSlips(await read(await access(), locale), await access());
-      return <PublicShell locale={locale} current="best-slips" app compact search={null}>
+      return <PublicShell locale={locale} current="best-slips" app compact>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />
         <BestSlips result={result} locale={locale} />
       </PublicShell>;

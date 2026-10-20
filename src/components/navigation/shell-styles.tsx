@@ -304,52 +304,6 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   `}
 `;
 
-/**
- * A square search field on the bar. White text and the placeholder keep 4.5:1 over the teal stop at
- * rest and when focused; focus draws a 2px inverse-teal ring. Dark color-scheme lightens the native
- * clear button.
- */
-export const HeaderSearch = styled.form`
-  display: none;
-  ${desktop} {
-    display: flex;
-    flex: 0 1 14rem;
-    max-inline-size: 26rem;
-    min-inline-size: 6rem;
-    align-items: center;
-    gap: ${({ theme }) => theme.space.sm};
-    margin-inline-start: auto;
-    padding-inline: ${({ theme }) => theme.space.md};
-    min-block-size: 2.5rem;
-    color: ${({ theme }) => theme.header.mutedText};
-    background: ${({ theme }) => theme.header.fieldFill};
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
-    border-radius: 0;
-    transition: background-color 120ms ease, border-color 120ms ease;
-    &:focus-within {
-      color: ${({ theme }) => theme.header.text};
-      background: ${({ theme }) => theme.header.fieldFillActive};
-      border-color: ${({ theme }) => theme.header.accent};
-      box-shadow: 0 0 0 1px ${({ theme }) => theme.header.accent};
-    }
-    > svg { flex: none; font-size: 1.125rem; }
-    > input {
-      flex: 1;
-      min-inline-size: 0;
-      border: 0;
-      background: none;
-      color: ${({ theme }) => theme.header.text};
-      caret-color: ${({ theme }) => theme.header.accent};
-      color-scheme: dark;
-      font: inherit;
-      font-size: 0.9375rem;
-      outline: none;
-      &::placeholder { color: ${({ theme }) => theme.header.placeholder}; opacity: 1; }
-    }
-  }
-  ${media.hover} { &:hover { background: ${({ theme }) => theme.header.fieldFillActive}; } }
-`;
-
 /** Phone app sections, fixed to the bottom edge. */
 export const TabBar = styled.nav`
   position: fixed;

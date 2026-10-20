@@ -174,3 +174,35 @@ Edge-instrumentation hang. Paid access remains off; nothing was deployed.
 
 
 **Later owner instruction, 20 October:** nothing should remain closed locally. The confirmed receiving-wallet name was saved privately; local test mode is open, with the existing daily plan preserved and approved Weekly/Monthly plans added through the plans service. Settings/mode changes are audited. No existing data was deleted. Production activation/deployment did not occur; release/legal notices remain drafts.
+
+## 20 October 2026 database recovery
+
+The owner authorized recovery after MySQL stopped accepting connections. The
+original directory contained older system metadata and redo logs alongside newer
+application tables. A complete cold copy was preserved with a SHA-256 manifest
+before recovery work; no reset or deletion of original database files was used.
+
+Recovery used the authenticated 93-table checkpoint from 05:27 EAT and copies of
+15 newer physical tables on isolated MySQL targets. Full row hashes matched the
+checkpoint for 87 tables, including all member and payment tables. The six
+analytics differences were reconciled: one expired administrator session was
+absent after the recorded purge; later events, pageviews and sessions were
+preserved, with monotonic counter/time updates. All 93 extended table checks,
+114 CHECK constraints and foreign-key checks passed. A fresh encrypted checkpoint
+containing 54,514 rows authenticated successfully and matched a second isolated
+restore. These findings establish agreement with the checkpoint and recovered
+readable files, rather than an absolute guarantee about unavailable history.
+
+MySQL now runs normally on `127.0.0.1:3307`, with `innodb_force_recovery=0`.
+Documented table and column grants were restored for all 92 application models;
+migration-history access remains excluded. The existing launcher and credentials
+remain in use. The local subscribe page reads the three existing plans in test
+mode. Nothing was deployed.
+
+The active datadir selected by `mysql.ini` is now
+`%LOCALAPPDATA%\GoalHint\repairs\subscribe-recovery-20261020T093154Z\extracted-data`.
+The original `data` directory, verified `original-data` cold copy, preservation
+manifest, encrypted checkpoints and recovery evidence remain private.
+**Do not delete or relocate this recovery directory: it contains the active
+database.** Any later relocation requires a clean shutdown, verified copy and
+updated `mysql.ini` before restarting.

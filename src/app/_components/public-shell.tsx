@@ -5,8 +5,6 @@ import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { SearchIcon } from "@/components/ui/icons";
 import { ResponsiveNavigation, type NavigationDestination } from "@/components/navigation/responsive-navigation";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { Container, PageMain } from "@/components/ui/layout";
@@ -15,12 +13,11 @@ import {
   feedHref, getFeedEntry, homeHref, matchesHref, informationHref, informationPages, slipsHref,
   type NavigationLocation,
 } from "@/domain/navigation";
-import { feedQueryRules } from "@/domain/feed-query";
 import { deviceFeedEntryHref } from "@/domain/device-feed";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import {
-  DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderActions, HeaderContent, HeaderSearch, HomeLink,
+  DesktopNav, Footer, FooterBrand, FooterContent, FooterLink, FooterLinks, FooterNote, Header, HeaderActions, HeaderContent, HomeLink,
   ShellFrame, SkipLink, TabBar,
 } from "@/components/navigation/shell-styles";
 
@@ -31,7 +28,7 @@ export const getShellInstant = cache(async () => {
 });
 export const getShellDate = cache(async () => getReportingDate(await getShellInstant()));
 
-export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, search, showAccount = true }: {
+export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, showAccount = true }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
@@ -42,8 +39,6 @@ export async function PublicShell({ children, locale, current, today: reportingD
   app?: boolean;
   /** Dense mobile feeds use 8px gutters; other app screens retain their existing spacing. */
   compact?: boolean;
-  /** null lets a page own its body search without a duplicate shell field. */
-  search?: null;
   showAccount?: boolean;
 }) {
   const language = resolveLocale(locale);
@@ -75,12 +70,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
           <DesktopNav aria-label={messages.text("navigation.primary")}>
             <ResponsiveNavigation destinations={destinations} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
           </DesktopNav>
-          {search !== null && <HeaderSearch action={matchesHref(language)} method="get" role="search" aria-label={messages.text("navigation.searchLabel")}>
-            <SearchIcon />
-            <input type="search" name="q" defaultValue="" maxLength={feedQueryRules.maximumSearchLength}
-              placeholder={messages.text("navigation.search")} aria-label={messages.text("navigation.searchLabel")} autoComplete="off" />
-          </HeaderSearch>}
-          <HeaderActions>{showAccount && <AccountLinks locale={language} />}<ThemeToggle /></HeaderActions>
+          <HeaderActions><AccountLinks locale={language} showAccount={showAccount} /></HeaderActions>
         </HeaderContent>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
