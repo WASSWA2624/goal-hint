@@ -91,7 +91,7 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
   for (const path of ['//evil.example/en', 'https://evil.example/en', '/\\evil.example', '/en#revision', '/en\r\nheader']) {
     assert.throws(() => canonicalUrl(path), RangeError);
   }
-  assert.equal(feedDiscovery(query({}), today).path, '/en');
+  assert.equal(feedDiscovery(query({}), today).path, '/en/matches');
   assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/predictions/2026-09-10?to=2026-10-09&page=2');
   assert.equal(feedDiscovery(query({ when: 'today' }), today).path, '/en/predictions/2026-10-09');
   assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3');
@@ -101,7 +101,7 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
     assert.equal(feedDiscovery(query(values), today).eligible, false);
     assert.equal(feedMetadata(query(values), today, populated, approved).robots.index, false);
   }
-  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).path, '/en');
+  assert.equal(feedDiscovery(query({ dir: 'desc' }), today).path, '/en/matches');
   assert.equal(feedDiscovery(query({ dir: 'desc' }), today).eligible, true);
 });
 
@@ -165,7 +165,7 @@ test('sitemap shards preserve stored lastmod, advertise each bounded shard and p
     'https://goalhint.com/sitemap-archive-0.xml']);
   assert.match(index, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<sitemapindex xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
   const urls = (await routes.sitemap()).map(row => row.url);
-  assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/help', 'https://goalhint.com/en/contact']);
+  assert.deepEqual(urls, ['https://goalhint.com/en', 'https://goalhint.com/en/matches', 'https://goalhint.com/en/help', 'https://goalhint.com/en/contact']);
   for (const id of ['-1', '01', '1.xml', '9999999999', 'x']) {
     assert.throws(() => sitemapPage(id), RangeError);
     await assert.rejects(routes.matches({ id: Promise.resolve(id) }), RangeError);

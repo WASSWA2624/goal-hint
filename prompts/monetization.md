@@ -1,3 +1,5 @@
+> **20 October 2026 owner amendment (specification 1.11):** all app screens and factual content remain public; all predictions and odds, including completed/canceled/awarded fixtures, require a current unlocked subscription. Best Slips is home, with public total odds, estimated joint probability and match count; its selections remain subscriber-only. Account/Get access links are always visible. The owner's later instruction opens all local account, trial, code and payment-report flows in **test** mode. The supported `off` mode closes new subscriptions while retaining sign-in and prediction gates; valid unlocked periods remain accessible until expiry in every mode. Receiving numbers/names and independent support call/WhatsApp numbers are environment-managed; preserve historical database values and reject dashboard/API edits to those identity fields. Use the shared robust phone input and existing square chrome. These instructions supersede the earlier free-final-fixture, off-mode bypass, test-mode anonymous bypass, hidden-entry-point and dashboard identity-editing instructions below. No production deployment or activation is authorized.
+
 # Monetization: phone accounts and manual mobile-money subscriptions
 
 **Status:** Plan only, not implemented. **Date:** 2026-10-19 (plans and period start set by the owner the same day). **File:** `prompts/monetization.md`.
@@ -73,7 +75,7 @@ Visitors sign in with their phone number only and pay the owner by MTN MoMo or A
 | Gating rule | One module, `src/domain/paywall.ts` (new). A fixture is free when finished (`isPlayedFinalStatus` in `src/domain/market-settlement.ts`), canceled or awarded; everything else is gated, by status alone. | One place for policy. Settled or void picks have no betting value and form a public track record. Postponed and abandoned matches can be replayed (`docs/schedule-lifecycle.md`), so they stay gated. |
 | Gating seam | Redact on the server after the MySQL cache read and before serialization, in one gated-read module that every page factory and API handler must use. | One cached body serves both tiers; no viewer dimension in the cache key. |
 | Gated representation | Explicit `gated` variants in the wire schemas; stored schemas unchanged. Never null out fields. Never say "locked", which means cutoff-locked. | The type checker forces every consumer to handle the gated case. |
-| Paywall switch | `paywallMode`: `off` (default, today's behaviour), `test` (only signed-in member sessions are gated), `on`. | Ships dark; the owner tests on a phone first. |
+| Paywall switch | `paywallMode`: `off` (default, subscriptions closed; predictions remain gated), `test` (anonymous and signed-in member sessions are gated), `on`. | Ships dark; the owner tests on a phone first. |
 | Owner preview | A valid owner session sees full content; the check never extends it. | No need to buy a code. |
 | Screenshots | DB `MEDIUMBLOB`, own table. The browser re-encodes to JPEG (width ≤ 1080 px, height ≤ 4096 px, target ≤ 400 KB), which drops EXIF. The server accepts JPEG only, ≤ 3 MB, after Content-Length, bounded-read (90 s), magic-byte and dimension checks. The form needs JavaScript; without it the page offers Call and WhatsApp. Owner-only sandboxed route. Purged 90 days after approval, 7 days after rejection or supersede. | Small, works on slow 3G. Release folders are replaced on deploy. |
 | Auto-fill | Prefills, a small client-side SMS parser (no libraries) and a draft kept in the tab. No AI reading of screenshots in this plan (section 13). | Ease of use without heavy JS or new data transfers. |
@@ -327,7 +329,7 @@ Per-IP limits are high on purpose: MTN and Airtel put many users behind shared (
 ### 5.5 Prediction gating
 
 **Access resolution.** `src/server/members/viewer-access.ts` (new) exports `resolveViewerAccess()` for pages (React `cache()`, reads `cookies()`) and `viewerAccessFromRequest(request)` for handlers. Both return `{ tier: "full" | "free", signedIn, mode }`, in this order:
-1. `paywallMode` is `off` → full.
+1. Every mode enforces entitlement; `off` closes new paid actions while allowing identity sign-in.
 2. A valid owner session → full. It is checked only when the owner cookie is present, with `verify(token, { touch: false })`, so pages and polls never extend the owner's 2 h idle window.
 3. An entitled member session → full.
 4. `paywallMode` is `test` and no member session → full.

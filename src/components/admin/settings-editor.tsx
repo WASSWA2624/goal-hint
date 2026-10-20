@@ -3,10 +3,11 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import styled from "styled-components";
 import { Definitions, Muted, Notice, Panel, PanelHeader, SegmentButton, Segmented } from "@/components/analytics/dashboard/dashboard-styles";
-import { formatPhone, normalizePhone, outsideUgandaHint, phoneHint } from "@/domain/phone";
+import { formatPhone, normalizePhone } from "@/domain/phone";
+import { PhoneInput } from "@/components/ui/controls";
 import { publicPolicy } from "@/domain/public-policy";
 import { editableSettingFields, isProtectedSettingField, paywallModes, settingLabels, settingsRules, type EditableSettingField,
-  type ModeRequirement, type PaywallMode, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
+  subscriptionIdentityVariables, type ModeRequirement, type PaywallMode, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
 import { ActionButton, ButtonRow, FieldBlock, FieldError, FieldRow, FormStack, Hint, postAdmin, replyErrors, replyMessage,
   Requirements, type AdminReply } from "./admin-form";
 
@@ -20,8 +21,8 @@ const numberFields = new Set<EditableSettingField>(["maxUnlockedDevices", "trial
 const modeLabels: Record<PaywallMode, string> = { off: "Off", test: "Test", on: "On" };
 const modeDone: Record<PaywallMode, string> = { off: "Paid access is now off.", test: "Paid access is now in test mode.", on: "Paid access is now on." };
 const modeExplanations: Record<PaywallMode, string> = {
-  off: "Everyone sees every pick, as today. Sign-in, codes and payment reports are closed.",
-  test: "Only signed-in member sessions are gated. Open /en/account on a phone to try the whole flow.",
+  off: "Phone sign-in stays open. Payments, trials and code activation are closed; predictions and odds still require current access.",
+  test: "All account and payment flows are open for testing. Predictions and odds require current access for every viewer.",
   on: "Everyone who has not unlocked a paid period sees the free view.",
 };
 /** A second tap must follow within this time, so a stray tap never switches paid access. */
@@ -55,7 +56,7 @@ const eat = (iso: string | null) => iso === null ? null : `${new Intl.DateTimeFo
 
 /**
  * The Settings page (prompts/monetization.md 5.7). The paywall mode switches only after a second tap. The other settings
- * save together; changing payment or contact numbers, registered names or menu shortcuts also needs the owner password.
+ * save together; environment-managed identity fields are read-only. Historical fixture edits retain password re-entry.
  */
 export function SettingsEditor({ initial, username }: { initial: SettingsPageData; username: string }) {
   const [view, setView] = useState(initial);
@@ -67,6 +68,7 @@ export function SettingsEditor({ initial, username }: { initial: SettingsPageDat
   const [busy, setBusy] = useState(false);
   const [armed, setArmed] = useState<PaywallMode | null>(null);
   const settings = view.settings;
+  const environmentFields: readonly string[] = view.environmentFields ?? [];
   const changes = changesOf(draft, settings);
   const changed = Object.keys(changes) as EditableSettingField[];
   const needsPassword = askPassword || changed.some(isProtectedSettingField);
@@ -84,6 +86,7 @@ export function SettingsEditor({ initial, username }: { initial: SettingsPageDat
   function accept(reply: AdminReply, text: string, { resetForm }: { resetForm: boolean }) {
     const next = reply.body as unknown as SavedReply;
     setView((shown) => ({ ...shown, settings: next.settings, protectedFields: next.protectedFields, diagnostics: next.diagnostics,
+      ...(next.environmentFields ? { environmentFields: next.environmentFields } : {}),
       ...(next.requirements ? { source: next.source ?? shown.source, requirements: next.requirements } : {}) }));
     if (resetForm) { setDraft(draftOf(next.settings)); setErrors({}); setPassword(""); setAskPassword(false); }
     const cleared = (next.cleared ?? []).map((field) => settingLabels[field as EditableSettingField] ?? field);
@@ -123,22 +126,18 @@ export function SettingsEditor({ initial, username }: { initial: SettingsPageDat
   }
 
   const field = (key: EditableSettingField) => ({
-    id: `setting-${key}`, value: draft[key], disabled: busy,
+    id: `setting-${key}`, value: draft[key], disabled: busy || environmentFields.includes(key),
     "aria-invalid": errors[key] ? true : undefined, "aria-describedby": `setting-${key}-note`,
     onChange: (event: { target: { value: string } }) => setDraft({ ...draft, [key]: event.target.value }),
   });
   const note = (key: EditableSettingField, children: ReactNode) => (
-    <span id={`setting-${key}-note`}>{errors[key] ? <FieldError>{errors[key]}</FieldError> : children}</span>
+    <span id={`setting-${key}-note`}>{errors[key] ? <FieldError>{errors[key]}</FieldError> : environmentFields.includes(key)
+      ? <Hint>Set {subscriptionIdentityVariables[key as keyof typeof subscriptionIdentityVariables]} in the environment and restart.</Hint> : children}</span>
   );
   const phone = (key: EditableSettingField) => {
-    const typed = draft[key].trim(), canonical = normalizePhone(typed);
-    return (
-      <FieldBlock>{settingLabels[key]}
-        <input {...field(key)} type="tel" inputMode="tel" autoComplete="off" spellCheck={false} />
-        {note(key, <Hint>{typed === "" ? "Not set" : canonical ? `Saved as ${formatPhone(canonical)}`
-          : phoneHint(typed) === "outside-uganda" ? outsideUgandaHint : "Not a full number yet"}</Hint>)}
-      </FieldBlock>
-    );
+    return <PhoneInput id={`setting-${key}`} label={settingLabels[key]} value={draft[key]} disabled={busy || environmentFields.includes(key)}
+      error={errors[key]} onValueChange={(value) => setDraft({ ...draft, [key]: value })}
+      {...(environmentFields.includes(key) ? { hint: `Set ${subscriptionIdentityVariables[key as keyof typeof subscriptionIdentityVariables]} in the environment and restart.` } : {})} />;
   };
   const shortcut = (key: "mtnMenuShortcut" | "airtelMenuShortcut", number: "mtnNumber" | "airtelNumber") => {
     const willClear = changed.includes(number) && !changed.includes(key) && settings[key] !== null;
@@ -150,7 +149,7 @@ export function SettingsEditor({ initial, username }: { initial: SettingsPageDat
             : "Digits, * and #. {amount} becomes the plan price. Shown on Android only; test it on your phone first."}</Hint>)}
         </FieldBlock>
         <ButtonRow>
-          <ActionButton type="button" disabled={busy} onClick={() => setDraft({ ...draft, [key]: `${draft[key]}{amount}` })}>Insert {"{amount}"}</ActionButton>
+          <ActionButton type="button" disabled={busy || environmentFields.includes(key)} onClick={() => setDraft({ ...draft, [key]: `${draft[key]}{amount}` })}>Insert {"{amount}"}</ActionButton>
         </ButtonRow>
       </FormStack>
     );
@@ -196,7 +195,7 @@ export function SettingsEditor({ initial, username }: { initial: SettingsPageDat
       <form onSubmit={save} noValidate data-analytics-ignore>
         <FormStack>
           <Panel aria-labelledby="payment-title">
-            <PanelHeader><h2 id="payment-title">Payment numbers</h2><p>Password needed to change</p></PanelHeader>
+            <PanelHeader><h2 id="payment-title">Payment numbers</h2><p>{environmentFields.length ? "Managed through environment variables" : "Password needed to change"}</p></PanelHeader>
             <Muted>Subscribers pay these numbers. A network without a number is hidden on Get access.</Muted>
             <FieldRow>{phone("mtnNumber")}{text("mtnName", settingsRules.nameMaxLength, "The name MoMo shows when paying this number")}</FieldRow>
             {shortcut("mtnMenuShortcut", "mtnNumber")}
@@ -205,7 +204,7 @@ export function SettingsEditor({ initial, username }: { initial: SettingsPageDat
           </Panel>
 
           <Panel aria-labelledby="contact-title">
-            <PanelHeader><h2 id="contact-title">Contact</h2><p>Password needed to change</p></PanelHeader>
+            <PanelHeader><h2 id="contact-title">Contact</h2><p>{environmentFields.length ? "Managed through environment variables" : "Password needed to change"}</p></PanelHeader>
             <Muted>Call, SMS and WhatsApp links, and the number Safety tips tell subscribers to trust.</Muted>
             <FieldRow>{phone("contactPhone")}{phone("whatsappPhone")}</FieldRow>
           </Panel>

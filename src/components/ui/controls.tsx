@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "@/components/navigation/navigation-link";
-import { useId, useState, type ComponentPropsWithRef, type ReactNode } from "react";
+import { useEffect, useId, useImperativeHandle, useRef, useState, type ComponentPropsWithRef, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
-import { formatPhone, normalizePhone, outsideUgandaHint, phoneHint } from "@/domain/phone";
+import { formatPhone, normalizePhone, outsideUgandaHint, phoneInputIssue, phoneInputMaxLength, phoneHint } from "@/domain/phone";
+import { createMessages } from "@/i18n/messages";
+import { GlobeIcon } from "./icons";
 
 export type ButtonVariant = "primary" | "secondary" | "quiet";
 
@@ -26,7 +28,7 @@ type FieldContent = {
   error?: ReactNode;
 };
 
-export type TextInputProps = Omit<ComponentPropsWithRef<"input">, "children"> & FieldContent;
+export type TextInputProps = Omit<ComponentPropsWithRef<"input">, "children"> & FieldContent & { leading?: ReactNode };
 export type SelectInputProps = ComponentPropsWithRef<"select"> & FieldContent;
 
 const focusTreatment = css`
@@ -202,13 +204,21 @@ const inputTreatment = css<{ $invalid: boolean }>`
   ${focusTreatment}
 `;
 
-const InputControl = styled.input<{ $invalid: boolean }>`
+const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean }>`
   ${inputTreatment}
+  ${({ $leading }) => $leading && css`padding-inline-start: 38px;`}
+  &[data-phone-input] { min-block-size: 44px; border-radius: 0; font-size: 1rem; letter-spacing: 0.02em; }
 
   &::placeholder {
     color: ${({ theme }) => theme.color.mutedText};
     opacity: 1;
   }
+`;
+const InputFrame = styled.div`
+  position: relative; min-inline-size: 0;
+  > span { position: absolute; inset-inline-start: 12px; inset-block-start: 50%; transform: translateY(-50%);
+    display: flex; pointer-events: none; color: ${({ theme }) => theme.color.mutedText}; }
+  svg { inline-size: 18px; block-size: 18px; }
 `;
 
 const SelectControl = styled.select<{ $invalid: boolean }>`
@@ -278,20 +288,15 @@ export function TextLink(props: TextLinkProps) {
   return <TextAnchor {...props} />;
 }
 
-export function TextInput({ label, hint, error, type = "text", ...props }: TextInputProps) {
+export function TextInput({ label, hint, error, leading, type = "text", ...props }: TextInputProps) {
   const field = useFieldAccessibility({ ...props, hint, error });
+  const control = <InputControl {...props} id={field.id} type={type} aria-describedby={field.describedBy}
+    aria-invalid={field.invalid} $invalid={field.isInvalid} $leading={hasContent(leading)} />;
 
   return (
     <Field>
       <FieldLabel htmlFor={field.id}>{label}</FieldLabel>
-      <InputControl
-        {...props}
-        id={field.id}
-        type={type}
-        aria-describedby={field.describedBy}
-        aria-invalid={field.invalid}
-        $invalid={field.isInvalid}
-      />
+      {hasContent(leading) ? <InputFrame><span aria-hidden="true">{leading}</span>{control}</InputFrame> : control}
       {field.hasHint && <FieldMessage id={field.hintId}>{hint}</FieldMessage>}
       {field.hasError && (
         <FieldMessage id={field.errorId} $error>
@@ -302,21 +307,38 @@ export function TextInput({ label, hint, error, type = "text", ...props }: TextI
   );
 }
 
-export type PhoneInputProps = Omit<TextInputProps, "type" | "inputMode" | "autoComplete" | "value" | "defaultValue" | "onChange" | "onPaste"> & {
+export type PhoneInputProps = Omit<TextInputProps, "type" | "inputMode" | "autoComplete" | "value" | "defaultValue" | "onChange" | "onPaste" | "leading"> & {
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
 };
 
-/** The same phone field for sign-in, payer details and owner tools. Paste always replaces the country-code prefill. */
-export function PhoneInput({ value, defaultValue = "256", onValueChange, hint, ...props }: PhoneInputProps) {
+/** Raw typing preserves the caret; complete pastes replace the prefill, partial pastes retain native selection behavior. */
+export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, hint, error, onBlur, onInvalid, ...props }: PhoneInputProps) {
   const [input, setInput] = useState(defaultValue);
+  const [touched, setTouched] = useState(false), [pasteError, setPasteError] = useState<string | null>(null);
+  const control = useRef<HTMLInputElement>(null), messages = createMessages();
+  useImperativeHandle(ref, () => control.current!, []);
   const current = value ?? input, canonical = normalizePhone(current);
-  const change = (next: string) => { setInput(next); onValueChange?.(next); };
-  return <TextInput {...props} type="tel" inputMode="tel" autoComplete="tel" value={current} maxLength={64} data-analytics-ignore
+  const issue = phoneInputIssue(current, props.required);
+  const message = props.disabled || props.readOnly ? "" : pasteError ?? (issue === "country-code" ? outsideUgandaHint
+    : issue ? messages.text(`phone.${issue}`) : "");
+  useEffect(() => { control.current?.setCustomValidity(message); }, [message]);
+  const change = (next: string) => { setPasteError(null); setInput(next); onValueChange?.(next); };
+  return <TextInput {...props} ref={control} type="tel" inputMode="tel" autoComplete="tel" value={current}
+    dir="ltr" spellCheck={false} autoCapitalize="none" maxLength={phoneInputMaxLength} leading={<GlobeIcon />} data-phone-input data-analytics-ignore
+    placeholder={props.placeholder ?? "+256 7…"} error={hasContent(error) ? error : (touched && message ? message : undefined)}
     onChange={(event) => change(event.currentTarget.value)}
-    onPaste={(event) => { event.preventDefault(); change(event.clipboardData.getData("text")); }}
-    hint={canonical ? formatPhone(canonical) : phoneHint(current) ? outsideUgandaHint : hint} />;
+    onPaste={(event) => {
+      if (props.disabled || props.readOnly) return;
+      const pasted = event.clipboardData.getData("text");
+      if (pasted.length > phoneInputMaxLength) { event.preventDefault(); setPasteError(messages.text("phone.paste")); setTouched(true); return; }
+      const normalized = normalizePhone(pasted);
+      if (normalized) { event.preventDefault(); change(normalized); }
+    }}
+    onBlur={(event) => { setTouched(true); if (canonical && canonical !== current) change(canonical); onBlur?.(event); }}
+    onInvalid={(event) => { setTouched(true); onInvalid?.(event); }}
+    hint={phoneHint(current) ? outsideUgandaHint : hint ?? (canonical ? `+${formatPhone(canonical)}` : messages.text("phone.hint"))} />;
 }
 
 export function SelectInput({ label, hint, error, children, ...props }: SelectInputProps) {

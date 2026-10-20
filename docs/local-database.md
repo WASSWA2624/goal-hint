@@ -154,3 +154,23 @@ This uses the existing schema and records no raw address or session token.
 ## Paid access (066)
 
 Owner erasure updates phone/support/payer/image fields and deletes sessions; amounts, transaction IDs and code/audit history remain. Real-data purge and erasure need owner authorization. Tests use isolated disposable databases only. See [subscriptions.md](subscriptions.md).
+
+## 20 October 2026 forward repair
+
+The owner authorized repair without deleting existing data. Existing
+`FixtureFacts`, `FootballVenue` and `SeasonStandings` tables are represented in
+Prisma and adopted by `20261020000000_adopt_match_facts`. The next forward
+migration recreates ten append-only triggers with dump-safe compound bodies.
+An encrypted private checkpoint was verified before DDL. No reset, data deletion
+or migration-history rewrite occurred. All 29 historical migration rows and 91
+durable application tables matched the pre-repair inventory; normal page reads
+can update the response cache. Two new forward history rows were added.
+`npm run db:verify` reports no drift. The 93-table backup drills include populated
+adopted tables, successful legacy history and its rolled-back attempt.
+
+Development uses `next dev --webpack` through nodemon. Next owns source HMR;
+nodemon restarts for environment changes. This avoids the reproduced Turbopack
+Edge-instrumentation hang. Paid access remains off; nothing was deployed.
+
+
+**Later owner instruction, 20 October:** nothing should remain closed locally. The confirmed receiving-wallet name was saved privately; local test mode is open, with the existing daily plan preserved and approved Weekly/Monthly plans added through the plans service. Settings/mode changes are audited. No existing data was deleted. Production activation/deployment did not occur; release/legal notices remain drafts.

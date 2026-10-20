@@ -34,8 +34,8 @@ test("default markets are Any; explicit single-family filters remain distinct an
   assert.equal(isAnyMarkets(defaults.markets), true);
   assert.equal(isAnyMarkets([...defaultMarkets].reverse()), true);
   assert.equal(isAnyMarkets(["match-result"]), false);
-  assert.equal(feedQueryHref(query(`market=${defaultMarkets.join(",")}`), today), "/en");
-  assert.equal(feedQueryHref(query("market=match-result"), today), "/en?market=match-result");
+  assert.equal(feedQueryHref(query(`market=${defaultMarkets.join(",")}`), today), "/en/matches");
+  assert.equal(feedQueryHref(query("market=match-result"), today), "/en/matches?market=match-result");
   assert.equal(panelFilterCount(defaults), 0); assert.equal(panelFilterCount(query("market=match-result")), 1);
   assert.notEqual(feedQueryKey(defaults, today), feedQueryKey(query("market=match-result"), today));
 });
@@ -45,7 +45,7 @@ test("home resolves the rolling last 30 calendar days inclusively across month, 
     const current = parseReportingDate(day), selected = parseFeedQuery({}, { today: current });
     const range = resolveFeedDates(selected, current);
     assert.equal(range.startDate, from); assert.equal(range.endDate, day); assert.equal(range.dayCount, 30);
-    assert.equal(feedQueryHref(selected, current), "/en");
+    assert.equal(feedQueryHref(selected, current), "/en/matches");
     assert.deepEqual(parseFeedQuery({ when: "last-30-days" }, { today: current }), selected);
   }
   const current = query(), tomorrow = parseReportingDate("2026-10-10");
@@ -56,14 +56,14 @@ test("home resolves the rolling last 30 calendar days inclusively across month, 
   assert.equal(resolveFeedDates(explicit, tomorrow).startDate, "2026-09-10");
   assert.equal(resolveFeedDates(explicit, tomorrow).endDate, today);
   assert.equal(feedQueryHref(explicit, today), "/en/predictions/2026-09-10?to=2026-10-09");
-  assert.equal(feedQueryHref(query("when=today"), today), "/en?when=today");
+  assert.equal(feedQueryHref(query("when=today"), today), "/en/matches?when=today");
   assert.equal(resolveFeedDates(query("when=today"), today).dayCount, 1);
 });
 
 test("full-day time bounds are unrestricted and canonicalize without adding an active filter", () => {
   for (const input of ["timeFrom=&timeTo=", "timeFrom=00:00&timeTo=23:59"]) {
     assert.deepEqual(query(input), query());
-    assert.equal(feedQueryHref(query(input), today), "/en");
+    assert.equal(feedQueryHref(query(input), today), "/en/matches");
     assert.equal(panelFilterCount(query(input)), 0);
   }
   const zoned = query("tz=America%2FNew_York");
@@ -71,7 +71,7 @@ test("full-day time bounds are unrestricted and canonicalize without adding an a
   assert.deepEqual(allDay, zoned);
   assert.equal(feedQueryKey(allDay, today), feedQueryKey(zoned, today));
   const draft = { ...query(), time: { ...fullDayKickoffTime, zone: "America/New_York" } };
-  assert.equal(feedQueryHref(draft, today), "/en?tz=America%2FNew_York");
+  assert.equal(feedQueryHref(draft, today), "/en/matches?tz=America%2FNew_York");
   assert.equal(panelFilterCount(draft), 0);
   assert.equal(activeFeedFilterCount(draft), 0);
   const limited = query("timeFrom=00:00&timeTo=23:58&tz=Africa%2FKampala");
@@ -142,8 +142,8 @@ test("sorting defaults to Latest first and preserves explicit ascending and prob
   assert.equal(serializeFeedQuery(query("sort=probability&dir=desc"), today).toString(), "sort=probability");
   assert.equal(serializeFeedQuery(query("dir=desc"), today).toString(), "");
   assert.equal(serializeFeedQuery(query("dir=asc"), today).toString(), "dir=asc");
-  assert.equal(feedQueryHref(query("sort=kickoff&dir=desc"), today), "/en");
-  assert.equal(feedQueryHref(query("sort=kickoff&dir=asc"), today), "/en?dir=asc");
+  assert.equal(feedQueryHref(query("sort=kickoff&dir=desc"), today), "/en/matches");
+  assert.equal(feedQueryHref(query("sort=kickoff&dir=asc"), today), "/en/matches?dir=asc");
   assert.equal(feedQueryKey(query("dir=desc"), today), feedQueryKey(query(), today));
   assert.notEqual(feedQueryKey(query("dir=asc"), today), feedQueryKey(query(), today));
   const sorted = query("sort=probability");

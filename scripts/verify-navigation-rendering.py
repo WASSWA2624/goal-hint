@@ -21,9 +21,9 @@ def main() -> None:
     root = anonymous("/")
     assert root.status == 308
     assert urlsplit(urljoin(origin, root.headers.get("location"))).path == "/en"
-    paths = ["/en", "/en/slips", today_path, results_path, "/en?status=live", "/en/predictions/2020-02-29?status=finished",
-        "/en?sort=probability", "/en?from=2026-10-09&to=2026-10-16",
-        "/en?when=tomorrow&status=scheduled&market=total-goals&sort=probability",
+    paths = ["/en", "/en/matches", "/en/slips", today_path, results_path, "/en/matches?status=live", "/en/predictions/2020-02-29?status=finished",
+        "/en/matches?sort=kickoff", "/en/matches?from=2026-10-09&to=2026-10-16",
+        "/en/matches?when=tomorrow&status=scheduled&market=total-goals&sort=kickoff",
         "/en/predictions/2020-02-29?to=2020-03-06&q=Synthetic&league=league-a&page=2&pageSize=40",
         *[f"/en/{page}" for page in information_pages]]
     for path in paths:
@@ -39,8 +39,8 @@ def main() -> None:
         assert 0 <= html.find("data-styled=") < html.find("<header"), f"{path}: initial shell CSS"
         visible = unescape(visible_html(html, comments=False))
         assert_navigation_overflow(visible,
-            primary=["/en", "/en?status=live", results_path],
-            overflow=["/en/slips", *[f"/en/{page}" for page in information_pages]],
+            primary=["/en", "/en/matches", "/en/matches?status=live"],
+            overflow=[results_path, "/en/slips", *[f"/en/{page}" for page in information_pages]],
             footer=[f"/en/{page}" for page in information_pages])
         target = urlsplit(path)
         information = next((page for page in information_pages if target.path == f"/en/{page}"), None)
@@ -56,15 +56,18 @@ def main() -> None:
                         "A live match result prediction remains Pending"]:
                     assert phrase in visible
                 no_match(r'data-stored-performance|data-performance-cell|action="[^"\s]*#performance', visible)
+        elif target.path == "/en":
+            assert_navigation(visible, primary="/en", mobile="/en")
         elif target.path == "/en/slips":
             assert_navigation(visible, primary="/en/slips", mobile="/en/slips")
         else:
             status = parse_qs(target.query).get("status", ["all"])[0]
-            expected = results_path if status == "finished" else "/en?status=live" if status == "live" else "/en"
+            expected = results_path if status == "finished" else "/en/matches?status=live" if status == "live" else "/en/matches"
             assert_navigation(visible, primary=expected, mobile=expected)
-        assert 'href="/en"' in visible, f"{path}: Default matches target"
+        assert 'href="/en"' in visible, f"{path}: Best Slips home target"
         assert f'href="{results_path}"' in visible, f"{path}: Results target"
         assert 'href="/en/slips"' in visible, f"{path}: Slips target"
+        assert 'href="/en/account"' in visible and 'href="/en/subscribe"' in visible
         no_match(r'(?:href|action)="[^"\s]*/(?:sign[-_]?in|log[-_]?in|auth)(?:[/?#]|"|$)', visible, flags=re.I)
         no_match(r'<(?:button|a)\b[^>]*>\s*(?:sign[ -]?in|log[ -]?in)\s*<', visible, flags=re.I)
         no_match(r'action="/api/account/sign-in"', visible)
@@ -88,8 +91,8 @@ def main() -> None:
     assert urlsplit(urljoin(origin, legacy.headers.get("location"))).path == "/en/help"
     for path in ["/en/predictions/2026-02-29", "/en/predictions/2026-1-01",
             "/en/predictions/2026-10-09?status=correct", "/en/predictions/2026-10-09?status=all&status=finished",
-            "/en?sort=unsupported", "/en?market=total-goals&sort=probability&sortMarket=match-result",
-            "/en?unknown=x", "/en?page=0", "/en?q=a&q=b", "/en?from=2026-10-09",
+            "/en/matches?sort=unsupported", "/en/matches?market=total-goals&sort=probability&sortMarket=match-result",
+            "/en/matches?unknown=x", "/en/matches?page=0", "/en/matches?q=a&q=b", "/en/matches?from=2026-10-09",
             "/en/matches/unknown/home-v-away", "/en/results", "/en/not-a-page"]:
         response = anonymous(path)
         assert response.status == 404, path

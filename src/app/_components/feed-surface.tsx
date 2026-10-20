@@ -21,7 +21,6 @@ import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
 import type { MatchFeedResponse } from "@/domain/match-feed";
-import { isFreeFixture } from "@/domain/paywall";
 import { canonicalMatchSlug } from "@/domain/match-slug";
 import { feedReturnStorageKey } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
@@ -73,7 +72,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
         {similarFrom !== null && first + index === Math.max(first, similarFrom) && <MatchListDivider title={messages.text("feed.search.similar")}
           note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
         <li>
-          <MatchCard fixture={fixture} gated={data.access.tier === "free" && !isFreeFixture(fixture.status)} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
+          <MatchCard fixture={fixture} gated={data.access.tier === "free"} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
             markets={query.markets} locale={query.locale} position={first + index}
             titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
         </li>

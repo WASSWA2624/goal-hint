@@ -6,7 +6,7 @@ import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
  * the dashboard form and the server; the migration's CHECK constraints repeat them.
  */
 export const paywallModes = Object.freeze(["off", "test", "on"] as const);
-/** `off`: today's free site. `test`: only signed-in member sessions are gated. `on`: everyone who is not entitled is gated. */
+/** Every mode gates predictions by entitlement. `off` closes acquisition; `test` opens development flows; `on` is the released offer. */
 export type PaywallMode = (typeof paywallModes)[number];
 /** What the Copy number button copies; numbers are always shown as `256 772 123 456`. */
 export const copyFormats = Object.freeze(["international", "local"] as const);
@@ -77,6 +77,12 @@ export type SettingsChanges = Partial<Pick<SubscriptionSettings, EditableSetting
 export const protectedSettingFields = Object.freeze(["mtnNumber", "mtnName", "mtnMenuShortcut", "airtelNumber", "airtelName",
   "airtelMenuShortcut", "contactPhone", "whatsappPhone"] as const);
 export type ProtectedSettingField = (typeof protectedSettingFields)[number];
+export type SubscriptionIdentity = Pick<SubscriptionSettings, ProtectedSettingField>;
+export const subscriptionIdentityVariables = Object.freeze({
+  mtnNumber: "GOAL_HINT_MTN_MOMO_NUMBER", mtnName: "GOAL_HINT_MTN_MOMO_NAME", mtnMenuShortcut: "GOAL_HINT_MTN_MOMO_MENU_SHORTCUT",
+  airtelNumber: "GOAL_HINT_AIRTEL_MONEY_NUMBER", airtelName: "GOAL_HINT_AIRTEL_MONEY_NAME", airtelMenuShortcut: "GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT",
+  contactPhone: "GOAL_HINT_CUSTOMER_SUPPORT_NUMBER", whatsappPhone: "GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER",
+} as const satisfies Readonly<Record<ProtectedSettingField, string>>);
 export const isProtectedSettingField = (field: string): field is ProtectedSettingField =>
   (protectedSettingFields as readonly string[]).includes(field);
 
@@ -232,5 +238,6 @@ export type SettingsPageData = Readonly<{
   source: "stored" | "defaults";
   requirements: Readonly<Record<Exclude<PaywallMode, "off">, readonly ModeRequirement[]>>;
   protectedFields: readonly string[];
+  environmentFields?: readonly ProtectedSettingField[];
   diagnostics: Readonly<{ address: string; headers: readonly Readonly<{ name: string; value: string | null }>[] }>;
 }>;

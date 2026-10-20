@@ -19,6 +19,25 @@ export async function repositoryCompatibility() {
   return { schemaHash: sha256(await readFile('prisma/schema.prisma')), lockfileHash: sha256(await readFile('package-lock.json')) };
 }
 
+/** Preserve explicitly adopted external history without accepting unknown or modified migrations. */
+export function migrationHistoryMatches(actual, required, adopted) {
+  const current = new Map(actual.map(({ name, checksum }) => [name, checksum]));
+  if (current.size !== actual.length || required.some(({ name, checksum }) => current.get(name) !== checksum)) return false;
+  const expected = new Map(required.map(({ name, checksum }) => [name, checksum]));
+  for (const entry of adopted) if (expected.has(entry.adoptedBy)) expected.set(entry.name, entry.checksum);
+  return actual.every(({ name, checksum }) => expected.get(name) === checksum);
+}
+
+export async function compatibleMigrationHistory(actual) {
+  const required = await Promise.all((await repositoryMigrations()).map(async (row) => {
+    const text = (await readFile(path.join('prisma/migrations', row.name, 'migration.sql'), 'utf8')).replaceAll('\r\n', '\n');
+    const applied = actual.find((entry) => entry.name === row.name)?.checksum;
+    // Prisma accepts LF/CRLF equivalents; never rewrite migration history for a checkout's line endings.
+    return [sha256(text), sha256(text.replaceAll('\n', '\r\n'))].includes(applied) ? { ...row, checksum: applied } : row;
+  }));
+  return migrationHistoryMatches(actual, required, JSON.parse(await readFile('prisma/adopted-migrations.json', 'utf8')));
+}
+
 /** No URL/password argument. A hosted adapter must supply an approved private option file. */
 export function createMysqlBackupSource({ binDirectory, defaultsFile, databaseName, expectedUuid, verifyQuiescence, ownedInstance }) {
   identifier(databaseName);
@@ -60,15 +79,16 @@ export function createMysqlBackupSource({ binDirectory, defaultsFile, databaseNa
       "SELECT JSON_OBJECT('kind','fk','table',k.TABLE_NAME,'name',k.CONSTRAINT_NAME,'column',k.COLUMN_NAME,'parent',k.REFERENCED_TABLE_NAME,'parentColumn',k.REFERENCED_COLUMN_NAME,'parentSchema',k.REFERENCED_TABLE_SCHEMA,'update',r.UPDATE_RULE,'delete',r.DELETE_RULE) FROM information_schema.KEY_COLUMN_USAGE k JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA=k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME=k.CONSTRAINT_NAME AND r.TABLE_NAME=k.TABLE_NAME WHERE k.TABLE_SCHEMA=DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL ORDER BY k.TABLE_NAME,k.CONSTRAINT_NAME,k.ORDINAL_POSITION",
       "SELECT JSON_OBJECT('kind','trigger','name',TRIGGER_NAME,'table',EVENT_OBJECT_TABLE,'event',EVENT_MANIPULATION,'timing',ACTION_TIMING,'body',ACTION_STATEMENT,'definer',DEFINER,'mode',SQL_MODE) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME",
       "SELECT JSON_OBJECT('kind','program') FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE() UNION ALL SELECT JSON_OBJECT('kind','program') FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()",
-      "SELECT JSON_OBJECT('kind','migration','name',migration_name,'checksum',checksum,'complete',finished_at IS NOT NULL AND rolled_back_at IS NULL) FROM _prisma_migrations ORDER BY migration_name",
+      "SELECT JSON_OBJECT('kind','migration','name',migration_name,'checksum',checksum,'complete',finished_at IS NOT NULL AND rolled_back_at IS NULL,'rolledBack',rolled_back_at IS NOT NULL) FROM _prisma_migrations ORDER BY migration_name",
     ];
     const metadata = (await query(metadataSql.join(';'))).map((row) => JSON.parse(row));
     const tables = metadata.filter((v) => v.kind === 'table').map((v) => v.table);
     if (!tables.includes('_prisma_migrations')) failBackup('incompatible-schema');
     if (metadata.some((v) => v.kind === 'table' && (v.engine !== 'InnoDB' || v.type !== 'BASE TABLE'))) failBackup('unsupported-storage');
     if (metadata.some((v) => v.kind === 'program')) failBackup('unsupported-stored-program');
-    const migrations = metadata.filter((v) => v.kind === 'migration');
-    if (migrations.some((v) => !v.complete)) failBackup('incompatible-schema');
+    const history = metadata.filter((v) => v.kind === 'migration');
+    if (history.some((v) => !v.complete && !v.rolledBack)) failBackup('incompatible-schema');
+    const migrations = history.filter((v) => !v.rolledBack);
     const digests = new Map(tables.map((table) => [table, { digest: createHash('sha256'), count: 0 }]));
     const hashSql = tables.map((table) => {
       const columns = metadata.filter((v) => v.kind === 'column' && v.table === table).map((v) => identifier(v.name));

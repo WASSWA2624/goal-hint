@@ -2,7 +2,6 @@ import { z } from "zod";
 import { marketFamilySchema, publicForecastSchema, publicVoidReasonSchema, publishedFamiliesSchema } from "./fixture-snapshot.ts";
 import { dailyRunProgressSchema, matchFeedRecordSchema, storedMatchFeedRecordSchema } from "./match-feed.ts";
 import { contentAccessSchema } from "./content-access.ts";
-import { isFreeFixture } from "./paywall.ts";
 
 export const matchDetailRules = Object.freeze({ defaultLimit: 10, maximumLimit: 20, maximumSequence: 4_294_967_295 });
 const id = z.uuid(), at = publicForecastSchema.shape.publishedAt, sequence = z.number().int().positive().max(matchDetailRules.maximumSequence);
@@ -95,7 +94,7 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
 }
 export const storedMatchDetailResponseSchema = storedDetailBaseSchema.superRefine((v, ctx) => refineDetail({ ...v, access: { tier: "full", signedIn: false } }, ctx));
 export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refineDetail).superRefine((v, ctx) => {
-  const gated = v.access.tier === "free" && !isFreeFixture(v.fixture.status);
+  const gated = v.access.tier === "free";
   if (gated ? !("gated" in v.history) || v.odds !== undefined || v.snapshot !== null && !("gated" in v.snapshot)
     || v.fixture.forecast !== null && !("gated" in v.fixture.forecast) || v.fixture.prices.length !== 0
     : "gated" in v.history || v.snapshot !== null && "gated" in v.snapshot || v.fixture.forecast !== null && "gated" in v.fixture.forecast) {

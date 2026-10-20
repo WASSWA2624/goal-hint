@@ -70,7 +70,7 @@ test('Reset clears odds bounds (052); Apply never carries them while provider od
   const query = parseFeedQuery({ odds: '1.50-3.00', prob: '60-100' }, { today, providerOdds: true });
   assert.deepEqual(query.odds, { min: 150, max: 300 });
   const reset = resetFeedFilters(query);
-  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en');
+  assert.equal(reset.odds, null); assert.equal(feedQueryHref(reset, today), '/en/matches');
   // The odds controls stay disabled while publicPolicy.features.providerOdds is false; a forged draft fails closed.
   assert.throws(() => applyFeedDraft(query, today));
   assert.equal(applyFeedDraft(reset, today).odds, null);

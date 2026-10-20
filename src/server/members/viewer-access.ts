@@ -20,7 +20,6 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
       const resolved = await services();
       const state = settings ? await settings() : resolved.database ? await settingsServiceFor(resolved.database).current() : { settings: null, source: "unavailable" } as const;
       mode = accessMode(state);
-      if (mode === "off") return { tier: "full", signedIn: false, mode };
       const owner = cookieValue(resolved.config.cookies.session);
       if (owner && await resolved.auth?.verify(owner, { touch: false })) return { tier: "full", signedIn: false, mode };
       if (!state.settings || !resolved.database) return { tier: "free", signedIn: false, mode };
@@ -42,14 +41,15 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
           data: { lastSeenAt: at, expiresAt: new Date(+at + memberSessionRules.expiryMs) } }));
         }
       }
-      return { tier: row?.entitled || mode === "test" && !row ? "full" : "free", signedIn: !!row, mode };
+      return { tier: row?.entitled ? "full" : "free", signedIn: !!row, mode };
     } catch { return { tier: "free", signedIn: false, mode }; }
   };
 }
 
 const resolve = createViewerAccess();
-export const resolveViewerAccess = cache(async (): Promise<ViewerAccess> => {
+export const resolveViewerAccessFresh = async (): Promise<ViewerAccess> => {
   const jar = await cookies();
   return resolve((name) => jar.get(name)?.value);
-});
+};
+export const resolveViewerAccess = cache(resolveViewerAccessFresh);
 export const viewerAccessFromRequest = (request: Request) => resolve((name) => readCookie(request, name));

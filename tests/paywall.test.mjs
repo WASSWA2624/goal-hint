@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { gateDetailResponse, gateFeedResponse, gateInsights, isFreeFixture, usesSubscriberFeedOracle } from '../src/domain/paywall.ts';
+import { gateDetailResponse, gateFeedResponse, gateInsights, usesSubscriberFeedOracle } from '../src/domain/paywall.ts';
 import { matchDetailResponseSchema } from '../src/domain/match-detail.ts';
 import { matchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
@@ -21,26 +21,22 @@ function walk(value) {
   if (!value || typeof value !== 'object') return;
   for (const [key, item] of Object.entries(value)) { assert.equal(premiumKeys.has(key), false, key); walk(item); }
 }
-test('only played finals, cancellations and awards are free', () => {
-  for (const status of ['finished-regulation', 'finished-extra-time', 'finished-penalties', 'canceled', 'awarded']) assert.equal(isFreeFixture(status), true);
-  for (const status of ['scheduled', 'live', 'postponed', 'abandoned', 'unknown']) assert.equal(isFreeFixture(status), false);
-});
-for (const [name, scenario] of Object.entries(scenarios)) test(`${name}: gates current and prior snapshots by fixture status and keeps raw data intact`, () => {
+for (const [name, scenario] of Object.entries(scenarios)) test(`${name}: gates current and prior snapshots for every fixture status and keeps raw data intact`, () => {
   const raw = JSON.stringify(scenario);
   const feed = matchFeedResponseSchema.parse(gateFeedResponse(scenario.feed, free));
   const details = [scenario.detail, scenario.prior].map(value => matchDetailResponseSchema.parse(gateDetailResponse(value, free)));
-  if (!isFreeFixture(scenario.detail.fixture.status)) {
+  {
     for (const value of [feed, ...details]) {
       assert.doesNotMatch(JSON.stringify(value), /SENTINEL-|0\.6173|7\.73|"home-win"/);
       for (const record of 'records' in value ? value.records : [value.fixture]) { walk(record.forecast); assert.deepEqual(record.prices, []); }
     }
     for (const value of details) { walk(value.snapshot); assert.deepEqual(value.history, { gated: true }); assert.equal('odds' in value, false); }
-  } else assert.match(JSON.stringify(details[0]), /SENTINEL-REASON-7Q/);
+  }
   assert.deepEqual(gateFeedResponse(scenario.feed, full).records, scenario.feed.records);
   assert.deepEqual(gateDetailResponse(scenario.prior, full).snapshot, scenario.prior.snapshot);
   assert.equal(JSON.stringify(scenario), raw);
-  const news = gateInsights(scenario.insights, free, scenario.detail.fixture.status).sections.news.items;
-  assert.equal(news.some(item => item.kind === 'analysis'), isFreeFixture(scenario.detail.fixture.status));
+  const news = gateInsights(scenario.insights, free).sections.news.items;
+  assert.equal(news.some(item => item.kind === 'analysis'), false);
   assert.ok(news.some(item => item.kind === 'report'));
 });
 test('strict wire schemas reject full data disguised as free or gated and reject unordered families', () => {

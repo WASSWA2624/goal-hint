@@ -98,6 +98,34 @@ function assertDeepFrozen(value) {
   for (const child of Object.values(value)) assertDeepFrozen(child);
 }
 
+test("wallet and support environment identities normalize independently without implicit fallbacks", () => {
+  const identity = parseRuntimePolicy({
+    GOAL_HINT_MTN_MOMO_NUMBER: "+256 700 000 901", GOAL_HINT_MTN_MOMO_NAME: "TEST MTN",
+    GOAL_HINT_AIRTEL_MONEY_NUMBER: "0700000903", GOAL_HINT_AIRTEL_MONEY_NAME: "TEST AIRTEL",
+    GOAL_HINT_CUSTOMER_SUPPORT_NUMBER: "+44 7946 001234", GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER: "254712345678",
+  }).choices.subscriptionIdentity;
+  assert.deepEqual(identity, { mtnNumber: "256700000901", mtnName: "TEST MTN", mtnMenuShortcut: null,
+    airtelNumber: "256700000903", airtelName: "TEST AIRTEL", airtelMenuShortcut: null,
+    contactPhone: "447946001234", whatsappPhone: "254712345678" });
+  assertDeepFrozen(identity);
+  const supportOnly = parseRuntimePolicy({ GOAL_HINT_CUSTOMER_SUPPORT_NUMBER: "0700000902" }).choices.subscriptionIdentity;
+  assert.equal(supportOnly.contactPhone, "256700000902");
+  for (const key of ["mtnNumber", "airtelNumber", "whatsappPhone"]) assert.equal(supportOnly[key], null);
+});
+
+test("wallet configuration requires paired identities and refuses malformed values without echoing them", () => {
+  for (const [configuration, field] of [
+    [{ GOAL_HINT_MTN_MOMO_NUMBER: "0700000901" }, "GOAL_HINT_MTN_MOMO_NAME"],
+    [{ GOAL_HINT_AIRTEL_MONEY_NAME: "TEST AIRTEL" }, "GOAL_HINT_AIRTEL_MONEY_NUMBER"],
+    [{ GOAL_HINT_MTN_MOMO_MENU_SHORTCUT: "*000*{amount}#" }, "GOAL_HINT_MTN_MOMO_MENU_SHORTCUT"],
+    [{ GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER: "invalid-private-number" }, "GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER"],
+    [{ GOAL_HINT_MTN_MOMO_NUMBER: "0700000901", GOAL_HINT_MTN_MOMO_NAME: "TEST\u0000PAYEE" }, "GOAL_HINT_MTN_MOMO_NAME"],
+  ]) {
+    const error = policyError(() => parseRuntimePolicy(configuration), [field]);
+    for (const value of Object.values(configuration)) assert.ok(!error.message.includes(value), "diagnostics contain field names, never configured values");
+  }
+});
+
 test("public exports expose only the immutable browser-safe product projection", () => {
   assert.deepEqual(Object.keys(publicExports), ["publicPolicy"]);
   assert.deepEqual(Object.keys(publicPolicy).sort(), [
@@ -132,6 +160,9 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_DATABASE_CONNECTION_MODE", "GOAL_HINT_DATABASE_POOL_LIMIT", "GOAL_HINT_DATABASE_CONNECT_TIMEOUT_MS",
     "GOAL_HINT_DATABASE_ACQUIRE_TIMEOUT_MS", "GOAL_HINT_DATABASE_IDLE_TIMEOUT_SECONDS", "GOAL_HINT_DATABASE_TLS_MODE", "GOAL_HINT_DATABASE_TLS_CA_FILE",
     "GOAL_HINT_DATABASE_ACCESS_REF",
+    "GOAL_HINT_MTN_MOMO_NUMBER", "GOAL_HINT_MTN_MOMO_NAME", "GOAL_HINT_MTN_MOMO_MENU_SHORTCUT",
+    "GOAL_HINT_AIRTEL_MONEY_NUMBER", "GOAL_HINT_AIRTEL_MONEY_NAME", "GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT",
+    "GOAL_HINT_CUSTOMER_SUPPORT_NUMBER", "GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER",
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES", "GOAL_HINT_DEPLOYMENT_ENVIRONMENT",
     "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
     "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_AI_BILLING_MODE",

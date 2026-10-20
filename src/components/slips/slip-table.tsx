@@ -37,7 +37,7 @@ function SlipProbability({ selection, label }: { selection: SlipSelection; label
 }
 
 /** Saved selections retain their own pick, probability and odds in a single semantic match row. */
-export function SlipTable({ slip, index, locale }: { slip: BuiltSlip; index: number; locale: string }) {
+export function SlipTable({ slip, index, locale, estimatedProbability }: { slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number }) {
   const messages = createMessages(locale), headingId = useId();
   return <SlipCard data-slip-id={slip.id}>
     <SlipTitle>
@@ -45,8 +45,8 @@ export function SlipTable({ slip, index, locale }: { slip: BuiltSlip; index: num
       {index === 0 && <span>{messages.text("slips.topRanked")}</span>}
       <SlipSummary data-slip-summary>
         <div><dt>{messages.text("slips.totalOdds")}</dt><dd>{slip.totalOdds}</dd></div>
-        <div><dt><span aria-hidden="true">{messages.text("slips.averageShort")}</span><VisuallyHidden>{messages.text("slips.average")}</VisuallyHidden></dt>
-          <dd>{percent(slip.averageProbability, messages)}</dd></div>
+        <div><dt>{estimatedProbability === undefined ? <><span aria-hidden="true">{messages.text("slips.averageShort")}</span><VisuallyHidden>{messages.text("slips.average")}</VisuallyHidden></> : messages.text("bestSlips.probability")}</dt>
+          <dd>{percent(estimatedProbability ?? slip.averageProbability, messages)}</dd></div>
         <div><dt><VisuallyHidden>{messages.text("slips.selectionCount")}</VisuallyHidden></dt>
           <dd>{messages.plural("slips.selections", slip.selections.length)}</dd></div>
       </SlipSummary>

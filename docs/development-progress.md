@@ -1,5 +1,50 @@
 # Development progress
 
+## 20 October 2026 — local repair and Best Slips follow-up
+
+Owner authorized non-destructive drift/restore repair, visible auth/access entry
+points, all-status subscription gates and Best Slips as home. Public Best Slips
+summaries alone are the approved exception; match selections stay private.
+The owner later requested that nothing remain closed and supplied the MTN registered name. Local test mode is now open with the approved receiving/contact details and three plans; existing data/plans were preserved and changes audited. Nothing was deployed.
+
+The follow-up moves both receiving-wallet numbers/names and independent support
+call/WhatsApp numbers to typed environment configuration. Admin Settings exposes
+managed fields read-only and rejects API edits before password/database work.
+The same environment overlay controls locked payment-submission decisions;
+historical database values are retained. A MySQL regression proves that an
+environment-only Airtel wallet accepts reports and a stale stored wallet cannot.
+The owner-supplied Airtel identity is configured only in the ignored local env.
+
+The shared phone field now covers sign-in, payment and admin phone forms, with
+the existing server normalizer, telephone keyboard/autofill, a forwarded native
+ref, canonicalization on blur, complete/partial paste handling, bounded input
+and native/linked inline validation. Square 44px/16px mobile controls match the
+existing chrome. Browser checks cover caret preservation, keyboard order,
+controlled updates, read-only behaviour and zero overflow at 375px. No real
+member/payment was created by browser acceptance. Both original network logos
+load on the real local payment page. The 39 real-MySQL member/payment/admin checks
+pass without skips; Python passes 18; final lint and the actual-env production
+build pass. See subscriptions.md for configuration and payment-branding.md for
+artwork sources.
+
+The forward repair preserves 91 durable tables and all 29 historical migration
+rows. Drift verification passes. The 93-table backup suite passes 10 real isolated
+MySQL base/PITR/tamper/least-privilege checks without skips. No reset or source
+data deletion was used. Original migration files remain unchanged.
+
+Best Slips now owns `/en`; Matches uses `/en/matches`, preserving old feed-query
+bookmarks by redirect. The generator reuses the existing bounded stored cohort
+and price checks, requires a qualified calibrated joint model, ranks joint
+probability/count/odds and sorts matches by individual probability. Page/API
+projections omit selections and internal IDs for free viewers and recheck access
+after generation. Account/Get access stay visible. Closed mode remains supported; the local app now uses open test mode. Valid existing unlocked periods are honored until expiry.
+
+The final full unit suite passes 1,593 checks with one existing Windows skip (1,594 total); Python passes 18. The final sweep updated stale anonymous-test-mode and dashboard identity-edit expectations to the owner-approved rules. Raw production HTML/RSC/API checks pass 696 cases across nine viewer states. The production build now passes with the actual local environment, without the former database-disabled override: analytics availability resolves at request time before initializing runtime database policy. Runtime production checks remain enforced.
+
+Actual daily slip publication remains unavailable while public odds rights and
+model qualification are unresolved (OP-15/17/36). No arithmetic mean or fabricated
+estimate is presented as a joint win probability. See [Best Slips](best-slips.md).
+
 ## 001 — Project foundation
 
 Date: 7 October 2026 (Africa/Kampala).

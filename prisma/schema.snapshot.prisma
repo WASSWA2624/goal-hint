@@ -179,6 +179,7 @@ model FootballSeason {
   providerUpdatedAt DateTime?           @db.DateTime(3)
   competition       FootballCompetition @relation(fields: [competitionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   fixtures          FootballFixture[]
+  standings         SeasonStandings?
 
   @@unique([competitionId, year])
 }
@@ -224,6 +225,7 @@ model FootballFixture {
   oddsSnapshots         ProviderOddsSnapshot[]
   oddsState             FixtureOddsState?
   oddsPrices            FixtureOddsPrice[]
+  facts                 FixtureFacts?
 
   @@unique([provider, externalId])
   @@index([eatDate, kickoff])
@@ -1719,4 +1721,50 @@ model OwnerAuditEvent {
   details    Json
 
   @@index([accountId, action, at])
+}
+
+// Existing locally collected match facts are adopted without rewriting their rows.
+model FixtureFacts {
+  fixtureId String @id @db.Char(36)
+  providerFixtureId BigInt @db.UnsignedBigInt
+  venueExternalId BigInt? @db.UnsignedBigInt
+  venueName String? @db.VarChar(256)
+  venueCity String? @db.VarChar(256)
+  referee String? @db.VarChar(256)
+  infoRetrievedAt DateTime? @db.DateTime(3)
+  events Json?
+  eventsHash String? @db.Char(64)
+  eventsRetrievedAt DateTime? @db.DateTime(3)
+  statistics Json?
+  statisticsHash String? @db.Char(64)
+  statisticsRetrievedAt DateTime? @db.DateTime(3)
+  updatedAt DateTime @db.DateTime(3)
+  fixture FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([venueExternalId])
+}
+
+model FootballVenue {
+  provider String @db.VarChar(32)
+  externalId BigInt @db.UnsignedBigInt
+  status String @db.VarChar(16)
+  name String? @db.VarChar(256)
+  city String? @db.VarChar(256)
+  country String? @db.VarChar(256)
+  capacity Int? @db.UnsignedInt
+  surface String? @db.VarChar(64)
+  retrievedAt DateTime? @db.DateTime(3)
+  checkedAt DateTime @db.DateTime(3)
+  @@id([provider, externalId])
+  @@index([checkedAt])
+}
+
+model SeasonStandings {
+  seasonId String @id @db.Char(36)
+  status String @db.VarChar(16)
+  body Json?
+  contentHash String? @db.Char(64)
+  retrievedAt DateTime? @db.DateTime(3)
+  checkedAt DateTime @db.DateTime(3)
+  season FootballSeason @relation(fields: [seasonId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  @@index([checkedAt])
 }

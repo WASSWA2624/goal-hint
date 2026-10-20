@@ -3,11 +3,9 @@ import type { FixtureSnapshot, StoredFixtureSnapshot } from "./fixture-snapshot.
 import type { MatchDetailResponse, StoredMatchDetailResponse } from "./match-detail.ts";
 import type { MatchFeedResponse, StoredMatchFeedResponse } from "./match-feed.ts";
 import type { MatchInsights, StoredMatchInsights } from "./match-insights.ts";
-import { isPlayedFinalStatus, type SettlementStatus } from "./market-settlement.ts";
 import { publicPolicy } from "./public-policy.ts";
 
 export type ContentAccess = Readonly<{ tier: "full" | "free"; signedIn: boolean }>;
-export const isFreeFixture = (status: SettlementStatus) => isPlayedFinalStatus(status) || status === "canceled" || status === "awarded";
 export const usesSubscriberFeedOracle = (query: FeedQuery) => query.probability.min !== 0 || query.probability.max !== 100 || query.sort.by === "probability" || query.picks === "only" || query.odds !== null;
 export const withoutSubscriberFeedOracle = (query: FeedQuery): FeedQuery => ({ ...query, probability: { min: 0, max: 100 }, odds: null, picks: "all", sort: { by: "kickoff", direction: "desc" }, page: 1 });
 const wireAccess = ({ tier, signedIn }: ContentAccess): ContentAccess => ({ tier, signedIn });
@@ -15,7 +13,7 @@ const families = (items: readonly { market: { family: (typeof publicPolicy.marke
   publicPolicy.markets.filter((family) => items.some((item) => item.market.family === family));
 
 export function gateFixture<T extends StoredFixtureSnapshot>(fixture: T, access: ContentAccess): Omit<T, "forecast"> & Pick<FixtureSnapshot, "forecast"> {
-  if (access.tier === "full" || isFreeFixture(fixture.status)) return fixture;
+  if (access.tier === "full") return fixture;
   const forecast = fixture.forecast;
   return { ...fixture, prices: [], forecast: forecast ? { gated: true, runId: forecast.runId, revisionId: forecast.revisionId,
     publishedAt: forecast.publishedAt, families: families(forecast.markets),
@@ -29,7 +27,7 @@ export function gateFeedResponse(response: StoredMatchFeedResponse, access: Cont
 }
 
 export function gateDetailResponse(response: StoredMatchDetailResponse, access: ContentAccess): MatchDetailResponse {
-  if (access.tier === "full" || isFreeFixture(response.fixture.status)) return { ...response, access: wireAccess(access) };
+  if (access.tier === "full") return { ...response, access: wireAccess(access) };
   const { odds: _odds, ...rest } = response;
   void _odds;
   const snapshot = response.snapshot;
@@ -38,8 +36,8 @@ export function gateDetailResponse(response: StoredMatchDetailResponse, access: 
       applicability: snapshot.applicability, publishedAt: snapshot.publishedAt, families: families(snapshot.markets) } : null, access: wireAccess(access) };
 }
 
-export function gateInsights(response: StoredMatchInsights, access: ContentAccess, status: SettlementStatus): MatchInsights {
-  return { ...response, access: wireAccess(access), sections: access.tier === "full" || isFreeFixture(status) ? response.sections : {
+export function gateInsights(response: StoredMatchInsights, access: ContentAccess): MatchInsights {
+  return { ...response, access: wireAccess(access), sections: access.tier === "full" ? response.sections : {
     ...response.sections, news: { ...response.sections.news, items: response.sections.news.items.filter((item) => item.kind !== "analysis") },
   } };
 }

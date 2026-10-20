@@ -6,7 +6,7 @@
 | ◐ Partial | Implementation started or landed, but work, acceptance checks or an external blocker remain. Each partial row has a note below. |
 | ☐ Not started | No implementation yet. |
 
-**Totals:** 50 completed · 9 partial · 8 not started (67 prompts).
+**Totals:** 51 completed · 8 partial · 8 not started (67 prompts).
 
 | Status        | Dev file                                                                        | Pending                                                                                             |
 | ------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -67,7 +67,7 @@
 | ☐ Not started | [055-on-device-picks.md](dev-plan/055-on-device-picks.md)                       | Implementation; run after 061–062                                                                   |
 | ☐ Not started | [056-leagues-and-tips-pages.md](dev-plan/056-leagues-and-tips-pages.md)         | Implementation; run after 061–062                                                                   |
 | ☑ Completed   | [057-owner-admin-foundation.md](dev-plan/057-owner-admin-foundation.md)         | —                                                                                                   |
-| ◐ Partial     | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md)       | Existing local build, database drift and backup checks                                              |
+| ☑ Completed   | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md)       | —                                              |
 | ☑ Completed   | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md)                           | —                                                                                                   |
 | ☑ Completed   | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md)             | —                                                                                                   |
 | ☑ Completed   | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md)     | —                                                                                                   |
@@ -75,7 +75,7 @@
 | ◐ Partial | [063-get-access-payments.md](dev-plan/063-get-access-payments.md)               | Real SMS/screenshot and physical phone verification (OP-38/067)                                     |
 | ☑ Completed | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md)             | — |
 | ☑ Completed | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md)       | — |
-| ◐ Partial | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Legal/privacy/refund facts remain pending (OP-26/27/39); owner chose drafts/off                              |
+| ◐ Partial | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Legal/privacy/refund facts remain pending (OP-26/27/39); draft notices; local test flows open                              |
 | ◐ Partial | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Real samples, phone/host/legal evidence and activation approval pending                              |
 
 ## Partial rows
@@ -85,10 +85,9 @@
 - **014 Forecast evaluation:** the offline harness, metrics, baselines and report command are built. Missing: the evaluation periods, sample sizes and quality thresholds (OP-16/17) and real forecast observations.
 - **051 Feed screen layout:** the screens are built. Missing: the browser acceptance checks. The prior stale rendering assertions were repaired within 061 and all required rendering commands now pass (19 October 2026).
 - **052 Provider odds import:** implementation is complete for the rights-off state. Missing: the counted odds trial (it needs the planned API plan upgrade; owner decision 10 October 2026) and odds display rights (OP-36), so `publicPolicy.features.providerOdds` stays off. See [development progress](docs/development-progress.md) and [provider odds](docs/provider-odds.md).
-- **058 Data model, settings, plans and audit:** the nine tables, overlay, phone helpers, settings, plans, audit and the Plans and Settings pages are built, and `test:members` and `test:admin` pass. The owner accepted leaving network auto-selection unset (`networkPrefixes` stays empty); do not re-request that choice. The 375 px check passed. Still failing locally, not because of 058: `npm run check`'s `next build` with `.env.local`; `db:verify` drift from the developer database's out-of-repo `20261015072524_match_facts`; and the `test:backup` restores (trailing `;` on the `20261012153531_goal_market_extension` triggers). The recorded build-only override and fresh isolated database allow independent implementation to continue.
 
 - **063 Get access:** local implementation and acceptance pass; drafted SMS fixtures are synthetic. Real messages/screenshots and physical Android/in-app/slow-network verification remain.
-- **066 Policy copy:** all local checks pass; owner chose draft notices/off pending legal, privacy and refund facts.
+- **066 Policy copy:** all local checks pass; notices remain drafts pending legal, privacy and refund facts; local test mode is open.
 - **067 Launch readiness:** verifiers and checklist are implemented; all required local regression checks and both local production verifiers pass. Real-message, owner/host/phone and activation evidence remains pending.
 
 ## Not started rows
@@ -101,7 +100,7 @@
 
 - **Phase 0 is done (19 October 2026):** specification v1.9, the index section, decisions OP-37–OP-40 and prompts 057–067 are recorded (commits c79a9c9 and 4529d71). Owner choices: Daily (24 hours) UGX 1,000, Weekly UGX 5,000 and Monthly UGX 20,000, all with full access, running from payment confirmation; one free 2-day trial per new number. At Phase 0 no paid-access code existed.
 - **057 (19 October 2026):** ☑ Completed, including the manual 375 px check.
-- **058 (19 October 2026):** ◐ Partial (see Partial rows).
+- **058:** completed in the 20 October follow-up: full build with local configuration, drift verification and all 10 backup/restore checks pass. Forward repair preserves data/history.
 - **059 (19 October 2026):** ☑ Completed: phone sign-in, hashed sessions, throttles, sign-out/devices and the account states in the existing chrome. MySQL concurrency, 375 px, production headers/build, changed-file lint, typecheck and the full sequential unit suite pass.
 - **060 (19 October 2026):** ☑ Completed: account-bound access codes, confirmation-time periods, device unlock, viewer resolution and audited owner code services. Member (43), SEO (29) and admin (25) checks pass; production HTML/build, typecheck, changed-file lint and 375 px fragment/refresh/unlock checks pass.
 - **061 (19 October 2026):** ☑ Completed: strict wire gates after shared raw reads, private responses, oracle refusal, generic metadata and access transitions. Unit/type/lint checks and every required rendering command pass, including 585 HTML/RSC/API leak checks.
@@ -118,3 +117,12 @@
 - **066 (20 October 2026):** ◐ Partial: mode-independent copy, owner runbook and name-only analytics implemented; units/type/lint/build and all four production HTML checks pass. Owner chose draft notices/off pending OP-26/27/39 facts.
 
 - **067 (20 October 2026):** ◐ Partial: read-only production verifiers and host/owner checklist implemented; npm run check (recorded local build override), all named service/rendering/HTML checks and both local production verifiers pass. Real SMS/screenshots, phone/menu/host checks and legal/launch approval remain pending.
+
+## 20 October 2026 follow-up
+
+Owner-authorized forward migrations resolve the previously recorded developer drift and backup restore failure. All 29 historical migration rows and 91 durable tables were preserved; db:verify passes. The 93-table base/PITR backup suite passes 10 checks without skips. The old 058 failure notes above are historical; production database capability evidence remains unresolved.
+
+Best Slips is now home, with public summaries and subscriber-only selections; Matches, Live, Results and Slip Builder remain available. Current production generation is unavailable pending a qualified joint model and public odds rights (OP-15/17/36). Account/Get access are visible, phone sign-in works while closed, and all fixture predictions/odds are gated. Nothing was deployed and paid access stays off.
+
+
+**Later owner instruction, 20 October:** nothing should remain closed locally. The confirmed receiving-wallet name was saved privately; local test mode is open, with the existing daily plan preserved and approved Weekly/Monthly plans added through the plans service. Settings/mode changes are audited. No existing data was deleted. Production activation/deployment did not occur; release/legal notices remain drafts.

@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
-import { UserIcon } from "@/components/ui/icons";
+import { SubscriberIcon, UserIcon } from "@/components/ui/icons";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 
@@ -23,4 +23,18 @@ const Control = styled(Link)`
 /** Shared square account entry beside the theme control in each existing title bar. */
 export function AccountLink({ locale = "en" }: { locale?: string }) {
   return <Control href="/en/account" aria-label={createMessages(locale).text("account.title")} prefetch={false}><UserIcon /></Control>;
+}
+
+const AccessControl = styled(Control)`
+  inline-size: auto;
+  grid-auto-flow: column;
+  gap: 4px;
+  padding-inline: 6px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+`;
+
+/** Public entry points remain discoverable even while subscriptions are closed. */
+export function AccountLinks({ locale = "en" }: { locale?: string }) {
+  return <><AccessControl href="/en/subscribe" prefetch={false}><SubscriberIcon />{createMessages(locale).text("paywall.getAccess")}</AccessControl><AccountLink locale={locale} /></>;
 }

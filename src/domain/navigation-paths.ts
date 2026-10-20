@@ -8,6 +8,10 @@ export function homeHref(locale?: string): string {
   return `/${resolveLocale(locale)}`;
 }
 
+export function matchesHref(locale?: string): string {
+  return `${homeHref(locale)}/matches`;
+}
+
 export function informationHref(page: InformationPage, locale?: string): string {
   return `${homeHref(locale)}/${page}`;
 }

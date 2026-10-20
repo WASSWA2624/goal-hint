@@ -42,8 +42,8 @@ def verify(origin, *, today=None):
         return response
 
     page('/en', '/en', True)
-    page('/en?q=Arsenal', '/en?q=Arsenal', False)
-    page('/en?tz=America%2FLos_Angeles', '/en?tz=America%2FLos_Angeles', False)
+    page('/en/matches?q=Arsenal', '/en/matches?q=Arsenal', False)
+    page('/en/matches?tz=America%2FLos_Angeles', '/en/matches?tz=America%2FLos_Angeles', False)
     publication = notices()
     page('/en/privacy', '/en/privacy', publication['privacyNotice']['releaseReady'])
     page('/en/terms', '/en/terms', publication['termsNotice']['releaseReady'])

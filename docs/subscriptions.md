@@ -1,6 +1,6 @@
 # Subscriber access and owner operations
 
-Paid access stays **off**. Local fixtures do not approve production activation.
+Local development now uses **test** mode at the owner's request: account, trial, code and payment-report flows are open. Production was not deployed or activated. Local fixtures do not approve production activation.
 See OP-26/27/37/38/39/40 in implementation-decisions.md and the deployment runbook.
 
 ## Model and terminology
@@ -14,12 +14,19 @@ manual entries; replacement chains preserve the original payment attribution.
 **Gated = subscriber-only; locked = cutoff-locked.** Cutoff locking preserves
 publication history; subscriber gating controls the projection a viewer receives.
 
-`off` serves full content; `test` gates signed-in member accounts while anonymous
-browsing stays full; `on` gates non-entitled viewers. Unfinished-fixture picks,
-probabilities, prices, analysis, history, slips and probability-dependent filters
-require entitlement. Fixtures, scores, factual insights, published-family indicators
-and performance aggregates remain free. Finished/canceled/awarded fixture picks
-remain public. Every prediction read uses `members/gated-reads.ts`. Shared premium
+`off` closes payments, trials and code activation, while phone sign-in and all
+public screens remain available. It never bypasses prediction gating. `test` and
+`on` also gate anonymous and non-entitled viewers. Existing valid unlocked
+periods are honored until expiry in every mode; the owner retains authenticated
+preview access. Predictions, probabilities, odds, prediction analysis/history,
+slip selections and probability-dependent filters require entitlement for every
+fixture, including finished/canceled/awarded matches. Fixtures, scores, factual
+insights, published-family indicators, aggregate performance and the slip criteria
+form remain public. Best Slips additionally exposes only total odds, estimated
+joint probability and match count publicly; its match selections remain gated.
+Account and Get access links are visible in all modes. Match prediction reads
+use `members/gated-reads.ts`; Best Slips uses an explicit summary allowlist and
+repeats authorization after generation. Shared premium
 caches stay server-side; final responses are private/no-store and vary on Cookie.
 
 ## Member and owner flow
@@ -50,9 +57,23 @@ Sign out others and owner Sign out all invalidate sessions. No OTP or auth SDK.
 
 ## Settings and audit
 
-Use the existing guarded owner dashboard. Configure verified receiving numbers
-and registered names, contact/WhatsApp sender, review-time/payment note and tested
-copy format/menu shortcuts. No real wallet values are seeded. Prefix selection
+Receiving identities are server environment configuration: `GOAL_HINT_MTN_MOMO_NUMBER`,
+`GOAL_HINT_MTN_MOMO_NAME`, `GOAL_HINT_AIRTEL_MONEY_NUMBER` and `GOAL_HINT_AIRTEL_MONEY_NAME`.
+Each wallet requires both its number and registered name; an empty wallet is hidden.
+Set `GOAL_HINT_CUSTOMER_SUPPORT_NUMBER` and `GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER`
+separately, even when they match a receiving number. There is no fallback between
+wallets, support channels or historical database values. Restart after configuration
+changes. The runtime policy accepts formatted/local numbers and canonicalizes them.
+Optional verified menu strings use `GOAL_HINT_MTN_MOMO_MENU_SHORTCUT` and
+`GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT`; leave them blank until tested for that wallet.
+
+Admin Settings displays these environment-managed fields read-only and rejects
+API edits before any database write. Existing stored identity and audit history
+is preserved. The dashboard still edits plans, mode, review time, payment note,
+copy format, trial length and device/image limits. No real wallet values are seeded.
+The shared `PhoneInput` uses the existing server normalizer for account, payer and
+admin phones, with native telephone/autofill semantics, bounded paste handling,
+canonicalization on blur and linked inline validation. Prefix selection
 stays unset by owner decision; users explicitly choose the receiving network.
 Mode changes require two-tap confirmation and satisfied readiness facts.
 
@@ -134,9 +155,10 @@ This is a future operator procedure, **not deployment authorization**. The owner
 explicitly chose draft notices and paid access off on 20 October 2026.
 
 1. Build and verify locally with paid mode off. Use isolated databases for
-   integration tests. The known developer runtime-policy/migration drift and
-   append-only-trigger restore failure remain separate recorded repair gates
-   (058); a database-disabled build does not resolve them.
+   integration tests. The 20 October forward repair resolves developer drift
+   and the trigger restore failure without resetting data. Production database
+   capability still requires TLS/access/budget evidence; a database-disabled
+   build does not approve production configuration.
 2. Only after an explicit owner deployment request, pause app/worker writers,
    take a private MariaDB backup including triggers, record its checksum and
    verify restoration to a separate authorized target. Include all nine member
@@ -174,11 +196,11 @@ explicitly chose draft notices and paid access off on 20 October 2026.
    deployment uses the existing `scripts/deploy-worker-cpanel.py`. Both database
    roles need the documented narrow DELETE grants on MemberAccount, MemberSession,
    PaymentScreenshot and RateLimitBucket; no DELETE on reports/codes/audit.
-6. The owner enters approved plans, payment numbers and registered names,
-   contact/sender, copy format and tested optional menu shortcuts. Do not seed real
-   credentials or wallet values into source. Switch to test only under that
+6. The owner enters approved plans/copy format in Settings and verified wallet,
+   support and optional menu configuration in the environment variables above.
+   Do not seed real credentials or wallet values into source. Switch to test only under that
    approved exercise. In a browser without the owner session, open `/en/account`
-   directly (its icon is hidden in test mode). Test gated to unlocked on the
+   directly (Account and Get access links are visible in every mode). Test gated to unlocked on the
    phone, the fragment code link, a renewal, a second browser/device, expiry,
    Facebook-to-Chrome recovery, file picker/clipboard, Messages return, forced tab
    discard, retry and upload at about 200 kbit/s. A real small payment requires
@@ -194,18 +216,19 @@ explicitly chose draft notices and paid access off on 20 October 2026.
    Both scripts make cookie-less GETs only and never sign in, upload, approve or
    change settings. They refuse cookies, cached/private-page regressions and gate
    leaks. Paywall verification needs a published scheduled forecast within the
-   upcoming week; no qualifying fixture is an incomplete check, not a pass. Free
-   finished-fixture predictions are intentionally allowed. Before deployment,
+   upcoming week; no qualifying fixture is an incomplete check, not a pass. Finished-fixture predictions and odds are gated too. Before deployment,
    `python scripts/verify-launch-rendering.py` exercises the same verifiers against
    local production route factories and explicitly synthetic data.
 8. If verification fails, the authorized owner switches back off. Watch pending
    payments, upload Busy events, error reports, review backlog and code delivery
    throughout the first week; assign the owner responsible for responding.
-9. Rollback is mode off, effective across settings caches within 30 seconds.
+9. Close new paid actions with mode off, effective across settings caches within
+   30 seconds. This retains the gate and honors existing valid unlocked periods.
    Prefer a forward fix and owner-approved extensions for affected periods.
    Rolling code back before 061 removes enforcement while paid periods continue
    and restores obsolete policy copy. Do not roll schema or delete paid history
-   as routine rollback. No new environment keys or npm dependencies were added.
+   as routine rollback. The follow-up adds the documented identity environment
+   keys without adding npm dependencies.
 
 Host evidence has **not** been collected: trusted header/entry, forged-header
 result, packet/redo sizes, CDN behavior, upload limits/deadline, physical owner
@@ -219,8 +242,8 @@ login, backup/restore and deployed worker grants are all pending OP-32/40.
 | --- | --- | --- |
 | Approved implementation scope/security | v1.9 followed: phone-only login, account-bound code for each new browser, automatic renewal on unlocked devices, any country-code account and UGX to Ugandan wallets. No security redesign is proposed. | OP-37/38 |
 | Plans and trial | Supplied: Daily 1 day/1,000; Weekly 7 days/5,000; Monthly 30 days/20,000 UGX, equal content; one free 2-day trial per new number. Owner enters Settings/Plans. | OP-38 |
-| Receiving/sender/contact number | MTN, calls and WhatsApp supplied: `256783230321`. Never seeded into committed settings. † MTN registered name still needed. Airtel number/name needed only if offered; otherwise leave Airtel hidden. | OP-38 |
-| † Final free/paid split | Implementation preserves public finished/canceled/awarded picks, factual insights and performance; confirm the remaining split decision before activation. | OP-37 |
+| Receiving/sender/contact number | MTN and Airtel numbers and registered names were supplied privately, with separate support call and WhatsApp configuration. Configured only in ignored local environment variables; stored database history is preserved. Both local receiving wallets are offered. | OP-38 |
+| Content split | Confirmed 20 October 2026: all screens/facts/scores/aggregate performance stay public; predictions and odds for every fixture require current subscription access. Closed mode hides premium content but permits sign-in. | OP-37 |
 | Review expectation and note | Supply typical review time and any extra note, or explicitly choose no estimate/note; there is no guaranteed SLA. | OP-38 |
 | † Real message/image verification | Six SMS drafts are intentionally synthetic, per owner request. Still need at least three real anonymized messages per offered network covering payer-sent and owner-received layouts, and anonymized app/SMS screenshots. Retain exact punctuation/labels while replacing names/digits. | OP-38 |
 | † Phone/menu evidence | Confirm whether each offered menu accepts international or local pasted numbers; test optional menu shortcuts and amount placement, or leave shortcuts absent. Physical Android/in-app, clipboard/file picker, tab discard, 200 kbit/s retry and 90-second upload evidence remains pending. | OP-38/40, 063 |

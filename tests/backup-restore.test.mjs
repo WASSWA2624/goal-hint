@@ -12,6 +12,22 @@ import { backupPolicy, backupAuthority } from './helpers/backup-fixtures.mjs';
 import { assessBackupHealth } from '../src/server/monitoring/monitoring-backup.ts';
 import { evaluateMonitoring } from '../src/server/monitoring/monitoring-rules.ts';
 import { monitoringPolicy, monitoringSnapshot } from './helpers/monitoring-fixtures.mjs';
+import { compatibleMigrationHistory, migrationHistoryMatches, repositoryMigrations } from '../src/server/backup/mysql-backup.mjs';
+
+test('backup migration verification permits exact adopted history and line endings, rejecting missing, changed and duplicate history', async () => {
+  const required = [{ name: 'adoption', checksum: 'current' }], legacy = { name: 'legacy', checksum: 'original', adoptedBy: 'adoption' };
+  assert.equal(migrationHistoryMatches([...required, legacy], required, [legacy]), true);
+  for (const actual of [[], [...required, { ...legacy, checksum: 'changed' }], [...required, ...required], [...required, { name: 'unknown', checksum: 'original' }]]) {
+    assert.equal(migrationHistoryMatches(actual, required, [legacy]), false);
+  }
+  const actual = await repositoryMigrations();
+  const row = actual.find(({ name }) => name === '20261014131920_first_party_analytics');
+  const bytes = await readFile(path.join('prisma/migrations', row.name, 'migration.sql'), 'utf8');
+  row.checksum = (await import('../src/server/backup/backup-contract.mjs')).sha256(bytes.replaceAll('\r\n', '\n'));
+  assert.equal(await compatibleMigrationHistory(actual), true);
+  row.checksum = '0'.repeat(64);
+  assert.equal(await compatibleMigrationHistory(actual), false);
+});
 
 test('encrypted streaming artifacts authenticate headers/body/tag/key and never overwrite an existing backup', async () => {
   const root = path.resolve('.tmp'); await mkdir(root, { recursive: true }); const directory = await mkdtemp(path.join(root, 'backup-crypto-'));

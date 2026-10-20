@@ -31,6 +31,18 @@ test('encrypted snapshot and multi-log PITR preserve representative durable hist
   await withPredictionPipeline(t, async (p) => {
     await p.instance.executeAdmin("GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ApiQuotaPeriod TO 'cutoff_app'@'127.0.0.1'; GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ApiQuotaAttempt TO 'cutoff_app'@'127.0.0.1';");
     const locked = await p.setup(3000), current = await p.setup(3005), stale = await p.setup(3002);
+    // The repaired developer history contains one successful external migration and its rolled-back attempt.
+    await p.instance.executeAdmin(`
+      INSERT INTO _prisma_migrations (id,checksum,finished_at,migration_name,started_at,applied_steps_count)
+        VALUES (UUID(),'8da3cba6b03d5c3216220d2049f3c463f0cbfde17412a1dc2488c5639eb90877',NOW(3),'20261015072524_match_facts',NOW(3),1);
+      INSERT INTO _prisma_migrations (id,checksum,rolled_back_at,migration_name,started_at,applied_steps_count)
+        VALUES (UUID(),'8db51fd7af1c4d499549f51847e556dfa59518465ee756c66b2ecbe6b6c89bab',NOW(3),'20261015072524_match_facts',NOW(3),0);
+      INSERT INTO FootballVenue (provider,externalId,status,name,checkedAt) VALUES ('synthetic',1,'available','Synthetic preserved venue',NOW(3));
+      INSERT INTO FixtureFacts (fixtureId,providerFixtureId,venueExternalId,venueName,updatedAt)
+        SELECT id,externalId,1,'Synthetic preserved venue',NOW(3) FROM FootballFixture WHERE id='${locked.fixture.id}';
+      INSERT INTO SeasonStandings (seasonId,status,checkedAt)
+        SELECT seasonId,'not-covered',NOW(3) FROM FootballFixture WHERE id='${locked.fixture.id}';
+    `);
     const publication = await p.publisher.publish(locked.input, locked.lease), currentPublication = await p.publisher.publish(current.input, current.lease);
     p.setTime(locked.cycle.cutoffAt); const lockReceipt = await p.first.close(p.target(locked));
     const h = await recoveryHarness(p);
@@ -64,8 +76,8 @@ test('encrypted snapshot and multi-log PITR preserve representative durable hist
     const options = { source, directory: artifacts, key, policy: backupPolicy(), authority: backupAuthority(), emit: (event) => events.push(event) };
     try {
       const snapshot = await captureMysqlSnapshot(options);
-      // 89 application models (the nine paid-access tables since prompt 058) plus Prisma's migration history.
-      assert.equal(snapshot.metadata.inventory.tables.length, 90); assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionset').count >= 2);
+      // 92 application models, including the three adopted match-fact tables, plus migration history.
+      assert.equal(snapshot.metadata.inventory.tables.length, 93); assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionset').count >= 2);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionaudit').count > 0);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'dailyrunmanifest').count > 0);
       // Commit a correction, rotate, then another correction and a counted launch.
@@ -86,6 +98,8 @@ test('encrypted snapshot and multi-log PITR preserve representative durable hist
           GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, TRIGGER ON goal_hint_test.* TO 'cutoff_migration'@'127.0.0.1';`);
       };
       async function inspect({ instance, target, quarantined, recoveryPoint: restoredPoint }) {
+        assert.equal((await target.query("SELECT COUNT(*) FROM _prisma_migrations WHERE migration_name='20261015072524_match_facts'"))[0], '2');
+        for (const table of ['FixtureFacts', 'FootballVenue', 'SeasonStandings']) assert.equal((await target.query(`SELECT COUNT(*) FROM ${table}`))[0], '1');
         assert.equal(quarantined, true); assert.notEqual(instance.port, p.instance.port);
         assert.notEqual((await target.identity()).uuid, snapshot.metadata.identity.uuid);
         assert.equal((await target.query("SELECT COUNT(*) FROM mysql.user WHERE User='cutoff_app'"))[0], '0');

@@ -17,7 +17,7 @@ METADATA_SQL = [
     "SELECT JSON_OBJECT('kind','fk','table',k.TABLE_NAME,'name',k.CONSTRAINT_NAME,'column',k.COLUMN_NAME,'parent',k.REFERENCED_TABLE_NAME,'parentColumn',k.REFERENCED_COLUMN_NAME,'parentSchema',k.REFERENCED_TABLE_SCHEMA,'update',r.UPDATE_RULE,'delete',r.DELETE_RULE) FROM information_schema.KEY_COLUMN_USAGE k JOIN information_schema.REFERENTIAL_CONSTRAINTS r ON r.CONSTRAINT_SCHEMA=k.CONSTRAINT_SCHEMA AND r.CONSTRAINT_NAME=k.CONSTRAINT_NAME AND r.TABLE_NAME=k.TABLE_NAME WHERE k.TABLE_SCHEMA=DATABASE() AND k.REFERENCED_TABLE_NAME IS NOT NULL ORDER BY k.TABLE_NAME,k.CONSTRAINT_NAME,k.ORDINAL_POSITION",
     "SELECT JSON_OBJECT('kind','trigger','name',TRIGGER_NAME,'table',EVENT_OBJECT_TABLE,'event',EVENT_MANIPULATION,'timing',ACTION_TIMING,'body',ACTION_STATEMENT,'definer',DEFINER,'mode',SQL_MODE) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME",
     "SELECT JSON_OBJECT('kind','program') FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE() UNION ALL SELECT JSON_OBJECT('kind','program') FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()",
-    "SELECT JSON_OBJECT('kind','migration','name',migration_name,'checksum',checksum,'complete',finished_at IS NOT NULL AND rolled_back_at IS NULL) FROM _prisma_migrations ORDER BY migration_name",
+    "SELECT JSON_OBJECT('kind','migration','name',migration_name,'checksum',checksum,'complete',finished_at IS NOT NULL AND rolled_back_at IS NULL,'rolledBack',rolled_back_at IS NOT NULL) FROM _prisma_migrations ORDER BY migration_name",
 ]
 
 
@@ -38,6 +38,27 @@ def repository_migrations(root="prisma/migrations"):
 
 def repository_compatibility():
     return {"schemaHash": sha256(Path("prisma/schema.prisma").read_bytes()), "lockfileHash": sha256(Path("package-lock.json").read_bytes())}
+
+
+def migration_history_matches(actual, required, adopted):
+    current = {row["name"]: row["checksum"] for row in actual}
+    if len(current) != len(actual) or any(current.get(row["name"]) != row["checksum"] for row in required):
+        return False
+    expected = {row["name"]: row["checksum"] for row in required}
+    for row in adopted:
+        if row["adoptedBy"] in expected:
+            expected[row["name"]] = row["checksum"]
+    return all(expected.get(row["name"]) == row["checksum"] for row in actual)
+
+
+def compatible_migration_history(actual):
+    applied = {row["name"]: row["checksum"] for row in actual}
+    required = repository_migrations()
+    for row in required:
+        text = (Path("prisma/migrations") / row["name"] / "migration.sql").read_bytes().replace(b"\r\n", b"\n")
+        if applied.get(row["name"]) in (sha256(text), sha256(text.replace(b"\n", b"\r\n"))):
+            row["checksum"] = applied[row["name"]]
+    return migration_history_matches(actual, required, json.loads(Path("prisma/adopted-migrations.json").read_text(encoding="utf-8")))
 
 
 class MysqlBackupSource:
@@ -99,9 +120,10 @@ class MysqlBackupSource:
             fail_backup("unsupported-storage")
         if any(value["kind"] == "program" for value in metadata):
             fail_backup("unsupported-stored-program")
-        migrations = [value for value in metadata if value["kind"] == "migration"]
-        if any(not value["complete"] for value in migrations):
+        history = [value for value in metadata if value["kind"] == "migration"]
+        if any(not value["complete"] and not value["rolledBack"] for value in history):
             fail_backup("incompatible-schema")
+        migrations = [value for value in history if not value["rolledBack"]]
         digests = {table: {"digest": hashlib.sha256(), "count": 0} for table in tables}
         hash_sql = []
         for table in tables:

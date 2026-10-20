@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import { getReportingDate, type UtcInstant } from "@/domain/calendar";
-import { breadcrumbStructuredData, feedDiscovery, homeStructuredData, serializeStructuredData } from "@/domain/discovery";
+import { breadcrumbStructuredData, feedDiscovery, serializeStructuredData } from "@/domain/discovery";
 import { homeHref } from "@/domain/navigation";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
@@ -54,13 +54,11 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
     async Page(props: Props) {
       const { query, today, result, access } = await resolve(props), discovery = feedDiscovery(query, today);
       const messages = createMessages(query.locale);
-      // Identity on the plain home page; a breadcrumb on each unfiltered dated collection.
-      const structured = !discovery.eligible ? null : !dated && discovery.home ? homeStructuredData()
-        : dated ? breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
-          { name: messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) }]) : null;
+      const structured = !discovery.eligible ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
+        { name: dated ? messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) : messages.text("navigation.matches") }]);
       return <>
         {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
-        <MatchFeedPage query={query} today={today} result={result} showAccount={access.mode === "on"} subscriberOnly={access.tier === "free"} />
+        <MatchFeedPage query={query} today={today} result={result} showAccount subscriberOnly={access.tier === "free"} />
       </>;
     },
   };

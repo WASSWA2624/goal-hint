@@ -320,7 +320,7 @@ export function feedQueryHref(query: FeedQuery, today: ReportingDate): string {
   if (dates.kind === "date" || dates.kind === "range") {
     path += `/predictions/${dates.kind === "date" ? dates.date : dates.from}`;
     parameters.delete("date"); parameters.delete("from");
-  }
+  } else path += "/matches";
   const search = parameters.toString();
   return search ? `${path}?${search}` : path;
 }

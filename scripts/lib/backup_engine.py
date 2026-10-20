@@ -10,7 +10,7 @@ import uuid
 from .backup_contract import BackupError, authorize_backup, backup_health, fail_backup, parse_backup_policy, serialize, sha256
 from .backup_crypto import backup_text, decrypt_backup, seal_backup, verify_backup
 from .isolated_mysql import is_owned_mysql, start_isolated_mysql
-from .mysql_backup import owned_mysql_source, repository_compatibility, repository_migrations
+from .mysql_backup import owned_mysql_source, repository_compatibility, compatible_migration_history
 from .mysql_tools import mysql_child
 
 
@@ -39,7 +39,7 @@ def point(source):
 
 
 def compatible(inventory):
-    if inventory["migrations"] != repository_migrations():
+    if not compatible_migration_history(inventory["migrations"]):
         fail_backup("incompatible-schema")
 
 

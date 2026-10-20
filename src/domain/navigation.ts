@@ -3,10 +3,10 @@ import { feedDefaults, parseFeedStatus, type FeedStatus } from "./feed-query.ts"
 import { homeHref, type InformationPage } from "./navigation-paths.ts";
 
 export { feedDefaults } from "./feed-query.ts";
-export { homeHref, informationHref, informationPages, type InformationPage } from "./navigation-paths.ts";
+export { homeHref, matchesHref, informationHref, informationPages, type InformationPage } from "./navigation-paths.ts";
 export type FeedView = Readonly<{ date: ReportingDate; status: FeedStatus }>;
 export type FeedEntry = "today" | "results";
-export type AppSection = FeedEntry | "live" | "slips";
+export type AppSection = FeedEntry | "live" | "slips" | "best-slips";
 export type NavigationLocation = AppSection | InformationPage;
 
 /** Both entry points select the same feed. Results starts with yesterday's finals. */

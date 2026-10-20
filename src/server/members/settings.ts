@@ -3,11 +3,12 @@ import "server-only";
 import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { applySettingsChanges, copyFormats, defaultSubscriptionSettings, modeRequirements, paywallModes, parseSettingsChanges,
   type CopyFormat, type EditableSettingField, type ModeFacts, type ModeRequirement, type PaywallMode, type ProtectedSettingField,
-  type ShortcutField, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
+  protectedSettingFields, type ShortcutField, type SubscriptionIdentity, type SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { auditTextErrors, writeOwnerAudit } from "../admin/audit.ts";
 import type { LoginRefusal, PasswordCheck } from "../analytics/analytics-auth.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
+import { getRuntimePolicy } from "../config/runtime-policy.ts";
 import type { Prisma, SubscriptionSettings as SettingsRow } from "../generated/prisma/client.ts";
 
 /**
@@ -99,6 +100,7 @@ export type SettingsOutcome =
 export type SettingsOverview = Readonly<{
   settings: SubscriptionSettings;
   source: "stored" | "defaults";
+  environmentFields: readonly ProtectedSettingField[];
   /** What still stops each mode; empty when it can be switched on now. */
   requirements: Readonly<Record<Exclude<PaywallMode, "off">, readonly ModeRequirement[]>>;
 }>;
@@ -106,8 +108,19 @@ export type SettingsOverview = Readonly<{
 /** A save of the eight protected fields: the password typed again, checked by the owner login (its check and throttle). */
 export type PasswordReentry = Readonly<{ password: string | null; confirm: (password: string) => Promise<PasswordCheck> }>;
 
+/** Overlay identity for reads and transaction decisions without changing stored history. Null is for historical fixtures. */
+export function configuredSubscriptionSettings(settings: SubscriptionSettings, environment: SubscriptionIdentity | null): SubscriptionSettings {
+  return environment ? Object.freeze({ ...settings, ...environment }) : settings;
+}
+
 export function createSettingsService(database: DatabaseRuntime,
-  { now = Date.now, readiness = noticeReadiness }: { now?: () => number; readiness?: ReleaseReadiness } = {}) {
+  { now = Date.now, readiness = noticeReadiness, environment = getRuntimePolicy().choices.subscriptionIdentity }: {
+    now?: () => number; readiness?: ReleaseReadiness;
+    /** Explicit null is for isolated historical-storage fixtures only. Production reads environment identity. */
+    environment?: SubscriptionIdentity | null;
+  } = {}) {
+  const environmentFields = environment ? protectedSettingFields : [];
+  const effective = (settings: SubscriptionSettings) => configuredSubscriptionSettings(settings, environment);
   let cached: Readonly<{ state: SettingsState; until: number }> | null = null;
   let lastGood: SubscriptionSettings | null = null;
   let loading: Promise<SettingsState> | null = null;
@@ -116,7 +129,7 @@ export function createSettingsService(database: DatabaseRuntime,
 
   async function stored(): Promise<Readonly<{ settings: SubscriptionSettings; source: "stored" | "defaults" }>> {
     const row = await database.query((client) => client.subscriptionSettings.findUnique({ where: { id: settingsId } }));
-    return row ? { settings: settingsFromRow(row), source: "stored" } : { settings: defaultSubscriptionSettings, source: "defaults" };
+    return row ? { settings: effective(settingsFromRow(row)), source: "stored" } : { settings: effective(defaultSubscriptionSettings), source: "defaults" };
   }
 
   async function refresh(): Promise<SettingsState> {
@@ -138,6 +151,7 @@ export function createSettingsService(database: DatabaseRuntime,
 
   /** A saved change shows at once in this process; other processes see it when their cached value expires. */
   function remember(settings: SubscriptionSettings) {
+    settings = effective(settings);
     generation++;
     lastGood = settings;
     cached = { state: { settings, source: "stored" }, until: now() + settingsCacheRules.freshMs };
@@ -153,6 +167,7 @@ export function createSettingsService(database: DatabaseRuntime,
   }
 
   return Object.freeze({
+    environmentFields,
     /** Settings for access decisions and member pages: cached for 30 s, the last good value on failure, else unavailable. */
     current(): Promise<SettingsState> {
       if (cached && now() < cached.until) return Promise.resolve(cached.state);
@@ -168,7 +183,7 @@ export function createSettingsService(database: DatabaseRuntime,
     async overview(): Promise<SettingsOverview> {
       const { settings, source } = await stored();
       const facts = await database.query((client) => modeFacts(client, readiness));
-      return { settings, source, requirements: { test: modeRequirements(settings, "test", facts), on: modeRequirements(settings, "on", facts) } };
+      return { settings, source, environmentFields, requirements: { test: modeRequirements(settings, "test", facts), on: modeRequirements(settings, "on", facts) } };
     },
 
     /**
@@ -179,6 +194,8 @@ export function createSettingsService(database: DatabaseRuntime,
     async save(actor: string, input: unknown, reentry: PasswordReentry): Promise<SettingsOutcome> {
       const parsed = parseSettingsChanges(input);
       if (!parsed.ok) return { status: "invalid", errors: parsed.errors };
+      const managed = environmentFields.filter((field) => Object.hasOwn(parsed.changes, field));
+      if (managed.length) return { status: "invalid", errors: Object.fromEntries(managed.map((field) => [field, "Managed through environment variables; restart after changing configuration."])) };
       const unsafe = auditTextErrors(parsed.changes, { ownerSetting: true });
       if (unsafe) return { status: "invalid", errors: unsafe };
       const preview = applySettingsChanges((await stored()).settings, parsed.changes);
@@ -196,7 +213,7 @@ export function createSettingsService(database: DatabaseRuntime,
       }
       const at = new Date(now());
       const outcome = await decide<SettingsOutcome>(database, async (tx, rollback) => {
-        const current = await lockSettings(tx, actor, at);
+        const current = effective(await lockSettings(tx, actor, at));
         // Applied again to the locked row, so a concurrent save is never overwritten with values read before it.
         const applied = applySettingsChanges(current, parsed.changes);
         if (!applied.ok) return rollback({ status: "invalid", errors: applied.errors });
@@ -219,7 +236,7 @@ export function createSettingsService(database: DatabaseRuntime,
           changes: Object.fromEntries(change.changed.map((field) => [field, { from: current[field], to: change.next[field] }])),
           cleared: change.cleared, passwordConfirmed: confirmed,
         } });
-        return { status: "saved", settings: settingsFromRow(row), changed: change.changed, cleared: change.cleared };
+        return { status: "saved", settings: effective(settingsFromRow(row)), changed: change.changed, cleared: change.cleared };
       });
       if (outcome.status === "saved" && outcome.changed.length > 0) remember(outcome.settings);
       return outcome;
@@ -233,14 +250,14 @@ export function createSettingsService(database: DatabaseRuntime,
       const next = mode as PaywallMode;
       const at = new Date(now());
       const outcome = await decide<SettingsOutcome>(database, async (tx, rollback) => {
-        const current = await lockSettings(tx, actor, at);
+        const current = effective(await lockSettings(tx, actor, at));
         if (current.paywallMode === next) return rollback({ status: "saved", settings: current, changed: [], cleared: [] });
         const missing = modeRequirements(current, next, await modeFacts(tx, readiness));
         if (missing.length > 0) return rollback({ status: "requirements", mode: next, missing });
         const row = await tx.subscriptionSettings.update({ where: { id: settingsId }, data: { paywallMode: next, updatedAt: at, updatedBy: actor } });
         await writeOwnerAudit(tx, { at, actor, action: "paywall_mode_changed", targetType: "settings", targetId: String(settingsId),
           details: { from: current.paywallMode, to: next } });
-        return { status: "saved", settings: settingsFromRow(row), changed: [], cleared: [] };
+        return { status: "saved", settings: effective(settingsFromRow(row)), changed: [], cleared: [] };
       });
       if (outcome.status === "saved") remember(outcome.settings);
       return outcome;

@@ -288,7 +288,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       const right = "a long synthetic owner passphrase";
       const hmacKey = (purpose, value) => sha256(`synthetic-secret\0${purpose}\0${value}`);
       const auth = createAdminAuth({ database, now, config: { admin: { username: "owner", passwordHash: await hashPassword(right) }, key: hmacKey } });
-      const settings = createSettingsService(database, { now });
+      const settings = createSettingsService(database, { environment: null, now });
       const plans = createPlansService(database, { now });
       const reentry = (password, address = "198.51.100.40") => ({ password, confirm: (typed) => auth.confirmPassword("owner", typed, address) });
       // Read through Prisma, which writes and reads instants in UTC like the services.
@@ -382,7 +382,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal((await plans.reorder("owner", [monthly, daily])).status, "invalid", "A reorder names every plan.");
 
       // Requirements now hold, so test mode switches; another process sees it within the 30 s cache.
-      const otherProcess = createSettingsService(database, { now });
+      const otherProcess = createSettingsService(database, { environment: null, now });
       assert.equal((await otherProcess.current()).settings.paywallMode, "off");
       clock.now += 1_000;
       assert.equal((await settings.setMode("owner", "test")).status, "saved");
@@ -393,7 +393,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.deepEqual((await audits("paywall_mode_changed")).map(({ details }) => details), [{ from: "off", to: "test" }]);
       const notReady = await settings.setMode("owner", "on");
       assert.deepEqual([notReady.status, keys(notReady)], ["requirements", ["privacy", "terms"]], "On waits for release-ready privacy and terms.");
-      const releaseReady = createSettingsService(database, { now, readiness: () => ({ privacy: true, terms: true }) });
+      const releaseReady = createSettingsService(database, { environment: null, now, readiness: () => ({ privacy: true, terms: true }) });
       assert.equal((await releaseReady.setMode("owner", "on")).status, "saved");
 
       // While on, the requirements keep holding: the last active plan and the last contact number cannot go.
@@ -417,6 +417,32 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       // Plans are never deleted: the role cannot, and every plan ever created is still there.
       await refused(app.query("DELETE FROM SubscriptionPlan WHERE id = ?", [daily]), DENIED, "plan delete");
       assert.equal((await plans.list()).length, everyPlan.length);
+
+      // Environment identity is authoritative even while editing non-identity settings or switching modes.
+      const blankIdentity = { mtnNumber: null, mtnName: null, mtnMenuShortcut: null, airtelNumber: null, airtelName: null,
+        airtelMenuShortcut: null, contactPhone: null, whatsappPhone: null };
+      const identity = { ...blankIdentity, mtnNumber: "256700000910", mtnName: "ENV MTN", airtelNumber: "256700000911",
+        airtelName: "ENV AIRTEL", contactPhone: "256700000912", whatsappPhone: "256700000913" };
+      const configured = createSettingsService(database, { environment: identity, now });
+      const storedBefore = await stored();
+      const managed = await configured.save("owner", { mtnNumber: MTN }, reentry(right));
+      assert.equal(managed.status, "invalid");
+      assert.match(managed.errors.mtnNumber, /environment variables/u);
+      const overview = await configured.overview();
+      assert.deepEqual([...overview.environmentFields].sort(), Object.keys(identity).sort());
+      for (const [key, value] of Object.entries(identity)) assert.equal(overview.settings[key], value, key);
+      const updated = await configured.save("owner", { trialDays: 1 }, reentry(null));
+      assert.equal(updated.status, "saved");
+      for (const [key, value] of Object.entries(identity)) assert.equal(updated.settings[key], value, key);
+      assert.equal((await plans.setActive("owner", daily, true)).status, "saved");
+      const noIdentity = createSettingsService(database, { environment: blankIdentity, now });
+      assert.deepEqual(keys(await noIdentity.setMode("owner", "test")), ["payment-number", "contact"], "Stored wallet history is never an environment fallback.");
+      assert.equal((await configured.setMode("owner", "test")).status, "saved");
+      assert.equal((await configured.current()).settings.airtelNumber, identity.airtelNumber);
+      const storedAfter = await stored();
+      for (const key of Object.keys(identity)) assert.equal(storedAfter[key], storedBefore[key], `stored identity preserved: ${key}`);
+      assert.equal((await configured.setMode("owner", "off")).status, "saved");
+      assert.equal((await plans.setActive("owner", daily, false)).status, "saved");
 
       await ownerSignInAudit(async () => ({ database }), "admin", { now })({ action: "sign-in", username: "owner" });
       assert.equal((await audits("owner_signed_in")).length, 1);
@@ -532,7 +558,11 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal((await access(numberOnly.token)).tier, "free");
       mode = "test";
       assert.equal((await access(numberOnly.token)).tier, "free");
-      assert.equal((await access(undefined)).tier, "full");
+      assert.equal((await access(undefined)).tier, "free", "test mode keeps anonymous predictions gated");
+      mode = "off";
+      assert.equal((await access(undefined)).tier, "free", "closed subscriptions never bypass prediction gates");
+      assert.equal((await access(unlocked.token)).tier, "full", "existing unlocked periods remain valid until expiry");
+      mode = "test";
       for (let n = 0; n < 2; n++) {
         instant++;
         const signedIn = await sessions.signIn(phone, "unknown");

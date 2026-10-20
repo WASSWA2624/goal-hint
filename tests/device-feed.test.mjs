@@ -25,8 +25,8 @@ test("named historical dates, explicit ranges and applied zones are never rewrit
 });
 
 test("device navigation selects today/live and yesterday's results in the same browsing zone", () => {
-  assert.equal(deviceFeedEntryHref("today", today, zone), "/en?tz=America%2FLos_Angeles");
-  assert.equal(deviceFeedEntryHref("live", today, zone), "/en?tz=America%2FLos_Angeles&status=live");
+  assert.equal(deviceFeedEntryHref("today", today, zone), "/en/matches?tz=America%2FLos_Angeles");
+  assert.equal(deviceFeedEntryHref("live", today, zone), "/en/matches?tz=America%2FLos_Angeles&status=live");
   assert.equal(deviceFeedEntryHref("results", today, zone), "/en/predictions/2026-10-11?tz=America%2FLos_Angeles&status=finished");
   assert.equal(deviceFeedEntryHref("results", parseReportingDate("2027-01-01"), "Asia/Kathmandu"),
     "/en/predictions/2026-12-31?tz=Asia%2FKathmandu&status=finished");
@@ -37,5 +37,5 @@ test("Clear filters returns to the last 30 days in the device zone and removes o
   const cleared = resetFeedFilters(original);
   assert.equal(cleared.zone, zone); assert.equal(cleared.time, undefined);
   assert.deepEqual(cleared.dates, { kind: "last-30-days" });
-  assert.equal(feedQueryHref(cleared, today), "/en?tz=America%2FLos_Angeles");
+  assert.equal(feedQueryHref(cleared, today), "/en/matches?tz=America%2FLos_Angeles");
 });

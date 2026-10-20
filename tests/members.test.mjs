@@ -15,7 +15,7 @@ import { createMemberCodeHandler, createMemberSignInHandler, createMemberSignOut
 import { memberCookieName } from "../src/server/members/member-sessions.ts";
 import { memberReturnPath } from "../src/domain/member-navigation.ts";
 
-// Synthetic owner numbers only; real numbers are typed by the owner on the dashboard.
+// Synthetic owner numbers only; real receiving and support identity comes from server environment configuration.
 const OWNER_MTN = "256700000901", OWNER_CONTACT = "256700000902";
 const settingsWith = (fields) => Object.freeze({ ...defaultSubscriptionSettings, ...fields });
 const ready = { activePlans: 1, privacyReleaseReady: true, termsReleaseReady: true };
@@ -71,6 +71,16 @@ test("member sign-out clears the Lax cookie and cache even with mode off or fail
   assert.equal(response.headers.get("location"), "/en/account?status=signed-out");
   assert.equal(response.headers.get("clear-site-data"), '"cache"');
   assert.match(response.headers.get("set-cookie"), /^goal-hint-member=; .*SameSite=Lax; Max-Age=0$/);
+});
+
+test("closed subscriptions allow phone sign-in but never activate a code", async () => {
+  const fixture = memberFixture({ mode: "off" });
+  const handler = createMemberSignInHandler(fixture.resolve);
+  assert.equal((await handler(memberRequest({ phone: "256700000999" }))).status, 200);
+  assert.equal(fixture.calls.signIn.length, 1);
+  assert.equal((await handler(memberRequest({ phone: "256700000999", code: "0123-4567-89AB" }))).status, 403);
+  assert.equal(fixture.calls.signIn.length, 1);
+  assert.equal((await createMemberCodeHandler(fixture.resolve)(memberRequest({ code: "0123-4567-89AB" }))).status, 403);
 });
 
 test("phone plus code uses the atomic code path, redirects only to safe paths, and retains codes only in request bodies", async () => {
@@ -184,10 +194,29 @@ function scriptedDatabase(script) {
 const row = (fields) => ({ ...defaultSubscriptionSettings, id: 1, paymentNumbersChangedAt: null, lastMembersPurgeAt: null,
   updatedAt: new Date("2026-10-19T07:00:00.000Z"), updatedBy: "owner", ...fields });
 
+test("environment identity overrides stored history and managed updates fail before database or password work", async () => {
+  const { database, state } = scriptedDatabase({ row: row({ mtnNumber: OWNER_MTN, mtnName: "OLD PAYEE", whatsappPhone: OWNER_CONTACT }) });
+  const environment = { mtnNumber: "256700000910", mtnName: "ENV PAYEE", airtelNumber: null, airtelName: null,
+    mtnMenuShortcut: null, airtelMenuShortcut: null, contactPhone: "256700000911", whatsappPhone: null };
+  const service = createSettingsService(database, { environment });
+  assert.deepEqual(service.environmentFields, protectedSettingFields);
+  const settings = (await service.current()).settings;
+  for (const [key, value] of Object.entries(environment)) assert.equal(settings[key], value, key);
+  assert.equal(state.row.mtnNumber, OWNER_MTN, "stored history is preserved");
+  assert.equal(state.row.whatsappPhone, OWNER_CONTACT, "an absent environment value never falls back to storage");
+  const reads = state.reads;
+  for (const field of protectedSettingFields) {
+    const refused = await service.save("owner", { [field]: null }, { password: "unused", confirm() { assert.fail("password must not be checked"); } });
+    assert.equal(refused.status, "invalid");
+    assert.match(refused.errors[field], /environment variables/u);
+  }
+  assert.equal(state.reads, reads, "managed fields are rejected before any database access");
+});
+
 test("public reads cache settings for 30 s, serve the last good value on failure, and resolve to free with none", async () => {
   const clock = { now: 0 };
   const { state, database } = scriptedDatabase({});
-  const service = createSettingsService(database, { now: () => clock.now });
+  const service = createSettingsService(database, { environment: null, now: () => clock.now });
   const missing = await service.current();
   assert.deepEqual({ source: missing.source, mode: missing.settings.paywallMode, trialDays: missing.settings.trialDays }, { source: "defaults", mode: "off", trialDays: 2 },
     "A missing row reads off with a 2-day trial.");
@@ -212,7 +241,7 @@ test("public reads cache settings for 30 s, serve the last good value on failure
   state.failing = false; state.row = row({ paywallMode: "maybe" });
   assert.equal((await service.current()).source, "last-good", "A row outside the reviewed shape counts as a failed read.");
 
-  const cold = createSettingsService(scriptedDatabase({ failing: true }).database, { now: () => clock.now });
+  const cold = createSettingsService(scriptedDatabase({ failing: true }).database, { environment: null, now: () => clock.now });
   const none = await cold.current();
   assert.deepEqual([none.source, none.settings, accessMode(none)], ["unavailable", null, "free"],
     "With no good value, access resolves to free, so an outage never opens subscriber content.");
@@ -248,7 +277,7 @@ test("plan ids never read as access codes, and owner text the audit would refuse
   const plans = createPlansService(untouched);
   for (const outcome of [await plans.create("owner", { name: "Promo 2025-2026-XMAS", durationDays: 1, priceUgx: 1000 }),
     await plans.edit("owner", ids[2], { name: "Call 256700000101" })]) assert.deepEqual([outcome.status, Object.keys(outcome.errors)], ["invalid", ["name"]]);
-  const saved = await createSettingsService(untouched).save("owner", { paymentNote: "Ref 1234-5678-9012" },
+  const saved = await createSettingsService(untouched, { environment: null }).save("owner", { paymentNote: "Ref 1234-5678-9012" },
     { password: null, async confirm() { throw new Error("unexpected password check"); } });
   assert.deepEqual([saved.status, Object.keys(saved.errors)], ["invalid", ["paymentNote"]]);
 });

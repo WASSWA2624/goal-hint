@@ -48,7 +48,7 @@ export function createDiscoveryRoutes({ policy = getDiscoveryPolicy, reader = re
     },
     async sitemap(): Promise<MetadataRoute.Sitemap> {
       if (!policy().index) return [];
-      return ["/en", ...informationPages.filter(informationPublicationReady).map(page => `/en/${page}`)].map(path => ({ url: canonicalUrl(path) }));
+      return ["/en", "/en/matches", ...informationPages.filter(informationPublicationReady).map(page => `/en/${page}`)].map(path => ({ url: canonicalUrl(path) }));
     },
     matchIds: () => ids("matches"), dateIds: () => ids("dates"),
     matches: (props: { id: Promise<string> }) => shard("matches", props),

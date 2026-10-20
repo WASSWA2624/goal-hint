@@ -21,7 +21,7 @@ export async function contentAccess(resolve: AccessResolver): Promise<ViewerAcce
 
 /** Raw caches stay viewer-independent. Every page/API factory injects only raw readers into this boundary. */
 export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed = readPublicMatchFeed, readDetail = readPublicMatchDetail,
-  readInsights = readPublicMatchInsights, readSlips = readPublicSlipBuild, readStatus }: {
+  readInsights = readPublicMatchInsights, readSlips = readPublicSlipBuild }: {
   resolveAccess?: AccessResolver; readFeed?: typeof readPublicMatchFeed; readDetail?: typeof readPublicMatchDetail;
   readInsights?: typeof readPublicMatchInsights; readSlips?: typeof readPublicSlipBuild;
   readStatus?: (id: string) => Promise<SettlementStatus>;
@@ -43,9 +43,7 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
     },
     async insights(...[id, clock]: Parameters<typeof readPublicMatchInsights>) {
       const access = await contentAccess(resolveAccess);
-      const [raw, status] = await Promise.all([readInsights(id, clock), access.tier === "full" ? "unknown" as const
-        : readStatus ? readStatus(id) : readDetail(id, new URLSearchParams(), clock).then((detail) => detail.fixture.status)]);
-      const result = gateInsights(raw, access, status);
+      const result = gateInsights(await readInsights(id, clock), access);
       try { return access.tier === "free" ? matchInsightsSchema.parse(result) : result; }
       catch { throw new MatchFeedError("unavailable"); }
     },

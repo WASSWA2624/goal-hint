@@ -35,11 +35,11 @@ type Props = Readonly<{
   locale: string; today: ReportingDate; criteria: SlipCriteria; result: SlipBuildPageResult | null;
   error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialMarkets?: readonly MarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
-  initialReuse?: boolean; showAccount?: boolean;
+  initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean;
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false }: Props) {
+export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
   const [validationVersion, setValidationVersion] = useState(0);
@@ -197,7 +197,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
               setError(null); setSelectedMarkets(publicPolicy.markets); setOutcomes({});
             }
           }}>{messages.text("slips.reset")}</ClearLink>
-          <BuildButton type="submit" disabled={pending}>{messages.text(pending ? "slips.building" : "slips.build")}</BuildButton>
+          <BuildButton type="submit" disabled={pending || subscriberOnly}>{messages.text(pending ? "slips.building" : "slips.build")}</BuildButton>
         </Actions>
       </CriteriaForm>
     </CriteriaPanel>
@@ -206,7 +206,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),
           requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
       </HeadingRow>
-      {generated ? <>
+      {subscriberOnly ? <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")} action={<ButtonLink href="/en/subscribe" prefetch={false}>{messages.text("paywall.getAccess")}</ButtonLink>} /> : generated ? <>
         <Note>{messages.text("slips.ranking")}</Note>
         {data.slips.map((slip, index) => <SlipTable key={slip.id} slip={slip} index={index} locale={locale} />)}
         <Note>{messages.text("slips.averageHint")}</Note>

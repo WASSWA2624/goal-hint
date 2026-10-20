@@ -45,6 +45,10 @@ export type SlipBuildResult = Readonly<{
   /** A candidate, enumeration, retained-combination or compatible-batch budget was reached. */
   searchLimited: boolean;
 }>;
+export type SlipRanking = Readonly<{
+  accepts: (slip: BuiltSlip) => boolean;
+  compare: (left: BuiltSlip, right: BuiltSlip) => number;
+}>;
 export type SlipCriteriaErrorCode = "invalid-query" | "invalid-date-range" | "invalid-time-range" | "invalid-market" | "invalid-pick"
   | "invalid-odds-range" | "invalid-probability-range" | "invalid-selection-range" | "invalid-slip-count";
 export class SlipCriteriaError extends RangeError {
@@ -256,7 +260,7 @@ function compatibleBatch(combinations: readonly Combination[], requested: number
 
 /** Uses only public, current, pre-cutoff published outcome probabilities and their own approved fresh prices.
  * No provider calls, synthetic prices, score guesses, stored slip writes or joint-probability assumptions. */
-export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRecord[], asOf: number): SlipBuildResult {
+export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRecord[], asOf: number, ranking?: SlipRanking): SlipBuildResult {
   serializeSlipCriteria(criteria); utcInstantFromEpochMilliseconds(asOf);
   const range = validateReportingDateRange(criteria.dateFrom, criteria.dateTo, slipBuilderRules.maximumDays);
   const timeWindows = criteria.timeFrom === "" ? null : kickoffTimeWindows(range,
@@ -302,27 +306,29 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   candidates.sort(compareCandidates);
   if (candidates.length > slipBuilderRules.maximumCandidates) { candidates.length = slipBuilderRules.maximumCandidates; searchLimited = true; }
   const retained: Combination[] = [];
+  const compare = ranking ? (left: Combination, right: Combination) => ranking.compare(left.slip, right.slip) : compareCombinations;
   let searchNodes = 0, exhausted = false;
   const selected: Candidate[] = [], fixtures = new Set<string>();
   function retain(value: Combination) {
+    if (ranking && !ranking.accepts(value.slip)) return;
     // Max-heap keeps the worst retained slip at the root, bounding both memory and insertion work.
     if (retained.length < slipBuilderRules.maximumCombinations) {
       let index = retained.push(value) - 1;
       while (index > 0) {
         const parent = Math.floor((index - 1) / 2);
-        if (compareCombinations(retained[index]!, retained[parent]!) <= 0) break;
+        if (compare(retained[index]!, retained[parent]!) <= 0) break;
         [retained[index], retained[parent]] = [retained[parent]!, retained[index]!]; index = parent;
       }
       return;
     }
     searchLimited = true;
-    if (compareCombinations(value, retained[0]!) >= 0) return;
+    if (compare(value, retained[0]!) >= 0) return;
     retained[0] = value;
     let index = 0;
     while (index * 2 + 1 < retained.length) {
       let worse = index * 2 + 1;
-      if (worse + 1 < retained.length && compareCombinations(retained[worse + 1]!, retained[worse]!) > 0) worse++;
-      if (compareCombinations(retained[worse]!, retained[index]!) <= 0) break;
+      if (worse + 1 < retained.length && compare(retained[worse + 1]!, retained[worse]!) > 0) worse++;
+      if (compare(retained[worse]!, retained[index]!) <= 0) break;
       [retained[index], retained[worse]] = [retained[worse]!, retained[index]!]; index = worse;
     }
   }
@@ -347,12 +353,12 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   let slips: BuiltSlip[] = [];
   for (let count = criteria.teamsMin; count <= Math.min(criteria.teamsMax, qualifying.size) && !exhausted; count++) {
     enumerate(0, count, 1n);
-    const combinations = [...retained].sort(compareCombinations);
+    const combinations = [...retained].sort(compare);
     if (criteria.reuse) slips = combinations.slice(0, criteria.slips).map((item) => item.slip);
     else {
       const batch = compatibleBatch(combinations, criteria.slips); slips = batch.slips; searchLimited ||= batch.limited;
     }
-    if (slips.length === criteria.slips) break;
+    if (!ranking && slips.length === criteria.slips) break;
   }
   return { slips, qualifyingMatches: qualifying.size, excludedMissingOdds, excludedMissingForecast, searchLimited };
 }

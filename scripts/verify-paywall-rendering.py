@@ -37,13 +37,13 @@ def main():
         def verify_viewer(viewer):
             checks = 0
             headers = {"x-test-viewer": viewer}
-            full = viewer in ("entitled", "off")
+            full = viewer == "entitled"
             for name, scenario in scenarios.items():
                 detail = scenario["detail"]
                 fixture_id, path = detail["fixture"]["fixtureId"], detail["route"]["path"]
-                free_fixture = name in ("finished-regulation", "canceled")
+                free_fixture = False
                 query = f"?cycle={scenario['cycle']}"
-                paths = [f"/en?q={name}", path, path + query,
+                paths = [f"/en/matches?q={name}", path, path + query,
                     f"/api/matches?q={name}", f"/api/matches/{fixture_id}",
                     f"/api/matches/{fixture_id}{query}", f"/api/matches/{fixture_id}?revision={scenario['revision']}",
                     f"/api/matches/{fixture_id}/insights?section=news"]
@@ -60,16 +60,16 @@ def main():
                             assert not re.search(SENTINELS, text), (viewer, url, "premium sentinel leaked")
                             assert not re.search(r'data-(?:prediction|outcome|featured-pick|verdict|market)="', text), (viewer, url, "prediction attribute leaked")
                         if not url.startswith("/api/") and "RSC" not in request_headers:
-                            if url.startswith("/en?q=") and not full:
+                            if url.startswith("/en/matches?q=") and not full:
                                 assert 'data-subscriber-banner' in text and 'href="/en/subscribe"' in text
                                 assert 'Subscribers only' in text
                                 assert re.search(r'<option[^>]*value="probability-desc"[^>]*disabled', text) or re.search(r'<option[^>]*disabled[^>]*value="probability-desc"', text)
-                            if not full and not free_fixture and not url.startswith("/en?q="):
+                            if not full and not free_fixture and not url.startswith("/en/matches?q="):
                                 assert 'Picks and probabilities for this match are for subscribers.' in text
                                 assert 'From UGX 1,000 for 1 day.' in text
                                 assert 'Have a code?' in text and 'return=%2Fen%2Fmatches%2F' in text
-                            if url.startswith("/en?q="):
-                                assert ('aria-label="Account"' in text) == (viewer not in ("off", "test"))
+                            if url.startswith("/en/matches?q="):
+                                assert ('aria-label="Account"' in text) == True
                         if url.startswith("/api/"):
                             assert response.headers.get("Cache-Control") == "private, no-store"
                             assert "cookie" in {item.strip().lower() for header in response.headers.get_all("Vary", []) for item in header.split(",")}
@@ -83,12 +83,26 @@ def main():
             if not full:
                 for oracle in ["prob=1-100", "sort=probability", "picks=only", "odds=1.50-3.00"]:
                     assert request(server.origin, "/api/matches?" + oracle, headers=headers).status == 403
-                    page = request(server.origin, "/en?" + oracle, headers=headers)
+                    page = request(server.origin, "/en/matches?" + oracle, headers=headers)
                     assert page.status == 307, (oracle, page.status)
                     assert not re.search(r"prob=|sort=probability|picks=|odds=", page.headers.get("Location"))
                     checks += 2
                 slips = request(server.origin, "/en/slips?build=1", headers=headers)
                 assert slips.status == 200 and not re.search(SENTINELS, slips.text)
+                checks += 1
+            for path, extra in [("/en", {}), ("/en?_rsc", {"RSC": "1"}), ("/api/best-slips", {})]:
+                response = request(server.origin, path, headers={**headers, **extra})
+                assert response.status == 200, (viewer, path, response.status)
+                assert "no-store" in response.headers.get("Cache-Control", ""), path
+                if not full:
+                    assert not re.search(SENTINELS, response.text), (viewer, path, "Best Slips selections leaked")
+                if path == "/api/best-slips":
+                    view = json.loads(response.text)["slips"][0]
+                    assert set(view) == {"rank", "totalOdds", "estimatedProbability", "matchCount"} | ({"slip"} if full else set())
+                    assert view["totalOdds"] == "5.00" and view["estimatedProbability"] == 0.3456
+                elif not extra:
+                    assert "Best Slips" in response.text and 'href="/en/matches"' in response.text
+                    assert ('data-slip-selection=' in response.text) == full
                 checks += 1
             print(f"PASS {viewer}: raw HTML, flight, APIs and access rules ({checks} checks).", flush=True)
             return checks

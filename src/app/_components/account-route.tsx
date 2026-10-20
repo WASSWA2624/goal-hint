@@ -22,7 +22,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
     const resolved = await services();
     const mode = resolved.settings.settings?.paywallMode;
     let member: MemberIdentity | null = null, unavailable = mode === undefined || !resolved.sessions;
-    if (mode && mode !== "off" && resolved.sessions) {
+    if (mode && resolved.sessions) {
       try { member = await resolved.sessions.verify((await cookies()).get(memberCookieName(resolved.config.production))?.value); }
       catch { unavailable = true; }
     }
@@ -38,11 +38,12 @@ export function createAccountRoute({ services = getMemberServices }: { services?
     const codeError = parameters.status === "code-not-recognized" ? messages.text("account.codeNotRecognized")
       : parameters.status === "code-ended" && ended && Number.isFinite(+ended) ? messages.text("account.codeEnded", { end: formatPeriodEnd(ended) })
       : parameters.status === "code-busy" ? messages.text("account.tryLater") : undefined;
-    return <PublicShell locale={locale} showAccount={mode === "on"}><AccountCodeRoot><Stack $gap="md">
+    return <PublicShell locale={locale} showAccount><AccountCodeRoot><Stack $gap="md">
       <PageHeading>{messages.text("account.title")}</PageHeading>
       <MemberNavigationRecovery />
       <MemberPanel><Stack $gap="md">
-        {mode === "off" ? <p>{messages.text("account.closed")}</p> : unavailable ? <p role="status">{messages.text("account.unavailable")}</p> : <>
+        {mode === "off" && <p>{messages.text("account.closed")}</p>}
+        {unavailable ? <p role="status">{messages.text("account.unavailable")}</p> : <>
           {inApp && <p>{messages.text("account.inAppBrowser")}</p>}
           {parameters.status === "signed-out" && <p role="status">{messages.text("account.signedOut")}</p>}
           {member?.blocked ? <><p role="status">{messages.text("account.refused")}</p><MemberSignOut>{messages.text("account.signOut")}</MemberSignOut></> : member ? <>
@@ -55,10 +56,10 @@ export function createAccountRoute({ services = getMemberServices }: { services?
                 : last && <p>{messages.text("account.accessEnded", { end: formatPeriodEnd(last.endsAt) })}</p>}
               {queued.map((code) => <p key={code.id}>{messages.text("account.queued", { plan: code.planName, start: formatPeriodEnd(code.startsAt), end: formatPeriodEnd(code.endsAt) })}</p>)}
             </>}
-            {paymentView?.trialEligible && <TrialRequest locale={locale} phone={member.phone} days={resolved.settings.settings!.trialDays} />}
+            {mode !== "off" && paymentView?.trialEligible && <TrialRequest locale={locale} phone={member.phone} days={resolved.settings.settings!.trialDays} />}
             <PaymentStatusPanel locale={locale} status={paymentView?.status ?? null} phone={member.phone} unlocked={!!member.codeEnteredAt} />
             <ButtonLink size="large" href={`${memberNextPath("subscribe", returnTo)}#plans`} prefetch={false}>{messages.text(view ? "account.renew" : "account.getAccess")}</ButtonLink>
-            <AccountCodeForm locale={locale} signedIn inApp={inApp} returnTo={returnTo} initialError={codeError} />
+            {mode !== "off" && <AccountCodeForm locale={locale} signedIn inApp={inApp} returnTo={returnTo} initialError={codeError} />}
             {!member.codeEnteredAt && <p>{messages.text("account.notYourNumber")}</p>}
             {view && <><h2>{messages.text("account.devices")}</h2>
               {view.devices.map((device, index) => <p key={index}>{messages.text("account.deviceLastUsed", { number: String(index + 1), at: formatPeriodEnd(device.lastSeenAt) })}</p>)}
@@ -66,7 +67,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
             </>}
             <MemberSignOut>{messages.text("account.signOut")}</MemberSignOut>
           </> : <AccountCodeForm locale={locale} signedIn={false} inApp={inApp} returnTo={returnTo} initialError={codeError}
-            invalidPhone={parameters.status === "invalid-phone"} />}
+            invalidPhone={parameters.status === "invalid-phone"} allowCode={mode !== "off"} />}
         </>}
       </Stack></MemberPanel>
     </Stack></AccountCodeRoot></PublicShell>;

@@ -6,7 +6,6 @@ import type { MatchDetailResponse } from "../../domain/match-detail.ts";
 import { breadcrumbStructuredData, matchPageIndexable, type DiscoveryPolicy } from "../../domain/discovery.ts";
 import { feedDefaults, feedHref, homeHref } from "../../domain/navigation.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { isFreeFixture } from "../../domain/paywall.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { resolveViewerAccess } from "../members/viewer-access.ts";
 import { createGatedReads, type AccessResolver } from "../members/gated-reads.ts";
@@ -54,7 +53,7 @@ export function matchDetailMetadata(result: DetailPageResult, locale = "en", var
     : messages.text("detail.metadataTitle", { match: title.slice(0, 180) });
   const description = date ? messages.text("detail.datedMetadataDescription", { match: title.slice(0, 240), date: messages.reportingDate(date) })
     : messages.text("detail.metadataDescription", { match: title.slice(0, 240) });
-  const preview = mode === "on" && !isFreeFixture(data.fixture.status) ? `${description} ${messages.text("detail.subscriberMetadataDescription")}` : description;
+  const preview = mode === "on" ? `${description} ${messages.text("detail.subscriberMetadataDescription")}` : description;
   return pageMetadata({ title: pageTitle, description: preview, path: data.route.path,
     index: policy.index && !variant && matchPageIndexable(data.fixture) });
 }

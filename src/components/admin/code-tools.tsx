@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Muted, Notice, Panel, PanelHeader } from "@/components/analytics/dashboard/dashboard-styles";
 import type { CodeDelivery } from "@/domain/code-delivery";
 import { formatPhone } from "@/domain/phone";
+import { PhoneInput } from "@/components/ui/controls";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerCode } from "@/domain/owner-members";
@@ -28,7 +29,7 @@ export function PlanField({ plans, value, allowCustom = true }: { plans: readonl
 export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "" }: { plans: readonly SubscriptionPlanView[]; action: CodeAction; phone?: string; amount?: number; note?: string }) {
   async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const planId = String(f.get("planId") ?? ""), network = String(f.get("network") ?? ""), transactionId = String(f.get("transactionId") ?? "").trim();
     await action.send("/api/admin/codes", { action: "manual", phone: f.get("phone"), note: f.get("note"), amount: Number(f.get("amount")), ...(planId ? { planId } : { days: Number(f.get("days")) }), ...(network ? { network } : {}), ...(transactionId ? { transactionId } : {}) }); }
-  return <form method="post" action="/api/admin/codes" onSubmit={submit} data-analytics-ignore><FormStack><FieldBlock>Account number<input name="phone" type="tel" defaultValue={phone} required maxLength={32} /></FieldBlock><FieldRow><PlanField plans={plans} /><FieldBlock>Custom days (1–366)<input name="days" type="number" min={1} max={366} defaultValue={1} /></FieldBlock></FieldRow>
+  return <form method="post" action="/api/admin/codes" onSubmit={submit} data-analytics-ignore><FormStack><PhoneInput label="Account number" name="phone" defaultValue={phone || "256"} required /><FieldRow><PlanField plans={plans} /><FieldBlock>Custom days (1–366)<input name="days" type="number" min={1} max={366} defaultValue={1} /></FieldBlock></FieldRow>
     <FieldBlock>Amount received (UGX)<input name="amount" type="number" min={0} max={4294967295} defaultValue={amount} required /></FieldBlock>
     <FieldBlock>Required note<textarea name="note" maxLength={200} defaultValue={note} required /></FieldBlock><FieldRow><FieldBlock>Network (optional)<select name="network"><option value="">No transaction ID</option><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></FieldBlock><FieldBlock>Transaction ID (optional)<input name="transactionId" maxLength={40} /></FieldBlock></FieldRow>
     <ActionButton type="submit" $variant="primary" disabled={action.busy}>Generate manual code</ActionButton></FormStack></form>;

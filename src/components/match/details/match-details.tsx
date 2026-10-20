@@ -2,7 +2,7 @@
 
 import Link from "@/components/navigation/navigation-link";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
-import { AccountLink } from "@/components/members/account-link";
+import { AccountLinks } from "@/components/members/account-link";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import styled, { css } from "styled-components";
 import { CloseIcon, SearchIcon } from "@/components/ui/icons";
@@ -12,7 +12,7 @@ import { useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import type { MatchDetailResponse } from "@/domain/match-detail";
 import type { InsightsPreview } from "@/domain/match-insights";
 import { defaultMatchView, openSection, type MatchSection, type MatchView } from "@/domain/match-view";
-import { feedReturnStorageKey, homeHref } from "@/domain/navigation";
+import { feedReturnStorageKey, homeHref, matchesHref } from "@/domain/navigation";
 import { useMessages } from "@/i18n/use-messages";
 import { media } from "@/styles/theme";
 import { BackIcon } from "./details-icons";
@@ -54,7 +54,7 @@ const PhoneHeaderGroup = styled.div`
 const PhoneBar = styled.div<{ $showAccount: boolean }>`
   position: relative;
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) 2rem 2rem ${({ $showAccount }) => $showAccount ? "2rem" : ""};
+  grid-template-columns: 2rem minmax(0, 1fr) 2rem 2rem ${({ $showAccount }) => $showAccount ? "auto 2rem" : ""};
   align-items: center;
   gap: 4px;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
@@ -153,7 +153,7 @@ function readFeedReturn(): string | null {
 /** The stored feed URL resolves after hydration inside this link alone, not across the whole page. */
 function useBackHref(locale: string) {
   const stored = useSyncExternalStore(subscribeNever, readFeedReturn, () => null);
-  return stored && stored.startsWith(homeHref(locale)) && !stored.includes("//") ? stored : homeHref(locale);
+  return stored && stored.startsWith(homeHref(locale)) && !stored.includes("//") ? stored : matchesHref(locale);
 }
 function DesktopBackLink() {
   const { locale, messages } = useStableDetails();
@@ -179,7 +179,7 @@ function PhoneHeader() {
     <PhoneBar $showAccount={showAccount === true}>
       <RoundLink href={backHref} prefetch={false} aria-label={messages.text("details.backToMatches")}><BackIcon /></RoundLink>
       <p>{messages.text("details.title")}</p>
-      {showAccount && <AccountLink locale={locale} />}
+      {showAccount && <AccountLinks locale={locale} />}
       <ThemeToggle />
       <RoundButton ref={toggle} type="button" aria-expanded={searching} aria-controls="details-search" aria-label={messages.text(searching ? "feed.search.close" : "feed.search.open")}
         onClick={() => { setSearching(!searching); if (!searching) requestAnimationFrame(() => searchInput.current?.focus()); }}>
@@ -187,7 +187,7 @@ function PhoneHeader() {
       </RoundButton>
       <NavigationProgress label={messages.text("navigation.loading")} />
     </PhoneBar>
-    {searching && <SearchForm id="details-search" action={homeHref(locale)} method="get" role="search" aria-label={messages.text("feed.search.open")}>
+    {searching && <SearchForm id="details-search" action={matchesHref(locale)} method="get" role="search" aria-label={messages.text("feed.search.open")}>
       <SearchIcon aria-hidden="true" />
       <input ref={searchInput} type="search" name="q" maxLength={100} autoComplete="off" placeholder={messages.text("navigation.search")}
         aria-label={messages.text("feed.filters.search")} />

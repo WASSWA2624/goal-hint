@@ -68,7 +68,7 @@ test("viewer access resolves in order, avoids absent owner cookies, checks a mem
   assert.equal((await resolver(cookies({ owner: "yes" }))).tier, "full");
   assert.deepEqual(calls.owner, [{ touch: false }]);
   mode = "test";
-  assert.equal((await resolver(cookies({}))).tier, "full");
+  assert.equal((await resolver(cookies({}))).tier, "free");
   row = { accountId: "account", lastSeenAt: new Date("2026-10-19T09:00:00Z"), entitled: 0 };
   assert.deepEqual(await resolver(cookies({ "goal-hint-member": "t".repeat(43) })), { tier: "free", signedIn: true, mode: "test" });
   assert.equal(calls.reads, 1);
@@ -77,5 +77,9 @@ test("viewer access resolves in order, avoids absent owner cookies, checks a mem
   fail = true;
   assert.equal((await resolver(cookies({ "goal-hint-member": "t".repeat(43) }))).tier, "free");
   mode = "off";
+  assert.equal((await resolver(cookies({ owner: "yes" }))).tier, "free");
+  fail = false;
+  assert.equal((await resolver(cookies({}))).tier, "free");
+  assert.equal((await resolver(cookies({ "goal-hint-member": "t".repeat(43) }))).tier, "full");
   assert.equal((await resolver(cookies({ owner: "yes" }))).tier, "full");
 });

@@ -69,7 +69,7 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
       return <>
         {result.data && !query && <script type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeStructuredData(matchStructuredData(result.data, route.locale)) }} />}
-        <MatchDetailPage showAccount={access.mode === "on"} offer={offer} result={result} today={today} locale={route.locale} preview={preview}
+        <MatchDetailPage showAccount offer={offer} result={result} today={today} locale={route.locale} preview={preview}
           historyResult={historyResult} historyQuery={query}
           retryHref={`/en/matches/${encodeURIComponent(route.fixtureId)}/${encodeURIComponent(route.slug)}`} />
       </>;

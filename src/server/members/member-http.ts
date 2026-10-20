@@ -37,7 +37,7 @@ export function memberRoute(handler: (context: MemberContext) => Promise<Respons
     try {
       const resolved = await services();
       if (access === "sign-out") return await handler({ request, services: resolved, member: null });
-      if (resolved.settings.settings?.paywallMode === "off") return json({ error: "closed", message: "Subscriptions are not open yet." }, 403);
+      if (resolved.settings.settings?.paywallMode === "off" && access === "member") return json({ error: "closed", message: "Subscriptions are not open yet." }, 403);
       if (!resolved.settings.settings || !resolved.sessions) return json({ error: "unavailable", message: "Member access is unavailable. Try again later." }, 503);
       const member = access === "sign-in" ? null : await resolved.sessions.verify(readCookie(request, memberCookieName(resolved.config.production)));
       if (access !== "sign-in" && !member || access === "unlocked" && (!member?.codeEnteredAt || member.blocked)) return json({ error: "forbidden", message: memberRefusal }, 403);
@@ -91,6 +91,7 @@ export function createMemberSignInHandler(services: MemberServicesSource = getMe
       : redirect(memberNextPath(body.destination, body.return, "invalid-phone"));
     const name = memberCookieName(resolved.config.production);
     if (body.code !== undefined && body.code !== "") {
+      if (resolved.settings.settings!.paywallMode === "off") return json({ error: "closed", message: "Subscriptions are not open yet." }, 403);
       if (!resolved.codes) return json({ error: "unavailable", message: memberRefusal }, 503);
       return codeResponse(request, resolved, await resolved.codes.signInWithCode(phone, body.code, clientAddress(request.headers),
         resolved.settings.settings!.maxUnlockedDevices, termsNotice.reviewedOn, readCookie(request, name)), body.return);

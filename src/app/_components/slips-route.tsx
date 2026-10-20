@@ -5,7 +5,7 @@ import { isMarketFamily, isMarketSelection, type MarketFamily, type MarketSelect
 import { publicPolicy } from "@/domain/public-policy";
 import { slipsHref } from "@/domain/navigation";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipInputFields, type SlipInputs } from "@/domain/slip-builder";
-import { SlipAccessRequired, SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
+import { SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
 import { createMessages } from "@/i18n/messages";
 import { readPublicSlipBuild } from "@/server/slips/public-slips";
 import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
@@ -25,8 +25,7 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
     },
     async Page({ params, searchParams }: Props) {
       const { locale } = await params, query = await searchParams, at = await instant(), today = getReportingDate(at);
-      const access = await contentAccess(resolveAccess), showAccount = access.mode === "on";
-      if (access.tier === "free") return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact search={null}><SlipAccessRequired locale={locale} showAccount={showAccount} /></PublicShell>;
+      const access = await contentAccess(resolveAccess), showAccount = true;
       const initialInputs: SlipInputs = {};
       for (const field of slipInputFields) {
         const value = query[field];
@@ -52,13 +51,13 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       }
       let captured = false;
       const clock = { now: () => { if (!captured) { captured = true; return at; } return completionInstant(); } };
-      const result = !error && query.build === "1" ? await createGatedReads({ readSlips: read, resolveAccess }).slips(criteria, clock, locale) : null;
+      const result = access.tier === "full" && !error && query.build === "1" ? await createGatedReads({ readSlips: read, resolveAccess }).slips(criteria, clock, locale) : null;
       const initialReuse = query.reuse === "0" ? false : query.reuse === "1"
         || Array.isArray(query.reuse) && query.reuse.length === 2 && query.reuse[0] === "0" && query.reuse[1] === "1" ? true : criteria.reuse;
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
       const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}`;
       return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact search={null}>
-        <SlipBuilder showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
+        <SlipBuilder subscriberOnly={access.tier === "free"} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
           error={error} initialInputs={initialInputs} initialOutcomes={initialOutcomes} initialReuse={initialReuse} {...(initialMarkets ? { initialMarkets } : {})} />
       </PublicShell>;
     },

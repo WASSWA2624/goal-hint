@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { AccountCodeRoot } from "@/components/members/account-code-form";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { SubscribeIdentity, SubscribePayment, SubscribeSignIn, SubscribeStep } from "@/components/members/subscribe-controls";
+import { ButtonLink } from "@/components/ui/controls";
 import { PageHeading, Stack } from "@/components/ui/layout";
 import { memberReturnPath } from "@/domain/member-navigation";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
@@ -39,9 +40,9 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
         }
       } catch { unavailable = true; }
     }
-    return <PublicShell locale={locale} showAccount={settings?.paywallMode === "on"}><AccountCodeRoot><Stack $gap="md">
+    return <PublicShell locale={locale} showAccount><AccountCodeRoot><Stack $gap="md">
       <PageHeading>{m.text("subscribe.title")}</PageHeading><MemberNavigationRecovery />
-      {settings?.paywallMode === "off" ? <p>{m.text("account.closed")}</p> : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
+      {settings?.paywallMode === "off" ? <><p>{m.text("account.closed")}</p><ButtonLink href="/en/account" prefetch={false}>{m.text("account.title")}</ButtonLink></> : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
         : member?.blocked ? <p role="status">{m.text("account.refused")}</p> : <>
           <SubscribeStep number={1} title={m.text("subscribe.yourNumber")}>
             {member ? <SubscribeIdentity locale={locale} phone={member.phone} /> : <SubscribeSignIn locale={locale} returnTo={returnTo} />}

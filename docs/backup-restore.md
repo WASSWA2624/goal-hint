@@ -1,5 +1,20 @@
 # Backup and restore runbook
 
+The 20 October 2026 owner-authorized repair resolves the historical 058 local
+restore failure: two forward migrations adopt existing match facts and recreate
+ten malformed append-only triggers, leaving original migrations unchanged.
+The complete 93-table chain passes base restore, multi-log PITR, tamper and
+least-privilege checks (10/10, no skips). Populated adopted tables and both
+successful and rolled-back legacy history survive restoration.
+
+Compatibility accepts exact repository migrations plus the named/checksummed
+legacy entry in `prisma/adopted-migrations.json`, only after its adoption migration.
+LF/CRLF equivalents are accepted without rewriting checksums. Rolled-back attempts
+remain in snapshots and row digests but are excluded from active history. Missing,
+unknown, changed or duplicate active history and unresolved failed attempts still
+fail closed. Node and Python implement the same rules. The encrypted pre-repair
+checkpoint remains in the private local GoalHint repair directory.
+
 Prompt 045 is **local verification only**, as explicitly selected by the owner
 on 10 October 2026. OP-31 ownership, recovery point objective (RPO), recovery time
 objective (RTO), retention, hosted storage and PITR remain unresolved. No live
@@ -298,3 +313,12 @@ Official references reviewed on 10 October 2026: [mysqldump consistency/options]
 [PITR](https://dev.mysql.com/doc/refman/8.4/en/point-in-time-recovery.html),
 [mysqlbinlog replay](https://dev.mysql.com/doc/refman/8.4/en/mysqlbinlog.html),
 [binary-log retention](https://dev.mysql.com/doc/refman/8.4/en/replication-options-binary-log.html).
+
+The 20 October local repair also has a fresh, authenticated encrypted post-repair
+checkpoint outside the repository, with inventory verified unchanged during the
+dump. Its SQL was not restored over the source database; restore acceptance used
+owned disposable MySQL targets. Restoring database history does not configure
+receiving wallets or customer support: those identities now come from separate
+server environment variables documented in subscriptions.md. Preserve the host's
+environment configuration separately; never infer current wallets from restored
+historical settings rows.

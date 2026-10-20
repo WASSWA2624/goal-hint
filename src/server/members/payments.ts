@@ -3,24 +3,27 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { paymentRules, type PaymentFields, type PaymentView } from "../../domain/payment.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
-import type { SubscriptionSettings } from "../../domain/subscription-settings.ts";
+import type { SubscriptionIdentity, SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
+import { getRuntimePolicy } from "../config/runtime-policy.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { imageDimensions } from "../images/image-format.ts";
 import { lockMemberAccount, newReference } from "./access-codes.ts";
 import { transactionKey } from "../../domain/payment.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
 import { memberRateRules, takeMemberLimit } from "./rate-limit.ts";
-import { decide, lockSettings } from "./settings.ts";
+import { configuredSubscriptionSettings, decide, lockSettings } from "./settings.ts";
 
 type Outcome = Readonly<{ status: "saved"; reference: string }> | Readonly<{ status: "busy" | "refused" | "invalid" | "duplicate" }>;
 type Bucket = { key: string; count: number; bytes: number };
 export const duplicatePaymentMessage = "This transaction ID was already used. If you made this payment, WhatsApp us with the ID.";
 
-export function createPayments({ database, config, now = Date.now }: {
+export function createPayments({ database, config, now = Date.now, environment = getRuntimePolicy().choices.subscriptionIdentity }: {
   database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number;
+  /** Explicit null is for isolated historical-storage fixtures only. */
+  environment?: SubscriptionIdentity | null;
 }) {
   async function bucket(tx: Prisma.TransactionClient, purpose: string, value: string, at: Date): Promise<Bucket> {
     const key = config.key(`member-${purpose}`, value), start = new Date(Math.floor(+at / memberRateRules.dayMs) * memberRateRules.dayMs);
@@ -67,7 +70,7 @@ export function createPayments({ database, config, now = Date.now }: {
           const at = new Date(now()), current = await currentMember(tx, member, at);
           if (!current) return rollback({ status: "refused" });
           // Shares confirmation's global lock, so a simultaneous owner approval cannot slip past this lookup.
-          const settings = await lockSettings(tx, "system", at);
+          const settings = configuredSubscriptionSettings(await lockSettings(tx, "system", at), environment);
           if (settings.paywallMode === "off") return rollback({ status: "refused" });
           const plan = await tx.subscriptionPlan.findUnique({ where: { id: fields.planId } });
           const key = transactionKey(fields.transactionId);

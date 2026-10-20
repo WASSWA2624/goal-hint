@@ -20,6 +20,9 @@ def main():
             if state == "off": assert "Subscriptions are not open yet" in html and "TEST MTN" not in html
             elif state == "blocked": assert "We couldn" in html and "TEST MTN" not in html
             else:
+                assert 'data-payment-logo="mtn"' in html and 'data-payment-logo="airtel"' in html
+                assert 'https://momoapi.mtn.com/content/momo_mtnb.png' in html
+                assert 'https://cdn-webportal.airtelstream.net/website/uganda/assets/icons/loadingLogo.svg' in html
                 for label in ["1. Your number", "2. Choose a plan", "3. Pay", "4. Tell us", "Daily", "Weekly", "Monthly", "Safety tips", "1,000", "5,000", "20,000"]: assert label in html, (state, label)
                 if state == "signed-out": assert 'action="/api/account/sign-in"' in html and 'method="post"' in html
                 if state in ["signed-in", "active", "rejected"]:
@@ -35,6 +38,9 @@ def main():
             assert ("Open MoMo menu" in html) == allowed
             assert "*000*1000#" in html
             if allowed: assert 'href="tel:*000*1000%23"' in html
+        phone = visible_html(request(server.origin, "/en/phone-input").text)
+        assert phone.count('data-phone-input="true"') == 4
+        assert 'autocomplete="tel"' in phone.lower() and 'inputmode="tel"' in phone.lower()
         print("PASS 8 server-rendered payment states, 5 user agents, hidden SMS fields, assent, plan order and private headers.", flush=True)
         if args.serve: server.serve()
 

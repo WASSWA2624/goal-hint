@@ -6,18 +6,15 @@ import re
 from lib.production_checks import get, origin_argument, private_response
 from lib.runtime import main_guard
 
-FREE_STATUSES = {"finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "awarded"}
 FORECAST_KEYS = {"gated", "runId", "revisionId", "publishedAt", "families", "runSequence", "provisional", "updateDelayed"}
 SNAPSHOT_KEYS = {"gated", "revisionId", "cycleId", "historical", "applicability", "publishedAt", "families"}
 
 
 def free_access(value):
-    assert value.get("access") == {"tier": "free", "signedIn": False}, "Expected anonymous gated access; mode may still be off."
+    assert value.get("access") == {"tier": "free", "signedIn": False}, "Expected anonymous gated access."
 
 
 def gated_record(record):
-    if record["status"] in FREE_STATUSES:
-        return
     assert record.get("prices") == [], "Subscriber prices leaked."
     forecast = record.get("forecast")
     if forecast is not None:
@@ -57,8 +54,12 @@ def verify(origin):
     free_access(feed)
     for record in feed["records"]:
         gated_record(record)
-    home = read("/en")
-    HomeCards(home, {record["fixtureId"] for record in feed["records"] if record["status"] not in FREE_STATUSES})
+    home = read("/en/matches")
+    HomeCards(home, {record["fixtureId"] for record in feed["records"]})
+    best = read("/api/best-slips", wire=True)
+    for slip in best["slips"]:
+        assert set(slip) == {"rank", "totalOdds", "estimatedProbability", "matchCount"}, "Best Slips selections leaked."
+    gated_html(read("/en"))
     upcoming = read("/api/matches?when=next-7-days&status=scheduled&pageSize=100", wire=True)
     free_access(upcoming)
     assert upcoming["records"], "No upcoming fixture available; gate verification is incomplete."
@@ -69,7 +70,7 @@ def verify(origin):
     assert candidate is not None, "No published upcoming forecast available to verify the gate."
     fixture_id = candidate["fixtureId"]
     assert re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", fixture_id)
-    gated_html(read("/en?when=next-7-days&status=scheduled"))
+    gated_html(read("/en/matches?when=next-7-days&status=scheduled"))
     detail = read(f"/api/matches/{fixture_id}", wire=True)
     free_access(detail)
     gated_record(detail["fixture"])

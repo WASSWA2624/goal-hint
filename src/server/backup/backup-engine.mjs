@@ -8,7 +8,7 @@ import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { authorizeBackup, backupHealth, BackupError, failBackup, parseBackupPolicy, sha256 } from './backup-contract.mjs';
 import { backupText, decryptBackup, sealBackup, verifyBackup } from './backup-crypto.mjs';
-import { mysqlChild, ownedMysqlSource, repositoryCompatibility, repositoryMigrations } from './mysql-backup.mjs';
+import { mysqlChild, ownedMysqlSource, repositoryCompatibility, compatibleMigrationHistory } from './mysql-backup.mjs';
 import { isOwnedMysql, startIsolatedMysql } from './isolated-mysql.mjs';
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -22,7 +22,7 @@ async function point(source) {
   return { file, position: value, at: Number(at) };
 }
 async function compatible(inventory) {
-  if (!same(inventory.migrations, await repositoryMigrations())) failBackup('incompatible-schema');
+  if (!await compatibleMigrationHistory(inventory.migrations)) failBackup('incompatible-schema');
 }
 function telemetry(options, event) {
   // Telemetry failure cannot undo a successful durable artifact or expose raw errors.

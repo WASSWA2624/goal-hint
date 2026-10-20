@@ -63,7 +63,7 @@ function LiveDetail({ initial, today, locale, children, preview = null, historyR
     (fixture.status === "scheduled" && kickoffAt !== null && Math.abs(kickoffAt - asOf) <= liveRefreshRules.kickoffLeadMs);
   useLiveRefresh({ today, enabled: true, interval: active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs,
     refresh, rollover: () => router.refresh() });
-  const sections = preview ? gateInsights(preview, data.access, data.fixture.status).sections : null;
+  const sections = preview ? gateInsights(preview, data.access).sections : null;
   const currentPreview = preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;
   return <MatchDetails showAccount={showAccount} offer={offer} data={data} preview={currentPreview} locale={locale} history={children} historyRequested={historyRequested} />;
 }

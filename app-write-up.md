@@ -2,7 +2,7 @@
 
 **Product requirements and technical design**
 
-Prepared for Wasswa Wilson • 7 October 2026 • Version 1.9 (owner-approved paid access, 19 October 2026; version 1.8 feed redesign, 10 October 2026)
+Prepared for Wasswa Wilson • 7 October 2026 • Version 1.11 (Best Slips home, all-status subscription gates and open local test flows, 20 October 2026; paid access 1.9, 19 October 2026)
 
 | Product setting | Decision |
 | --- | --- |
@@ -35,7 +35,7 @@ Use “Goal Hint” consistently in the interface, metadata and public copy. Dom
 
 ## 1 Product purpose
 
-Goal Hint is a mobile-first football prediction website. Visitors find fixtures for today and the next six days, read estimated probabilities and supporting analysis, and later verify prediction outcomes. Fixtures, scores, factual insights and finished-match results are always free; when paid access is on, picks, probabilities and AI analysis for unfinished fixtures are for subscribers (see Paid access below). Launch with one match feed, reusable match detail pages and a methodology page.
+Goal Hint is a mobile-first football prediction website. Visitors find fixtures for today and the next six days, read estimated probabilities and supporting analysis, and later verify prediction outcomes. Fixtures, scores, factual insights and finished-match results are always free; picks, probabilities, prediction analysis and odds for every fixture require a current subscription (see Paid access below). Launch with one match feed, reusable match detail pages and a methodology page.
 
 AI is the primary predictor; validated API-Football predictions provide fallback for supported markets. A daily midnight East Africa run refreshes eligible fixtures in the seven-day window. New valid revisions replace displayed predictions until the publication cutoff; immutable history supports settlement and performance reporting.
 
@@ -51,14 +51,14 @@ Every public page and read endpoint works without registration or sign-in, and a
 
 ### Paid access (owner decision, 19 October 2026)
 
-Version 1.9 adds optional paid access. It ships behind a dashboard switch (`off`, `test`, `on`) that stays **off** until the owner turns it on; while off, visitors see the free service unchanged apart from generic match metadata (section 12).
+Version 1.9 adds optional paid access. It ships behind a dashboard switch (`off`, `test`, `on`) that stays **off** until the owner turns it on; while off, subscriptions are closed: sign-in and the rest of the app remain available, predictions and odds remain gated, and payments, trials and code activation are refused. Account and Get access entry points stay visible. Existing valid unlocked subscription periods remain honored.
 
 - **Accounts.** Visitors sign in with a phone number only: digits with the country code and no plus (`256772123456`), shown as `256 772 123 456`. There is no password, OTP, name, email or profile. A number identifies an account; on its own it never shows picks, payment status or subscription details.
 - **Payment.** On one mobile-first "Get access" page the visitor picks a plan, pays the owner's MTN MoMo or Airtel Money number and reports the payment: payer number, transaction ID, amount and a screenshot, mostly filled in for them. The plans are Daily (24 hours from activation, UGX 1,000), Weekly (7 days, UGX 5,000) and Monthly (30 days, UGX 20,000); every plan gives full access to every feature and section, and only the length differs. A day is 24 hours from activation (payment confirmation), never a calendar day or midnight EAT. Payments are whole UGX to the owner's Ugandan wallets; accounts may use any country code.
 - **Approval and codes.** The owner finds the money in their own wallet and approves it on a private, phone-friendly `/admin` dashboard that reuses the analytics owner login. Payments are never approved automatically. Approval issues a 12-character access code (`XXXX-XXXX-XXXX`) that works only on the paying account; the owner sends it by WhatsApp or SMS with a one-tap unlock link.
 - **Periods and devices.** A paid period starts when the owner confirms the payment (for a renewal, when the current period ends) and ends by itself at its expiry date and time; entering the code later does not move it. When it ends, subscriber content is hidden again until the next payment. Entering the code once unlocks that browser; an account has at most two unlocked devices by default.
 - **Free trial.** A new number can ask once for 2 days (48 hours) free. Because numbers are not verified, the owner sends the trial as a code like any other; it starts when sent and ends by itself.
-- **Free and subscriber content.** Fixtures, scores, the live clock, search, factual insights, which market families have a pick, performance aggregates and everything about finished, canceled and awarded fixtures (picks, outcomes, analysis, history) stay free; the owner confirms this split under OP-37. For unfinished fixtures, picks, probabilities, alternatives, prices, AI analysis, revision history, slip results and probability filters are for entitled viewers. Gating happens on the server: nothing subscriber-only reaches anonymous HTML, page data, API responses or metadata.
+- **Free and subscriber content.** Fixtures, scores, the live clock, search, factual insights, published-family indicators and performance aggregates remain free. The owner confirmed on 20 October 2026 that every fixture, including finished, canceled and awarded matches, requires entitlement for picks, probabilities, alternatives, prices, prediction analysis/history, slip selections and probability-dependent filters. Best Slips summaries are the owner-approved public exception. Gating happens on the server: nothing subscriber-only reaches anonymous HTML, page data, API responses or metadata.
 
 The detailed design is [the monetization plan](prompts/monetization.md); prompts 057–067 implement it. Betting, stakes, bookmaker links and automatic payment collection remain outside scope.
 
@@ -66,15 +66,15 @@ Cover enabled competitions available through the selected plan, expanding only a
 
 ## 2 Navigation and everyday use
 
-The homepage opens directly to today’s matches in `Africa/Kampala` time, with the date and search visible above the cards.
+Best Slips is the default homepage (`/en`). Daily slips target combined odds around 5.00; total odds, estimated joint probability and match count are public, while match selections require current subscription access. Matches (`/en/matches`), Live, Results and the existing Slip Builder remain in the same navigation and chrome. Missing approved odds or a calibrated correlation-aware joint model produces an honest unavailable state.
 
 | Surface | Purpose |
 | --- | --- |
-| Today and Results | Two navigation choices using the same feed and cards. Provide Today, Tomorrow, Next 7 days and historical date controls. |
+| Matches and Results | Two navigation choices using the same feed and cards. Provide Today, Tomorrow, Next 7 days and historical date controls. |
 | Match detail | Teams, kickoff, markets, analysis, sources, revisions and final outcomes; one tap from a card. |
 | How it works | Probability explanations, sources, timing, settlement and measured performance; linked from the footer and probability help. |
 | Utility pages | Privacy, terms and contact information in the footer. |
-| Account and Get access | Phone sign-in, plan choice, payment report and code entry; linked from the interface only when paid access is on and never indexed. |
+| Account and Get access | Visible in every mode and never indexed. Closed mode permits phone sign-in while closing payments, trials and code activation. |
 
 ### Search and filters
 
@@ -94,7 +94,7 @@ During a run, show “Updating predictions for the next 7 days” with completed
 
 ### Reusable match cards
 
-Use an article with this reading order: competition and kickoff, home team, away team, selected prediction, probability, outcome and “View analysis”. On phones, show separate Home and Away rows with logos beside names and aligned scores. A gated card (paid access on, viewer not entitled, unfinished fixture) keeps that order with the market name and “Pick for subscribers” in place of the selected prediction and probability. Its markup carries no pick, probability or outcome value, and the tile still opens the match.
+Use an article with this reading order: competition and kickoff, home team, away team, selected prediction, probability, outcome and “View analysis”. On phones, show separate Home and Away rows with logos beside names and aligned scores. A gated card (viewer not entitled, in any mode or fixture status) keeps that order with the market name and “Pick for subscribers” in place of the selected prediction and probability. Its markup carries no pick, probability or outcome value, and the tile still opens the match.
 
 For example: “Home win · 54% estimated probability”, followed by “AI prediction · Updated 00:18 EAT”; gated: “Match result · Pick for subscribers”. A final score and the prediction outcome are separate labels. Any illustrative probabilities must be identified as examples.
 
@@ -408,11 +408,11 @@ Use hosting tools, private operator commands and structured logs for run progres
 
 ### A small navigation with useful searchable pages
 
-Use `https://goalhint.com` as the metadata base and canonical origin; redirect `www` there. Use “Goal Hint” as the site name, “Goal Hint | Daily Football Predictions” as the homepage title, and the app name as the suffix for unique match titles.
+Use `https://goalhint.com` as the metadata base and canonical origin; redirect `www` there. Use “Goal Hint” as the site name, Best Slips as the homepage title, and the app name as the suffix for unique page and match titles.
 
 Routes: `/en`, `/en/predictions/YYYY-MM-DD`, `/en/matches/fixture-id/home-v-away` and `/en/how-it-works`. Redirect `/` consistently to `/en`. Fixture IDs establish identity; changed slugs redirect to the canonical page. Results shares the dated feed.
 
-- Server-render names, kickoff, factual insights and results. Server-render probabilities and explanations only for entitled viewers or free fixtures (finished, canceled, awarded); crawlers get exactly the anonymous view, with no user-agent branching. Use Next.js metadata APIs for unique titles, descriptions, canonical URLs and social previews; include valid canonical pages in the sitemap. Metadata is generic and viewer-independent: it never quotes a pick or probability. [8]
+- Server-render names, kickoff, factual insights and results. Server-render probabilities and explanations only for entitled viewers; crawlers get exactly the anonymous view, with no user-agent branching. Use Next.js metadata APIs for unique titles, descriptions, canonical URLs and social previews; include valid canonical pages in the sitemap. Metadata is generic and viewer-independent: it never quotes a pick or probability. [8]
 - Retain historical match pages with locked predictions, source/evidence timestamps, scores and outcomes. Show revisions within that page and canonicalize revision URLs to it.
 - Keep search, arbitrary filters and revision variants out of the index. Account and Get access pages are noindex, no-store and outside sitemaps; robots.txt blocks only `/admin`. Allow crawlers to read `noindex`; do not hide it behind a robots.txt block. Avoid thin team, league, keyword or AI article pages.
 - Provide crawlable archive, pagination and detail links. Unknown fixtures return 404; known fixtures may show unavailable states. Supported structured data must match visible content and does not guarantee rich results. [10]
@@ -515,7 +515,7 @@ These handoff requirements need recorded evidence. Confirm proposed workload and
 | Area | Required evidence |
 | --- | --- |
 | Navigation and access | Today’s picks appear immediately; search includes unloaded cards and a card opens analysis in one tap. Fresh-session public pages/read endpoints need no account, token or cookie and set no cookie. Visitor identity is limited to paid-access phone accounts: no auth SDK, passwords, OTP or profiles. Unauthorized job triggers and unauthenticated `/admin` requests are rejected. |
-| Paid access | Phone sign-in turns every documented input into canonical digits (`256772123456`) or refuses it. A manual payment report (payer number, transaction ID, amount, screenshot) reaches the owner queue, and one owner approval issues one code that works only on the paying account; an approved transaction ID can never be approved again. A new number gets at most one 48-hour trial code. Periods start at payment confirmation, chain without overlap and expire without a job; the device cap holds. With the switch `on`, anonymous visitors, crawlers and sessions that are not entitled (no unlock, or no running period) get no pick, probability, reason, alternative, price or analysis for unfinished fixtures in any HTML, page data, API response or metadata (leak scan). With it `off`, the public site matches the free service apart from generic metadata. |
+| Paid access | Phone sign-in turns every documented input into canonical digits (`256772123456`) or refuses it. A manual payment report (payer number, transaction ID, amount, screenshot) reaches the owner queue, and one owner approval issues one code that works only on the paying account; an approved transaction ID can never be approved again. A new number gets at most one 48-hour trial code. Periods start at payment confirmation, chain without overlap and expire without a job; the device cap holds. In every switch mode, anonymous visitors, crawlers and sessions that are not entitled (no unlock, or no running period) get no pick, probability, reason, alternative, price or analysis for every fixture in any HTML, page data, API response or metadata (leak scan). With it `off`, sign-in and public app screens remain available while predictions/odds stay gated and new paid actions are closed. |
 | Layout and rendering | At 320, 360, 390 and 430 px, long names, broken logos, keyboard use and zoom remain usable. Shared components follow the layout templates with consistent Goal Hint branding. Match HTML and styled-components CSS exist before hydration without flashes/errors. |
 | Images and teams | Third-party images remain URL-only and load directly without app storage/proxy/cache; first-party brand assets may be bundled. Broken or throttled logos show text. Concurrent/repeated imports across competitions/seasons produce one canonical team; ambiguous identities are held for resolution. |
 | Schedule | Prove today plus six days, exclusive day-seven boundary, 21:00 UTC trigger, midnight rollover and rejection outside eligibility. Prior-day predictions remain usable for eligible early kickoffs. |

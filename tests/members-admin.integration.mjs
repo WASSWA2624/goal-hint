@@ -14,7 +14,7 @@ const DAY=86400000,HOUR=3600000;
 test("subscriber management, accounting and retention on restricted MySQL",{timeout:180000},async t=>{
  const f=await paidDatabase();t.after(()=>f.close());const{database:db,config}=f;
  const base=Date.parse("2026-11-11T21:30:00Z");let clock=base,n=1000;const now=()=>clock;
- const codes=createAccessCodes({database:db,config,now}),sessions=createMemberSessions({database:db,config,now}),payments=createPayments({database:db,config,now}),review=createPaymentReview(db,now),members=createSubscribers(db,now),purge=createMembersPurge(db,now);
+ const codes=createAccessCodes({database:db,config,now}),sessions=createMemberSessions({database:db,config,now}),payments=createPayments({database:db,config,now,environment:null}),review=createPaymentReview(db,now),members=createSubscribers(db,now),purge=createMembersPurge(db,now);
  const planId=randomUUID();await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"test",mtnNumber:"256700000901",mtnName:"TEST",airtelNumber:"256700000902",airtelName:"TEST",paymentNumbersChangedAt:new Date(base),updatedAt:new Date(base),updatedBy:"owner"}}));await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Weekly",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:new Date(base),updatedAt:new Date(base)}}));
  async function member(){const r=await sessions.signIn(`25670000${++n}`,"unknown");return sessions.verify(r.token);}
  async function manual(who,amount=3000){const r=await codes.manual({phone:who.phone,planId,amountReceivedUgx:amount,note:"Synthetic code"},"owner");assert.equal(r.status,"created");return r.ready;}

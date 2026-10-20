@@ -12,7 +12,7 @@ import { jpeg } from "./helpers/payment-fixtures.mjs";
 test("owner review transactions on restricted real MySQL",{timeout:180000},async t=>{
   const f=await paidDatabase(); t.after(()=>f.close()); const {database:db,config}=f;
   let clock=Date.parse("2026-10-19T09:00:00Z"), n=500;
-  const now=()=>clock, codes=createAccessCodes({database:db,config,now}), sessions=createMemberSessions({database:db,config,now}), payments=createPayments({database:db,config,now}), review=createPaymentReview(db,now);
+  const now=()=>clock, codes=createAccessCodes({database:db,config,now}), sessions=createMemberSessions({database:db,config,now}), payments=createPayments({database:db,config,now,environment:null}), review=createPaymentReview(db,now);
   const planId=randomUUID(); await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"test",mtnNumber:"256700000901",mtnName:"TEST",airtelNumber:"256700000902",airtelName:"TEST AIRTEL",updatedAt:new Date(clock),updatedBy:"owner"}}));
   await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Weekly",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:new Date(clock),updatedAt:new Date(clock)}}));
   async function member(){ const signed=await sessions.signIn(`25670000${String(++n).padStart(4,"0")}`,"unknown"); return sessions.verify(signed.token); }

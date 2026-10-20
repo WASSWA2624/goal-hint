@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { cache } from "react";
 import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
-import { AccountLink } from "@/components/members/account-link";
+import { AccountLinks } from "@/components/members/account-link";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { SearchIcon } from "@/components/ui/icons";
@@ -12,7 +12,7 @@ import { NavigationProgress } from "@/components/navigation/navigation-progress"
 import { Container, PageMain } from "@/components/ui/layout";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import {
-  feedHref, getFeedEntry, homeHref, informationHref, informationPages, slipsHref,
+  feedHref, getFeedEntry, homeHref, matchesHref, informationHref, informationPages, slipsHref,
   type NavigationLocation,
 } from "@/domain/navigation";
 import { feedQueryRules } from "@/domain/feed-query";
@@ -31,7 +31,7 @@ export const getShellInstant = cache(async () => {
 });
 export const getShellDate = cache(async () => getReportingDate(await getShellInstant()));
 
-export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, search, showAccount = false }: {
+export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, search, showAccount = true }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
@@ -49,11 +49,12 @@ export async function PublicShell({ children, locale, current, today: reportingD
   const language = resolveLocale(locale);
   const messages = createMessages(language);
   const today = reportingDate ?? await getShellDate();
-  const todayHref = zone ? deviceFeedEntryHref("today", today, zone, language) : homeHref(language);
+  const todayHref = zone ? deviceFeedEntryHref("today", today, zone, language) : matchesHref(language);
   const resultsHref = zone ? deviceFeedEntryHref("results", today, zone, language) : feedHref(getFeedEntry(today, "results"), language);
   const sections = [
-    { key: "today", href: todayHref, label: messages.text("navigation.predictions"), tab: messages.text("navigation.matches"), icon: "matches", tone: "teal" },
-    { key: "live", href: zone ? deviceFeedEntryHref("live", today, zone, language) : `${homeHref(language)}?status=live`, label: messages.text("navigation.live"), tab: messages.text("navigation.live"), icon: "live", tone: "red" },
+    { key: "best-slips", href: homeHref(language), label: messages.text("bestSlips.title"), tab: messages.text("bestSlips.title"), icon: "slips", tone: "teal" },
+    { key: "today", href: todayHref, label: messages.text("navigation.matches"), tab: messages.text("navigation.matches"), icon: "matches", tone: "teal" },
+    { key: "live", href: zone ? deviceFeedEntryHref("live", today, zone, language) : `${matchesHref(language)}?status=live`, label: messages.text("navigation.live"), tab: messages.text("navigation.live"), icon: "live", tone: "red" },
     { key: "results", href: resultsHref, label: messages.text("navigation.results"), tab: messages.text("navigation.results"), icon: "results", tone: "violet" },
     { key: "slips", href: slipsHref(language), label: messages.text("navigation.slips"), tab: messages.text("navigation.slips"), icon: "slips", tone: "teal" },
   ] as const;
@@ -74,12 +75,12 @@ export async function PublicShell({ children, locale, current, today: reportingD
           <DesktopNav aria-label={messages.text("navigation.primary")}>
             <ResponsiveNavigation destinations={destinations} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
           </DesktopNav>
-          {search !== null && <HeaderSearch action={homeHref(language)} method="get" role="search" aria-label={messages.text("navigation.searchLabel")}>
+          {search !== null && <HeaderSearch action={matchesHref(language)} method="get" role="search" aria-label={messages.text("navigation.searchLabel")}>
             <SearchIcon />
             <input type="search" name="q" defaultValue="" maxLength={feedQueryRules.maximumSearchLength}
               placeholder={messages.text("navigation.search")} aria-label={messages.text("navigation.searchLabel")} autoComplete="off" />
           </HeaderSearch>}
-          <HeaderActions>{showAccount && <AccountLink locale={language} />}<ThemeToggle /></HeaderActions>
+          <HeaderActions>{showAccount && <AccountLinks locale={language} />}<ThemeToggle /></HeaderActions>
         </HeaderContent>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>

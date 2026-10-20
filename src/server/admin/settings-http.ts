@@ -20,7 +20,8 @@ const unavailable = () => json({ error: "unavailable", message: "Settings storag
 async function savedReply(outcome: Extract<SettingsOutcome, { status: "saved" }>, service: SettingsService, headers: Headers): Promise<Response> {
   const saved = { changed: outcome.changed, cleared: outcome.cleared };
   try { return json({ ...await settingsView(service, headers), ...saved }); }
-  catch { return json({ settings: outcome.settings, protectedFields: protectedSettingFields, diagnostics: clientAddressDiagnostics(headers), ...saved }); }
+  catch { return json({ settings: outcome.settings, protectedFields: protectedSettingFields, environmentFields: service.environmentFields,
+    diagnostics: clientAddressDiagnostics(headers), ...saved }); }
 }
 
 async function answer(outcome: SettingsOutcome, service: SettingsService, request: Request): Promise<Response> {

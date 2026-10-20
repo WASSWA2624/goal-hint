@@ -1,14 +1,17 @@
 {
   "watch": [
-    "src",
-    "public",
-    "next.config.ts",
-    "tsconfig.json",
     ".env{,.*}",
-    ".env.example"
+    ".env.example",
+    "nodemon.json"
   ],
   "ext": "*",
-  "ignore": ["**/*.md", ".next/**", "node_modules/**"],
+  "ignore": [
+    "**/*.md",
+    ".next/**",
+    ".tmp/**",
+    "node_modules/**",
+    "src/server/generated/**"
+  ],
   "delay": 300,
-  "exec": "next dev"
+  "exec": "next dev --webpack"
 }

@@ -31,8 +31,9 @@ class ProductionChecks(unittest.TestCase):
         for access in ({"tier": "full", "signedIn": False}, {"tier": "free", "signedIn": True}):
             with self.assertRaises(AssertionError):
                 paywall["free_access"]({"access": access})
-        # Finished results are intentionally public.
-        paywall["gated_record"]({**safe, "status": "finished-regulation", "prices": [{"price": "2.00"}]})
+        # Scores remain public; historical predictions and odds still require entitlement.
+        with self.assertRaises(AssertionError):
+            paywall["gated_record"]({**safe, "status": "finished-regulation", "prices": [{"price": "2.00"}]})
 
     def test_raw_html_and_escaped_flight_leaks_fail(self):
         paywall["gated_html"]('<p>Subscriber access</p>')
@@ -70,6 +71,8 @@ class ProductionChecks(unittest.TestCase):
             headers["Cache-Control"] = "private, no-store"
             if "/insights" in path:
                 value = {"access": access, "fixtureId": record["fixtureId"], "section": "news", "data": {"items": [{"kind": state["kind"]}]}}
+            elif path == "/api/best-slips":
+                value = {"day": "2026-10-09", "state": "odds-unavailable", "slips": []}
             elif path.startswith("/api/matches/"):
                 value = {"access": access, "fixture": record, "history": {"gated": True}, "snapshot": {"gated": True},
                          "route": {"path": f'/en/matches/{record["fixtureId"]}/{record["slug"]}'}}
@@ -81,7 +84,7 @@ class ProductionChecks(unittest.TestCase):
 
         with patch.dict(paywall["verify"].__globals__, {"get": read}), redirect_stdout(io.StringIO()):
             paywall["verify"]("http://127.0.0.1")
-            self.assertEqual(len(seen), 7)
+            self.assertEqual(len(seen), 9)
             state["kind"] = "analysis"
             with self.assertRaises(AssertionError):
                 paywall["verify"]("http://127.0.0.1")

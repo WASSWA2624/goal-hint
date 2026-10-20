@@ -1,7 +1,7 @@
 /**
  * Phone numbers for paid access (prompts/monetization.md 3 and 5.2). The canonical form is digits with the country
  * code and no plus (`256772123456`): member accounts, payer numbers and the owner's settings numbers are all stored
- * that way and shown grouped in threes (`256 772 123 456`). A plus appears only inside `tel:` and `sms:` links.
+ * that way and shown grouped in threes (`256 772 123 456`). Input previews and `tel:`/`sms:` links include the leading plus.
  *
  * The phone field starts with `256`, so `normalizePhone` also accepts a full number typed or pasted after that prefill
  * (`2560772…`, `256+256…`, `25600254…`). Ugandan numbers must be `2567` plus 8 digits; numbers from other countries are
@@ -26,12 +26,12 @@ export type PhoneHint = "outside-uganda";
 
 const ugandaCode = "256";
 // Anything longer is not a phone number; refusing early keeps a pasted paragraph cheap.
-const maxInputLength = 64;
+export const phoneInputMaxLength = 64;
 const separators = /[\s\-.()[\]\u2010-\u2015\u2212]/gu;
 
 /** Steps 1–3 of `normalizePhone`: separators removed, a number typed after the prefill kept, then `+` or `00` dropped. */
 function digitsOf(input: unknown): string | null {
-  if (typeof input !== "string" || input.length > maxInputLength) return null;
+  if (typeof input !== "string" || input.length > phoneInputMaxLength) return null;
   let value = input.replace(separators, "");
   const rest = value.slice(ugandaCode.length);
   if (value.startsWith(ugandaCode) && (rest.startsWith("+") || rest.startsWith("0") || rest.startsWith(ugandaCode))) value = rest;
@@ -60,6 +60,15 @@ export function normalizePhone(input: unknown): string | null {
   if (/^0\d{9}$/u.test(value)) value = ugandaCode + value.slice(1);
   else if (/^7\d{8}$/u.test(value)) value = ugandaCode + value;
   return isCanonicalPhone(value) ? value : null;
+}
+
+export type PhoneInputIssue = "required" | "invalid" | "too-long" | "country-code";
+/** UI validation uses the same canonical-number contract as every server mutation. */
+export function phoneInputIssue(value: string, required = false): PhoneInputIssue | null {
+  if (!value.trim()) return required ? "required" : null;
+  if (normalizePhone(value)) return null;
+  if (value.length > phoneInputMaxLength || (value.match(/\d/gu)?.length ?? 0) > 15) return "too-long";
+  return phoneHint(value) ? "country-code" : "invalid";
 }
 
 /** The hint for a refused or unfinished number that starts `256` and then a digit other than 7 or 0. */

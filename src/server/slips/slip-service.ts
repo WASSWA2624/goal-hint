@@ -21,6 +21,7 @@ export function createSlipBuildService(options: Readonly<{
   clock?: Clock;
   /** Effective public odds policy. Tests alone override it to exercise priced stored projections. */
   providerOdds?: boolean;
+  build?: typeof buildSlips;
 }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   return Object.freeze({ async query(criteria: SlipCriteria, locale = "en"): Promise<SlipBuildPageResult> {
@@ -85,7 +86,7 @@ export function createSlipBuildService(options: Readonly<{
       // The scan can take time. Retain the original observation cutoff, but exclude matches that
       // have entered the publication/kickoff cutoff by completion, even if their first page was valid.
       const current = records.filter((record) => record.kickoffAt === null || completedAt < getPublicationDeadline(record.kickoffAt));
-      const data = buildSlips(criteria, current, asOf);
+      const data = (options.build ?? buildSlips)(criteria, current, asOf);
       return { ...base, state: data.slips.length > 0 ? "generated" : data.qualifyingMatches === 0 ? "no-qualifying" : "no-combinations",
         data, asOf: completedAt, examined: records.length, searchLimited: searchLimited || data.searchLimited, partialCoverage };
     } catch (error) {

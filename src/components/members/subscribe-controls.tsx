@@ -18,6 +18,7 @@ import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
 import { AccountCodeForm } from "./account-code-form";
 import { MemberForm, MemberPanel, MemberSignOut } from "./member-controls";
+import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
 
@@ -47,6 +48,13 @@ const Preview = styled.img`max-inline-size: 100%; max-block-size: 16rem; object-
 const Safety = styled(Disclosure)`
   max-inline-size: 36rem;
   > summary { min-block-size: 48px; }
+`;
+const ReceivingWallet = styled.div`
+  display: flex; flex-direction: column; gap: 8px; min-inline-size: 0;
+  padding-block: 12px; border-block-end: 1px solid ${({ theme }) => theme.color.border};
+  > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  > [data-payment-logo] { align-self: flex-end; }
+  p { overflow-wrap: anywhere; }
 `;
 export function SubscribeStep({ number, title, children, id }: { number: number; title: string; children: ReactNode; id?: string }) {
   return <Step id={id}><Stack $gap="md"><h2>{number}. {title}</h2>{children}</Stack></Step>;
@@ -168,10 +176,13 @@ export function SubscribePayment({ locale, settings, plans, account, view, retur
     </SubscribeStep>
     <SubscribeStep number={3} title={m.text("subscribe.pay")}>
       {networks.map((network) => { const number = settings[network === "mtn" ? "mtnNumber" : "airtelNumber"]!, name = settings[network === "mtn" ? "mtnName" : "airtelName"], shortcut = settings[network === "mtn" ? "mtnMenuShortcut" : "airtelMenuShortcut"]?.replaceAll("{amount}", String(plan.priceUgx));
-        return <div key={network}><p>{network === "mtn" ? "MTN MoMo" : "Airtel Money"} · {formatPhone(number)}{name ? ` · ${name}` : ""}</p>
+        return <ReceivingWallet key={network}>
+          <header><strong>{network === "mtn" ? "MTN MoMo" : "Airtel Money"}</strong>{network === "airtel" && <MobileMoneyLogo network={network} />}</header>
+          <p>{formatPhone(number)}{name ? ` · ${name}` : ""}</p>
           <Button size="large" variant="secondary" data-analytics-ignore onClick={async () => { selectPayCard(network); try { await navigator.clipboard.writeText(settings.copyFormat === "local" ? localUgandaPhone(number) : number); setCopied(network); } catch { setError(m.text("account.copyFailed")); } }}>{m.text(copied === network ? "account.copied" : "subscribe.copyNumber")}</Button>
           {shortcut && <><p>{shortcut}</p>{canOpenMoneyMenu(userAgent) && <ButtonLink size="large" variant="secondary" data-analytics-ignore href={`tel:${shortcut.replaceAll("#", "%23")}`} onClick={() => selectPayCard(network)}>{m.text(network === "mtn" ? "subscribe.openMtn" : "subscribe.openAirtel")}</ButtonLink>}</>}
-        </div>; })}
+          {network === "mtn" && <MobileMoneyLogo network={network} />}
+        </ReceivingWallet>; })}
       <p>{m.text("subscribe.sendExactly", { amount: money(plan.priceUgx) })}</p>
       {settings.paymentNote && <p>{settings.paymentNote}</p>}<PaymentHelp settings={settings} locale={locale} text={helpText} />
     </SubscribeStep>
