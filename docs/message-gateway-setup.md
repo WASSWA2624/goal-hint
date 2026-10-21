@@ -38,6 +38,39 @@ permission. See the official [installation guide](https://docs.sms-gate.app/inst
 SMSGate sends through the phone's SIM. WhatsApp codes use Meta's separate business messaging service; the recipient's
 registered number must be on WhatsApp.
 
+### Connect an existing WhatsApp Business app number
+
+For a number already used in the WhatsApp Business app, use Meta's **Coexistence** onboarding to keep the app and its
+history while adding automatic API delivery. Meta documents this route through a Solution Partner or Tech Provider
+that supports business app number onboarding. Creating a developer app alone does not connect that existing number.
+
+1. Sign in to [Meta Business Suite](https://business.facebook.com/) with the Facebook account that will manage Goal Hint.
+   Select the existing business portfolio, or create one using the business's actual details.
+2. Update WhatsApp Business on the phone and back up its chat history. Meta requires app version 2.24.17 or later.
+3. Choose a provider from [Meta's partner showcase](https://business.facebook.com/messaging/partner-showcase) that supports
+   **Coexistence / Connect an existing WhatsApp Business app**. Check its fees and integration credentials before
+   connecting. Goal Hint currently calls Meta's Graph API directly; a provider offering only its own API requires a
+   separate adapter. The provider must also handle the Embedded Signup and webhook requirements.
+4. In that provider's Meta-hosted signup, select the business portfolio and the option to connect the existing
+   WhatsApp Business app. Enter the business sender number. Meta checks the account's eligibility during onboarding.
+5. Complete the connection on the phone using the official Facebook Business message and the instructions shown by
+   Meta. Enter Meta's connection code in its signup flow, never in Goal Hint or chat. Review any optional history sharing.
+6. Obtain the actual sender's Meta **Phone number ID** and a token authorized for `whatsapp_business_messaging`.
+   Configure the private environment fields below, then create and approve the authentication template.
+7. Test delivery to a separate WhatsApp recipient before testing account registration and security changes. Confirm
+   arrival on the recipient's phone; an API acceptance response alone does not confirm delivery.
+
+The ordinary delete-and-register migration is a different route: Meta warns that it loses messaging history and stops
+the number working in the WhatsApp Business app until it is deregistered from Cloud API. Do not use that route when
+the intent is to keep the existing app account. See Meta's
+[existing-number migration guide](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/migrate-existing-whatsapp-number-to-a-business-account)
+and [Coexistence requirements and onboarding](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users).
+
+### Developer test connection and sender configuration
+
+Meta's test sender can establish API connectivity while business sender onboarding is pending. It does not send from
+the existing business number. After Coexistence onboarding, configure the real sender's credentials instead.
+
 1. Open [Meta Apps](https://developers.facebook.com/apps) and sign in. Complete developer registration if prompted.
 2. Choose **Create App**, enter **Goal Hint** and your contact email, then choose **Connect with customers through
    WhatsApp**. Select or create your business portfolio and finish creating the app.
