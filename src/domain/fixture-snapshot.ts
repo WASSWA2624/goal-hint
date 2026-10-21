@@ -155,9 +155,11 @@ const fixtureSnapshotBaseSchema = z.strictObject({
   prices: z.array(fixturePriceSchema).max(4).optional(),
 });
 export const publishedFamiliesSchema = z.array(marketFamilySchema).max(4).refine((families) => families.join() === publicPolicy.markets.filter((family) => families.includes(family)).join(), "Families must be unique and in policy order.");
+/** Public chance only: neither a selection nor the complete group from which it could be reconstructed. */
+export const publicChanceSchema = z.array(z.strictObject({ family: marketFamilySchema, probability: z.number().gt(0).lt(1) })).max(4);
 export const gatedForecastSchema = z.strictObject({ gated: z.literal(true), runId: identity, revisionId: identity, publishedAt: instant,
   runSequence: publicForecastSchema.shape.runSequence, provisional: publicForecastSchema.shape.provisional,
-  updateDelayed: publicForecastSchema.shape.updateDelayed, families: publishedFamiliesSchema,
+  updateDelayed: publicForecastSchema.shape.updateDelayed, families: publishedFamiliesSchema, probabilities: publicChanceSchema,
 });
 const wireFixtureBaseSchema = fixtureSnapshotBaseSchema.extend({ forecast: z.union([publicForecastSchema, gatedForecastSchema]).nullable() });
 function refineFixture(value: z.infer<typeof wireFixtureBaseSchema>, context: z.RefinementCtx) {

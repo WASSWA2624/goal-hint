@@ -1,5 +1,6 @@
 /** Browser-only re-encode strips metadata and bounds the upload without an image dependency. */
 export async function preparePaymentImage(file: File): Promise<Blob> {
+  if (!file.size || file.size > 25_000_000 || !file.type.startsWith("image/")) throw new Error("Choose an image smaller than 25 MB.");
   let source: ImageBitmap | HTMLImageElement;
   try { source = await createImageBitmap(file); }
   catch {

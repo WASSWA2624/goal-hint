@@ -12,6 +12,7 @@ import { countryFlagAsset } from "@/domain/country-flag";
 import { bestCardFamily, noPickReason } from "@/domain/feed-presentation";
 import { defaultMarkets } from "@/domain/feed-query";
 import type { FixtureSnapshot } from "@/domain/fixture-snapshot";
+import { subscriberHref } from "@/domain/subscriber-navigation";
 import { cardResultStatus, hasFinalScoreStatus, sameCardFixture, selectedCardPrediction, selectedCardPrice } from "@/domain/match-card";
 import type { MarketFamily } from "@/domain/markets";
 import { matchHref } from "@/domain/navigation";
@@ -32,6 +33,7 @@ export type MatchCardProps = {
   fixture: FixtureSnapshot;
   /** Also gates unpublished fixtures, whose forecast has no wire variant to carry this state. */
   gated?: boolean;
+  signedIn?: boolean;
   analysisSlug: string;
   /** Show the most likely available pick among these eligible families. */
   markets?: readonly MarketFamily[];
@@ -444,7 +446,7 @@ const GatedPick = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  grid-column: 2 / -1;
+  grid-column: 2;
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.secondary};
@@ -722,16 +724,16 @@ function PredictionCell({ prediction, price, reason, locale, children }: {
     data-outcome={prediction?.status ?? "unavailable"} title={details ?? reason ?? undefined}>{children}</Prediction>;
 }
 
-function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
+function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
   headingLevel = 2, eagerLogos = false, position, titleNote }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
   const eligible = markets && markets.length > 0 ? markets : selectedFamily ? [selectedFamily] : defaultMarkets;
   const gatedForecast = fixture.forecast !== null && "gated" in fixture.forecast ? fixture.forecast : null;
-  const gated = requiresAccess || gatedForecast !== null;
-  const shownFamily = gated ? gatedForecast?.families.find((family) => eligible.includes(family)) ?? eligible[0]!
-    : bestCardFamily(fixture, eligible) ?? eligible[0]!;
+  const gated = !hasFinalScoreStatus(fixture.status) && (requiresAccess || gatedForecast !== null);
+  const shownFamily = bestCardFamily(fixture, eligible) ?? eligible[0]!;
+  const publicChance = gatedForecast?.probabilities.find((entry) => entry.family === shownFamily)?.probability;
   const home = fixture.homeTeam.name?.trim() || messages.text("match.homeUnknown");
   const away = fixture.awayTeam.name?.trim() || messages.text("match.awayUnknown");
   const title = messages.text("match.title", { home, away });
@@ -781,10 +783,12 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
     </Teams>
     <Pick $gated={gated} data-pick-state={pickState} data-result={result}>
       <MarketName $family={shownFamily} aria-hidden={gated ? undefined : true}>
-        <span data-pick-value="" data-mobile-only="">{family}</span>
-        <span data-pick-value="" data-desktop-only="">{family}</span>
+        <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
+        <span data-pick-value="" data-desktop-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
       </MarketName>
-      {gated ? <GatedPick><SubscriberIcon /><SubscriberNotice locale={locale} kind="card" /></GatedPick> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
+      {gated ? <><GatedPick><SubscriberIcon /><SubscriberNotice locale={locale} kind="card" /></GatedPick>
+        <Probability aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChance === undefined ? "—" : messages.number(publicChance, { style: "percent", maximumFractionDigits: 0 })}</Percent></Probability>
+      </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <>
             <span data-pick-value=""><span data-pick-selection="">{predictionLabel(messages, selection)}</span>
@@ -814,7 +818,7 @@ function MatchCardView({ fixture, gated: requiresAccess = false, analysisSlug, m
       {result !== "upcoming" && settledOutcome(result) && resultIcon[result as keyof typeof resultIcon]}
       <span data-pick-value="">{resultLabel}</span>
     </Result>
-    <Open href={matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
+    <Open href={gated ? subscriberHref(signedIn, matchHref(fixture.fixtureId, analysisSlug, locale)) : matchHref(fixture.fixtureId, analysisSlug, locale)} prefetch={false}>
       <VisuallyHidden>{messages.text("match.analysisLabel", { home, away })}</VisuallyHidden><ChevronIcon />
     </Open>
   </Card>;

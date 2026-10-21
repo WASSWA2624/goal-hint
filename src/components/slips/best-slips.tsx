@@ -6,12 +6,13 @@ import { AppBrandBar } from "@/components/navigation/app-brand-bar";
 import { ButtonLink, TextLink } from "@/components/ui/controls";
 import { Inline, Stack } from "@/components/ui/layout";
 import { matchesHref, slipsHref } from "@/domain/navigation";
+import { subscriberHref } from "@/domain/subscriber-navigation";
 import { bestSlipsRules, type BestSlipsResult } from "@/domain/best-slips";
 import { createMessages } from "@/i18n/messages";
 import { CriteriaPanel, Note, SlipCard, SlipHeading, SlipStack, SlipSummary, SlipTitle } from "./slip-styles";
 import { SlipTable } from "./slip-table";
 
-export function BestSlips({ result, locale }: { result: BestSlipsResult; locale: string }) {
+export function BestSlips({ result, locale, signedIn = false }: { result: BestSlipsResult; locale: string; signedIn?: boolean }) {
   const m = createMessages(locale), router = useRouter();
   useEffect(() => {
     const timer = setInterval(() => { if (document.visibilityState === "visible") router.refresh(); }, 20_000);
@@ -37,13 +38,13 @@ export function BestSlips({ result, locale }: { result: BestSlipsResult; locale:
         slip={view.slip} estimatedProbability={view.estimatedProbability} /> : <SlipCard key={view.rank}>
         <SlipTitle><h3>{m.text("slips.slipTitle", { number: m.number(view.rank) })}</h3>
           <SlipSummary>
-            <div><dt>{m.text("slips.totalOdds")}</dt><dd>{view.totalOdds}</dd></div>
+            <div><dt>{m.text("slips.totalOdds")}</dt><dd><TextLink href={subscriberHref(signedIn)} prefetch={false}>{m.text("paywall.lockedOdds")}</TextLink></dd></div>
             <div><dt>{m.text("bestSlips.probability")}</dt><dd>{m.number(view.estimatedProbability, { style: "percent", maximumFractionDigits: 1 })}</dd></div>
             <div><dt>{m.text("slips.selectionCount")}</dt><dd>{m.number(view.matchCount)}</dd></div>
           </SlipSummary>
         </SlipTitle>
         <CriteriaPanel><Stack $gap="sm"><p>{m.text("bestSlips.subscriberMatches")}</p>
-          <ButtonLink href="/en/subscribe?return=%2Fen" prefetch={false}>{m.text("paywall.getAccess")}</ButtonLink>
+          <ButtonLink href={subscriberHref(signedIn)} prefetch={false}>{m.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>
         </Stack></CriteriaPanel>
       </SlipCard>)}
     </>}

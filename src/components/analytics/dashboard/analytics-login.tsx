@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import { BrandImage, Notice } from "./dashboard-styles";
-import { ButtonLink } from "@/components/ui/controls";
+import { ButtonLink, TextInput } from "@/components/ui/controls";
 import { SignInIcon } from "@/components/ui/icons";
 
 export type LoginStatus = "invalid" | "locked" | "unavailable" | "signed-out" | null;
@@ -40,7 +40,7 @@ export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/
         <ButtonLink href="/en/account" prefetch={false}><SignInIcon />Sign in with your phone number</ButtonLink>
         <Form method="post" action={action}>
           <label>Username<input name="username" autoComplete="username" required maxLength={64} autoCapitalize="none" spellCheck={false} disabled={problem !== null} /></label>
-          <label>Password<input name="password" type="password" autoComplete="current-password" required maxLength={1024} disabled={problem !== null} /></label>
+          <TextInput label="Password" name="password" type="password" autoComplete="current-password" required maxLength={1024} disabled={problem !== null} />
           <button type="submit" disabled={problem !== null}>Sign in</button>
         </Form>
         <small>
@@ -82,7 +82,7 @@ const Form = styled.form`
     color: ${({ theme }) => theme.color.text};
   }
   input:focus-visible, button:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-  button {
+  button[type="submit"] {
     min-block-size: 44px;
     border: 0;
     color: ${({ theme }) => theme.color.onAction};

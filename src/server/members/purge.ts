@@ -39,7 +39,8 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
           OR (lockedUntil IS NULL AND windowStartedAt <= ${new Date(+at - 2 * DAY)})) LIMIT ${BATCH}`));
       result.accounts = await drain(() => database.transaction(async tx => {
         const admins = memberAdminPhones();
-        const where: Prisma.MemberAccountWhereInput = { passwordHash: null, ...(admins.length ? { phone: { notIn: [...admins] } } : {}),
+        const where: Prisma.MemberAccountWhereInput = { passwordHash: null, temporaryPasswordHash: null, passwordResetRequestedAt: null,
+          ...(admins.length ? { phone: { notIn: [...admins] } } : {}),
           lastSignInAt: { lte: new Date(+at - 30 * DAY) }, submissions: { none: {} }, codes: { none: {} } };
         const rows = await tx.memberAccount.findMany({ where, select: { id: true }, orderBy: { id: "asc" }, take: BATCH });
         for (const row of rows) await lockMemberAccount(tx, row.id);

@@ -9,6 +9,7 @@ import { formatOddsRange } from "@/domain/odds";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
+import { subscriberHref } from "@/domain/subscriber-navigation";
 
 /** Secondary feed notes: 12px on phones and tablets so they never outrank cards and controls. */
 export const FeedNote = styled(MutedText)`
@@ -17,9 +18,9 @@ export const FeedNote = styled(MutedText)`
   ${media.desktop} { font-size: inherit; line-height: inherit; }
 `;
 
-export function SubscriberFeedBanner({ locale }: { locale: string }) {
+export function SubscriberFeedBanner({ locale, signedIn = false }: { locale: string; signedIn?: boolean }) {
   const messages = createMessages(locale);
-  return <FeedNote data-subscriber-banner>{messages.text("paywall.banner")} · <Link href="/en/subscribe" prefetch={false}>{messages.text("paywall.getAccess")}</Link></FeedNote>;
+  return <FeedNote data-subscriber-banner>{messages.text("paywall.banner")} · <Link href={subscriberHref(signedIn, "/en/matches")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</Link></FeedNote>;
 }
 
 const PicksLabel = styled.label`

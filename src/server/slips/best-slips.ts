@@ -7,7 +7,7 @@ import type { ViewerAccess } from "../members/viewer-access.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
 
 export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): BestSlipsResult {
-  return { ...result, slips: result.slips.map((view) => ({ rank: view.rank, totalOdds: view.totalOdds,
+  return { ...result, slips: result.slips.map((view) => ({ rank: view.rank, ...(access.tier === "full" && view.totalOdds ? { totalOdds: view.totalOdds } : {}),
     estimatedProbability: view.estimatedProbability, matchCount: view.matchCount,
     ...(access.tier === "full" && view.slip ? { slip: view.slip } : {}) })) };
 }

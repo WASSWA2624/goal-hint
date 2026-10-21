@@ -126,7 +126,7 @@ function RevisionAnalysis({ snapshot, analysis, locale, scope = "detail-" }: {
 export function HistorySnapshot({ data, locale }: { data: MatchDetailResponse; locale: string }) {
   const snapshot = data.snapshot;
   if (!snapshot) return null;
-  if ("gated" in snapshot) return <SubscriberNotice locale={locale} />;
+  if ("gated" in snapshot) return <SubscriberNotice locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} />;
   const analysis = detailAnalysis(snapshot.analysis), scope = `history-${snapshot.revisionId}-`;
   return <Stack data-history-snapshot={snapshot.revisionId}>
     <DetailMarketGrid>

@@ -9,6 +9,8 @@ import { createAuthenticatedTestSessions as createMemberSessions } from "./helpe
 import { createPayments } from "../src/server/members/payments.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { jpeg } from "./helpers/payment-fixtures.mjs";
+import { grantSessionAccess } from "../src/server/members/device-grants.ts";
+import { lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
 
 test("real MySQL payment transactions, budgets, snapshots, assent and trial limits", { timeout: 180_000 }, async (t) => {
@@ -22,7 +24,7 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
   await database.query((tx) => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST MTN", airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "synthetic-owner" } }));
   await database.query((tx) => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at, updatedAt: at } }));
   async function member(phone) { const signed = await sessions.signIn(phone ?? `25670000${String(++serial).padStart(4, "0")}`, "unknown"); return sessions.verify(signed.token); }
-  const fields = (overrides = {}) => ({ planId, payerPhone: "256700000101", network: "mtn", transactionId: `TEST-${++serial}`, amount: 5000, accepted: true, ...overrides });
+  const fields = (overrides = {}) => ({ planId, payerPhone: "256700000101", network: "mtn", transactionId: `TEST-${++serial}`, accepted: true, ...overrides });
   const settings = { ...defaultSubscriptionSettings, paywallMode: "test", trialDays: 2 };
   const image = jpeg();
   async function report(who, values = fields()) { assert.equal(await payments.begin(who, "unknown", image.length), true); return payments.submit(who, values, image); }
@@ -54,15 +56,31 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
     const before = await count();
     const result = await report(await member(), fields({ transactionId: transactionId.replace(/[.-]/gu, ""), network: "airtel" }));
     assert.equal(result.status, "duplicate"); assert.equal(await count(), before);
-    const hidden = await payments.view(await member(first.phone), settings); assert.equal(hidden.status, null);
+    const otherDevice = await payments.view(await member(first.phone), settings); assert.equal(otherDevice.status.reference, a.reference);
     const visible = await payments.view(first, settings); assert.equal(visible.status.reference, a.reference); assert.ok(visible.status.endsAt);
   });
-  await t.test("current assent waives only an unlocked session's checkbox", async () => {
+  await t.test("current assent waives only an unlocked session's checkbox without code entry", async () => {
     const who = await member(); assert.equal((await report(who, fields({ accepted: false }))).status, "invalid");
-    const ready = await codes.manual({ phone: who.phone, planId, amountReceivedUgx: 0, note: "Synthetic assent test" }, "synthetic-owner"); assert.equal(ready.status, "created");
-    const accepted = await codes.redeem(who, ready.ready.code, "unknown", 2, termsNotice.reviewedOn); assert.equal(accepted.status, "accepted");
-    const unlocked = await sessions.verify(accepted.token); assert.equal((await report(unlocked, fields({ accepted: false }))).status, "saved");
+    const submitted = await report(who), row = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: submitted.reference.slice(2) } }));
+    const approved = await codes.approvePayment(row.id, { planId, network: "mtn", transactionRef: fields().transactionId, amountReceivedUgx: 5000 }, "synthetic-owner"); assert.equal(approved.status, "created");
+    const unlocked = { ...who, codeEnteredAt: (await database.query((tx) => tx.memberSession.findUniqueOrThrow({ where: { tokenHash: who.tokenHash } }))).codeEnteredAt };
+    assert.equal((await report(unlocked, fields({ accepted: false }))).status, "saved");
     const numberOnly = await member(who.phone); assert.equal((await report(numberOnly, fields({ accepted: false }))).status, "invalid");
+  });
+  await t.test("proof without optional details uses the account phone and plan price; approval preserves the paid-for offer", async () => {
+    const who = await member(), sent = await report(who, fields({ payerPhone: null, transactionId: null }));
+    const before = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: sent.reference.slice(2) } }));
+    assert.equal(before.payerPhone, who.phone); assert.equal(before.claimedAmountUgx, 5000); assert.equal(before.claimedTxnKey, null);
+    assert.equal((await database.query((tx) => tx.memberSession.findUniqueOrThrow({ where: { tokenHash: who.tokenHash } }))).codeEnteredAt, null);
+    await database.query((tx) => tx.subscriptionPlan.update({ where: { id: planId }, data: { priceUgx: 7000, durationDays: 30 } }));
+    const approved = await codes.approvePayment(before.id, { planId, network: "mtn", transactionRef: `APPROVED-${++serial}`, amountReceivedUgx: 5000 }, "owner");
+    assert.equal(approved.status, "created"); assert.equal(+approved.grant.endsAt - +approved.grant.startsAt, 7 * 86_400_000);
+    assert.equal(approved.grant.devicesUnlocked, 1); assert.ok(!("ready" in approved));
+    const after = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { id: before.id } }));
+    assert.equal(after.priceUgx, 5000); assert.equal(after.durationDays, 7);
+    await database.query((tx) => tx.subscriptionPlan.update({ where: { id: planId }, data: { priceUgx: 5000, durationDays: 7 } }));
+    const again = await member(who.phone);
+    await database.transaction(async (tx) => { await lockMemberAccount(tx, again.accountId); assert.equal(await grantSessionAccess(tx, { accountId: again.accountId, tokenHash: again.tokenHash, at: new Date(instant), actor: "member" }), true); });
   });
   await t.test("stored and attempted uploads have independent daily caps, including concurrent storage", async () => {
     const who = await member();

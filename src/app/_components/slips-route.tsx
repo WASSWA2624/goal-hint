@@ -8,6 +8,8 @@ import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCrit
 import { SlipBuilder, type SlipCriteriaIssue } from "@/components/slips/slip-builder";
 import { createMessages } from "@/i18n/messages";
 import { readPublicSlipBuild } from "@/server/slips/public-slips";
+import { readCompletedSlips } from "@/server/slips/saved-slips";
+import { SlipHistory } from "@/components/slips/slip-history";
 import { createGatedReads, contentAccess } from "@/server/members/gated-reads";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { pageMetadata } from "@/server/seo/metadata";
@@ -17,7 +19,7 @@ type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promi
 
 /** Anonymous, read-only GET builds. Invalid drafts remain editable without reading the stored feed. */
 export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShellInstant,
-  completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()), resolveAccess = resolveViewerAccess } = {}) {
+  completionInstant = () => utcInstantFromEpochMilliseconds(Date.now()), resolveAccess = resolveViewerAccess, history = readCompletedSlips } = {}) {
   return {
     async generateMetadata({ params }: Props) {
       const { locale } = await params, messages = createMessages(locale);
@@ -57,8 +59,9 @@ export function createSlipsRoute({ read = readPublicSlipBuild, instant = getShel
       // A criteria change or browser history navigation resets uncontrolled inputs to this server-owned draft.
       const key = `${Object.keys(query).length ? "draft" : "defaults"}|${serializeSlipCriteria(criteria)}|${JSON.stringify(initialInputs)}|${initialMarkets?.join(",") ?? ""}|${JSON.stringify(initialOutcomes)}|${initialReuse}|${error?.code ?? ""}`;
       return <PublicShell showAccount={showAccount} locale={locale} today={today} current="slips" app compact>
-        <SlipBuilder subscriberOnly={access.tier === "free"} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
+        <SlipBuilder subscriberOnly={access.tier === "free"} signedIn={access.signedIn} showAccount={showAccount} key={key} locale={locale} today={today} criteria={criteria} result={result}
           error={error} initialInputs={initialInputs} initialOutcomes={initialOutcomes} initialReuse={initialReuse} {...(initialMarkets ? { initialMarkets } : {})} />
+        <SlipHistory slips={await history()} locale={locale} />
       </PublicShell>;
     },
   };

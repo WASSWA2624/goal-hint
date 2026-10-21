@@ -26,10 +26,10 @@ export function createBestSlipsRoute({ read = readBestSlips, access = resolveVie
         for (const [key, value] of Object.entries(query)) for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) parameters.append(key, item);
         redirect(`${matchesHref(locale)}?${parameters}`);
       }
-      const result = gateBestSlips(await read(await access(), locale), await access());
+      const viewer = await access(), result = gateBestSlips(await read(viewer, locale), await access());
       return <PublicShell locale={locale} current="best-slips" app compact>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />
-        <BestSlips result={result} locale={locale} />
+        <BestSlips result={result} locale={locale} signedIn={viewer.signedIn} />
       </PublicShell>;
     },
   };

@@ -74,7 +74,18 @@ initially read from an MSIX-shadowed configuration; the real saved administrativ
 out-of-package helper. The narrow application grant is now applied and recorded in the real private
 `application-grants.sql`. Application SELECT/INSERT/UPDATE/DELETE were verified with a rolled-back synthetic transaction,
 the verification table stayed empty, and database health reports `ready`. No production database was changed. See
-[member-authentication.md](member-authentication.md) for SMS gateway configuration, recovery and expiry rules.
+[member-authentication.md](member-authentication.md) for manual recovery and expiry rules. Message delivery is retired.
+
+The manual account release adds saved-slip snapshots and fixture links in
+`20261021110000_saved_slips`, followed by temporary-password and reset-request
+fields in `20261021120000_manual_password_recovery`. These changes are pending
+deployment; the implementation does not apply them to the existing local data.
+After migration, review [manual-account-grants.sql](../deploy/manual-account-grants.sql)
+with the approved database and application host. `SavedSlip` needs SELECT,
+INSERT and DELETE; `SavedSlipFixture` needs SELECT and INSERT. Snapshots and
+links are never updated; erasing an account deletes its snapshots and cascades
+to their links. Existing table-scoped account/session grants cover the new
+recovery columns. Backup inventory discovers both new tables automatically.
 
 Prompt 044 adds the seeded `OperationsMonitorState` singleton and time-window
 indexes. The local application receives only SELECT and UPDATE (`stateJson`) on

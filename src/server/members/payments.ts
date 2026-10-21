@@ -40,7 +40,8 @@ export function createPayments({ database, config, now = Date.now, environment =
   async function currentMember(tx: Prisma.TransactionClient, member: MemberIdentity, at: Date) {
     const account = await lockMemberAccount(tx, member.accountId);
     const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
-    return account && !account.blockedAt && !account.erasedAt && account.phone && session?.accountId === account.id && session.expiresAt > at ? { account, session } : null;
+    return account && !account.blockedAt && !account.erasedAt && account.phone && session?.accountId === account.id
+      && session.authenticatedAt && !session.passwordResetAt && session.expiresAt > at ? { account, session } : null;
   }
   async function acceptedTerms(tx: Pick<Prisma.TransactionClient, "accessCode">, member: MemberIdentity): Promise<boolean> {
     return !!member.codeEnteredAt && await tx.accessCode.count({ where: { accountId: member.accountId, termsVersion: termsNotice.reviewedOn } }) > 0;

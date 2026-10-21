@@ -13,7 +13,7 @@ export type JointSlipModel = Readonly<{
   estimate: (selections: readonly SlipSelection[]) => number | null;
 }>;
 export type BestSlip = BuiltSlip & Readonly<{ estimatedProbability: number }>;
-export type BestSlipSummary = Readonly<{ rank: number; totalOdds: string; estimatedProbability: number; matchCount: number }>;
+export type BestSlipSummary = Readonly<{ rank: number; totalOdds?: string; estimatedProbability: number; matchCount: number }>;
 export type BestSlipView = BestSlipSummary & Readonly<{ slip?: BestSlip }>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
@@ -59,6 +59,6 @@ export function bestSlipBuilder(model: JointSlipModel) {
 
 /** Explicit allowlist: even internal slip IDs contain fixture/selection identifiers. */
 export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean): readonly BestSlipView[] {
-  return slips.map((slip, index) => ({ rank: index + 1, totalOdds: slip.totalOdds,
+  return slips.map((slip, index) => ({ rank: index + 1, ...(entitled ? { totalOdds: slip.totalOdds } : {}),
     estimatedProbability: slip.estimatedProbability, matchCount: slip.selections.length, ...(entitled ? { slip } : {}) }));
 }

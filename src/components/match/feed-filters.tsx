@@ -704,7 +704,7 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
 
   const oddsLabel = messages.text("feed.filters.oddsLabel"), probabilityLabel = messages.text("feed.filters.probabilityLabel");
   const probabilityErrorId = `${formId}-probability-error`, titleId = `${panelId}-title`, marketsId = `${panelId}-markets`;
-  const probabilityFields = <ProbabilityRangeInputs disabled={subscriberOnly} values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
+  const probabilityFields = <ProbabilityRangeInputs disabled={false} values={probabilityInputs} invalid={probability === null} descriptionId={probabilityErrorId} messages={messages}
     onChange={(bound, value) => setProbabilityInputs((previous) => ({ ...previous, [bound]: value }))} />;
 
   const count = panelFilterCount(query), filtersLabel = messages.text("feed.filters.toggle");
@@ -742,8 +742,8 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
         <SortIcon />
         <PhoneSort aria-label={messages.text("feed.sort.label")} value={sortKey} onChange={(event) => {
           const sort = feedSortOptions.find((option) => `${option.by}-${option.direction}` === event.target.value);
-          if (sort && (!subscriberOnly || sort.by !== "probability")) onApply({ ...query, sort, page: 1 });
-        }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, disabled: subscriberOnly && sort.by === "probability", label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) + (subscriberOnly && sort.by === "probability" ? ` · ${messages.text("paywall.subscribersOnly")}` : "") }))} />
+          if (sort) onApply({ ...query, sort, page: 1 });
+        }} options={feedSortOptions.map((sort) => ({ value: `${sort.by}-${sort.direction}`, label: messages.text(`feed.sort.compact.${sort.by}-${sort.direction}`) }))} />
       </SortField>
       <PhoneClear type="reset" aria-label={messages.text("feed.filters.clear")} title={messages.text("feed.filters.clear")}>
         <FilterActionLabel label={messages.text("feed.filters.clear")} />
@@ -799,8 +799,8 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
           <ProbabilityGroup role="group" aria-label={probabilityLabel}>
             <span>{messages.text("feed.filters.predictionProbability")}</span>{probabilityFields}
           </ProbabilityGroup>
-          <PicksOnlyFilter locale={query.locale} checked={draft.picks === "only"} disabled={subscriberOnly} onChange={(checked) => edit({ ...draft, picks: checked ? "only" : "all" })} />
-          <ProbabilityHelp>{messages.text(subscriberOnly ? "paywall.subscribersOnly" : "feed.filters.probabilityExplanation")}</ProbabilityHelp>
+          <PicksOnlyFilter locale={query.locale} checked={draft.picks === "only"} disabled={subscriberOnly && query.status !== "finished"} onChange={(checked) => edit({ ...draft, picks: checked ? "only" : "all" })} />
+          <ProbabilityHelp>{messages.text("feed.filters.probabilityExplanation")}</ProbabilityHelp>
         </PhoneSection>
         {probability === null && <ProbabilityError id={probabilityErrorId}>{messages.text("feed.filters.probabilityInvalid")}</ProbabilityError>}
         <PhoneSection>
@@ -817,14 +817,13 @@ function FilterFields({ query, today, leagues, onApply, formId, onDraftStatus, o
               <ChipLine><span data-placeholder aria-disabled="true">{messages.text("feed.filters.any")}</span></ChipLine>
               <VisuallyHidden>{messages.text("feed.filters.oddsPending")}</VisuallyHidden>
             </Field>
-            <Field $accent="pink" $disabled={subscriberOnly} role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
+            <Field $accent="pink" role="group" aria-labelledby="filters-probability" title={messages.text("feed.filters.probabilityHelp")}>
               <FieldName id="filters-probability" $accent="pink">{probabilityLabel}</FieldName>
               {probabilityFields}%
-              {subscriberOnly && <span>{messages.text("paywall.subscribersOnly")}</span>}
               <VisuallyHidden>{messages.text("feed.filters.probabilityHelp")}</VisuallyHidden>
             </Field>
           </DesktopGrid>
-          <PicksOnlyFilter locale={query.locale} checked={draft.picks === "only"} disabled={subscriberOnly} onChange={(checked) => edit({ ...draft, picks: checked ? "only" : "all" })} />
+          <PicksOnlyFilter locale={query.locale} checked={draft.picks === "only"} disabled={subscriberOnly && query.status !== "finished"} onChange={(checked) => edit({ ...draft, picks: checked ? "only" : "all" })} />
         </DesktopOnly>
       </SheetBody>
       <SheetFooter>

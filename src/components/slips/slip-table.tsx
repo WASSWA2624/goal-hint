@@ -11,6 +11,7 @@ import { matchHref } from "@/domain/navigation";
 import { predictionLabel } from "@/domain/prediction-label";
 import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
+import type { SavedSlipView } from "@/domain/saved-slips";
 import { createMessages, type Messages } from "@/i18n/messages";
 import { SlipCard, SlipMarket, SlipPick, SlipSummary, SlipTitle, Table } from "./slip-styles";
 
@@ -37,7 +38,7 @@ function SlipProbability({ selection, label }: { selection: SlipSelection; label
 }
 
 /** Saved selections retain their own pick, probability and odds in a single semantic match row. */
-export function SlipTable({ slip, index, locale, estimatedProbability }: { slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number }) {
+export function SlipTable({ slip, index, locale, estimatedProbability, results }: { slip: BuiltSlip; index: number; locale: string; estimatedProbability?: number; results?: SavedSlipView["results"] }) {
   const messages = createMessages(locale), headingId = useId();
   return <SlipCard data-slip-id={slip.id}>
     <SlipTitle>
@@ -66,6 +67,7 @@ export function SlipTable({ slip, index, locale, estimatedProbability }: { slip:
         const probability = percent(selection.probability, messages);
         const family = messages.text(`market.family.${selection.family}`);
         const pick = predictionLabel(messages, selection.selection);
+        const result = results?.find((item) => item.fixtureId === selection.fixtureId);
         return <tr key={selection.fixtureId} data-slip-selection={selection.fixtureId}>
           <td data-column="match">
             <span data-mobile="metadata">
@@ -77,6 +79,7 @@ export function SlipTable({ slip, index, locale, estimatedProbability }: { slip:
               <span data-versus> v </span>
               <SlipTeam team={selection.awayTeam} name={away} side="away" />
             </Link>
+            {result && <span data-slip-result>{result.home === null || result.away === null ? messages.text("slips.resultPending") : `${result.home} – ${result.away}`} · {messages.text(`slips.leg.${result.outcome}`)}</span>}
           </td>
           <td data-column="selection">
             <SlipMarket $family={selection.family} data-market>

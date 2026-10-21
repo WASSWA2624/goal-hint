@@ -31,7 +31,9 @@ export function createMatchDetailRoute(read: typeof readPublicMatchDetail = read
   const loadPreview = cache(async (id: string): Promise<InsightsPreview | null> => {
     const instant = await getShellInstant();
     // Optional section previews must not delay metadata; failed reads retain each section's retry.
-    try { return insightsPreview(await createGatedReads({ readDetail: read, readInsights, resolveAccess }).insights(id, { now: () => instant })); }
+    try { return insightsPreview(await createGatedReads({ readDetail: read, readInsights, resolveAccess,
+      readStatus: async (fixtureId) => (await loadCurrent(fixtureId)).result.data?.fixture.status ?? "unknown",
+    }).insights(id, { now: () => instant })); }
     catch { return null; }
   });
   const load = cache(async (id: string, query: string) => {

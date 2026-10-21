@@ -11,6 +11,6 @@ export async function verifyMemberAdminSession(services: Readonly<{ database: Da
   if (!services.database || !validMemberToken(token)) return null;
   try {
     const member = await createMemberSessions({ database: services.database, config: services.config }).verify(token);
-    return member && !member.blocked && isMemberAdminPhone(member.phone) ? member : null;
+    return member && !member.blocked && member.administrator && isMemberAdminPhone(member.phone) ? member : null;
   } catch { return null; }
 }

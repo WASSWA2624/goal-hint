@@ -34,7 +34,7 @@ export function RevisionHistory({ current, result, query, locale = "en", open = 
 }) {
   const messages = createMessages(locale), parameters = new URLSearchParams(query);
   const data = result.data ?? current;
-  if ("gated" in data.history) return <div id="revision-history"><SubscriberNotice locale={locale} /></div>;
+  if ("gated" in data.history) return <div id="revision-history"><SubscriberNotice locale={locale} signedIn={data.access.signedIn} returnTo={data.route.path} /></div>;
   const { revisions, cycles } = data.history;
   const selected = result.data && (parameters.has("revision") || parameters.has("cycle")) ? result.data : null;
   const nextRevisions = historyNextHref(data, revisions.next), nextCycles = historyNextHref(data, cycles.next);

@@ -12,6 +12,7 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds, type ReportingDate } from "@/domain/calendar";
 import { marketSelections, type MarketFamily, type MarketSelection } from "@/domain/markets";
 import { slipsHref } from "@/domain/navigation";
+import { subscriberHref } from "@/domain/subscriber-navigation";
 import { predictionLabel } from "@/domain/prediction-label";
 import { publicPolicy } from "@/domain/public-policy";
 import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules, slipInputFields,
@@ -19,14 +20,15 @@ import { defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCrit
 import { createMessages } from "@/i18n/messages";
 import type { SlipBuildPageResult } from "@/domain/slip-page";
 import { SlipTable } from "./slip-table";
+import { SaveSlip } from "./save-slip";
 import { Actions, BuildButton, ClearLink, CriteriaError, CriteriaForm, CriteriaPanel, FieldGroup,
   Fields, HeadingRow, LimitGroups, MarketChoice, MarketChoices, MarketField, Note, Results, ReuseRow, SlipHeading, SlipStack, TargetGroups } from "./slip-styles";
 
-export function SlipAccessRequired({ locale, showAccount = false }: { locale: string; showAccount?: boolean }) {
+export function SlipAccessRequired({ locale, showAccount = false, signedIn = false }: { locale: string; showAccount?: boolean; signedIn?: boolean }) {
   const messages = createMessages(locale);
   return <SlipStack><AppBrandBar locale={locale} showAccount={showAccount} />
     <EmptyState headingLevel={1} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")}
-      action={<ButtonLink size="large" href="/en/subscribe" prefetch={false}>{messages.text("paywall.getAccess")}</ButtonLink>} />
+      action={<ButtonLink size="large" href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>} />
   </SlipStack>;
 }
 
@@ -35,11 +37,11 @@ type Props = Readonly<{
   locale: string; today: ReportingDate; criteria: SlipCriteria; result: SlipBuildPageResult | null;
   error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialMarkets?: readonly MarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
-  initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean;
+  initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean; signedIn?: boolean;
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false }: Props) {
+export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
   const [validationVersion, setValidationVersion] = useState(0);
@@ -197,7 +199,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
               setError(null); setSelectedMarkets(publicPolicy.markets); setOutcomes({});
             }
           }}>{messages.text("slips.reset")}</ClearLink>
-          <BuildButton type="submit" disabled={pending || subscriberOnly}>{messages.text(pending ? "slips.building" : "slips.build")}</BuildButton>
+          {subscriberOnly ? <ButtonLink href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>
+            : <BuildButton type="submit" disabled={pending}>{messages.text(pending ? "slips.building" : "slips.build")}</BuildButton>}
         </Actions>
       </CriteriaForm>
     </CriteriaPanel>
@@ -206,9 +209,10 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
         {data && <Note>{messages.text("slips.resultCount", { count: messages.number(data.slips.length),
           requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
       </HeadingRow>
-      {subscriberOnly ? <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")} action={<ButtonLink href="/en/subscribe" prefetch={false}>{messages.text("paywall.getAccess")}</ButtonLink>} /> : generated ? <>
+      {subscriberOnly ? <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")} action={<ButtonLink href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>} /> : generated ? <>
         <Note>{messages.text("slips.ranking")}</Note>
-        {data.slips.map((slip, index) => <SlipTable key={slip.id} slip={slip} index={index} locale={locale} />)}
+        {data.slips.map((slip, index) => <div key={slip.id}><SlipTable slip={slip} index={index} locale={locale} />
+          {signedIn && <SaveSlip slipId={slip.id} criteria={criteria} locale={locale} />}</div>)}
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
         description={messages.text(emptyState ? `slips.state.${emptyState}.description` : "slips.idle")} />}

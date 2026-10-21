@@ -76,8 +76,11 @@ test('encrypted snapshot and multi-log PITR preserve representative durable hist
     const options = { source, directory: artifacts, key, policy: backupPolicy(), authority: backupAuthority(), emit: (event) => events.push(event) };
     try {
       const snapshot = await captureMysqlSnapshot(options);
-      // 92 application models, including the three adopted match-fact tables, plus migration history.
-      assert.equal(snapshot.metadata.inventory.tables.length, 93); assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionset').count >= 2);
+      // Every application model, including saved slips and adopted match facts, is part of the snapshot.
+      const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
+      const requiredTables = [...schema.matchAll(/^model (\w+) \{/gmu)].map((match) => match[1]);
+      assert.deepEqual(snapshot.metadata.inventory.tables.map((table) => table.table).sort(), [...requiredTables, '_prisma_migrations'].sort());
+      assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionset').count >= 2);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionaudit').count > 0);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'dailyrunmanifest').count > 0);
       // Commit a correction, rotate, then another correction and a counted launch.

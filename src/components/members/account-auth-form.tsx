@@ -12,19 +12,19 @@ import { accountRequest, PasswordInput } from "./account-security";
 
 export type AccountAuthView = "login" | "register" | "forgot";
 
-/** Phone and password only. Nothing is sent to the phone: a forgotten password is reset by the admin on a call. */
+/** Phone and password only; recovery is requested here and the admin shares the temporary password manually. */
 export function AccountAuthForm({ locale, view = "login", returnTo, contact }: { locale: string; view?: AccountAuthView; returnTo: string | null; contact: AdminContact }) {
   const m = createMessages(locale), [mode, setMode] = useState(view), [phone, setPhone] = useState("256");
-  const [password, setPassword] = useState(""), [confirm, setConfirm] = useState("");
+  const [password, setPassword] = useState(""), [requested, setRequested] = useState(false);
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const base = `/${resolveLocale(locale)}`;
   const href = (next: AccountAuthView) => `${base}/account?${new URLSearchParams({ view: next, ...(returnTo ? { return: returnTo } : {}) })}`;
-  const show = (next: AccountAuthView) => { setMode(next); setError(""); setPassword(""); setConfirm(""); };
+  const show = (next: AccountAuthView) => { setMode(next); setError(""); setPassword(""); setRequested(false); };
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || mode === "forgot") return;
-    if (mode === "register" && password !== confirm) { setError(m.text("account.passwordMismatch")); return; }
+    event.preventDefault(); if (busy) return;
     setBusy(true); setError("");
     try {
+      if (mode === "forgot") { await accountRequest("forgot", { phone }); setRequested(true); setBusy(false); return; }
       const result = await accountRequest<{ next: string }>(mode, { phone, password, ...(returnTo ? { return: returnTo } : {}) });
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
@@ -34,6 +34,12 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
     <AccountCardBody>
       <p>{m.text("account.resetHelp")}</p>
       <AccountNote>{m.text("account.resetSteps")}</AccountNote>
+      <MemberForm method="post" action="/api/account/forgot" onSubmit={submit} data-analytics-ignore aria-busy={busy}>
+        <PhoneInput name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} required />
+        {requested && <p role="status">{m.text("account.resetSent")}</p>}
+        {error && <AccountError role="alert">{error}</AccountError>}
+        <AccountPrimary type="submit" disabled={busy || requested}>{m.text(busy ? "account.working" : "account.sendResetRequest")}</AccountPrimary>
+      </MemberForm>
       {contact.contactPhone || contact.whatsappPhone ? <AdminContactLinks locale={locale} contact={contact} text={m.text("account.resetMessage")} />
         : <AccountNote><TextLink href={`${base}/contact`} prefetch={false}>{m.text("account.contactAdmin")}</TextLink></AccountNote>}
       <AccountTextButton variant="quiet" onClick={() => show("login")}><ChevronLeftIcon />{m.text("account.back")}</AccountTextButton>
@@ -46,7 +52,6 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
         <PhoneInput name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} required />
         <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current={mode === "login"}
           {...(mode === "register" ? { hint: m.text("account.passwordHint") } : {})} />
-        {mode === "register" && <PasswordInput name="confirm" label={m.text("account.repeatPassword")} value={confirm} onChange={setConfirm} />}
         {mode === "login" && <AccountTextButton variant="quiet" onClick={() => show("forgot")}>{m.text("account.forgotPassword")}</AccountTextButton>}
         {mode === "register" && <AccountNote>{m.text("account.registerHelp")}</AccountNote>}
         {error && <AccountError role="alert">{error}</AccountError>}

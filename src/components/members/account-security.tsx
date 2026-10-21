@@ -1,9 +1,9 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import styled from "styled-components";
 import { Button, PhoneInput, TextInput, TextLink } from "@/components/ui/controls";
-import { ChevronLeftIcon, Icon, LockIcon, PhoneIcon, UserIcon } from "@/components/ui/icons";
+import { ChevronLeftIcon, LockIcon, PhoneIcon, UserIcon } from "@/components/ui/icons";
 import { formatPhone, telHref } from "@/domain/phone";
 import { createMessages } from "@/i18n/messages";
 import type { AdminContact } from "./admin-contact";
@@ -19,21 +19,13 @@ export async function accountRequest<T>(path: string, body: Record<string, unkno
   return result;
 }
 
-const PasswordWrap = styled.div`
-  position: relative; min-inline-size: 0;
-  input { padding-inline-end: 48px; }
-  > button { position: absolute; inset-inline-end: 1px; inset-block-end: 1px; inline-size: 44px; padding: 8px; min-block-size: 42px; }
-`;
 export function PasswordInput({ label, name = "password", value, onChange, current = false, hint }: {
   label: string; name?: string; value: string; onChange: (value: string) => void; current?: boolean; hint?: string;
 }) {
-  const [visible, setVisible] = useState(false), id = useId(), m = createMessages();
-  return <div><PasswordWrap><TextInput id={id} label={label} name={name} value={value} required minLength={current ? undefined : 8} maxLength={128}
-    type={visible ? "text" : "password"} autoComplete={current ? "current-password" : "new-password"}
+  return <div><TextInput label={label} name={name} value={value} required minLength={current ? undefined : 8} maxLength={128}
+    type="password" autoComplete={current ? "current-password" : "new-password"}
     onChange={event => onChange(event.currentTarget.value)} data-analytics-ignore />
-    <Button variant="quiet" aria-label={m.text(visible ? "account.hidePassword" : "account.showPassword")} aria-controls={id}
-      onClick={() => setVisible(!visible)}><Icon><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />{visible && <path d="m3 3 18 18" />}</Icon></Button>
-  </PasswordWrap>{hint && <AccountNote>{hint}</AccountNote>}</div>;
+    {hint && <AccountNote>{hint}</AccountNote>}</div>;
 }
 
 export function NewPasswordFields({ locale, password, setPassword, confirm, setConfirm }: {
@@ -42,6 +34,25 @@ export function NewPasswordFields({ locale, password, setPassword, confirm, setC
   const m = createMessages(locale);
   return <><PasswordInput label={m.text("account.newPassword")} value={password} onChange={setPassword} hint={m.text("account.passwordHint")} />
     <PasswordInput name="confirm" label={m.text("account.confirmPassword")} value={confirm} onChange={setConfirm} /></>;
+}
+
+/** The reset cookie is deliberately not an authenticated member session. It authorizes this form alone. */
+export function ResetPasswordForm({ locale, phone }: { locale: string; phone: string }) {
+  const m = createMessages(locale), [password, setPassword] = useState(""), [confirm, setConfirm] = useState("");
+  const [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (busy) return;
+    if (password !== confirm) { setError(m.text("account.passwordMismatch")); return; }
+    setBusy(true); setError("");
+    try { const result = await accountRequest<{ next: string }>("reset", { password }); location.replace(result.next); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
+  }
+  return <div data-analytics-ignore><h1>{m.text("account.chooseNewPassword")}</h1><p>{m.text("account.resetAccepted", { phone: formatPhone(phone) })}</p>
+    <MemberForm method="post" action="/api/account/reset" onSubmit={submit} aria-busy={busy}>
+      <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />
+      {error && <AccountError role="alert">{error}</AccountError>}
+      <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : "account.savePassword")}</AccountPrimary>
+    </MemberForm></div>;
 }
 
 const Identity = styled.div`

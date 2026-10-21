@@ -10,7 +10,6 @@ import { createMessages } from "@/i18n/messages";
 import { getAnalyticsServices } from "@/server/analytics/analytics-http";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
 import { memberCookieName } from "@/server/members/member-sessions";
-import { isMemberAdminPhone } from "@/server/members/member-admin";
 import { createPlansService } from "@/server/members/plans";
 import { PublicShell } from "./public-shell";
 
@@ -31,7 +30,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     if (resolved.sessions) {
       try {
         member = await resolved.sessions.verify((await cookies()).get(memberCookieName(resolved.config.production))?.value);
-        if (settings && settings.paywallMode !== "off" && !(member && !member.blocked && isMemberAdminPhone(member.phone))) {
+        if (settings && settings.paywallMode !== "off" && !(member && !member.blocked && member.administrator)) {
           offers = (await plans()).filter((plan) => plan.active);
           if (member && !member.blocked) {
             view = await resolved.payments?.view(member, settings) ?? null;
@@ -43,7 +42,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
         }
       } catch { unavailable = true; }
     }
-    const administrator = !!member && !member.blocked && isMemberAdminPhone(member.phone);
+    const administrator = !!member && !member.blocked && member.administrator;
     return <PublicShell locale={locale} showAccount><SubscribeLayout>
       <SubscribeIntro locale={locale} /><MemberNavigationRecovery />
       {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href="/admin" prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>

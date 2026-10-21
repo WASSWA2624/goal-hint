@@ -1,5 +1,5 @@
 import "server-only";
-import { randomInt, randomUUID } from "node:crypto";
+import { randomInt } from "node:crypto";
 import { getReportingDate, getReportingDayBounds, addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow } from "../../domain/owner-members.ts";
 import { normalizePhone } from "../../domain/phone.ts";
@@ -7,6 +7,7 @@ import { hashPassword } from "../analytics/analytics-password.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { lockMemberAccount, type CodeFailure, type CodeOutcome } from "../members/access-codes.ts";
 import { isMemberAdminPhone } from "../members/member-admin.ts";
+import { passwordRecoveryRules } from "../members/password-recovery.ts";
 import { decide } from "../members/settings.ts";
 import { createPaymentReview } from "./payment-review.ts";
 import { auditTextErrors, ownerAuditActions, writeOwnerAudit } from "./audit.ts";
@@ -21,9 +22,14 @@ export function revenueBounds(now: number) {
 export const temporaryPasswordRules = Object.freeze({ alphabet: "abcdefghjkmnpqrstuvwxyz23456789", length: 10 });
 export const generateTemporaryPassword = () => Array.from({ length: temporaryPasswordRules.length },
   () => temporaryPasswordRules.alphabet[randomInt(temporaryPasswordRules.alphabet.length)]).join("");
-export type TemporaryPasswordOutcome = Readonly<{ status: "reset"; accountId: string; temporaryPassword: string; created: boolean; sessionsDeleted: number }> | CodeFailure;
+export type TemporaryPasswordOutcome = Readonly<{ status: "reset"; accountId: string; temporaryPassword: string; expiresAt: string; created: boolean; sessionsDeleted: number }> | CodeFailure;
 export function createSubscribers(database: DatabaseRuntime, now = Date.now, adminPhone = isMemberAdminPhone) {
   return {
+    async passwordResetRequests(): Promise<readonly Readonly<{ id: string; phone: string; requestedAt: string }>[]> {
+      return database.query(async tx => (await tx.memberAccount.findMany({ where: { passwordResetRequestedAt: { not: null }, blockedAt: null, erasedAt: null, phone: { not: null } },
+        orderBy: { passwordResetRequestedAt: "asc" }, take: 100, select: { id: true, phone: true, passwordResetRequestedAt: true } }))
+        .filter(row => row.phone && !adminPhone(row.phone)).map(row => ({ id: row.id, phone: row.phone!, requestedAt: row.passwordResetRequestedAt!.toISOString() })));
+    },
     async overview(): Promise<OwnerOverview> {
       const at = new Date(now()), bounds = revenueBounds(+at);
       return database.query(async tx => {
@@ -86,13 +92,15 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
             if (action === "block") deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
             break;
           case "erase": {
+            await tx.savedSlip.deleteMany({ where: { accountId: id } });
             const rows = await tx.paymentSubmission.findMany({ where: { accountId: id }, select: { id: true } });
             await tx.paymentScreenshot.deleteMany({ where: { submissionId: { in: rows.map(r => r.id) } } });
             await tx.paymentSubmission.updateMany({ where: { accountId: id }, data: { payerPhone: null, rejectText: null, imagePurgedAt: at } });
             if (account.phone) await tx.paymentSubmission.updateMany({ where: { payerPhone: account.phone }, data: { payerPhone: null } });
             await tx.accessCode.updateMany({ where: { accountId: id }, data: { note: null } });
             deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
-            await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, ownerNote: null, blockedReason: null, erasedAt: at } });
+            await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null,
+              passwordResetRequestedAt: null, ownerNote: null, blockedReason: null, erasedAt: at } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             break;
           }
@@ -103,25 +111,21 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
         return { status: "saved" };
       });
     },
-    /** Owner reset (068 D1-reset), the only password recovery: a random password the owner reads out once, stored as a scrypt
-     * hash; every device of the account signs out. By phone it serves only an allow-listed administrator number, creating its
-     * account when none exists, since registration refuses those numbers. The audit names the account, never the password. */
+    /** The admin reads a random single-use password out once. Only its hash survives, for 15 minutes;
+     * every existing device signs out, and the member must choose a new password before authenticating. */
     async temporaryPassword(target: Readonly<{ id: string }> | Readonly<{ phone: string }>, actor: string): Promise<TemporaryPasswordOutcome> {
-      const phone = "phone" in target ? normalizePhone(target.phone) : null;
-      if ("phone" in target && (!phone || !adminPhone(phone))) return { status: "not-found", message: "Search for the member's account first." };
-      const temporaryPassword = generateTemporaryPassword(), passwordHash = await hashPassword(temporaryPassword);
+      if ("phone" in target) return { status: "refused", message: "Administrator credentials are configured in the environment. Search for the member's account first." };
+      const temporaryPassword = generateTemporaryPassword(), temporaryPasswordHash = await hashPassword(temporaryPassword);
       return decide<TemporaryPasswordOutcome>(database, async (tx, rollback) => {
-        const at = new Date(now()), fresh = randomUUID();
-        if (phone) await tx.$executeRaw`INSERT INTO MemberAccount (id, phone, createdAt, lastSignInAt) VALUES (${fresh}, ${phone}, ${at}, ${at})
-          ON DUPLICATE KEY UPDATE id = id`;
-        const id = phone ? (await tx.memberAccount.findUniqueOrThrow({ where: { phone }, select: { id: true } })).id : (target as { id: string }).id;
+        const at = new Date(now()), id = target.id, expiresAt = new Date(+at + passwordRecoveryRules.temporaryMs);
         const account = await lockMemberAccount(tx, id);
         if (!account?.phone || account.erasedAt) return rollback({ status: "refused", message: "This account is unavailable." });
+        if (adminPhone(account.phone)) return rollback({ status: "refused", message: "Administrator passwords are managed in the environment." });
         if (account.blockedAt) return rollback({ status: "refused", message: "Unblock this account before setting a password." });
-        await tx.memberAccount.update({ where: { id }, data: { passwordHash } });
-        const sessionsDeleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count, created = id === fresh;
-        await writeOwnerAudit(tx, { at, actor, action: "password_reset", accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted, created } });
-        return { status: "reset", accountId: id, temporaryPassword, created, sessionsDeleted };
+        await tx.memberAccount.update({ where: { id }, data: { passwordHash: null, temporaryPasswordHash, temporaryPasswordExpiresAt: expiresAt, passwordResetRequestedAt: null } });
+        const sessionsDeleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
+        await writeOwnerAudit(tx, { at, actor, action: "password_reset", accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted, created: false, expiresAt: expiresAt.toISOString() } });
+        return { status: "reset", accountId: id, temporaryPassword, expiresAt: expiresAt.toISOString(), created: false, sessionsDeleted };
       });
     },
     async audit(action = ""): Promise<readonly OwnerAuditRow[]> {

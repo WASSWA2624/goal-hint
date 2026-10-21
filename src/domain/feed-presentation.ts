@@ -12,7 +12,8 @@ import type { createMessages } from "../i18n/messages.ts";
  * then policy order. Ordering and filters therefore refer to the pick the card actually shows.
  */
 export function bestCardFamily(fixture: Pick<FixtureSnapshot, "forecast" | "prices">, markets: readonly MarketFamily[]): MarketFamily | null {
-  if (fixture.forecast && "gated" in fixture.forecast) return null;
+  if (fixture.forecast && "gated" in fixture.forecast) return fixture.forecast.probabilities
+    .filter((entry) => markets.includes(entry.family)).sort((left, right) => right.probability - left.probability)[0]?.family ?? null;
   return bestPublishedFamily(fixture.forecast?.markets, fixture.prices ?? [], markets);
 }
 

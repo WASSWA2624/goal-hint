@@ -6,12 +6,12 @@ import type { PaywallMode } from "../../domain/subscription-settings.ts";
 import { getAnalyticsServices, type AnalyticsServices } from "../analytics/analytics-http.ts";
 import { readCookie } from "../http/private-http.ts";
 import { memberCookieName, memberSessionRules, memberTokenHash, validMemberToken } from "./member-sessions.ts";
-import { isMemberAdminPhone } from "./member-admin.ts";
+import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
 import { accessMode, settingsServiceFor, type SettingsState } from "./settings.ts";
 
 export type ViewerAccess = Readonly<{ tier: "full" | "free"; signedIn: boolean; mode: PaywallMode | "free" }>;
 type AccessRow = { accountId: string; phone: string; passwordHash: string | null; blockedAt: Date | null;
-  lastSeenAt: Date; entitled: number | bigint };
+  adminPasswordVersion: string | null; lastSeenAt: Date; entitled: number | bigint };
 
 export function createViewerAccess({ services = getAnalyticsServices, settings, now = Date.now }: {
   services?: () => Promise<AnalyticsServices>; settings?: () => Promise<SettingsState>; now?: () => number;
@@ -30,15 +30,18 @@ export function createViewerAccess({ services = getAnalyticsServices, settings, 
       if (validMemberToken(token)) {
         const hash = memberTokenHash(token);
         const rows = await resolved.database.query((tx) => tx.$queryRaw<AccessRow[]>`
-          SELECT s.accountId, s.lastSeenAt, a.phone, a.passwordHash, a.blockedAt,
+          SELECT s.accountId, s.lastSeenAt, s.adminPasswordVersion, a.phone, a.passwordHash, a.blockedAt,
             (a.blockedAt IS NULL AND s.codeEnteredAt IS NOT NULL AND EXISTS (
               SELECT 1 FROM AccessCode c WHERE c.accountId = s.accountId AND c.revokedAt IS NULL AND c.startsAt <= ${at} AND c.endsAt > ${at}
             )) AS entitled
           FROM MemberSession s JOIN MemberAccount a ON a.id = s.accountId
-          WHERE s.tokenHash = ${hash} AND s.expiresAt > ${at} AND s.authenticatedAt IS NOT NULL
+          WHERE s.tokenHash = ${hash} AND s.expiresAt > ${at} AND s.authenticatedAt IS NOT NULL AND s.passwordResetAt IS NULL
             AND a.erasedAt IS NULL AND a.phone IS NOT NULL LIMIT 1`);
         row = rows[0];
         if (row && !row.passwordHash && !isMemberAdminPhone(row.phone)) row = undefined;
+        // Allowlisting a phone cannot elevate a pre-existing member session. Password rotation also invalidates it.
+        const adminHash = memberAdminCredential();
+        if (row && isMemberAdminPhone(row.phone) && (!adminHash || row.adminPasswordVersion !== resolved.config.key("admin-password-version", adminHash))) row = undefined;
         if (row && +at - +row.lastSeenAt >= memberSessionRules.touchAfterMs) {
           await resolved.database.query((tx) => tx.memberSession.updateMany({ where: { tokenHash: hash, expiresAt: { gt: at },
             lastSeenAt: { lte: new Date(+at - memberSessionRules.touchAfterMs) } },

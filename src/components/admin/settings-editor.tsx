@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import styled from "styled-components";
 import { Definitions, Muted, Notice, Panel, PanelHeader, SegmentButton, Segmented } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatPhone, normalizePhone } from "@/domain/phone";
-import { PhoneInput } from "@/components/ui/controls";
+import { PhoneInput, TextInput } from "@/components/ui/controls";
 import { publicPolicy } from "@/domain/public-policy";
 import { editableSettingFields, isProtectedSettingField, paywallModes, settingLabels, settingsRules, type EditableSettingField,
   subscriptionIdentityVariables, type ModeRequirement, type PaywallMode, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
@@ -241,12 +241,9 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
             <PanelHeader><h2 id="save-title">Save</h2><p>{changed.length === 0 ? "No changes" : `${changed.length} changed`}</p></PanelHeader>
             {needsPassword && changed.length > 0 && <>
               <input type="text" name="username" autoComplete="username" value={username} readOnly hidden />
-              <FieldBlock>Owner password
-                <input id="setting-password" name="password" type="password" autoComplete="current-password" value={password} disabled={busy} required
-                  aria-invalid={errors.password ? true : undefined} aria-describedby="setting-password-note" onChange={(event) => setPassword(event.target.value)} />
-                <span id="setting-password-note">{errors.password ? <FieldError>{errors.password}</FieldError>
-                  : <Hint>Needed for payment and contact numbers, registered names and menu shortcuts. Wrong passwords count towards the sign-in limit.</Hint>}</span>
-              </FieldBlock>
+              <TextInput label="Owner password" id="setting-password" name="password" type="password" autoComplete="current-password" value={password} disabled={busy} required
+                error={errors.password} hint={errors.password ? undefined : "Needed for payment and contact numbers, registered names and menu shortcuts. Wrong passwords count towards the sign-in limit."}
+                onChange={(event) => setPassword(event.target.value)} />
             </>}
             <ButtonRow>
               <ActionButton type="submit" $variant="primary" disabled={busy || changed.length === 0 || (needsPassword && password === "")}>Save changes</ActionButton>

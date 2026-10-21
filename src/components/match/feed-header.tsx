@@ -166,7 +166,7 @@ export const feedSortOptions: readonly FeedSort[] = [
 ];
 
 /** One independent sort menu retains the established immediate sort behavior. */
-export function FeedFilterToolbar({ query, onApply, actions, summary, subscriberOnly = false }: {
+export function FeedFilterToolbar({ query, onApply, actions, summary }: {
   query: FeedQuery; onApply: (next: FeedQuery) => void; actions: ReactNode; summary: ReactNode; subscriberOnly?: boolean;
 }) {
   const messages = createMessages(query.locale);
@@ -174,7 +174,7 @@ export function FeedFilterToolbar({ query, onApply, actions, summary, subscriber
   const choose = (sort: FeedSort) => onApply({ ...query, sort, page: 1 });
   const chooseKey = (key: string) => {
     const selected = feedSortOptions.find((sort) => `${sort.by}-${sort.direction}` === key);
-    if (selected && (!subscriberOnly || selected.by !== "probability")) choose(selected);
+    if (selected) choose(selected);
   };
   return <FilterToolbar>
     {summary}
@@ -182,8 +182,8 @@ export function FeedFilterToolbar({ query, onApply, actions, summary, subscriber
       <DesktopSortLabel htmlFor="feed-sort-desktop">{messages.text("feed.sort.label")}</DesktopSortLabel>
       <SelectWrap>
         <select id="feed-sort-desktop" value={sortKey} onChange={(event) => chooseKey(event.target.value)}>
-          {feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`} disabled={subscriberOnly && sort.by === "probability"}>
-            {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}{subscriberOnly && sort.by === "probability" ? ` · ${messages.text("paywall.subscribersOnly")}` : ""}
+          {feedSortOptions.map((sort) => <option key={`${sort.by}-${sort.direction}`} value={`${sort.by}-${sort.direction}`}>
+            {messages.text(`feed.sort.${sort.by}-${sort.direction}`)}
           </option>)}
         </select>
         <ChevronDownIcon />

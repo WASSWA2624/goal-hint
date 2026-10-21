@@ -1,21 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { codeFromFragment, extractCode, formatCode, normalizeCode } from "../src/domain/access-code.ts";
+import { normalizeCode } from "../src/domain/access-code.ts";
 import { chainPeriods, codeStatus, extendPeriods, formatPeriodEnd, remainingDays, subscriptionDayMs as day } from "../src/domain/subscription-period.ts";
 import { generateCode, hashCode, newReference, newSalt, transactionKey } from "../src/server/members/access-codes.ts";
 import { createViewerAccess } from "../src/server/members/viewer-access.ts";
 import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
 
-test("codes normalize Crockford aliases and extract only a complete dashed code or a complete input", () => {
+test("internal period hashes normalize Crockford aliases and refuse invalid values", () => {
   assert.equal(normalizeCode("o1il-abcd efgh"), "0111ABCDEFGH");
-  assert.equal(formatCode("o1il-abcd efgh"), "0111-ABCD-EFGH");
-  for (const message of ["Goal Hint code: 0123-4567-89AB\nTap: https://goalhint.com/en/account#code=0123-4567-89AB",
-    "Tap to unlock: https://goalhint.com/en/account#code=0123-4567-89AB"]) assert.equal(extractCode(message), "0123456789AB");
-  assert.equal(extractCode("xxxx-xxxx-xxxx then 0123-4567-89AB"), "XXXXXXXXXXXX");
-  for (const input of ["0123456789AU", "code 0123456789AB", "x0123-4567-89AB", "0123-4567-89AB-x", "x".repeat(4097), null]) assert.equal(extractCode(input), null);
-  for (const hash of ["#code=0123-4567-89ab", "#code=0123%204567%2089AB"]) assert.equal(codeFromFragment(hash), "0123456789AB");
-  for (const hash of ["code=0123456789AB", "#other=0123456789AB", "#code=0123456789AB&x=1", "#code=%", "#code=0123456789AU"]) assert.equal(codeFromFragment(hash), null);
+  assert.equal(normalizeCode("0123-4567-89ab"), "0123456789AB");
+  for (const input of ["0123456789AU", "code 0123456789AB", "x0123-4567-89AB", "0123-4567-89AB-x", "x".repeat(65), null]) assert.equal(normalizeCode(input), null);
 });
 
 test("code storage has independent random codes, salts and references and a versioned unkeyed hash", () => {
@@ -25,7 +20,7 @@ test("code storage has independent random codes, salts and references and a vers
   assert.equal(salt.length, 16);
   assert.notEqual(hashCode(salt, code), hashCode(otherSalt, code));
   assert.equal(hashCode(salt, code), createHash("sha256").update("goal-hint-access-code:v1:").update(salt).update(code).digest("hex"));
-  assert.equal(hashCode(salt, code), hashCode(salt, formatCode(code).toLowerCase()));
+  assert.equal(hashCode(salt, code), hashCode(salt, code.toLowerCase().match(/.{4}/gu).join("-")));
   assert.throws(() => hashCode(new Uint8Array(15), code), RangeError);
   assert.equal(transactionKey("tx. 10-01"), "TX1001");
 });

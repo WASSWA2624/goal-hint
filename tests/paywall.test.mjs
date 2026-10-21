@@ -13,22 +13,29 @@ import { sameCardFixture } from '../src/domain/match-card.ts';
 import { cheapestActivePlan } from '../src/domain/subscription-offer.ts';
 import { createMessages } from '../src/i18n/messages.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
+import { isPlayedFinalStatus } from '../src/domain/market-settlement.ts';
+import { subscriberHref } from '../src/domain/subscriber-navigation.ts';
 import { scenarios, today, sentinel, now } from './helpers/paywall-fixtures.mjs';
 
 const free = { tier: 'free', signedIn: false, mode: 'on' }, full = { ...free, tier: 'full' };
-const premiumKeys = new Set(['market', 'markets', 'probabilities', 'selectedProbability', 'reasons', 'uncertainty', 'alternatives', 'analysis']);
+const premiumKeys = new Set(['market', 'markets', 'selectedProbability', 'reasons', 'uncertainty', 'alternatives', 'analysis']);
 function walk(value) {
   if (!value || typeof value !== 'object') return;
   for (const [key, item] of Object.entries(value)) { assert.equal(premiumKeys.has(key), false, key); walk(item); }
 }
-for (const [name, scenario] of Object.entries(scenarios)) test(`${name}: gates current and prior snapshots for every fixture status and keeps raw data intact`, () => {
+for (const [name, scenario] of Object.entries(scenarios)) test(`${name}: exposes probabilities, unlocks finished history, and preserves raw data`, () => {
   const raw = JSON.stringify(scenario);
   const feed = matchFeedResponseSchema.parse(gateFeedResponse(scenario.feed, free));
   const details = [scenario.detail, scenario.prior].map(value => matchDetailResponseSchema.parse(gateDetailResponse(value, free)));
-  {
+  if (isPlayedFinalStatus(scenario.detail.fixture.status)) {
+    assert.deepEqual(feed.records, scenario.feed.records);
+    assert.deepEqual(details[0].snapshot, scenario.detail.snapshot);
+    assert.deepEqual(details[1].history, scenario.prior.history);
+    assert.equal('odds' in details[0], true);
+  } else {
     for (const value of [feed, ...details]) {
-      assert.doesNotMatch(JSON.stringify(value), /SENTINEL-|0\.6173|7\.73|"home-win"/);
-      for (const record of 'records' in value ? value.records : [value.fixture]) { walk(record.forecast); assert.deepEqual(record.prices, []); }
+      assert.doesNotMatch(JSON.stringify(value), /SENTINEL-|7\.73|"home-win"/);
+      for (const record of 'records' in value ? value.records : [value.fixture]) { walk(record.forecast); assert.deepEqual(record.prices, []); if (record.forecast) assert.equal(record.forecast.probabilities[0].probability, sentinel.probability); }
     }
     for (const value of details) { walk(value.snapshot); assert.deepEqual(value.history, { gated: true }); assert.equal('odds' in value, false); }
   }
@@ -49,14 +56,27 @@ test('strict wire schemas reject full data disguised as free or gated and reject
     assert.equal(matchDetailResponseSchema.safeParse({ ...gated, snapshot }).success, false);
   }
 });
-test('parsed oracle filters detect every probability, picks, sort and odds path', () => {
-  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today })), false);
-  for (const query of ['prob=1-100', 'prob=0-99', 'sort=probability', 'picks=only', 'odds=1.50-3.00']) {
+
+test('all played final statuses expose the original result and revision to guests and unsubscribed members', () => {
+  const original = scenarios['finished-regulation'].detail;
+  for (const status of ['finished-regulation', 'finished-extra-time', 'finished-penalties']) {
+    const raw = { ...original, fixture: { ...original.fixture, status } };
+    for (const signedIn of [false, true]) {
+      const response = matchDetailResponseSchema.parse(gateDetailResponse(raw, { ...free, signedIn }));
+      assert.deepEqual(response.snapshot, raw.snapshot);
+      assert.deepEqual(response.history, raw.history);
+      assert.deepEqual(response.fixture.prices, raw.fixture.prices);
+    }
+  }
+});
+test('probability filters and finished odds are public; active selection and price oracles stay locked', () => {
+  for (const query of ['', 'prob=0-100', 'status=finished', 'market=total-goals', 'sort=kickoff&dir=asc', 'prob=1-100', 'prob=0-99', 'sort=probability', 'status=finished&picks=only', 'status=finished&odds=1.50-3.00']) assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), false);
+  for (const query of ['picks=only', 'odds=1.50-3.00']) {
     assert.equal(usesSubscriberFeedOracle(parseFeedQuery(new URLSearchParams(query), { today, providerOdds: true })), true);
   }
 });
 test('oracle requests return nonrecoverable private 403 before any raw read', async () => {
-  for (const query of ['prob=1-100', 'sort=probability', 'picks=only', 'odds=1.50-3.00']) {
+  for (const query of ['picks=only', 'odds=1.50-3.00']) {
     const response = await createMatchFeedHandler(async () => { assert.fail('oracle read'); }, { now: () => now }, async () => free)(new Request(`https://example.test/api/matches?${query}`));
     assert.equal(response.status, 403); assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
     assert.equal(response.headers.get('set-cookie'), null);
@@ -74,7 +94,7 @@ test('free and failing resolvers never read slips and malformed gated bodies fai
 test('equal-version expiry or revocation withdraws all accepted prediction content', () => {
   const before = gateDetailResponse(scenarios.scheduled.detail, full), after = gateDetailResponse(scenarios.scheduled.detail, free);
   const merged = mergeLiveDetail(before, after);
-  assert.deepEqual(merged, after); assert.doesNotMatch(JSON.stringify(merged), /SENTINEL-|0\.6173|7\.73/);
+  assert.deepEqual(merged, after); assert.doesNotMatch(JSON.stringify(merged), /SENTINEL-|7\.73/);
   assert.deepEqual(mergeLiveDetail(before, { ...after, asOf: after.asOf - 1 }), { ...after, asOf: after.asOf - 1 });
   const view = initialLoadedFeed(gateFeedResponse(scenarios.scheduled.feed, full)), page = gateFeedResponse(scenarios.scheduled.feed, free);
   assert.throws(() => appendFeedPage(view, page), e => e.code === 'changed');
@@ -97,4 +117,21 @@ test('public offer uses the cheapest active purchase, retains owner ordering for
   const messages = createMessages('en');
   assert.equal(messages.text('paywall.from', { price: messages.number(1000), days: messages.plural('paywall.days', 1) }), 'From UGX 1,000 for 1 day.');
   assert.equal(messages.plural('paywall.days', 2), '2 days');
+});
+
+
+test('finished analysis is public only with verified canonical final status', async () => {
+  const fixture = scenarios['finished-regulation'];
+  for (const status of ['finished-regulation', 'finished-extra-time', 'finished-penalties']) {
+    const insights = await createGatedReads({ resolveAccess: async () => free, readInsights: async () => fixture.insights, readStatus: async () => status }).insights(fixture.detail.fixture.fixtureId);
+    assert.equal(insights.sections.news.items.some(item => item.kind === 'analysis'), true);
+  }
+  const insights = await createGatedReads({ resolveAccess: async () => free, readInsights: async () => fixture.insights, readStatus: async () => { throw Error('unavailable'); } }).insights(fixture.detail.fixture.fixtureId);
+  assert.equal(insights.sections.news.items.some(item => item.kind === 'analysis'), false);
+});
+
+test('locked destinations preserve safe return paths and distinguish guests from members', () => {
+  assert.equal(subscriberHref(false, '/en/matches'), '/en/account?view=register&return=%2Fen%2Fmatches');
+  assert.equal(subscriberHref(true, '/en/slips'), '/en/subscribe?return=%2Fen%2Fslips');
+  assert.equal(subscriberHref(false, 'https://outside.test'), '/en/account?view=register');
 });

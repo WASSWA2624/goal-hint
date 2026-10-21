@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { marketFamilySchema, publicForecastSchema, publicVoidReasonSchema, publishedFamiliesSchema } from "./fixture-snapshot.ts";
+import { marketFamilySchema, publicForecastSchema, publicVoidReasonSchema, publishedFamiliesSchema, publicChanceSchema } from "./fixture-snapshot.ts";
+import { isPlayedFinalStatus } from "./market-settlement.ts";
 import { dailyRunProgressSchema, matchFeedRecordSchema, storedMatchFeedRecordSchema } from "./match-feed.ts";
 import { contentAccessSchema } from "./content-access.ts";
 
@@ -72,7 +73,7 @@ const storedDetailBaseSchema = z.strictObject({ fixture: storedMatchFeedRecordSc
     cycles: z.strictObject({ anchor: sequence.or(z.literal(0)), entries: z.array(detailCycleSchema).max(matchDetailRules.maximumLimit), next: historyLink }) }),
 });
 export const gatedDetailSnapshotSchema = z.strictObject({ gated: z.literal(true), revisionId: id, cycleId: id, historical: z.boolean(),
-  applicability: storedDetailSnapshotSchema.shape.applicability, publishedAt: at, families: publishedFamiliesSchema,
+  applicability: storedDetailSnapshotSchema.shape.applicability, publishedAt: at, families: publishedFamiliesSchema, probabilities: publicChanceSchema,
 });
 export const detailSnapshotSchema = z.union([storedDetailSnapshotSchema, gatedDetailSnapshotSchema]);
 const wireDetailBaseSchema = z.strictObject({ ...storedDetailBaseSchema.shape, fixture: matchFeedRecordSchema,
@@ -94,7 +95,7 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
 }
 export const storedMatchDetailResponseSchema = storedDetailBaseSchema.superRefine((v, ctx) => refineDetail({ ...v, access: { tier: "full", signedIn: false } }, ctx));
 export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refineDetail).superRefine((v, ctx) => {
-  const gated = v.access.tier === "free";
+  const gated = v.access.tier === "free" && !isPlayedFinalStatus(v.fixture.status);
   if (gated ? !("gated" in v.history) || v.odds !== undefined || v.snapshot !== null && !("gated" in v.snapshot)
     || v.fixture.forecast !== null && !("gated" in v.fixture.forecast) || v.fixture.prices.length !== 0
     : "gated" in v.history || v.snapshot !== null && "gated" in v.snapshot || v.fixture.forecast !== null && "gated" in v.fixture.forecast) {

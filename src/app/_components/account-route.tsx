@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { MemberForm, MemberNavigationRecovery, MemberPanel, MemberSignOut } from "@/components/members/member-controls";
 import { AccountAuthForm, type AccountAuthView } from "@/components/members/account-auth-form";
-import { AccountSettings } from "@/components/members/account-security";
+import { AccountSettings, ResetPasswordForm } from "@/components/members/account-security";
 import { AccountCard, AccountCardBody, AccountCardHeading, AccountSection } from "@/components/members/account-styles";
 import { ApprovalRefresh, PaymentStatusCard, TrialStatusCard } from "@/components/members/payment-status";
 import { TrialRequest } from "@/components/members/subscribe-controls";
@@ -15,7 +15,6 @@ import { codeStatus, formatPeriodEnd, remainingDays } from "@/domain/subscriptio
 import { createMessages } from "@/i18n/messages";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
 import { memberCookieName, type MemberIdentity } from "@/server/members/member-sessions";
-import { isMemberAdminPhone } from "@/server/members/member-admin";
 import { PublicShell } from "./public-shell";
 
 export function createAccountRoute({ services = getMemberServices }: { services?: MemberServicesSource } = {}) {
@@ -24,16 +23,19 @@ export function createAccountRoute({ services = getMemberServices }: { services?
   }) {
     const messages = createMessages(locale), parameters = await searchParams;
     const resolved = await services(), settings = resolved.settings.settings;
+    const token = (await cookies()).get(memberCookieName(resolved.config.production))?.value;
+    const reset = await resolved.auth?.passwordResetSession(token).catch(() => null);
+    if (reset) return <PublicShell locale={locale} showAccount><AccountCard><AccountCardBody><ResetPasswordForm locale={locale} phone={reset.phone} /></AccountCardBody></AccountCard></PublicShell>;
     const mode = settings?.paywallMode;
     let member: MemberIdentity | null = null, unavailable = mode === undefined || !resolved.sessions;
     if (mode && resolved.sessions) {
-      try { member = await resolved.sessions.verify((await cookies()).get(memberCookieName(resolved.config.production))?.value); }
+      try { member = await resolved.sessions.verify(token); }
       catch { unavailable = true; }
     }
     const returnTo = memberReturnPath(parameters.return);
-    // `reset` is the pre-068 name of the forgot-password view; it now only shows how to reach the admin.
+    // Keep old reset links pointed at the manual admin-request form.
     const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
-    const administrator = !!member && !member.blocked && isMemberAdminPhone(member.phone);
+    const administrator = !!member && !member.blocked && !!member.administrator;
     const contact = { contactPhone: settings?.contactPhone ?? null, whatsappPhone: settings?.whatsappPhone ?? null, reviewTime: settings?.reviewTime ?? null };
     const now = new Date();
     const view = member?.codeEnteredAt && !member.blocked && !administrator ? await resolved.codes?.accountView(member).catch(() => null) : null;
@@ -63,7 +65,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
             {trialPending && <TrialStatusCard locale={locale} settings={contact} phone={member.phone} heading="h2" />}
             <PaymentStatusCard locale={locale} status={status} settings={contact} phone={member.phone} activeUntil={activeUntil} returnTo={returnTo} heading="h2" />
           </>}
-          <AccountSettings locale={locale} phone={member.phone} contact={contact} />
+          {!administrator && <AccountSettings locale={locale} phone={member.phone} contact={contact} />}
           {administrator && <><p>{messages.text("account.administratorAccess")}</p>
             <ButtonLink href="/admin" prefetch={false}>{messages.text("account.dashboard")}</ButtonLink></>}
           {mode !== "off" && !administrator && <AccountSection open={status?.status === "rejected" || status?.status === "reversed"}>

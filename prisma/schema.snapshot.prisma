@@ -185,6 +185,7 @@ model FootballSeason {
 }
 
 model FootballFixture {
+  savedSlips            SavedSlipFixture[]
   id                    String                        @id @default(uuid()) @db.Char(36)
   resultState           FixtureResultState?
   results               FixtureResult[]
@@ -235,6 +236,31 @@ model FootballFixture {
   @@index([seasonId, round, kickoff])
   @@index([homeTeamId, kickoff])
   @@index([awayTeamId, kickoff])
+}
+
+// Member-owned, immutable selection snapshot. accountId stays private; public history includes only slips whose legs ended.
+// Account erasure deletes these snapshots and cascades their fixture links; no payment or betting-provider action is stored.
+model SavedSlip {
+  id           String             @id @db.Char(36)
+  accountId    String             @db.Char(36)
+  fingerprint  String             @db.Char(64)
+  snapshotJson Json
+  createdAt    DateTime           @db.DateTime(3)
+  selections   SavedSlipFixture[]
+
+  @@unique([accountId, fingerprint])
+  @@index([createdAt])
+}
+
+// Fixture membership for a saved slip, without personal data. Foreign keys prevent orphan legs and cascade parent erasure.
+model SavedSlipFixture {
+  slipId    String          @db.Char(36)
+  fixtureId String          @db.Char(36)
+  slip      SavedSlip       @relation(fields: [slipId], references: [id], onDelete: Cascade)
+  fixture   FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([slipId, fixtureId])
+  @@index([fixtureId])
 }
 
 model FootballFixtureAudit {
@@ -1526,6 +1552,9 @@ model MemberAccount {
   id               String              @id @db.Char(36)
   phone            String?             @unique @db.VarChar(15)
   passwordHash     String?             @db.VarChar(255)
+  temporaryPasswordHash String?        @db.VarChar(255)
+  temporaryPasswordExpiresAt DateTime? @db.DateTime(3)
+  passwordResetRequestedAt DateTime?   @db.DateTime(3)
   createdAt        DateTime            @db.DateTime(3)
   lastSignInAt     DateTime            @db.DateTime(3)
   blockedAt        DateTime?           @db.DateTime(3)
@@ -1538,6 +1567,8 @@ model MemberAccount {
   submissions      PaymentSubmission[]
   codes            AccessCode[]
   verifications    MemberVerification[]
+
+  @@index([passwordResetRequestedAt])
 }
 
 // Member sign-ins: only a SHA-256 of each random session token is stored, with no user agent or address. A signed-in
@@ -1550,6 +1581,8 @@ model MemberSession {
   lastSeenAt    DateTime      @db.DateTime(3)
   expiresAt     DateTime      @db.DateTime(3)
   authenticatedAt DateTime?   @db.DateTime(3)
+  passwordResetAt DateTime?   @db.DateTime(3)
+  adminPasswordVersion String? @db.Char(64)
   codeEnteredAt DateTime?     @db.DateTime(3)
   accessCodeId  String?       @db.Char(36)
   account       MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)

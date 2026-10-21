@@ -56,8 +56,8 @@ test('absent, expired and impossible joint estimates never get replaced with ari
 
 test('public projection contains only rank and the three approved summaries, with no internal identifiers', () => {
   const slips = generate().slips, publicView = bestSlipViews(slips, false);
-  assert.deepEqual(Object.keys(publicView[0]), ['rank', 'totalOdds', 'estimatedProbability', 'matchCount']);
-  assert.doesNotMatch(JSON.stringify(publicView), /private-fixture|home-win|selections|kickoffAt|averageProbability/);
+  assert.deepEqual(Object.keys(publicView[0]), ['rank', 'estimatedProbability', 'matchCount']);
+  assert.doesNotMatch(JSON.stringify(publicView), /private-fixture|home-win|selections|kickoffAt|averageProbability|totalOdds/);
   assert.equal(bestSlipViews(slips, true)[0].slip, slips[0]);
 });
 
@@ -96,5 +96,5 @@ test('API rechecks access after generation, strips expired selections, and disab
   assert.equal(response.status, 200); assert.equal(checks, 2);
   assert.equal(response.headers.get('cache-control'), 'private, no-store'); assert.equal(response.headers.get('vary'), 'Cookie');
   assert.equal(response.headers.get('set-cookie'), null);
-  assert.doesNotMatch(await response.text(), /private-fixture|home-win|selections|kickoffAt/);
+  assert.doesNotMatch(await response.text(), /private-fixture|home-win|selections|kickoffAt|totalOdds/);
 });

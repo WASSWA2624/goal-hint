@@ -11,7 +11,7 @@ import { auditDetails, auditTextErrors, ownerSignInAudit, UnsafeAuditDetailsErro
 import { createSettingsHandlers } from "../src/server/admin/settings-http.ts";
 import { createPlansService } from "../src/server/members/plans.ts";
 import { accessMode, createSettingsService, settingsCacheRules } from "../src/server/members/settings.ts";
-import { createMemberCodeHandler, createMemberSignInHandler, createMemberSignOutHandler } from "../src/server/members/member-http.ts";
+import { createMemberSignInHandler, createMemberSignOutHandler } from "../src/server/members/member-http.ts";
 import { memberCookieName } from "../src/server/members/member-sessions.ts";
 import { memberReturnPath } from "../src/domain/member-navigation.ts";
 import { normalizePhone } from "../src/domain/phone.ts";
@@ -74,7 +74,7 @@ test("member sign-out clears the Lax cookie and cache even with mode off or fail
   assert.match(response.headers.get("set-cookie"), /^goal-hint-member=; .*SameSite=Lax; Max-Age=0$/);
 });
 
-test("closed subscriptions allow password sign-in but never activate a subscription code", async () => {
+test("closed subscriptions allow password sign-in but never accept subscription codes as credentials", async () => {
   const fixture = memberFixture({ mode: "off" });
   const handler = createMemberSignInHandler(fixture.resolve);
   assert.equal((await handler(memberRequest({ phone: "256700000999" }))).status, 401);
@@ -82,10 +82,9 @@ test("closed subscriptions allow password sign-in but never activate a subscript
   assert.equal(fixture.calls.signIn.length, 1);
   assert.equal((await handler(memberRequest({ phone: "256700000999", code: "0123-4567-89AB" }))).status, 400);
   assert.equal(fixture.calls.signIn.length, 1);
-  assert.equal((await createMemberCodeHandler(fixture.resolve)(memberRequest({ code: "0123-4567-89AB" }))).status, 403);
 });
 
-test("a subscription code cannot bypass password authentication; authenticated redemption retains safe redirects", async () => {
+test("a subscription code cannot bypass password authentication or call legacy redemption", async () => {
   const fixture = memberFixture(), calls = [];
   fixture.services.codes = { async signInWithCode(...args) { calls.push(args); return { status: "accepted", token: "c".repeat(43) }; } };
   fixture.services.settings.settings.maxUnlockedDevices = 2;
@@ -98,13 +97,6 @@ test("a subscription code cannot bypass password authentication; authenticated r
   response = await createMemberSignInHandler(fixture.resolve)(memberRequest({ phone: "0772123456", code: "0123-4567-89AB" }));
   assert.equal(response.status, 400);
   assert.equal(response.headers.get("set-cookie"), null);
-  const signed = memberFixture({ member: { blocked: false } });
-  signed.services.codes = { async redeem() { return { status: "ended", endsAt: new Date("2026-10-20T11:30:00Z") }; } };
-  response = await createMemberCodeHandler(signed.resolve)(memberRequest({ code: "0123-4567-89AB", return: "https://evil.test" }, { json: false }));
-  assert.equal(response.status, 303);
-  const target = response.headers.get("location");
-  assert.match(target, /^\/en\/account\?status=code-ended&ended=/u);
-  assert.doesNotMatch(target, /0123|evil/u);
 });
 
 test("settings fields parse to canonical numbers, tested shortcuts, trimmed text and in-range whole numbers", () => {

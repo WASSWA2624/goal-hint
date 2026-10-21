@@ -16,6 +16,9 @@ const fixture = () => {
 test("payment fields normalize IDs and numbers, with exact limits and a strict whitelist", () => {
   assert.equal(parsePaymentFields(values).transactionId, "TX.100-1"); assert.equal(parsePaymentFields(values).payerPhone, "256700000101");
   assert.equal(transactionKey("tx .100-1"), transactionKey("TX1001"));
+  assert.deepEqual(parsePaymentFields({ planId: values.planId, network: "airtel", accepted: "true" }), {
+    planId: values.planId, network: "airtel", accepted: true, payerPhone: null, transactionId: null,
+  });
   for (const fields of [{ amount: "99" }, { amount: "10000001" }, { amount: "5e3" }, { transactionId: "---." }, { transactionId: "abc" }, { transactionId: "<script>" }, { payerPhone: "0201234567" }, { network: "other" }, { accepted: "yes" }, { sms: "secret" }]) assert.equal(parsePaymentFields({ ...values, ...fields }), null);
 });
 test("image policy trusts magic and bounded dimensions while preserving the provider badge policy", () => {
@@ -37,6 +40,16 @@ test("multipart reads are bounded and strict; extra SMS, spoofed content types a
   assert.equal((await f.handler(chunked)).status, 413);
   const slow = new Request("http://localhost/api/account/payments", { method: "POST", headers: { "sec-fetch-site": "same-origin", "content-length": "100" }, duplex: "half", body: new ReadableStream({ start() {} }) });
   assert.equal((await f.handler(slow)).status, 408); assert.equal(f.calls.submit.length, 1);
+});
+
+test("proof can omit optional payment details while amount overrides and unauthenticated uploads are refused", async () => {
+  const f = fixture();
+  assert.equal((await f.handler(await paymentRequest({ fields: { payerPhone: "", transactionId: "" } }))).status, 201);
+  assert.equal(f.calls.submit[0][1].payerPhone, null); assert.equal(f.calls.submit[0][1].transactionId, null);
+  assert.equal((await f.handler(await paymentRequest({ fields: { amount: "100" } }))).status, 400);
+  assert.equal(f.calls.submit.length, 1);
+  f.services.sessions.verify = async () => null;
+  const signedOut = await paymentRequest(); assert.equal((await f.handler(signedOut)).status, 403); assert.equal(signedOut.bodyUsed, false);
 });
 test("attempt checks precede the body, and only two uploads may be in flight", async () => {
   const f = fixture(); f.services.payments.begin = async () => false;
@@ -74,20 +87,15 @@ test("browser upload reports progress, sets its deadline and preserves multipart
   assert.deepEqual(progress, [50, 50]); assert.ok(observed.filter((entry) => entry.timeout).every((entry) => entry.timeout === 90_000 && entry.body === body));
 });
 
-test("owner checks flag each companion and code messages encode complete masked delivery", async () => {
-  const { paymentChecks, codeDelivery } = await import("../src/domain/code-delivery.ts");
-  const base = { amount:5000,price:5000,approved:null,pending:null,image:null,payerAccount:false,payerDiffers:false };
+test("owner checks flag duplicate proof and payer differences without treating a screenshot as verification", async () => {
+  const { paymentChecks } = await import("../src/domain/payment-checks.ts");
+  const base = { received:5000,price:5000,transactionId:true,approved:null,pending:null,image:null,payerAccount:false,payerDiffers:false };
   assert.equal(paymentChecks(base).filter(c=>c.tone==="warning").length,0);
-  const all = paymentChecks({...base,amount:1000,approved:"P-AAAA",pending:"P-BBBB",image:"P-CCCC",payerAccount:true,payerDiffers:true});
+  const all = paymentChecks({...base,received:1000,approved:"P-AAAA",pending:"P-BBBB",image:"P-CCCC",payerAccount:true,payerDiffers:true});
   assert.equal(all.filter(c=>c.tone==="warning").length,6);
   assert.equal(paymentChecks({...base,payerDiffers:true})[5].tone,"info");
   for (const companion of [{image:"P-CCCC"},{payerAccount:true}]) assert.equal(paymentChecks({...base,payerDiffers:true,...companion})[5].tone,"warning");
-  for (const source of ["payment","trial"]) for (const renewal of [false,true]) {
-    const delivery = codeDelivery({code:"0123-4567-89AB",reference:"C-TEST",phone:"256700000101",planName:"Weekly & Daily",endsAt:new Date("2026-11-01T18:00:00Z"),renewal,source},"https://synthetic.example/local");
-    assert.equal(new URL(delivery.whatsapp).searchParams.get("text"),delivery.message);
-    assert.equal(new URL(delivery.sms).searchParams.get("body"),delivery.message);
-    assert.match(delivery.message,/https:\/\/synthetic.example\/en\/account#code=0123-4567-89AB/);
-    assert.match(delivery.message,/ending 101/); assert.ok(!delivery.message.includes(delivery.phone)); assert.match(delivery.message,/21:00 EAT/);
-    if (source==="trial") assert.match(delivery.message,/free trial code/i); else assert.equal(delivery.message.includes("updates by itself"),renewal);
-  }
+  const unverified = paymentChecks({ ...base, received: null, transactionId: false });
+  assert.match(unverified[0].text, /Check your wallet/);
+  assert.match(unverified[1].text, /No transaction ID/);
 });

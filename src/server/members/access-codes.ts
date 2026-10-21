@@ -123,15 +123,18 @@ export function createAccessCodes({ database, now = Date.now }: {
     if (!plan) return invalid("Choose a plan.");
     const existing = submissionId ? await tx.paymentSubmission.findUnique({ where: { id: submissionId } }) : null;
     if (submissionId && (!existing || existing.accountId !== account.id || !["pending", "superseded"].includes(existing.status))) return refused();
-    const final = { planId: plan.id, planName: plan.name, durationDays: plan.durationDays, priceUgx: plan.priceUgx,
+    // Keep the offer the member actually paid for. An administrator may explicitly choose another package, but editing
+    // a package's price or duration while a report waits cannot silently change the pending purchase.
+    const offer = existing?.planId === plan.id ? existing : plan;
+    const final = { planId: plan.id, planName: "planName" in offer ? offer.planName : offer.name, durationDays: offer.durationDays, priceUgx: offer.priceUgx,
       status: "approved", network: fields.network, transactionRef: fields.transactionRef.toUpperCase().replace(/\s/gu, ""),
       amountReceivedUgx: fields.amountReceivedUgx, approvedTxnKey: `${fields.network}:${key}`, decidedAt: at, decidedBy: actor };
     const submission = existing ? await tx.paymentSubmission.update({ where: { id: existing.id }, data: final })
       : await tx.paymentSubmission.create({ data: { ...final, id: randomUUID(), accountId: account.id, reference: newReference().slice(2), source: "owner",
         submittedAt: at, claimedNetwork: fields.network, claimedTxnRef: final.transactionRef, claimedTxnKey: key, claimedAmountUgx: fields.amountReceivedUgx } });
     // The report's own session always gets a slot, even on a full account; other signed-in devices fill free slots.
-    const grant = await create(tx, account, { source: "payment", paymentSubmissionId: submission.id, planId: plan.id, planName: plan.name,
-      durationDays: plan.durationDays, priceUgx: plan.priceUgx, termsVersion: existing?.termsVersion ?? null, ...(note ? { note } : {}) }, actor, at,
+    const grant = await create(tx, account, { source: "payment", paymentSubmissionId: submission.id, planId: plan.id, planName: final.planName,
+      durationDays: final.durationDays, priceUgx: final.priceUgx, termsVersion: existing?.termsVersion ?? null, ...(note ? { note } : {}) }, actor, at,
       { maximum: settings.maxUnlockedDevices, prefer: existing?.submittedSessionHash ? [existing.submittedSessionHash] : [] });
     await audit(tx, account.id, submission.id, "payment_approved", actor, at, { codeId: grant.id, amountReceivedUgx: fields.amountReceivedUgx }, "payment");
     return { status: "created", grant: { ...grant, payment: `P-${submission.reference}` } };

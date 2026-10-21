@@ -27,11 +27,13 @@ function isolatedEnvironment(url) {
 
 async function runNode(args, env) {
   return execFileAsync(process.execPath, ["--conditions=react-server", ...args], {
-    cwd: workspace, env, windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024,
+    // A cold CLI loads the application's policy bridge and Prisma, then applies the complete migration history.
+    // Keep that subprocess bounded without killing it before its own 120-second Prisma deadline.
+    cwd: workspace, env, windowsHide: true, timeout: args[0] === script ? 180000 : 60000, maxBuffer: 1024 * 1024,
   });
 }
 
-test("isolated genuine MySQL migration, transaction and lifecycle contracts", { timeout: 240000 }, async (t) => {
+test("isolated genuine MySQL migration, transaction and lifecycle contracts", { timeout: 480000 }, async (t) => {
   let instance;
   try {
     instance = await startIsolatedMysql();
@@ -49,6 +51,7 @@ test("isolated genuine MySQL migration, transaction and lifecycle contracts", { 
   const env = { ...isolatedEnvironment(applicationUrl), MIGRATION_DATABASE_URL: migrationUrl };
   let database;
   let migrationDatabase;
+  let migrated = false;
   try {
     await instance.executeAdmin(`
       CREATE USER 'goal_hint_migration'@'127.0.0.1' IDENTIFIED BY '${migrationPassword}';
@@ -70,7 +73,10 @@ test("isolated genuine MySQL migration, transaction and lifecycle contracts", { 
       `);
       assert.ok(migrations.length > 0);
       assert.ok(migrations.every((migration) => migration.finished_at !== null && migration.rolled_back_at === null));
+      migrated = true;
     });
+    // A failed deployment invalidates every following database assertion; retain its failure and clean up the instance.
+    if (!migrated) return;
 
     // MySQL DDL commits implicitly. This fixture table belongs only to the
     // proven new datadir and is intentionally created outside a DML transaction.

@@ -1,5 +1,5 @@
 /**
- * Subscription plans (prompts/monetization.md 5.1 and 5.6). The owner creates them on /admin/plans; nothing is seeded.
+ * Subscription plans. Daily, Weekly and Monthly start at the documented prices; the owner can edit them on /admin/plans.
  * Every plan unlocks every feature, so a plan is only a name, a length and a price. `durationDays` counts 24-hour blocks
  * from payment confirmation, never calendar days. Plans are never deleted: submissions and codes keep their snapshots.
  */

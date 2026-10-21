@@ -197,7 +197,11 @@ const environmentSchema = z.object({
   GOAL_HINT_ANALYTICS_GEO_SOURCE: optional(z.enum(["timezone", "cloudflare", "vercel"])).transform((value) => value ?? "timezone")
     .describe("Use timezone (default), cloudflare or vercel; edge headers are trusted only when the site is served through that edge."),
   GOAL_HINT_ADMIN_PHONES: optional(z.string().max(4096).refine((value) => parseMemberAdminPhones(value) !== null))
-    .describe("Use a private JSON array of canonical country-code phone strings for member administrator access; the owner sets their passwords."),
+    .describe("Use a private JSON array of canonical country-code phone strings for administrator access."),
+  GOAL_HINT_ADMIN_PASSWORD_HASH: optional(z.string().regex(/^scrypt:\d+:\d+:\d+:[A-Za-z0-9_-]{16,}:[A-Za-z0-9_-]{32,}$/))
+    .describe("Private shared password hash for configured administrator phones; generate with npm run analytics:hash-password."),
+  GOAL_HINT_ADMIN_PASSWORD: optional(z.string().min(8).max(128).regex(/^[^\u0000-\u001f\u007f]+$/u))
+    .describe("Private administrator password fallback (8–128 characters). Prefer GOAL_HINT_ADMIN_PASSWORD_HASH; when both are set the hash takes precedence."),
   GOAL_HINT_ADS_ENABLED: disabledFeature.describe("Advertising is disabled at launch; approval and consent requirements remain unresolved."),
   GOAL_HINT_DARK_MODE_ENABLED: disabledFeature.describe("Dark mode is disabled at launch."),
   GOAL_HINT_EXACT_SCORES_ENABLED: disabledFeature.describe("Exact scores are excluded until explicit approval and score-distribution validation."),
@@ -240,6 +244,8 @@ function assemble(settings: z.output<typeof environmentSchema>) {
       analyticsSecret: secret(settings.GOAL_HINT_ANALYTICS_SECRET),
       analyticsPasswordHash: secret(settings.GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH),
       adminPhones: secret(settings.GOAL_HINT_ADMIN_PHONES),
+      adminPasswordHash: secret(settings.GOAL_HINT_ADMIN_PASSWORD_HASH),
+      adminPassword: secret(settings.GOAL_HINT_ADMIN_PASSWORD),
     },
     choices: {
       subscriptionIdentity: {

@@ -151,7 +151,7 @@ export function Explanation() {
   const { data, messages } = useStableDetails();
   const snapshot = fullDetailSnapshot(data);
   const analysis = snapshot ? detailAnalysis(snapshot.analysis) : null;
-  if ("gated" in data.history) return <SubscriberNotice kind="markets" />;
+  if ("gated" in data.history) return <SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} />;
   const cite = (urls: readonly string[]) => [...new Set(urls)].flatMap((url) => {
     const source = analysis?.sources.find((entry) => entry.url === url);
     return source ? [<a key={url} href={url} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer"> {source.publisher}<ExternalIcon /></a>] : [];
@@ -246,7 +246,7 @@ export const MarketsCard = memo(function MarketsCard() {
   useReturnFocus(list, view.market);
   const [search, setSearch] = useMarketSearch(view.marketSearch), query = useDeferredValue(search);
   const snapshot = fullDetailSnapshot(data);
-  if ("gated" in data.history) return <SubscriberRow><SubscriberNotice kind="markets" /></SubscriberRow>;
+  if ("gated" in data.history) return <SubscriberRow><SubscriberNotice kind="markets" signedIn={data.access.signedIn} returnTo={data.route.path} /></SubscriberRow>;
   const published = snapshot?.markets.length ?? 0;
   const label = (family: MarketFamily) => marketName(messages, family);
   const shown = visibleMarkets(view.marketCategory, query, label);

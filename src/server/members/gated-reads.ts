@@ -4,7 +4,7 @@ import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/
 import { matchDetailResponseSchema } from "../../domain/match-detail.ts";
 import { matchFeedResponseSchema } from "../../domain/match-feed.ts";
 import { matchInsightsSchema } from "../../domain/match-insights.ts";
-import type { SettlementStatus } from "../../domain/market-settlement.ts";
+import { isPlayedFinalStatus, type SettlementStatus } from "../../domain/market-settlement.ts";
 import { gateDetailResponse, gateFeedResponse, gateInsights, usesSubscriberFeedOracle } from "../../domain/paywall.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
 import { parseMatchFeedQuery } from "../matches/feed-service.ts";
@@ -13,6 +13,7 @@ import { readPublicMatchFeed } from "../matches/public-feed.ts";
 import { readPublicMatchInsights } from "../matches/public-insights.ts";
 import { readPublicSlipBuild } from "../slips/public-slips.ts";
 import { resolveViewerAccess, type ViewerAccess } from "./viewer-access.ts";
+import { readPublicMatchStatus } from "../matches/public-insights.ts";
 
 export type AccessResolver = () => Promise<ViewerAccess>;
 export async function contentAccess(resolve: AccessResolver): Promise<ViewerAccess> {
@@ -21,7 +22,7 @@ export async function contentAccess(resolve: AccessResolver): Promise<ViewerAcce
 
 /** Raw caches stay viewer-independent. Every page/API factory injects only raw readers into this boundary. */
 export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed = readPublicMatchFeed, readDetail = readPublicMatchDetail,
-  readInsights = readPublicMatchInsights, readSlips = readPublicSlipBuild }: {
+  readInsights = readPublicMatchInsights, readSlips = readPublicSlipBuild, readStatus = readPublicMatchStatus }: {
   resolveAccess?: AccessResolver; readFeed?: typeof readPublicMatchFeed; readDetail?: typeof readPublicMatchDetail;
   readInsights?: typeof readPublicMatchInsights; readSlips?: typeof readPublicSlipBuild;
   readStatus?: (id: string) => Promise<SettlementStatus>;
@@ -43,7 +44,13 @@ export function createGatedReads({ resolveAccess = resolveViewerAccess, readFeed
     },
     async insights(...[id, clock]: Parameters<typeof readPublicMatchInsights>) {
       const access = await contentAccess(resolveAccess);
-      const result = gateInsights(await readInsights(id, clock), access);
+      const response = await readInsights(id, clock);
+      // Status comes from the current canonical fixture, never from a selected historical revision.
+      let finished = false;
+      if (access.tier === "free") {
+        try { finished = isPlayedFinalStatus(await readStatus(id)); } catch { /* Withhold analysis when status cannot be verified. */ }
+      }
+      const result = gateInsights(response, access, finished);
       try { return access.tier === "free" ? matchInsightsSchema.parse(result) : result; }
       catch { throw new MatchFeedError("unavailable"); }
     },

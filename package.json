@@ -62,7 +62,7 @@
     "test:results": "node --conditions=react-server --test tests/result-sync.test.mjs tests/result-sync.integration.mjs",
     "test:settlement": "node --conditions=react-server --test tests/market-settlement.test.mjs tests/market-settlement.integration.mjs",
     "test:odds": "node --conditions=react-server --test tests/odds.test.mjs tests/odds-import.test.mjs tests/odds.integration.mjs",
-    "test:slips": "node --conditions=react-server --test tests/slip-builder.test.mjs tests/slip-price-page.test.mjs tests/slip-service.test.mjs",
+    "test:slips": "node --conditions=react-server --test tests/slip-builder.test.mjs tests/slip-price-page.test.mjs tests/slip-service.test.mjs tests/saved-slips.test.mjs tests/saved-slips.integration.mjs",
     "test:slips:rendering": "python scripts/verify-slip-rendering.py",
     "test:team-codes": "node --conditions=react-server --test tests/team-codes.test.mjs tests/team-name.test.mjs tests/team-codes.integration.mjs",
     "test:feed": "node --conditions=react-server --test tests/match-feed.test.mjs tests/match-feed.integration.mjs",
@@ -94,7 +94,7 @@
     "test:scripts": "python -m unittest discover -s tests -p \"*_test.py\"",
     "test:scripts:integration": "python tests/scripts_integration.py",
     "test:payments:rendering": "python scripts/verify-payments-rendering.py",
-    "test:payments": "node --conditions=react-server --test --test-concurrency=1 tests/payment-sms.test.mjs tests/payments.test.mjs tests/payments.integration.mjs tests/payments-admin.integration.mjs",
+    "test:payments": "node --conditions=react-server --test --test-concurrency=1 tests/payment-sms.test.mjs tests/payments.test.mjs tests/payments.integration.mjs tests/payments-admin.integration.mjs tests/subscription-packages.integration.mjs",
     "test:paywall": "node --conditions=react-server --test tests/paywall.test.mjs",
     "test:paywall:rendering": "python scripts/verify-paywall-rendering.py"
   },

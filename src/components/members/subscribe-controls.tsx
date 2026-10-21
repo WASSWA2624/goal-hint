@@ -16,7 +16,6 @@ import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
 import { PasswordInput } from "./account-security";
-import { refreshMemberSession } from "./member-session";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
@@ -60,7 +59,7 @@ function PaymentHelp({ settings, text, locale }: { settings: HelpSettings; text?
   </HelpActions></Row>;
 }
 function SubscribeSignIn({ locale, returnTo }: { locale: string; returnTo: string | null }) {
-  const router = useRouter(), m = createMessages(locale), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const m = createMessages(locale), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
@@ -68,9 +67,9 @@ function SubscribeSignIn({ locale, returnTo }: { locale: string; returnTo: strin
     try {
       const response = await fetch("/api/account/login", { method: "POST", credentials: "same-origin", headers: { Accept: "application/json", "Content-Type": "application/json" },
         body: JSON.stringify(Object.fromEntries(data)) });
-      const result = await response.json() as { message?: string };
+      const result = await response.json() as { message?: string; next?: string };
       if (!response.ok) setError(result.message ?? m.text("account.unavailable"));
-      else { await refreshMemberSession(); router.refresh(); }
+      else location.replace(result.next ?? memberNextPath("subscribe", returnTo));
     } catch { setError(m.text("account.unavailable")); } finally { setBusy(false); }
   }
   return <Panel>
@@ -131,6 +130,17 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const plan = plans.find((candidate) => candidate.id === draft.planId) ?? plans[0];
   const update = (values: Partial<PaymentDraft>) => setDraft((old) => ({ ...old, ...values }));
   const helpText = account && status ? m.text("subscribe.helpPaid", { price: String(status.priceUgx), plan: status.planName, phone: formatPhone(account.phone), reference: status.reference }) : undefined;
+  async function chooseImage(file: File | undefined) {
+    if (!file || busy) return;
+    setBusy(true); setError("");
+    try {
+      const prepared = await preparePaymentImage(file);
+      setImage(prepared); setPreview(URL.createObjectURL(prepared));
+    } catch (failure) {
+      setImage(null); setPreview("");
+      setError(failure instanceof Error ? failure.message : m.text("subscribe.chooseImage"));
+    } finally { setBusy(false); }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
     if (!image || !plan || !account) { setError(m.text("subscribe.chooseImage")); return; }
@@ -222,11 +232,11 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
             <AmountRow><span>{m.text("subscribe.amount")}</span><strong>UGX {m.number(plan.priceUgx)} · {plan.name}</strong></AmountRow>
             <FileField>
               <FileBox><ImageIcon /><span id={`${ids}-shot`}>{image ? m.text("subscribe.imageSize", { size: String(Math.ceil(image.size / 1000)) }) : m.text("subscribe.chooseScreenshot")}</span>
-                <input type="file" accept="image/*" required={!image} aria-labelledby={`${ids}-shot`} aria-describedby={`${ids}-shot-hint`} onChange={async (event) => {
-                  const file = event.currentTarget.files?.[0]; if (!file) return;
-                  setBusy(true); setError(""); try { const prepared = await preparePaymentImage(file); setImage(prepared); setPreview(URL.createObjectURL(prepared)); }
-                  catch (failure) { setImage(null); setError(failure instanceof Error ? failure.message : m.text("subscribe.chooseImage")); } finally { setBusy(false); }
-                }} /></FileBox>
+                <input type="file" accept="image/*" required={!image} disabled={busy} aria-labelledby={`${ids}-shot`} aria-describedby={`${ids}-shot-hint`}
+                  onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox>
+              <FileBox><ImageIcon /><span id={`${ids}-camera`}>{m.text("subscribe.takePhoto")}</span>
+                <input type="file" accept="image/*" capture="environment" disabled={busy} aria-labelledby={`${ids}-camera`} aria-describedby={`${ids}-shot-hint`}
+                  onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox>
               <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
             </FileField>
             {image && <Preview src={preview} alt={m.text("subscribe.preview")} />}

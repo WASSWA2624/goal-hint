@@ -6,7 +6,7 @@ import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { formatPhone, normalizePhone, outsideUgandaHint, phoneInputIssue, phoneInputMaxLength, phoneHint } from "@/domain/phone";
 import { createMessages } from "@/i18n/messages";
-import { GlobeIcon } from "./icons";
+import { GlobeIcon, Icon } from "./icons";
 
 export type ButtonVariant = "primary" | "secondary" | "quiet";
 
@@ -213,12 +213,23 @@ const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean }>`
     color: ${({ theme }) => theme.color.mutedText};
     opacity: 1;
   }
+  &[data-password-input]::-ms-reveal { display: none; }
 `;
 const InputFrame = styled.div`
   position: relative; min-inline-size: 0;
   > span { position: absolute; inset-inline-start: 12px; inset-block-start: 50%; transform: translateY(-50%);
     display: flex; pointer-events: none; color: ${({ theme }) => theme.color.mutedText}; }
+  > input[data-password-input] { padding-inline-end: 48px; }
   svg { inline-size: 18px; block-size: 18px; }
+`;
+const PasswordToggle = styled(Button)`
+  && {
+    position: absolute; inset-inline-end: 1px; inset-block: 1px;
+    inline-size: 44px; min-inline-size: 44px; min-block-size: 0; padding: 0;
+    border: 0; border-radius: 0; background: transparent;
+    color: ${({ theme }) => theme.color.link};
+    &:disabled { color: ${({ theme }) => theme.color.disabledText}; }
+  }
 `;
 
 const SelectControl = styled.select<{ $invalid: boolean }>`
@@ -290,13 +301,25 @@ export function TextLink(props: TextLinkProps) {
 
 export function TextInput({ label, hint, error, leading, type = "text", ...props }: TextInputProps) {
   const field = useFieldAccessibility({ ...props, hint, error });
-  const control = <InputControl {...props} id={field.id} type={type} aria-describedby={field.describedBy}
-    aria-invalid={field.invalid} $invalid={field.isInvalid} $leading={hasContent(leading)} />;
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const password = type === "password";
+  const toggleLabel = password ? createMessages().text(passwordVisible ? "account.hidePassword" : "account.showPassword") : "";
+  const control = <InputControl {...props} id={field.id} type={password && passwordVisible ? "text" : type} aria-describedby={field.describedBy}
+    aria-invalid={field.invalid} $invalid={field.isInvalid} $leading={hasContent(leading)}
+    spellCheck={password ? false : props.spellCheck} autoCapitalize={password ? "none" : props.autoCapitalize}
+    {...(password ? { "data-password-input": true, "data-analytics-ignore": true } : {})} />;
 
   return (
     <Field>
       <FieldLabel htmlFor={field.id}>{label}</FieldLabel>
-      {hasContent(leading) ? <InputFrame><span aria-hidden="true">{leading}</span>{control}</InputFrame> : control}
+      {hasContent(leading) || password ? <InputFrame>
+        {hasContent(leading) && <span aria-hidden="true">{leading}</span>}{control}
+        {password && <PasswordToggle type="button" variant="quiet" disabled={props.disabled} data-analytics-ignore
+          aria-label={toggleLabel}
+          aria-controls={field.id} aria-pressed={passwordVisible} onClick={() => setPasswordVisible((visible) => !visible)}>
+          <Icon><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />{passwordVisible && <path d="m3 3 18 18" />}</Icon>
+        </PasswordToggle>}
+      </InputFrame> : control}
       {field.hasHint && <FieldMessage id={field.hintId}>{hint}</FieldMessage>}
       {field.hasError && (
         <FieldMessage id={field.errorId} $error>

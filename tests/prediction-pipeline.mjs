@@ -99,6 +99,9 @@ export async function withPredictionPipeline(t, operation, instanceOptions) {
       GRANT SELECT, UPDATE ON goal_hint_test.PublicSearchLimit TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE ON goal_hint_test.DurableJobAttempt TO 'cutoff_app'@'127.0.0.1';
       GRANT SELECT, INSERT ON goal_hint_test.DurableJobEvent TO 'cutoff_app'@'127.0.0.1';`);
+    await instance.executeAdmin(`
+      GRANT SELECT, INSERT, DELETE ON goal_hint_test.SavedSlip TO 'cutoff_app'@'127.0.0.1';
+      GRANT SELECT, INSERT ON goal_hint_test.SavedSlipFixture TO 'cutoff_app'@'127.0.0.1';`);
     const a = replica(), b = replica(), catalog = createFootballCatalogStore(a), history = createMysqlPredictionHistoryStore(a);
     const queue = createMysqlJobQueue(a), otherQueue = createMysqlJobQueue(b), model = modelVersion();
     await createMysqlModelVersionStore(a).save(model, modelAuthority());

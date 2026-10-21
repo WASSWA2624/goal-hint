@@ -10,15 +10,14 @@ import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { ActionButton, ButtonRow, FieldBlock, FieldRow, FormStack, Hint } from "./admin-form";
 import { ActionNotices, CodeActions, ManualCodeForm, useCodeAction, type CodeAction } from "./code-tools";
 /** An owner reset's answer (068 D1-reset), held in memory only: shown once, never stored, gone on Done or leaving the page. */
-type Revealed = Readonly<{ password: string; accountId: string; phone: string | null; created: boolean; sessionsDeleted: number }>;
+export type Revealed = Readonly<{ password: string; accountId: string; phone: string | null; created: boolean; sessionsDeleted: number; expiresAt: string }>;
 export function SubscribersEditor({ accounts, detail, plans }: { accounts: readonly OwnerAccount[]; detail: OwnerSubscriber | null; plans: readonly SubscriptionPlanView[] }) {
   const action = useCodeAction(), [found, setFound] = useState<readonly OwnerAccount[] | null>(null), [search, setSearch] = useState(""), [adminPhone, setAdminPhone] = useState<string | null>(null), [revealed, setRevealed] = useState<Revealed | null>(null);
   const path = detail ? `/api/admin/subscribers/${detail.id}` : "/api/admin/subscribers";
   return <div data-analytics-ignore><ActionNotices action={action} />{revealed && <TemporaryPassword value={revealed} done={() => setRevealed(null)} />}
     <Panel><form method="post" action="/api/admin/subscribers" onSubmit={async e => { e.preventDefault(); const r = await action.send("/api/admin/subscribers", { search }); if (r.ok) { setFound(r.body.accounts as OwnerAccount[]); setAdminPhone(typeof r.body.adminPhone === "string" ? r.body.adminPhone : null); } }}><FieldRow><PhoneInput label="Search by phone" value={search} onValueChange={setSearch} /><ActionButton disabled={action.busy}>Search</ActionButton></FieldRow></form>
       {(found ?? accounts).map(a => <p key={a.id}><a href={`/admin/subscribers?accountId=${a.id}`}>{a.phone ? formatPhone(a.phone) : "Erased account"}</a> · {a.status}</p>)}
-      {adminPhone && <FormStack><Muted>{formatPhone(adminPhone)} is an administrator number without an account. A temporary password creates its account.</Muted>
-        <PasswordReset path="/api/admin/subscribers" phone={adminPhone} action={action} reveal={value => { setAdminPhone(null); setRevealed(value); }} /></FormStack>}</Panel>
+      {adminPhone && <Muted>{formatPhone(adminPhone)} is an administrator number. Its password is configured in the environment.</Muted>}</Panel>
     {detail && <><Panel><PanelHeader><h2>{detail.phone ? formatPhone(detail.phone) : "Erased account"}</h2></PanelHeader><p>{detail.erasedAt ? "Erased" : detail.blockedAt ? "Blocked" : detail.codes.some(c => c.status === "active") ? "Active access" : detail.codes.some(c => c.status === "queued") ? "Queued access" : "No current access"} · {detail.unlocks} unlocks in the last 30 days</p>{detail.blockedReason && <p>{detail.blockedReason}</p>}
       {!detail.erasedAt && <FormStack><ActionButton type="button" disabled={action.busy} onClick={() => void action.send(path, { action: "sign-out-all" })}>Sign out all devices</ActionButton>
         <form method="post" action={path} onSubmit={e => { e.preventDefault(); void action.send(path, { action: detail.blockedAt ? "unblock" : "block", value: new FormData(e.currentTarget).get("reason") }); }}><FieldBlock>Reason<input name="reason" required maxLength={200} /></FieldBlock><ActionButton disabled={action.busy}>{detail.blockedAt ? "Unblock" : "Block"}</ActionButton></form>
@@ -39,19 +38,21 @@ export function SubscribersEditor({ accounts, detail, plans }: { accounts: reado
     </>}
   </div>;
 }
-/** Sets a temporary password for the account at `path`, or by `phone` for an allow-listed administrator number without one. */
-function PasswordReset({ path, phone, action, reveal }: { path: string; phone?: string; action: CodeAction; reveal: (value: Revealed) => void }) {
+/** Generates a single-use member recovery password after the admin verifies the caller. */
+export function PasswordReset({ path, phone, action, reveal }: { path: string; phone?: string; action: CodeAction; reveal: (value: Revealed) => void }) {
   async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const form = e.currentTarget, confirmed = new FormData(form).get("confirmed") === "on";
     const r = await action.send(path, { action: "temporary-password", ...(phone ? { phone } : {}), confirmed });
     if (r.ok && r.body.status === "reset" && typeof r.body.temporaryPassword === "string" && typeof r.body.accountId === "string") { form.reset();
-      reveal({ password: r.body.temporaryPassword, accountId: r.body.accountId, phone: phone ?? null, created: r.body.created === true, sessionsDeleted: typeof r.body.sessionsDeleted === "number" ? r.body.sessionsDeleted : 0 }); } }
+      reveal({ password: r.body.temporaryPassword, accountId: r.body.accountId, phone: phone ?? null, created: r.body.created === true,
+        expiresAt: typeof r.body.expiresAt === "string" ? r.body.expiresAt : "", sessionsDeleted: typeof r.body.sessionsDeleted === "number" ? r.body.sessionsDeleted : 0 }); } }
   return <form method="post" action={path} onSubmit={submit}><FormStack><label><input type="checkbox" name="confirmed" required /> I am on a call with the member and checked it is their number.</label><ActionButton disabled={action.busy}>Set temporary password</ActionButton></FormStack></form>;
 }
-function TemporaryPassword({ value, done }: { value: Revealed; done: () => void }) {
+export function TemporaryPassword({ value, done }: { value: Revealed; done: () => void }) {
   const [copied, setCopied] = useState(false);
   return <Panel aria-label="Temporary password"><PanelHeader><h2>Temporary password{value.phone ? ` · ${formatPhone(value.phone)}` : ""}</h2></PanelHeader>
     <Secret translate="no">{value.password}</Secret><ButtonRow><ActionButton type="button" onClick={() => { void navigator.clipboard?.writeText(value.password).then(() => setCopied(true), () => {}); }}>{copied ? "Copied" : "Copy"}</ActionButton><ActionButton type="button" onClick={done}>Done</ActionButton></ButtonRow>
-    <Hint>Read it to the member on the phone. They should change it under Account.</Hint>
+    <Hint>Read it to the member on the phone. It works once and requires them to choose a new password before signing in.</Hint>
+    {value.expiresAt && <p>Expires {formatPeriodEnd(new Date(value.expiresAt))} (15 minutes).</p>}
     <Muted>{value.sessionsDeleted} device{value.sessionsDeleted === 1 ? "" : "s"} signed out. It is shown only now; set a new one if it is lost.</Muted>
     {value.created && <p><a href={`/admin/subscribers?accountId=${value.accountId}`}>Open the new account</a></p>}
   </Panel>;

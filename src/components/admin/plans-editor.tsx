@@ -64,6 +64,8 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
       <Panel aria-labelledby="add-plan-title">
         <PanelHeader><h2 id="add-plan-title">Add a plan</h2></PanelHeader>
         <Muted>Every plan unlocks every feature; plans differ only in length and price. A day is 24 hours from payment confirmation, never a calendar day.</Muted>
+        <ButtonRow>{[{ name: "Daily", days: 1, price: 1000 }, { name: "Weekly", days: 7, price: 5000 }, { name: "Monthly", days: 30, price: 20000 }].map((preset) =>
+          <ActionButton key={preset.name} type="button" disabled={busy} onClick={() => { setErrors({}); setDraft({ name: preset.name, durationDays: String(preset.days), priceUgx: String(preset.price) }); }}>{preset.name}</ActionButton>)}</ButtonRow>
         <form onSubmit={create} noValidate>
           <FormStack>
             <PlanFields draft={draft} errors={errors} onChange={setDraft} idPrefix="new" disabled={busy} />

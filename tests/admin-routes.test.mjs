@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { createMemberSignInHandler, createMemberDevicesHandler, createMemberCodeHandler } from "../src/server/members/member-http.ts";
+import { createMemberSignInHandler, createMemberDevicesHandler } from "../src/server/members/member-http.ts";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Every later prompt that adds an /admin page or an /api/admin route is covered here automatically: the scan finds it,
@@ -29,7 +29,7 @@ const routes = await find("src/app/api/admin", "route.ts");
 const source = (file) => readFile(path.join(root, file), "utf8");
 
 test("member write routes use the shared factories; sign-in and devices enforce origin, mode and device unlock", async () => {
-  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"], ["code", "createMemberCodeHandler"], ["payments", "createPaymentHandler"], ["trial", "createTrialHandler"]]) {
+  for (const [segment, factory] of [["sign-in", "createMemberSignInHandler"], ["sign-out", "createMemberSignOutHandler"], ["devices", "createMemberDevicesHandler"], ["payments", "createPaymentHandler"], ["trial", "createTrialHandler"]]) {
     const route = `src/app/api/account/${segment}/route.ts`;
     assert.ok(memberRoutes.includes(route));
     assert.match(await source(route), new RegExp(`export const POST = ${factory}\\(\\);`));
@@ -49,18 +49,8 @@ test("member write routes use the shared factories; sign-in and devices enforce 
   }
 });
 
-test("code entry requires same origin, an open mode and a nonblocked member, without requiring an unlock", async () => {
-  for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null }, { codeEnteredAt: new Date(), blocked: true }]) {
-    const services = async () => ({ config: { production: false, cookies: { secure: false } }, settings: { settings: { paywallMode: mode, maxUnlockedDevices: 2 } },
-      sessions: { verify: async () => member }, codes: { redeem: async () => ({ status: "accepted", token: "t".repeat(43) }) } });
-    for (const site of ["same-origin", "cross-site"]) {
-      const response = await createMemberCodeHandler(services)(new Request("http://localhost:3000/api/account/code", { method: "POST",
-        headers: { "sec-fetch-site": site, "content-type": "application/json" }, body: JSON.stringify({ code: "0123-4567-89AB" }) }));
-      const denied = site === "cross-site" || mode === "off" || !member || member.blocked;
-      assert.equal(response.status, denied ? 403 : 200);
-      if (member?.blocked && mode !== "off" && site === "same-origin") assert.equal((await response.json()).message, "We couldn't complete this. Please contact us.");
-    }
-  }
+test("account activation no longer exposes code redemption or message verification routes", () => {
+  for (const segment of ["code", "verification", "verification/confirm"]) assert.ok(!memberRoutes.includes(`src/app/api/account/${segment}/route.ts`));
 });
 
 test("the scan sees the admin shell, sign-in and sign-out, and the Plans and Settings pages and routes", () => {

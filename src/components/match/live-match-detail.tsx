@@ -6,6 +6,7 @@ import { MatchDetails } from "@/components/match/details/match-details";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import type { InsightsPreview } from "@/domain/match-insights";
 import { gateInsights } from "@/domain/paywall";
+import { isPlayedFinalStatus } from "@/domain/market-settlement";
 import type { ReportingDate } from "@/domain/calendar";
 import { liveRefreshRules, mergeLiveDetail } from "@/domain/live-refresh";
 import { FeedPaginationError } from "@/domain/feed-pagination-error";
@@ -63,7 +64,7 @@ function LiveDetail({ initial, today, locale, children, preview = null, historyR
     (fixture.status === "scheduled" && kickoffAt !== null && Math.abs(kickoffAt - asOf) <= liveRefreshRules.kickoffLeadMs);
   useLiveRefresh({ today, enabled: true, interval: active ? liveRefreshRules.activeMs : liveRefreshRules.quietMs,
     refresh, rollover: () => router.refresh() });
-  const sections = preview ? gateInsights(preview, data.access).sections : null;
+  const sections = preview ? gateInsights(preview, data.access, isPlayedFinalStatus(data.fixture.status)).sections : null;
   const currentPreview = preview && sections !== preview.sections ? { ...preview, sections: sections!, totals: { ...preview.totals, news: sections!.news.items.length } } : preview;
   return <MatchDetails showAccount={showAccount} offer={offer} data={data} preview={currentPreview} locale={locale} history={children} historyRequested={historyRequested} />;
 }

@@ -5,7 +5,7 @@ import re
 from lib.rendering import ROOT, Server, build_fixture, create_fixture, environment, parse_args, request, run_node, write_json
 from lib.runtime import main_guard
 
-SENTINELS = r"SENTINEL-|(?<![\d.])(?:0\.6173|61\.73|62%|7\.73)(?!\d)"
+SENTINELS = r"SENTINEL-|(?<![\d.])7\.73(?!\d)"
 VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "test", "off"]
 
 
@@ -28,7 +28,9 @@ def main():
         'import {FixtureControls} from "./fixture-controls";\n'
         'export default function Layout({children}:{children:React.ReactNode}){return <Root><FixtureControls/>{children}</Root>;}\n', encoding="utf-8")
     config = directory / "next.config.mjs"
-    config.write_text(config.read_text(encoding="utf-8").replace("export default {", 'import production from "../../next.config.ts";\nexport default { headers: production.headers,'), encoding="utf-8")
+    config_source = config.read_text(encoding="utf-8")
+    if 'import production from' not in config_source:
+        config.write_text(config_source.replace("export default {", 'import production from "../../next.config.ts";\nexport default { headers: production.headers,'), encoding="utf-8")
     env = environment(GOAL_HINT_DATABASE_ENABLED="false")
     print(f"Building leak-scan fixture: {directory}", flush=True)
     build_fixture(directory, env, timeout=240)
@@ -41,7 +43,7 @@ def main():
             for name, scenario in scenarios.items():
                 detail = scenario["detail"]
                 fixture_id, path = detail["fixture"]["fixtureId"], detail["route"]["path"]
-                free_fixture = False
+                free_fixture = detail["fixture"]["status"] in {"finished-regulation", "finished-extra-time", "finished-penalties"}
                 query = f"?cycle={scenario['cycle']}"
                 paths = [f"/en/matches?q={name}", path, path + query,
                     f"/api/matches?q={name}", f"/api/matches/{fixture_id}",
@@ -61,15 +63,16 @@ def main():
                             assert not re.search(r'data-(?:prediction|outcome|featured-pick|verdict|market)="', text), (viewer, url, "prediction attribute leaked")
                         if not url.startswith("/api/") and "RSC" not in request_headers:
                             if url.startswith("/en/matches?q=") and not full:
-                                assert 'data-subscriber-banner' in text and 'href="/en/subscribe"' in text
+                                assert 'data-subscriber-banner' in text and ('/en/account?view=register' in text if viewer in {'anonymous', 'off', 'evicted'} else '/en/subscribe?return=' in text)
                                 assert 'Subscribers only' in text
-                                assert re.search(r'<option[^>]*value="probability-desc"[^>]*disabled', text) or re.search(r'<option[^>]*disabled[^>]*value="probability-desc"', text)
+                                assert not re.search(r'<option[^>]*value="probability-desc"[^>]*disabled', text) and not re.search(r'<option[^>]*disabled[^>]*value="probability-desc"', text)
                             if not full and not free_fixture and not url.startswith("/en/matches?q="):
-                                assert 'Picks and probabilities for this match are for subscribers.' in text
+                                assert 'Subscribe to unlock predictions, markets and odds.' in text
+                                assert 'data-public-probability' in text
                                 assert 'From UGX 1,000 for 1 day.' in text
-                                assert 'Have a code?' in text and 'return=%2Fen%2Fmatches%2F' in text
+                                assert 'return=%2Fen%2Fmatches%2F' in text
                             if url.startswith("/en/matches?q="):
-                                assert ('aria-label="Account"' in text) == True
+                                assert 'data-account-actions' in text and 'view=register' in text
                         if url.startswith("/api/"):
                             assert response.headers.get("Cache-Control") == "private, no-store"
                             assert "cookie" in {item.strip().lower() for header in response.headers.get_all("Vary", []) for item in header.split(",")}
@@ -81,7 +84,7 @@ def main():
                         if head: assert not re.search(SENTINELS, head.group(1)), (viewer, url, "metadata sentinel leaked")
                         checks += 1
             if not full:
-                for oracle in ["prob=1-100", "sort=probability", "picks=only", "odds=1.50-3.00"]:
+                for oracle in ["picks=only", "odds=1.50-3.00"]:
                     assert request(server.origin, "/api/matches?" + oracle, headers=headers).status == 403
                     page = request(server.origin, "/en/matches?" + oracle, headers=headers)
                     assert page.status == 307, (oracle, page.status)
@@ -98,8 +101,9 @@ def main():
                     assert not re.search(SENTINELS, response.text), (viewer, path, "Best Slips selections leaked")
                 if path == "/api/best-slips":
                     view = json.loads(response.text)["slips"][0]
-                    assert set(view) == {"rank", "totalOdds", "estimatedProbability", "matchCount"} | ({"slip"} if full else set())
-                    assert view["totalOdds"] == "5.00" and view["estimatedProbability"] == 0.3456
+                    assert set(view) == {"rank", "estimatedProbability", "matchCount"} | ({"slip", "totalOdds"} if full else set())
+                    assert view["estimatedProbability"] == 0.3456
+                    assert (view.get("totalOdds") == "5.00") == full
                 elif not extra:
                     assert "Best Slips" in response.text and 'href="/en/matches"' in response.text
                     assert ('data-slip-selection=' in response.text) == full

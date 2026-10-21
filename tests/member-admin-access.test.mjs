@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import test from "node:test";
 import { adminRoute } from "../src/server/admin/admin-http.ts";
 import { createSettingsHandlers } from "../src/server/admin/settings-http.ts";
@@ -10,12 +10,19 @@ import { createMemberSessions, memberTokenHash } from "../src/server/members/mem
 import { createSettingsService } from "../src/server/members/settings.ts";
 import { createViewerAccess } from "../src/server/members/viewer-access.ts";
 
+import { hashPassword } from "../src/server/analytics/analytics-password.ts";
+
+const adminHash = await hashPassword("synthetic administrator password");
+const key = (purpose, value) => createHmac("sha256", "synthetic-member-admin").update(`${purpose}\0${value}`).digest("hex");
 const phone = "256700000991", regularPhone = "256700000992", token = "s".repeat(43);
 const sameOrigin = { "sec-fetch-site": "same-origin" };
 function allowlist(run) {
-  const previous = process.env.GOAL_HINT_ADMIN_PHONES;
+  const previous = process.env.GOAL_HINT_ADMIN_PHONES, previousHash = process.env.GOAL_HINT_ADMIN_PASSWORD_HASH;
+  process.env.GOAL_HINT_ADMIN_PASSWORD_HASH = adminHash;
   process.env.GOAL_HINT_ADMIN_PHONES = JSON.stringify([phone]);
   return Promise.resolve().then(run).finally(() => {
+    if (previousHash === undefined) delete process.env.GOAL_HINT_ADMIN_PASSWORD_HASH;
+    else process.env.GOAL_HINT_ADMIN_PASSWORD_HASH = previousHash;
     if (previous === undefined) delete process.env.GOAL_HINT_ADMIN_PHONES;
     else process.env.GOAL_HINT_ADMIN_PHONES = previous;
   });
@@ -27,7 +34,7 @@ const request = (method = "GET", headers = {}, body) => new Request("http://loca
 function fixture() {
   const at = new Date(), accountId = randomUUID(), audits = [], reads = [];
   const row = { tokenHash: memberTokenHash(token), accountId, createdAt: at, lastSeenAt: at,
-    authenticatedAt: at, expiresAt: new Date(+at + 86_400_000), codeEnteredAt: null, accessCodeId: null,
+    authenticatedAt: at, adminPasswordVersion: key("admin-password-version", adminHash), expiresAt: new Date(+at + 86_400_000), codeEnteredAt: null, accessCodeId: null,
     account: { id: accountId, phone, passwordHash: null, blockedAt: null, erasedAt: null } };
   let present = true;
   const tx = { memberSession: {
@@ -35,7 +42,7 @@ function fixture() {
     async deleteMany({ where }) { if (where.tokenHash === row.tokenHash && present) { present = false; return { count: 1 }; } return { count: 0 }; },
     async updateMany() { return { count: 1 }; },
   } };
-  const config = { production: false, cookies: { session: "owner", secure: false }, key: () => "h".repeat(64) };
+  const config = { production: false, cookies: { session: "owner", secure: false }, key };
   const database = { async query(run) { return run(tx); } };
   const services = { config, database, auth: null, collector: null, reporter: null, retention: null, limiter: {} };
   return { row, services, reads, audits };
@@ -61,6 +68,12 @@ test("dashboard policy requires an authenticated, current, unblocked allowlisted
     assert.equal(await requireAdmin(services, request()), null, field);
     row.account[field] = null;
   }
+  row.adminPasswordVersion = null;
+  assert.equal(await requireAdmin(services, request()), null, "A pre-existing member cookie cannot elevate when its phone becomes allowlisted");
+  row.adminPasswordVersion = key("admin-password-version", adminHash);
+  process.env.GOAL_HINT_ADMIN_PASSWORD_HASH = await hashPassword("rotated administrator password");
+  assert.equal(await requireAdmin(services, request()), null, "Password rotation invalidates administrative privilege");
+  process.env.GOAL_HINT_ADMIN_PASSWORD_HASH = adminHash;
   row.account.passwordHash = "a registered password hash";
   row.account.phone = regularPhone;
   assert.equal(await requireAdmin(services, request()), null, "A password-authenticated regular member is not an administrator");
@@ -125,11 +138,11 @@ test("logout from either dashboard revokes the member session so a copied cookie
 }));
 
 test("allowlisted authenticated members receive full content without a subscription while ordinary no-password rows remain invalid", () => allowlist(async () => {
-  const at = new Date(), row = { accountId: randomUUID(), phone, passwordHash: null, blockedAt: null, lastSeenAt: at, entitled: 0 };
+  const at = new Date(), row = { accountId: randomUUID(), phone, passwordHash: null, adminPasswordVersion: key("admin-password-version", adminHash), blockedAt: null, lastSeenAt: at, entitled: 0 };
   let legacy = false, erased = false, expired = false, unavailableSettings = false, reads = 0;
   const resolver = createViewerAccess({ now: () => +at,
     settings: async () => unavailableSettings ? { settings: null, source: "unavailable" } : { settings: { ...defaultSubscriptionSettings, paywallMode: "on" } },
-    services: async () => ({ config: { production: false, cookies: { session: "owner" } }, auth: null,
+    services: async () => ({ config: { production: false, cookies: { session: "owner" }, key }, auth: null,
       database: { async query(run) { return run({ async $queryRaw(strings) {
         reads++;
         assert.match(strings.join(""), /s\.authenticatedAt IS NOT NULL/u);
@@ -139,6 +152,14 @@ test("allowlisted authenticated members receive full content without a subscript
       } }); } } }) });
   const cookies = name => name === "goal-hint-member" ? token : undefined;
   assert.deepEqual(await resolver(cookies), { tier: "full", signedIn: true, mode: "on" });
+  row.adminPasswordVersion = null;
+  assert.equal((await resolver(cookies)).tier, "free", "Allowlisted member cookies without the env credential cannot elevate");
+  row.adminPasswordVersion = "f".repeat(64);
+  assert.equal((await resolver(cookies)).tier, "free");
+  row.adminPasswordVersion = key("admin-password-version", adminHash);
+  process.env.GOAL_HINT_ADMIN_PASSWORD_HASH = await hashPassword("rotated administrator password");
+  assert.equal((await resolver(cookies)).tier, "free", "Rotating the configured password removes old session privilege");
+  process.env.GOAL_HINT_ADMIN_PASSWORD_HASH = adminHash;
   unavailableSettings = true;
   assert.equal((await resolver(cookies)).tier, "full");
   unavailableSettings = false;

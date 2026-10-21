@@ -168,11 +168,8 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_ADMIN_USERNAME",
     "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
-    // Verification credentials are private configuration and do not grant forecast or provider capabilities.
-    "GOAL_HINT_SMS_GATEWAY_URL", "GOAL_HINT_SMS_TOKEN", "GOAL_HINT_SMS_USERNAME", "GOAL_HINT_SMS_PASSWORD",
-    "GOAL_HINT_WHATSAPP_ACCESS_TOKEN", "GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID", "GOAL_HINT_WHATSAPP_TEMPLATE_NAME",
-    "GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE", "GOAL_HINT_WHATSAPP_API_VERSION",
-    "GOAL_HINT_ADMIN_PHONES",
+    // Administrator credentials are private configuration and do not grant provider capabilities.
+    "GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD", "GOAL_HINT_ADMIN_PASSWORD_HASH",
   ]);
   documentedKeys.delete("NODE_ENV");
   assert.deepEqual(Object.keys(env).sort(), [...documentedKeys].sort());
@@ -372,6 +369,7 @@ test("secret serialization and validation errors stay redacted while explicit re
   const smsSentinels = ["synthetic-sms-token-sentinel", "synthetic-sms-user-sentinel", "synthetic-sms-password-sentinel"];
   const whatsappSentinel = "synthetic-whatsapp-access-token-sentinel";
   const adminSentinel = "256700009999";
+  const adminPassword = "synthetic-admin-password-sentinel", adminPasswordHash = `scrypt:16384:8:1:${"A".repeat(22)}:${"B".repeat(43)}`;
   const policy = parseRuntimePolicy({
     API_FOOTBALL_KEY: sentinels[0], AI_API_KEY: sentinels[1], RESEARCH_API_KEY: sentinels[2],
     DATABASE_URL: `mysql://synthetic:${databaseSentinels[0]}@synthetic.invalid/synthetic_main`,
@@ -383,18 +381,20 @@ test("secret serialization and validation errors stay redacted while explicit re
     GOAL_HINT_WHATSAPP_TEMPLATE_NAME: "goal_hint_verification", GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: "en_US",
     GOAL_HINT_WHATSAPP_API_VERSION: "v25.0",
     GOAL_HINT_ADMIN_PHONES: JSON.stringify([adminSentinel]),
+    GOAL_HINT_ADMIN_PASSWORD: adminPassword, GOAL_HINT_ADMIN_PASSWORD_HASH: adminPasswordHash,
   });
   assert.equal(policy.secrets.footballKey.read(), sentinels[0]);
   assert.equal(policy.secrets.aiKey.read(), sentinels[1]);
   assert.equal(policy.secrets.researchKey.read(), sentinels[2]);
-  for (const [index, key] of ["smsToken", "smsUsername", "smsPassword"].entries()) assert.equal(policy.secrets[key].read(), smsSentinels[index]);
-  assert.equal(policy.secrets.whatsappAccessToken.read(), whatsappSentinel);
+  assert.ok(!Object.keys(policy.secrets).some((key) => /^(sms|whatsapp)/u.test(key)), "Retired delivery configuration is not retained.");
   assert.equal(policy.secrets.adminPhones.read(), JSON.stringify([adminSentinel]));
+  assert.equal(policy.secrets.adminPassword.read(), adminPassword);
+  assert.equal(policy.secrets.adminPasswordHash.read(), adminPasswordHash);
   for (const [index, key] of ["databaseUrl", "testDatabaseUrl", "migrationDatabaseUrl"].entries()) {
     assert.ok(policy.secrets[key].read().includes(databaseSentinels[index]));
   }
   for (const output of [JSON.stringify(policy), inspect(policy, { depth: null }), String(policy.secrets.footballKey)]) {
-    for (const sentinel of [...sentinels, ...databaseSentinels, ...smsSentinels, whatsappSentinel, adminSentinel]) assert.ok(!output.includes(sentinel));
+    for (const sentinel of [...sentinels, ...databaseSentinels, ...smsSentinels, whatsappSentinel, adminSentinel, adminPassword, adminPasswordHash]) assert.ok(!output.includes(sentinel));
   }
   assert.equal(JSON.parse(JSON.stringify(policy)).secrets.aiKey, "[REDACTED]");
 
@@ -413,15 +413,20 @@ test("secret serialization and validation errors stay redacted while explicit re
   }
 });
 
-test("WhatsApp and admin configuration validate privately without enabling unrelated capabilities", () => {
+test("retired delivery settings are ignored and admin credentials validate privately without provider capabilities", () => {
   const valid = parseRuntimePolicy({ GOAL_HINT_WHATSAPP_ACCESS_TOKEN: "synthetic-private-token", GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID: "1234567890",
     GOAL_HINT_WHATSAPP_TEMPLATE_NAME: "goal_hint_verification", GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: "en_US",
-    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0", GOAL_HINT_ADMIN_PHONES: '["256700009999"]' });
-  assert.equal(valid.secrets.whatsappTemplateLanguage.read(), "en_US");
+    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0", GOAL_HINT_ADMIN_PHONES: '["256700009999"]', GOAL_HINT_ADMIN_PASSWORD: "synthetic-admin-password" });
+  assert.equal(valid.secrets.adminPhones.read(), '["256700009999"]');
+  assert.equal(valid.secrets.adminPassword.read(), "synthetic-admin-password");
+  assert.ok(!Object.keys(valid.secrets).some((key) => /^(sms|whatsapp)/u.test(key)));
   assert.ok(Object.values(valid.capabilities).every((value) => value === false));
-  for (const [name, value] of Object.entries({ GOAL_HINT_WHATSAPP_ACCESS_TOKEN: "synthetic token\nsecret", GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID: "synthetic-private-id",
+  const retired = { GOAL_HINT_WHATSAPP_ACCESS_TOKEN: "synthetic token\nsecret", GOAL_HINT_WHATSAPP_PHONE_NUMBER_ID: "synthetic-private-id",
     GOAL_HINT_WHATSAPP_TEMPLATE_NAME: "synthetic-private/template", GOAL_HINT_WHATSAPP_TEMPLATE_LANGUAGE: "synthetic_private",
-    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0/private", GOAL_HINT_ADMIN_PHONES: '["+256700009999"]' })) {
+    GOAL_HINT_WHATSAPP_API_VERSION: "v25.0/private", GOAL_HINT_SMS_GATEWAY_URL: "retired-malformed-url" };
+  assert.doesNotThrow(() => parseRuntimePolicy(retired));
+  for (const [name, value] of Object.entries({ GOAL_HINT_ADMIN_PHONES: '["+256700009999"]',
+    GOAL_HINT_ADMIN_PASSWORD: "short", GOAL_HINT_ADMIN_PASSWORD_HASH: "synthetic-invalid-hash" })) {
     const error = policyError(() => parseRuntimePolicy({ [name]: value }), [name]);
     for (const output of [error.message, JSON.stringify(error), inspect(error)]) assert.ok(!output.includes(value));
   }
