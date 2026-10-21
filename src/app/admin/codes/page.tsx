@@ -15,5 +15,5 @@ export default async function AdminCodesPage({ searchParams }: { searchParams: P
   const db = page.services.database;
   const data = db ? await createPaymentReview(db).codes().catch(() => null) : null;
   const plans = db ? await plansServiceFor(db).list().catch(() => []) : [];
-  return <AdminShell current="codes" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}><PageTitle><h1>Codes</h1></PageTitle>{data ? <CodesEditor owner={page.owner.username} initialCodes={data} plans={plans} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}</AdminShell>;
+  return <AdminShell current="codes" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}><PageTitle><h1>Codes</h1></PageTitle>{data ? <CodesEditor initialCodes={data} plans={plans} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}</AdminShell>;
 }

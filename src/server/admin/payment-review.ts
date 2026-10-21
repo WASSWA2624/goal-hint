@@ -1,6 +1,6 @@
 import "server-only";
 import type { PaymentQueue, OwnerCode } from "../../domain/owner-members.ts";
-import { paymentChecks } from "../../domain/code-delivery.ts";
+import { paymentChecks } from "../../domain/payment-checks.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import { codeStatus } from "../../domain/subscription-period.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -9,6 +9,7 @@ import { decide } from "../members/settings.ts";
 import { writeOwnerAudit } from "./audit.ts";
 
 export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
+const reference = (row?: { reference: string }) => row ? `P-${row.reference}` : null;
 export function createPaymentReview(database: DatabaseRuntime, now = Date.now) {
   return {
     async list(tab = "pending"): Promise<PaymentQueue> {
@@ -16,7 +17,8 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now) {
         const at = new Date(now());
         const rows = await tx.paymentSubmission.findMany({ where: { status: tab === "approved" ? { in: ["approved", "reversed"] } : tab === "rejected" ? "rejected" : { in: ["pending", "superseded"] } },
           orderBy: [{ submittedAt: tab === "pending" ? "asc" : "desc" }, { id: "asc" }], take: 100, include: { account: { select: { phone: true } }, screenshot: { select: { submissionId: true } } } });
-        const keys = [...new Set(rows.map(r => r.claimedTxnKey))], hashes = rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []), phones = rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []);
+        // A report without a transaction ID (null key) matches no other report's ID; only real keys are compared.
+        const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []), phones = rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []);
         const [related, payers, trials, pendingCount] = await Promise.all([
           tx.paymentSubmission.findMany({ where: { OR: [{ claimedTxnKey: { in: keys } }, { approvedTxnKey: { in: keys.flatMap(k => [`mtn:${k}`, `airtel:${k}`]) } }, { imageSha256: { in: hashes } }] },
             select: { id: true, accountId: true, reference: true, status: true, claimedTxnKey: true, approvedTxnKey: true, imageSha256: true } }),
@@ -32,12 +34,12 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now) {
           const details = events.find(e => e.accountId === t.id)?.details as { ipKey?: string; ipCount?: number } | undefined;
           return { ...t, trialRequestedAt: t.trialRequestedAt!.toISOString(), ipCount: details?.ipKey ? buckets.find(b => b.key === details.ipKey)?.count ?? 0 : null };
         }), payments: rows.map(r => ({ id: r.id, reference: `P-${r.reference}`, accountId: r.accountId, accountPhone: r.account.phone,
-          payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: r.claimedTxnRef, amount: r.claimedAmountUgx, planId: r.planId,
+          payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: r.claimedTxnRef ?? "", amount: r.claimedAmountUgx, planId: r.planId,
           planName: r.planName, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,
           final: r.transactionRef ? { network: r.network, transactionId: r.transactionRef, amount: r.amountReceivedUgx } : null,
-          checks: paymentChecks({ amount: r.claimedAmountUgx, price: r.priceUgx,
-            approved: related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)?.reference ? `P-${related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)!.reference}` : null,
-            pending: related.find(s => s.accountId !== r.accountId && s.status === "pending" && s.claimedTxnKey === r.claimedTxnKey)?.reference ? `P-${related.find(s => s.accountId !== r.accountId && s.status === "pending" && s.claimedTxnKey === r.claimedTxnKey)!.reference}` : null,
+          checks: paymentChecks({ received: r.amountReceivedUgx, price: r.priceUgx, transactionId: !!r.claimedTxnKey,
+            approved: r.claimedTxnKey ? reference(related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)) : null,
+            pending: r.claimedTxnKey ? reference(related.find(s => s.accountId !== r.accountId && s.status === "pending" && s.claimedTxnKey === r.claimedTxnKey)) : null,
             image: r.imageSha256 ? related.filter(s => s.id !== r.id && s.imageSha256 === r.imageSha256).map(s => `P-${s.reference}`)[0] ?? null : null,
             payerAccount: payers.some(p => p.phone === r.payerPhone && p.id !== r.accountId), payerDiffers: !!r.payerPhone && r.payerPhone !== r.account.phone }) })) };
       });

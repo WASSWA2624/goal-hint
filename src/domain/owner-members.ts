@@ -1,4 +1,4 @@
-import type { PaymentCheck } from "./code-delivery.ts";
+import type { PaymentCheck } from "./payment-checks.ts";
 export type OwnerPayment = Readonly<{ id: string; reference: string; accountId: string; accountPhone: string | null; payerPhone: string | null;
   network: string; transactionId: string; amount: number; planId: string; planName: string; price: number; submittedAt: string; status: string; hasImage: boolean;
   final: Readonly<{ network: string | null; transactionId: string; amount: number | null }> | null; checks: readonly PaymentCheck[] }>;

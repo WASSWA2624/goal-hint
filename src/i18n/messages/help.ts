@@ -51,9 +51,9 @@ export const helpMessages = {
   "help.contact": "Contact and correction guidance",
   "help.access.title": "Get access",
   "help.access.trial.title": "Try it first",
-  "help.access.trial.body": "When access is open, use Get access and continue with your number. A new number can request one free trial without paying. The initial offer is 2 days from when the owner creates and sends your code, so check the expiry in the message.",
+  "help.access.trial.body": "When access is open, use Get access and sign in with your number. A new number can request one free trial without paying. The initial offer is 2 days from when the owner grants it; your signed-in devices unlock by themselves and Account shows when it ends.",
   "help.access.payment.title": "Report your payment",
-  "help.access.payment.body": "Choose a plan, pay the exact amount to a listed number and check its registered name. Paste the payment SMS to fill the fields in this browser, correct anything needed and attach the screenshot. Choose the network you paid to. Send the report once and wait for the owner to check it; there is no guaranteed review time.",
-  "help.access.code.title": "Unlock and renew",
-  "help.access.code.body": "Tap the code link sent to your number, sign in with that same number and tap Unlock. You can also paste the code or its whole message on Account. A renewal extends an unlocked phone without another code entry; a new browser needs the code. If the link opens inside Facebook, open the page in Chrome and sign in there. In-app browsers use a separate device slot.",
+  "help.access.payment.body": "Choose a plan, pay the exact amount to a listed number and check its registered name. Choose the network you paid to, attach a screenshot of the payment or its SMS and tap Confirm payment; the transaction ID and the number you paid from are optional. The owner checks the money in their own wallet before approving. There is no guaranteed review time, so call admin if you need help.",
+  "help.access.approval.title": "Approval and renewal",
+  "help.access.approval.body": "Nothing is sent to your phone. When the owner approves your payment, access opens by itself on your signed-in devices, up to the device limit. Signing in on another device unlocks it too; above the limit, the device unlocked longest ago loses access. Get access and Account show whether you are waiting, approved or need to send a different screenshot. Paying again before access ends adds the new days after the current period. Separate browsers and in-app browsers count as separate devices. Forgot your password? Call admin to reset it.",
 } as const;

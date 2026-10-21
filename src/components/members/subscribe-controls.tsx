@@ -1,32 +1,31 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { trackEvent } from "@/components/analytics/tracker";
 import { useRouter } from "next/navigation";
 import { Button, PhoneInput, TextInput } from "@/components/ui/controls";
-import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, ClipboardIcon, CopyIcon, DialpadIcon, GiftIcon, HelpIcon, ImageIcon, KeyIcon, LockIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
+import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, DialpadIcon, GiftIcon, HelpIcon, ImageIcon, InfoIcon, LockIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
 import { PageHeading } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { memberNextPath } from "@/domain/member-navigation";
-import { formatPhone, localUgandaPhone, networkForPrefix, telHref, waHref, type MobileNetwork } from "@/domain/phone";
-import { canOpenMoneyMenu, normalizeTransactionId, type PaymentView } from "@/domain/payment";
-import { parsePaymentSms } from "@/domain/payment-sms";
+import { formatPhone, localUgandaPhone, networkForPrefix, normalizePhone, telHref, waHref, type MobileNetwork } from "@/domain/phone";
+import { canOpenMoneyMenu, normalizeTransactionId, type PaymentStatus, type PaymentView } from "@/domain/payment";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
-import { AccountCodeForm } from "./account-code-form";
 import { PasswordInput } from "./account-security";
 import { refreshMemberSession } from "./member-session";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
+import { PaymentStatusCard, TrialStatusCard, useApprovalRefresh } from "./payment-status";
 
 import {
-  AccountRow, Action, ActionLink, Assent, CopyButton, Disclosure, FieldWithAction, FileBox, FileField,
+  AccountRow, ActionLink, AmountRow, Assent, CopyButton, Disclosure, FileBox, FileField,
   HelpActions, HelpTitle, Identity, Intro, Lead, Locked, MenuLink, Note, Optional, PageFooter, Panel, PaymentFields, PaymentTransfer,
-  Plan, PlanDays, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowLink, RowNote, Sheet, SignInForm, StatusBox,
+  Plan, PlanDays, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowLink, RowNote, Sheet, SignInForm,
   Step, StepHeading, StepNumber, StepTitle, Submit, Unit, Wallet, WalletChoice, WalletChoices,
   WalletMeta, WalletNumber,
 } from "./subscribe-styles";
@@ -40,6 +39,12 @@ const wallets = {
   mtn: { name: "MTN MoMo", short: "MTN", menu: "subscribe.openMtn" },
   airtel: { name: "Airtel Money", short: "Airtel", menu: "subscribe.openAirtel" },
 } as const;
+const waitingStatuses: readonly string[] = ["pending", "superseded"];
+/** A closed "More details" would hide an invalid optional field from the browser's message, so open it first. */
+const revealInvalid = (event: FormEvent<HTMLFormElement>) => {
+  const details = event.target instanceof Element ? event.target.closest("details") : null;
+  if (details && !details.open) details.open = true;
+};
 
 export function SubscribeIntro({ locale }: { locale: string }) {
   const m = createMessages(locale);
@@ -54,7 +59,7 @@ function PaymentHelp({ settings, text, locale }: { settings: HelpSettings; text?
     {settings.whatsappPhone && <ActionLink href={waHref(settings.whatsappPhone, text)} variant="secondary" data-analytics-ignore><ChatIcon />{m.text("subscribe.whatsapp")}</ActionLink>}
   </HelpActions></Row>;
 }
-function SubscribeSignIn({ locale, returnTo, showCode = true }: { locale: string; returnTo: string | null; showCode?: boolean }) {
+function SubscribeSignIn({ locale, returnTo }: { locale: string; returnTo: string | null }) {
   const router = useRouter(), m = createMessages(locale), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -78,89 +83,69 @@ function SubscribeSignIn({ locale, returnTo, showCode = true }: { locale: string
       <input type="hidden" name="destination" value="subscribe" />{returnTo && <input type="hidden" name="return" value={returnTo} />}
       {error && <p role="alert">{error}</p>}
     </SignInForm>
-    {showCode && <RowLink variant="quiet" href={memberNextPath("account", returnTo)} prefetch={false}><KeyIcon />{m.text("subscribe.haveCodeLead")}</RowLink>}
   </Panel>;
 }
 /** Reuse the trial action in the account page and the compact subscription footer. */
-export function TrialRequest({ locale, phone, days, appearance = "button" }: { locale: string; phone: string; days: number; appearance?: "button" | "row" }) {
+export function TrialRequest({ locale, days, appearance = "button" }: { locale: string; days: number; appearance?: "button" | "row" }) {
   const router = useRouter(), m = createMessages(locale), [state, setState] = useState(""), [busy, setBusy] = useState(false);
   async function request() {
     setBusy(true);
     try { const response = await fetch("/api/account/trial", { method: "POST", credentials: "same-origin" }); setState(response.ok ? "saved" : "error"); if (response.ok) { trackEvent("trial_requested"); router.refresh(); } }
     catch { setState("error"); } finally { setBusy(false); }
   }
-  const status = state && <p role="status">{m.text(state === "saved" ? "subscribe.trialRequested" : "account.unavailable", { phone: formatPhone(phone) })}</p>;
-  if (appearance === "row") return state === "saved" ? <RowNote role="status">{m.text("subscribe.trialRequested", { phone: formatPhone(phone) })}</RowNote> : <>
+  const status = state && <p role="status">{m.text(state === "saved" ? "subscribe.trialRequested" : "account.unavailable")}</p>;
+  if (appearance === "row") return state === "saved" ? <RowNote role="status">{m.text("subscribe.trialRequested")}</RowNote> : <>
     <RowButton type="button" variant="quiet" disabled={busy} onClick={request}><GiftIcon />{m.text("subscribe.trialRequest", { days: String(days) })}</RowButton>
     {state === "error" && <RowNote role="status">{m.text("account.unavailable")}</RowNote>}
   </>;
   return <div><Button size="large" variant="secondary" disabled={busy || state === "saved"} onClick={request}>{m.text("subscribe.trial", { days: String(days) })}</Button>{status}</div>;
 }
-export function PaymentStatusPanel({ locale, status, phone, unlocked }: { locale: string; status: PaymentView["status"]; phone: string; unlocked: boolean }) {
-  const m = createMessages(locale);
-  if (!status) return null;
-  return <div role="status"><p>{status.reference}</p>
-    {status.status === "approved" ? <><p>{status.endsAt && m.text("account.accessUntil", { end: formatPeriodEnd(new Date(status.endsAt)) })}</p>
-      {!unlocked && <p>{m.text("subscribe.codeSent", { phone: formatPhone(phone) })}</p>}</>
-      : status.status === "rejected" || status.status === "reversed" ? <p>{m.text("subscribe.rejected", { reason: status.rejectText ?? status.status })}</p>
-        : <p>{m.text("subscribe.checking", { phone: formatPhone(phone) })}</p>}</div>;
-}
 
-export function SubscribeFlow({ locale, settings, plans, account, view, returnTo, userAgent, activeUntil }: {
+export function SubscribeFlow({ locale, settings, plans, account, view, returnTo, userAgent, activeUntil, trialPending }: {
   locale: string; settings: SubscriptionSettings; plans: readonly SubscriptionPlanView[];
-  account: { id: string; phone: string; unlocked: boolean } | null; view: PaymentView | null; returnTo: string | null; userAgent: string; activeUntil: string | null;
+  account: { id: string; phone: string } | null; view: PaymentView | null; returnTo: string | null; userAgent: string;
+  /** The end of the account's latest live period, or null. */
+  activeUntil: string | null; trialPending: boolean;
 }) {
   const m = createMessages(locale), router = useRouter(), ids = useId();
   const networks = useMemo(() => (["mtn", "airtel"] as const).filter((key) => !!settings[key === "mtn" ? "mtnNumber" : "airtelNumber"]), [settings]);
   const initial = useMemo<PaymentDraft>(() => ({ planId: plans[0]?.id ?? "", payerPhone: account?.phone ?? "256",
-    network: networks.find((network) => network === networkForPrefix(account?.phone ?? "")) ?? networks[0] ?? "", transactionId: "", amount: String(plans[0]?.priceUgx ?? ""), amountEdited: false, payCard: "", accepted: false }), [account, networks, plans]);
+    network: networks.find((network) => network === networkForPrefix(account?.phone ?? "")) ?? networks[0] ?? "", transactionId: "", accepted: false }), [account, networks, plans]);
   const restored = useSyncExternalStore(subscribeNothing, clientReady, serverReady);
   const persisted = useSyncExternalStore(subscribeNothing, () => account ? paymentDraftSnapshot(account.id) : null, () => null);
   const recovered = useMemo(() => account ? readPaymentDraft(account.id, persisted) : null, [account, persisted]);
   const [edited, setEdited] = useState<PaymentDraft | null>(null);
-  const draft = useMemo(() => {
-    const base = edited ?? (recovered && plans.some((item) => item.id === recovered.planId) ? { ...recovered,
-      network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial);
-    const selected = plans.find((item) => item.id === base.planId);
-    return selected ? { ...base, amount: String(selected.priceUgx), amountEdited: false } : base;
-  }, [edited, recovered, plans, networks, initial]);
+  const draft = useMemo(() => edited ?? (recovered && plans.some((item) => item.id === recovered.planId) ? { ...recovered,
+    network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial), [edited, recovered, plans, networks, initial]);
   const setDraft = (change: (old: PaymentDraft) => PaymentDraft) => setEdited((old) => change(old ?? draft));
-  const [sms, setSms] = useState("");
-  const [changingAccount, setChangingAccount] = useState(false);
-  const [foreign, setForeign] = useState(""), smsInput = useRef<HTMLInputElement>(null);
+  const [changingAccount, setChangingAccount] = useState(false), [replacing, setReplacing] = useState(false);
   const [image, setImage] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [busy, setBusy] = useState(false), [percentage, setPercentage] = useState<number | null>(null);
-  const [error, setError] = useState(""), [copied, setCopied] = useState<MobileNetwork | "">(""), [sent, setSent] = useState<string | null>(null);
-  useEffect(() => { if (restored && account && (!sent || view?.status && ["rejected", "reversed"].includes(view.status.status))) savePaymentDraft(account.id, draft); }, [account, draft, restored, sent, view]);
+  const [error, setError] = useState(""), [copied, setCopied] = useState<MobileNetwork | "">("");
+  // Until the refresh after an upload lands, the new report stands in for the server's previous latest report.
+  const [sent, setSent] = useState<{ status: PaymentStatus; before: string | null } | null>(null);
+  const status = sent && (view?.status?.reference ?? null) === sent.before ? sent.status : view?.status ?? null;
+  const waiting = !!status && waitingStatuses.includes(status.status);
+  useApprovalRefresh(!!account && (waiting || trialPending));
+  useEffect(() => { if (restored && account && (!waiting || replacing)) savePaymentDraft(account.id, draft); }, [account, draft, restored, replacing, waiting]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
-  const clipboard = restored && typeof navigator.clipboard?.readText === "function";
   const plan = plans.find((candidate) => candidate.id === draft.planId) ?? plans[0];
   const update = (values: Partial<PaymentDraft>) => setDraft((old) => ({ ...old, ...values }));
-  const status = view?.status;
-  const checking = sent && !status || status && ["pending", "superseded", "approved"].includes(status.status);
-  useEffect(() => {
-    if (!status || !["pending", "superseded"].includes(status.status)) return;
-    const timer = setInterval(() => router.refresh(), 60_000);
-    return () => clearInterval(timer);
-  }, [router, status]);
   const helpText = account && status ? m.text("subscribe.helpPaid", { price: String(status.priceUgx), plan: status.planName, phone: formatPhone(account.phone), reference: status.reference }) : undefined;
-  function parseSms(text: string) {
-    setSms(text);
-    const parsed = parsePaymentSms(text, { mtn: settings.mtnNumber, airtel: settings.airtelNumber });
-    const matchedNetwork = networks.find((network) => settings[network === "mtn" ? "mtnNumber" : "airtelNumber"] === parsed.counterparty) ?? null;
-    update({ ...(parsed.transactionId ? { transactionId: parsed.transactionId } : {}), ...(matchedNetwork ? { network: matchedNetwork, payCard: matchedNetwork } : {}) });
-    setForeign(parsed.foreignRecipient ? m.text("subscribe.foreign", { phone: formatPhone(parsed.foreignRecipient) }) : "");
-  }
-  function selectPayCard(network: MobileNetwork) { update({ payCard: network, network }); }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
     if (!image || !plan || !account) { setError(m.text("subscribe.chooseImage")); return; }
     setBusy(true); setPercentage(0);
-    const body = new FormData();
-    for (const [key, value] of Object.entries({ planId: plan.id, payerPhone: draft.payerPhone, network: draft.network,
-      transactionId: draft.transactionId, amount: String(plan.priceUgx), accepted: String(draft.accepted) })) body.append(key, value);
+    // No amount: the server records the plan's price. Blank optional details are left out; a missing payer is the account number.
+    const body = new FormData(), payer = normalizePhone(draft.payerPhone), transactionId = normalizeTransactionId(draft.transactionId);
+    for (const [key, value] of Object.entries({ planId: plan.id, network: draft.network, ...(payer ? { payerPhone: payer } : {}),
+      ...(transactionId ? { transactionId } : {}), accepted: String(draft.accepted) })) body.append(key, value);
     body.append("image", image, "payment.jpg");
-    try { const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); trackEvent("payment_submitted"); setSent(result.reference); setImage(null); setPreview(""); setSms(""); router.refresh(); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); } finally { setBusy(false); }
+    try {
+      const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); trackEvent("payment_submitted");
+      setSent({ before: view?.status?.reference ?? null, status: { reference: result.reference, status: "pending", rejectText: null, rejectReason: null,
+        planName: plan.name, priceUgx: plan.priceUgx, submittedAt: new Date().toISOString(), endsAt: null } });
+      setEdited(null); setReplacing(false); setImage(null); setPreview(""); setPercentage(null); router.refresh();
+    } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); } finally { setBusy(false); }
   }
   const help = <Disclosure>
     <summary><HelpIcon /><span>{m.text("navigation.help")}</span><ChevronDownIcon /></summary>
@@ -168,8 +153,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       <PaymentHelp settings={settings} locale={locale} text={helpText} />
       <Disclosure><summary><ShieldIcon /><span>{m.text("subscribe.safety")}</span><ChevronDownIcon /></summary><ul>
         <li>{m.text("subscribe.payOnly")}{[settings.mtnName, settings.airtelName].filter(Boolean).join(" · ")}</li>
-        {settings.whatsappPhone && <li>{m.text("subscribe.codesWhatsapp", { phone: formatPhone(settings.whatsappPhone) })}</li>}
-        {settings.contactPhone && <li>{m.text("subscribe.codesSms", { phone: formatPhone(settings.contactPhone) })}</li>}
+        <li>{m.text("subscribe.selfUnlock")}</li>
         <li>{m.text("subscribe.noPin")}</li>{settings.reviewTime && <li>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</li>}<li>{m.text("subscribe.estimates")}</li>
       </ul></Disclosure>
     </div>
@@ -177,14 +161,13 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const accountPanel = account ? <>
     <AccountRow><Identity><VisuallyHidden>{m.text("account.title")} </VisuallyHidden><strong>{formatPhone(account.phone)}</strong></Identity>
       <Button variant="quiet" onClick={() => setChangingAccount(!changingAccount)} aria-expanded={changingAccount} aria-controls={`${ids}-account`}>{m.text("subscribe.change")}</Button>
-      <RowLink variant="quiet" href={memberNextPath("account", returnTo)} prefetch={false}>{m.text("subscribe.haveCodeLead")}</RowLink>
     </AccountRow>
-    {changingAccount && <div id={`${ids}-account`}><SubscribeSignIn locale={locale} returnTo={returnTo} showCode={false} /></div>}
+    {changingAccount && <div id={`${ids}-account`}><SubscribeSignIn locale={locale} returnTo={returnTo} /></div>}
+    {trialPending && <TrialStatusCard locale={locale} settings={settings} phone={account.phone} heading="h2" />}
   </> : <SubscribeSignIn locale={locale} returnTo={returnTo} />;
   const footer = <PageFooter>
-    {account && view?.trialEligible && <TrialRequest locale={locale} phone={account.phone} days={settings.trialDays} appearance="row" />}
+    {account && view?.trialEligible && <TrialRequest locale={locale} days={settings.trialDays} appearance="row" />}
     {help}
-    {account && view?.trialRequested && <RowNote role="status">{m.text("subscribe.trialRequested", { phone: formatPhone(account.phone) })}</RowNote>}
   </PageFooter>;
   if (!plan || !networks.length) return <>{accountPanel}<p>{m.text(plan ? "account.unavailable" : "subscribe.noPlans")}</p>{footer}</>;
   const menu = canOpenMoneyMenu(userAgent);
@@ -207,14 +190,14 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
         <StepHeading><StepNumber aria-hidden="true">2</StepNumber><StepTitle id={`${ids}-pay`}>{m.text("subscribe.sendPayment")}</StepTitle></StepHeading>
         <PaymentTransfer>
           {networks.length > 1 ? <WalletChoices><VisuallyHidden as="legend">{m.text("subscribe.network")}</VisuallyHidden>{networks.map((network) => <WalletChoice key={network}>
-            <input type="radio" name={`${ids}-wallet`} value={network} checked={payNetwork === network} onChange={() => { selectPayCard(network); setCopied(""); }} />
+            <input type="radio" name={`${ids}-wallet`} value={network} checked={payNetwork === network} onChange={() => { update({ network }); setCopied(""); }} />
             <span><MobileMoneyLogo network={network} /><span>{wallets[network].name}</span><CheckIcon /></span>
           </WalletChoice>)}</WalletChoices> : <Note>{wallet.name}</Note>}
           <Wallet>
             <WalletNumber><VisuallyHidden>{wallet.name} </VisuallyHidden><WalletMeta>{m.text("subscribe.payTo")}</WalletMeta> <span>{localUgandaPhone(number)}</span></WalletNumber>
             <WalletMeta>{m.text("subscribe.payeeNames")} {name}</WalletMeta>
             <CopyButton variant="secondary" data-analytics-ignore onClick={async () => {
-              selectPayCard(payNetwork);
+              update({ network: payNetwork });
               try { await navigator.clipboard.writeText(localUgandaPhone(number)); setCopied(payNetwork); }
               catch { setError(m.text("account.copyFailed")); }
             }}>
@@ -224,21 +207,19 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
           </Wallet>
         </PaymentTransfer>
         <Note>{m.text("subscribe.transferHint")}</Note>
-        {shortcut && (menu ? <MenuLink variant="quiet" data-analytics-ignore href={`tel:${shortcut.replaceAll("#", "%23")}`} onClick={() => selectPayCard(payNetwork)}><DialpadIcon />{m.text(wallet.menu)}</MenuLink>
+        {shortcut && (menu ? <MenuLink variant="quiet" data-analytics-ignore href={`tel:${shortcut.replaceAll("#", "%23")}`} onClick={() => update({ network: payNetwork })}><DialpadIcon />{m.text(wallet.menu)}</MenuLink>
           : <Note>{m.text("subscribe.dial")} <strong>{shortcut}</strong></Note>)}
         <noscript>{networks.filter((network) => network !== payNetwork).map((network) => <p key={network}>{wallets[network].name}: {localUgandaPhone(settings[network === "mtn" ? "mtnNumber" : "airtelNumber"]!)} · {settings[network === "mtn" ? "mtnName" : "airtelName"]}</p>)}</noscript>
         {settings.paymentNote && <Note>{settings.paymentNote}</Note>}
       </Step>
-      <Step aria-labelledby={`${ids}-report`}>
-        <StepHeading><StepNumber aria-hidden="true" $muted={!account}>3</StepNumber><StepTitle id={`${ids}-report`}>{m.text(checking ? "subscribe.yourCode" : "subscribe.report")}</StepTitle></StepHeading>
+      <Step id="report" aria-labelledby={`${ids}-report`}>
+        <StepHeading><StepNumber aria-hidden="true" $muted={!account}>3</StepNumber><StepTitle id={`${ids}-report`}>{m.text("subscribe.report")}</StepTitle></StepHeading>
         {!account ? <Locked><LockIcon /><span>{m.text("subscribe.signInFirst")}</span></Locked> : <>
-          {status ? <StatusBox><PaymentStatusPanel locale={locale} status={status} phone={account.phone} unlocked={account.unlocked} /></StatusBox>
-            : sent && <StatusBox role="status"><p>{sent}</p><p>{m.text("subscribe.checking", { phone: formatPhone(account.phone) })}</p></StatusBox>}
-          {checking ? <AccountCodeForm locale={locale} signedIn inApp={/FBAN|FBAV|Instagram/iu.test(userAgent)} returnTo={returnTo} /> : <ReportForm onSubmit={submit} data-analytics-ignore>
-            <PaymentFields>
-              <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} hint={false} required onValueChange={(value) => update({ payerPhone: value })} />
-              <TextInput label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId} required minLength={4} maxLength={40} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false} onChange={(event) => update({ transactionId: normalizeTransactionId(event.currentTarget.value) })} />
-            </PaymentFields>
+          <PaymentStatusCard locale={locale} status={status} settings={settings} phone={account.phone} activeUntil={activeUntil} returnTo={returnTo}
+            replace={waiting ? { open: replacing, controls: `${ids}-form`, toggle: () => setReplacing(!replacing) } : undefined} />
+          {(!waiting || replacing) && <ReportForm id={`${ids}-form`} onSubmit={submit} onInvalidCapture={revealInvalid} data-analytics-ignore>
+            {waiting && status && <Note>{m.text("subscribe.replaces", { reference: status.reference })}</Note>}
+            <AmountRow><span>{m.text("subscribe.amount")}</span><strong>UGX {m.number(plan.priceUgx)} · {plan.name}</strong></AmountRow>
             <FileField>
               <FileBox><ImageIcon /><span id={`${ids}-shot`}>{image ? m.text("subscribe.imageSize", { size: String(Math.ceil(image.size / 1000)) }) : m.text("subscribe.chooseScreenshot")}</span>
                 <input type="file" accept="image/*" required={!image} aria-labelledby={`${ids}-shot`} aria-describedby={`${ids}-shot-hint`} onChange={async (event) => {
@@ -249,20 +230,18 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
               <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
             </FileField>
             {image && <Preview src={preview} alt={m.text("subscribe.preview")} />}
-            {foreign && <p role="alert">{foreign}</p>}
             <Disclosure>
-              <summary><ClipboardIcon /><span>{m.text("subscribe.sms")} <Optional>{m.text("subscribe.optional")}</Optional></span><ChevronDownIcon /></summary>
-              <div><FieldWithAction data-analytics-ignore>
-                <TextInput ref={smsInput} label={<VisuallyHidden>{m.text("subscribe.sms")}</VisuallyHidden>} placeholder={m.text("subscribe.smsPlaceholder")}
-                  value={sms} maxLength={12_000} onChange={(event) => parseSms(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} data-analytics-ignore />
-                {clipboard && <Action variant="secondary" data-analytics-ignore onClick={async () => { try { parseSms(await navigator.clipboard.readText()); } catch { smsInput.current?.focus(); } }}><ClipboardIcon />{m.text("subscribe.paste")}</Action>}
-              </FieldWithAction><Note>{m.text("subscribe.smsPrivacy")}</Note></div>
+              <summary><InfoIcon /><span>{m.text("subscribe.moreDetails")} <Optional>{m.text("subscribe.optional")}</Optional></span><ChevronDownIcon /></summary>
+              <div><PaymentFields>
+                <TextInput label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId} minLength={4} maxLength={40} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false} onChange={(event) => update({ transactionId: normalizeTransactionId(event.currentTarget.value) })} />
+                <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} hint={false} onValueChange={(value) => update({ payerPhone: value })} />
+              </PaymentFields><Note>{m.text("subscribe.moreDetailsHint")}</Note></div>
             </Disclosure>
             {view?.acceptedTerms ? <Note>{m.text("subscribe.currentTerms")} <Link href="/en/terms">{m.text("account.terms")}</Link>.</Note>
               : <Assent><input type="checkbox" required checked={draft.accepted} onChange={(event) => update({ accepted: event.currentTarget.checked })} /><span>{m.text("subscribe.assent")}{" "}<Link href="/en/terms">{m.text("account.terms")}</Link>.</span></Assent>}
-            <Submit type="submit" disabled={busy || !restored || !draft.network}>{m.text(busy ? "subscribe.sending" : "subscribe.send")}<ChevronRightIcon /></Submit>
+            <Submit type="submit" disabled={busy || !restored || !draft.network}>{m.text(busy ? "subscribe.sending" : "subscribe.report")}<ChevronRightIcon /></Submit>
             {percentage !== null && <div role="status"><progress max={100} value={percentage} aria-label={m.text("subscribe.uploadProgress")} /><span> {percentage}%</span></div>}
-            <Note>{m.text("subscribe.delivery")}</Note>
+            <Note>{m.text("subscribe.afterApproval")}</Note>
           </ReportForm>}
           <noscript><p>{m.text("subscribe.noJavaScript")}</p></noscript>
         </>}

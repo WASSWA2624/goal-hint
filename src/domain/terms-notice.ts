@@ -4,7 +4,7 @@ import { publicOperator } from "./public-operator.ts";
 export const termsNotice = Object.freeze({
   publication: "prelaunch-draft",
   releaseReady: false,
-  reviewedOn: "2026-10-20",
+  reviewedOn: "2026-10-21",
   effectiveOn: null,
   plannedEffectiveOn: publicOperator.plannedLaunchOn,
   blockers: Object.freeze(["privacy", "payments", "refunds", "data-protection", "jurisdiction", "paid-rights"] as const),

@@ -14,7 +14,6 @@ export function SubscriberPanel({ locale = "en", returnTo, offer }: { locale?: s
     })}</>}</p>
     <Inline>
       <ButtonLink size="large" href={memberNextPath("subscribe", returnTo)} prefetch={false}>{messages.text("paywall.getAccess")}</ButtonLink>
-      <ButtonLink size="large" variant="secondary" href={memberNextPath("account", returnTo)} prefetch={false}>{messages.text("paywall.haveCode")}</ButtonLink>
     </Inline>
   </Stack>;
 }

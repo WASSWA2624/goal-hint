@@ -1,9 +1,12 @@
 import "server-only";
+import { randomInt, randomUUID } from "node:crypto";
 import { getReportingDate, getReportingDayBounds, addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow } from "../../domain/owner-members.ts";
 import { normalizePhone } from "../../domain/phone.ts";
+import { hashPassword } from "../analytics/analytics-password.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
-import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
+import { lockMemberAccount, type CodeFailure, type CodeOutcome } from "../members/access-codes.ts";
+import { isMemberAdminPhone } from "../members/member-admin.ts";
 import { decide } from "../members/settings.ts";
 import { createPaymentReview } from "./payment-review.ts";
 import { auditTextErrors, ownerAuditActions, writeOwnerAudit } from "./audit.ts";
@@ -14,7 +17,12 @@ export function revenueBounds(now: number) {
   const week = addReportingDays(today, -(weekday + 6) % 7), month = parseReportingDate(today.slice(0, 7) + "-01");
   return { week: new Date(getReportingDayBounds(week).startInclusive), month: new Date(getReportingDayBounds(month).startInclusive) };
 }
-export function createSubscribers(database: DatabaseRuntime, now = Date.now) {
+/** Read out on a phone call and typed on a phone: lower case, without i, l, o, 0 or 1. */
+export const temporaryPasswordRules = Object.freeze({ alphabet: "abcdefghjkmnpqrstuvwxyz23456789", length: 10 });
+export const generateTemporaryPassword = () => Array.from({ length: temporaryPasswordRules.length },
+  () => temporaryPasswordRules.alphabet[randomInt(temporaryPasswordRules.alphabet.length)]).join("");
+export type TemporaryPasswordOutcome = Readonly<{ status: "reset"; accountId: string; temporaryPassword: string; created: boolean; sessionsDeleted: number }> | CodeFailure;
+export function createSubscribers(database: DatabaseRuntime, now = Date.now, adminPhone = isMemberAdminPhone) {
   return {
     async overview(): Promise<OwnerOverview> {
       const at = new Date(now()), bounds = revenueBounds(+at);
@@ -93,6 +101,27 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now) {
         const auditAction = { note: "member_note_changed", "sign-out-all": "member_signed_out_all", block: "member_blocked", unblock: "member_unblocked", erase: "member_erased" }[action] as "member_note_changed" | "member_signed_out_all" | "member_blocked" | "member_unblocked" | "member_erased";
         await writeOwnerAudit(tx, { at, actor, action: auditAction, accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted: deleted, ...(action === "note" ? { length: (value as string).length } : {}), ...(["block", "unblock"].includes(action) ? { reason: value } : {}) } });
         return { status: "saved" };
+      });
+    },
+    /** Owner reset (068 D1-reset), the only password recovery: a random password the owner reads out once, stored as a scrypt
+     * hash; every device of the account signs out. By phone it serves only an allow-listed administrator number, creating its
+     * account when none exists, since registration refuses those numbers. The audit names the account, never the password. */
+    async temporaryPassword(target: Readonly<{ id: string }> | Readonly<{ phone: string }>, actor: string): Promise<TemporaryPasswordOutcome> {
+      const phone = "phone" in target ? normalizePhone(target.phone) : null;
+      if ("phone" in target && (!phone || !adminPhone(phone))) return { status: "not-found", message: "Search for the member's account first." };
+      const temporaryPassword = generateTemporaryPassword(), passwordHash = await hashPassword(temporaryPassword);
+      return decide<TemporaryPasswordOutcome>(database, async (tx, rollback) => {
+        const at = new Date(now()), fresh = randomUUID();
+        if (phone) await tx.$executeRaw`INSERT INTO MemberAccount (id, phone, createdAt, lastSignInAt) VALUES (${fresh}, ${phone}, ${at}, ${at})
+          ON DUPLICATE KEY UPDATE id = id`;
+        const id = phone ? (await tx.memberAccount.findUniqueOrThrow({ where: { phone }, select: { id: true } })).id : (target as { id: string }).id;
+        const account = await lockMemberAccount(tx, id);
+        if (!account?.phone || account.erasedAt) return rollback({ status: "refused", message: "This account is unavailable." });
+        if (account.blockedAt) return rollback({ status: "refused", message: "Unblock this account before setting a password." });
+        await tx.memberAccount.update({ where: { id }, data: { passwordHash } });
+        const sessionsDeleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count, created = id === fresh;
+        await writeOwnerAudit(tx, { at, actor, action: "password_reset", accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted, created } });
+        return { status: "reset", accountId: id, temporaryPassword, created, sessionsDeleted };
       });
     },
     async audit(action = ""): Promise<readonly OwnerAuditRow[]> {

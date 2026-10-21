@@ -21,7 +21,7 @@ const numberFields = new Set<EditableSettingField>(["maxUnlockedDevices", "trial
 const modeLabels: Record<PaywallMode, string> = { off: "Off", test: "Test", on: "On" };
 const modeDone: Record<PaywallMode, string> = { off: "Paid access is now off.", test: "Paid access is now in test mode.", on: "Paid access is now on." };
 const modeExplanations: Record<PaywallMode, string> = {
-  off: "Phone sign-in stays open. Payments, trials and code activation are closed; predictions and odds still require current access.",
+  off: "Phone sign-in stays open. Payments and trials are closed; predictions and odds still require current access.",
   test: "All account and payment flows are open for testing. Predictions and odds require current access for every viewer.",
   on: "Everyone who has not unlocked a paid period sees the free view.",
 };
@@ -205,7 +205,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
 
           <Panel aria-labelledby="contact-title">
             <PanelHeader><h2 id="contact-title">Contact</h2><p>{environmentFields.length ? "Managed through environment variables" : "Password needed to change"}</p></PanelHeader>
-            <Muted>Call, SMS and WhatsApp links, and the number Safety tips tell subscribers to trust.</Muted>
+            <Muted>Call admin and WhatsApp admin links, and the number Safety tips tell subscribers to trust.</Muted>
             <FieldRow>{phone("contactPhone")}{phone("whatsappPhone")}</FieldRow>
           </Panel>
 
@@ -228,7 +228,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
           <Panel aria-labelledby="access-title">
             <PanelHeader><h2 id="access-title">Access</h2></PanelHeader>
             <FieldRow>
-              {range("maxUnlockedDevices", "A new unlock signs out the oldest device.")}
+              {range("maxUnlockedDevices", "Paid access unlocks this many signed-in devices; a new sign-in takes the slot of the device unlocked longest ago.")}
               {range("trialDays", "0 hides the free-trial offer.")}
             </FieldRow>
             <FieldBlock>{settingLabels.screenshotRetentionDays}

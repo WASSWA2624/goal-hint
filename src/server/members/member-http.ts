@@ -1,18 +1,13 @@
 import "server-only";
 
 import { createPayments, type Payments } from "./payments.ts";
-import { memberNextPath } from "../../domain/member-navigation.ts";
-import { memberReturnPath } from "../../domain/member-navigation.ts";
-import { formatPeriodEnd } from "../../domain/subscription-period.ts";
-import { termsNotice } from "../../domain/terms-notice.ts";
 import { getAnalyticsServices } from "../analytics/analytics-http.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
-import { clientAddress, cookie, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect } from "../http/private-http.ts";
-import { createMemberSessions, memberCookieName, memberSessionRules, type MemberIdentity, type MemberSessions } from "./member-sessions.ts";
+import { cookie, isSameOrigin, json, privateHeaders, readCookie, redirect } from "../http/private-http.ts";
+import { createMemberSessions, memberCookieName, type MemberIdentity, type MemberSessions } from "./member-sessions.ts";
 import { settingsServiceFor, type SettingsState } from "./settings.ts";
-import { createAccessCodes, wrongCodeMessage, type AccessCodes, type RedeemOutcome } from "./access-codes.ts";
+import { createAccessCodes, type AccessCodes } from "./access-codes.ts";
 import { createMemberAuth, type MemberAuth } from "./member-auth.ts";
-import { createMemberVerificationSender } from "./member-verification-delivery.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
 export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null }>;
@@ -26,7 +21,7 @@ export async function getMemberServices(): Promise<MemberServices> {
     sessions: database && keyed ? createMemberSessions({ database, config }) : null,
     payments: database && keyed ? createPayments({ database, config }) : null,
     codes: database && keyed ? createAccessCodes({ database, config }) : null,
-    auth: database && keyed ? createMemberAuth({ database, config, sendVerification: createMemberVerificationSender() }) : null };
+    auth: database && keyed ? createMemberAuth({ database, config }) : null };
 }
 
 export type MemberContext = Readonly<{ request: Request; services: MemberServices; member: MemberIdentity | null }>;
@@ -50,54 +45,9 @@ export function memberRoute(handler: (context: MemberContext) => Promise<Respons
 
 const wantsJson = (request: Request) => (request.headers.get("accept") ?? "").includes("application/json") || /^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "");
 
-/** A bounded body, strict field whitelist, and no identity in any redirect. */
-async function memberBody(request: Request, fields: readonly string[]): Promise<Record<string, unknown> | null> {
-  if (Number(request.headers.get("content-length") ?? 0) > 2048) return null;
-  const bytes = await readLimitedBody(request, 2048, { deadlineMs: 15_000 });
-  if (!bytes) return null;
-  const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  let body: Record<string, unknown>;
-  if (/^application\/json(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) {
-    const input: unknown = JSON.parse(text);
-    if (!input || typeof input !== "object" || Array.isArray(input)) return null;
-    body = input as Record<string, unknown>;
-  } else if (/^application\/x-www-form-urlencoded(?:;|$)/iu.test(request.headers.get("content-type") ?? "")) {
-    const parameters = new URLSearchParams(text);
-    if ([...parameters.keys()].some((key) => parameters.getAll(key).length !== 1)) return null;
-    body = Object.fromEntries(parameters);
-  } else return null;
-  return Object.keys(body).every((key) => fields.includes(key)) ? body : null;
-}
-
-function codeResponse(request: Request, services: MemberServices, result: RedeemOutcome, returnTo: unknown) {
-  if (result.status !== "accepted") {
-    const message = result.status === "ended" ? `This code's access ended on ${formatPeriodEnd(result.endsAt)}.`
-      : result.status === "busy" ? "Try again later." : result.status === "refused" ? memberRefusal : wrongCodeMessage;
-    if (wantsJson(request)) return json({ error: result.status, message }, result.status === "busy" ? 429 : result.status === "refused" ? 403 : 400);
-    const next = new URL(memberNextPath("account", returnTo, `code-${result.status}`), request.url);
-    if (result.status === "ended") next.searchParams.set("ended", result.endsAt.toISOString());
-    return redirect(`${next.pathname}${next.search}`);
-  }
-  const next = memberReturnPath(returnTo) ?? "/en/account?status=code-accepted";
-  const sessionCookie = result.token ? cookie(services.config, memberCookieName(services.config.production), result.token, memberSessionRules.cookieSeconds, "Lax") : null;
-  return wantsJson(request) ? json({ next }, 200, sessionCookie ? { "Set-Cookie": sessionCookie } : {}) : redirect(next, sessionCookie ? [sessionCookie] : []);
-}
-
 export function createMemberSignInHandler(services: MemberServicesSource = getMemberServices) {
   // Keep the legacy endpoint as an alias, without retaining number-only or subscription-code authentication.
   return async (request: Request) => (await import("./member-auth-http.ts")).createMemberAuthHandler("login", services)(request);
-}
-
-export function createMemberCodeHandler(services: MemberServicesSource = getMemberServices) {
-  return memberRoute(async ({ request, services: resolved, member }) => {
-    if (member!.blocked) return json({ error: "forbidden", message: memberRefusal }, 403);
-    let body;
-    try { body = await memberBody(request, ["code", "return"]); } catch { body = null; }
-    if (!body) return json({ error: "invalid-request", message: memberRefusal }, 400);
-    if (!resolved.codes) return json({ error: "unavailable", message: memberRefusal }, 503);
-    return codeResponse(request, resolved, await resolved.codes.redeem(member!, body.code, clientAddress(request.headers),
-      resolved.settings.settings!.maxUnlockedDevices, termsNotice.reviewedOn), body.return);
-  }, { services, access: "member" });
 }
 
 export function createMemberSignOutHandler(services: MemberServicesSource = getMemberServices) {

@@ -1,8 +1,8 @@
 import { paymentDraftStorageKey } from "@/domain/member-navigation";
 import type { MobileNetwork } from "@/domain/phone";
 
-export type PaymentDraft = { planId: string; payerPhone: string; network: MobileNetwork | ""; transactionId: string;
-  amount: string; amountEdited: boolean; payCard: MobileNetwork | ""; accepted: boolean };
+/** The amount is the plan's price and is never kept; the payer and transaction ID are the optional "More details". */
+export type PaymentDraft = { planId: string; payerPhone: string; network: MobileNetwork | ""; transactionId: string; accepted: boolean };
 const key = (accountId: string) => `${paymentDraftStorageKey}:${accountId}`;
 export function paymentDraftSnapshot(accountId: string): string | null {
   try { return sessionStorage.getItem(key(accountId)); } catch { return null; }
@@ -12,12 +12,10 @@ export function readPaymentDraft(accountId: string, raw = paymentDraftSnapshot(a
     const value: unknown = JSON.parse(raw ?? "null");
     if (!value || typeof value !== "object") return null;
     const draft = value as Record<string, unknown>;
-    if (!["planId", "payerPhone", "transactionId", "amount"].every((field) => typeof draft[field] === "string" && (draft[field] as string).length <= 64)
-      || !["", "mtn", "airtel"].includes(String(draft.network)) || !["", "mtn", "airtel"].includes(String(draft.payCard))
-      || typeof draft.accepted !== "boolean" || typeof draft.amountEdited !== "boolean") return null;
+    if (!["planId", "payerPhone", "transactionId"].every((field) => typeof draft[field] === "string" && (draft[field] as string).length <= 64)
+      || !["", "mtn", "airtel"].includes(String(draft.network)) || typeof draft.accepted !== "boolean") return null;
     return { planId: draft.planId as string, payerPhone: draft.payerPhone as string, transactionId: draft.transactionId as string,
-      amount: draft.amount as string, network: draft.network as PaymentDraft["network"], payCard: draft.payCard as PaymentDraft["payCard"],
-      accepted: draft.accepted, amountEdited: draft.amountEdited };
+      network: draft.network as PaymentDraft["network"], accepted: draft.accepted };
   } catch { return null; }
 }
 export function savePaymentDraft(accountId: string, draft: PaymentDraft) {

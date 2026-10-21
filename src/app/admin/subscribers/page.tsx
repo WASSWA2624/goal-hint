@@ -16,5 +16,5 @@ export default async function AdminSubscribersPage({ searchParams }: { searchPar
   const params = await searchParams, db = page.services.database;
   const id = uuid(params.accountId) ? params.accountId : null;
   const data = db ? await Promise.all([createSubscribers(db).search(), id ? createSubscribers(db).detail(id) : null, plansServiceFor(db).list()]).catch(() => null) : null;
-  return <AdminShell current="subscribers" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}><PageTitle><h1>Subscribers</h1></PageTitle>{data ? <SubscribersEditor owner={page.owner.username} accounts={data[0]} detail={data[1]} plans={data[2]} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}</AdminShell>;
+  return <AdminShell current="subscribers" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}><PageTitle><h1>Subscribers</h1></PageTitle>{data ? <SubscribersEditor accounts={data[0]} detail={data[1]} plans={data[2]} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}</AdminShell>;
 }

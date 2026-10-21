@@ -15,7 +15,7 @@ export async function preparePaymentImage(file: File): Promise<Blob> {
     const canvas = document.createElement("canvas");
     canvas.width = Math.floor(width * scale); canvas.height = Math.floor(height * scale);
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("Your browser cannot prepare this image. Send it on WhatsApp instead.");
+    if (!context) throw new Error("Your browser cannot prepare this image. Try another browser, or call admin.");
     const draw = () => { context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(source, 0, 0, canvas.width, canvas.height); };
     const encode = (quality: number) => new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Choose a readable screenshot.")), "image/jpeg", quality));
     draw();
@@ -25,7 +25,7 @@ export async function preparePaymentImage(file: File): Promise<Blob> {
       canvas.height = Math.max(1, Math.floor(canvas.height * 900 / canvas.width)); canvas.width = 900;
       draw(); output = await encode(0.55);
     }
-    if (output.size > 3_000_000 || Math.min(canvas.width, canvas.height) < 200) throw new Error("Choose a clearer, smaller screenshot or send it on WhatsApp.");
+    if (output.size > 3_000_000 || Math.min(canvas.width, canvas.height) < 200) throw new Error("Choose a clearer, smaller screenshot.");
     return output;
   } finally { if ("close" in source) source.close(); }
 }

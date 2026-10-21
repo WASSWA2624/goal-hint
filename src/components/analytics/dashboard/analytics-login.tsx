@@ -37,7 +37,7 @@ export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/
         </div>
         {status === "signed-out" && !problem && <Notice role="status">You have signed out.</Notice>}
         {message && <Notice $tone={problem || status === "locked" ? "warning" : "error"} role="alert">{message}</Notice>}
-        <ButtonLink href="/en/account?view=code" prefetch={false}><SignInIcon />Sign in with a code</ButtonLink>
+        <ButtonLink href="/en/account" prefetch={false}><SignInIcon />Sign in with your phone number</ButtonLink>
         <Form method="post" action={action}>
           <label>Username<input name="username" autoComplete="username" required maxLength={64} autoCapitalize="none" spellCheck={false} disabled={problem !== null} /></label>
           <label>Password<input name="password" type="password" autoComplete="current-password" required maxLength={1024} disabled={problem !== null} /></label>

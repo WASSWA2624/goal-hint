@@ -17,5 +17,5 @@ export const contactMessages = {
   "contact.policies.title": "Related information",
   "contact.policies.navigation": "Related policies",
   "contact.link": "Contact availability and correction guidance",
-  "contact.access": "For subscriber plans, payment reports and access codes, use Get access when subscriptions are open.",
+  "contact.access": "For subscriber plans, payment reports and access, use Get access when subscriptions are open.",
 } as const;

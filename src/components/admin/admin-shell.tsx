@@ -3,7 +3,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import styled from "styled-components";
 import { useRouter } from "next/navigation";
-import { clearOwnerCodes } from "./code-ready";
 import { SkipLink } from "@/components/navigation/shell-styles";
 import { Brand, BrandImage, HeaderButton, HeaderLink, Main, Notice, Shell, Tab, Tabs, TopActions, TopBar,
   TopBarContent } from "@/components/analytics/dashboard/dashboard-styles";
@@ -20,6 +19,12 @@ const sections = [
 ] as const;
 export type AdminSection = (typeof sections)[number]["key"];
 
+/** A background tab shows "(n) Payments · …" while payments wait; the page's own title stays after it, and returns at 0. */
+function pendingTitle(title: string, count: number, payments: boolean) {
+  const base = title.replace(payments ? /^(?:\(\d+\) )?Payments · /u : /^\(\d+\) Payments · /u, "");
+  return `${count > 0 ? `(${count}) ` : ""}${count > 0 || payments ? "Payments · " : ""}${base}`;
+}
+
 /**
  * Phone-first owner shell: one column, 44 px targets and a top tab strip. Signing out is a plain form POST, so it works
  * without JavaScript. Owner copy is English only.
@@ -31,7 +36,7 @@ export function AdminShell({ current, username, developmentCredentials, children
   useEffect(() => {
     const refreshCount = () => {
       void fetch("/api/admin/payments?count=1", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then((v: { pendingCount: number } | null) => {
-        if (v) { setCount(v.pendingCount); if (current === "payments") router.refresh(); }
+        if (v) { setCount(v.pendingCount); document.title = pendingTitle(document.title, v.pendingCount, current === "payments"); if (current === "payments") router.refresh(); }
       }).catch(() => {});
     };
     if (pendingCount === undefined) refreshCount();
@@ -47,7 +52,7 @@ export function AdminShell({ current, username, developmentCredentials, children
           <Actions>
             <span>Signed in as <strong>{username}</strong></span>
             <HeaderLink href="/analytics">Analytics</HeaderLink>
-            <form method="post" action="/api/admin/logout" onSubmit={clearOwnerCodes}><HeaderButton type="submit">Sign out</HeaderButton></form>
+            <form method="post" action="/api/admin/logout"><HeaderButton type="submit">Sign out</HeaderButton></form>
           </Actions>
         </TopBarContent>
       </TopBar>

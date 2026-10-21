@@ -18,7 +18,7 @@ import { configuredSubscriptionSettings, decide, lockSettings } from "./settings
 
 type Outcome = Readonly<{ status: "saved"; reference: string }> | Readonly<{ status: "busy" | "refused" | "invalid" | "duplicate" }>;
 type Bucket = { key: string; count: number; bytes: number };
-export const duplicatePaymentMessage = "This transaction ID was already used. If you made this payment, WhatsApp us with the ID.";
+export const duplicatePaymentMessage = "This transaction ID was already used. If you made this payment, call admin with the ID.";
 
 export function createPayments({ database, config, now = Date.now, environment = getRuntimePolicy().choices.subscriptionIdentity }: {
   database: DatabaseRuntime; config: Pick<AnalyticsConfig, "key">; now?: () => number;
@@ -73,10 +73,11 @@ export function createPayments({ database, config, now = Date.now, environment =
           const settings = configuredSubscriptionSettings(await lockSettings(tx, "system", at), environment);
           if (settings.paywallMode === "off") return rollback({ status: "refused" });
           const plan = await tx.subscriptionPlan.findUnique({ where: { id: fields.planId } });
-          const key = transactionKey(fields.transactionId);
+          const key = fields.transactionId ? transactionKey(fields.transactionId) : null;
           if (!plan?.active || !settings[fields.network === "mtn" ? "mtnNumber" : "airtelNumber"]
             || !fields.accepted && !await acceptedTerms(tx, { ...member, codeEnteredAt: current.session.codeEnteredAt })) return rollback({ status: "invalid" });
-          if (await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: { in: [`mtn:${key}`, `airtel:${key}`] } }, select: { id: true } })) return rollback({ status: "duplicate" });
+          // Without an ID there is nothing to match; the owner's approval still claims the ID from their wallet SMS exactly once.
+          if (key && await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: { in: [`mtn:${key}`, `airtel:${key}`] } }, select: { id: true } })) return rollback({ status: "duplicate" });
           const stored = await bucket(tx, "upload-stored", member.tokenHash, at), site = await bucket(tx, "upload-site", "all", at);
           if (stored.count >= paymentRules.sessionStored) return rollback({ status: "busy" });
           if (site.bytes + image.length > paymentRules.siteBytes) { await busyAudit(tx, at); return { status: "busy" }; }
@@ -85,10 +86,11 @@ export function createPayments({ database, config, now = Date.now, environment =
           await tx.paymentSubmission.updateMany({ where: { accountId: member.accountId, status: "pending" },
             data: { status: "superseded", decidedAt: at, decidedBy: "system:superseded" } });
           const reference = newReference().slice(2), id = randomUUID();
+          // The claimed amount is the plan's price, never a browser value; the owner records the amount actually received.
           await tx.paymentSubmission.create({ data: { id, reference, source: "report", accountId: member.accountId,
             planId: plan.id, planName: plan.name, durationDays: plan.durationDays, priceUgx: plan.priceUgx,
-            payerPhone: fields.payerPhone, claimedNetwork: fields.network, claimedTxnRef: fields.transactionId,
-            claimedTxnKey: key, claimedAmountUgx: fields.amount, status: "pending", submittedAt: at,
+            payerPhone: fields.payerPhone ?? current.account.phone, claimedNetwork: fields.network, claimedTxnRef: fields.transactionId,
+            claimedTxnKey: key || null, claimedAmountUgx: plan.priceUgx, status: "pending", submittedAt: at,
             submittedSessionHash: member.tokenHash, termsVersion: termsNotice.reviewedOn, acceptedAt: at,
             imageSha256: createHash("sha256").update(image).digest("hex"), imageBytes: image.length,
             screenshot: { create: { width: dimensions.width, height: dimensions.height, bytes: image.length, data: new Uint8Array(image) } } } });
@@ -120,20 +122,21 @@ export function createPayments({ database, config, now = Date.now, environment =
       });
     },
 
+    /** Account-level: any authenticated, current session of an open account sees the account's latest report (068). */
     async view(member: MemberIdentity, settings: SubscriptionSettings): Promise<PaymentView> {
       return database.query(async (tx) => {
         const [account, codes, terms, status] = await Promise.all([
-          tx.memberAccount.findUnique({ where: { id: member.accountId }, select: { trialRequestedAt: true } }),
+          tx.memberAccount.findUnique({ where: { id: member.accountId }, select: { trialRequestedAt: true, trialDismissedAt: true } }),
           tx.accessCode.count({ where: { accountId: member.accountId } }), acceptedTerms(tx, member),
-          tx.paymentSubmission.findFirst({ where: { accountId: member.accountId,
-            account: { blockedAt: null, erasedAt: null, sessions: { some: { tokenHash: member.tokenHash, expiresAt: { gt: new Date(now()) } } } },
-            OR: [{ submittedSessionHash: member.tokenHash }, { account: { sessions: { some: { tokenHash: member.tokenHash, codeEnteredAt: { not: null } } } } }] },
+          tx.paymentSubmission.findFirst({ where: { accountId: member.accountId, account: { blockedAt: null, erasedAt: null,
+            sessions: { some: { tokenHash: member.tokenHash, authenticatedAt: { not: null }, expiresAt: { gt: new Date(now()) } } } } },
             orderBy: [{ submittedAt: "desc" }, { id: "desc" }], select: { reference: true, status: true, rejectText: true, rejectReason: true,
-              planName: true, priceUgx: true, code: { select: { endsAt: true } } } }),
+              planName: true, priceUgx: true, submittedAt: true, code: { select: { endsAt: true } } } }),
         ]);
         return { acceptedTerms: terms, trialEligible: !!account && !account.trialRequestedAt && codes === 0 && settings.trialDays > 0,
-          trialRequested: !!account?.trialRequestedAt, status: status ? { reference: `P-${status.reference}`, status: status.status,
-            rejectText: status.rejectText ?? status.rejectReason, planName: status.planName, priceUgx: status.priceUgx, endsAt: status.code?.endsAt.toISOString() ?? null } : null };
+          trialPending: !!account?.trialRequestedAt && !account.trialDismissedAt && codes === 0, status: status ? { reference: `P-${status.reference}`, status: status.status,
+            rejectText: status.rejectText, rejectReason: status.rejectReason, planName: status.planName, priceUgx: status.priceUgx,
+            submittedAt: status.submittedAt.toISOString(), endsAt: status.code?.endsAt.toISOString() ?? null } : null };
       });
     },
   });

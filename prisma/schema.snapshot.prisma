@@ -1540,8 +1540,9 @@ model MemberAccount {
   verifications    MemberVerification[]
 }
 
-// Member sign-ins: only a SHA-256 of each random session token is stored, with no user agent or address. A session is
-// unlocked once a valid code was entered in it; the composite key keeps that code on the session's own account.
+// Member sign-ins: only a SHA-256 of each random session token is stored, with no user agent or address. A signed-in
+// session is unlocked by an access period of its own account (068: at approval, grant or sign-in, under the device cap;
+// codeEnteredAt is the unlock time); the composite key keeps that period on the session's own account.
 model MemberSession {
   tokenHash     String        @id @db.Char(64)
   accountId     String        @db.Char(36)
@@ -1559,8 +1560,8 @@ model MemberSession {
   @@index([accessCodeId, accountId])
 }
 
-// SMS challenges are short lived and bound to a browser/session, purpose and original registered number. Codes and
-// one-use verification proofs are HMACs, never plaintext; confirming a code never extends its five-minute lifetime.
+// Retired (068): one-time phone codes are gone, so nothing writes this table and it stays empty. It is kept, with its
+// purge and erase deletes, until a later migration drops it. Rows held HMACs only, never plaintext codes.
 model MemberVerification {
   id           String         @id @db.Char(36)
   accountId    String?        @db.Char(36)
@@ -1614,8 +1615,8 @@ model PaymentSubmission {
   priceUgx             Int                @db.UnsignedInt
   payerPhone           String?            @db.VarChar(15)
   claimedNetwork       String             @db.VarChar(8)
-  claimedTxnRef        String             @db.VarChar(40)
-  claimedTxnKey        String             @db.VarChar(40)
+  claimedTxnRef        String?            @db.VarChar(40)
+  claimedTxnKey        String?            @db.VarChar(40)
   claimedAmountUgx     Int                @db.UnsignedInt
   status               String             @db.VarChar(16)
   submittedAt          DateTime           @db.DateTime(3)
@@ -1658,10 +1659,11 @@ model PaymentScreenshot {
   submission   PaymentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade, onUpdate: Restrict)
 }
 
-// Access codes, each bound to one account. Only a salted SHA-256 of a code is stored (a random salt per code, no key); the
-// plain code is shown to the owner once. The period (activatedAt, startsAt, endsAt) is set when the code is created, at
-// payment confirmation, and code entry never moves it. Plan name, days and price are snapshots (price 0 for trial,
-// reissue and number-change codes). replacedById points from a reissued or number-changed code to its successor.
+// Access periods, each bound to one account (068: no code is sent or entered). The NOT NULL code columns hold a salted
+// SHA-256 of a random code that is never shown or kept (a random salt per row, no key). The period (activatedAt,
+// startsAt, endsAt) is set when the row is created, at payment approval or an owner grant. Plan name, days and price are
+// snapshots (price 0 for trial and number-change periods). replacedById points from an earlier reissued or
+// number-changed period to its successor.
 model AccessCode {
   id                  String             @id @db.Char(36)
   accountId           String             @db.Char(36)

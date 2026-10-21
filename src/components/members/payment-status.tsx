@@ -1,0 +1,85 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { CheckIcon, ChevronRightIcon, ImageIcon } from "@/components/ui/icons";
+import type { PaymentStatus } from "@/domain/payment";
+import { formatPhone } from "@/domain/phone";
+import { formatPeriodEnd } from "@/domain/subscription-period";
+import type { SubscriptionSettings } from "@/domain/subscription-settings";
+import { createMessages } from "@/i18n/messages";
+import { AdminContactLinks } from "./admin-contact";
+import { ActionLink, HelpActions, Note, RowButton, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
+
+export type StatusSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone" | "reviewTime">;
+const rejectReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
+type RejectReason = (typeof rejectReasons)[number];
+const reasonOf = (code: string | null): RejectReason => rejectReasons.find((reason) => reason === code) ?? "other";
+
+/** While a report or trial waits, re-read the page every 20 s and whenever the tab comes back. router.refresh also drops the
+ * client router cache, so the render that first shows the approval already carries the unlocked tier to every gated page. */
+export function useApprovalRefresh(waiting: boolean) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!waiting) return;
+    const refresh = () => { if (document.visibilityState === "visible") router.refresh(); };
+    const timer = setInterval(refresh, 20_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [router, waiting]);
+}
+/** The hook for server-rendered pages that only show the card. */
+export function ApprovalRefresh({ waiting }: { waiting: boolean }) {
+  useApprovalRefresh(waiting);
+  return null;
+}
+
+/** The account's latest report: waiting (with the admin's numbers), approved while its period runs, or refused with a reason.
+ * Approval needs nothing from the member: access opens on the account's signed-in devices by itself. */
+export function PaymentStatusCard({ locale, status, settings, phone, activeUntil, returnTo, heading = "h3", replace }: {
+  locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string; activeUntil: string | null; returnTo: string | null;
+  heading?: "h2" | "h3"; replace?: Readonly<{ open: boolean; controls: string; toggle: () => void }> | undefined;
+}) {
+  const m = createMessages(locale);
+  if (!status) return null;
+  const facts = (sent: boolean) => <StatusFacts>
+    <div><dt>{m.text("subscribe.referenceLabel")}</dt><dd>{status.reference}</dd></div>
+    <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{status.planName}</dd></div>
+    <div><dt>{m.text("subscribe.amountLabel")}</dt><dd>UGX {m.number(status.priceUgx)}</dd></div>
+    {sent && <div><dt>{m.text("subscribe.sentLabel")}</dt><dd>{formatPeriodEnd(new Date(status.submittedAt))}</dd></div>}
+  </StatusFacts>;
+  if (status.status === "pending" || status.status === "superseded") return <StatusBox role="status" data-payment-status="pending">
+    <StatusTitle as={heading}>{m.text("subscribe.pendingTitle")}</StatusTitle>
+    <p>{m.text("subscribe.pendingLead")}</p>
+    {facts(true)}
+    {settings.reviewTime && <Note>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</Note>}
+    <AdminContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpPaid", { price: String(status.priceUgx), plan: status.planName,
+      phone: formatPhone(phone), reference: status.reference })} />
+    {replace && <RowButton variant="quiet" aria-expanded={replace.open} aria-controls={replace.controls} onClick={replace.toggle}><ImageIcon />{m.text("subscribe.replace")}</RowButton>}
+  </StatusBox>;
+  if (status.status === "approved") return activeUntil ? <StatusBox data-payment-status="approved">
+    <StatusTitle as={heading}><CheckIcon />{m.text("subscribe.approvedTitle")}</StatusTitle>
+    <p>{m.text("subscribe.activeUntil", { end: formatPeriodEnd(new Date(activeUntil)) })}</p>
+    <HelpActions><ActionLink href={returnTo ?? "/en"} prefetch={false}>{m.text("subscribe.seePredictions")}<ChevronRightIcon /></ActionLink></HelpActions>
+  </StatusBox> : null;
+  if (status.status !== "rejected" && status.status !== "reversed") return null;
+  // The owner's own words win; otherwise the reason code becomes a plain sentence. A reversal keeps its reason off this table.
+  return <StatusBox role="status" data-payment-status={status.status}>
+    <StatusTitle as={heading}>{m.text(status.status === "reversed" ? "subscribe.reversedTitle" : "subscribe.rejectedTitle")}</StatusTitle>
+    <p>{status.rejectText ?? (status.status === "reversed" ? m.text("subscribe.reversedLead") : m.text(`subscribe.reason.${reasonOf(status.rejectReason)}`))}</p>
+    {facts(false)}
+    <Note>{m.text("subscribe.rejectedNext")}</Note>
+    <AdminContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpRejected", { reference: status.reference, phone: formatPhone(phone) })} />
+  </StatusBox>;
+}
+
+/** A requested trial waits for the owner's Grant free trial, which unlocks the account's devices by itself. */
+export function TrialStatusCard({ locale, settings, phone, heading = "h3" }: { locale: string; settings: StatusSettings; phone: string; heading?: "h2" | "h3" }) {
+  const m = createMessages(locale);
+  return <StatusBox role="status" data-trial-status="requested">
+    <StatusTitle as={heading}>{m.text("subscribe.trialRequested")}</StatusTitle>
+    <p>{m.text("subscribe.trialWaiting")}</p>
+    {settings.reviewTime && <Note>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</Note>}
+    <AdminContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpTrial", { phone: formatPhone(phone) })} />
+  </StatusBox>;
+}

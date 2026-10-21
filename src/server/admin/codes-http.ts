@@ -1,6 +1,4 @@
 import "server-only";
-import { codeDelivery } from "../../domain/code-delivery.ts";
-import { publicPolicy } from "../../domain/public-policy.ts";
 import { normalizeTransactionId } from "../../domain/payment.ts";
 import { createAccessCodes, type CodeOutcome } from "../members/access-codes.ts";
 import { settingsServiceFor } from "../members/settings.ts";
@@ -11,8 +9,11 @@ import { createPaymentReview } from "./payment-review.ts";
 export const storageUnavailable = () => json({ message: "Member storage is unavailable. Try again shortly." }, 503);
 export const invalidAction = () => json({ message: "Check the action and values." }, 400);
 export const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu.test(value);
-export function codeAnswer(outcome: CodeOutcome, context: AdminContext) {
-  if (outcome.status === "created") return json({ delivery: codeDelivery(outcome.ready, context.services.config.production ? publicPolicy.origin : new URL(context.request.url).origin) }, 201);
+/** A new period answers 201 with what the owner needs to see; nothing is sent, the account's signed-in devices are unlocked. */
+export function codeAnswer(outcome: CodeOutcome) {
+  if (outcome.status === "created") { const { grant } = outcome;
+    return json({ status: grant.payment ? "approved" : "granted", ...(grant.payment ? { reference: grant.payment } : {}), endsAt: grant.endsAt.toISOString(),
+      devicesUnlocked: grant.devicesUnlocked }, 201); }
   if (outcome.status === "saved") return json(outcome);
   return json(outcome, outcome.status === "duplicate" || outcome.status === "refused" ? 409 : 400);
 }
@@ -35,15 +36,14 @@ export function createCodesHandlers() {
             || b.days !== undefined && typeof b.days !== "number" || b.network !== undefined && !["mtn", "airtel"].includes(String(b.network))
             || b.transactionId !== undefined && typeof b.transactionId !== "string") return invalidAction();
           return codeAnswer(await codes.manual({ phone: b.phone, note: b.note, amountReceivedUgx: b.amount, ...(b.planId ? { planId: b.planId as string } : {}),
-            ...(typeof b.days === "number" ? { durationDays: b.days } : {}), ...(b.network ? { network: b.network as "mtn" | "airtel" } : {}), ...(b.transactionId ? { transactionRef: b.transactionId as string } : {}) }, owner.username), context);
+            ...(typeof b.days === "number" ? { durationDays: b.days } : {}), ...(b.network ? { network: b.network as "mtn" | "airtel" } : {}), ...(b.transactionId ? { transactionRef: b.transactionId as string } : {}) }, owner.username));
         }
         if (!uuid(b.id)) return invalidAction();
         switch (b.action) {
-          case "revoke": return typeof b.reason === "string" ? codeAnswer(await codes.revoke(b.id, b.reason, owner.username), context) : invalidAction();
-          case "extend": return typeof b.days === "number" ? codeAnswer(await codes.extend(b.id, b.days, owner.username), context) : invalidAction();
-          case "reissue": return codeAnswer(await codes.reissue(b.id, owner.username), context);
-          case "trial": { const settings = await settingsServiceFor(services.database).current(); return settings.settings ? codeAnswer(await codes.sendTrial(b.id, settings.settings.trialDays, owner.username), context) : storageUnavailable(); }
-          case "dismiss-trial": return codeAnswer(await codes.dismissTrial(b.id, owner.username), context);
+          case "revoke": return typeof b.reason === "string" ? codeAnswer(await codes.revoke(b.id, b.reason, owner.username)) : invalidAction();
+          case "extend": return typeof b.days === "number" ? codeAnswer(await codes.extend(b.id, b.days, owner.username)) : invalidAction();
+          case "trial": { const settings = await settingsServiceFor(services.database).current(); return settings.settings ? codeAnswer(await codes.sendTrial(b.id, settings.settings.trialDays, owner.username)) : storageUnavailable(); }
+          case "dismiss-trial": return codeAnswer(await codes.dismissTrial(b.id, owner.username));
           default: return invalidAction();
         }
       } catch { return storageUnavailable(); }
@@ -76,10 +76,10 @@ export function createReviewHandlers() {
       try {
         if (b.action === "approve") {
           if (!["mtn", "airtel"].includes(String(b.network)) || typeof b.transactionId !== "string" || !uuid(b.planId) || typeof b.amount !== "number") return invalidAction();
-          return codeAnswer(await codes.approvePayment(id, { network: b.network as "mtn" | "airtel", transactionRef: normalizeTransactionId(b.transactionId), amountReceivedUgx: b.amount, planId: b.planId }, owner.username), context);
+          return codeAnswer(await codes.approvePayment(id, { network: b.network as "mtn" | "airtel", transactionRef: normalizeTransactionId(b.transactionId), amountReceivedUgx: b.amount, planId: b.planId }, owner.username));
         }
         if (b.action === "reject") { const outcome = await createPaymentReview(services.database).reject(id, b.reason, b.text ?? "", b.deleteImage === true, owner.username); return json(outcome, outcome.status === "saved" ? 200 : 400); }
-        if (b.action === "reverse" && ["network-reversal", "wrong-account"].includes(String(b.reason))) return codeAnswer(await codes.reversePayment(id, b.reason as "network-reversal" | "wrong-account", owner.username), context);
+        if (b.action === "reverse" && ["network-reversal", "wrong-account"].includes(String(b.reason))) return codeAnswer(await codes.reversePayment(id, b.reason as "network-reversal" | "wrong-account", owner.username));
         return invalidAction();
       } catch { return storageUnavailable(); }
     },

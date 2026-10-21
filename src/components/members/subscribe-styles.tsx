@@ -37,7 +37,7 @@ export const Row = styled.div`
 `;
 export const AccountRow = styled(Row)`
   column-gap: 6px; padding-block: 4px; border-block: 1px solid ${({ theme }) => theme.color.border};
-  > a:last-child { margin-inline-start: auto; }
+  > :last-child:not(:first-child) { margin-inline-start: auto; }
   form { display: flex; }
   button, a { font-size: 12px; padding-inline: 4px; }
 `;
@@ -128,7 +128,28 @@ export const ActionLink = styled(ButtonLink)`font-size: 12px; gap: 6px; min-bloc
 export const CopyButton = styled(Action)`grid-column: 2; grid-row: 1 / 3; padding-inline: 8px;`;
 export const MenuLink = styled(ActionLink)`justify-self: start; padding-inline: 0;`;
 export const Locked = styled.p`display: flex; align-items: center; gap: 8px; padding: 12px; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText} ${icons}`;
-export const StatusBox = styled.div`display: grid; gap: 6px; padding: 12px; background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 13px; line-height: 20px;`;
+export const StatusBox = styled.div`
+  display: grid; gap: 8px; min-inline-size: 0; padding: 12px; background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 13px; line-height: 20px;
+  p { margin: 0; }
+  ${RowButton} { justify-self: start; min-block-size: 44px; }
+`;
+/** Doubled specificity: the account card styles its own headings. */
+export const StatusTitle = styled.h3`
+  && { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  ${icons}
+`;
+export const StatusFacts = styled.dl`
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; margin: 0; font-size: 12px; line-height: 18px;
+  > div { display: contents; }
+  dt { color: ${({ theme }) => theme.color.mutedText}; }
+  dd { margin: 0; min-inline-size: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+`;
+/** The amount is the chosen plan's price, shown read-only; the server records the same price. */
+export const AmountRow = styled.p`
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; min-inline-size: 0; margin: 0; padding: 10px;
+  border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText}
+  strong { color: ${({ theme }) => theme.color.text}; font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+`;
 export const ReportForm = styled.form`
   display: grid; gap: 10px; min-inline-size: 0;
   label { font-size: 12px; line-height: 18px; }

@@ -9,14 +9,15 @@ import type { Prisma } from "../generated/prisma/client.ts";
  * The owner audit trail (OwnerAuditEvent): owner sign-ins and every owner change. Operational, not tamper-proof: the
  * application role writes it. Details never hold a subscriber phone, a full access code or an image; phone numbers may
  * appear only under an owner settings field name (the owner's own numbers, shortcuts and notes). The Audit page comes in 065.
+ * `code_reissued` is no longer written (068 removed reissue); it stays so earlier rows remain filterable.
  */
 export const ownerAuditActions = Object.freeze([
   "owner_signed_in", "owner_signed_out", "owner_sign_in_refused",
   "settings_changed", "settings_password_refused", "paywall_mode_changed",
   "plan_created", "plan_updated", "plan_activated", "plan_deactivated", "plans_reordered",
   "code_created", "code_revoked", "code_extended", "code_reissued", "number_changed", "payment_approved", "payment_reversed",
-  "device_unlocked", "device_evicted", "trial_sent", "trial_dismissed",
-  "member_note_changed", "member_signed_out_all", "member_blocked", "member_unblocked", "member_erased", "members_purged",
+  "device_unlocked", "device_evicted", "access_granted", "trial_sent", "trial_dismissed",
+  "member_note_changed", "member_signed_out_all", "member_blocked", "member_unblocked", "member_erased", "members_purged", "password_reset",
   "payment_submitted", "payment_rejected", "trial_requested", "uploads_busy",
 ] as const);
 export type OwnerAuditAction = (typeof ownerAuditActions)[number];
