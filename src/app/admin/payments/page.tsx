@@ -15,7 +15,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 }
 export default async function AdminPaymentsPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const page = await adminPageGate(searchParams);
-  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
+  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Admin sign-in" />;
   const params = await searchParams, tab = typeof params.tab === "string" ? params.tab : "pending";
   const db = page.services.database;
   const data = db ? await createPaymentReview(db).list(tab).catch(() => null) : null;

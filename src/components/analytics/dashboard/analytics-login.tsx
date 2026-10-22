@@ -2,8 +2,7 @@
 
 import styled from "styled-components";
 import { BrandImage, Notice } from "./dashboard-styles";
-import { ButtonLink, TextInput } from "@/components/ui/controls";
-import { SignInIcon } from "@/components/ui/icons";
+import { TextInput } from "@/components/ui/controls";
 
 export type LoginStatus = "invalid" | "locked" | "unavailable" | "signed-out" | null;
 export type LoginProblem = "not-configured" | "insecure-default" | "missing-secret" | "storage" | null;
@@ -16,14 +15,14 @@ const problems: Record<Exclude<LoginProblem, null>, string> = {
 };
 
 /**
- * A plain form POST: works without JavaScript and never embeds credentials in the page. `/analytics` and `/admin` share
- * the one owner login; each posts to its own fixed sign-in route, which lands back on that page.
+ * A plain form POST for administrator phones and existing owner usernames. Both dashboards use the same authentication
+ * policy and reusable inputs; each posts to its own fixed route and lands back on that dashboard.
  */
 export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/api/analytics/login", title = "Analytics sign-in" }: {
   status: LoginStatus; problem: LoginProblem; retryAfterSeconds: number | null; action?: string; title?: string;
 }) {
   const message = problem ? problems[problem]
-    : status === "invalid" ? "Incorrect username or password."
+    : status === "invalid" ? "Incorrect phone number, username, or password."
     : status === "locked" ? `Too many failed attempts. Try again in ${Math.max(1, Math.ceil((retryAfterSeconds ?? 900) / 60))} minutes.`
     : status === "unavailable" ? "Sign-in is temporarily unavailable. Try again shortly."
     : null;
@@ -33,19 +32,17 @@ export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/
         <BrandImage src="/brand/goal-hint-logo-primary.svg" alt="Goal Hint" width={112} height={26} />
         <div>
           <h1 id="login-title">{title}</h1>
-          <p>Private dashboard for the Goal Hint operator.</p>
+          <p>Sign in with your administrator phone number and password. Existing owner usernames are also accepted.</p>
         </div>
         {status === "signed-out" && !problem && <Notice role="status">You have signed out.</Notice>}
         {message && <Notice $tone={problem || status === "locked" ? "warning" : "error"} role="alert">{message}</Notice>}
-        <ButtonLink href="/en/account" prefetch={false}><SignInIcon />Sign in with your phone number</ButtonLink>
         <Form method="post" action={action}>
-          <label>Username<input name="username" autoComplete="username" required maxLength={64} autoCapitalize="none" spellCheck={false} disabled={problem !== null} /></label>
+          <TextInput label="Phone number or owner username" name="username" autoComplete="username" required maxLength={64} autoCapitalize="none" spellCheck={false} disabled={problem !== null} />
           <TextInput label="Password" name="password" type="password" autoComplete="current-password" required maxLength={1024} disabled={problem !== null} />
           <button type="submit" disabled={problem !== null}>Sign in</button>
         </Form>
         <small>
-          Five failed attempts from one network pause sign-in there for 15 minutes; 50 in an hour pause it everywhere.
-          Sessions end after 2 idle hours or 12 hours in total.
+          Too many failed attempts temporarily pause sign-in. Please wait 15 minutes before trying again.
         </small>
       </Panel>
     </Page>

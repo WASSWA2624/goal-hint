@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Password requests · Admin · Goal H
 
 export default async function PasswordResetsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await adminPageGate(searchParams);
-  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
+  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Admin sign-in" />;
   const requests = page.services.database ? await createSubscribers(page.services.database).passwordResetRequests().catch(() => null) : null;
   return <AdminShell current="password-resets" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}>
     <PageTitle><h1>Password requests</h1></PageTitle>

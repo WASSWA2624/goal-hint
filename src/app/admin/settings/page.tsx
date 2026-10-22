@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Settings · Admin · Goal Hint" };
 /** Server-side gate, then the stored settings (uncached) and the address headers this request carried. */
 export default async function AdminSettingsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await adminPageGate(searchParams);
-  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
+  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Admin sign-in" />;
   const { database } = page.services;
   const view = database ? await settingsView(settingsServiceFor(database), await headers()).catch(() => null) : null;
   return (

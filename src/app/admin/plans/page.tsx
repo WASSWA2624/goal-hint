@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Plans · Admin · Goal Hint" };
 /** Server-side gate, then the stored plans, rendered before any script runs. */
 export default async function AdminPlansPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await adminPageGate(searchParams);
-  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
+  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Admin sign-in" />;
   const { database } = page.services;
   const plans = database ? await plansServiceFor(database).list().catch(() => null) : null;
   return (

@@ -76,16 +76,49 @@ out-of-package helper. The narrow application grant is now applied and recorded 
 the verification table stayed empty, and database health reports `ready`. No production database was changed. See
 [member-authentication.md](member-authentication.md) for manual recovery and expiry rules. Message delivery is retired.
 
-The manual account release adds saved-slip snapshots and fixture links in
-`20261021110000_saved_slips`, followed by temporary-password and reset-request
-fields in `20261021120000_manual_password_recovery`. These changes are pending
-deployment; the implementation does not apply them to the existing local data.
-After migration, review [manual-account-grants.sql](../deploy/manual-account-grants.sql)
-with the approved database and application host. `SavedSlip` needs SELECT,
-INSERT and DELETE; `SavedSlipFixture` needs SELECT and INSERT. Snapshots and
+The manual account release was applied locally on **22 October 2026**:
+`20261021090000_payment_screenshot_approval`,
+`20261021103000_standard_subscription_packages`,
+`20261021110000_saved_slips` and `20261021120000_manual_password_recovery`.
+`npm run db:verify` confirms the applied history and exact schema; no reset,
+credential changes or migration-history rewrite was needed.
+
+The application role has SELECT, INSERT and DELETE on `SavedSlip`, and SELECT
+and INSERT on `SavedSlipFixture`, as documented in
+[manual-account-grants.sql](../deploy/manual-account-grants.sql). Snapshots and
 links are never updated; erasing an account deletes its snapshots and cascades
 to their links. Existing table-scoped account/session grants cover the new
-recovery columns. Backup inventory discovers both new tables automatically.
+recovery columns. The application still has no database-level DDL privileges.
+The actual private `application-grants.sql` records the new grants.
+
+Before deployment, an AES-256-GCM encrypted consistent InnoDB dump was saved
+under the private installation's
+`manual-account-rollout-20261021T211327Z-3df1f4c5` directory, with its key in
+the separate sibling key directory. Full authenticated decryption and the
+plaintext SHA-256 comparison passed. No plaintext SQL dump was written. This
+is a local pre-migration checkpoint, not a PITR or restore qualification. The
+encrypted artifact, manifest and separate key were also copied to the real
+native private installation outside the desktop application's cache, with all
+three copied files checked against their source hashes.
+
+The expected server UUID, local listener and normal recovery mode were checked.
+Application and migration credentials authenticate without changes. The saved
+admin file visible from the packaged desktop application is an older AppData
+shadow, so grants were applied by a one-time interactive scheduled helper using
+the real native administrator file; the helper verified the actual file path,
+UUID and datadir before granting anything. All temporary scheduled tasks were
+removed afterward. The normal `GoalHintMySQL84` startup task was preserved.
+
+Local subscriptions remain in `test` mode, with the existing Test Daily, Weekly
+and Monthly packages, both configured receiving wallets, support contact and
+environment-managed administrator login. An application-role transaction
+verified registration, duplicate-number handling, admin recovery, one-use
+temporary passwords, forced password change, JPEG proof upload, manual approval,
+subscriber access and saved-slip grants/cascade. It was rolled back and checked
+to retain no test accounts, payments, sessions or access periods. Audit sequence
+numbers can have harmless gaps after rolled-back inserts. The running local
+Account, Subscribe and Admin pages returned HTTP 200 without storage errors.
+No production database or deployment was changed.
 
 Prompt 044 adds the seeded `OperationsMonitorState` singleton and time-window
 indexes. The local application receives only SELECT and UPDATE (`stateJson`) on

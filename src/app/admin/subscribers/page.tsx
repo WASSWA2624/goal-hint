@@ -12,7 +12,7 @@ import { uuid } from "@/server/admin/codes-http";
 export const metadata: Metadata = { title: "Subscribers · Admin · Goal Hint" };
 export default async function AdminSubscribersPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const page = await adminPageGate(searchParams);
-  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
+  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Admin sign-in" />;
   const params = await searchParams, db = page.services.database;
   const id = uuid(params.accountId) ? params.accountId : null;
   const data = db ? await Promise.all([createSubscribers(db).search(), id ? createSubscribers(db).detail(id) : null, plansServiceFor(db).list()]).catch(() => null) : null;

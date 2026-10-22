@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Admin · Goal Hint" };
 /** Server-side gate: the owner login when signed out, the owner dashboard when signed in. */
 export default async function AdminPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await adminPageGate(searchParams);
-  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
+  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Admin sign-in" />;
   const value = page.services.database ? await createSubscribers(page.services.database).overview().catch(() => null) : null;
   return (
     <AdminShell current="overview" username={adminDisplayName(page.owner)} developmentCredentials={page.services.config.usingDevelopmentCredentials}>

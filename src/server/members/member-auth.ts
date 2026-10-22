@@ -17,7 +17,7 @@ import { decide } from "./settings.ts";
 export const memberAuthRules = Object.freeze({ passwordMin: 8, passwordMax: 128 });
 export type AuthBinding = Readonly<{ member: MemberIdentity | null }>;
 export type AuthFailure = Readonly<{ status: "invalid" | "unauthorized" | "busy" | "conflict"; message: string }>;
-type AuthSuccess = Readonly<{ status: "authenticated"; token: string; phone: string; administrator?: boolean; requiresPasswordChange?: boolean }>;
+type AuthSuccess = Readonly<{ status: "authenticated"; token: string; accountId: string; phone: string; administrator?: boolean; requiresPasswordChange?: boolean }>;
 const invalid = (message: string): AuthFailure => ({ status: "invalid", message });
 const refused = (): AuthFailure => ({ status: "unauthorized", message: "We couldn't verify these details. Please try again." });
 const reserved = (): AuthFailure => ({ status: "unauthorized", message: "This number is reserved." });
@@ -66,7 +66,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
     if (old?.codeEnteredAt && old.accessCodeId) await tx.memberSession.update({ where: { tokenHash: session.tokenHash },
       data: { codeEnteredAt: old.codeEnteredAt, accessCodeId: old.accessCodeId } });
     await grantSessionAccess(tx, { accountId: account.id, tokenHash: session.tokenHash, at, actor: "member" });
-    return { status: "authenticated", token, phone: account.phone! };
+    return { status: "authenticated", token, accountId: account.id, phone: account.phone! };
   }
 
   return Object.freeze({
@@ -98,14 +98,14 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
           await tx.memberSession.deleteMany({ where: { accountId: current.id } });
           const { token, session } = await issueMemberSession(tx, current.id, at, previous);
           await tx.memberSession.update({ where: { tokenHash: session.tokenHash }, data: { passwordResetAt: at, expiresAt: new Date(+at + passwordRecoveryRules.resetSessionMs) } });
-          return { status: "authenticated", token, phone, requiresPasswordChange: true };
+          return { status: "authenticated", token, accountId: current.id, phone, requiresPasswordChange: true };
         }
         const { token, session } = await issueMemberSession(tx, current.id, at, previous, true);
         if (administrator) await tx.memberSession.update({ where: { tokenHash: session.tokenHash },
           data: { adminPasswordVersion: config.key("admin-password-version", stored) } });
         await tx.memberAccount.update({ where: { id: current.id }, data: { lastSignInAt: at } });
         if (!administrator) await grantSessionAccess(tx, { accountId: current.id, tokenHash: session.tokenHash, at, actor: "member" });
-        return { status: "authenticated", token, phone, ...(administrator ? { administrator: true } : {}) };
+        return { status: "authenticated", token, accountId: current.id, phone, ...(administrator ? { administrator: true } : {}) };
       });
     },
 

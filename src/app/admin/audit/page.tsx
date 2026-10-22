@@ -11,7 +11,7 @@ import { ownerAuditActions } from "@/server/admin/audit";
 export const metadata: Metadata = { title: "Audit · Admin · Goal Hint" };
 export default async function AdminAuditPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const page = await adminPageGate(searchParams);
-  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
+  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Admin sign-in" />;
   const params = await searchParams, db = page.services.database;
   const action = typeof params.action === "string" ? params.action : "";
   const data = db ? await createSubscribers(db).audit(action).catch(() => null) : null;

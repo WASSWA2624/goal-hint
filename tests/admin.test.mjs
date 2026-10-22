@@ -394,11 +394,12 @@ test("every private exclusion point covers /admin; member pages stay crawlable b
   assert.match(layout, /robots: \{ index: false, follow: false, nocache: true \}/, "Every /admin page answers noindex in its metadata.");
 });
 
-test("the owner login form keeps password-manager autocomplete and describes the new throttle", async () => {
+test("the administrator login form accepts phones and keeps password-manager autocomplete", async () => {
   const login = await readFile(new URL("../src/components/analytics/dashboard/analytics-login.tsx", import.meta.url), "utf8");
   assert.match(login, /autoComplete="username"/); assert.match(login, /autoComplete="current-password"/);
   assert.match(login, /action = "\/api\/analytics\/login", title = "Analytics sign-in"/, "/analytics keeps its own form unless a page overrides it.");
-  assert.match(login, /Five failed attempts from one network pause sign-in there for 15 minutes; 50 in an hour pause it everywhere\./);
+  assert.match(login, /label="Phone number or owner username"/);
+  assert.match(login, /wait 15 minutes before trying again\./);
   const page = await readFile(new URL("../src/app/admin/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /action=\{ownerRoutes\.login\} title="Owner sign-in"/);
+  assert.match(page, /action=\{ownerRoutes\.login\} title="Admin sign-in"/);
 });

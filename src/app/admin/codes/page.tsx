@@ -11,7 +11,7 @@ import { plansServiceFor } from "@/server/members/plans";
 export const metadata: Metadata = { title: "Codes · Admin · Goal Hint" };
 export default async function AdminCodesPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const page = await adminPageGate(searchParams);
-  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Owner sign-in" />;
+  if (!page.owner) return <AnalyticsLogin {...page.login} action={ownerRoutes.login} title="Admin sign-in" />;
   const db = page.services.database;
   const data = db ? await createPaymentReview(db).codes().catch(() => null) : null;
   const plans = db ? await plansServiceFor(db).list().catch(() => []) : [];

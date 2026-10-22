@@ -26,10 +26,10 @@ export function requireOwner(services: AnalyticsServices, request: Request, opti
   return requireAdmin(services, request, options);
 }
 
-/** `POST /api/admin/login`: the analytics sign-in handler, landing on `/admin`, audited in OwnerAuditEvent by default. */
-export function createOwnerLoginHandler({ services = getAnalyticsServices, audit = ownerSignInAudit(services, "admin") }:
-  { services?: OwnerServices; audit?: SignInOptions["audit"] } = {}) {
-  return createLoginHandler(services, { home: ownerRoutes.home, audit });
+/** `POST /api/admin/login`: configured phone or legacy owner sign-in, landing on `/admin`, audited by default. */
+export function createOwnerLoginHandler({ services = getAnalyticsServices, audit = ownerSignInAudit(services, "admin"), memberAuth }:
+  { services?: OwnerServices; audit?: SignInOptions["audit"]; memberAuth?: SignInOptions["memberAuth"] } = {}) {
+  return createLoginHandler(services, { home: ownerRoutes.home, audit, memberAuth });
 }
 
 /** `POST /api/admin/logout`: deletes the session and lands on `/admin?login=signed-out`, audited by default. */

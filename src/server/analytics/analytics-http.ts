@@ -16,7 +16,10 @@ import { createAnalyticsRetention, isRetentionDays, type AnalyticsRetention } fr
 import type { LoginProblem, LoginStatus } from "../../components/analytics/dashboard/analytics-login.tsx";
 import { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect } from "../http/private-http.ts";
 import { verifyMemberAdminSession } from "../members/member-admin-access.ts";
-import { createMemberSessions, memberCookieName } from "../members/member-sessions.ts";
+import { createMemberSessions, memberCookieName, memberSessionRules } from "../members/member-sessions.ts";
+import { createMemberAuth, type MemberAuth } from "../members/member-auth.ts";
+import { isMemberAdminPhone, memberAdminCredential, memberAdminPhones } from "../members/member-admin.ts";
+import { normalizePhone } from "../../domain/phone.ts";
 
 // Moved to the shared private helpers; re-exported so analytics callers are unchanged.
 export { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect };
@@ -77,7 +80,11 @@ const loginStatuses: readonly LoginStatus[] = ["invalid", "locked", "unavailable
 export function loginNotice(services: AnalyticsServices, parameters: Record<string, string | string[] | undefined>) {
   const status = typeof parameters.login === "string" && (loginStatuses as readonly string[]).includes(parameters.login) ? parameters.login as LoginStatus : null;
   const retryAfterSeconds = typeof parameters.retry === "string" && /^\d{1,5}$/.test(parameters.retry) ? Number(parameters.retry) : null;
-  const problem: LoginProblem = services.config.adminProblem ?? (services.auth ? null : "storage");
+  let phoneReady = false;
+  if (services.database && memberAdminPhones().length && memberAdminCredential()) {
+    try { services.config.key("member-readiness", "ready"); phoneReady = true; } catch { /* A phone session needs the server key too. */ }
+  }
+  const problem: LoginProblem = phoneReady ? null : services.config.adminProblem ?? (services.auth ? null : "storage");
   return { status, problem, retryAfterSeconds };
 }
 
@@ -139,6 +146,8 @@ export type SignInOptions = Readonly<{
   /** Where every outcome lands, fixed by the route: never taken from the request. */
   home?: string;
   audit?: ((event: SignInAuditEvent) => Promise<void> | void) | undefined;
+  /** Reuse account authentication for configured administrator phones, including its durable limits and session version. */
+  memberAuth?: ((services: AnalyticsServices) => Pick<MemberAuth, "login"> | null) | undefined;
 }>;
 
 /** An audit failure never blocks signing in or out. */
@@ -147,11 +156,11 @@ async function report(audit: SignInOptions["audit"], event: SignInAuditEvent) {
 }
 
 export function createLoginHandler(services: () => Promise<AnalyticsServices> = getAnalyticsServices,
-  { home = analyticsRules.dashboardPath, audit }: SignInOptions = {}) {
+  { home = analyticsRules.dashboardPath, audit, memberAuth = ({ database, config }) => database ? createMemberAuth({ database, config }) : null }: SignInOptions = {}) {
   return async function POST(request: Request): Promise<Response> {
-    const { config, auth } = await services();
     if (!isSameOrigin(request)) return empty(403);
-    if (!auth) return redirect(`${home}?login=unavailable`);
+    const resolved = await services(), { config, auth } = resolved;
+    if (!auth && !resolved.database) return redirect(`${home}?login=unavailable`);
     if (Number(request.headers.get("content-length") ?? 0) > 4_096) return empty(413);
     let username = "", password = "";
     try {
@@ -163,6 +172,21 @@ export function createLoginHandler(services: () => Promise<AnalyticsServices> = 
       username = String(form.get("username") ?? "").slice(0, 128);
       password = String(form.get("password") ?? "").slice(0, 1024);
     } catch { return redirect(`${home}?login=invalid`); }
+    const phone = normalizePhone(username);
+    if (phone && isMemberAdminPhone(phone)) {
+      try {
+        const phoneAuth = memberAuth(resolved);
+        if (!phoneAuth) return redirect(`${home}?login=unavailable`);
+        const name = memberCookieName(config.production);
+        const result = await phoneAuth.login(phone, password, clientAddress(request.headers), readCookie(request, name));
+        if (result.status === "busy") return redirect(`${home}?login=locked&retry=900`);
+        if (result.status !== "authenticated" || !result.administrator || result.requiresPasswordChange) return redirect(`${home}?login=invalid`);
+        await report(audit, { action: "sign-in", username: `member-admin:${result.accountId}` });
+        return redirect(home, [cookie(config, name, result.token, memberSessionRules.cookieSeconds, "Lax"),
+          cookie(config, config.cookies.exclude, "1", adminSessionRules.excludeMaxAgeSeconds)]);
+      } catch { return redirect(`${home}?login=unavailable`); }
+    }
+    if (!auth) return redirect(`${home}?login=unavailable`);
     let result;
     try { result = await auth.login(username, password, clientAddress(request.headers)); }
     catch { return redirect(`${home}?login=unavailable`); }
