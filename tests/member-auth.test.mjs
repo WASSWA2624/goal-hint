@@ -569,14 +569,14 @@ test("HTTP registration, channel selection, verification and reset codes set res
   assert.equal(registration.status, 200);
   const registrationBody = await registration.json(), verifyPage = new URL(registrationBody.next, "https://goal.test");
   assert.equal(registrationBody.requiresVerification, true); assert.equal(verifyPage.pathname, "/en/account");
-  assert.equal(verifyPage.searchParams.get("view"), "verify"); assert.equal(verifyPage.searchParams.get("return"), "/en/matches/example/home-away");
+  assert.equal(verifyPage.searchParams.get("view"), "verify"); assert.equal(verifyPage.searchParams.get("return"), "/en");
   const pendingToken = responseToken(registration); assert.ok(pendingToken); assert.equal(await f.sessionService.verify(pendingToken), null);
   assert.match(registration.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
   const request = await handle("verification", { channel: "whatsapp" }, pendingToken);
   assert.equal(request.status, 200); assert.equal(request.headers.get("set-cookie"), null);
   assert.ok(!JSON.stringify(await request.json()).includes(f.messages[0].code));
-  const verification = await handle("verify", { code: f.messages[0].code, return: "/en/matches/example/home-away" }, pendingToken);
-  assert.equal(verification.status, 200); assert.equal((await verification.json()).next, "/en/matches/example/home-away");
+  const verification = await handle("verify", { code: f.messages[0].code, return: verifyPage.searchParams.get("return") }, pendingToken);
+  assert.equal(verification.status, 200); assert.equal((await verification.json()).next, "/en");
   assert.ok(await f.sessionService.verify(responseToken(verification)));
   const forgot = await handle("forgot", { phone, channel: "sms" });
   assert.equal(forgot.status, 200); assert.equal(forgot.headers.get("set-cookie"), null);
@@ -585,6 +585,41 @@ test("HTTP registration, channel selection, verification and reset codes set res
   const resetToken = responseToken(reset); assert.equal(await f.sessionService.verify(resetToken), null);
   assert.match(reset.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax; Max-Age=900/u);
   assert.equal((await handle("reset", { password: "replacement HTTP password" }, resetToken)).status, 200);
+});
+
+test("signup completion goes home while keeping pending accounts restricted", async () => {
+  const token = "s".repeat(43);
+  for (const returnTo of [undefined, "/en/matches/example/home-away", "https://evil.test", "/en?phone=256700000001"]) {
+    for (const requiresVerification of [false, true]) {
+      const source = async () => ({ config: { production: false, cookies: { secure: false } }, sessions: { async verify() { return null; } },
+        auth: { async register() { return { status: "authenticated", token, phone, ...(requiresVerification ? { requiresVerification: true } : {}) }; } } });
+      const response = await createMemberAuthHandler("register", source)(authRequest("register", { phone, password, ...(returnTo ? { return: returnTo } : {}) }));
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      assert.equal(result.next, requiresVerification ? "/en/account?view=verify&return=%2Fen" : "/en");
+      assert.equal(result.requiresVerification, requiresVerification ? true : undefined);
+      assert.equal(responseToken(response), token);
+      assert.match(response.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
+    }
+  }
+});
+
+test("verification defaults home and keeps safe return destinations for existing account flows", async () => {
+  const token = "v".repeat(43), target = "/en/matches/example/home-away";
+  const success = async () => ({ status: "authenticated", token, phone });
+  const source = async () => ({ config: { production: false, cookies: { secure: false } }, sessions: { async verify() { return null; } },
+    auth: { verifyAccount: success, login: success, resetPassword: success } });
+  const handle = (action, body) => createMemberAuthHandler(action, source)(authRequest(action, body, token));
+  const verified = await handle("verify", { code: "123456" });
+  assert.equal(verified.status, 200); assert.equal((await verified.json()).next, "/en");
+  for (const [action, body] of [["verify", { code: "123456" }], ["login", { phone, password }], ["reset", { password: "new HTTP password" }]]) {
+    const response = await handle(action, { ...body, return: target });
+    assert.equal(response.status, 200); assert.equal((await response.json()).next, target);
+  }
+  for (const returnTo of ["https://evil.test", "//evil.test", "/en?phone=256700000001", "/en/matches/example/%2f", "/en/../admin"]) {
+    const response = await handle("verify", { code: "123456", return: returnTo });
+    assert.equal(response.status, 200); assert.equal((await response.json()).next, "/en");
+  }
 });
 
 test("all verification writes reject cross-site requests before storage and whitelist request fields", async () => {

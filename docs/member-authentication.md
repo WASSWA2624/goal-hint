@@ -2,6 +2,8 @@
 
 Registration requires a supported phone number and a password of 8–128 characters. Numbers are canonicalized with their country code; passwords use salted scrypt hashes. Duplicate registration returns HTTP 409. Registration creates a restricted cookie and redirects to account verification. Password login for an unverified number resumes verification. Pending cookies cannot access member content, payment submissions, trials, profile changes, or administrator pages.
 
+Verification shows one step at a time: choose SMS or WhatsApp, then enter the delivered six-digit code. Support and detailed code rules are available under “Need help?”. Existing-code entry and returning to delivery selection support resuming or requesting another code. Completing signup redirects to the home page (`/en`), including signup begun from protected content. Other login and recovery flows retain their validated return destination.
+
 ## One active device
 
 A phone-number account can be signed in on only one device at a time. A warning above the login button explains that logging in here signs out the other device. A successful fully authenticated login atomically ends previous sessions for that account before issuing its new session. The destination page confirms a successful login and explicitly confirms that the other device was signed out only when a live authenticated session on another browser was revoked. This dismissible notice has no automatic timeout. A tab-scoped event flag carries it through the redirect without storing account details, session tokens or destinations. If browser storage is blocked, the login form displays the confirmation with a Continue button instead.

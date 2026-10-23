@@ -35,6 +35,16 @@ export const AccountError = styled.p`
 export const AccountActions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px;
 `;
+export const AccountSteps = styled.ol`
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
+  list-style: none; margin: 0; padding: 0; font-size: 0.75rem;
+  li { display: flex; align-items: center; gap: 8px; min-inline-size: 0; padding-block-end: 10px;
+    border-block-end: 2px solid ${({ theme }) => theme.color.border}; color: ${({ theme }) => theme.color.mutedText}; }
+  li > span { display: grid; place-items: center; flex: none; inline-size: 24px; block-size: 24px;
+    background: ${({ theme }) => theme.color.surfaceMuted}; font-variant-numeric: tabular-nums; }
+  li[aria-current="step"] { color: ${({ theme }) => theme.color.text}; border-color: ${({ theme }) => theme.color.link}; font-weight: 500; }
+  li[aria-current="step"] > span { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; }
+`;
 export const AccountPrimary = styled(Button)`width: 100%;`;
 export const AccountTextButton = styled(Button)`
   padding: 4px 0; font-weight: 400; background: transparent;

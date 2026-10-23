@@ -1,6 +1,64 @@
 """Verify the account's initial production HTML using the shared rendering harness."""
+import json
+import re
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 from lib.rendering import Server, build_fixture, create_fixture, environment, match, no_match, parse_args, request, visible_html
 from lib.runtime import main_guard
+
+
+def delivery_step(html):
+    match(r'data-verification-step="delivery"', html)
+    match(r'data-account-step-form="delivery"', html)
+    no_match(r'data-account-step-form="code"|name="code"|autoComplete="one-time-code"', html)
+    help_section = match(r'<details\b([^>]*data-verification-help[^>]*)>([\s\S]*?)</details>', html)
+    no_match(r'\bopen(?:\s|=|$)', help_section.group(1))
+    for text in ["Need help?", "24 hours", "up to 3 messages", "Contact the admin"]:
+        match(re.escape(text), help_section.group(2))
+    active = html[:help_section.start()] + html[help_section.end():]
+    no_match(r'up to 3 messages|Contact the admin', active)
+    no_match(r'only the latest code works', html, flags=re.IGNORECASE)
+    match(r'>Send code</button>', active)
+    match("I already have a code", active)
+
+
+def post_fixture(origin, action, body, scenario="success", cookie=""):
+    outgoing = Request(f"{origin}/api/account/{action}", data=json.dumps(body).encode(), method="POST",
+        headers={"Content-Type": "application/json", "Sec-Fetch-Site": "same-origin",
+            "X-Member-Fixture-Scenario": scenario, "Cookie": cookie})
+    try:
+        response = urlopen(outgoing, timeout=20)
+    except HTTPError as error:
+        response = error
+    with response:
+        assert response.headers.get("Cache-Control") == "no-store"
+        return response.status, json.loads(response.read()), response.headers
+
+
+def verify_synthetic_api(origin):
+    for action, body in [("verification", {"channel": "sms"}), ("forgot", {"phone": "256700000101", "channel": "whatsapp"})]:
+        for scenario, expected in [("success", 200), ("send-failed", 503), ("rate-limited", 429), ("unavailable", 503)]:
+            status, reply, headers = post_fixture(origin, action, body, scenario)
+            assert status == expected, (action, scenario, status, reply)
+            if scenario == "success":
+                assert reply["status"] == "requested"
+                assert "123456" not in json.dumps(reply), "Delivery never returns a verification code."
+            if scenario == "rate-limited":
+                assert headers.get("Retry-After") == "60"
+    for action, fields in [("verify", {}), ("reset-code", {"phone": "256700000101"})]:
+        for scenario, code in [("success", "000000"), ("invalid-code", "123456")]:
+            status, reply, _ = post_fixture(origin, action, {**fields, "code": code}, scenario)
+            assert status == 400 and "invalid" in reply["message"], (action, scenario, reply)
+    status, registered, headers = post_fixture(origin, "register", {"phone": "256700000101", "password": "Synthetic password", "return": "/en/matches"})
+    assert status == 200 and registered["next"] == "/en/account?view=verify&return=%2Fen"
+    assert "HttpOnly" in headers.get("Set-Cookie", "")
+    status, verified, _ = post_fixture(origin, "verify", {"code": "123456", "return": "/en"})
+    assert status == 200 and verified["next"] == "/en"
+    match("data-fixture-home", request(origin, verified["next"]).text)
+    status, reset, headers = post_fixture(origin, "reset-code", {"phone": "256700000101", "code": "123456"})
+    assert status == 200 and reset["next"] == "/en/account?view=new-password"
+    reset_page = visible_html(request(origin, reset["next"], headers={"Cookie": headers["Set-Cookie"].split(";", 1)[0]}).text)
+    match("Choose a new password", reset_page)
 
 
 def main():
@@ -47,7 +105,8 @@ def main():
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', login)
         for state in ["signed-out", "signed-in", "unverified"]:
             forgot = visible_html(request(server.origin, f"/en/account?state={state}&view=forgot&return=%2Fen%2Fmatches").text)
-            for text in ["Reset password", "Registered number", "SMS", "WhatsApp", "24 hours", "up to 3 messages", "Only the latest code works", "Contact the admin"]:
+            delivery_step(forgot)
+            for text in ["Reset password", "Registered number", "SMS", "WhatsApp"]:
                 match(text, forgot)
             match(r'action="/api/account/forgot"', forgot)
             match(r'name="channel"', forgot)
@@ -55,11 +114,11 @@ def main():
             no_match(r'name="code"|temporary password|request to the admin', forgot)
             match(r'href="/en/account\?view=login&amp;return=%2Fen%2Fmatches"', forgot)
         verify = visible_html(request(server.origin, "/en/account?state=unverified&view=verify").text)
-        for text in ["Verify account", "256 700 000 101", "SMS", "WhatsApp", "Verification code", "6-digit", "up to 3 messages", "Only the latest code works"]:
+        delivery_step(verify)
+        for text in ["Verify account", "256 700 000 101", "SMS", "WhatsApp"]:
             match(text, verify)
         match(r'action="/api/account/verification"', verify)
-        match(r'action="/api/account/verify"', verify)
-        match(r'autoComplete="one-time-code"', verify)
+        no_match(r'action="/api/account/verify"', verify)
         match(r'action="/api/account/sign-out"', verify)
         no_match(r'<input[^>]+type="radio"[^>]+checked', verify)
         no_match(r'value="[0-9]{6}"', verify)
@@ -71,7 +130,8 @@ def main():
             match(text, reset)
         match(r'action="/api/account/reset"', reset)
         no_match(r'Your account|action="/api/account/verification"', reset)
-        print("Member HTML: account states, login device warning order, recovery navigation, unselected delivery channels, pending verification, code privacy, country coverage and reset-only forms pass.", flush=True)
+        verify_synthetic_api(server.origin)
+        print("Member HTML and synthetic APIs: account states, login warning, single delivery step, collapsed help, code privacy, recovery navigation, country coverage, delivery failures and signup home destination pass.", flush=True)
         if options.serve:
             server.serve()
 

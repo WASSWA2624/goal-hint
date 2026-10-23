@@ -67,7 +67,7 @@ export function createYoolaMessaging({ env = process.env, fetch: request = globa
         throw new YoolaMessagingError("invalid-message");
       }
       if (channel === "sms") {
-        await sendSms({ phone, message: `Goal Hint ${purpose === "account" ? "account verification" : "password reset"} code: ${code}. Valid for 24 hours; only the latest code works. Do not share this code.` });
+        await sendSms({ phone, message: `Goal Hint ${purpose === "account" ? "account verification" : "password reset"} code: ${code}. Valid for 24 hours. Do not share this code.` });
       } else {
         await deliver(phone, "whatsapp", { template_name: "yoola_otp_verification", template_params: [code], consent: "yes" });
       }

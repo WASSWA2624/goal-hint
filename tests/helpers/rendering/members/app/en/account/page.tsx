@@ -3,6 +3,8 @@ import { defaultSubscriptionSettings } from "@/domain/subscription-settings";
 import { pageMetadata } from "@/server/seo/metadata";
 import type { MemberServices } from "@/server/members/member-http";
 import { RefreshProbe } from "./refresh-probe";
+import { cookies } from "next/headers";
+import { fixtureTokens } from "../../fixture-auth";
 
 export const dynamic = "force-dynamic";
 export const metadata = pageMetadata({ title: "Account", description: "Isolated member acceptance fixture." });
@@ -25,6 +27,9 @@ const accountRoutes = Object.fromEntries(["off", "signed-out", "signed-in", "una
 /** Synthetic scenarios are confined to this isolated acceptance app; no owner setting or developer DB is changed. */
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const parameters = await searchParams;
-  const Account = accountRoutes[typeof parameters.state === "string" ? parameters.state : parameters.status === "code-accepted" ? "active" : "signed-out"] ?? accountRoutes["signed-out"]!;
-  return <><Account locale="en" searchParams={searchParams} /><RefreshProbe /></>;
+  const token = (await cookies()).get("goal-hint-member")?.value;
+  const cookieState = token === fixtureTokens.reset ? "password-reset" : token === fixtureTokens.pending ? "unverified"
+    : token === fixtureTokens.authenticated ? "signed-in" : "signed-out";
+  const Account = accountRoutes[typeof parameters.state === "string" ? parameters.state : parameters.status === "code-accepted" ? "active" : cookieState] ?? accountRoutes["signed-out"]!;
+  return <><Account locale="en" searchParams={searchParams} /><RefreshProbe initialScenario={typeof parameters.scenario === "string" ? parameters.scenario : "success"} /></>;
 }

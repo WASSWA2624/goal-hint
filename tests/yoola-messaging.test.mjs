@@ -45,7 +45,7 @@ test("SMS uses the documented single-recipient JSON payload and optional approve
   assert.equal(request.cache, "no-store");
   assert.ok(request.signal instanceof AbortSignal);
   assert.deepEqual(request.payload, { api_key: apiKey, phone, sender: "GoalHint",
-    message: `Goal Hint account verification code: ${code}. Valid for 24 hours; only the latest code works. Do not share this code.` });
+    message: `Goal Hint account verification code: ${code}. Valid for 24 hours. Do not share this code.` });
 });
 
 test("password reset SMS identifies its purpose and omits an unconfigured sender", async () => {

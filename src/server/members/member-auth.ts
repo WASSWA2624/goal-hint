@@ -173,7 +173,7 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
         return await codes.reserve(tx, account, "account", channel, at) ?? messageLimit();
       });
       if (!("id" in reserved)) return reserved;
-      return await codes.deliver(reserved) ? { status: "requested", message: "Your verification code has been sent. Only the latest code works, for up to 24 hours." } : deliveryFailure();
+      return await codes.deliver(reserved) ? { status: "requested", message: "Your verification code has been sent. It is valid for up to 24 hours." } : deliveryFailure();
     },
 
     async verifyAccount(code: unknown, token: string | undefined, address: string): Promise<AuthSuccess | AuthFailure> {
