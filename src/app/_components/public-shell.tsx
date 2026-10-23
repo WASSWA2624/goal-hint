@@ -29,7 +29,7 @@ export const getShellInstant = cache(async () => {
 });
 export const getShellDate = cache(async () => getReportingDate(await getShellInstant()));
 
-export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, showAccount = true, wide = false }: {
+export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, showAccount = true, wide = false, administratorName }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
@@ -43,6 +43,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
   showAccount?: boolean;
   /** Dense dashboards use the wide container while keeping the shared phone header. */
   wide?: boolean;
+  administratorName?: string;
 }) {
   const language = resolveLocale(locale);
   const messages = createMessages(language);
@@ -73,14 +74,14 @@ export async function PublicShell({ children, locale, current, today: reportingD
           <DesktopNav aria-label={messages.text("navigation.primary")}>
             <SessionNavigation destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
           </DesktopNav>
-          <HeaderActions><AccountLinks locale={language} showAccount={showAccount} /></HeaderActions>
+          <HeaderActions><AccountLinks locale={language} showAccount={showAccount} {...(administratorName ? { administratorName } : {})} /></HeaderActions>
         </HeaderContent>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
-      <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact}>
+      <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact} $dashboard={current === "dashboard"}>
         <Container $wide={app || wide}>{children}</Container>
       </PageMain>
-      <Footer>
+      {current !== "dashboard" && <Footer>
         <FooterContent $wide={app || wide}>
           <FooterBrand>
             <BrandMark alt="" />
@@ -100,7 +101,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
           </nav>
           <FooterNote>{messages.text("navigation.footerNote")}</FooterNote>
         </FooterContent>
-      </Footer>
+      </Footer>}
       <TabBar aria-label={messages.text("navigation.tabs")}>
         <SessionNavigation mobile destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
       </TabBar>

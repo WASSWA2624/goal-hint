@@ -106,7 +106,7 @@ const SignOut = styled(MemberSignOut)`
   }
 `;
 
-function AccountMenu({ locale, phone }: { locale: string; phone: string }) {
+function AccountMenu({ locale, phone, administratorName }: { locale: string; phone: string | null; administratorName?: string }) {
   const messages = createMessages(locale);
   const root = useRef<HTMLDetailsElement>(null);
   const popupId = useId();
@@ -125,24 +125,24 @@ function AccountMenu({ locale, phone }: { locale: string; phone: string }) {
       <UserIcon />
     </summary>
     <Popup id={popupId}>
-      <Identity><UserIcon /><div><small>{messages.text("account.registeredNumber")}</small><strong>+{formatPhone(phone.replace(/^\+/, ""))}</strong></div></Identity>
-      <nav aria-label={messages.text("account.title")} onClick={dismiss}>
+      <Identity><UserIcon /><div>{administratorName ? <strong>{administratorName}</strong> : <><small>{messages.text("account.registeredNumber")}</small><strong>+{formatPhone((phone ?? "").replace(/^\+/, ""))}</strong></>}</div></Identity>
+      {!administratorName && <nav aria-label={messages.text("account.title")} onClick={dismiss}>
         <Destination href={`/${resolveLocale(locale)}/account`} prefetch={false}><UserIcon />{messages.text("account.title")}<ChevronRightIcon /></Destination>
-      </nav>
-      <SignOut><SignOutIcon />{messages.text("account.logOut")}</SignOut>
+      </nav>}
+      <SignOut logoutAction={administratorName ? "/api/admin/logout" : "/api/account/sign-out"}><SignOutIcon />{messages.text("account.logOut")}</SignOut>
     </Popup>
   </Disclosure>;
 }
 
 /** Single Rail: visible guest actions or a generic account avatar, plus the theme action in every header. */
-export function AccountLinks({ locale = "en" }: { locale?: string; showAccount?: boolean }) {
+export function AccountLinks({ locale = "en", administratorName }: { locale?: string; showAccount?: boolean; administratorName?: string }) {
   const pathname = usePathname();
   const phone = useSyncExternalStore(subscribeMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot);
   useEffect(() => { void refreshMemberSession(); }, [pathname]);
   const messages = createMessages(locale);
   const base = `/${resolveLocale(locale)}/account`;
   return <Actions data-account-actions>
-    {phone ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} /></> : <>
+    {phone || administratorName ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(administratorName ? { administratorName } : {})} /></> : <>
       <AuthLink href={`${base}?view=login`} prefetch={false}><SignInIcon />{messages.text("account.login")}</AuthLink>
       <AuthLink href={`${base}?view=register`} prefetch={false} $primary><UserPlusIcon />{messages.text("account.register")}</AuthLink>
       <ThemeToggle locale={locale} />

@@ -1,24 +1,13 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useTransition, type ReactNode } from "react";
 import styled from "styled-components";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/controls";
-import { Main, Notice, Tab, Tabs } from "@/components/analytics/dashboard/dashboard-styles";
-
-/** Owner dashboard sections share the same tab order on every admin page. */
-const sections = [
-  { key: "overview", href: "/admin", label: "Overview" },
-  { key: "payments", href: "/admin/payments", label: "Payments" },
-  { key: "codes", href: "/admin/codes", label: "Codes" },
-  { key: "subscribers", href: "/admin/subscribers", label: "Subscribers" },
-  { key: "password-resets", href: "/admin/password-resets", label: "Password requests" },
-  { key: "plans", href: "/admin/plans", label: "Plans" },
-  { key: "settings", href: "/admin/settings", label: "Settings" },
-  { key: "audit", href: "/admin/audit", label: "Audit" },
-  { key: "analytics", href: "/analytics", label: "Analytics" },
-] as const;
-export type AdminSection = (typeof sections)[number]["key"];
+import Link from "@/components/navigation/navigation-link";
+import { Notice, PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
+import { adminSections, type AdminSection } from "@/domain/admin-navigation";
+import { media } from "@/styles/theme";
+import { adminControl } from "./admin-form";
 
 /** A background tab shows "(n) Payments · …" while payments wait; the page's own title stays after it, and returns at 0. */
 function pendingTitle(title: string, count: number, payments: boolean) {
@@ -27,39 +16,37 @@ function pendingTitle(title: string, count: number, payments: boolean) {
 }
 
 /**
- * Phone-first owner shell: one column, 44 px targets and a top tab strip. Signing out is a plain form POST, so it works
- * without JavaScript. Owner copy is English only.
+ * One compact page selector serves every owner section. Site navigation and account actions belong to the shared header.
  */
-export function AdminWorkspace({ current, username, developmentCredentials, children, pendingCount }: {
-  current: AdminSection; username: string; developmentCredentials: boolean; children: ReactNode; pendingCount?: number;
+export function AdminWorkspace({ current, developmentCredentials, children, pendingCount }: {
+  current: AdminSection; developmentCredentials: boolean; children: ReactNode; pendingCount?: number;
 }) {
-  const router = useRouter(), [count, setCount] = useState(pendingCount);
+  const router = useRouter(), [navigating, startNavigation] = useTransition();
   useEffect(() => {
     const refreshCount = () => {
       void fetch("/api/admin/payments?count=1", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then((v: { pendingCount: number } | null) => {
-        if (v) { setCount(v.pendingCount); document.title = pendingTitle(document.title, v.pendingCount, current === "payments"); if (current === "payments") router.refresh(); }
+        if (v) { document.title = pendingTitle(document.title, v.pendingCount, current === "payments"); if (current === "payments") router.refresh(); }
       }).catch(() => {});
     };
     if (pendingCount === undefined) refreshCount();
+    else document.title = pendingTitle(document.title, pendingCount, current === "payments");
     const timer = setInterval(refreshCount, 60000);
     return () => clearInterval(timer);
   }, [current, pendingCount, router]);
   return (
     <Workspace data-analytics-ignore>
-      <Actions>
-        <strong>Admin</strong>
-        <span>Signed in as <strong>{username}</strong></span>
-        <form method="post" action="/api/admin/logout"><Button type="submit">Sign out</Button></form>
-      </Actions>
-      <Strip>
-        <Tabs as="nav" aria-label="Owner dashboard">
-          {sections.map((section) => (
-            <SectionTab key={section.key} as="a" href={section.href} $selected={section.key === current}
-              aria-current={section.key === current ? "page" : undefined}>{section.label}{section.key === "payments" && (pendingCount ?? count) !== undefined ? ` (${pendingCount ?? count})` : ""}</SectionTab>
-          ))}
-        </Tabs>
-      </Strip>
-      <Column as="div" $wide={current === "analytics"}>
+      <Switcher aria-label="Admin pages" aria-busy={navigating}>
+        <label htmlFor="admin-page">Admin</label>
+        <PageSelect id="admin-page" name="admin-page" value={current} disabled={navigating} onChange={(event) => {
+          const section = adminSections.find(({ key }) => key === event.target.value);
+          if (section && section.key !== current) startNavigation(() => router.push(section.href));
+        }}>
+          {adminSections.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
+        </PageSelect>
+      </Switcher>
+      <noscript><Fallback aria-label="Admin pages">{adminSections.map(({ key, href, label }) =>
+        <Link key={key} href={href} aria-current={key === current ? "page" : undefined}>{label}</Link>)}</Fallback></noscript>
+      <Column $wide={current === "analytics"}>
         {developmentCredentials && <Notice $tone="warning">
           Development sign-in is active. Production refuses it: set GOAL_HINT_ANALYTICS_ADMIN_USERNAME, GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH and GOAL_HINT_ANALYTICS_SECRET before deploying.
         </Notice>}
@@ -69,36 +56,38 @@ export function AdminWorkspace({ current, username, developmentCredentials, chil
   );
 }
 
-const column = "48rem";
-
 const Workspace = styled.div`
   min-inline-size: 0;
 `;
-const Actions = styled.div`
+const Switcher = styled.nav`
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 16px;
-  margin-block-end: 16px;
-  > span { margin-inline-start: auto; }
-`;
-const Strip = styled.div`
+  justify-content: space-between;
+  gap: 12px;
+  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
+  padding: 8px ${({ theme }) => theme.layout.gutter};
   background: ${({ theme }) => theme.color.surface};
   border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  ${Tabs} {
-    max-inline-size: ${({ theme }) => theme.layout.wideMaxWidth};
-    margin-inline: auto;
-    padding-inline: 16px;
-    border-block-end: 0;
-  }
+  label { font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
 `;
-const SectionTab = styled(Tab)`
-  display: inline-flex;
-  align-items: center;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
-  text-decoration: none;
+const PageSelect = styled.select`
+  ${adminControl}
+  inline-size: min(15rem, 72%);
+  border-radius: 0;
 `;
-const Column = styled(Main)<{ $wide: boolean }>`
+const Column = styled.div<{ $wide: boolean }>`
+  display: grid;
+  gap: 16px;
   min-inline-size: 0;
-  max-inline-size: ${({ $wide }) => $wide ? "100%" : column};
+  max-inline-size: ${({ $wide }) => $wide ? "100%" : "56rem"};
+  margin-inline: auto;
+  padding-block: 20px;
+  > ${PageTitle} h1 { font-size: 1.375rem; }
+  ${media.desktop} { gap: 20px; padding-block: 24px; }
+`;
+const Fallback = styled.nav`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-block: 12px;
 `;

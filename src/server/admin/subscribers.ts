@@ -1,7 +1,7 @@
 import "server-only";
 import { randomInt } from "node:crypto";
 import { getReportingDate, getReportingDayBounds, addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow } from "../../domain/owner-members.ts";
+import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow, OwnerPaymentSummary } from "../../domain/owner-members.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import { hashPassword } from "../analytics/analytics-password.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -25,6 +25,13 @@ export const generateTemporaryPassword = () => Array.from({ length: temporaryPas
 export type TemporaryPasswordOutcome = Readonly<{ status: "reset"; accountId: string; temporaryPassword: string; expiresAt: string; created: boolean; sessionsDeleted: number }> | CodeFailure;
 export function createSubscribers(database: DatabaseRuntime, now = Date.now, adminPhone = isMemberAdminPhone) {
   return {
+    async pendingPayments(): Promise<readonly OwnerPaymentSummary[]> {
+      return database.query(async tx => (await tx.paymentSubmission.findMany({ where: { status: "pending" },
+        orderBy: [{ submittedAt: "asc" }, { id: "asc" }], take: 2,
+        select: { id: true, reference: true, claimedNetwork: true, claimedAmountUgx: true, submittedAt: true } }))
+        .map(row => ({ id: row.id, reference: `P-${row.reference}`, network: row.claimedNetwork,
+          amount: row.claimedAmountUgx, submittedAt: row.submittedAt.toISOString() })));
+    },
     async passwordResetRequests(): Promise<readonly Readonly<{ id: string; phone: string; requestedAt: string }>[]> {
       return database.query(async tx => (await tx.memberAccount.findMany({ where: { passwordResetRequestedAt: { not: null }, blockedAt: null, erasedAt: null, phone: { not: null } },
         orderBy: { passwordResetRequestedAt: "asc" }, take: 100, select: { id: true, phone: true, passwordResetRequestedAt: true } }))

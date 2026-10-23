@@ -17,7 +17,7 @@ export const FieldRow = styled.div`
   gap: 14px;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
 `;
-const control = css`
+export const adminControl = css`
   inline-size: 100%;
   min-block-size: ${({ theme }) => theme.control.minHeight};
   padding: 8px 10px;
@@ -34,7 +34,7 @@ export const FieldBlock = styled.label`
   gap: 4px;
   min-inline-size: 0;
   font-weight: ${({ theme }) => theme.typography.weight.medium};
-  input, select, textarea { ${control} }
+  input, select, textarea { ${adminControl} }
   textarea { min-block-size: 5.5rem; resize: vertical; }
 `;
 export const Hint = styled.span`

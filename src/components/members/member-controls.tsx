@@ -30,8 +30,10 @@ export function MemberNavigationRecovery() {
   return null;
 }
 
-export function MemberSignOut({ children, ...props }: ComponentProps<typeof Button>) {
-  return <form method="post" action="/api/account/sign-out" onSubmit={() => {
+export function MemberSignOut({ children, logoutAction = "/api/account/sign-out", ...props }: ComponentProps<typeof Button> & {
+  logoutAction?: "/api/account/sign-out" | "/api/admin/logout";
+}) {
+  return <form method="post" action={logoutAction} onSubmit={() => {
     try { for (const key of Object.keys(sessionStorage)) if (key.startsWith(paymentDraftStoragePrefix)) sessionStorage.removeItem(key); } catch { /* Browser storage may be disabled. */ }
   }} data-analytics-ignore><Button variant="secondary" {...props} type="submit">{children}</Button></form>;
 }

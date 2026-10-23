@@ -51,7 +51,7 @@ const anchorClearance = css`
 `;
 
 /** App screens (feeds) start close to the header; content pages keep generous spacing. */
-export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean }>`
+export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean; $dashboard?: boolean }>`
   padding-block: ${({ theme, $app }) => $app ? `10px ${theme.space.lg}` : `${theme.space.md} ${theme.space.lg}`};
   min-inline-size: 0;
   ${({ $compact }) => $compact && css`
@@ -65,6 +65,10 @@ export const PageMain = styled.main<{ $app?: boolean; $compact?: boolean }>`
     padding-block: ${({ theme, $app }) => $app ? `14px ${theme.space.xl}` : theme.space.xl};
   }
   ${({ $app }) => !$app && anchorClearance}
+  ${({ $dashboard }) => $dashboard && css`
+    padding-block: 0 calc(4.5rem + env(safe-area-inset-bottom));
+    ${media.desktop} { padding-block: 0 24px; }
+  `}
 `;
 
 /** Mobile first: the phone page title, a tablet step, then the desktop size. */

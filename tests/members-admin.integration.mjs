@@ -78,4 +78,17 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   const changed=await handler(context(`/${who.accountId}`,{action:"change-number",newPhone,verifiedBy:"payment-details",confirmed:true}));assert.equal(changed.status,201);const delivery=(await changed.json()).delivery;assert.equal(delivery.phone,newPhone);assert.ok(!delivery.message.includes(newPhone));assert.match(delivery.message,/#code=/);
  });
 
+ await t.test("overview preview shows only the two oldest pending payments and excludes private payment details",async()=>{
+  const existing=await db.query(tx=>tx.paymentSubmission.findMany({where:{status:"pending"},select:{id:true}}));
+  if(existing.length)await db.query(tx=>tx.paymentSubmission.updateMany({where:{id:{in:existing.map(row=>row.id)}},data:{status:"rejected"}}));
+  const submitted=[];
+  for(let i=0;i<3;i++){clock=base+(i+1)*HOUR;submitted.push(await report(await member(),`PREVIEW${i}`));}
+  const rows=await members.pendingPayments();
+  assert.deepEqual(rows.map(row=>row.id),submitted.slice(0,2).map(row=>row.id));
+  assert.equal(rows[0].amount,5000);assert.equal(rows[0].reference,`P-${submitted[0].reference}`);
+  assert.deepEqual(Object.keys(rows[0]).sort(),["amount","id","network","reference","submittedAt"]);
+  await db.query(tx=>tx.paymentSubmission.update({where:{id:submitted[0].id},data:{status:"rejected"}}));
+  assert.deepEqual((await members.pendingPayments()).map(row=>row.id),submitted.slice(1).map(row=>row.id));
+  clock=base;
+ });
 });
