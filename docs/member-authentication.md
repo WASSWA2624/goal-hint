@@ -4,7 +4,7 @@ Registration requires a supported phone number and a password of 8–128 charact
 
 ## Account verification
 
-The member explicitly chooses SMS or WhatsApp to their registered number, then enters the six-digit code. Production delivery uses YoolaSMS. A code expires exactly 24 hours after issuance or immediately after successful use. Every new request invalidates earlier codes for that purpose, including requests from another session or delivery channel. At most three requests per account and purpose are allowed in a rolling 24 hours; changing numbers does not reset the allowance, and a reused number retains its recent requests. Reservations and failed/uncertain deliveries count toward the limit to prevent concurrent or retried sends from exceeding it. Five incorrect guesses invalidate a code. Codes are stored as keyed hashes; no public response, URL, log, or database field contains the plaintext code.
+The member explicitly chooses SMS or WhatsApp to their registered number, then enters the six-digit code. Delivery uses YoolaSMS in both production and development when server-only credentials are configured. A code expires exactly 24 hours after issuance or immediately after successful use. Every new request invalidates earlier codes for that purpose, including requests from another session or delivery channel. At most three requests per account and purpose are allowed in a rolling 24 hours; changing numbers does not reset the allowance, and a reused number retains its recent requests. Reservations and failed/uncertain deliveries count toward the limit to prevent concurrent or retried sends from exceeding it. Five incorrect guesses invalidate a code. Codes are stored as keyed hashes; no public response, URL, log, or database field contains the plaintext code.
 
 Successful verification grants a normal member cookie. It does not grant a subscription. Changing the phone number requires the current password, revokes existing sessions/codes, and requires verification of the new number before using the account again.
 
@@ -17,7 +17,7 @@ Successful verification grants a normal member cookie. It does not grant a subsc
 
 Profile password changes and password recovery share a rolling 24-hour limit: a member can save a new password only once during that period. The restriction is checked under the account lock, including concurrent requests. Members can contact the administrator for further assistance. Recovery requests remain visible under Admin → Password requests. After manually checking identity, an admin can issue a single-use temporary password that expires in 15 minutes and resets the password-change restriction. It invalidates existing passwords, codes, and sessions; logging in with it grants the same reset-only cookie. Temporary passwords are displayed once privately and never placed in audit records.
 
-Production delivery setup, country/channel coverage, API credentials and development behavior are described in [yoola-messaging.md](yoola-messaging.md). Development makes no external deliveries and never exposes a generated code; automated tests inject synthetic delivery.
+Production and development delivery setup, country/channel coverage and server-only API credentials are described in [yoola-messaging.md](yoola-messaging.md). Development uses real delivery with configured credentials; automated tests inject synthetic delivery.
 
 ## Administrator access
 
