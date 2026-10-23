@@ -20,9 +20,11 @@ export function feedDiscovery(query: FeedQuery, today: ReportingDate) {
   const range = resolveFeedDates(query, today);
   const filtered = Boolean(query.zone) || activeFeedFilterCount(query) > 0 || query.sort.by !== "kickoff" || query.sort.direction !== defaultSortDirection.kickoff ||
     query.pageSize !== feedQueryRules.pageSize || range.dayCount !== 1 && query.dates.kind !== defaultFeedDatePreset;
-  // Pin pagination/relative aliases to a dated collection; the default feed lives at /en/matches.
+  // The rolling default collection keeps its own pagination: pinning its 30-day
+  // range would point an indexable page at a deliberately noindex multiday archive.
+  // Single-day aliases still pin to a dated collection.
   const home = query.dates.kind === defaultFeedDatePreset && query.page === 1;
-  const canonicalQuery: FeedQuery = filtered || home ? query : { ...query, dates: pinnedDateSelection(range) };
+  const canonicalQuery: FeedQuery = filtered || query.dates.kind === defaultFeedDatePreset ? query : { ...query, dates: pinnedDateSelection(range) };
   return { path: feedQueryHref(canonicalQuery, today), eligible: !filtered, home, range };
 }
 

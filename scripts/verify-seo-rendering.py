@@ -1,5 +1,5 @@
 """Verify isolated SEO production/staging responses from genuine SQL captures."""
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import json
 import os
 import re
@@ -37,7 +37,7 @@ def prepare(args):
     (directory / "next.config.mjs").unlink()
     (directory / "next.config.ts").write_text(
         f"import config from {json.dumps('./' + relative)};\n"
-        + "export default {...config,turbopack:{root:" + json.dumps(str(ROOT)) + "}};\n", encoding="utf-8")
+        + "export default {...config,experimental:{...config.experimental,cpus:1},turbopack:{root:" + json.dumps(str(ROOT)) + "}};\n", encoding="utf-8")
     return directory, cases
 
 
@@ -110,7 +110,9 @@ def verify(origin, cases, *, staging):
         assert urljoin(origin, shared.headers.get("location")) == origin + path + "#gh_attr=utm_source%3Dsearch%26click%3Dgoogle"
         assert shared.headers.get("x-robots-tag") == ("noindex, follow" if staging else None)
         checks += 1
-    match(r"<title>Goal Hint \| Daily Football Predictions</title>", home)
+    match(r"<title>Best Slips.*?</title>", home)
+    match(r'<h1\b[^>]*>Best Slips</h1>', visible_html(home, comments=False))
+    match(r'href="/en/matches"', home)
     structured = json.loads(match(r'<script type="application/ld\+json">([^<]+)</script>', home).group(1))
     graph = {node["@type"]: node for node in structured["@graph"]}
     assert graph["WebSite"]["url"] == fixed + "/en" and graph["Organization"]["url"] == fixed + "/en"
@@ -123,11 +125,20 @@ def verify(origin, cases, *, staging):
     assert "page=2" in visible_html(first, comments=False)
     match("Page 2", second)
     checks += 1
-    today = datetime.fromtimestamp(cases["at"] / 1000, timezone(timedelta(hours=3))).date()
-    default_archive = f"/en/predictions/{today - timedelta(days=29)}?to={today}"
-    for path in ["/en?page=2", "/en?q=Discovery+Home+1", "/en?when=next-7-days", "/en?page=10000"]:
-        canonical = default_archive + "&" + path.split("?", 1)[1] if path in ("/en?page=2", "/en?page=10000") else path
-        page(path, canonical, path == "/en?page=2" and not staging)
+    feed = page("/en/matches", "/en/matches", not staging)
+    match(r"<title>Goal Hint \| Daily Football Predictions</title>", feed)
+    match(r'href="/en/matches\?page=2"', visible_html(feed, comments=False))
+    for query in ["page=2", "q=Discovery+Home+1", "when=next-7-days", "page=10000"]:
+        # The old homepage feed bookmarks retain their exact query in one redirect.
+        legacy = anonymous("/en?" + query)
+        assert legacy.status == 307, query
+        assert urljoin(origin, legacy.headers.get("location")) == origin + "/en/matches?" + query
+        checks += 1
+        path = "/en/matches?" + query
+        rendered = page(path, path, query == "page=2" and not staging)
+        if query == "page=2":
+            match(r"<title>Daily Football Predictions · Page 2 \| Goal Hint</title>", rendered)
+            assert metadata(rendered, "description") == metadata(feed, "description")
     detail = cases["details"][cases["publishedId"]]["current"]["data"]
     shared_detail = anonymous(detail["route"]["path"] + "?revision=" + cases["revision"] + "&fbclid=shared")
     assert shared_detail.status == 308
@@ -187,7 +198,7 @@ def verify(origin, cases, *, staging):
         match(r"Sitemap: https://goalhint\.com/sitemap-index\.xml", robots)
         index = locations(index_response.text)
         assert index == [fixed + "/sitemap.xml", fixed + "/sitemap-matches-0.xml", fixed + "/sitemap-archive-0.xml"]
-        assert locations(sitemap) == [fixed + "/en", fixed + "/en/help", fixed + "/en/contact"]
+        assert locations(sitemap) == [fixed + "/en", fixed + "/en/matches", fixed + "/en/help", fixed + "/en/contact"]
         assert locations(matches) == [fixed + row["path"] for row in cases["matches"]]
         assert locations(dates) == [fixed + archive]
         for row in cases["matches"]:
@@ -221,7 +232,7 @@ def main():
     directory, cases = prepare(args)
     print(f"Building isolated SEO acceptance: {directory}", flush=True)
     if not args.reuse:
-        build_fixture(directory, env=environment(SEO_ACCEPTANCE_ENVIRONMENT="staging"))
+        build_fixture(directory, env=environment(SEO_ACCEPTANCE_ENVIRONMENT="staging"), timeout=300)
     logs = []
     try:
         for deployment in ("staging", "production"):

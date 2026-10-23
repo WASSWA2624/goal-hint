@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { canonicalUrl, feedDiscovery, type DiscoveryPolicy } from "../../domain/discovery.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { ReportingDate } from "../../domain/calendar.ts";
-import type { FeedQuery } from "../../domain/feed-query.ts";
+import { defaultFeedDatePreset, type FeedQuery } from "../../domain/feed-query.ts";
 import { privacyNotice } from "../../domain/privacy-notice.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import { contactNotice } from "../../domain/contact-notice.ts";
@@ -26,12 +26,13 @@ export function pageMetadata({ title, description, path, index = false }: {
 export function feedMetadata(query: FeedQuery, today: ReportingDate, result: FeedPageResult, policy: DiscoveryPolicy = getDiscoveryPolicy()): Metadata {
   const messages = createMessages(query.locale), discovery = feedDiscovery(query, today);
   const values = { date: messages.reportingDate(discovery.range.startDate), page: messages.number(query.page) };
-  const title = discovery.home ? messages.text("metadata.homeTitle") : messages.text("metadata.archiveTitle", values);
-  const pageTitle = query.page === 1 ? title : messages.text("metadata.paginationTitle", { title: title.replace(/ \| Goal Hint$/u, ""), page: values.page });
-  // The home page is the site's entry point: a quiet or uncovered day must not flip it to noindex (Google drops
-  // noindex pages and recrawls them slowly). Dated archives still need stored matches; failed reads stay noindex.
+  const rolling = query.dates.kind === defaultFeedDatePreset;
+  const title = rolling ? messages.text("metadata.homeTitle") : messages.text("metadata.archiveTitle", values);
+  const pageTitle = query.page === 1 ? title : messages.text("metadata.paginationTitle", { title: title.replace(/^Goal Hint \| | \| Goal Hint$/gu, ""), page: values.page });
+  // Keep the default feed landing page indexable on quiet days. Dated archives
+  // and later collection pages still need stored matches; failed reads stay noindex.
   const populated = result.data !== null && (discovery.home || result.data.records.length > 0 && result.data.state !== "page-out-of-range");
-  return pageMetadata({ title: pageTitle, description: discovery.home ? messages.text("metadata.description")
+  return pageMetadata({ title: pageTitle, description: rolling ? messages.text("metadata.description")
     : messages.text("metadata.archiveDescription", values), path: discovery.path, index: policy.index && discovery.eligible && populated });
 }
 

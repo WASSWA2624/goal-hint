@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { breadcrumbStructuredData, canonicalUrl, feedDiscovery, homeStructuredData, matchPageIndexable, resolveDiscoveryPolicy, serializeStructuredData, sitemapIndexXml, sitemapPage, websiteStructuredData } from '../src/domain/discovery.ts';
 import { parseFeedQuery } from '../src/domain/feed-query.ts';
+import { feedPageHref } from '../src/domain/feed-pagination.ts';
 import { parseReportingDate } from '../src/domain/calendar.ts';
 import { feedMetadata, createInformationMetadata } from '../src/server/seo/metadata.ts';
 import { matchDetailMetadata, matchStructuredData } from '../src/server/matches/detail-page.ts';
@@ -92,7 +93,7 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
     assert.throws(() => canonicalUrl(path), RangeError);
   }
   assert.equal(feedDiscovery(query({}), today).path, '/en/matches');
-  assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/predictions/2026-09-10?to=2026-10-09&page=2');
+  assert.equal(feedDiscovery(query({ page: '2' }), today).path, '/en/matches?page=2');
   assert.equal(feedDiscovery(query({ when: 'today' }), today).path, '/en/predictions/2026-10-09');
   assert.equal(feedDiscovery(query({ when: 'tomorrow', page: '3' }), today).path, '/en/predictions/2026-10-10?page=3');
   assert.equal(feedDiscovery(query({ date: '2026-10-08' }), today).path, '/en/predictions/2026-10-08');
@@ -105,13 +106,38 @@ test('canonical origin is fixed and genuine pagination retains its dated page id
   assert.equal(feedDiscovery(query({ dir: 'desc' }), today).eligible, true);
 });
 
+test('rolling default pagination has distinct indexable canonical destinations', () => {
+  const paths = new Set();
+  for (const page of [1, 2, 3]) {
+    const source = feedMetadata(query({ page: String(page) }), today, populated, approved);
+    const destination = new URL(source.alternates.canonical);
+    const targetQuery = parseFeedQuery(destination.searchParams, { today });
+    const target = feedMetadata(targetQuery, today, populated, approved);
+    assert.equal(destination.pathname, '/en/matches');
+    assert.equal(targetQuery.page, page);
+    assert.equal(source.robots.index, true);
+    assert.equal(target.robots.index, true, 'An indexable page must not canonicalize to a noindex range variant.');
+    assert.equal(target.alternates.canonical, source.alternates.canonical);
+    assert.equal(feedPageHref(query({}), today, page), destination.pathname + destination.search,
+      'Ordinary pagination links discover the same indexable canonical URL.');
+    paths.add(source.alternates.canonical);
+  }
+  assert.equal(paths.size, 3, 'Pagination never canonicalizes to page one.');
+  assert.equal(feedDiscovery(query({ from: '2026-09-10', to: today, page: '2' }), today).eligible, false,
+    'Explicit multiday archives retain their noindex policy.');
+  const dated = feedMetadata(query({ when: 'today', page: '2' }), today, populated, approved);
+  assert.equal(dated.alternates.canonical, 'https://goalhint.com/en/predictions/2026-10-09?page=2');
+  assert.equal(dated.robots.index, true);
+});
+
 test('page metadata has independent social fields, real canonical pagination and honest unavailable indexing', async () => {
   const home = feedMetadata(query({}), today, populated, approved);
   assert.equal(home.title, 'Goal Hint | Daily Football Predictions');
   assert.equal(home.robots.index, true);
   const page = feedMetadata(query({ page: '2' }), today, populated, approved);
-  assert.match(page.title, /Page 2/); assert.notEqual(page.title, home.title);
-  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/predictions/2026-09-10?to=2026-10-09&page=2');
+  assert.equal(page.title, 'Daily Football Predictions · Page 2 | Goal Hint');
+  assert.equal(page.description, home.description, 'A rolling collection is not described as only its first day.');
+  assert.equal(page.alternates.canonical, 'https://goalhint.com/en/matches?page=2');
   assert.equal(page.openGraph.url, page.alternates.canonical);
   assert.equal(page.openGraph.title, page.title); assert.equal(page.twitter.title, page.title);
   assert.equal(page.openGraph.images[0].url, 'https://goalhint.com/brand/goal-hint-open-graph.png');

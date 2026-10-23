@@ -4,12 +4,16 @@ import {getReportingDate,utcInstantFromEpochMilliseconds} from '@/domain/calenda
 import {parseMatchDetailQuery} from '@/server/matches/detail-query';
 import {MatchFeedError} from '@/server/matches/feed-error';
 import {createDiscoveryRoutes} from '@/server/seo/discovery-routes';
+import {createBestSlipsService} from '@/server/slips/best-slips';
 import type {StoredMatchFeedResponse} from '@/domain/match-feed';
 import type {StoredMatchDetailResponse} from '@/domain/match-detail';
 import type {FeedQuery,FeedParameters} from '@/domain/feed-query';
 import data from '../scenarios.json';
 import {policy} from './policy';
 export const instant=async()=>utcInstantFromEpochMilliseconds(data.at);
+// The production homepage's fail-closed model/odds state, with the capture clock.
+// No synthetic model qualification or prediction is introduced for acceptance.
+export const readBestSlips=createBestSlipsService({now:()=>data.at});
 const today=getReportingDate(utcInstantFromEpochMilliseconds(data.at));
 const feeds=Object.values(data.feeds) as unknown as {query:FeedQuery;result:{data:StoredMatchFeedResponse}}[];
 const details=data.details as unknown as Record<string,{current:{data:StoredMatchDetailResponse};revision?:{data:StoredMatchDetailResponse}}>;

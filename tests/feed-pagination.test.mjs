@@ -25,6 +25,13 @@ test('page URLs retain filters/order/size and pin relative reporting dates', () 
   assert.match(feedPageApiHref(q,today,2),/^\/api\/matches\?from=2026-10-09&to=2026-10-15&q=Alias&league=league-a&status=live&market=total-goals&sort=probability&page=2&pageSize=40$/u);
   assert.throws(()=>feedPageHref(q,today,0));
 });
+
+test('rolling default navigation stays on the feed while API appends pin its current range', () => {
+  assert.equal(feedPageHref(query(),today,2),'/en/matches?page=2');
+  const filtered=query('q=Alias&country=England&status=finished&pageSize=40');
+  assert.equal(feedPageHref(filtered,today,2),'/en/matches?q=Alias&country=England&status=finished&page=2&pageSize=40');
+  assert.equal(feedPageApiHref(filtered,today,2),'/api/matches?from=2026-09-10&to=2026-10-09&q=Alias&country=England&status=finished&page=2&pageSize=40');
+});
 test('append uses contiguous, stable cohorts and fails atomically on drift or overlap', () => {
   const initial=initialLoadedFeed(page(1,['a','b'])), next=appendFeedPage(initial,page(2,['c','d']));
   assert.deepEqual(next.records.map(r=>r.fixtureId),['a','b','c','d']); assert.equal(next.lastPage,2);

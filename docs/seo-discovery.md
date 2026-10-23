@@ -5,6 +5,11 @@ The owner authorized production publication and deployment on 15 October 2026.
 See [the production release record](reports/seo-production-2026-10-15.md). Search
 Console submission remains a separate owner-account action.
 
+The [23 October audit](reports/seo-audit-2026-10-23.md) records a current hosting
+suspension affecting public pages, APIs, robots and sitemaps. Earlier successful
+deployment checks are historical evidence; production availability and indexing
+must be verified again after hosting is restored.
+
 ## Canonical pages and metadata
 
 `publicPolicy.origin` fixes the metadata base and canonical origin to
@@ -22,8 +27,9 @@ This normalization stores no attribution and adds no analytics. The API remains
 outside the page proxy and retains its strict input contract.
 
 Shared `pageMetadata` supplies complete page-specific Open Graph and Twitter
-fields because Next metadata objects merge shallowly. The homepage title is
-`Goal Hint | Daily Football Predictions`; archive titles include the EAT day and
+fields because Next metadata objects merge shallowly. The homepage at `/en` now
+shows Best Slips; `/en/matches` is the default match feed, titled
+`Goal Hint | Daily Football Predictions`. Archive titles include the EAT day and
 pagination number; match titles include the teams, known kickoff's EAT date and
 Goal Hint suffix. Dates distinguish repeat fixtures between the same clubs without
 inventing a kickoff when none is stored. Existing
@@ -31,20 +37,25 @@ named first-party favicon, touch icon and 1200 × 630 social PNG assets are reus
 
 `createFeedRoute` shares its stored read and request-owned reporting clock between
 metadata and meaningful initial HTML. Dated collections and pagination keep their
-own canonical identities. For example, `/en?page=2` canonicalizes to
-`/en/predictions/YYYY-MM-DD?page=2`, never to page one. Relative date aliases pin
-to the corresponding dated collection; the ordinary home page stays `/en`.
+own canonical identities. The default rolling collection keeps
+`/en/matches?page=2`, never page one or an explicit noindex multiday range.
+Its ordinary numbered links use the same canonical URLs. API pagination still
+pins the date range to prevent mixed cohorts across midnight; a full document
+navigation to the rolling collection resolves its dates at request time.
+Single-day aliases pin to the corresponding dated collection. Legacy homepage
+filter URLs redirect to `/en/matches` with their query parameters preserved.
 Match metadata shares the fixture read with its page; only page rendering reads
 optional section insights, in parallel with that fixture read. An insights retry
 or slow insights query cannot hold up the canonical/title metadata.
 
 Search, league/status/market/probability-order filters, nondefault page sizes and
-multiday collections receive `noindex, follow`. Their normalized canonical retains
+explicit multiday collections receive `noindex, follow`. Their normalized canonical retains
 the actual query rather than claiming to be an equivalent unfiltered page.
-Empty, failed or out-of-range dated archives are not made indexable. The plain
-home page `/en` is the exception: once its stored read succeeds it stays indexable
-on a quiet or uncovered day, because flipping the site's entry point to noindex
-makes Google drop it and recrawl it slowly; failed reads still receive noindex.
+Empty, failed or out-of-range dated archives are not made indexable. The default
+match-feed page `/en/matches` stays indexable once its stored read succeeds, even
+on a quiet or uncovered day; failed reads still receive noindex. The Best Slips
+homepage `/en` has independent metadata and remains indexable under the production
+release policy even when no slips are available.
 Match pages are indexable only when the displayed revision publishes at least
 one market (`matchPageIndexable`). Fixtures without a published forecast remain
 valid 200 pages with noindex, since every section would read "Not available".
