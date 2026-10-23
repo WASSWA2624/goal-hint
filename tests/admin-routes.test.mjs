@@ -49,8 +49,13 @@ test("member write routes use the shared factories; sign-in and devices enforce 
   }
 });
 
-test("account activation no longer exposes code redemption or message verification routes", () => {
-  for (const segment of ["code", "verification", "verification/confirm"]) assert.ok(!memberRoutes.includes(`src/app/api/account/${segment}/route.ts`));
+test("account verification and recovery use the shared auth handler without exposing subscription code redemption", async () => {
+  for (const segment of ["code", "verification/confirm"]) assert.ok(!memberRoutes.includes(`src/app/api/account/${segment}/route.ts`));
+  for (const action of ["verification", "verify", "forgot", "reset-code", "reset"]) {
+    const route = `src/app/api/account/${action}/route.ts`;
+    assert.ok(memberRoutes.includes(route));
+    assert.match(await source(route), new RegExp(`export const POST = createMemberAuthHandler\\("${action}"\\);`));
+  }
 });
 
 test("the scan sees the admin shell, sign-in and sign-out, and the Plans and Settings pages and routes", () => {

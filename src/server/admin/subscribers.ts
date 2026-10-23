@@ -107,7 +107,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
             await tx.accessCode.updateMany({ where: { accountId: id }, data: { note: null } });
             deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
             await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null,
-              passwordResetRequestedAt: null, ownerNote: null, blockedReason: null, erasedAt: at } });
+              passwordResetRequestedAt: null, phoneVerifiedAt: null, passwordChangedAt: null, ownerNote: null, blockedReason: null, erasedAt: at } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             break;
           }
@@ -129,7 +129,9 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
         if (!account?.phone || account.erasedAt) return rollback({ status: "refused", message: "This account is unavailable." });
         if (adminPhone(account.phone)) return rollback({ status: "refused", message: "Administrator passwords are managed in the environment." });
         if (account.blockedAt) return rollback({ status: "refused", message: "Unblock this account before setting a password." });
-        await tx.memberAccount.update({ where: { id }, data: { passwordHash: null, temporaryPasswordHash, temporaryPasswordExpiresAt: expiresAt, passwordResetRequestedAt: null } });
+        await tx.memberAccount.update({ where: { id }, data: { passwordHash: null, temporaryPasswordHash, temporaryPasswordExpiresAt: expiresAt,
+          passwordResetRequestedAt: null, passwordChangedAt: null } });
+        await tx.memberVerification.updateMany({ where: { accountId: id, consumedAt: null }, data: { consumedAt: at } });
         const sessionsDeleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
         await writeOwnerAudit(tx, { at, actor, action: "password_reset", accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted, created: false, expiresAt: expiresAt.toISOString() } });
         return { status: "reset", accountId: id, temporaryPassword, expiresAt: expiresAt.toISOString(), created: false, sessionsDeleted };

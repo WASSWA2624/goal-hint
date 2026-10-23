@@ -4147,3 +4147,19 @@ Best Slips now owns home, with public summaries and subscriber-only selections, 
 **Later owner instruction, 20 October:** nothing should remain closed locally. The confirmed receiving-wallet name was saved privately; local test mode is open, with the existing daily plan preserved and approved Weekly/Monthly plans added through the plans service. Settings/mode changes are audited. No existing data was deleted. Production activation/deployment did not occur; release/legal notices remain drafts.
 
 **Environment and phone follow-up:** the owner explicitly authorized separate environment variables for MTN/Airtel numbers and registered names, plus independent support call and WhatsApp numbers. Both wallets were supplied privately and configured only in ignored local environment variables. Environment identity supersedes historical database identity for page reads, readiness checks and locked payment-submission decisions. Managed API edits are refused before database/password work; stored values and audit rows remain intact. Tested menu shortcuts also use separate optional environment variables to avoid retaining a shortcut for an old wallet. No npm dependency was added. The reusable phone input now covers account, payer and owner forms, preserving native keyboard/ref behaviour and the existing square chrome.
+
+## 23 October 2026 — Next.js security maintenance
+
+Upgrade `next` and `eslint-config-next` together from `16.4.0` to exact
+`16.4.2` pins and update the committed npm lockfile, retaining the existing
+Node, React and package-manager baseline. The [14 October security update](https://nextjs.org/blog/nextjs-security-update-october-14-2026)
+identifies `16.4.1` as the patched Next.js 16.4 release for the disclosed cache,
+image-optimization and Server Action vulnerabilities. Select the subsequent
+[official `16.4.2` maintenance release](https://github.com/vercel/next.js/releases/tag/v16.4.2)
+within that patched line. Historical baseline decisions above remain records of
+their original dates.
+
+Re-run dependency audits, lint, type generation/checking, the production build
+and framework-boundary/not-found rendering regressions; restart the development
+server to load the installed framework. This entry records the maintenance
+decision, not completed verification. Check results belong in development progress.

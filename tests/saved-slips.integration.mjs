@@ -5,8 +5,7 @@ import test from "node:test";
 import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { DatabaseOperationError } from "../src/server/database/client.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
-import { createMemberAuth } from "../src/server/members/member-auth.ts";
-import { createMemberSessions } from "../src/server/members/member-sessions.ts";
+import { createAuthenticatedTestSessions as createMemberSessions } from "./helpers/member-fixtures.mjs";
 import { createSavedSlips } from "../src/server/slips/saved-slips.ts";
 import { liveRecord } from "./helpers/live-refresh-fixtures.mjs";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
@@ -42,10 +41,9 @@ test("saved slips persist privately, settle only completed fixtures and erase un
     GRANT SELECT ON goal_hint_test.FixtureResultState TO 'paid_application'@'127.0.0.1';
   `);
   for (const id of fixtures) await root.query("INSERT INTO FootballFixture (id,status) VALUES (?,'scheduled')", [id]);
-  const auth = createMemberAuth({ database, config, now, adminPhone: () => false });
   const sessions = createMemberSessions({ database, config, now, adminPhone: () => false });
-  const registered = await auth.register(phone, "synthetic slip password", { member: null }, "198.51.100.10");
-  assert.equal(registered.status, "authenticated");
+  const registered = await sessions.signIn(phone, "198.51.100.10");
+  assert.equal(registered.status, "signed-in");
   let member = await sessions.verify(registered.token);
   const service = createSavedSlips(database, config, now);
   function slip(id, legs) {
@@ -85,7 +83,7 @@ test("saved slips persist privately, settle only completed fixtures and erase un
     await database.query(tx => tx.memberSession.update({ where: { tokenHash: member.tokenHash }, data: { expiresAt: new Date(instant + 86_400_000), passwordResetAt: new Date(instant) } }));
     assert.equal(await service.save(member, lost), "forbidden");
     await database.query(tx => tx.memberSession.update({ where: { tokenHash: member.tokenHash }, data: { passwordResetAt: null } }));
-    const other = await auth.register("256700003002", "synthetic other password", { member: null }, "198.51.100.11");
+    const other = await sessions.signIn("256700003002", "198.51.100.11");
     const outsider = await sessions.verify(other.token);
     assert.equal(await service.save({ ...member, tokenHash: outsider.tokenHash }, lost), "forbidden");
     assert.equal(await database.query(tx => tx.savedSlip.count()), 1);

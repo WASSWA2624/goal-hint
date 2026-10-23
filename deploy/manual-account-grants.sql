@@ -6,4 +6,6 @@ GRANT SELECT, INSERT ON `goal_hint_db`.`SavedSlipFixture` TO 'goal_hint_app'@'ap
 
 -- Password recovery adds columns to MemberAccount and MemberSession. Existing table-scoped SELECT/INSERT/UPDATE
 -- grants cover them; deployments using column-scoped grants must add the new fields before starting this release.
--- No new grant is required for the retired MemberVerification table or any messaging service.
+-- Phone verification reuses MemberVerification to retain hashed requests for a rolling 24 hours.
+-- Review after deploying 20261023090000_member_message_verification. No credentials are stored in this table.
+GRANT SELECT, INSERT, UPDATE, DELETE ON `goal_hint_db`.`MemberVerification` TO 'goal_hint_app'@'application-host';

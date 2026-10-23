@@ -4,7 +4,7 @@ import test from "node:test";
 import { hashPassword, verifyPassword } from "../src/server/analytics/analytics-password.ts";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberAuthHandler } from "../src/server/members/member-auth-http.ts";
-import { createMemberSessions } from "../src/server/members/member-sessions.ts";
+import { createMemberSessions, memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, parseMemberAdminPhones, verifyMemberAdminCredential } from "../src/server/members/member-admin.ts";
 import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { passwordRecoveryRules } from "../src/server/members/password-recovery.ts";
@@ -12,18 +12,23 @@ import { passwordRecoveryRules } from "../src/server/members/password-recovery.t
 const phone = "256700000001", replacement = "256700000002", password = "correct horse 47";
 const key = (purpose, value) => createHmac("sha256", "synthetic-test-secret").update(`${purpose}\0${value}`).digest("hex");
 const browser = () => ({ member: null });
+const DAY = 86_400_000, address = "198.51.100.1";
+const wrongCode = (code) => `${code[0] === "0" ? "1" : "0"}${code.slice(1)}`;
 
 /** Small transactional store: assertions exercise the production auth service, not a second implementation of it. */
-function fixture({ admins = [], adminHash = null } = {}) {
+function fixture({ admins = [], adminHash = null, send } = {}) {
   let time = Date.parse("2026-10-20T18:00:00Z"), queue = Promise.resolve();
-  const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), sent = [];
+  const accounts = new Map(), sessions = new Map(), challenges = new Map(), buckets = new Map(), sent = [], messages = [];
   function matches(row, where = {}) {
     return Object.entries(where).every(([name, value]) => {
+      if (name === "OR") return value.some((part) => matches(row, part));
+      if (name === "AND") return [].concat(value).every((part) => matches(row, part));
+      if (name === "NOT") return !matches(row, value);
       const actual = row[name];
       if (value && typeof value === "object" && !(value instanceof Date)) return Object.entries(value).every(([operator, target]) =>
-        operator === "gt" ? actual > target : operator === "lte" ? actual <= target : operator === "not" ? actual !== target
+        operator === "gt" ? actual > target : operator === "gte" ? actual >= target : operator === "lt" ? actual < target : operator === "lte" ? actual <= target : operator === "not" ? actual !== target
           : operator === "in" ? target.includes(actual) : false);
-      return actual === value;
+      return actual instanceof Date && value instanceof Date ? +actual === +value : actual === value;
     });
   }
   function table(rows, id, defaults = {}) {
@@ -31,15 +36,23 @@ function fixture({ admins = [], adminHash = null } = {}) {
       async findUnique({ where, include }) { const row = [...rows.values()].find((row) => matches(row, where)); return row ? { ...row, ...(include?.account ? { account: accounts.get(row.accountId) } : {}) } : null; },
       async upsert({ where, create, update }) { return await this.findUnique({ where }) ? this.update({ where, data: update }) : this.create({ data: create }); },
       async findUniqueOrThrow(query) { const row = await this.findUnique(query); assert.ok(row); return row; },
-      async findMany({ where, orderBy } = {}) { const values = [...rows.values()].filter((row) => matches(row, where)); if (orderBy?.createdAt) values.sort((a, b) => +a.createdAt - +b.createdAt); return values.map((row) => ({ ...row })); },
-      async findFirst(query) { const values = await this.findMany(query); return query.orderBy?.createdAt === "desc" ? values.at(-1) ?? null : values[0] ?? null; },
+      async findMany({ where, orderBy, take } = {}) {
+        let values = [...rows.values()].filter((row) => matches(row, where));
+        if (orderBy) values.sort((a, b) => { for (const part of [].concat(orderBy)) for (const [field, direction] of Object.entries(part)) {
+          const comparison = a[field] < b[field] ? -1 : a[field] > b[field] ? 1 : 0; if (comparison) return direction === "desc" ? -comparison : comparison;
+        } return 0; });
+        if (take) values = values.slice(0, take);
+        return values.map((row) => ({ ...row }));
+      },
+      async findFirst(query) { return (await this.findMany(query))[0] ?? null; },
+      async count({ where } = {}) { return [...rows.values()].filter((row) => matches(row, where)).length; },
       async create({ data }) { const row = { ...defaults, ...data }; assert.ok(!rows.has(row[id])); rows.set(row[id], row); return { ...row }; },
-      async update({ where, data }) { const row = [...rows.values()].find((row) => matches(row, where)); assert.ok(row); Object.assign(row, data); return { ...row }; },
+      async update({ where, data }) { const row = [...rows.values()].find((row) => matches(row, where)); assert.ok(row); for (const [name, value] of Object.entries(data)) row[name] = value && typeof value === "object" && "increment" in value ? row[name] + value.increment : value; return { ...row }; },
       async updateMany({ where, data }) { let count = 0; for (const row of rows.values()) if (matches(row, where)) { Object.assign(row, data); count++; } return { count }; },
       async deleteMany({ where }) { let count = 0; for (const [identifier, row] of rows) if (matches(row, where)) { rows.delete(identifier); count++; } return { count }; },
     };
   }
-  const tx = { memberAccount: table(accounts, "id", { passwordHash: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null, passwordResetRequestedAt: null, blockedAt: null, erasedAt: null }),
+  const tx = { memberAccount: table(accounts, "id", { passwordHash: null, phoneVerifiedAt: null, passwordChangedAt: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null, passwordResetRequestedAt: null, blockedAt: null, erasedAt: null }),
     memberSession: table(sessions, "tokenHash", { codeEnteredAt: null, accessCodeId: null, authenticatedAt: null, passwordResetAt: null }),
     memberVerification: table(challenges, "id", { sentAt: null, confirmedAt: null, consumedAt: null, proofHash: null, attempts: 0 }),
     paymentSubmission: { async findMany() { return []; } },
@@ -64,10 +77,12 @@ function fixture({ admins = [], adminHash = null } = {}) {
     queue = result.catch(() => {}); return result;
   } };
   const adminPhones = new Set(admins), adminPhone = (phone) => adminPhones.has(phone);
-  const service = createMemberAuth({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash: () => adminHash });
+  const delivery = { async send(message) { messages.push(message); await send?.(message); } };
+  const restart = () => createMemberAuth({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash: () => adminHash, delivery });
+  const service = restart();
   const sessionService = createMemberSessions({ database, config: { key }, now: () => time, adminPhone, adminPasswordHash: () => adminHash });
   async function account(fields = {}) {
-    return tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash: await hashPassword(password), createdAt: new Date(time), lastSignInAt: new Date(time), ...fields } });
+    return tx.memberAccount.create({ data: { id: randomUUID(), phone, passwordHash: await hashPassword(password), phoneVerifiedAt: new Date(time), createdAt: new Date(time), lastSignInAt: new Date(time), ...fields } });
   }
   async function authenticate() {
     await account();
@@ -75,15 +90,20 @@ function fixture({ admins = [], adminHash = null } = {}) {
     const member = await sessionService.verify(logged.token); assert.ok(member);
     return { member, token: logged.token };
   }
-  return { service, database, tx, accounts, sessions, challenges, buckets, sent, sessionService, account, authenticate, adminPhones,
+  return { service, database, tx, accounts, sessions, challenges, buckets, sent, messages, sessionService, account, authenticate, adminPhones, restart,
     now: () => time, advance: (ms) => { time += ms; } };
 }
 
-test("registration needs only phone and password and never claims an existing passwordless account", async () => {
+test("registration creates a restricted verification session and never claims an existing passwordless account", async () => {
   const f = fixture();
   const result = await f.service.register(phone, password, browser(), "198.51.100.1");
   assert.equal(result.status, "authenticated");
-  assert.equal((await f.sessionService.verify(result.token)).phone, phone);
+  assert.equal(result.requiresVerification, true);
+  assert.equal(await f.sessionService.verify(result.token), null);
+  assert.deepEqual(await f.service.verificationSession(result.token), { phone });
+  assert.equal(f.messages.length, 0, "The member selects SMS or WhatsApp before a message is sent");
+  assert.equal([...f.sessions.values()][0].authenticatedAt, null);
+  assert.equal([...f.sessions.values()][0].passwordResetAt, null);
   assert.notEqual([...f.accounts.values()][0].passwordHash, password);
   assert.ok(await verifyPassword(password, [...f.accounts.values()][0].passwordHash));
   assert.deepEqual(await f.service.register(phone, password, browser(), "198.51.100.1"), { status: "conflict", message: "An account already exists, so please log in." });
@@ -125,14 +145,17 @@ test("private administrator password fallback works without hashing on each read
   assert.equal(memberAdminCredential({ GOAL_HINT_ADMIN_PASSWORD: "        " }), null);
 });
 
-test("forgot password persists one request and returns no credential or account-existence information", async () => {
+test("forgot password sends to a registered number and gives unknown/admin numbers the same generic response", async () => {
   const f = fixture(), account = await f.account();
-  const result = await f.service.requestPasswordReset(phone, "198.51.100.1");
+  const result = await f.service.requestPasswordReset(phone, address, "sms");
   assert.equal(result.status, "requested"); assert.ok(f.accounts.get(account.id).passwordResetRequestedAt);
-  const at = +f.accounts.get(account.id).passwordResetRequestedAt; f.advance(10_000);
-  assert.deepEqual(await f.service.requestPasswordReset(replacement, "198.51.100.1"), result);
-  await f.service.requestPasswordReset(phone, "198.51.100.1");
-  assert.equal(+f.accounts.get(account.id).passwordResetRequestedAt, at);
+  assert.deepEqual(await f.service.requestPasswordReset(replacement, address, "whatsapp"), result);
+  assert.equal(f.messages.length, 1);
+  assert.equal(f.messages[0].phone, phone); assert.equal(f.messages[0].channel, "sms"); assert.equal(f.messages[0].purpose, "password-reset");
+  const admin = fixture({ admins: [phone] }); await admin.account();
+  assert.deepEqual(await admin.service.requestPasswordReset(phone, address, "sms"), result);
+  assert.equal(admin.messages.length, 0); assert.equal(admin.challenges.size, 0);
+  assert.ok(!JSON.stringify(result).includes(f.messages[0].code));
   assert.equal(f.sent.length, 0);
   assert.equal((await f.service.login(phone, password, "198.51.100.1")).status, "authenticated", "A request alone does not change the password");
 });
@@ -174,15 +197,12 @@ test("temporary password and reset authorization expire at their exact deadline"
   assert.equal((await second.service.resetPassword("replacement secret", login.token, "198.51.100.1")).status, "unauthorized");
 });
 
-test("reissuing a temporary password invalidates the old one and request throttles are durable", async () => {
+test("reissuing a temporary password invalidates the old one", async () => {
   const f = fixture(), { account, result } = await temporary(f);
   const next = await createSubscribers(f.database, f.now, () => false).temporaryPassword({ id: account.id }, "owner");
   assert.equal(next.status, "reset"); assert.notEqual(next.temporaryPassword, result.temporaryPassword);
   assert.equal((await f.service.login(phone, result.temporaryPassword, "198.51.100.1")).status, "unauthorized");
   assert.equal((await f.service.login(phone, next.temporaryPassword, "198.51.100.1")).requiresPasswordChange, true);
-  for (let i = 0; i < 3; i++) assert.equal((await f.service.requestPasswordReset(phone, "198.51.100.1")).status, "requested");
-  const restarted = createMemberAuth({ database: f.database, config: { key }, now: f.now, adminPhone: () => false });
-  assert.equal((await restarted.requestPasswordReset(phone, "198.51.100.1")).status, "busy");
 });
 
 test("normal password changes check the current password and revoke other devices", async () => {
@@ -191,6 +211,280 @@ test("normal password changes check the current password and revoke other device
   const changed = await f.service.changePassword("new secret password", password, binding);
   assert.equal(changed.status, "authenticated"); assert.equal(await f.sessionService.verify(binding.token), null); assert.equal(await f.sessionService.verify(second.token), null);
   assert.ok(await f.sessionService.verify(changed.token));
+});
+
+async function pending(f) {
+  const result = await f.service.register(phone, password, browser(), address);
+  assert.equal(result.requiresVerification, true);
+  return result;
+}
+
+test("account verification uses the selected channel, stores a keyed proof, and consumes the latest code once", async () => {
+  const f = fixture(), registered = await pending(f);
+  assert.equal((await f.service.requestVerification("whatsapp", registered.token, address)).status, "requested");
+  const message = f.messages[0], challenge = [...f.challenges.values()][0];
+  assert.equal(message.phone, phone); assert.equal(message.channel, "whatsapp"); assert.equal(message.purpose, "account");
+  assert.match(message.code, /^\d{6}$/u); assert.notEqual(challenge.codeHash, message.code);
+  assert.match(challenge.codeHash, /^[a-f0-9]{64}$/u); assert.equal(+challenge.expiresAt - +challenge.createdAt, DAY);
+  assert.ok(!JSON.stringify([...f.challenges.values()]).includes(`"${message.code}"`));
+  assert.equal(await f.service.passwordResetSession(registered.token), null);
+  const claims = await Promise.all([f.service.verifyAccount(message.code, registered.token, address), f.service.verifyAccount(message.code, registered.token, "198.51.100.2")]);
+  assert.deepEqual(claims.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
+  const verified = claims.find(result => result.status === "authenticated");
+  assert.equal(verified.status, "authenticated"); assert.equal((await f.sessionService.verify(verified.token)).phone, phone);
+  assert.ok(f.accounts.get(verified.accountId).phoneVerifiedAt);
+  assert.equal(await f.service.verificationSession(registered.token), null);
+  assert.equal((await f.service.verifyAccount(message.code, registered.token, address)).status, "unauthorized");
+  const logged = await f.service.login(phone, password, address);
+  assert.equal(logged.requiresVerification, undefined); assert.ok(await f.sessionService.verify(logged.token));
+});
+
+test("unverified passwords only reopen verification and cannot access authenticated profile actions", async () => {
+  const f = fixture(); await f.account({ phoneVerifiedAt: null });
+  const logged = await f.service.login(phone, password, address);
+  assert.equal(logged.requiresVerification, true); assert.equal(await f.sessionService.verify(logged.token), null);
+  assert.deepEqual(await f.service.verificationSession(logged.token), { phone });
+  assert.equal(f.messages.length, 0);
+  assert.equal((await f.service.changePassword("replacement secret", password, browser())).status, "unauthorized");
+  assert.equal((await f.service.changePhone(replacement, password, browser())).status, "unauthorized");
+  assert.equal((await f.service.requestVerification("email", logged.token, address)).status, "invalid");
+  assert.equal((await f.service.requestVerification("sms", undefined, address)).status, "unauthorized");
+  assert.equal((await f.service.requestPasswordReset(phone, address, "email")).status, "invalid");
+  assert.equal(f.messages.length, 0);
+});
+
+test("member sessions require both authenticated authorization and a verified phone", async () => {
+  const f = fixture(), binding = await f.authenticate(), account = f.accounts.get(binding.member.accountId);
+  account.phoneVerifiedAt = null;
+  assert.equal(await f.sessionService.verify(binding.token), null, "An authenticated cookie cannot bypass an unverified phone");
+  account.phoneVerifiedAt = new Date(f.now());
+  const session = f.sessions.get(binding.member.tokenHash);
+  session.passwordResetAt = new Date(f.now());
+  assert.equal(await f.sessionService.verify(binding.token), null, "Reset authorization never grants normal account access");
+  session.passwordResetAt = null; session.authenticatedAt = null;
+  assert.equal(await f.sessionService.verify(binding.token), null);
+});
+
+test("changing the phone revokes sessions and verifies the replacement before account access", async () => {
+  const f = fixture(), binding = await f.authenticate();
+  const changed = await f.service.changePhone(replacement, password, binding);
+  assert.equal(changed.requiresVerification, true); assert.equal(await f.sessionService.verify(binding.token), null);
+  assert.equal(await f.sessionService.verify(changed.token), null);
+  assert.deepEqual(await f.service.verificationSession(changed.token), { phone: replacement });
+  assert.equal(f.accounts.get(changed.accountId).phoneVerifiedAt, null);
+  await f.service.requestVerification("sms", changed.token, address);
+  assert.equal(f.messages.at(-1).phone, replacement);
+  const verified = await f.service.verifyAccount(f.messages.at(-1).code, changed.token, address);
+  assert.equal((await f.sessionService.verify(verified.token)).phone, replacement);
+});
+
+test("only the newest account code works across SMS and WhatsApp, including after a restart", async () => {
+  const f = fixture(), registered = await pending(f);
+  await f.service.requestVerification("sms", registered.token, address);
+  const first = f.messages.at(-1).code; f.advance(1);
+  await f.service.requestVerification("whatsapp", registered.token, address);
+  assert.equal((await f.restart().verifyAccount(first, registered.token, address)).status, "unauthorized");
+  const verified = await f.restart().verifyAccount(f.messages.at(-1).code, registered.token, address);
+  assert.equal(verified.status, "authenticated");
+});
+
+test("account and reset codes expire at exactly 24 hours and fail closed after five wrong guesses", async () => {
+  const account = fixture(), registered = await pending(account);
+  await account.service.requestVerification("sms", registered.token, address); account.advance(DAY);
+  assert.equal((await account.service.verifyAccount(account.messages[0].code, registered.token, address)).status, "unauthorized");
+  const reset = fixture(); await reset.account();
+  await reset.service.requestPasswordReset(phone, address, "whatsapp"); reset.advance(DAY);
+  assert.equal((await reset.service.verifyPasswordReset(phone, reset.messages[0].code, address)).status, "unauthorized");
+  for (const purpose of ["account", "reset"]) {
+    const f = fixture(), pendingMember = purpose === "account" ? await pending(f) : (await f.account(), null);
+    if (pendingMember) await f.service.requestVerification("sms", pendingMember.token, address);
+    else await f.service.requestPasswordReset(phone, address, "sms");
+    const code = f.messages[0].code;
+    const verify = (input) => pendingMember ? f.service.verifyAccount(input, pendingMember.token, address) : f.service.verifyPasswordReset(phone, input, address);
+    for (let i = 0; i < 5; i++) assert.equal((await verify(wrongCode(code))).status, "unauthorized");
+    assert.equal((await verify(code)).status, "unauthorized", `${purpose}: exhausted code cannot be recovered with the right value`);
+  }
+});
+
+test("each purpose allows three messages across channels in a rolling 24 hours and persists the limit", async () => {
+  const f = fixture(), registered = await pending(f);
+  for (let i = 0; i < 3; i++) {
+    assert.equal((await f.service.requestVerification(i % 2 ? "whatsapp" : "sms", registered.token, address)).status, "requested");
+    assert.equal((await f.service.requestPasswordReset(phone, address, i % 2 ? "sms" : "whatsapp")).status, "requested");
+  }
+  f.advance(12 * 3_600_000);
+  assert.equal((await f.restart().requestVerification("sms", registered.token, address)).status, "busy");
+  assert.equal((await f.restart().requestPasswordReset(phone, address, "whatsapp")).status, "busy");
+  assert.equal(f.messages.length, 6);
+  f.advance(12 * 3_600_000);
+  assert.equal((await f.service.requestVerification("sms", registered.token, address)).status, "requested");
+  assert.equal((await f.service.requestPasswordReset(phone, address, "whatsapp")).status, "requested");
+});
+
+test("changing the registered phone does not reset the account's daily message allowance", async () => {
+  const f = fixture(), registered = await pending(f);
+  await f.service.requestVerification("sms", registered.token, address);
+  const verified = await f.service.verifyAccount(f.messages.at(-1).code, registered.token, address);
+  const changed = await f.service.changePhone(replacement, password, { member: await f.sessionService.verify(verified.token) });
+  assert.equal(changed.requiresVerification, true);
+  assert.equal((await f.service.requestVerification("sms", changed.token, address)).status, "requested");
+  assert.equal((await f.service.requestVerification("whatsapp", changed.token, address)).status, "requested");
+  assert.equal((await f.restart().requestVerification("sms", changed.token, address)).status, "busy");
+  assert.equal(f.messages.length, 3);
+});
+
+test("parallel requests cannot exceed the shared three-message allowance", async () => {
+  const f = fixture(), registered = await pending(f);
+  const account = await Promise.all(Array.from({ length: 5 }, (_, i) => f.service.requestVerification(i % 2 ? "sms" : "whatsapp", registered.token, `198.51.100.${i + 1}`)));
+  assert.equal(account.filter(result => result.status === "requested").length, 3);
+  assert.equal(account.filter(result => result.status === "busy").length, 2);
+  const reset = await Promise.all(Array.from({ length: 5 }, (_, i) => f.service.requestPasswordReset(phone, `198.51.100.${i + 1}`, i % 2 ? "sms" : "whatsapp")));
+  assert.equal(reset.filter(result => result.status === "requested").length, 3);
+  assert.equal(reset.filter(result => result.status === "busy").length, 2);
+  assert.equal(f.messages.length, 6);
+});
+
+test("delivery runs outside the transaction; delayed older sends cannot reactivate superseded codes", { timeout: 30_000 }, async () => {
+  let f, release, entered;
+  const firstSend = new Promise(resolve => { entered = resolve; }), held = new Promise(resolve => { release = resolve; });
+  f = fixture({ async send() { await f.database.transaction(async () => {}); if (f.messages.length === 1) { entered(); await held; } } });
+  const registered = await pending(f), first = f.service.requestVerification("sms", registered.token, address);
+  await firstSend; const old = f.messages[0].code;
+  const second = await f.service.requestVerification("whatsapp", registered.token, address);
+  assert.equal(second.status, "requested");
+  assert.equal((await f.service.verifyAccount(old, registered.token, address)).status, "unauthorized", "An unsent reserved code is unusable");
+  release(); await first;
+  assert.equal((await f.service.verifyAccount(old, registered.token, address)).status, "unauthorized");
+  assert.equal((await f.service.verifyAccount(f.messages.at(-1).code, registered.token, address)).status, "authenticated");
+});
+
+test("failed delivery consumes allowance, invalidates older codes and exposes no provider details", async () => {
+  let fail = false;
+  const f = fixture({ async send() { if (fail) throw new Error("provider-secret-123 returned forbidden"); } }), registered = await pending(f);
+  await f.service.requestVerification("sms", registered.token, address); const old = f.messages[0].code; fail = true;
+  for (let i = 0; i < 2; i++) {
+    const result = await f.service.requestVerification("whatsapp", registered.token, address);
+    assert.equal(result.status, "unavailable"); assert.doesNotMatch(JSON.stringify(result), /provider-secret|forbidden|\d{6}/u);
+  }
+  assert.equal((await f.service.verifyAccount(old, registered.token, address)).status, "unauthorized");
+  assert.equal((await f.service.verifyAccount(f.messages.at(-1).code, registered.token, address)).status, "unauthorized");
+  assert.equal((await f.restart().requestVerification("sms", registered.token, address)).status, "busy");
+  assert.equal(f.messages.length, 3);
+});
+
+test("a password reset code grants only a short reset session and is single-use under concurrency", async () => {
+  const f = fixture(), original = await f.authenticate();
+  await f.service.requestPasswordReset(phone, address, "sms"); const code = f.messages[0].code;
+  const attempts = await Promise.all([f.service.verifyPasswordReset(phone, code, address), f.service.verifyPasswordReset(phone, code, "198.51.100.2")]);
+  assert.deepEqual(attempts.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
+  const authorized = attempts.find(result => result.status === "authenticated");
+  assert.equal(authorized.requiresPasswordChange, true); assert.equal(await f.sessionService.verify(authorized.token), null);
+  assert.deepEqual(await f.service.passwordResetSession(authorized.token), { phone });
+  assert.equal(await f.service.verificationSession(authorized.token), null);
+  assert.equal(+f.sessions.get(memberTokenHash(authorized.token)).expiresAt - f.now(), passwordRecoveryRules.resetSessionMs);
+  const saved = await f.service.resetPassword("new recovery password", authorized.token, address);
+  assert.equal(saved.status, "authenticated"); assert.ok(await f.sessionService.verify(saved.token));
+  assert.equal(await f.sessionService.verify(original.token), null); assert.equal(await f.service.passwordResetSession(authorized.token), null);
+  assert.equal((await f.service.login(phone, password, address)).status, "unauthorized");
+  assert.equal((await f.service.login(phone, "new recovery password", address)).status, "authenticated");
+  assert.ok(f.accounts.get(saved.accountId).passwordChangedAt);
+});
+
+test("requesting a newer reset code revokes earlier reset authorization and never accepts account codes", async () => {
+  const f = fixture(), registered = await pending(f);
+  await f.service.requestVerification("sms", registered.token, address); const accountCode = f.messages.at(-1).code;
+  assert.equal((await f.service.verifyPasswordReset(phone, accountCode, address)).status, "unauthorized");
+  await f.service.requestPasswordReset(phone, address, "sms"); const first = f.messages.at(-1).code;
+  const session = await f.service.verifyPasswordReset(phone, first, address);
+  assert.equal(session.requiresPasswordChange, true); f.advance(1);
+  await f.service.requestPasswordReset(phone, address, "whatsapp");
+  assert.equal(await f.service.passwordResetSession(session.token), null);
+  assert.equal((await f.service.resetPassword("another password", session.token, address)).status, "unauthorized");
+  assert.equal((await f.service.verifyPasswordReset(phone, first, address)).status, "unauthorized");
+  const latest = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
+  assert.equal(latest.requiresPasswordChange, true);
+  const saved = await f.service.resetPassword("another password", latest.token, address);
+  assert.equal(saved.status, "authenticated"); assert.ok(f.accounts.get(saved.accountId).phoneVerifiedAt, "Recovery proves control of an unverified phone");
+});
+
+test("password changes are limited across profile and code recovery for exactly 24 hours", async () => {
+  const f = fixture(), binding = await f.authenticate();
+  const first = await f.service.changePassword("first new password", password, binding);
+  const active = { member: await f.sessionService.verify(first.token), token: first.token };
+  const second = await f.service.changePassword("second new password", "first new password", active);
+  assert.equal(second.status, "busy"); assert.match(second.message, /admin/iu);
+  await f.service.requestPasswordReset(phone, address, "sms");
+  const reset = await f.service.verifyPasswordReset(phone, f.messages.at(-1).code, address);
+  assert.equal((await f.service.resetPassword("second new password", reset.token, address)).status, "busy");
+  assert.equal((await f.service.login(phone, "first new password", address)).status, "authenticated");
+  f.advance(DAY - 1);
+  assert.equal((await f.service.changePassword("second new password", "first new password", active)).status, "busy");
+  f.advance(1);
+  assert.equal((await f.service.changePassword("second new password", "first new password", active)).status, "authenticated");
+});
+
+test("administrator assistance can recover a member within the daily password-change limit", async () => {
+  const f = fixture(), binding = await f.authenticate();
+  const first = await f.service.changePassword("first new password", password, binding);
+  await f.service.requestPasswordReset(phone, address, "sms"); const code = f.messages.at(-1).code;
+  const assisted = await createSubscribers(f.database, f.now, () => false).temporaryPassword({ id: first.accountId }, "owner");
+  assert.equal(assisted.status, "reset");
+  assert.equal((await f.service.verifyPasswordReset(phone, code, address)).status, "unauthorized");
+  const temporary = await f.service.login(phone, assisted.temporaryPassword, address);
+  assert.equal(temporary.requiresPasswordChange, true);
+  const saved = await f.service.resetPassword("assisted password", temporary.token, address);
+  assert.equal(saved.status, "authenticated"); assert.ok(await f.sessionService.verify(saved.token));
+});
+
+const authRequest = (action, body, token, headers = {}) => new Request(`https://goal.test/api/account/${action}`, { method: "POST",
+  headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", ...(token ? { Cookie: `goal-hint-member=${token}` } : {}), ...headers },
+  body: JSON.stringify(body) });
+const responseToken = response => /^goal-hint-member=([^;]+)/u.exec(response.headers.getSetCookie()[0] ?? "")?.[1];
+
+test("HTTP registration, channel selection, verification and reset codes set restricted HttpOnly cookies", async () => {
+  const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService });
+  const handle = (action, body, token) => createMemberAuthHandler(action, source)(authRequest(action, body, token));
+  const registration = await handle("register", { phone, password, return: "/en/matches/example/home-away" });
+  assert.equal(registration.status, 200);
+  const registrationBody = await registration.json(), verifyPage = new URL(registrationBody.next, "https://goal.test");
+  assert.equal(registrationBody.requiresVerification, true); assert.equal(verifyPage.pathname, "/en/account");
+  assert.equal(verifyPage.searchParams.get("view"), "verify"); assert.equal(verifyPage.searchParams.get("return"), "/en/matches/example/home-away");
+  const pendingToken = responseToken(registration); assert.ok(pendingToken); assert.equal(await f.sessionService.verify(pendingToken), null);
+  assert.match(registration.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
+  const request = await handle("verification", { channel: "whatsapp" }, pendingToken);
+  assert.equal(request.status, 200); assert.equal(request.headers.get("set-cookie"), null);
+  assert.ok(!JSON.stringify(await request.json()).includes(f.messages[0].code));
+  const verification = await handle("verify", { code: f.messages[0].code, return: "/en/matches/example/home-away" }, pendingToken);
+  assert.equal(verification.status, 200); assert.equal((await verification.json()).next, "/en/matches/example/home-away");
+  assert.ok(await f.sessionService.verify(responseToken(verification)));
+  const forgot = await handle("forgot", { phone, channel: "sms" });
+  assert.equal(forgot.status, 200); assert.equal(forgot.headers.get("set-cookie"), null);
+  const reset = await handle("reset-code", { phone, code: f.messages.at(-1).code });
+  assert.equal(reset.status, 200); assert.equal((await reset.json()).requiresPasswordChange, true);
+  const resetToken = responseToken(reset); assert.equal(await f.sessionService.verify(resetToken), null);
+  assert.match(reset.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax; Max-Age=900/u);
+  assert.equal((await handle("reset", { password: "replacement HTTP password" }, resetToken)).status, 200);
+});
+
+test("all verification writes reject cross-site requests before storage and whitelist request fields", async () => {
+  for (const [action, body] of [["verification", { channel: "sms" }], ["verify", { code: "123456" }], ["forgot", { phone, channel: "sms" }], ["reset-code", { phone, code: "123456" }]]) {
+    const response = await createMemberAuthHandler(action, async () => { assert.fail("Cross-site writes cannot reach storage"); })(
+      authRequest(action, body, undefined, { Origin: "https://evil.test", "Sec-Fetch-Site": "cross-site" }));
+    assert.equal(response.status, 403); assert.equal(response.headers.get("set-cookie"), null);
+    const extra = await createMemberAuthHandler(action, async () => { assert.fail("Unexpected fields cannot reach storage"); })(authRequest(action, { ...body, accountId: "other-account" }));
+    assert.equal(extra.status, 400);
+  }
+  const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService });
+  assert.equal((await createMemberAuthHandler("forgot", source)(authRequest("forgot", { phone }))).status, 400);
+  assert.equal((await createMemberAuthHandler("verification", source)(authRequest("verification", { channel: "sms" }))).status, 401);
+});
+
+test("HTTP delivery failure returns a generic 503 without provider errors or a credential", async () => {
+  const f = fixture({ async send() { throw new Error("private-yoola-token: provider rejected request"); } }), registered = await pending(f);
+  const response = await createMemberAuthHandler("verification", async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService }))(
+    authRequest("verification", { channel: "sms" }, registered.token));
+  assert.equal(response.status, 503); assert.equal(response.headers.get("set-cookie"), null);
+  assert.doesNotMatch(JSON.stringify(await response.json()), /private-yoola-token|provider rejected|\d{6}/u);
 });
 
 test("recovery cannot reset administrator environment credentials and requires same-origin HTTP", async () => {

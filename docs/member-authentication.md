@@ -1,50 +1,50 @@
-# Manual account authentication
+# Member account authentication
 
-Registration requires only a phone number and a password of 8–128 characters. Phone numbers are canonicalized with their country code; passwords are stored as salted scrypt hashes. A duplicate number returns HTTP 409 with: “An account already exists, so please log in.” Registration signs in the new account but does not grant subscriber access.
+Registration requires a supported phone number and a password of 8–128 characters. Numbers are canonicalized with their country code; passwords use salted scrypt hashes. Duplicate registration returns HTTP 409. Registration creates a restricted cookie and redirects to account verification. Password login for an unverified number resumes verification. Pending cookies cannot access member content, payment submissions, trials, profile changes, or administrator pages.
 
-No SMS, WhatsApp, email, or verification-code delivery is involved in registration, activation, or recovery. Call/contact links open only when the user chooses them.
+## Account verification
+
+The member explicitly chooses SMS or WhatsApp to their registered number, then enters the six-digit code. Production delivery uses YoolaSMS. A code expires exactly 24 hours after issuance or immediately after successful use. Every new request invalidates earlier codes for that purpose, including requests from another session or delivery channel. At most three requests per account and purpose are allowed in a rolling 24 hours; changing numbers does not reset the allowance, and a reused number retains its recent requests. Reservations and failed/uncertain deliveries count toward the limit to prevent concurrent or retried sends from exceeding it. Five incorrect guesses invalidate a code. Codes are stored as keyed hashes; no public response, URL, log, or database field contains the plaintext code.
+
+Successful verification grants a normal member cookie. It does not grant a subscription. Changing the phone number requires the current password, revokes existing sessions/codes, and requires verification of the new number before using the account again.
 
 ## Password recovery
 
-1. On Account, choose Forgot Password, enter the registered phone number, and submit the request.
-2. The request appears under Admin → Password requests. The public response is generic and never reveals a password or whether an account exists.
-3. After manually checking the caller's identity, the admin generates a random temporary password. It appears once in the private admin interface, expires after 15 minutes, and must be shared manually.
-4. The user enters the phone number and temporary password on the normal login form. The temporary password is consumed once, under an account lock.
-5. The resulting cookie permits only the password-change screen, for 15 minutes. It cannot read subscriber content, submit payment proof, or open admin pages. The user chooses a new password to finish signing in.
+1. Forgot password opens the recovery page. The user enters their registered number and chooses SMS or WhatsApp.
+2. The acknowledgement is generic for missing or ineligible accounts. Eligible accounts receive a six-digit code through the selected channel. The same 24-hour expiry, three-request rolling allowance, newest-only rule, and guess limit apply independently to recovery.
+3. A valid code is consumed atomically and grants a reset-only cookie for 15 minutes. The user chooses a new password. This cookie cannot access member or administrator content.
+4. Saving the password invalidates outstanding codes and all existing sessions, and issues a new member cookie.
 
-Issuing a temporary password invalidates the old password and all old sessions. If the password expires or the reset session is lost, the admin generates another one. Password changes and phone changes during a regular session require the current password and revoke other sessions. Login, registration, recovery, and password checks use durable rate limits. Recovery passwords are never written to audit records or returned from a public account lookup.
+Profile password changes and password recovery share a rolling 24-hour limit: a member can save a new password only once during that period. The restriction is checked under the account lock, including concurrent requests. Members can contact the administrator for further assistance. Recovery requests remain visible under Admin → Password requests. After manually checking identity, an admin can issue a single-use temporary password that expires in 15 minutes and resets the password-change restriction. It invalidates existing passwords, codes, and sessions; logging in with it grants the same reset-only cookie. Temporary passwords are displayed once privately and never placed in audit records.
+
+Production delivery setup, country/channel coverage, API credentials and development behavior are described in [yoola-messaging.md](yoola-messaging.md). Development makes no external deliveries and never exposes a generated code; automated tests inject synthetic delivery.
 
 ## Administrator access
 
-Configure server-only environment variables, then restart the application:
-
-- `GOAL_HINT_ADMIN_PHONES`: a JSON array of canonical numbers, for example `["256700000001"]`.
-- `GOAL_HINT_ADMIN_PASSWORD_HASH`: a scrypt hash generated by `npm run analytics:hash-password` (preferred). Alternatively, `GOAL_HINT_ADMIN_PASSWORD` holds the private environment password. A configured hash takes precedence.
-- `GOAL_HINT_ANALYTICS_SECRET`: a strong private secret for keyed session/rate-limit data (required in production).
-
-An allowlisted number signs in using the configured admin password and goes directly to `/admin`, with dashboard rights and full content access without subscribing. Public registration refuses admin numbers. Successful admin login provisions its account if needed. An ordinary member cookie never becomes an admin cookie merely because its number was added to the allowlist. Sessions carry a keyed credential version; removing a number or rotating the configured password withdraws admin access. Admin passwords are changed through environment configuration, not member recovery.
-
-The separate existing owner/analytics username login remains available for owner operations.
+Configure server-only `GOAL_HINT_ADMIN_PHONES` as a JSON array of canonical numbers, and `GOAL_HINT_ADMIN_PASSWORD_HASH` (preferred) or `GOAL_HINT_ADMIN_PASSWORD`. Generate a scrypt hash with `npm run analytics:hash-password`. `GOAL_HINT_ANALYTICS_SECRET` must be a strong private secret in production. Configured admin numbers authenticate with the environment credential and go to `/admin`. Public registration and member recovery cannot provision/reset an administrator. Removing a configured number or rotating its credential withdraws existing admin access. The separate owner/analytics login remains available.
 
 ## API
 
-All writes require same-origin requests. Responses are private and not cached; cookies are HttpOnly, same-site, and Secure in production.
+All writes require same-origin requests. Responses are private and not cached; cookies are HttpOnly, same-site, and Secure in production. Optional `return` paths are validated locally.
 
 | Endpoint | Request | Success |
 | --- | --- | --- |
-| `POST /api/account/register` | `{phone,password,return?}` | `{next,phone}` plus cookie |
-| `POST /api/account/login` | `{phone,password,return?}` | `{next,phone,requiresPasswordChange?}` plus cookie |
-| `POST /api/account/forgot` | `{phone}` | Generic acknowledgement; admin request recorded |
-| `POST /api/account/reset` | `{password}` with reset-only cookie | New authenticated cookie |
-| `POST /api/account/password` | `{password,currentPassword}` | Rotated cookie |
-| `POST /api/account/phone` | `{phone,currentPassword}` | Rotated cookie |
-| `GET /api/account/session` | — | Authenticated phone, otherwise null |
+| `POST /api/account/register` | `{phone,password,return?}` | `{next,phone,requiresVerification:true}` plus restricted cookie |
+| `POST /api/account/login` | `{phone,password,return?}` | `{next,phone,...}` plus appropriate cookie |
+| `POST /api/account/verification` | `{channel,return?}` with pending cookie | Verification delivery acknowledgement |
+| `POST /api/account/verify` | `{code,return?}` with pending cookie | Normal member cookie |
+| `POST /api/account/forgot` | `{phone,channel,return?}` | Generic recovery acknowledgement |
+| `POST /api/account/reset-code` | `{phone,code,return?}` | Reset-only cookie |
+| `POST /api/account/reset` | `{password,return?}` with reset-only cookie | New member cookie |
+| `POST /api/account/password` | `{password,currentPassword}` | Rotated member cookie |
+| `POST /api/account/phone` | `{phone,currentPassword}` | Restricted cookie for a changed phone |
+| `GET /api/account/session` | — | Verified phone, otherwise null |
 | `POST /api/account/sign-out` | — | Clear cookie and end session |
 
-`/api/account/sign-in` remains a password-login alias. The old verification and account-code activation endpoints are removed.
+`/api/account/sign-in` remains a password-login alias.
 
 ## Database rollout
 
-Deploy the reviewed migrations before the application code, through the existing database deployment workflow. The manual recovery migration adds `MemberAccount.passwordResetRequestedAt`, `temporaryPasswordHash`, `temporaryPasswordExpiresAt`, and `MemberSession.passwordResetAt`/`adminPasswordVersion`. Existing password sessions continue as ordinary sessions; admin sessions must authenticate with the environment credential.
+Deploy `20261023090000_member_message_verification` through the existing database deployment workflow before the new code. The migration adds `MemberAccount.phoneVerifiedAt` and `passwordChangedAt`, and restores `MemberVerification` for request/code tracking with a delivery channel. Existing account numbers are grandfathered as verified; new registrations and phone changes require delivery verification. Historical retired challenges are invalidated. Update column-scoped grants for the added account fields, and ensure SELECT/INSERT/UPDATE/DELETE on `MemberVerification` as shown in [manual-account-grants.sql](../deploy/manual-account-grants.sql). Schema generation does not apply the migration to any application database.
 
-See [subscriptions.md](subscriptions.md) for subscription approval, screenshot storage, saved slips, and table grants. Do not print real environment credentials or phone numbers in deployment logs.
+See [subscriptions.md](subscriptions.md) for payment approval, screenshots, saved slips, and related grants. Never print real environment credentials or phone numbers in deployment logs.

@@ -20,6 +20,7 @@ export async function paidDatabase({ seedPlans = false } = {}) {
     // is installed here; saved-slip integration fixtures install SavedSlipFixture with the real FootballFixture table.
     await root.query((await readFile(new URL("../../prisma/migrations/20261021110000_saved_slips/migration.sql", import.meta.url), "utf8")).split(";")[0]);
     await root.query(await readFile(new URL("../../prisma/migrations/20261021120000_manual_password_recovery/migration.sql", import.meta.url), "utf8"));
+    await root.query(await readFile(new URL("../../prisma/migrations/20261023090000_member_message_verification/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
     const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentScreenshot", "RateLimitBucket", "SavedSlip"]);

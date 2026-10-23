@@ -1552,6 +1552,8 @@ model MemberAccount {
   id               String              @id @db.Char(36)
   phone            String?             @unique @db.VarChar(15)
   passwordHash     String?             @db.VarChar(255)
+  phoneVerifiedAt  DateTime?           @db.DateTime(3)
+  passwordChangedAt DateTime?          @db.DateTime(3)
   temporaryPasswordHash String?        @db.VarChar(255)
   temporaryPasswordExpiresAt DateTime? @db.DateTime(3)
   passwordResetRequestedAt DateTime?   @db.DateTime(3)
@@ -1593,13 +1595,14 @@ model MemberSession {
   @@index([accessCodeId, accountId])
 }
 
-// Retired (068): one-time phone codes are gone, so nothing writes this table and it stays empty. It is kept, with its
-// purge and erase deletes, until a later migration drops it. Rows held HMACs only, never plaintext codes.
+// Single-use account/reset codes. Requests are reserved under the account lock before delivery; HMACs only, never
+// plaintext codes. Retain consumed/failed requests until expiry to enforce the rolling 24-hour send allowance.
 model MemberVerification {
   id           String         @id @db.Char(36)
   accountId    String?        @db.Char(36)
   phone        String         @db.VarChar(15)
   purpose      String         @db.VarChar(12)
+  channel      String         @default("sms") @db.VarChar(8)
   bindingHash  String         @db.Char(64)
   codeHash     String         @db.Char(64)
   proofHash    String?        @db.Char(64)

@@ -1,4 +1,4 @@
 import "server-only";
 
-/** An admin reads the generated password to the member; no delivery integration is involved. */
+/** A verified code or an admin-issued temporary password grants this short reset-only authorization. */
 export const passwordRecoveryRules = Object.freeze({ temporaryMs: 15 * 60_000, resetSessionMs: 15 * 60_000 });

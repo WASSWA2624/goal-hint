@@ -690,8 +690,10 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       await root.query("USE goal_hint_overlay");
       await root.query(overlay);
       await root.query(overlay);
-      // Layer the later auth migration onto both storage paths before comparing their current table shapes.
-      await root.query(await readFile(new URL("../prisma/migrations/20261020193000_member_password_sms/migration.sql", import.meta.url), "utf8"));
+      // Apply subsequent changes to the compared tables before checking the overlay against the deployed schema.
+      for (const migration of ["20261020193000_member_password_sms", "20261021090000_payment_screenshot_approval",
+        "20261021120000_manual_password_recovery", "20261023090000_member_message_verification"])
+        await root.query(await readFile(new URL(`../prisma/migrations/${migration}/migration.sql`, import.meta.url), "utf8"));
       assert.deepEqual(await showCreate("goal_hint_overlay"), await showCreate("goal_hint_test"));
       const records = await root.query("SELECT checksum, finished_at, rolled_back_at, applied_steps_count FROM _prisma_migrations WHERE migration_name = ?", [migrationName]);
       assert.equal(records.length, 1, "a second import records nothing");

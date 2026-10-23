@@ -1,6 +1,6 @@
 # Manual subscriptions and public access
 
-Members register and log in with a phone number and password. Accounts require no messaging or verification delivery. Paid access starts only after an authenticated administrator approves a payment request; the member does not enter an activation code. See [member-authentication.md](member-authentication.md) for recovery and administrator credentials.
+Members register with a phone number and password, then verify their registered number through SMS or WhatsApp in supported countries. Paid access starts only after an authenticated administrator approves a payment request; the member does not enter an activation code. See [member-authentication.md](member-authentication.md) for verification, recovery, and administrator credentials.
 
 ## Public and subscriber views
 
@@ -51,6 +51,7 @@ Apply the reviewed migrations in order before deploying this application:
 - `20261021103000_standard_subscription_packages`
 - `20261021110000_saved_slips`
 - `20261021120000_manual_password_recovery`
+- `20261023090000_member_message_verification`
 
 They follow the existing subscription/password migrations. Grant the application role SELECT, INSERT, DELETE on `SavedSlip` and SELECT, INSERT on `SavedSlipFixture`, alongside existing member/payment grants. The child links are removed through the foreign-key cascade; no snapshot UPDATE or child DELETE permission is needed. See `deploy/manual-account-grants.sql`. Use DDL-capable migration credentials only for deployment. Keep ordinary application credentials DML-only. No development or production database is migrated by editing the application source.
 

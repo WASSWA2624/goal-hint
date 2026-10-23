@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { MemberForm, MemberNavigationRecovery, MemberPanel, MemberSignOut } from "@/components/members/member-controls";
 import { AccountAuthForm, type AccountAuthView } from "@/components/members/account-auth-form";
 import { AccountSettings, ResetPasswordForm } from "@/components/members/account-security";
+import { AccountVerificationForm } from "@/components/members/account-verification";
 import { AccountCard, AccountCardBody, AccountCardHeading, AccountSection } from "@/components/members/account-styles";
 import { ApprovalRefresh, PaymentStatusCard, TrialStatusCard } from "@/components/members/payment-status";
 import { TrialRequest } from "@/components/members/subscribe-controls";
@@ -24,19 +25,22 @@ export function createAccountRoute({ services = getMemberServices }: { services?
     const messages = createMessages(locale), parameters = await searchParams;
     const resolved = await services(), settings = resolved.settings.settings;
     const token = (await cookies()).get(memberCookieName(resolved.config.production))?.value;
+    const returnTo = memberReturnPath(parameters.return);
+    const contact = { contactPhone: settings?.contactPhone ?? null, whatsappPhone: settings?.whatsappPhone ?? null, reviewTime: settings?.reviewTime ?? null };
+    // Old reset links enter the same code-based recovery flow.
+    const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
     const reset = await resolved.auth?.passwordResetSession(token).catch(() => null);
-    if (reset) return <PublicShell locale={locale} showAccount><AccountCard><AccountCardBody><ResetPasswordForm locale={locale} phone={reset.phone} /></AccountCardBody></AccountCard></PublicShell>;
+    if (reset) return <PublicShell locale={locale} showAccount><AccountCard><AccountCardBody><ResetPasswordForm locale={locale} phone={reset.phone} returnTo={returnTo} contact={contact} /></AccountCardBody></AccountCard></PublicShell>;
+    if (authView === "forgot") return <PublicShell locale={locale} showAccount><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
+    const verification = await resolved.auth?.verificationSession(token).catch(() => null);
+    if (verification) return <PublicShell locale={locale} showAccount><AccountVerificationForm locale={locale} phone={verification.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
     const mode = settings?.paywallMode;
     let member: MemberIdentity | null = null, unavailable = mode === undefined || !resolved.sessions;
     if (mode && resolved.sessions) {
       try { member = await resolved.sessions.verify(token); }
       catch { unavailable = true; }
     }
-    const returnTo = memberReturnPath(parameters.return);
-    // Keep old reset links pointed at the manual admin-request form.
-    const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
     const administrator = !!member && !member.blocked && !!member.administrator;
-    const contact = { contactPhone: settings?.contactPhone ?? null, whatsappPhone: settings?.whatsappPhone ?? null, reviewTime: settings?.reviewTime ?? null };
     const now = new Date();
     const view = member?.codeEnteredAt && !member.blocked && !administrator ? await resolved.codes?.accountView(member).catch(() => null) : null;
     const paymentView = member && !member.blocked && !administrator && settings ? await resolved.payments?.view(member, settings).catch(() => null) : null;
@@ -65,7 +69,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
             {trialPending && <TrialStatusCard locale={locale} settings={contact} phone={member.phone} heading="h2" />}
             <PaymentStatusCard locale={locale} status={status} settings={contact} phone={member.phone} activeUntil={activeUntil} returnTo={returnTo} heading="h2" />
           </>}
-          {!administrator && <AccountSettings locale={locale} phone={member.phone} contact={contact} />}
+          {!administrator && <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} />}
           {administrator && <><p>{messages.text("account.administratorAccess")}</p>
             <ButtonLink href="/admin" prefetch={false}>{messages.text("account.dashboard")}</ButtonLink></>}
           {mode !== "off" && !administrator && <AccountSection open={status?.status === "rejected" || status?.status === "reversed"}>

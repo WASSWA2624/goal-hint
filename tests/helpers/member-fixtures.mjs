@@ -10,8 +10,8 @@ export function createAuthenticatedTestSessions({ database, config, now = Date.n
     testHash ??= hashPassword("synthetic member test password");
     const passwordHash = await testHash, at = new Date(now());
     return database.transaction(async (tx) => {
-      await tx.$executeRaw`INSERT INTO MemberAccount (id, phone, passwordHash, createdAt, lastSignInAt)
-        VALUES (${randomUUID()}, ${phone}, ${passwordHash}, ${at}, ${at}) ON DUPLICATE KEY UPDATE lastSignInAt = ${at}, passwordHash = ${passwordHash}`;
+      await tx.$executeRaw`INSERT INTO MemberAccount (id, phone, passwordHash, phoneVerifiedAt, createdAt, lastSignInAt)
+        VALUES (${randomUUID()}, ${phone}, ${passwordHash}, ${at}, ${at}, ${at}) ON DUPLICATE KEY UPDATE lastSignInAt = ${at}, passwordHash = ${passwordHash}, phoneVerifiedAt = ${at}`;
       const account = await tx.memberAccount.findUniqueOrThrow({ where: { phone } });
       const { token } = await issueMemberSession(tx, account.id, at, previous, true);
       return { status: "signed-in", token };

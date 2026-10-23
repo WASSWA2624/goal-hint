@@ -4,9 +4,11 @@ import { useState, type FormEvent } from "react";
 import styled from "styled-components";
 import { Button, PhoneInput, TextInput, TextLink } from "@/components/ui/controls";
 import { ChevronLeftIcon, LockIcon, PhoneIcon, UserIcon } from "@/components/ui/icons";
-import { formatPhone, telHref } from "@/domain/phone";
+import { passwordChangeWindowMs } from "@/domain/member-verification";
+import { formatPhone } from "@/domain/phone";
+import { resolveLocale } from "@/i18n/locales";
 import { createMessages } from "@/i18n/messages";
-import type { AdminContact } from "./admin-contact";
+import { AccountHelpLinks, type AdminContact } from "./admin-contact";
 import { MemberForm } from "./member-controls";
 import { AccountError, AccountNote, AccountPrimary, AccountTextButton } from "./account-styles";
 
@@ -36,23 +38,28 @@ export function NewPasswordFields({ locale, password, setPassword, confirm, setC
     <PasswordInput name="confirm" label={m.text("account.confirmPassword")} value={confirm} onChange={setConfirm} /></>;
 }
 
+export function PasswordChangeNote({ locale }: { locale: string }) {
+  return <AccountNote>{createMessages(locale).text("account.passwordChangeLimit", { hours: String(passwordChangeWindowMs / 3_600_000) })}</AccountNote>;
+}
+
 /** The reset cookie is deliberately not an authenticated member session. It authorizes this form alone. */
-export function ResetPasswordForm({ locale, phone }: { locale: string; phone: string }) {
+export function ResetPasswordForm({ locale, phone, returnTo = null, contact }: { locale: string; phone: string; returnTo?: string | null; contact: AdminContact }) {
   const m = createMessages(locale), [password, setPassword] = useState(""), [confirm, setConfirm] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy) return;
     if (password !== confirm) { setError(m.text("account.passwordMismatch")); return; }
     setBusy(true); setError("");
-    try { const result = await accountRequest<{ next: string }>("reset", { password }); location.replace(result.next); }
+    try { const result = await accountRequest<{ next: string }>("reset", { password, ...(returnTo ? { return: returnTo } : {}) }); location.replace(result.next); }
     catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(false); }
   }
   return <div data-analytics-ignore><h1>{m.text("account.chooseNewPassword")}</h1><p>{m.text("account.resetAccepted", { phone: formatPhone(phone) })}</p>
+    <PasswordChangeNote locale={locale} />
     <MemberForm method="post" action="/api/account/reset" onSubmit={submit} aria-busy={busy}>
       <NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} />
       {error && <AccountError role="alert">{error}</AccountError>}
       <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : "account.savePassword")}</AccountPrimary>
-    </MemberForm></div>;
+    </MemberForm><AccountHelpLinks locale={locale} contact={contact} /></div>;
 }
 
 const Identity = styled.div`
@@ -71,8 +78,8 @@ const Setting = styled.div`
   @media(max-width: 380px) { > svg { display: none; } }
 `;
 
-/** Either change needs the current password and nothing else; a forgotten one is reset by the admin on a call. */
-export function AccountSettings({ phone, locale, contact }: { phone: string; locale: string; contact: AdminContact }) {
+/** Account changes require the current password; a new phone must also be verified. */
+export function AccountSettings({ phone, locale, contact, returnTo = null }: { phone: string; locale: string; contact: AdminContact; returnTo?: string | null }) {
   const m = createMessages(locale), [task, setTask] = useState<"phone" | "password" | null>(null);
   const [newPhone, setNewPhone] = useState(""), [current, setCurrent] = useState(""), [password, setPassword] = useState(""), [confirm, setConfirm] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -96,9 +103,10 @@ export function AccountSettings({ phone, locale, contact }: { phone: string; loc
     <MemberForm method="post" action={`/api/account/${task}`} onSubmit={save} data-analytics-ignore aria-busy={busy}>
       {task === "phone" ? <><PhoneInput name="phone" label={m.text("account.newPhone")} value={newPhone} onValueChange={setNewPhone} required />{currentField}</>
         : <>{currentField}<NewPasswordFields locale={locale} password={password} setPassword={setPassword} confirm={confirm} setConfirm={setConfirm} /></>}
-      {contact.contactPhone && <AccountNote>{m.text("account.forgotCurrent")} <TextLink href={telHref(contact.contactPhone)} data-analytics-ignore>{m.text("subscribe.callAdmin")}</TextLink></AccountNote>}
+      {task === "password" ? <PasswordChangeNote locale={locale} /> : <AccountNote>{m.text("account.newPhoneVerification")}</AccountNote>}
+      <AccountNote><TextLink href={`/${resolveLocale(locale)}/account?${new URLSearchParams({ view: "forgot", ...(returnTo ? { return: returnTo } : {}) })}`} prefetch={false}>{m.text("account.forgotPassword")}</TextLink></AccountNote>
       {error && <AccountError role="alert">{error}</AccountError>}
       <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : task === "phone" ? "account.savePhone" : "account.savePassword")}</AccountPrimary>
       <AccountTextButton variant="quiet" onClick={back} disabled={busy}><ChevronLeftIcon />{m.text("account.back")}</AccountTextButton>
-    </MemberForm></div>;
+    </MemberForm><AccountHelpLinks locale={locale} contact={contact} /></div>;
 }

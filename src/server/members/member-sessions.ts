@@ -71,6 +71,7 @@ export function createMemberSessions({ database, config, now = Date.now, adminPh
       const configured = adminPasswordHash();
       const administrator = !!configured && adminPhone(row.account.phone) && row.adminPasswordVersion === config.key("admin-password-version", configured);
       if (adminPhone(row.account.phone) && !administrator) return null;
+      if (!administrator && !row.account.phoneVerifiedAt) return null;
       if (at.getTime() - row.lastSeenAt.getTime() >= memberSessionRules.touchAfterMs) {
         await database.query((tx) => tx.memberSession.updateMany({ where: { tokenHash: hash, expiresAt: { gt: at },
           lastSeenAt: { lte: new Date(at.getTime() - memberSessionRules.touchAfterMs) } },

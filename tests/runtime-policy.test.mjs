@@ -170,6 +170,8 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
     // Administrator credentials are private configuration and do not grant provider capabilities.
     "GOAL_HINT_ADMIN_PHONES", "GOAL_HINT_ADMIN_PASSWORD", "GOAL_HINT_ADMIN_PASSWORD_HASH",
+    // Member messaging credentials do not grant football, research, AI or publication capabilities.
+    "YOOLA_SMS_API_KEY", "YOOLA_SMS_SENDER",
   ]);
   documentedKeys.delete("NODE_ENV");
   assert.deepEqual(Object.keys(env).sort(), [...documentedKeys].sort());
