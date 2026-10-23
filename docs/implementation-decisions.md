@@ -3885,7 +3885,8 @@ no other OP row changes state.
   and had hidden it. A fix needs a new forward migration that recreates the
   triggers, or restore-side handling. That is outside 058 and waits for owner
   approval (OP-31). A real restore of a database migrated the same way would
-  probably fail too.
+  probably fail too. Fixed later the same day by a forward migration; see
+  "Append-only trigger repair" below.
 - **`npm run check` fails at `next build` with the local `.env.local`.** The
   database capability is on, and in production mode it needs TLS, access and
   budget refs. The build passes with `GOAL_HINT_DATABASE_ENABLED=false` set on
@@ -4163,3 +4164,53 @@ Re-run dependency audits, lint, type generation/checking, the production build
 and framework-boundary/not-found rendering regressions; restart the development
 server to load the installed framework. This entry records the maintenance
 decision, not completed verification. Check results belong in development progress.
+
+## Append-only trigger repair (19 October 2026)
+
+**Status:** fixed locally; `npm run test:backup` passes 9/9 with 90 tables.
+Not deployed. One migration (`20261019174619_append_only_trigger_blocks`) and
+its MariaDB overlay. No env key or npm dependency. OP-31 gains a note; no OP
+row changes state. This records the branch's original 19 October repair evidence;
+the 20 October authorized repair above records the later 93-table restore checks.
+Both forward migrations preserve the same append-only trigger behavior.
+
+- **Root cause.** Prisma applies a migration as one multi-statement script.
+  MySQL then stores a single-statement trigger body with its closing `;` (a
+  `BEGIN … END` body ends at `END`). 9 of the 10 append-only triggers of
+  `20261012153531_goal_market_extension` were stored that way; the file's last
+  statement was not. mysqldump writes `/*!50003 … ; */;;`, and the mysql
+  client stops at ` */` with ERROR 1064.
+- **Fix in the schema, not in restore.** A forward migration recreates the
+  ten triggers as `BEGIN … END` blocks, with the same names, tables, timing,
+  events and messages. The applied migration stays unchanged. Rewriting the
+  dump during restore was rejected. The restore verifier compares every
+  trigger body with the source, so a rewritten body would fail as an integrity
+  mismatch. Dumps made with other tools (mysqldump by hand, phpMyAdmin) would
+  also still break.
+- **Block bodies.** `BEGIN … END` is how the 32 cache triggers are already
+  written, and it works however the SQL is sent. A single-statement body
+  without `;` would only work as a script's last statement.
+- **MySQL migration.** `DROP TRIGGER IF EXISTS` then `CREATE TRIGGER` for each,
+  so a rerun after a partial failure is safe. MySQL 8.4 has no
+  `CREATE OR REPLACE TRIGGER`. Each table is unguarded only between its own
+  two statements. That is acceptable because writers pause during schema
+  changes and the application never updates or deletes these rows.
+  `LOCK TABLES` around the script was rejected: if a statement failed, Prisma
+  could not write the failure to `_prisma_migrations` under the lock.
+- **MariaDB overlay.** `CREATE OR REPLACE TRIGGER` swaps each trigger in one
+  statement, so production has no unguarded window and a rerun is a no-op. A
+  guard first requires the goal-market migration to be recorded and its five
+  tables to exist. A verification requires ten `BEGIN … END` bodies before the
+  checksum is recorded. The importing account becomes the definer, as with the
+  original overlay. Whether production's bodies end in `;` depends on how that
+  overlay was imported, so the runbook gives a check query first.
+- **Regression guard.** `tests/append_only_trigger_migration_test.py` refuses a
+  single-statement trigger in any other migration. It also checks that the
+  migration and overlay reproduce the original ten exactly and that the
+  overlay records the committed SHA-256 only after verifying. A guard inside
+  the backup engine (refusing to capture a `;`-terminated body) was not added.
+  The restore drill already fails on such a body, and a schema rule caught by a
+  static test stops it before any migration ships.
+- **Not run.** The overlay on MariaDB 11.4 (its logic ran on MySQL with the
+  MariaDB-only statements translated), `db:deploy` on the developer database,
+  and anything in production.

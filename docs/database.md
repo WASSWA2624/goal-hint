@@ -309,6 +309,46 @@ MyISAM or wrongly collated leftover must stop the import before anything is
 recorded. The MariaDB-only syntax (`BEGIN NOT ATOMIC`, `DELIMITER` through
 phpMyAdmin) has not been run on MariaDB 11.4 locally.
 
+### Append-only trigger repair on MariaDB (19 October 2026)
+
+Migration `20261019174619_append_only_trigger_blocks` recreates the ten
+append-only triggers of `20261012153531_goal_market_extension` as
+`BEGIN … END` blocks, with the same names, tables, events and messages. Prisma
+runs a migration as one multi-statement script, and MySQL then stores a
+single-statement trigger body with its closing `;`. mysqldump writes such a
+trigger as `/*!50003 … 'append-only'; */;;`, which the mysql client refuses
+(ERROR 1064), so no snapshot of a database migrated that way restored. A block
+body ends at `END`, like the `PublicCache_*` triggers. On MySQL the migration
+drops and recreates each trigger, so pause writers while it runs.
+
+On production, check the stored bodies first:
+
+```sql
+SELECT TRIGGER_NAME FROM information_schema.TRIGGERS
+  WHERE TRIGGER_SCHEMA = DATABASE() AND ACTION_STATEMENT LIKE '%;';
+```
+
+Then import `prisma/mariadb/20261019174619_append_only_trigger_blocks.sql` with
+the migration account, through phpMyAdmin or `mariadb <database> < file`. It
+stops (`SQLSTATE 45000`) unless the goal-market migration is recorded and its
+five tables exist. `CREATE OR REPLACE TRIGGER` swaps each trigger in one
+statement, so no table is left unguarded. It then stops before recording
+unless all ten triggers exist as `BEGIN … END` blocks, records the committed
+checksum once, and lists the ten triggers. A rerun is a no-op. The importing
+account becomes the triggers' definer, so keep that account while they are in
+use. The overlay changes no table or row. If the check query returned rows, a
+dump taken before the overlay probably has the same broken trigger statements
+(this was not tried on MariaDB). After importing, take and verify a fresh
+backup, and use it as the verified backup before the paid-access overlay.
+
+`npm run test:scripts` (`tests/append_only_trigger_migration_test.py`) checks
+that the migration and overlay recreate exactly the original ten triggers as
+blocks, that the overlay guards first and records the migration's SHA-256 only
+after verifying, and that no other migration creates a single-statement
+trigger. The overlay's logic was run on MySQL 8.4 with `CREATE OR REPLACE`
+replaced by `DROP`/`CREATE` and each `BEGIN NOT ATOMIC` block run as a
+procedure, but not on MariaDB 11.4.
+
 ## Privileges and storage conventions
 
 Separate application and migration accounts. Grant the application account only

@@ -101,7 +101,8 @@ For each schema change:
    target. Keep backups outside the public document root.
 3. Review only the pending migration. MariaDB uses `DROP CONSTRAINT` where MySQL
    uses `DROP CHECK`. Reviewed scripts in `prisma/mariadb/` cover the goal-market
-   extension, eight-date manifest and analytics migrations. Preserve applied SQL
+   extension, eight-date manifest and analytics migrations, and the append-only
+   trigger repair (`20261019174619`). Preserve applied SQL
    and checksums; create a new migration for corrections. Check for partially
    created objects before using an overlay.
 4. Apply the reviewed SQL with the migration role. Record the original migration's

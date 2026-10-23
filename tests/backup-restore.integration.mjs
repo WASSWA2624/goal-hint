@@ -79,7 +79,10 @@ test('encrypted snapshot and multi-log PITR preserve representative durable hist
       // Every application model, including saved slips and adopted match facts, is part of the snapshot.
       const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
       const requiredTables = [...schema.matchAll(/^model (\w+) \{/gmu)].map((match) => match[1]);
-      assert.deepEqual(snapshot.metadata.inventory.tables.map((table) => table.table).sort(), [...requiredTables, '_prisma_migrations'].sort());
+      // Windows MySQL stores lowercase names; retain exact checks when the server preserves case.
+      const lowercaseNames = Number((await source.query('SELECT @@lower_case_table_names'))[0]) === 1;
+      const expectedTables = [...requiredTables, '_prisma_migrations'].map((name) => lowercaseNames ? name.toLowerCase() : name).sort();
+      assert.deepEqual(snapshot.metadata.inventory.tables.map((table) => table.table).sort(), expectedTables);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionset').count >= 2);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'predictionaudit').count > 0);
       assert.ok(snapshot.metadata.inventory.tables.find((v) => v.table.toLowerCase() === 'dailyrunmanifest').count > 0);
