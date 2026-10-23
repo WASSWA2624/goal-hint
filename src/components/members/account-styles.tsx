@@ -10,7 +10,7 @@ export const AccountCard = styled.section`
   border: 1px solid ${({ theme }) => theme.color.border};
   font-size: 0.875rem; line-height: 1.45;
   button, a { min-block-size: 44px; }
-  input { min-block-size: 44px; font-size: 16px; border-radius: 0; }
+  input { min-block-size: 48px; font-size: 16px; border-radius: 0; }
   button { border-radius: 0; font-size: 0.875rem; }
   h2 { font-size: 1rem; font-weight: 500; margin: 0 0 12px; }
 `;
@@ -35,17 +35,38 @@ export const AccountError = styled.p`
 export const AccountActions = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px;
 `;
-export const AccountSteps = styled.ol`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
-  list-style: none; margin: 0; padding: 0; font-size: 0.75rem;
-  li { display: flex; align-items: center; gap: 8px; min-inline-size: 0; padding-block-end: 10px;
-    border-block-end: 2px solid ${({ theme }) => theme.color.border}; color: ${({ theme }) => theme.color.mutedText}; }
-  li > span { display: grid; place-items: center; flex: none; inline-size: 24px; block-size: 24px;
-    background: ${({ theme }) => theme.color.surfaceMuted}; font-variant-numeric: tabular-nums; }
-  li[aria-current="step"] { color: ${({ theme }) => theme.color.text}; border-color: ${({ theme }) => theme.color.link}; font-weight: 500; }
-  li[aria-current="step"] > span { color: ${({ theme }) => theme.color.onBrand}; background: ${({ theme }) => theme.color.brand}; }
+export const AccountSingleDeviceInfo = styled.details`
+  position: relative; color: ${({ theme }) => theme.color.link};
+  > summary { display: grid; place-items: center; inline-size: 44px; min-block-size: 44px; cursor: pointer; list-style: none; }
+  > summary::-webkit-details-marker { display: none; }
+  > summary:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  > summary svg { inline-size: 18px; block-size: 18px; }
+  > p { position: absolute; inset-inline-end: 0; inset-block-start: 100%; z-index: 2; inline-size: 14rem; max-inline-size: 70vw;
+    padding: 10px 12px; border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface};
+    color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
 `;
-export const AccountPrimary = styled(Button)`width: 100%;`;
+export const AccountSupport = styled.nav`
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: 8px;
+  border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 8px;
+  > * { min-inline-size: 0; }
+  form { margin: 0; }
+  a, button { display: flex; align-items: center; min-block-size: 44px; padding: 4px 0; border: 0; background: transparent;
+    color: ${({ theme }) => theme.color.link}; font-size: 0.75rem; font-weight: 400; text-decoration: underline;
+    text-underline-offset: 3px; white-space: normal; }
+  > :last-child, > :last-child button { justify-content: flex-end; text-align: end; }
+  > :last-child button { inline-size: 100%; }
+`;
+export const AccountCodeField = styled.div`
+  input { text-align: center; font-size: 1.375rem; letter-spacing: 0.28em; min-block-size: 60px; }
+`;
+export const AccountSteps = styled.ol`
+  display: flex; flex-wrap: wrap; gap: 10px;
+  list-style: none; margin: 0; padding: 0; font-size: 0.75rem;
+  li { display: flex; align-items: center; gap: 6px; min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText}; }
+  li svg { inline-size: 16px; block-size: 16px; flex: none; }
+  li[aria-current="step"] { color: ${({ theme }) => theme.color.link}; font-weight: 500; }
+`;
+export const AccountPrimary = styled(Button)`width: 100%; font-weight: 500;`;
 export const AccountTextButton = styled(Button)`
   padding: 4px 0; font-weight: 400; background: transparent;
 `;

@@ -1,4 +1,5 @@
 import { normalizePhone } from "@/domain/phone";
+import { supportedMessageChannels, type MessageChannel } from "@/domain/member-verification";
 import { createMemberAuthHandler } from "@/server/members/member-auth-http";
 import type { MemberServices } from "@/server/members/member-http";
 
@@ -20,7 +21,8 @@ export function fixtureAuthHandler(action: FixtureAction) {
       if (scenario === "unavailable") return unavailable();
       if (scenario === "send-failed") return { status: "unavailable", message: "We couldn't send your code. Please try again later or contact the admin." };
       if (scenario === "rate-limited") return { status: "busy", message: "You can request up to three messages within 24 hours. Please wait or contact the admin for assistance." };
-      if (!normalizePhone(phone) || !["sms", "whatsapp"].includes(String(channel))) return { status: "invalid", message: "Enter your registered number and choose a delivery method." };
+      const canonical = normalizePhone(phone);
+      if (!canonical || !supportedMessageChannels(canonical).includes(channel as MessageChannel)) return { status: "invalid", message: "Enter your registered number and choose an available delivery method." };
       return { status: "requested", message: "If this number has an eligible account, a code has been sent through your selected channel." };
     };
     const verify = (code: unknown, reset = false) => scenario === "unavailable" ? unavailable()

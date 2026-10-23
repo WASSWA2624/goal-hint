@@ -2,12 +2,21 @@
 
 Run `python scripts/verify-member-rendering.py --serve` from the repository root. The script builds the fixture, checks its initial HTML and synthetic API responses, and prints its local browser URL. No database, account creation or message provider is used.
 
+Repeat checks against an already built fixture with `--fixture .tmp/members-<id>`. Omit that option after application changes so the fixture uses current sources.
+
 - `/en/account?state=unverified&view=verify` starts signup verification at delivery selection.
 - `/en/account?view=forgot` starts password recovery.
 - `/en/account?view=register&return=%2Fen%2Fmatches` exercises registration, verification and the final `/en` home destination.
 - `/en/account?state=password-reset&view=new-password` shows the reset-password form directly.
+- `/en/account?state=sms-only` shows account verification for a synthetic UK number, where only SMS is supported.
+- `/en/account?state=unsupported` shows a number with no configured messaging channel.
+- `/en/phone-fields` exercises shared phone fields and native FormData independently of authentication.
 - Existing `state` values, refresh and browser-history probes remain available.
 
 The **Fixture API outcome** selector controls subsequent calls without reloading or clearing the current form. It supports `success`, `send-failed`, `rate-limited`, `invalid-code`, and `unavailable`. Set the same value using `?scenario=send-failed` when opening a page. Direct HTTP checks can override it with the `X-Member-Fixture-Scenario` header.
 
-Use `123456` as the synthetic verification code. Any other code is rejected. A successful send enters the code step; use the component's back/resend controls to change delivery, or choose **I already have a code** to enter an existing code. Registration and successful verification use the production auth HTTP adapter with scripted services; verification navigates to the synthetic `/en` home page. Successful recovery enters the reset-only page through a synthetic cookie.
+Use `123456` as the synthetic verification code. Any other code is rejected. SMS starts selected. Selecting WhatsApp must deselect SMS, and selecting it again must leave WhatsApp selected; an available delivery choice cannot be toggled off. Switching to an SMS-only country must restore SMS; unsupported countries show no choice and disable Send code. An invalid recovery phone must also keep Send code disabled. A successful send enters the code step; use the component's resend control to change delivery, or choose **Have a code?** to enter an existing code. The fixture's **Paste valid synthetic OTP** and **Paste invalid synthetic OTP** buttons dispatch synthetic paste events; they never access the system clipboard. The valid sample trims outer whitespace, while the invalid sample includes message text around digits and must produce an inline error without extracting a code. Check a failed send remaining on delivery, an invalid code remaining on code entry, and the persistent support/back links. **Back to log in** from a pending verification submits sign-out and clears the synthetic pending cookie.
+
+Registration, login and verification use the production auth HTTP adapter with scripted services and finish at the synthetic `/en` home page. Successful recovery enters the reset-only page through a synthetic cookie.
+
+On `/en/phone-fields`, inspect the form before entering anything: required account phone and optional admin search must both serialize as empty strings. The required visible input must block submission until valid; empty optional search must remain valid. Enter a local national number and inspect again: only the hidden canonical field name should be serialized, with the full country code and no `+`. Search the country picker by country name, ISO code and calling code. The controlled international field starts in Kenya; **Set controlled UK phone**, **Clear controlled phone**, and **Focus controlled phone ref** check external state changes and forwarded input focus. Type a partial number, then use **Paste synthetic full UK phone** to confirm a full paste replaces the old country/prefix. The invalid paste button contains message text and must be refused. These paste probes use synthetic browser events and do not read or write the system clipboard.

@@ -69,12 +69,12 @@ function SubscribeSignIn({ locale, returnTo }: { locale: string; returnTo: strin
         body: JSON.stringify(Object.fromEntries(data)) });
       const result = await response.json() as { message?: string; next?: string };
       if (!response.ok) setError(result.message ?? m.text("account.unavailable"));
-      else location.replace(result.next ?? memberNextPath("subscribe", returnTo));
+      else location.replace(result.next ?? "/en");
     } catch { setError(m.text("account.unavailable")); } finally { setBusy(false); }
   }
   return <Panel>
     <SignInForm action="/api/account/login" method="post" onSubmit={submit} data-analytics-ignore>
-        <PhoneInput name="phone" label={m.text("account.phone")} required hint={m.text("account.phoneHint")} />
+        <PhoneInput name="phone" label={m.text("account.phone")} required hint="" />
         <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current />
         <Button type="submit" disabled={busy}>{m.text(busy ? "account.working" : "account.login")}</Button>
         <RowLink variant="quiet" href={`${memberNextPath("account", returnTo)}${returnTo ? "&" : "?"}view=register`} prefetch={false}>{m.text("account.register")}</RowLink>

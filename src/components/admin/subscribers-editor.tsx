@@ -8,18 +8,28 @@ import { PhoneInput } from "@/components/ui/controls";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { OwnerAccount, OwnerSubscriber } from "@/domain/owner-members";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
-import { ActionButton, ButtonRow, DangerButton, FieldBlock, FieldRow, FormStack, Hint } from "./admin-form";
+import { ActionButton, ButtonRow, DangerButton, FieldBlock, FormStack, Hint } from "./admin-form";
 import { ActionNotices, CodeActions, ManualCodeForm, useCodeAction, type CodeAction } from "./code-tools";
+import { SubscriberDirectory } from "./subscriber-directory";
 /** An owner reset's answer (068 D1-reset), held in memory only: shown once, never stored, gone on Done or leaving the page. */
 export type Revealed = Readonly<{ password: string; accountId: string; phone: string | null; created: boolean; sessionsDeleted: number; expiresAt: string }>;
 export function SubscribersEditor({ accounts, detail: selected, plans }: { accounts: readonly OwnerAccount[]; detail: OwnerSubscriber | null; plans: readonly SubscriptionPlanView[] }) {
-  const router = useRouter(), action = useCodeAction(), [found, setFound] = useState<readonly OwnerAccount[] | null>(null), [search, setSearch] = useState(""), [adminPhone, setAdminPhone] = useState<string | null>(null), [revealed, setRevealed] = useState<Revealed | null>(null), [deletedId, setDeletedId] = useState<string | null>(null);
+  const router = useRouter(), action = useCodeAction(), [found, setFound] = useState<readonly OwnerAccount[] | null>(null), [search, setSearch] = useState(""), [filtering, setFiltering] = useState(false), [adminPhone, setAdminPhone] = useState<string | null>(null), [revealed, setRevealed] = useState<Revealed | null>(null), [deletedId, setDeletedId] = useState<string | null>(null);
   const detail = selected?.id === deletedId ? null : selected;
+  const currentAccounts = new Map(accounts.map(account => [account.id, account]));
+  const listedAccounts = (found ?? accounts).filter(account => account.id !== deletedId).map(account => currentAccounts.get(account.id) ?? account);
   const path = detail ? `/api/admin/subscribers/${detail.id}` : "/api/admin/subscribers";
   return <div data-analytics-ignore><ActionNotices action={action} />{revealed && <TemporaryPassword value={revealed} done={() => setRevealed(null)} />}
-    <Panel><form method="post" action="/api/admin/subscribers" onSubmit={async e => { e.preventDefault(); const r = await action.send("/api/admin/subscribers", { search }); if (r.ok) { setFound(r.body.accounts as OwnerAccount[]); setAdminPhone(typeof r.body.adminPhone === "string" ? r.body.adminPhone : null); } }}><FieldRow><PhoneInput label="Search by phone" value={search} onValueChange={setSearch} /><ActionButton disabled={action.busy}>Search</ActionButton></FieldRow></form>
-      {(found ?? accounts).filter(a => a.id !== deletedId).map(a => <p key={a.id}><a href={`/admin/subscribers?accountId=${a.id}`}>{a.phone ? formatPhone(a.phone) : "Erased account"}</a> · {a.status}</p>)}
-      {adminPhone && <Muted>{formatPhone(adminPhone)} is an administrator number. Its password is configured in the environment.</Muted>}</Panel>
+    <SubscriberDirectory accounts={listedAccounts} selectedId={detail?.id ?? null}
+      search={search} onSearchChange={setSearch} filtering={filtering} busy={action.busy} adminPhone={adminPhone}
+      onSearch={async query => {
+        if (action.busy) return;
+        const reply = await action.send("/api/admin/subscribers", { search: query });
+        if (reply.ok) {
+          setFound(reply.body.accounts as OwnerAccount[]); setFiltering(query.trim() !== "");
+          setAdminPhone(typeof reply.body.adminPhone === "string" ? reply.body.adminPhone : null);
+        }
+      }} />
     {detail && <><Panel><PanelHeader><h2>{detail.phone ? formatPhone(detail.phone) : "Erased account"}</h2></PanelHeader><p>{detail.erasedAt ? "Erased" : detail.blockedAt ? "Blocked" : detail.codes.some(c => c.status === "active") ? "Active access" : detail.codes.some(c => c.status === "queued") ? "Queued access" : "No current access"} · {detail.unlocks} unlocks in the last 30 days</p>{detail.blockedReason && <p>{detail.blockedReason}</p>}
       {!detail.erasedAt && <FormStack><ActionButton type="button" disabled={action.busy} onClick={() => void action.send(path, { action: "sign-out-all" })}>Sign out all devices</ActionButton>
         <form method="post" action={path} onSubmit={e => { e.preventDefault(); void action.send(path, { action: detail.blockedAt ? "unblock" : "block", value: new FormData(e.currentTarget).get("reason") }); }}><FieldBlock>Reason<input name="reason" required maxLength={200} /></FieldBlock><ActionButton disabled={action.busy}>{detail.blockedAt ? "Unblock" : "Block"}</ActionButton></form>

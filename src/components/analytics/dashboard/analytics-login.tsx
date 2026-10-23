@@ -1,8 +1,9 @@
 "use client";
 
 import styled from "styled-components";
+import { useState } from "react";
 import { BrandImage, Notice } from "./dashboard-styles";
-import { TextInput } from "@/components/ui/controls";
+import { Button, PhoneInput, TextInput } from "@/components/ui/controls";
 
 export type LoginStatus = "invalid" | "locked" | "unavailable" | "signed-out" | null;
 export type LoginProblem = "not-configured" | "insecure-default" | "missing-secret" | "storage" | null;
@@ -21,6 +22,8 @@ const problems: Record<Exclude<LoginProblem, null>, string> = {
 export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/api/analytics/login", title = "Analytics sign-in" }: {
   status: LoginStatus; problem: LoginProblem; retryAfterSeconds: number | null; action?: string; title?: string;
 }) {
+  const [identifierMode, setIdentifierMode] = useState<"phone" | "username">("phone");
+  const [phone, setPhone] = useState(""), [username, setUsername] = useState("");
   const message = problem ? problems[problem]
     : status === "invalid" ? "Incorrect phone number, username, or password."
     : status === "locked" ? `Too many failed attempts. Try again in ${Math.max(1, Math.ceil((retryAfterSeconds ?? 900) / 60))} minutes.`
@@ -37,7 +40,13 @@ export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/
         {status === "signed-out" && !problem && <Notice role="status">You have signed out.</Notice>}
         {message && <Notice $tone={problem || status === "locked" ? "warning" : "error"} role="alert">{message}</Notice>}
         <Form method="post" action={action}>
-          <TextInput label="Phone number or owner username" name="username" autoComplete="username" required maxLength={64} autoCapitalize="none" spellCheck={false} disabled={problem !== null} />
+          {identifierMode === "phone"
+            ? <PhoneInput id="owner-identity" label="Phone number" name="username" value={phone} onValueChange={setPhone} hint="" required disabled={problem !== null} />
+            : <TextInput id="owner-identity" label="Owner username" name="username" value={username} onChange={event => setUsername(event.currentTarget.value)} autoComplete="username" required maxLength={64} autoCapitalize="none" spellCheck={false} disabled={problem !== null} />}
+          <IdentitySwitch type="button" variant="quiet" disabled={problem !== null} aria-controls="owner-identity"
+            onClick={() => setIdentifierMode(mode => mode === "phone" ? "username" : "phone")}>
+            {identifierMode === "phone" ? "Use owner username" : "Use phone number"}
+          </IdentitySwitch>
           <TextInput label="Password" name="password" type="password" autoComplete="current-password" required maxLength={1024} disabled={problem !== null} />
           <button type="submit" disabled={problem !== null}>Sign in</button>
         </Form>
@@ -48,6 +57,8 @@ export function AnalyticsLogin({ status, problem, retryAfterSeconds, action = "/
     </Page>
   );
 }
+
+const IdentitySwitch = styled(Button)`justify-self: start; padding: 4px 0; font-weight: 400;`;
 
 const Page = styled.main`
   display: grid;

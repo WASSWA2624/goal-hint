@@ -42,7 +42,7 @@ test("member password sign-in preserves phone normalization, bounds/whitelists i
     assert.equal(response.status, 200, input);
     assert.equal(calls.signIn.at(-1)[0], input.includes("254") ? "254712345678" : "256772123456");
     const body = await response.json();
-    assert.equal(body.next, "/en/matches/test-id/home-away");
+    assert.equal(body.next, "/en");
     assert.doesNotMatch(body.next, /256772|254712/);
     assert.match(response.headers.getSetCookie()[0], /^goal-hint-member=t{43}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=34560000$/);
   }
@@ -60,7 +60,7 @@ test("member password sign-in preserves phone normalization, bounds/whitelists i
   for (const path of ["https://evil.test", "//evil.test", "/en?phone=256772123456", "/en#code=x", "/en/matches/a/b?x=1", "/en/matches/a/%2f", "/en/../admin"]) {
     assert.equal(memberReturnPath(path), null, path);
     const response = await handler(memberRequest({ phone: "0772123456", password: "test password", destination: path, return: path }, { json: false }));
-    assert.equal((await response.json()).next, "/en/account");
+    assert.equal((await response.json()).next, "/en");
   }
 });
 

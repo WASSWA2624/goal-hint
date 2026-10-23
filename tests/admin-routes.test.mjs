@@ -289,9 +289,10 @@ test("owner screenshot is private JPEG with a sandbox and cannot return data wit
 });
 
 test("owner phone forms have POST fallbacks so disabled JavaScript cannot put phones in URLs",async()=>{
-  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payments-editor.tsx","src/components/admin/subscribers-editor.tsx"]){
+  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payments-editor.tsx","src/components/admin/subscribers-editor.tsx","src/components/admin/subscriber-directory.tsx"]){
     const text=await source(file);
-    const forms=[...text.matchAll(/<form\b[^>]*?onSubmit=/gu)];assert.ok(forms.length>0);
+    const names=["form",...Array.from(text.matchAll(/\b(\w+)\s*=\s*styled\.form\b/gu),match=>match[1])].join("|");
+    const forms=[...text.matchAll(new RegExp(`<(?:${names})\\b[^>]*?onSubmit=`,"gu"))];assert.ok(forms.length>0,file);
     for(const [form] of forms)assert.match(form,/method="post"/u,file);
   }
 });

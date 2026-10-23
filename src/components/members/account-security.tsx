@@ -21,11 +21,11 @@ export async function accountRequest<T>(path: string, body: Record<string, unkno
   return result;
 }
 
-export function PasswordInput({ label, name = "password", value, onChange, current = false, hint }: {
-  label: string; name?: string; value: string; onChange: (value: string) => void; current?: boolean; hint?: string;
+export function PasswordInput({ label, name = "password", value, onChange, current = false, hint, disabled = false, placeholder }: {
+  label: string; name?: string; value: string; onChange: (value: string) => void; current?: boolean; hint?: string; disabled?: boolean; placeholder?: string;
 }) {
   return <div><TextInput label={label} name={name} value={value} required minLength={current ? undefined : 8} maxLength={128}
-    type="password" autoComplete={current ? "current-password" : "new-password"}
+    type="password" autoComplete={current ? "current-password" : "new-password"} disabled={disabled} placeholder={placeholder}
     onChange={event => onChange(event.currentTarget.value)} data-analytics-ignore />
     {hint && <AccountNote>{hint}</AccountNote>}</div>;
 }

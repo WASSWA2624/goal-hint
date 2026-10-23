@@ -62,12 +62,12 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         : action === "reset" ? await services.auth.resetPassword(body.password, currentToken, address)
         : await services.auth.changePassword(body.password, body.currentPassword, binding);
       if (result.status !== "authenticated") return failure(result);
-      // Signup finishes at home after number verification, including when it began from protected content.
-      const returnTo = action === "register" ? "/en" : memberReturnPath(body.return);
+      // Login and signup finish at home; restricted sessions carry that destination through verification or reset.
+      const returnTo = action === "register" || action === "login" ? "/en" : memberReturnPath(body.return);
       const restrictedPath = (view: string) => `/en/account?${new URLSearchParams({ view, ...(returnTo ? { return: returnTo } : {}) })}`;
       const next = result.administrator ? "/admin" : result.requiresPasswordChange ? restrictedPath("new-password")
         : result.requiresVerification ? restrictedPath("verify")
-        : returnTo ?? (action === "verify" ? "/en" : body.destination === "subscribe" ? "/en/subscribe"
+        : returnTo ?? (action === "verify" ? "/en"
         : action === "phone" ? "/en/account?status=phone-changed" : action === "password" || action === "reset" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),
         ...(result.requiresVerification ? { requiresVerification: true } : {}),

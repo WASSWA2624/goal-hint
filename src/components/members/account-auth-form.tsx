@@ -2,13 +2,13 @@
 
 import { useState, type FormEvent } from "react";
 import { PhoneInput, TextLink } from "@/components/ui/controls";
-import { UserIcon } from "@/components/ui/icons";
+import { InfoIcon, UserIcon } from "@/components/ui/icons";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import type { AdminContact } from "./admin-contact";
 import { MemberForm } from "./member-controls";
-import { AccountActions, AccountCard, AccountCardBody, AccountCardHeading, AccountError, AccountNote, AccountPrimary } from "./account-styles";
+import { AccountActions, AccountCard, AccountCardBody, AccountCardHeading, AccountError, AccountNote, AccountPrimary, AccountSingleDeviceInfo } from "./account-styles";
 import { accountRequest, PasswordInput } from "./account-security";
 import { ForgotPasswordForm } from "./account-verification";
 import { saveMemberLoginFlash } from "./member-login-flash";
@@ -45,21 +45,23 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
   return <AccountCard data-account-auth data-analytics-ignore>
     <AccountCardHeading><UserIcon /><h1>{m.text(view === "register" ? "account.register" : "account.login")}</h1></AccountCardHeading>
     <AccountCardBody>
-      <MemberForm method="post" action={`/api/account/${view}`} onSubmit={submit} data-analytics-ignore aria-busy={busy}
-        aria-describedby={view === "login" ? "account-single-device-notice" : undefined}>
-        <PhoneInput name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} required disabled={busy} />
+      <MemberForm method="post" action={`/api/account/${view}`} onSubmit={submit} data-analytics-ignore aria-busy={busy}>
+        <PhoneInput name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} required disabled={busy} hint="" />
         <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current={view === "login"}
-          {...(view === "register" ? { hint: m.text("account.passwordHint") } : {})} />
-        {view === "login" && <TextLink href={href("forgot")} prefetch={false}>{m.text("account.forgotPassword")}</TextLink>}
-        {view === "register" && <AccountNote>{m.text("account.registerHelp")}</AccountNote>}
+          placeholder={m.text("account.passwordPlaceholder")} disabled={busy} />
+        {view === "login" && <AccountActions>
+          <TextLink href={href("forgot")} prefetch={false}>{m.text("account.forgotPassword")}</TextLink>
+          <AccountSingleDeviceInfo><summary aria-label={m.text("account.singleDeviceNotice")} title={m.text("account.singleDeviceNotice")}><InfoIcon /></summary>
+            <p role="note">{m.text("account.singleDeviceNotice")}</p>
+          </AccountSingleDeviceInfo>
+        </AccountActions>}
         {error && <AccountError role="alert">{error}</AccountError>}
-        {view === "login" && <Notice id="account-single-device-notice" $tone="warning" role="note">{m.text("account.singleDeviceNotice")}</Notice>}
         <AccountPrimary type="submit" disabled={busy}>{m.text(busy ? "account.working" : view === "login" ? "account.login" : "account.createAccount")}</AccountPrimary>
       </MemberForm>
-      <AccountActions><AccountNote>{m.text(view === "login" ? "account.newHere" : "account.alreadyRegistered")}</AccountNote>
+      <AccountActions>
         <TextLink href={href(view === "login" ? "register" : "login")} prefetch={false}>{m.text(view === "login" ? "account.register" : "account.login")}</TextLink>
+        <AccountNote>{m.text("account.ageAssent")} · <TextLink href={`${base}/terms`} prefetch={false}>{m.text("account.terms")}</TextLink></AccountNote>
       </AccountActions>
-      <AccountNote>{m.text("account.signInAssent")} <TextLink href={`${base}/terms`} prefetch={false}>{m.text("account.terms")}</TextLink>.</AccountNote>
     </AccountCardBody>
   </AccountCard>;
 }

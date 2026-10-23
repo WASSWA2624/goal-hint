@@ -141,9 +141,10 @@ test("available phone credentials keep sign-in enabled when legacy owner credent
   assert.equal(loginNotice(f.services, {}).problem, "not-configured");
 }));
 
-test("the shared admin sign-in form explains that configured phone numbers are accepted", async () => {
+test("the shared admin sign-in form uses the phone selector and preserves the owner username fallback", async () => {
   const source = await readFile(new URL("../src/components/analytics/dashboard/analytics-login.tsx", import.meta.url), "utf8");
-  assert.match(source, /Phone number or owner username/u);
+  assert.match(source, /<PhoneInput\b[^>]*label="Phone number"[^>]*name="username"/u);
+  assert.match(source, /<TextInput\b[^>]*label="Owner username"[^>]*name="username"/u);
   assert.match(source, /autoComplete="username"/u);
   assert.match(source, /autoComplete="current-password"/u);
 });

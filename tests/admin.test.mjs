@@ -398,7 +398,9 @@ test("the administrator login form accepts phones and keeps password-manager aut
   const login = await readFile(new URL("../src/components/analytics/dashboard/analytics-login.tsx", import.meta.url), "utf8");
   assert.match(login, /autoComplete="username"/); assert.match(login, /autoComplete="current-password"/);
   assert.match(login, /action = "\/api\/analytics\/login", title = "Analytics sign-in"/, "/analytics keeps its own form unless a page overrides it.");
-  assert.match(login, /label="Phone number or owner username"/);
+  assert.match(login, /<PhoneInput\b[^>]*label="Phone number"[^>]*name="username"/u, "Administrator phone sign-in uses the shared country-aware field.");
+  assert.match(login, /<TextInput\b[^>]*label="Owner username"[^>]*name="username"/u, "Legacy owner usernames retain their own password-manager field.");
+  assert.match(login, /type="button"[^>]*onClick=\{/u, "The owner username fallback can be selected without submitting credentials.");
   assert.match(login, /wait 15 minutes before trying again\./);
   const page = await readFile(new URL("../src/app/admin/page.tsx", import.meta.url), "utf8");
   assert.match(page, /action=\{ownerRoutes\.login\} title="Admin sign-in"/);

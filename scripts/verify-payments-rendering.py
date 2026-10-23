@@ -45,8 +45,15 @@ def main():
             if allowed: assert 'href="tel:*000*1000%23"' in html
             else: assert "*000*1000#" in html
         phone = visible_html(request(server.origin, "/en/phone-input").text)
-        assert phone.count('data-phone-input="true"') == 4
-        assert 'autocomplete="tel"' in phone.lower() and 'inputmode="tel"' in phone.lower()
+        national_inputs = re.findall(r'<input\b[^>]*data-phone-input[^>]*>', phone)
+        assert len(national_inputs) == 4
+        for field in national_inputs:
+            assert 'autocomplete="tel-national"' in field.lower() and 'inputmode="numeric"' in field.lower()
+            assert not re.search(r'\bname=', field), "Visible national inputs must not submit incomplete phone values."
+        canonical_inputs = re.findall(r'<input\b[^>]*data-phone-canonical[^>]*>', phone)
+        assert canonical_inputs and all('type="hidden"' in field for field in canonical_inputs)
+        named_phone = [field for field in canonical_inputs if 'name="phone"' in field]
+        assert len(named_phone) == 1, "The native form must submit its canonical phone field exactly once."
         print("PASS 8 server-rendered payment states, 5 user agents, hidden SMS fields, assent, plan order and private headers.", flush=True)
         if args.serve: server.serve()
 

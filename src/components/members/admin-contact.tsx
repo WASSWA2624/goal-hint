@@ -26,3 +26,9 @@ export function AccountHelpLinks({ locale, contact }: { locale: string; contact:
   return contact.contactPhone || contact.whatsappPhone ? <AdminContactLinks locale={locale} contact={contact} />
     : <AccountNote><TextLink href={`/${resolveLocale(locale)}/contact`} prefetch={false}>{createMessages(locale).text("account.contactAdmin")}</TextLink></AccountNote>;
 }
+
+/** One persistent support action fits beside account navigation on small screens. */
+export function AccountSupportLink({ locale, contact }: { locale: string; contact: AdminContact }) {
+  const href = contact.contactPhone ? telHref(contact.contactPhone) : contact.whatsappPhone ? waHref(contact.whatsappPhone) : `/${resolveLocale(locale)}/contact`;
+  return <TextLink href={href} prefetch={false} data-analytics-ignore>{createMessages(locale).text("account.contactSupport")}</TextLink>;
+}

@@ -2,107 +2,130 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PhoneInput, SegmentedChoice, TextInput, TextLink } from "@/components/ui/controls";
-import { ChevronDownIcon, ChevronLeftIcon, LockIcon, PhoneIcon } from "@/components/ui/icons";
-import { messageChannels, supportedMessageChannels, verificationCodeLifetimeMs, verificationRequestLimit, verificationRequestWindowMs, type MessageChannel } from "@/domain/member-verification";
-import { formatPhone, normalizePhone } from "@/domain/phone";
+import { ChevronRightIcon, KeyIcon, LockIcon, MailIcon } from "@/components/ui/icons";
+import { messageChannels, supportedMessageChannels, type MessageChannel } from "@/domain/member-verification";
+import { normalizePhone } from "@/domain/phone";
+import { parseVerificationCode } from "@/domain/verification-code";
 import { resolveLocale } from "@/i18n/locales";
 import { createMessages } from "@/i18n/messages";
-import { AccountHelpLinks, type AdminContact } from "./admin-contact";
-import { accountRequest, PasswordChangeNote } from "./account-security";
-import { AccountCard, AccountCardBody, AccountCardHeading, AccountError, AccountNote, AccountPhone, AccountPrimary,
-  AccountSection, AccountSteps, AccountTextButton } from "./account-styles";
+import { AccountSupportLink, type AdminContact } from "./admin-contact";
+import { accountRequest } from "./account-security";
+import { AccountCard, AccountCardBody, AccountCardHeading, AccountCodeField, AccountError, AccountNote, AccountPrimary,
+  AccountSteps, AccountSupport, AccountTextButton } from "./account-styles";
 import { MemberForm, MemberSignOut } from "./member-controls";
 
 type CodeFormProps = { locale: string; returnTo: string | null; contact: AdminContact } & (
   { purpose: "account"; phone: string } | { purpose: "password-reset"; phone?: never }
 );
 
-/** A shared code flow keeps both recovery and number verification consistent. No code is persisted by the browser. */
+/** Both verification flows keep codes in component memory and submit only after an explicit confirmation. */
 function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) {
   const m = createMessages(locale), [phone, setPhone] = useState(flow.phone ?? "256");
-  const [channel, setChannel] = useState<MessageChannel | "">(""), [code, setCode] = useState("");
+  const [channel, setChannel] = useState<MessageChannel | "">("sms"), [code, setCode] = useState("");
   const [step, setStep] = useState<"delivery" | "code">("delivery");
-  const [requested, setRequested] = useState(false), [error, setError] = useState("");
+  const [requested, setRequested] = useState(false), [error, setError] = useState(""), [invalidCode, setInvalidCode] = useState(false);
   const [busy, setBusy] = useState<"request" | "verify" | null>(null);
-  const codeInput = useRef<HTMLInputElement>(null);
+  const codeInput = useRef<HTMLInputElement>(null), codeRevision = useRef(0), clipboardPending = useRef(false);
   const recovery = flow.purpose === "password-reset", canonicalPhone = normalizePhone(phone);
   const channels = canonicalPhone ? supportedMessageChannels(canonicalPhone) : messageChannels;
-  const selectedChannel = channel && channels.includes(channel) ? channel : "";
+  const selectedChannel = channel && channels.includes(channel) ? channel : channels.includes("sms") ? "sms" : channels[0] ?? "";
+  const sendLabel = selectedChannel ? m.text("account.sendCodeBy", { channel: selectedChannel === "sms" ? "SMS" : "WhatsApp" }) : m.text("account.sendCode");
   const loginHref = `/${resolveLocale(locale)}/account?${new URLSearchParams({ view: "login", ...(returnTo ? { return: returnTo } : {}) })}`;
   const returnBody = returnTo ? { return: returnTo } : {};
-  const changePhone = (value: string) => { setPhone(value); setChannel(""); setCode(""); setRequested(false); setError(""); };
-  const changeStep = (next: "delivery" | "code") => {
-    if (busy || next === "code" && !canonicalPhone) return;
-    setCode(""); setError(""); setStep(next);
+  function updateCode(value: string) { codeRevision.current++; setCode(value); setInvalidCode(false); setError(""); }
+  const changePhone = (value: string) => {
+    if (value === phone) return;
+    setPhone(value); setChannel("sms"); updateCode(""); setRequested(false);
   };
+  function changeStep(next: "delivery" | "code") {
+    if (busy || next === "code" && !canonicalPhone) return;
+    updateCode(""); setStep(next);
+  }
   useEffect(() => { if (step === "code") codeInput.current?.focus(); }, [step]);
+
+  function pasteCode(value: unknown, reportError: boolean) {
+    const parsed = parseVerificationCode(value);
+    if (parsed !== null) updateCode(parsed);
+    else { codeRevision.current++; if (reportError) { setInvalidCode(true); setError(""); } }
+  }
+  async function readCopiedCode(input: HTMLInputElement) {
+    // A deliberate click/tap may allow clipboard access; automatic focus never requests it.
+    if (busy || step !== "code" || input.value || clipboardPending.current || !window.isSecureContext || !navigator.clipboard?.readText) return;
+    const revision = codeRevision.current;
+    clipboardPending.current = true;
+    try {
+      const copied = await navigator.clipboard.readText();
+      if (input.isConnected && document.activeElement === input && !input.disabled && !input.value && revision === codeRevision.current)
+        pasteCode(copied, false);
+    } catch { /* Native paste, keyboard suggestions and manual entry remain available. */ }
+    finally { clipboardPending.current = false; }
+  }
   async function request(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy || !canonicalPhone || !selectedChannel) return;
     setBusy("request"); setError("");
     try {
       await accountRequest(recovery ? "forgot" : "verification", { ...(recovery ? { phone } : {}), channel: selectedChannel, ...returnBody });
-      setRequested(true); setCode(""); setStep("code");
+      setRequested(true); updateCode(""); setStep("code");
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); }
     finally { setBusy(null); }
   }
   async function verify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || !canonicalPhone || !/^[0-9]{6}$/u.test(code)) return;
+    event.preventDefault(); if (busy || !canonicalPhone) return;
+    const parsed = parseVerificationCode(code);
+    if (parsed === null || invalidCode) { setInvalidCode(true); return; }
     setBusy("verify"); setError("");
     try {
-      const result = await accountRequest<{ next: string }>(recovery ? "reset-code" : "verify", { ...(recovery ? { phone } : {}), code, ...returnBody });
+      const result = await accountRequest<{ next: string }>(recovery ? "reset-code" : "verify", { ...(recovery ? { phone } : {}), code: parsed, ...returnBody });
       location.replace(result.next);
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); setBusy(null); }
   }
   return <AccountCard data-account-auth data-account-verification={flow.purpose} data-verification-step={step} data-analytics-ignore>
     <AccountCardHeading><LockIcon /><h1>{m.text(step === "code" ? "account.enterCode" : recovery ? "account.resetPassword" : "account.verifyAccount")}</h1></AccountCardHeading>
     <AccountCardBody>
-      <AccountSteps aria-label={m.text("account.verificationSteps")}>
-        <li aria-current={step === "delivery" ? "step" : undefined}><span aria-hidden="true">1</span>{m.text("account.deliveryStep")}</li>
-        <li aria-current={step === "code" ? "step" : undefined}><span aria-hidden="true">2</span>{m.text("account.codeStep")}</li>
-      </AccountSteps>
       {step === "delivery" ? <>
-        <p>{m.text(recovery ? "account.resetHelp" : "account.verificationHelp")}</p>
-        {!recovery && <AccountPhone><PhoneIcon /><div><small>{m.text("account.registeredNumber")}</small><strong>+{formatPhone(phone)}</strong></div></AccountPhone>}
         <MemberForm method="post" action={`/api/account/${recovery ? "forgot" : "verification"}`} onSubmit={request}
           data-account-step-form="delivery" data-analytics-ignore aria-busy={busy === "request"}>
-          {recovery && <PhoneInput name="phone" label={m.text("account.registeredNumber")} value={phone} onValueChange={changePhone} required disabled={!!busy} />}
+          {recovery && <PhoneInput name="phone" label={m.text("account.registeredNumber")} value={phone} onValueChange={changePhone} required disabled={!!busy} hint="" />}
           {channels.length > 0 ? <SegmentedChoice<MessageChannel | ""> name="channel" label={m.text("account.deliveryChannel")} value={selectedChannel}
             options={channels.map(value => ({ value, label: value === "sms" ? "SMS" : "WhatsApp" }))} onValueChange={setChannel} disabled={!!busy} />
             : <AccountNote role="status">{m.text("account.countryUnsupported")}</AccountNote>}
           {selectedChannel === "whatsapp" && <AccountNote>{m.text("account.whatsappConsent")}</AccountNote>}
           {error && <AccountError role="alert">{error}</AccountError>}
-          <AccountPrimary type="submit" disabled={!!busy || !canonicalPhone || !selectedChannel}>{m.text(busy === "request" ? "account.working" : "account.sendCode")}</AccountPrimary>
+          <AccountPrimary type="submit" disabled={!!busy || !canonicalPhone || !selectedChannel}>{busy === "request" ? m.text("account.working") : sendLabel}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
         <AccountTextButton type="button" variant="quiet" disabled={!!busy || !canonicalPhone} onClick={() => changeStep("code")}>
           {m.text("account.alreadyHaveCode")}
         </AccountTextButton>
       </> : <>
-        <p role={requested ? "status" : undefined}>{m.text(requested ? recovery ? "account.resetSent" : "account.verificationSent" : "account.existingCode")}</p>
-        <AccountPhone><PhoneIcon /><div><small>{m.text("account.registeredNumber")}</small><strong>+{formatPhone(canonicalPhone ?? phone)}</strong></div></AccountPhone>
+        <AccountSteps aria-label={m.text("account.verificationSteps")}>
+          <li><MailIcon />{m.text("account.deliveryStep")}</li>
+          <li aria-current="step"><ChevronRightIcon /><KeyIcon />{m.text("account.codeStep")}</li>
+        </AccountSteps>
+        <p role={requested ? "status" : undefined}>{m.text(requested ? recovery ? "account.resetSent" : "account.verificationSent" : "account.existingCode", { suffix: (canonicalPhone ?? phone).slice(-3) })}</p>
         <MemberForm method="post" action={`/api/account/${recovery ? "reset-code" : "verify"}`} onSubmit={verify}
           data-account-step-form="code" data-analytics-ignore aria-busy={busy === "verify"}>
-          <TextInput ref={codeInput} name="code" label={m.text("account.verificationCode")} value={code}
-            onChange={event => setCode(event.currentTarget.value.replace(/[^0-9]/gu, "").slice(0, 6))}
-            autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required disabled={!!busy} data-analytics-ignore
-            hint={m.text("account.codeHint")} />
+          <AccountCodeField><TextInput ref={codeInput} name="code" label={m.text("account.verificationCode")} value={code}
+            onChange={event => {
+              const value = event.currentTarget.value;
+              if (/^[0-9]{0,6}$/u.test(value)) updateCode(value);
+              else { codeRevision.current++; setInvalidCode(true); setError(""); }
+            }}
+            onPaste={event => { event.preventDefault(); if (!busy) pasteCode(event.clipboardData.getData("text"), true); }}
+            onClick={event => { if (event.isTrusted && event.button === 0) void readCopiedCode(event.currentTarget); }}
+            autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" minLength={6} required disabled={!!busy} data-analytics-ignore data-validated-code
+            error={invalidCode ? <span role="alert">{m.text("account.invalidCode")}</span> : undefined} /></AccountCodeField>
           {error && <AccountError role="alert">{error}</AccountError>}
-          <AccountPrimary type="submit" disabled={!!busy}>{m.text(busy === "verify" ? "account.working" : recovery ? "account.continueReset" : "account.verifyAccount")}</AccountPrimary>
+          <AccountPrimary type="submit" disabled={!!busy || code.length !== 6 || invalidCode}>{m.text(busy === "verify" ? "account.working" : recovery ? "account.continueReset" : "account.verifyCode")}<ChevronRightIcon /></AccountPrimary>
         </MemberForm>
         <AccountTextButton type="button" variant="quiet" disabled={!!busy} onClick={() => changeStep("delivery")}>
-          <ChevronLeftIcon />{m.text(recovery ? "account.changeCodeDeliveryNumber" : "account.changeCodeDelivery")}
+          {m.text(recovery ? "account.changeCodeDeliveryNumber" : "account.changeCodeDelivery")}
         </AccountTextButton>
       </>}
-      <AccountSection data-verification-help>
-        <summary>{m.text("account.needHelp")}<ChevronDownIcon /></summary>
-        <div>
-          <AccountNote>{m.text("account.codeRules", { hours: String(verificationCodeLifetimeMs / 3_600_000), limit: String(verificationRequestLimit), window: String(verificationRequestWindowMs / 3_600_000) })}</AccountNote>
-          {recovery && <PasswordChangeNote locale={locale} />}
-          <AccountHelpLinks locale={locale} contact={contact} />
-          {recovery ? <TextLink href={loginHref} prefetch={false}>{m.text("account.backToLogin")}</TextLink>
-            : <><TextLink href={`/${resolveLocale(locale)}/account?${new URLSearchParams({ view: "forgot", ...(returnTo ? { return: returnTo } : {}) })}`} prefetch={false}>{m.text("account.forgotPassword")}</TextLink>
-              <MemberSignOut disabled={!!busy}>{m.text("account.backToLogin")}</MemberSignOut></>}
-        </div>
-      </AccountSection>
+      <AccountSupport aria-label={m.text("account.support")} data-account-support>
+        <AccountSupportLink locale={locale} contact={contact} />
+        {recovery ? <TextLink href={loginHref} prefetch={false}>{m.text("account.backToLogin")}</TextLink>
+          : <MemberSignOut disabled={!!busy} variant="quiet">{m.text("account.backToLogin")}</MemberSignOut>}
+      </AccountSupport>
     </AccountCardBody>
   </AccountCard>;
 }
