@@ -36,6 +36,7 @@ export const ShieldIcon = (props: IconProps) => <Icon {...props}><path d="M12 3 
 export const DocumentIcon = (props: IconProps) => <Icon {...props}><path d="M14 3H5v18h14V8l-5-5ZM14 3v5h5M8 12h8M8 16h8" /></Icon>;
 export const MailIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="5" width="18" height="14" /><path d="m3 6 9 7 9-7" /></Icon>;
 export const HomeIcon = (props: IconProps) => <Icon {...props}><path d="M4 11.5 12 5l8 6.5V20h-5v-5H9v5H4v-8.5Z" /></Icon>;
+export const DashboardIcon = (props: IconProps) => <Icon {...props}><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" /></Icon>;
 export const LiveIcon = (props: IconProps) => <Icon {...props}>
   <circle cx="12" cy="12" r="2.5" /><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14" />
 </Icon>;

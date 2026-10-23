@@ -236,6 +236,7 @@ export const en = {
   "navigation.live": "Live",
   "navigation.slips": "Slip builder",
   "navigation.more": "More",
+  "navigation.dashboard": "Dashboard",
   "navigation.menu": "Menu",
   "navigation.appearance": "Appearance",
   "navigation.themeLight": "Light",

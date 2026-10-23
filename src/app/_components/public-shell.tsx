@@ -5,7 +5,8 @@ import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
-import { ResponsiveNavigation, type NavigationDestination } from "@/components/navigation/responsive-navigation";
+import type { NavigationDestination } from "@/components/navigation/responsive-navigation";
+import { SessionNavigation } from "@/components/navigation/session-navigation";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { Container, PageMain } from "@/components/ui/layout";
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
@@ -28,7 +29,7 @@ export const getShellInstant = cache(async () => {
 });
 export const getShellDate = cache(async () => getReportingDate(await getShellInstant()));
 
-export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, showAccount = true }: {
+export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, showAccount = true, wide = false }: {
   children: ReactNode;
   locale?: string;
   current?: NavigationLocation;
@@ -40,6 +41,8 @@ export async function PublicShell({ children, locale, current, today: reportingD
   /** Dense mobile feeds use 8px gutters; other app screens retain their existing spacing. */
   compact?: boolean;
   showAccount?: boolean;
+  /** Dense dashboards use the wide container while keeping the shared phone header. */
+  wide?: boolean;
 }) {
   const language = resolveLocale(locale);
   const messages = createMessages(language);
@@ -63,22 +66,22 @@ export async function PublicShell({ children, locale, current, today: reportingD
       {app && <MemberNavigationRecovery />}
       <SkipLink href="#main-content">{messages.text("navigation.skip")}</SkipLink>
       <Header $app={app}>
-        <HeaderContent $wide={app}>
+        <HeaderContent $wide={app || wide}>
           <HomeLink href={homeHref(language)} aria-label={messages.text("navigation.home")} prefetch={false}>
             <BrandLogo alt="" variant="inverse" />
           </HomeLink>
           <DesktopNav aria-label={messages.text("navigation.primary")}>
-            <ResponsiveNavigation destinations={destinations} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
+            <SessionNavigation destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
           </DesktopNav>
           <HeaderActions><AccountLinks locale={language} showAccount={showAccount} /></HeaderActions>
         </HeaderContent>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
       <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact}>
-        <Container $wide={app}>{children}</Container>
+        <Container $wide={app || wide}>{children}</Container>
       </PageMain>
       <Footer>
-        <FooterContent $wide={app}>
+        <FooterContent $wide={app || wide}>
           <FooterBrand>
             <BrandMark alt="" />
             <span>{messages.text("navigation.copyright", { year: today.slice(0, 4) })}</span>
@@ -99,7 +102,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
         </FooterContent>
       </Footer>
       <TabBar aria-label={messages.text("navigation.tabs")}>
-        <ResponsiveNavigation mobile destinations={destinations} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
+        <SessionNavigation mobile destinations={destinations} dashboardLabel={messages.text("navigation.dashboard")} moreLabel={messages.text("navigation.more")} {...(current ? { current } : {})} />
       </TabBar>
     </ShellFrame>
   );

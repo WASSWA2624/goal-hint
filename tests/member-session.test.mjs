@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getAdminSessionSnapshot, getServerAdminSessionSnapshot,
   getMemberSessionSnapshot, getServerMemberSessionSnapshot, refreshMemberSession, subscribeMemberSession,
 } from "../src/components/members/member-session.ts";
 
@@ -22,6 +23,8 @@ test("header identity requests are private, deduplicated and refreshed after ano
   });
   assert.equal(getServerMemberSessionSnapshot(), null);
   assert.equal(getMemberSessionSnapshot(), null);
+  assert.equal(getAdminSessionSnapshot(), false);
+  assert.equal(getServerAdminSessionSnapshot(), false);
   let updates = 0;
   const desktop = subscribeMemberSession(() => { updates += 1; });
   const mobile = subscribeMemberSession(() => { updates += 1; });
@@ -63,6 +66,28 @@ test("header identity requests are private, deduplicated and refreshed after ano
   responses.shift()(new Response(null, { status: 503 }));
   await failure;
   assert.equal(getMemberSessionSnapshot(), "+256700000002", "temporary transport failures preserve the last confirmed account");
+
+  for (const administrator of [true, false]) {
+    const before = updates;
+    const refreshed = refreshMemberSession();
+    await Promise.resolve();
+    responses.shift()(Response.json({ phone: "+256700000002", administrator }));
+    await refreshed;
+    assert.equal(getAdminSessionSnapshot(), administrator);
+    assert.equal(getServerAdminSessionSnapshot(), false, "public HTML never includes private admin state");
+    assert.equal(updates, before + 2, "role changes notify both headers even when the phone stays the same");
+  }
+
+  const owner = refreshMemberSession();
+  await Promise.resolve();
+  responses.shift()(Response.json({ phone: null, administrator: true }));
+  await owner;
+  assert.equal(getAdminSessionSnapshot(), true, "owner sessions do not require a member phone");
+  const signedOut = refreshMemberSession();
+  await Promise.resolve();
+  responses.shift()(Response.json({ phone: null, administrator: false }));
+  await signedOut;
+  assert.equal(getAdminSessionSnapshot(), false, "signing out removes dashboard access from navigation");
 
   desktop();
   mobile();

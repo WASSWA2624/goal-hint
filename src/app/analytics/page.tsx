@@ -7,6 +7,7 @@ import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/cale
 import { getAnalyticsServices, loginNotice, verifyAdminSession } from "@/server/analytics/analytics-http";
 import { memberCookieName } from "@/server/members/member-sessions";
 import { adminDisplayName } from "@/domain/admin-identity";
+import { AdminShell } from "@/components/admin/admin-shell";
 
 export const metadata: Metadata = {
   title: "Analytics · Goal Hint",
@@ -23,8 +24,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const admin = await verifyAdminSession(services, jar.get(services.config.cookies.session)?.value,
     jar.get(memberCookieName(services.config.production))?.value);
   if (admin) {
-    return <AnalyticsDashboard username={adminDisplayName(admin)} today={currentReportingDate()}
-      developmentCredentials={services.config.usingDevelopmentCredentials} />;
+    return <AdminShell current="analytics" username={adminDisplayName(admin)} developmentCredentials={services.config.usingDevelopmentCredentials}>
+      <AnalyticsDashboard today={currentReportingDate()} />
+    </AdminShell>;
   }
   return <AnalyticsLogin {...loginNotice(services, await searchParams)} />;
 }

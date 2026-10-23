@@ -7,13 +7,12 @@ import { analyticsFilterKeys, analyticsFilterLabels, analyticsRules, comparisonM
 import { analyticsPresets, bucketLabel, formatRange, presetRange, rangeDays, type AnalyticsPreset } from "@/domain/analytics-range";
 import { analyticsDatasets, formatDuration, formatPercent } from "@/domain/analytics-datasets";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
-import { SkipLink } from "@/components/navigation/shell-styles";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from "./charts";
 import { DataTable } from "./data-table";
-import { Brand, BrandImage, Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, HeaderButton, HeaderLink, LiveList, LivePill, Main,
-  Muted, Notice, PageTitle, Panel, PanelHeader, SegmentButton, Segmented, SeriesTable, SettingsRow, Shell, Skeleton, Tab, Tabs, ToolButton,
-  TopActions, TopBar, TopBarContent, WidePanel } from "./dashboard-styles";
+import { Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, LiveList,
+  Muted, Notice, PageTitle, Panel, PanelHeader, SegmentButton, Segmented, SeriesTable, SettingsRow, Skeleton, Tab, Tabs, ToolButton,
+  WidePanel } from "./dashboard-styles";
 
 type Filters = Partial<Record<AnalyticsFilterKey, Readonly<{ value: string; label: string }>>>;
 type Selection = Readonly<{ preset: AnalyticsPreset | "custom"; from: ReportingDate; to: ReportingDate }>;
@@ -142,7 +141,7 @@ function filterOptions(report: AnalyticsReport | null, key: AnalyticsFilterKey):
   });
 }
 
-export function AnalyticsDashboard({ username, today, developmentCredentials }: { username: string; today: ReportingDate; developmentCredentials: boolean }) {
+export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
   const [selection, setSelection] = useState<Selection>({ preset: "last-30", ...presetRange("last-30", today) });
   const [compare, setCompare] = useState<ComparisonMode>("previous");
   const [filters, setFilters] = useState<Filters>({});
@@ -211,27 +210,12 @@ export function AnalyticsDashboard({ username, today, developmentCredentials }: 
   const empty = report !== null && report.summary.visits === 0 && report.summary.pageviews === 0;
 
   return (
-    <Shell>
-      <SkipLink href="#main-content">Skip to analytics</SkipLink>
-      <TopBar>
-        <TopBarContent>
-          <Brand href="/en"><BrandImage src="/brand/goal-hint-logo-inverse.svg" alt="Goal Hint" width={112} height={26} /><span>Analytics</span></Brand>
-          <TopActions>
-            <LivePill aria-live="polite" title="Distinct visitors active in the last five minutes">{live ? count(live.visitors) : "–"} live</LivePill>
-            <span>Signed in as <strong>{username}</strong></span>
-            <HeaderLink href="/admin">Admin</HeaderLink>
-            <form method="post" action="/api/analytics/logout"><HeaderButton type="submit">Sign out</HeaderButton></form>
-          </TopActions>
-        </TopBarContent>
-      </TopBar>
-      <Main id="main-content" tabIndex={-1}>
+    <>
         <PageTitle>
           <h1>Visitor analytics</h1>
           <p>{formatRange(selection)} · East Africa Time{report ? ` · updated ${new Date(report.generatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
+          <p aria-live="polite" title="Distinct visitors active in the last five minutes">{live ? count(live.visitors) : "–"} live</p>
         </PageTitle>
-        {developmentCredentials && <Notice $tone="warning">
-          Development sign-in is active. Production refuses it: set GOAL_HINT_ANALYTICS_ADMIN_USERNAME, GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH and GOAL_HINT_ANALYTICS_SECRET before deploying.
-        </Notice>}
         <FilterControls selection={selection} compare={compare} filters={filters} today={today} report={report}
           onSelection={setSelection} onCompare={setCompare} onAddFilter={addFilter} onRemoveFilter={removeFilter}
           exportHref={exportHref("summary")} />
@@ -312,8 +296,7 @@ export function AnalyticsDashboard({ username, today, developmentCredentials }: 
           <summary><strong>Metric definitions</strong></summary>
           <Definitions>{definitions.map(([term, description]) => <div key={term}><dt>{term}</dt><dd>{description}</dd></div>)}</Definitions>
         </Panel>
-      </Main>
-    </Shell>
+    </>
   );
 }
 

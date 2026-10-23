@@ -1,4 +1,5 @@
 export const minimumPrimaryDestinations = 3;
+export const maximumDesktopDestinations = 5;
 
 /** Preserve order; narrow equal-width phone bars can put every destination in More. */
 export function fitNavigationItems({ widths, moreWidth, activeMoreWidth = moreWidth, currentIndex = -1, availableWidth, gap = 0, equalColumns = false }: Readonly<{
@@ -6,7 +7,8 @@ export function fitNavigationItems({ widths, moreWidth, activeMoreWidth = moreWi
   availableWidth: number; gap?: number; equalColumns?: boolean;
 }>): number {
   const minimum = equalColumns ? 0 : Math.min(minimumPrimaryDestinations, widths.length);
-  for (let count = widths.length; count >= minimum; count--) {
+  const maximum = equalColumns ? widths.length : Math.min(maximumDesktopDestinations, widths.length);
+  for (let count = maximum; count >= minimum; count--) {
     const overflow = count < widths.length, columns = count + Number(overflow);
     const visibleWidths = widths.slice(0, count);
     if (overflow) visibleWidths.push(currentIndex >= count ? activeMoreWidth : moreWidth);

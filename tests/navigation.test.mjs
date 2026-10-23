@@ -8,6 +8,14 @@ import { getLocaleRedirect, isSupportedLocale, resolveLocale } from "../src/i18n
 import { createMessages } from "../src/i18n/messages.ts";
 import { fitNavigationItems } from "../src/components/navigation/navigation-fit.ts";
 
+test("desktop keeps at most five primary destinations and reserves space for More", () => {
+  const dimensions = { widths: Array(10).fill(60), moreWidth: 60, gap: 8 };
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 2000 }), 5);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 400 }), 5);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 399 }), 4);
+  assert.equal(fitNavigationItems({ ...dimensions, availableWidth: 2000, equalColumns: true }), 10);
+});
+
 test("mobile navigation moves destinations into More instead of squeezing three primary links", () => {
   const dimensions = { widths: [60, 60, 60, 60, 60], moreWidth: 60, equalColumns: true };
   for (const [availableWidth, expected] of [[300, 5], [240, 3], [180, 2], [120, 1], [60, 0], [0, 0]]) {

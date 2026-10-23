@@ -1,104 +1,12 @@
-"use client";
+import "server-only";
 
-import { useEffect, useState, type ReactNode } from "react";
-import styled from "styled-components";
-import { useRouter } from "next/navigation";
-import { SkipLink } from "@/components/navigation/shell-styles";
-import { Brand, BrandImage, HeaderButton, HeaderLink, Main, Notice, Shell, Tab, Tabs, TopActions, TopBar,
-  TopBarContent } from "@/components/analytics/dashboard/dashboard-styles";
+import type { ComponentProps } from "react";
+import { PublicShell } from "@/app/_components/public-shell";
+import { AdminWorkspace } from "./admin-workspace";
 
-/** Owner dashboard sections, in tab order. Later prompts add their pages here (and the pending count). */
-const sections = [
-  { key: "overview", href: "/admin", label: "Overview" },
-  { key: "payments", href: "/admin/payments", label: "Payments" },
-  { key: "codes", href: "/admin/codes", label: "Codes" },
-  { key: "subscribers", href: "/admin/subscribers", label: "Subscribers" },
-  { key: "password-resets", href: "/admin/password-resets", label: "Password requests" },
-  { key: "plans", href: "/admin/plans", label: "Plans" },
-  { key: "settings", href: "/admin/settings", label: "Settings" },
-  { key: "audit", href: "/admin/audit", label: "Audit" },
-] as const;
-export type AdminSection = (typeof sections)[number]["key"];
-
-/** A background tab shows "(n) Payments · …" while payments wait; the page's own title stays after it, and returns at 0. */
-function pendingTitle(title: string, count: number, payments: boolean) {
-  const base = title.replace(payments ? /^(?:\(\d+\) )?Payments · /u : /^\(\d+\) Payments · /u, "");
-  return `${count > 0 ? `(${count}) ` : ""}${count > 0 || payments ? "Payments · " : ""}${base}`;
+/** All owner sections retain the shared site navigation above their dashboard tabs. */
+export function AdminShell(props: ComponentProps<typeof AdminWorkspace>) {
+  return <PublicShell locale="en" current="dashboard" wide>
+    <AdminWorkspace {...props} />
+  </PublicShell>;
 }
-
-/**
- * Phone-first owner shell: one column, 44 px targets and a top tab strip. Signing out is a plain form POST, so it works
- * without JavaScript. Owner copy is English only.
- */
-export function AdminShell({ current, username, developmentCredentials, children, pendingCount }: {
-  current: AdminSection; username: string; developmentCredentials: boolean; children: ReactNode; pendingCount?: number;
-}) {
-  const router = useRouter(), [count, setCount] = useState(pendingCount);
-  useEffect(() => {
-    const refreshCount = () => {
-      void fetch("/api/admin/payments?count=1", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then((v: { pendingCount: number } | null) => {
-        if (v) { setCount(v.pendingCount); document.title = pendingTitle(document.title, v.pendingCount, current === "payments"); if (current === "payments") router.refresh(); }
-      }).catch(() => {});
-    };
-    if (pendingCount === undefined) refreshCount();
-    const timer = setInterval(refreshCount, 60000);
-    return () => clearInterval(timer);
-  }, [current, pendingCount, router]);
-  return (
-    <Shell data-analytics-ignore>
-      <SkipLink href="#main-content">Skip to admin</SkipLink>
-      <TopBar>
-        <TopBarContent>
-          <BrandLink href="/en"><BrandImage src="/brand/goal-hint-logo-inverse.svg" alt="Goal Hint" width={112} height={26} /><span>Admin</span></BrandLink>
-          <Actions>
-            <span>Signed in as <strong>{username}</strong></span>
-            <HeaderLink href="/analytics">Analytics</HeaderLink>
-            <form method="post" action="/api/admin/logout"><HeaderButton type="submit">Sign out</HeaderButton></form>
-          </Actions>
-        </TopBarContent>
-      </TopBar>
-      <Strip>
-        <Tabs as="nav" aria-label="Owner dashboard">
-          {sections.map((section) => (
-            <SectionTab key={section.key} as="a" href={section.href} $selected={section.key === current}
-              aria-current={section.key === current ? "page" : undefined}>{section.label}{section.key === "payments" && (pendingCount ?? count) !== undefined ? ` (${pendingCount ?? count})` : ""}</SectionTab>
-          ))}
-        </Tabs>
-      </Strip>
-      <Column id="main-content" tabIndex={-1}>
-        {developmentCredentials && <Notice $tone="warning">
-          Development sign-in is active. Production refuses it: set GOAL_HINT_ANALYTICS_ADMIN_USERNAME, GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH and GOAL_HINT_ANALYTICS_SECRET before deploying.
-        </Notice>}
-        {children}
-      </Column>
-    </Shell>
-  );
-}
-
-const column = "48rem";
-
-const BrandLink = styled(Brand)`
-  min-block-size: ${({ theme }) => theme.control.minHeight};
-`;
-const Actions = styled(TopActions)`
-  a, button { min-block-size: ${({ theme }) => theme.control.minHeight}; }
-`;
-const Strip = styled.div`
-  background: ${({ theme }) => theme.color.surface};
-  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  ${Tabs} {
-    max-inline-size: ${column};
-    margin-inline: auto;
-    padding-inline: 16px;
-    border-block-end: 0;
-  }
-`;
-const SectionTab = styled(Tab)`
-  display: inline-flex;
-  align-items: center;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
-  text-decoration: none;
-`;
-const Column = styled(Main)`
-  max-inline-size: ${column};
-`;

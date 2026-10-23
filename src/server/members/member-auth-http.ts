@@ -5,6 +5,8 @@ import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody 
 import { getMemberServices, type MemberServices, type MemberServicesSource } from "./member-http.ts";
 import type { AuthBinding, AuthFailure } from "./member-auth.ts";
 import { memberCookieName, memberSessionRules } from "./member-sessions.ts";
+import { getAnalyticsServices } from "../analytics/analytics-http.ts";
+import { requireOwner, type OwnerServices } from "../admin/owner-auth.ts";
 
 type AuthAction = "register" | "login" | "phone" | "password" | "forgot" | "reset";
 const fields: Readonly<Record<AuthAction, readonly string[]>> = {
@@ -66,13 +68,14 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
   };
 }
 
-export function createMemberSessionHandler(source: MemberServicesSource = getMemberServices) {
+export function createMemberSessionHandler(source: MemberServicesSource = getMemberServices, ownerSource: OwnerServices = getAnalyticsServices) {
   return async (request: Request): Promise<Response> => {
     try {
       const services: MemberServices = await source();
       if (!services.sessions) return json({ phone: null, error: "unavailable" }, 503);
       const member = await services.sessions.verify(readCookie(request, memberCookieName(services.config.production)));
-      return json({ phone: member?.phone ?? null });
+      const administrator = !!await requireOwner(await ownerSource(), request, { touch: false });
+      return json({ phone: member?.phone ?? null, administrator });
     } catch { return json({ phone: null, error: "unavailable" }, 503); }
   };
 }

@@ -7,7 +7,7 @@ export { homeHref, matchesHref, informationHref, informationPages, type Informat
 export type FeedView = Readonly<{ date: ReportingDate; status: FeedStatus }>;
 export type FeedEntry = "today" | "results";
 export type AppSection = FeedEntry | "live" | "slips" | "best-slips";
-export type NavigationLocation = AppSection | InformationPage;
+export type NavigationLocation = AppSection | InformationPage | "dashboard";
 
 /** Both entry points select the same feed. Results starts with yesterday's finals. */
 export function getFeedEntry(today: ReportingDate, entry: FeedEntry): FeedView {
