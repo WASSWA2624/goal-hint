@@ -12,6 +12,7 @@ import { jpeg } from "./helpers/payment-fixtures.mjs";
 import { grantSessionAccess } from "../src/server/members/device-grants.ts";
 import { lockMemberAccount } from "../src/server/members/access-codes.ts";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
+import { silentPaymentNotifications } from "./helpers/payment-notification-fixtures.mjs";
 
 test("real MySQL payment transactions, budgets, snapshots, assent and trial limits", { timeout: 180_000 }, async (t) => {
   let fixture;
@@ -20,7 +21,7 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
   t.after(() => fixture.close());
   let instant = Date.parse("2026-10-19T09:00:00Z"), serial = 100;
   const now = () => instant, at = new Date(instant), planId = randomUUID();
-  const sessions = createMemberSessions({ database, config, now }), payments = createPayments({ database, config, now, environment: null }), codes = createAccessCodes({ database, config, now });
+  const sessions = createMemberSessions({ database, config, now }), payments = createPayments({ database, config, now, environment: null }), codes = createAccessCodes({ database, config, now, notifications: silentPaymentNotifications });
   await database.query((tx) => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST MTN", airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "synthetic-owner" } }));
   await database.query((tx) => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at, updatedAt: at } }));
   async function member(phone) { const signed = await sessions.signIn(phone ?? `25670000${String(++serial).padStart(4, "0")}`, "unknown"); return sessions.verify(signed.token); }

@@ -5,14 +5,16 @@ import { Muted, Notice, Panel, PanelHeader } from "@/components/analytics/dashbo
 import { formatPhone } from "@/domain/phone";
 import { PhoneInput } from "@/components/ui/controls";
 import { formatPeriodEnd } from "@/domain/subscription-period";
+import { paymentNotificationNotice } from "@/domain/payment-notification";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerCode } from "@/domain/owner-members";
 import { ActionButton, ButtonRow, FieldBlock, FieldRow, FormStack, postAdmin, replyMessage, type AdminReply } from "./admin-form";
-/** A new access period's 201 answer (068) as one short line: nothing is sent, the account's signed-in devices unlock at once. */
+/** Keep the access decision visible alongside the separate payment notification outcome. */
 export function grantNotice(body: AdminReply["body"]): string | null {
   if (typeof body.endsAt !== "string" || typeof body.devicesUnlocked !== "number") return null;
   const n = body.devicesUnlocked, line = `${body.status === "approved" ? "Approved" : "Granted"} · access until ${formatPeriodEnd(new Date(body.endsAt))} · ${n} device${n === 1 ? "" : "s"} unlocked`;
-  return n ? line : `${line}. Devices already unlocked keep access; the member's next sign-in unlocks one.`;
+  const grant = n ? line : `${line}. Devices already unlocked keep access; the member's next sign-in unlocks one.`;
+  return [grant, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
 }
 export function useCodeAction() {
   const router = useRouter(), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [notice, setNotice] = useState(""), [duplicateId, setDuplicateId] = useState<string | null>(null);
@@ -20,7 +22,7 @@ export function useCodeAction() {
   async function send(path: string, body: unknown, done = "") {
     setBusy(true); setMessage(""); setNotice(""); setDuplicateId(null);
     const reply = await postAdmin(path, body); setBusy(false);
-    if (reply.ok) { setNotice(grantNotice(reply.body) ?? done); router.refresh(); }
+    if (reply.ok) { setNotice(grantNotice(reply.body) ?? [done, paymentNotificationNotice(reply.body.notification)].filter(Boolean).join(" · ")); router.refresh(); }
     else { setMessage(replyMessage(reply, "The action was refused.")); if (typeof reply.body.submissionId === "string") setDuplicateId(reply.body.submissionId); }
     return reply;
   }

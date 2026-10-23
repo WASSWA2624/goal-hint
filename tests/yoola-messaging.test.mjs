@@ -119,3 +119,78 @@ test("a queued provider acceptance succeeds without a second send", async () => 
   await messaging.send({ ...message, channel: "whatsapp" });
   assert.equal(calls, 1);
 });
+
+test("generic SMS preserves the message and uses the shared documented endpoint in every environment", async () => {
+  const text = "Goal Hint: Your payment was approved. Subscription expires on 24 Oct 2026 at 15:00 EAT.";
+  for (const NODE_ENV of ["development", "production", "test", undefined]) {
+    const { messaging, requests } = fixture({ env: { NODE_ENV, YOOLA_SMS_API_KEY: ` ${apiKey} `, YOOLA_SMS_SENDER: " GoalHint " } });
+    await messaging.sendSms({ phone, message: text });
+    assert.equal(requests.length, 1);
+    const request = requests[0];
+    assert.equal(request.url, "https://yoolasms.com/api/v1/send");
+    assert.equal(request.method, "POST");
+    assert.deepEqual(request.headers, { "Content-Type": "application/json", Accept: "application/json" });
+    assert.equal(request.redirect, "error");
+    assert.equal(request.cache, "no-store");
+    assert.ok(request.signal instanceof AbortSignal);
+    assert.deepEqual(request.payload, { api_key: apiKey, phone, message: text, sender: "GoalHint" });
+  }
+});
+
+test("generic SMS supports SMS-only countries and omits an unconfigured sender", async () => {
+  const { messaging, requests } = fixture();
+  const destination = "447946001234";
+  await messaging.sendSms({ phone: destination, message: "Goal Hint: Your payment was rejected. Please contact the administrator." });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].payload.phone, destination);
+  assert.equal("sender" in requests[0].payload, false);
+});
+
+test("generic SMS rejects blank, non-string, oversized and unsupported messages before external requests", async () => {
+  const { messaging, requests } = fixture();
+  for (const text of ["", " \t\n", 12345, null, undefined, "x".repeat(1_601)]) {
+    await assert.rejects(() => messaging.sendSms({ phone, message: text }), (error) => error instanceof YoolaMessagingError && error.code === "invalid-message");
+  }
+  for (const destination of ["257700000001", "+256700000001", "0770000001", `${phone},256700000002`]) {
+    await assert.rejects(() => messaging.sendSms({ phone: destination, message: "Payment approved." }), (error) => error instanceof YoolaMessagingError && error.code === "unsupported-country");
+  }
+  assert.deepEqual(requests, []);
+  await messaging.sendSms({ phone, message: "x".repeat(1_600) });
+  assert.equal(requests.length, 1);
+});
+
+test("generic SMS requires valid configuration in every environment", async () => {
+  for (const NODE_ENV of ["development", "production", "test", undefined]) {
+    for (const credentials of [{}, { YOOLA_SMS_API_KEY: " " }, { YOOLA_SMS_API_KEY: apiKey, YOOLA_SMS_SENDER: "Goal Hint" }]) {
+      const { messaging, requests } = fixture({ env: { NODE_ENV, ...credentials } });
+      await assert.rejects(() => messaging.sendSms({ phone, message: "Payment approved." }), (error) => error instanceof YoolaMessagingError && error.code === "configuration");
+      assert.deepEqual(requests, []);
+    }
+  }
+});
+
+test("generic SMS safely redacts failures and never retries an uncertain delivery", async () => {
+  const text = "Goal Hint: Payment rejected. Private payment note.";
+  const secret = `${apiKey} ${phone} ${text}`;
+  for (const respond of [() => new Response(secret, { status: 401 }), () => new Response(secret),
+    () => Response.json({ status: "error", message: secret }), () => Response.json(null), () => Response.json({}),
+    () => { throw new Error(secret); }]) {
+    let calls = 0;
+    const { messaging } = fixture({ fetch: async () => { calls++; return respond(); } });
+    await assert.rejects(() => messaging.sendSms({ phone, message: text }), (error) => {
+      assert.ok(error instanceof YoolaMessagingError);
+      assert.equal(error.code, "delivery");
+      for (const value of [apiKey, phone, text]) assert.equal(String(error).includes(value), false);
+      assert.equal(error.cause, undefined);
+      return true;
+    });
+    assert.equal(calls, 1);
+  }
+});
+
+test("generic SMS accepts queued responses", async () => {
+  let calls = 0;
+  const { messaging } = fixture({ fetch: async () => { calls++; return Response.json({ status: "queued" }, { status: 202 }); } });
+  await messaging.sendSms({ phone, message: "Payment approved." });
+  assert.equal(calls, 1);
+});

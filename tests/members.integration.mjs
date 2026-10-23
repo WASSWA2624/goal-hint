@@ -23,6 +23,7 @@ import { defaultSubscriptionSettings } from "../src/domain/subscription-settings
 import { execFile } from "./helpers/command-runtime.mjs";
 import { costTestEnvironment } from "./helpers/cost-fixtures.mjs";
 import { MysqlServerUnavailableError, startIsolatedMysql } from "./helpers/mysql-instance.mjs";
+import { silentPaymentNotifications } from "./helpers/payment-notification-fixtures.mjs";
 
 const execFileAsync = promisify(execFile);
 const workspace = fileURLToPath(new URL("../", import.meta.url));
@@ -523,7 +524,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       let instant = now.getTime();
       const config = { production: false, cookies: { session: "owner" }, key: (purpose, value) => sha256(`${purpose}:${value}`) };
       const sessions = createMemberSessions({ database, config, now: () => instant });
-      const codes = createAccessCodes({ database, config, now: () => instant });
+      const codes = createAccessCodes({ database, config, now: () => instant, notifications: silentPaymentNotifications });
       const phone = "256700000711", initial = await sessions.signIn(phone, "unknown"), member = await sessions.verify(initial.token);
       assert.equal(await codes.accountView(member), null);
       const first = await codes.manual({ phone, durationDays: 1, amountReceivedUgx: 0, note: "Synthetic daily" }, "owner");
@@ -600,7 +601,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
     await t.test("extend and revoke move queued periods, and reissue copies the period and transfers unlocks without a payment FK", async () => {
       const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
       const instant = +now, phone = "256700000721";
-      const codes = createAccessCodes({ database, config, now: () => instant });
+      const codes = createAccessCodes({ database, config, now: () => instant, notifications: silentPaymentNotifications });
       const sessions = createMemberSessions({ database, config, now: () => instant });
       const first = await codes.manual({ phone, durationDays: 1, amountReceivedUgx: 0, note: "Synthetic" }, "owner");
       const second = await codes.manual({ phone, durationDays: 7, amountReceivedUgx: 0, note: "Synthetic" }, "owner");
@@ -627,7 +628,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
     await t.test("payment approvals race across spelling and network, and reversal follows reissue and number-change replacements", async () => {
       const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
       let instant = +now;
-      const codes = createAccessCodes({ database, config, now: () => instant });
+      const codes = createAccessCodes({ database, config, now: () => instant, notifications: silentPaymentNotifications });
       const firstPhone = "256700000731", otherPhone = "256700000732";
       const otherAccount = await account(otherPhone), report = await submission(otherAccount, weekly);
       const outcomes = await Promise.all([
@@ -659,7 +660,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
 
     await t.test("a trial is issued only for a requested account with no prior code and is exactly trialDays from confirmation", async () => {
       const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
-      const codes = createAccessCodes({ database, config, now: () => +now });
+      const codes = createAccessCodes({ database, config, now: () => +now, notifications: silentPaymentNotifications });
       const requested = await account("256700000741");
       assert.equal((await codes.sendTrial(requested, 2, "owner")).status, "refused");
       await app.query("UPDATE MemberAccount SET trialRequestedAt = ? WHERE id = ?", [now, requested]);

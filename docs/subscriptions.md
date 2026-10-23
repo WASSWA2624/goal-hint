@@ -20,6 +20,10 @@ The standard package migration adds missing duration offers: Daily (1 day, UGX 1
 4. Submit the request. The account displays the pending/rejected/approved status. The administrator sees the private proof and request under Payments, manually verifies the receiving-wallet transaction and account ownership, then approves or rejects it.
 5. Approval creates a single account-bound access period, marks the request approved, and unlocks eligible signed-in devices under the device limit. Existing pages refresh pending status. Subsequent password logins inherit approved access while the period remains valid. A rejected report never unlocks access.
 
+After a payment approval or rejection is committed, Goal Hint attempts one YoolaSMS notification to the registered account number, including payments recorded manually with a transaction ID. It never sends to a separate payer number. Approval messages include the package and subscription expiry date and time, with the year in East Africa Time (EAT); renewals use the new period's expiry after the existing access ends. Rejection messages use a standard reason and direct the member to the app or administrator; private freeform review explanations are not included in SMS.
+
+The admin success notice separately reports whether Yoola accepted the SMS or delivery could not be confirmed. Unsupported destinations or accounts without a registered number also prompt the administrator to contact the member. Missing credentials or delivery failure do not reverse the payment decision or access grant. Refused or repeated decisions send no further message. Delivery is a best-effort attempt after commit, with no automatic retry or durable queue; a process interruption between commit and sending can leave the member without an SMS. Yoola acceptance does not confirm handset receipt. The three-message verification-code allowance does not apply to these payment decision notifications.
+
 Submitted requests retain their package name, price, and duration, even if an admin later edits the offer. Duplicate transaction/image checks and locked account/payment decisions protect against repeated approval. Receipts are evidence for manual review, not automatic payment confirmation. Reversal and blocking revoke access without deleting the payment/audit history.
 
 The user can call the administrator if approval is delayed. Optional support-chat links are user-initiated only; no WhatsApp message or SMS activates the account.
@@ -32,6 +36,7 @@ Receiving wallets and support contacts are private server configuration:
 - `GOAL_HINT_AIRTEL_MONEY_NUMBER`, `GOAL_HINT_AIRTEL_MONEY_NAME`
 - `GOAL_HINT_CUSTOMER_SUPPORT_NUMBER`, `GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER`
 - Optional verified menu shortcuts: `GOAL_HINT_MTN_MOMO_MENU_SHORTCUT`, `GOAL_HINT_AIRTEL_MONEY_MENU_SHORTCUT`
+- Payment decision SMS uses `YOOLA_SMS_API_KEY` and optional `YOOLA_SMS_SENDER` in development and production; see [yoola-messaging.md](yoola-messaging.md).
 
 Use country-code numbers. Both number and registered name are required for a wallet to appear. Support numbers are separate and never inferred from wallets or the admin allowlist. Admin Settings shows environment-managed identities read-only. Restart after changing environment values. Never seed or commit real credentials or receiving numbers.
 

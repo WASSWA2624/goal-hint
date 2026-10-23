@@ -18,7 +18,7 @@ export const ownerAuditActions = Object.freeze([
   "code_created", "code_revoked", "code_extended", "code_reissued", "number_changed", "payment_approved", "payment_reversed",
   "device_unlocked", "device_evicted", "access_granted", "trial_sent", "trial_dismissed",
   "member_note_changed", "member_signed_out_all", "member_blocked", "member_unblocked", "member_erased", "members_purged", "password_reset",
-  "payment_submitted", "payment_rejected", "trial_requested", "uploads_busy",
+  "payment_submitted", "payment_rejected", "payment_sms_attempted", "trial_requested", "uploads_busy",
 ] as const);
 export type OwnerAuditAction = (typeof ownerAuditActions)[number];
 

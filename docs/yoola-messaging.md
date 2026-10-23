@@ -7,12 +7,24 @@ The delivery adapter uses Yoola's documented [SMS endpoint](https://yoolasms.com
 ## Production and development setup
 
 1. Create or use the owner's YoolaSMS account, copy the API key from its dashboard, and fund its credit balance.
-2. Ask Yoola to enable transactional SMS delivery for account verification and password recovery. Also request activation of any international destination routes you will use; the provider enables these per account. The standard send API has no documented route parameter; routing is configured on the provider account.
+2. Ask Yoola to enable transactional SMS delivery for account verification, password recovery, and payment decisions. Also request activation of any international destination routes you will use; the provider enables these per account. The standard send API has no documented route parameter; routing is configured on the provider account.
 3. Confirm WhatsApp authentication messaging is active for the account and the documented `yoola_otp_verification` template is available. Goal Hint sends this approved template with one parameter: its generated verification code. Users explicitly request a message on WhatsApp by selecting that delivery channel; that request is the consent supplied as `consent: "yes"` to Yoola.
 4. Set server-only `YOOLA_SMS_API_KEY` in the ignored `.env.local` file for local development and in the production environment for deployment. Optionally set `YOOLA_SMS_SENDER` to an approved alphanumeric sender ID. If omitted, Yoola supplies its default sender. Keep these values out of browser configuration and source control, and restart the application after changing them.
 5. Apply the application's database migration and start or deploy the application, then perform an owner-authorized end-to-end delivery check with a phone you control on each enabled channel. Confirm receipt, code consumption, and resend behavior before opening registration to members.
 
 The SMS request sends JSON fields `api_key`, `phone`, `message`, and optional `sender`. The WhatsApp request sends `api_key`, `phone`, `template_name: "yoola_otp_verification"`, `template_params: [code]`, and `consent: "yes"`. The registered phone is a single canonical number with its country code and no leading plus.
+
+## Payment decision notifications
+
+After an administrator approves or rejects a payment, Goal Hint attempts one SMS to the registered account number using the same SMS endpoint and credentials. A separate payer number is never the recipient. An owner-recorded payment with a transaction ID also receives its approval notification; a free trial or manual access grant without a recorded payment does not.
+
+Approval messages identify the payment and package and include the granted subscription expiry date and time, with the year in East Africa Time (EAT). This is the renewal's actual expiry when it follows existing access. Rejection messages identify the payment and use a standard rejection reason, with guidance to check the app or contact the administrator; the private freeform explanation is not sent to Yoola.
+
+Sending starts only after the database decision commits, outside retried database work. Invalid, refused or repeated decisions do not send another message. Notification failures never undo an approval, rejection or access grant. The administrator sees `SMS accepted for delivery` after provider acceptance, or guidance to contact the member when delivery could not be confirmed, the destination is unsupported, or no registered phone is available. Provider acceptance does not prove handset receipt.
+
+A separate owner audit event records the payment decision and classified notification status. It does not contain the recipient number, message body, credentials or provider response. Audit persistence is also best-effort and cannot turn a committed payment decision into a failure.
+
+These notifications are best-effort, with no durable queue or automatic retries. A process interruption between the committed decision and sending can prevent a notification. A timeout can occur after provider acceptance, so a failed/unconfirmed result does not prove that no SMS arrived. Payment decision notifications are independent of account-verification and password-reset code request allowances and work in both development and production.
 
 ## Coverage
 

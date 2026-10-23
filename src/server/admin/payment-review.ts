@@ -7,10 +7,14 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
 import { decide } from "../members/settings.ts";
 import { writeOwnerAudit } from "./audit.ts";
+import { createPaymentNotifications, type PaymentNotifications, type PaymentRejectionNotification } from "../members/payment-notifications.ts";
+import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 
 export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
 const reference = (row?: { reference: string }) => row ? `P-${row.reference}` : null;
-export function createPaymentReview(database: DatabaseRuntime, now = Date.now) {
+export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = createPaymentNotifications({ database, now }) }: {
+  notifications?: PaymentNotifications;
+} = {}) {
   return {
     async list(tab = "pending"): Promise<PaymentQueue> {
       return database.query(async tx => {
@@ -47,10 +51,11 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now) {
     async screenshot(id: string) { return database.query(tx => tx.paymentScreenshot.findUnique({ where: { submissionId: id }, select: { data: true } })); },
     async reject(id: string, reason: unknown, text: unknown, deleteImage: boolean, actor: string): Promise<CodeOutcome> {
       if (!rejectionReasons.includes(reason as typeof rejectionReasons[number]) || typeof text !== "string" || text.length > 200) return { status: "invalid", message: "Choose a rejection reason and keep text within 200 characters." };
-      return decide<CodeOutcome>(database, async (tx, rollback) => {
+      let payment: PaymentRejectionNotification | undefined;
+      const outcome = await decide<CodeOutcome>(database, async (tx, rollback) => {
         const initial = await tx.paymentSubmission.findUnique({ where: { id } });
         if (!initial) return rollback({ status: "refused", message: "This payment cannot be rejected." });
-        await lockMemberAccount(tx, initial.accountId);
+        const account = await lockMemberAccount(tx, initial.accountId);
         const row = await tx.paymentSubmission.findUniqueOrThrow({ where: { id } });
         if (!["pending", "superseded"].includes(row.status)) return rollback({ status: "refused", message: "This payment cannot be rejected." });
         const at = new Date(now());
@@ -58,8 +63,14 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now) {
           ...(deleteImage ? { imagePurgedAt: at } : {}) } });
         if (deleteImage) await tx.paymentScreenshot.deleteMany({ where: { submissionId: id } });
         await writeOwnerAudit(tx, { at, actor, action: "payment_rejected", accountId: row.accountId, targetType: "payment", targetId: id, details: { reason, deleteImage } });
+        payment = { paymentId: id, accountId: row.accountId, phone: account?.phone ?? null, reference: `P-${row.reference}`, reason: reason as string };
         return { status: "saved" };
       });
+      if (outcome.status !== "saved" || !payment) return outcome;
+      let notification: PaymentNotificationStatus;
+      try { notification = await notifications.rejected(payment); }
+      catch { notification = "failed"; }
+      return { ...outcome, notification };
     },
     async codes(search = "", status = "all", accountId?: string): Promise<readonly OwnerCode[]> {
       const phone = normalizePhone(search), ref = search.trim().toUpperCase().replace(/^[PC]-/u, "");

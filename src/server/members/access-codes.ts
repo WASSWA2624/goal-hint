@@ -4,6 +4,7 @@ import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { accessCodeAlphabet, normalizeCode } from "../../domain/access-code.ts";
 import { transactionKey } from "../../domain/payment.ts";
 import { normalizePhone } from "../../domain/phone.ts";
+import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import { chainPeriods, extendPeriods, remainingDays, subscriptionDayMs } from "../../domain/subscription-period.ts";
 import { auditTextErrors, writeOwnerAudit, type OwnerAuditAction } from "../admin/audit.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
@@ -12,6 +13,7 @@ import type { AccessCode, Prisma } from "../generated/prisma/client.ts";
 import { grantDevices, liveAccessCode, unlockedDeviceLimit } from "./device-grants.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
 import { decide, lockSettings } from "./settings.ts";
+import { createPaymentNotifications, type PaymentNotifications } from "./payment-notifications.ts";
 
 export const generateCode = () => Array.from({ length: 12 }, () => accessCodeAlphabet[randomInt(32)]).join("");
 export const newSalt = () => randomBytes(16);
@@ -30,9 +32,10 @@ const refused = (): CodeFailure => ({ status: "refused", message: "We couldn't c
 
 /** A new access period and the account's signed-in devices it unlocked; `payment` is the approved P- reference, if any. */
 export type AccessGrant = Readonly<{ id: string; accountId: string; reference: string; planName: string; startsAt: Date; endsAt: Date;
-  source: string; devicesUnlocked: number; payment?: string }>;
+  source: string; devicesUnlocked: number; payment?: string; paymentSubmissionId?: string }>;
 export type CodeFailure = Readonly<{ status: "invalid" | "refused" | "duplicate" | "not-found"; message: string; submissionId?: string }>;
-export type CodeOutcome = Readonly<{ status: "created"; grant: AccessGrant }> | Readonly<{ status: "saved" }> | CodeFailure;
+export type CodeOutcome = Readonly<{ status: "created"; grant: AccessGrant; notification?: PaymentNotificationStatus }>
+  | Readonly<{ status: "saved"; notification?: PaymentNotificationStatus }> | CodeFailure;
 export type PaymentApproval = Readonly<{ network: "mtn" | "airtel"; transactionRef: string; amountReceivedUgx: number; planId: string }>;
 type Snapshot = Readonly<{ planId?: string | null; planName: string; durationDays: number; priceUgx: number; extensionDays?: number }>;
 type Creation = Snapshot & Readonly<{ source: string; paymentSubmissionId?: string; amountReceivedUgx?: number; note?: string; termsVersion?: string | null }>;
@@ -62,8 +65,8 @@ async function codeTransaction<T>(database: DatabaseRuntime, run: (tx: Prisma.Tr
 }
 
 /** Access periods without codes to send (068): every new period unlocks the account's signed-in devices directly. */
-export function createAccessCodes({ database, now = Date.now }: {
-  database: DatabaseRuntime; now?: () => number;
+export function createAccessCodes({ database, now = Date.now, notifications = createPaymentNotifications({ database, now }) }: {
+  database: DatabaseRuntime; now?: () => number; notifications?: PaymentNotifications;
   /** Accepted for existing callers; nothing here is keyed since code entry (and its throttle) was removed. */
   config?: Pick<AnalyticsConfig, "key">;
 }) {
@@ -82,7 +85,8 @@ export function createAccessCodes({ database, now = Date.now }: {
       extensionDays: code.extensionDays, startsAt: code.startsAt, endsAt: code.endsAt });
     const devicesUnlocked = await grantDevices(tx, { accountId: account.id, codeId: code.id, at, maximum: devices.maximum, prefer: devices.prefer ?? [], actor });
     await audit(tx, account.id, code.id, "access_granted", actor, at, { source: fields.source, devicesUnlocked });
-    return { id: code.id, accountId: account.id, reference, planName: code.planName, startsAt: code.startsAt, endsAt: code.endsAt, source: fields.source, devicesUnlocked };
+    return { id: code.id, accountId: account.id, reference, planName: code.planName, startsAt: code.startsAt, endsAt: code.endsAt, source: fields.source, devicesUnlocked,
+      ...(fields.paymentSubmissionId ? { paymentSubmissionId: fields.paymentSubmissionId } : {}) };
   }
 
   async function rechain(tx: Prisma.TransactionClient, accountId: string, at: Date) {
@@ -140,13 +144,25 @@ export function createAccessCodes({ database, now = Date.now }: {
     return { status: "created", grant: { ...grant, payment: `P-${submission.reference}` } };
   }
 
+  async function notifyApproval(outcome: CodeOutcome, phone: string | null): Promise<CodeOutcome> {
+    if (outcome.status !== "created") return outcome;
+    const { grant } = outcome;
+    const { payment, paymentSubmissionId } = grant;
+    if (!payment || !paymentSubmissionId) return outcome;
+    let notification: PaymentNotificationStatus;
+    try { notification = await notifications.approved({ paymentId: paymentSubmissionId, accountId: grant.accountId, phone,
+      reference: payment, planName: grant.planName, expiresAt: grant.endsAt }); }
+    catch { notification = "failed"; }
+    return { ...outcome, notification };
+  }
+
   return Object.freeze({
     async manual(input: { phone: string; planId?: string; durationDays?: number; amountReceivedUgx: number; note: string;
       network?: "mtn" | "airtel"; transactionRef?: string }, actor: string): Promise<CodeOutcome> {
       const phone = normalizePhone(input.phone), note = input.note.trim();
       if (!phone || !note || note.length > 200 || !validAmount(input.amountReceivedUgx)
         || (!!input.network !== !!input.transactionRef) || input.transactionRef && !input.planId) return invalid();
-      return codeTransaction(database, async (tx, rollback) => {
+      const outcome = await codeTransaction<CodeOutcome>(database, async (tx, rollback) => {
         const at = new Date(now()), account = await accountForPhone(tx, phone, at);
         if (account.blockedAt || account.erasedAt) return rollback(refused());
         if (input.network && input.transactionRef && input.planId) {
@@ -161,17 +177,22 @@ export function createAccessCodes({ database, now = Date.now }: {
           planName: plan?.name ?? "Manual", durationDays: days, priceUgx: plan?.priceUgx ?? 0, amountReceivedUgx: input.amountReceivedUgx, note }, actor, at,
           { maximum: await unlockedDeviceLimit(tx) }) };
       });
+      return notifyApproval(outcome, phone);
     },
 
     async approvePayment(id: string, fields: PaymentApproval, actor: string): Promise<CodeOutcome> {
-      return codeTransaction(database, async (tx, rollback) => {
+      let phone: string | null = null;
+      const outcome = await codeTransaction<CodeOutcome>(database, async (tx, rollback) => {
+        phone = null;
         const submission = await tx.paymentSubmission.findUnique({ where: { id } });
         if (!submission) return rollback(refused());
         const account = await lockMemberAccount(tx, submission.accountId);
         if (!account || account.blockedAt || account.erasedAt) return rollback(refused());
+        phone = account.phone;
         const outcome = await approval(tx, account, fields, actor, new Date(now()), id);
         return outcome.status === "created" ? outcome : rollback(outcome);
       });
+      return notifyApproval(outcome, phone);
     },
 
     async revoke(id: string, reason: string, actor: string): Promise<CodeOutcome> {

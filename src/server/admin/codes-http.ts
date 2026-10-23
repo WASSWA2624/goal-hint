@@ -5,19 +5,20 @@ import { settingsServiceFor } from "../members/settings.ts";
 import { json, privateHeaders } from "../http/private-http.ts";
 import { readJsonBody, type AdminContext } from "./admin-http.ts";
 import { createPaymentReview } from "./payment-review.ts";
+import type { PaymentNotifications } from "../members/payment-notifications.ts";
 
 export const storageUnavailable = () => json({ message: "Member storage is unavailable. Try again shortly." }, 503);
 export const invalidAction = () => json({ message: "Check the action and values." }, 400);
 export const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu.test(value);
-/** A new period answers 201 with what the owner needs to see; nothing is sent, the account's signed-in devices are unlocked. */
+/** A new period answers 201 with access and payment SMS status; credentials and message bodies stay server-side. */
 export function codeAnswer(outcome: CodeOutcome) {
   if (outcome.status === "created") { const { grant } = outcome;
     return json({ status: grant.payment ? "approved" : "granted", ...(grant.payment ? { reference: grant.payment } : {}), endsAt: grant.endsAt.toISOString(),
-      devicesUnlocked: grant.devicesUnlocked }, 201); }
+      devicesUnlocked: grant.devicesUnlocked, ...(outcome.notification ? { notification: outcome.notification } : {}) }, 201); }
   if (outcome.status === "saved") return json(outcome);
   return json(outcome, outcome.status === "duplicate" || outcome.status === "refused" ? 409 : 400);
 }
-export function createCodesHandlers() {
+export function createCodesHandlers({ notifications }: { notifications?: PaymentNotifications } = {}) {
   return {
     async GET({ services }: AdminContext) {
       if (!services.database) return storageUnavailable();
@@ -27,7 +28,7 @@ export function createCodesHandlers() {
       const { services, request, owner } = context;
       if (!services.database) return storageUnavailable();
       const read = await readJsonBody(request); if ("refusal" in read) return read.refusal;
-      const b = read.body, codes = createAccessCodes({ database: services.database, config: services.config });
+      const b = read.body, codes = createAccessCodes({ database: services.database, config: services.config, ...(notifications ? { notifications } : {}) });
       try {
         if (b.action === "search") return typeof b.search === "string" && b.search.length <= 40 && typeof b.status === "string"
           ? json({ codes: await createPaymentReview(services.database).codes(b.search, b.status) }) : invalidAction();
@@ -51,7 +52,7 @@ export function createCodesHandlers() {
   };
 }
 function paymentId(request: Request) { return new URL(request.url).pathname.match(/\/payments\/([^/]+)(?:\/screenshot)?$/u)?.[1]; }
-export function createReviewHandlers() {
+export function createReviewHandlers({ notifications }: { notifications?: PaymentNotifications } = {}) {
   return {
     async GET({ services, request }: AdminContext) {
       if (!services.database) return storageUnavailable();
@@ -72,13 +73,13 @@ export function createReviewHandlers() {
       if (!uuid(id)) return invalidAction();
       if (!services.database) return storageUnavailable();
       const read = await readJsonBody(request); if ("refusal" in read) return read.refusal;
-      const b = read.body, codes = createAccessCodes({ database: services.database, config: services.config });
+      const b = read.body, codes = createAccessCodes({ database: services.database, config: services.config, ...(notifications ? { notifications } : {}) });
       try {
         if (b.action === "approve") {
           if (!["mtn", "airtel"].includes(String(b.network)) || typeof b.transactionId !== "string" || !uuid(b.planId) || typeof b.amount !== "number") return invalidAction();
           return codeAnswer(await codes.approvePayment(id, { network: b.network as "mtn" | "airtel", transactionRef: normalizeTransactionId(b.transactionId), amountReceivedUgx: b.amount, planId: b.planId }, owner.username));
         }
-        if (b.action === "reject") { const outcome = await createPaymentReview(services.database).reject(id, b.reason, b.text ?? "", b.deleteImage === true, owner.username); return json(outcome, outcome.status === "saved" ? 200 : 400); }
+        if (b.action === "reject") { const outcome = await createPaymentReview(services.database, Date.now, notifications ? { notifications } : {}).reject(id, b.reason, b.text ?? "", b.deleteImage === true, owner.username); return json(outcome, outcome.status === "saved" ? 200 : 400); }
         if (b.action === "reverse" && ["network-reversal", "wrong-account"].includes(String(b.reason))) return codeAnswer(await codes.reversePayment(id, b.reason as "network-reversal" | "wrong-account", owner.username));
         return invalidAction();
       } catch { return storageUnavailable(); }
