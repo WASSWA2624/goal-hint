@@ -4,6 +4,7 @@ import type { PaymentNotificationStatus } from "../../domain/payment-notificatio
 import { supportedMessageChannels } from "../../domain/member-verification.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
+import { lockMemberAccount } from "./access-codes.ts";
 import { createYoolaMessaging, type SmsMessaging } from "./yoola-messaging.ts";
 
 type PaymentReceipt = Readonly<{ paymentId: string; accountId: string; phone: string | null; reference: string }>;
@@ -43,8 +44,14 @@ export function createPaymentNotifications({ database, now = Date.now, delivery 
     }
     // Neither provider nor audit failures may turn a committed approval/rejection into an apparent failed decision.
     try {
-      await database.query(tx => writeOwnerAudit(tx, { at: new Date(now()), actor: "system:payment-sms", action: "payment_sms_attempted",
-        accountId: payment.accountId, targetType: "payment", targetId: payment.paymentId, details: { decision, status } }));
+      await database.transaction(async tx => {
+        // Delivery happens after the decision commits; deletion may finish while the provider is responding.
+        // Share deletion's account lock so an accepted SMS cannot recreate the account's erased audit data.
+        const account = await lockMemberAccount(tx, payment.accountId);
+        if (!account || account.erasedAt) return;
+        await writeOwnerAudit(tx, { at: new Date(now()), actor: "system:payment-sms", action: "payment_sms_attempted",
+          accountId: payment.accountId, targetType: "payment", targetId: payment.paymentId, details: { decision, status } });
+      }, { isolationLevel: "ReadCommitted" });
     } catch { /* The administrator still receives the delivery status in the decision response. */ }
     return status;
   }

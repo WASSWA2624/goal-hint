@@ -56,12 +56,16 @@ application receives:
 - SELECT, INSERT and UPDATE on `MemberAccount`, `MemberSession`,
   `SubscriptionPlan`, `PaymentSubmission`, `PaymentScreenshot`, `AccessCode`,
   `SubscriptionSettings`, `RateLimitBucket` and `OwnerAuditEvent`;
-- DELETE only on `MemberAccount` (the never-paid purge), `MemberSession`
+- DELETE on `MemberAccount` (the never-paid purge and permanent deletion), `MemberSession`
   (sign-out, eviction and expiry), `PaymentScreenshot` (screenshot purge and
-  erasure) and `RateLimitBucket` (throttle purge).
+  erasure), `RateLimitBucket` (throttle purge), and `PaymentSubmission`,
+  `AccessCode` and `OwnerAuditEvent` (admin-confirmed permanent account deletion).
 
-Payments, codes, plans, settings and audit rows are never deleted by the
-application; plans are deactivated instead. As with the odds tables, apply the
+Plans and settings are retained; plans are deactivated instead of deleted.
+Personal-data erasure retains accounting history. The separate permanent account
+deletion action removes the account and all its related records, including
+payments, codes and account-linked audits. Apply the additional DELETE grants in
+`deploy/manual-account-grants.sql` before deploying this action. As with the odds tables, apply the
 grants after `npm run db:deploy`. They were applied locally on 19 October 2026
 and are recorded as section (H) of `application-grants.sql`. Paid access stays
 off (`paywallMode = off`, the default when `SubscriptionSettings` has no row).
@@ -119,6 +123,23 @@ to retain no test accounts, payments, sessions or access periods. Audit sequence
 numbers can have harmless gaps after rolled-back inserts. The running local
 Account, Subscribe and Admin pages returned HTTP 200 without storage errors.
 No production database or deployment was changed.
+
+### 23 October 2026 account availability repair
+
+Admin sign-in and member registration failed because the local database had not
+applied `20261023090000_member_message_verification` and
+`20261023130000_single_member_login`. The connection-only health probe still
+reported ready while account queries failed on missing columns.
+
+A consistent encrypted backup was created and its full authenticated decryption
+verified before applying both migrations to the existing local MySQL instance.
+`npm run db:status`, `npm run db:verify` and `npm run db:health` now pass.
+Administrator login/authorization and registration's restricted verification
+session were checked in a transaction whose test writes were rolled back.
+
+The health command now checks the current account, session and verification
+columns with zero-row reads. Missing columns or account-table SELECT permissions
+return `schema-unavailable` and migration/permission guidance.
 
 Prompt 044 adds the seeded `OperationsMonitorState` singleton and time-window
 indexes. The local application receives only SELECT and UPDATE (`stateJson`) on
@@ -195,9 +216,11 @@ to conceal that missing configuration.
 
 ### Member retention worker (065)
 
-The application/worker account needs DELETE only on `MemberAccount`,
-`MemberSession`, `PaymentScreenshot` and `RateLimitBucket`, as already listed in
-section (H) of the grants. No DELETE is granted on submissions, codes or audit.
+The retention worker deletes from `MemberAccount`, `MemberSession`,
+`MemberVerification`, `PaymentScreenshot` and `RateLimitBucket`. Saved-slip erasure
+also needs DELETE on `SavedSlip`; fixture links cascade. The admin's separate
+permanent deletion flow additionally needs DELETE on `PaymentSubmission`,
+`AccessCode` and `OwnerAuditEvent`, provided by `deploy/manual-account-grants.sql`.
 The live maintenance loop and cPanel cron invoke the same hourly, conditional
 `lastMembersPurgeAt` claim; authenticated admin page loads and
 `npm run members:purge` are fallback triggers. The command performs deletion;

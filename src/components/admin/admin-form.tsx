@@ -52,6 +52,11 @@ export const ActionButton = styled(ToolButton)`
   min-block-size: ${({ theme }) => theme.control.minHeight};
   padding-inline: 14px;
 `;
+export const DangerButton = styled(ActionButton)`
+  color: ${({ theme }) => theme.color.outcome.incorrect.text};
+  background: ${({ theme }) => theme.color.outcome.incorrect.background};
+  border-color: ${({ theme }) => theme.color.outcome.incorrect.border};
+`;
 export const ButtonRow = styled.div`
   display: flex;
   flex-wrap: wrap;

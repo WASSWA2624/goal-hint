@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { Muted, Panel, PanelHeader } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatPhone } from "@/domain/phone";
@@ -7,16 +8,17 @@ import { PhoneInput } from "@/components/ui/controls";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { OwnerAccount, OwnerSubscriber } from "@/domain/owner-members";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
-import { ActionButton, ButtonRow, FieldBlock, FieldRow, FormStack, Hint } from "./admin-form";
+import { ActionButton, ButtonRow, DangerButton, FieldBlock, FieldRow, FormStack, Hint } from "./admin-form";
 import { ActionNotices, CodeActions, ManualCodeForm, useCodeAction, type CodeAction } from "./code-tools";
 /** An owner reset's answer (068 D1-reset), held in memory only: shown once, never stored, gone on Done or leaving the page. */
 export type Revealed = Readonly<{ password: string; accountId: string; phone: string | null; created: boolean; sessionsDeleted: number; expiresAt: string }>;
-export function SubscribersEditor({ accounts, detail, plans }: { accounts: readonly OwnerAccount[]; detail: OwnerSubscriber | null; plans: readonly SubscriptionPlanView[] }) {
-  const action = useCodeAction(), [found, setFound] = useState<readonly OwnerAccount[] | null>(null), [search, setSearch] = useState(""), [adminPhone, setAdminPhone] = useState<string | null>(null), [revealed, setRevealed] = useState<Revealed | null>(null);
+export function SubscribersEditor({ accounts, detail: selected, plans }: { accounts: readonly OwnerAccount[]; detail: OwnerSubscriber | null; plans: readonly SubscriptionPlanView[] }) {
+  const router = useRouter(), action = useCodeAction(), [found, setFound] = useState<readonly OwnerAccount[] | null>(null), [search, setSearch] = useState(""), [adminPhone, setAdminPhone] = useState<string | null>(null), [revealed, setRevealed] = useState<Revealed | null>(null), [deletedId, setDeletedId] = useState<string | null>(null);
+  const detail = selected?.id === deletedId ? null : selected;
   const path = detail ? `/api/admin/subscribers/${detail.id}` : "/api/admin/subscribers";
   return <div data-analytics-ignore><ActionNotices action={action} />{revealed && <TemporaryPassword value={revealed} done={() => setRevealed(null)} />}
     <Panel><form method="post" action="/api/admin/subscribers" onSubmit={async e => { e.preventDefault(); const r = await action.send("/api/admin/subscribers", { search }); if (r.ok) { setFound(r.body.accounts as OwnerAccount[]); setAdminPhone(typeof r.body.adminPhone === "string" ? r.body.adminPhone : null); } }}><FieldRow><PhoneInput label="Search by phone" value={search} onValueChange={setSearch} /><ActionButton disabled={action.busy}>Search</ActionButton></FieldRow></form>
-      {(found ?? accounts).map(a => <p key={a.id}><a href={`/admin/subscribers?accountId=${a.id}`}>{a.phone ? formatPhone(a.phone) : "Erased account"}</a> · {a.status}</p>)}
+      {(found ?? accounts).filter(a => a.id !== deletedId).map(a => <p key={a.id}><a href={`/admin/subscribers?accountId=${a.id}`}>{a.phone ? formatPhone(a.phone) : "Erased account"}</a> · {a.status}</p>)}
       {adminPhone && <Muted>{formatPhone(adminPhone)} is an administrator number. Its password is configured in the environment.</Muted>}</Panel>
     {detail && <><Panel><PanelHeader><h2>{detail.phone ? formatPhone(detail.phone) : "Erased account"}</h2></PanelHeader><p>{detail.erasedAt ? "Erased" : detail.blockedAt ? "Blocked" : detail.codes.some(c => c.status === "active") ? "Active access" : detail.codes.some(c => c.status === "queued") ? "Queued access" : "No current access"} · {detail.unlocks} unlocks in the last 30 days</p>{detail.blockedReason && <p>{detail.blockedReason}</p>}
       {!detail.erasedAt && <FormStack><ActionButton type="button" disabled={action.busy} onClick={() => void action.send(path, { action: "sign-out-all" })}>Sign out all devices</ActionButton>
@@ -35,8 +37,26 @@ export function SubscribersEditor({ accounts, detail, plans }: { accounts: reado
     </Panel><Panel><PanelHeader><h2>Erase personal data</h2></PanelHeader><Muted>This clears numbers, notes, sessions and screenshots. Payment amounts, IDs and access history remain for accounting. This cannot be undone.</Muted>
       <form method="post" action={path} onSubmit={e => { e.preventDefault(); void action.send(path, { action: "erase", confirmed: new FormData(e.currentTarget).get("confirmed") === "on" }); }}><FormStack><label><input type="checkbox" name="confirmed" required /> I verified the account and want to erase its personal data.</label><ActionButton disabled={action.busy}>Erase personal data</ActionButton></FormStack></form>
     </Panel></>}
+    <DeleteAccount key={detail.id} account={detail} action={action} onDeleted={() => { setDeletedId(detail.id); setRevealed(null); router.replace("/admin/subscribers", { scroll: false }); }} />
     </>}
   </div>;
+}
+function DeleteAccount({ account, action, onDeleted }: { account: OwnerSubscriber; action: CodeAction; onDeleted: () => void }) {
+  const [confirmed, setConfirmed] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!confirmed || action.busy) return;
+    const reply = await action.send(`/api/admin/subscribers/${account.id}`, { action: "delete", confirmed }, "Account and all related information permanently deleted.");
+    if (reply.ok) onDeleted();
+  }
+  return <Panel><PanelHeader><h2>Permanently delete account</h2></PanelHeader>
+    <p>{account.phone ? formatPhone(account.phone) : `Erased account · ${account.id}`}</p>
+    <Muted>This permanently removes the account, passwords, all sessions, verification records, saved slips, payments, screenshots, access history and related audit records. Payment totals will change. This cannot be undone.</Muted>
+    <form method="post" action={`/api/admin/subscribers/${account.id}`} onSubmit={submit}><FormStack>
+      <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => setConfirmed(event.target.checked)} /> I verified this account and want to permanently delete it and all related information.</label>
+      <DangerButton type="submit" disabled={action.busy || !confirmed}>Permanently delete account</DangerButton>
+    </FormStack></form>
+  </Panel>;
 }
 /** Generates a single-use member recovery password after the admin verifies the caller. */
 export function PasswordReset({ path, phone, action, reveal }: { path: string; phone?: string; action: CodeAction; reveal: (value: Revealed) => void }) {

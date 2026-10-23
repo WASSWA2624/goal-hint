@@ -51,6 +51,8 @@ export function createPayments({ database, config, now = Date.now, environment =
     async begin(member: MemberIdentity, address: string, bytes: number): Promise<boolean> {
       const at = new Date(now());
       return database.transaction(async (tx) => {
+        // Authentication may have completed before deletion; serialize metadata reservations with account removal.
+        if (!await currentMember(tx, member, at)) return false;
         if (!await takeMemberLimit(tx, config, { purpose: "upload-attempts", value: member.tokenHash, maximum: paymentRules.sessionAttempts, windowMs: memberRateRules.dayMs }, at)) return false;
         const stored = await bucket(tx, "upload-stored", member.tokenHash, at);
         if (stored.count >= paymentRules.sessionStored) return false;

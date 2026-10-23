@@ -1,11 +1,13 @@
-"""Read database readiness through the shared application connection pool."""
+"""Check application connectivity and required account schema without reading member data."""
 from lib.runtime import main_guard, service
 
 
 def main():
     status = service("database-health")
     print(f"Database readiness: {status}.")
-    return 1 if status == "unavailable" else 0
+    if status == "schema-unavailable":
+        print("Check pending migrations and application-role account-table permissions.")
+    return 0 if status in ("ready", "disabled") else 1
 
 
 if __name__ == "__main__":

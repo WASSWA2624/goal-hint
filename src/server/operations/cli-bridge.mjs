@@ -56,7 +56,8 @@ async function dispatch(action, payload) {
     }
     case 'database-health': {
       const { getDatabase, disconnectDatabase } = await import('../database/client.ts');
-      try { return getRuntimePolicy().capabilities.database ? await getDatabase().readiness() : 'disabled'; }
+      const { databaseHealth } = await import('../database/health.ts');
+      try { return getRuntimePolicy().capabilities.database ? await databaseHealth(getDatabase()) : 'disabled'; }
       finally { await disconnectDatabase(); }
     }
     case 'football-trial': {

@@ -12,7 +12,7 @@ import { grantSessionAccess } from "./device-grants.ts";
 import { issueMemberSession, memberTokenHash, validMemberToken, type MemberIdentity } from "./member-sessions.ts";
 import { isMemberAdminPhone, memberAdminCredential, verifyMemberAdminCredential } from "./member-admin.ts";
 import { passwordRecoveryRules } from "./password-recovery.ts";
-import { createMemberRateLimit } from "./rate-limit.ts";
+import { createMemberRateLimit, takeMemberLimit } from "./rate-limit.ts";
 import { decide } from "./settings.ts";
 import { createVerificationCodes } from "./verification-codes.ts";
 import { createYoolaMessaging, type MemberMessaging } from "./yoola-messaging.ts";
@@ -59,13 +59,18 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
       && session.expiresAt > at && session.accountId === account.id ? account : null;
   }
 
-  /** The signed-in member's current password, checked like a login (throttled per account, constant work) outside the
-   * account lock. Returns the hash it matched, which the caller re-reads under the lock. */
+  /** Reserve the account throttle under its lock, then check the password with constant work outside it.
+   * Returns the hash it matched, which the caller re-reads under the lock. */
   async function currentPassword(member: MemberIdentity | null, password: unknown): Promise<string | AuthFailure> {
     if (!member) return refused();
     if (typeof password !== "string" || !password || password.length > memberAuthRules.passwordMax) return wrongPassword();
-    if (!await limit({ purpose: "current-password-account", value: member.accountId, maximum: 10, windowMs: 15 * 60_000 })) return busy();
-    const stored = (await database.query((tx) => tx.memberAccount.findUnique({ where: { id: member.accountId }, select: { passwordHash: true } })))?.passwordHash ?? null;
+    const { stored, allowed } = await database.transaction(async tx => {
+      const at = new Date(now()), account = await currentAccount(tx, { member }, at);
+      if (!account?.passwordHash || account.phone !== member.phone) return { stored: null, allowed: true };
+      return { stored: account.passwordHash, allowed: await takeMemberLimit(tx, config,
+        { purpose: "current-password-account", value: member.accountId, maximum: 10, windowMs: 15 * 60_000 }, at) };
+    }, { isolationLevel: "ReadCommitted" });
+    if (!allowed) return busy();
     return await verifyPassword(password, stored ?? await dummyHash()) && stored ? stored : wrongPassword();
   }
 

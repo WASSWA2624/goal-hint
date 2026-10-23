@@ -16,7 +16,7 @@ export function createSubscriberHandlers() {
       if (!services.database) return storageUnavailable();
       const read = await readJsonBody(request); if ("refusal" in read) return read.refusal;
       const body = read.body, id = new URL(request.url).pathname.match(/\/subscribers\/([^/]+)$/u)?.[1];
-      const service = createSubscribers(services.database);
+      const service = createSubscribers(services.database, Date.now, isMemberAdminPhone, services.config);
       try {
         if (id === undefined) {
           // An allow-listed administrator number without an account: the owner's temporary password creates it.
@@ -32,7 +32,7 @@ export function createSubscriberHandlers() {
           return codeAnswer(await createAccessCodes({ database: services.database, config: services.config }).changeNumber(id, { newPhone: body.newPhone, verifiedBy: body.verifiedBy as "old-number" | "payment-details" }, owner.username));
         }
         if (body.action === "temporary-password") return body.confirmed === true ? passwordAnswer(await service.temporaryPassword({ id }, owner.username)) : invalidAction();
-        if (body.action === "erase" && body.confirmed !== true || typeof body.action !== "string") return invalidAction();
+        if (typeof body.action !== "string" || ["erase", "delete"].includes(body.action) && body.confirmed !== true) return invalidAction();
         return codeAnswer(await service.action(id, body.action, body.value, owner.username));
       } catch { return storageUnavailable(); }
     },

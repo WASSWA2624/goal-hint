@@ -189,7 +189,7 @@ column-scoped cycle grants and rollback that preserves forecast history.
 | `npm run db:deploy` | Apply committed migrations using the explicit migration connection. |
 | `npm run db:status` | Inspect the committed/applied migration state on that connection. |
 | `npm run db:verify` | Check migration status, then compare the datasource with the Prisma schema using `migrate diff --exit-code`; drift fails without repair/reset. |
-| `npm run db:health` | Run the private sanitized application-readiness probe. |
+| `npm run db:health` | Check connectivity and current account/session/verification columns using zero-row reads. Missing schema or SELECT grants return `schema-unavailable` and a nonzero exit. |
 | `npm run test:db` | Run the disposable real-MySQL integration harness. |
 
 Schema generation and validation must work when no URL is configured; no fake
@@ -421,4 +421,4 @@ prompt 052:
 
 ## Paid access (066)
 
-Nine paid-access tables store private phone/payment/image data. Verify the MariaDB overlay and restricted grants above; reapply erasure suppression after any restore. Retained submissions, codes and audit have no DELETE grant. See [subscriptions.md](subscriptions.md).
+Nine paid-access tables store private phone/payment/image data. Verify the MariaDB overlay and restricted grants above; reapply erasure suppression after any restore. Admin-confirmed permanent account deletion removes submissions, codes and related audits as well as the account, sessions, verifications, screenshots and saved slips. Apply the additional DELETE grants in `deploy/manual-account-grants.sql` before deploying this action. See [subscriptions.md](subscriptions.md).

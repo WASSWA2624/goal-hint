@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import { getReportingDate, getReportingDayBounds, addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow, OwnerPaymentSummary } from "../../domain/owner-members.ts";
 import { normalizePhone } from "../../domain/phone.ts";
+import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword } from "../analytics/analytics-password.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { lockMemberAccount, type CodeFailure, type CodeOutcome } from "../members/access-codes.ts";
@@ -11,6 +12,7 @@ import { passwordRecoveryRules } from "../members/password-recovery.ts";
 import { decide } from "../members/settings.ts";
 import { createPaymentReview } from "./payment-review.ts";
 import { auditTextErrors, ownerAuditActions, writeOwnerAudit } from "./audit.ts";
+import { deleteSubscriber } from "./delete-subscriber.ts";
 
 export function revenueBounds(now: number) {
   const today = getReportingDate(utcInstantFromEpochMilliseconds(now));
@@ -23,7 +25,7 @@ export const temporaryPasswordRules = Object.freeze({ alphabet: "abcdefghjkmnpqr
 export const generateTemporaryPassword = () => Array.from({ length: temporaryPasswordRules.length },
   () => temporaryPasswordRules.alphabet[randomInt(temporaryPasswordRules.alphabet.length)]).join("");
 export type TemporaryPasswordOutcome = Readonly<{ status: "reset"; accountId: string; temporaryPassword: string; expiresAt: string; created: boolean; sessionsDeleted: number }> | CodeFailure;
-export function createSubscribers(database: DatabaseRuntime, now = Date.now, adminPhone = isMemberAdminPhone) {
+export function createSubscribers(database: DatabaseRuntime, now = Date.now, adminPhone = isMemberAdminPhone, config?: Pick<AnalyticsConfig, "key">) {
   return {
     async pendingPayments(): Promise<readonly OwnerPaymentSummary[]> {
       return database.query(async tx => (await tx.paymentSubmission.findMany({ where: { status: "pending" },
@@ -85,6 +87,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
       });
     },
     async action(id: string, action: string, value: unknown, actor: string): Promise<CodeOutcome> {
+      if (action === "delete") return deleteSubscriber(database, id, config ?? await getAnalyticsConfig());
       if (action === "note" && (typeof value !== "string" || value.length > 500) || ["block", "unblock"].includes(action) && (typeof value !== "string" || !value.trim() || value.length > 200)) return { status: "invalid", message: "Provide a reason (up to 200 characters) or a note (up to 500 characters)." };
       if (["block", "unblock"].includes(action) && auditTextErrors({ reason: value })) return { status: "invalid", message: "Use a reason without phone numbers or access codes." };
       return decide<CodeOutcome>(database, async (tx, rollback) => {
