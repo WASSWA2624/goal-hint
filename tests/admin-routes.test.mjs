@@ -289,7 +289,7 @@ test("owner screenshot is private JPEG with a sandbox and cannot return data wit
 test("owner phone forms have POST fallbacks so disabled JavaScript cannot put phones in URLs",async()=>{
   assert.match(await source("src/components/admin/subscriber-styles.tsx"), /export const CompactForm\s*=\s*styled\.form\b/u,
     "The shared subscriber form wrapper remains a native HTML form.");
-  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payments-editor.tsx","src/components/admin/subscriber-detail.tsx","src/components/admin/subscriber-credentials.tsx","src/components/admin/subscriber-directory.tsx"]){
+  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payment-review.tsx","src/components/admin/subscriber-detail.tsx","src/components/admin/subscriber-credentials.tsx","src/components/admin/subscriber-directory.tsx"]){
     const text=await source(file);
     const names=["form",...Array.from(text.matchAll(/\b(\w+)\s*=\s*styled\.form\b/gu),match=>match[1]),
       ...(file.endsWith("subscriber-detail.tsx") || file.endsWith("subscriber-credentials.tsx") ? ["CompactForm"] : [])].join("|");

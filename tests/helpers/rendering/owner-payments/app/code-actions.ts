@@ -2,7 +2,7 @@ import { readJsonBody } from "@/server/admin/admin-http";
 import { json } from "@/server/http/private-http";
 import { normalizePhone } from "@/domain/phone";
 import { chainPeriods, extendPeriods } from "@/domain/subscription-period";
-import { fixtureAccountForPhone, fixtureCodes, fixturePlan, fixtureState, grantFixtureAccess, recordFixtureAudit } from "./fixture";
+import { fixtureAccountForPhone, fixtureCodes, fixturePaymentPlans, fixtureState, grantFixtureAccess, recordFixtureAudit } from "./fixture";
 
 export async function codeAction(request: Request) {
   const read = await readJsonBody(request);if ("refusal" in read) return read.refusal;
@@ -10,7 +10,7 @@ export async function codeAction(request: Request) {
   if (action === "search") return typeof body.search === "string" && typeof body.status === "string"
     ? json({ codes: fixtureCodes(body.search, body.status) }) : json({ message: "Enter a code search." }, 400);
   if (action === "manual") {
-    const phone = normalizePhone(body.phone), days = body.planId === fixturePlan.id ? fixturePlan.durationDays : body.days;
+    const phone = normalizePhone(body.phone), plan = fixturePaymentPlans.find(row => row.id === body.planId), days = plan?.durationDays ?? body.days;
     if (!phone || typeof body.note !== "string" || !body.note.trim() || body.note.length > 200
       || typeof days !== "number" || !Number.isInteger(days) || days < 1 || days > 366
       || typeof body.amount !== "number" || !Number.isInteger(body.amount) || body.amount < 0 || body.amount > 4294967295)
@@ -18,7 +18,7 @@ export async function codeAction(request: Request) {
     const existing = state.accounts.find(row => row.phone === phone);
     if (existing?.blockedAt || existing?.erasedAt) return json({ status: "refused", message: "This account is unavailable." }, 409);
     const account = fixtureAccountForPhone(phone);
-    return json(grantFixtureAccess(account, days, "manual", body.planId ? fixturePlan.name : "Manual"), 201);
+    return json(grantFixtureAccess(account, days, "manual", plan?.name ?? "Manual"), 201);
   }
   if (action === "trial" || action === "dismiss-trial") {
     const account = state.accounts.find(row => row.id === body.id);

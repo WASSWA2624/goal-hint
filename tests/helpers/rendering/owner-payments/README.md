@@ -25,3 +25,22 @@ Focused browser checks:
 - Use Change number with `256700000777`, a verification method and confirmation. Remaining access moves to that new account; the old phone stays on its old account with revoked periods and locked devices.
 - Reset the password after confirming the caller. The synthetic password appears once, signs out devices and disappears after Done; the fixture never sends it anywhere.
 - Delete account opens a contextual panel with an unchecked confirmation. **Erase personal data instead** retains accounting history; permanent deletion removes the selected account's related synthetic records. Reset the fixture afterward.
+
+Settings previews use the real Settings page, HTTP adapter and settings service over transactional in-memory rows. Open `/api/fixture/session?page=settings&scenario=writable` to establish the synthetic member cookie and enter Settings. The collapsed **Synthetic settings controls** below the page switches scenarios and resets their saved data. Each scenario has independent state, including after refresh:
+
+- `writable`: complete payment/contact details; saves, phone normalization, shortcut clearing and mode changes work.
+- `managed`: the eight payment/contact identity fields are read-only; the server refuses changes to them.
+- `missing`: payment/contact details, an active plan and notice readiness are absent, so release requirements are shown.
+- `requirements-race`: initial requirements pass, but an active plan disappears during a mode switch; the server returns a requirement error.
+- `save-failed`: writes fail without changing the row or audit count.
+- `saved-without-requirements`: the write commits, but its follow-up overview read fails; the successful response contains saved values without requirements. A reload can read the overview again.
+
+Check saving and Undo, inline validation, mode confirmation and refusal, managed details, refresh persistence, narrow layouts and both themes. `/api/fixture/settings` exposes the synthetic row and audit count for guarded harness checks; a same-origin POST resets the selected scenario. Its selector cookie and `X-Settings-Fixture-Scenario` header belong only to this isolated test application.
+
+Audit previews open through `/api/fixture/session?page=audit`. The real page receives 17 synthetic events spanning payments, access, accounts, settings, plans, sign-ins and maintenance. They include configured-administrator actors, legacy/system/subscriber actors, opaque references, a device-session hash and an unknown event. The stub applies exact-action filtering before newest-first ordering and the 100-row limit; `/admin/audit?action=payment_approved` contains one row, while an unrecognized action restores the full loaded window.
+
+Check client search, category and period filters, clearing them, empty results, event disclosure and exporting only the filtered rows. Summaries should show friendly labels; session/device hashes must not appear in the interface or CSV. Non-session reference IDs may be disclosed. Row 9 is dated `2026-10-22T22:30:00Z`, which belongs to 23 October in EAT; row 17 is `2026-09-30T21:30:00Z`, which belongs to 1 October in EAT. These exercise civil-day filtering across UTC boundaries. All audit records and downloads are synthetic.
+
+Payments review previews open through `/api/fixture/session?page=payments` or `/admin/payments?fixture=review`. This opt-in scenario adds three pending reports in total (Weekly 7 days, Monthly 30 days and Daily 1 day), one approved report, one reversed report, one rejected report and one superseded report. Pending is oldest first; reviewed history is newest first. The Monthly report includes a generated JPEG reading **SYNTHETIC PROOF**, served through the production authenticated screenshot handler and private response headers.
+
+Approving and rejecting mutate the isolated in-memory reports, update pending counts and remain visible in the correct history after refresh. Approval validates the owner-entered transaction ID, network, amount and plan, detects already-approved IDs, and grants synthetic access. Rejection can purge the attachment. Notification success is simulated; no SMS, wallet or business database is contacted. POST `{"scenario":"review"}` to the guarded `/api/fixture/payments` endpoint resets this scenario; POST `{"scenario":"baseline"}` restores the original one-report fixture and 17 audit events. Opening the opt-in page again preserves decisions until reset.

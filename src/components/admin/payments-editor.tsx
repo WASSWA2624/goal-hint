@@ -1,48 +1,117 @@
 "use client";
-import { useState, type FormEvent } from "react";
-import styled from "styled-components";
-import { Muted, Notice, Panel, PanelHeader } from "@/components/analytics/dashboard/dashboard-styles";
-import { Button } from "@/components/ui/controls";
-import { parsePaymentSms, type PaymentSms } from "@/domain/payment-sms";
-import { normalizeTransactionId } from "@/domain/payment";
-import { formatPhone, telHref } from "@/domain/phone";
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "@/components/navigation/navigation-link";
+import { TextInput } from "@/components/ui/controls";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, ImageIcon, ResetIcon, SearchIcon } from "@/components/ui/icons";
+import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
-import type { SubscriptionPlanView } from "@/domain/subscription-plans";
-import type { PaymentQueue } from "@/domain/owner-members";
-import { ActionButton, ButtonRow, FieldBlock, FieldRow, FormStack, Hint } from "./admin-form";
-import { ActionNotices, ManualCodeForm, PlanField, useCodeAction, type CodeAction } from "./code-tools";
-const reasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"];
+import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
+import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
+import { ActionButton, ButtonRow } from "./admin-form";
+import { ActionNotices, useCodeAction } from "./code-tools";
+import { PaymentReview, type PaymentRecovery } from "./payment-review";
+import { PaymentBadge, PaymentEmpty, PaymentFeedback, PaymentLayout, PaymentTabs, PaymentToolbar, PaymentWorkspace, QueueHeading, QueueItem, QueueList,
+  QueueMeta, QueuePanel, ReviewBack, ReviewPanel, TrialPanel } from "./payment-styles";
+
+const tabLabels = { pending: "Pending", approved: "Approved", rejected: "Rejected", superseded: "Replaced reports" };
+const phoneLabel = (phone: string | null) => phone ? `+${formatPhone(phone)}` : "Erased account";
+const searchText = (value: string) => value.toLowerCase().replace(/[\s()+.-]/gu, "");
+
+/** Payment decisions share one queue; only the selected report mounts a review form. */
 export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; plans: readonly SubscriptionPlanView[]; tab: string }) {
-  const action = useCodeAction();
-  return <div data-analytics-ignore><ActionNotices action={action} />
-    <ButtonRow>{["pending", "approved", "rejected"].map(t => <ActionButton as="a" key={t} href={`/admin/payments?tab=${t}`} aria-current={tab === t ? "page" : undefined}>{t === "pending" ? `Pending (${queue.pendingCount})` : t === "approved" ? "Approved" : "Rejected"}</ActionButton>)}</ButtonRow>
-    {tab === "pending" && queue.trials.map(t => <Panel key={t.id}><PanelHeader><h2>Free trial · {t.phone ? formatPhone(t.phone) : "Erased"}</h2></PanelHeader><p>{formatPeriodEnd(new Date(t.trialRequestedAt))}</p><Muted>{t.ipCount === null ? "Client address unavailable" : `This IP asked for ${t.ipCount} trials today`}</Muted><ButtonRow><ActionButton type="button" disabled={action.busy} onClick={() => void action.send("/api/admin/codes", { action: "trial", id: t.id })}>Grant free trial</ActionButton><ActionButton type="button" disabled={action.busy} onClick={() => void action.send("/api/admin/codes", { action: "dismiss-trial", id: t.id })}>Dismiss</ActionButton></ButtonRow></Panel>)}
-    {queue.payments.length === 0 && <Panel><Muted>No payments in this tab.</Muted></Panel>}{queue.payments.map(p => <PaymentCard key={p.id} payment={p} plans={plans} action={action} />)}
-  </div>;
+  const router = useRouter(), action = useCodeAction();
+  const [search, setSearch] = useState(""), [selectedId, setSelectedId] = useState(queue.payments[0]?.id ?? "");
+  const [detailOpen, setDetailOpen] = useState(false), [completed, setCompleted] = useState<readonly string[]>([]);
+  const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
+  const [actionReference, setActionReference] = useState("");
+  const focusNext = useRef(false);
+  const lastHash = useRef<string | null>(null);
+  const query = searchText(search);
+  const payments = queue.payments.filter(payment => !(completed.includes(payment.id) && ["pending", "superseded"].includes(payment.status)) && (!query || searchText([
+    payment.reference, payment.accountPhone ?? "", payment.payerPhone ?? "", payment.transactionId, payment.final?.transactionId ?? "", payment.planName,
+  ].join(" ")).includes(query)));
+  const selected = payments.find(payment => payment.id === selectedId) ?? payments[0];
+  const selectedKey = selected?.id;
+  const pendingCount = Math.max(0, queue.pendingCount - queue.payments.filter(payment => payment.status === "pending" && completed.includes(payment.id)).length);
+
+  useEffect(() => {
+    const readHash = () => {
+      const id = window.location.hash.slice(1);
+      if (lastHash.current === id) return;
+      lastHash.current = id;
+      if (queue.payments.some(payment => payment.id === id)) { setSelectedId(id); setDetailOpen(true); }
+    };
+    readHash(); window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
+  }, [queue.payments]);
+
+  useEffect(() => {
+    if (!focusNext.current) return;
+    focusNext.current = false;
+    const target = document.getElementById(selectedKey ? "payment-review" : "payment-queue-title");
+    target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: "start" });
+  }, [selectedKey, detailOpen]);
+
+  useEffect(() => {
+    if (!action.notice && !action.message) return;
+    const result = document.getElementById("payment-feedback");
+    result?.focus({ preventScroll: true }); result?.scrollIntoView({ block: "start" });
+  }, [action.notice, action.message]);
+
+  function locationFor(id: string) {
+    lastHash.current = id;
+    history.replaceState(history.state, "", `${location.pathname}${location.search}${id ? `#${id}` : ""}`);
+  }
+
+  function select(payment: OwnerPayment) {
+    if (action.busy) return;
+    focusNext.current = true; setSelectedId(payment.id); setDetailOpen(true);
+    locationFor(payment.id);
+  }
+  function resolved(id: string) {
+    setCompleted(shown => [...shown, id]); focusNext.current = false;
+    const next = payments.find(payment => payment.id !== id);
+    setSelectedId(next?.id ?? ""); setDetailOpen(!!next);
+    locationFor(next?.id ?? "");
+  }
+  const feedback = { ...action, notice: action.notice && `${actionReference ? `${actionReference} · ` : ""}${action.notice}`,
+    message: action.message && `${actionReference ? `${actionReference} · ` : ""}${action.message}` };
+
+  return <PaymentLayout data-payments-editor data-analytics-ignore>
+    <PaymentTabs aria-label="Payment status">{Object.entries(tabLabels).map(([value, label]) => <Link key={value} href={`/admin/payments?tab=${value}`}
+      prefetch={false} aria-current={tab === value ? "page" : undefined} aria-disabled={action.busy || undefined}
+      onClick={event => { if (action.busy) event.preventDefault(); else setDetailOpen(false); }}>{label}{value === "pending" && ` (${pendingCount})`}</Link>)}</PaymentTabs>
+    <PaymentToolbar $reviewing={detailOpen}><TextInput id="payment-search" type="search" label="Find a payment" placeholder="Phone, transaction ID or reference" leading={<SearchIcon />}
+      value={search} maxLength={100} disabled={action.busy} autoComplete="off" onChange={event => setSearch(event.target.value)} />
+      <QueueMeta><span data-payment-count>{payments.length} {tab === "pending" ? "waiting" : "reports"}</span><span>Up to 100 · {tab === "pending" ? "Oldest first" : "Newest first"}</span>
+        <ActionButton type="button" disabled={action.busy} onClick={() => router.refresh()}><ResetIcon />Refresh</ActionButton></QueueMeta>
+    </PaymentToolbar>
+    {(feedback.notice || feedback.message) && <PaymentFeedback id="payment-feedback" tabIndex={-1} aria-label="Payment result"><ActionNotices action={feedback} /></PaymentFeedback>}
+    <PaymentWorkspace $detailOpen={detailOpen} data-payment-workspace>
+      <QueuePanel aria-label="Payment queue"><QueueHeading><h2 id="payment-queue-title" tabIndex={-1}>{tabLabels[tab as keyof typeof tabLabels] ?? "Pending"}</h2><span>{payments.length}</span></QueueHeading>
+        <QueueList>{payments.length ? payments.map(payment => <QueueItem key={payment.id} type="button" $selected={selected?.id === payment.id}
+          disabled={action.busy} aria-pressed={selected?.id === payment.id} aria-controls="payment-review" onClick={() => select(payment)} data-payment-row={payment.id}>
+          <header><strong>{phoneLabel(payment.accountPhone)}</strong><strong>{formatUgx(payment.final?.amount ?? payment.amount)}</strong></header>
+          <div><span>{payment.planName} · {formatPlanLength(payment.durationDays)}</span><small>{payment.reference} · {payment.network.toUpperCase()}</small>
+            <small>Transaction: {payment.final?.transactionId || payment.transactionId || "Not provided"}</small></div>
+          <QueueMeta><PaymentBadge $status={recoveries[payment.id]?.reversed ? "reversed" : payment.status}>{recoveries[payment.id]?.reversed ? "Reversed" : payment.status === "superseded" ? "Replaced" : tabLabels[payment.status as keyof typeof tabLabels] ?? payment.status}</PaymentBadge>
+            <span>{payment.hasImage ? <><ImageIcon /> Screenshot</> : "No screenshot"}</span><span>{payment.final ? "Received" : "Reported amount"}</span><ChevronRightIcon /></QueueMeta>
+        </QueueItem>) : <PaymentEmpty data-payment-empty><CheckIcon /><p>{search ? "No matching payments" : tab === "pending" ? "No payments waiting" : "No payments here yet"}</p></PaymentEmpty>}</QueueList>
+      </QueuePanel>
+      <ReviewPanel id="payment-review" aria-label="Review payment" tabIndex={-1}>
+        <ReviewBack type="button" disabled={action.busy} onClick={() => { setDetailOpen(false); locationFor(""); requestAnimationFrame(() => document.getElementById("payment-queue-title")?.focus()); }}><ChevronLeftIcon />All payments</ReviewBack>
+        {selected ? <PaymentReview key={selected.id} payment={selected} plans={plans} action={action} recovery={recoveries[selected.id]}
+          onStart={() => setActionReference(selected.reference)} onResolved={() => resolved(selected.id)}
+          onRecovery={value => setRecoveries(shown => ({ ...shown, [selected.id]: value }))} />
+          : <PaymentEmpty><CheckIcon /><p>{search ? "No matching payment" : "Queue complete"}</p></PaymentEmpty>}
+      </ReviewPanel>
+    </PaymentWorkspace>
+    {tab === "pending" && queue.trials.length > 0 && <TrialPanel data-payment-trials><summary><GiftIcon />Free trial requests ({queue.trials.length})</summary><div>
+      {queue.trials.map(trial => <div key={trial.id}><QueueHeading><strong>{phoneLabel(trial.phone)}</strong><span>{formatPeriodEnd(new Date(trial.trialRequestedAt))}</span></QueueHeading>
+        <ButtonRow><ActionButton type="button" disabled={action.busy} onClick={() => { setActionReference("Free trial"); void action.send("/api/admin/codes", { action: "trial", id: trial.id }); }}>Grant free trial</ActionButton>
+          <ActionButton type="button" disabled={action.busy} onClick={() => { setActionReference("Free trial"); void action.send("/api/admin/codes", { action: "dismiss-trial", id: trial.id }, "Trial request dismissed."); }}>Dismiss</ActionButton></ButtonRow></div>)}
+    </div></TrialPanel>}
+  </PaymentLayout>;
 }
-function PaymentCard({ payment: p, plans, action }: { payment: PaymentQueue["payments"][number]; plans: readonly SubscriptionPlanView[]; action: CodeAction }) {
-  // The transaction ID and amount come from the owner's own wallet SMS (typed or pasted), never from the subscriber's claim.
-  const [network, setNetwork] = useState(p.network), [id, setId] = useState(""), [amount, setAmount] = useState(""), [sms, setSms] = useState<PaymentSms>({});
-  const [recovery, setRecovery] = useState(false), [reversed, setReversed] = useState(false), [carried, setCarried] = useState(false);
-  async function approve(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const form = new FormData(e.currentTarget); await action.send(`/api/admin/payments/${p.id}`, { action: "approve", network, transactionId: id, amount: Number(amount), planId: form.get("planId") }); }
-  function parse(text: string) { const v = parsePaymentSms(text, {}); setSms(v); if (v.amount !== undefined) setAmount(String(v.amount)); if (v.transactionId) setId(v.transactionId); if (v.network) setNetwork(v.network); }
-  const phone = p.accountPhone;
-  return <Panel id={p.id}><PanelHeader><h2>{p.reference} · {reversed ? "reversed" : p.status}</h2><p>{formatPeriodEnd(new Date(p.submittedAt))}</p></PanelHeader>
-    <FieldRow><div>{p.hasImage ? <a href={`/api/admin/payments/${p.id}/screenshot`} target="_blank" rel="noopener noreferrer" aria-label={`Zoom screenshot ${p.reference}`}><Receipt src={`/api/admin/payments/${p.id}/screenshot`} alt={`Payment screenshot ${p.reference}`} loading="lazy" /></a> : <Muted>Image unavailable or purged</Muted>}</div><div><h3>Subscriber says</h3><p>Payer: {p.payerPhone ? formatPhone(p.payerPhone) : "—"}</p><p>{p.network.toUpperCase()} · {p.transactionId || "No transaction ID"}</p><p>UGX {p.amount.toLocaleString("en-UG")} · {p.planName} (UGX {p.price.toLocaleString("en-UG")})</p>{p.final && <p>Approved: {p.final.network} · {p.final.transactionId} · UGX {p.final.amount?.toLocaleString("en-UG")}</p>}</div></FieldRow>
-    <Checks aria-label="Automatic checks">{p.checks.map((c,i) => <Check key={i} $tone={c.tone}>{c.text}</Check>)}</Checks>
-    <p>{phone ? <>Access goes to account <a href={telHref(phone)} data-analytics-ignore>{formatPhone(phone)}</a></> : "Erased account"}</p>
-    {["pending", "superseded"].includes(p.status) && <><form method="post" action={`/api/admin/payments/${p.id}`} onSubmit={approve}><FormStack>
-      <FieldBlock>Paste my SMS<textarea maxLength={12000} onChange={e => parse(e.target.value)} /></FieldBlock>
-      {Object.keys(sms).length > 0 && <Notice><strong>Your SMS says</strong> {sms.network?.toUpperCase()} · {sms.transactionId ?? "ID not found"} · UGX {sms.amount?.toLocaleString("en-UG") ?? "—"}{sms.counterparty && <> · Sender {formatPhone(sms.counterparty)}: {sms.counterparty === p.payerPhone ? "matches payer" : "differs from payer; verify"}</>}</Notice>}
-      <FieldRow><FieldBlock>Network<select value={network} onChange={e => setNetwork(e.target.value)}><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></FieldBlock><FieldBlock>Transaction ID<input required maxLength={40} value={id} onChange={e => setId(normalizeTransactionId(e.target.value))} /></FieldBlock></FieldRow>
-      <FieldRow><FieldBlock>Amount received (UGX)<input type="number" min={0} required value={amount} onChange={e => setAmount(e.target.value)} /></FieldBlock><PlanField plans={plans} value={p.planId} allowCustom={false} /></FieldRow>
-      <Button size="large" type="submit" disabled={action.busy || !phone}>I found this payment in my account</Button><Hint>Find the money and right sender in your own wallet before approving. Checks do not verify receipt.</Hint>
-    </FormStack></form><details><summary>Reject</summary><form method="post" action={`/api/admin/payments/${p.id}`} onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); void action.send(`/api/admin/payments/${p.id}`, { action: "reject", reason: f.get("reason"), text: f.get("text"), deleteImage: f.get("deleteImage") === "on" }, `Rejected ${p.reference} · the member sees the reason in the app`); }}><FormStack><FieldBlock>Reason<select name="reason">{reasons.map(r => <option key={r}>{r}</option>)}</select></FieldBlock><FieldBlock>Optional explanation<textarea name="text" maxLength={200} /></FieldBlock><label><input type="checkbox" name="deleteImage" /> Delete image now</label><ActionButton disabled={action.busy}>Reject payment</ActionButton></FormStack></form></details></>}
-    {p.status === "approved" && !reversed && <form method="post" action={`/api/admin/payments/${p.id}`} onSubmit={async e => { e.preventDefault(); const reason = new FormData(e.currentTarget).get("reason"); const r = await action.send(`/api/admin/payments/${p.id}`, { action: "reverse", reason }); if (r.ok) { setReversed(true); setCarried(r.body.carriedOtherDays === true); setRecovery(reason === "wrong-account"); } }}><FieldBlock>Reverse reason<select name="reason"><option value="network-reversal">Network reversal</option><option value="wrong-account">Wrong account</option></select></FieldBlock><ActionButton type="submit" disabled={action.busy}>Reverse payment and end its access</ActionButton></form>}
-    {carried && <Notice $tone="warning">The ended access carried other days from a number change. Grant access manually for any verified remaining days.</Notice>}
-    {recovery && <><h3>Grant access to the real payer</h3><Muted>Keep the ID on this reversed payment. Use no ID here so the payment is counted once.</Muted><ManualCodeForm plans={plans} action={action} phone={p.payerPhone ?? ""} amount={p.final?.amount ?? p.amount} note={`for ${p.reference}`} /></>}
-  </Panel>;
-}
-const Receipt = styled.img`display:block; max-inline-size:100%; max-block-size:20rem; object-fit:contain;`;
-const Checks = styled.ul`padding-inline-start:1.25rem; display:grid; gap:6px;`;
-const Check = styled.li<{ $tone: "good" | "warning" | "info" }>`color:${({theme,$tone}) => $tone === "good" ? theme.color.outcome.correct.text : $tone === "warning" ? theme.color.outcome.pending.text : theme.color.mutedText};`;

@@ -19,7 +19,7 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   const view = database ? await settingsView(settingsServiceFor(database), await headers()).catch(() => null) : null;
   return (
     <AdminShell current="settings" username={adminDisplayName(page.owner)}>
-      <PageTitle><h1>Settings</h1><p>Paid access switch, payment numbers and limits</p></PageTitle>
+      <PageTitle><h1>Settings</h1><p>Payments, support and account access</p></PageTitle>
       {view ? <SettingsEditor initial={view} username={page.owner.username} sessionAuthorized={!!page.owner.memberAccountId} />
         : <Notice $tone="error" role="alert">Settings are unavailable because the database cannot be read. Paid access stays as it was.</Notice>}
     </AdminShell>

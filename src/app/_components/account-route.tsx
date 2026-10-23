@@ -13,6 +13,7 @@ import { Button, ButtonLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
 import { ChevronDownIcon, SignOutIcon, UserIcon } from "@/components/ui/icons";
 import { memberNextPath, memberReturnPath } from "@/domain/member-navigation";
+import { adminLandingPath } from "@/domain/admin-navigation";
 import { codeStatus, formatPeriodEnd, remainingDays } from "@/domain/subscription-period";
 import { createMessages } from "@/i18n/messages";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
@@ -38,7 +39,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
     }
     // Administrator sign-in is independent of subscription settings and every account subview.
     const administrator = !!currentMember && !currentMember.blocked && !!currentMember.administrator;
-    if (administrator) redirect("/admin");
+    if (administrator) redirect(adminLandingPath);
     const member = mode ? currentMember : null;
     const reset = await resolved.auth?.passwordResetSession(token).catch(() => null);
     if (reset) return <PublicShell locale={locale} showAccount><AccountCard><AccountCardBody><ResetPasswordForm locale={locale} phone={reset.phone} returnTo={returnTo} contact={contact} /></AccountCardBody></AccountCard></PublicShell>;

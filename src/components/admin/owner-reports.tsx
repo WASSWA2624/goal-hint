@@ -1,13 +1,10 @@
 "use client";
-import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { media } from "@/styles/theme";
-import { Muted, Panel, PanelHeader } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatUgx } from "@/domain/subscription-plans";
 import { formatPeriodEnd } from "@/domain/subscription-period";
-import type { OwnerAuditRow, OwnerOverview, OwnerPaymentSummary } from "@/domain/owner-members";
-import { FieldBlock } from "./admin-form";
+import type { OwnerOverview, OwnerPaymentSummary } from "@/domain/owner-members";
 export function OverviewReport({ value: v, payments }: { value: OwnerOverview; payments: readonly OwnerPaymentSummary[] | null }) {
   const metrics = [
     ["Pending payments", v.pending], ["Active paid subscribers", v.active],
@@ -92,7 +89,3 @@ const OverviewNote = styled.div`
   p { margin: 0; }
   summary { color: ${({ theme }) => theme.color.link}; cursor: pointer; padding-block: 10px; }
 `;
-export function AuditReport({ rows, actions, action }: { rows: readonly OwnerAuditRow[]; actions: readonly string[]; action: string }) {
-  const router = useRouter();
-  return <div data-analytics-ignore><Panel><FieldBlock>Action<select value={action} onChange={e => { router.push(`/admin/audit${e.target.value ? `?action=${encodeURIComponent(e.target.value)}` : ""}`); }}><option value="">All actions</option>{actions.map(a => <option key={a}>{a}</option>)}</select></FieldBlock></Panel>{rows.length === 0 && <Muted>No audit rows match.</Muted>}{rows.map(r => <Panel key={r.id}><PanelHeader><h2>{r.action}</h2><p>{formatPeriodEnd(new Date(r.at))} · {r.actor}</p></PanelHeader><p>{r.targetType} · {r.targetId}</p>{r.accountId && <a href={`/admin/subscribers?accountId=${r.accountId}`}>Subscriber</a>}</Panel>)}</div>;
-}

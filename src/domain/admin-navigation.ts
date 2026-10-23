@@ -1,3 +1,6 @@
+/** Successful administrator sign-in starts with payments awaiting review. */
+export const adminLandingPath = "/admin/payments";
+
 /** Fixed destinations shared by the admin page switcher and its no-script fallback. */
 export const adminSections = [
   { key: "overview", href: "/admin", label: "Overview" },

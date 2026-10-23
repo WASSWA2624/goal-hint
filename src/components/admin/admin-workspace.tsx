@@ -46,7 +46,7 @@ export function AdminWorkspace({ current, children, pendingCount }: {
       </Switcher>
       <noscript><Fallback aria-label="Admin pages">{adminSections.map(({ key, href, label }) =>
         <Link key={key} href={href} aria-current={key === current ? "page" : undefined}>{label}</Link>)}</Fallback></noscript>
-      <Column $wide={current === "analytics"} $subscribers={current === "subscribers"}>
+      <Column $wide={current === "analytics"} $expanded={current === "subscribers" || current === "payments"}>
         {children}
       </Column>
     </Workspace>
@@ -72,11 +72,11 @@ const PageSelect = styled.select`
   inline-size: min(15rem, 72%);
   border-radius: 0;
 `;
-const Column = styled.div<{ $wide: boolean; $subscribers: boolean }>`
+const Column = styled.div<{ $wide: boolean; $expanded: boolean }>`
   display: grid;
   gap: 16px;
   min-inline-size: 0;
-  max-inline-size: ${({ $wide, $subscribers }) => $wide ? "100%" : $subscribers ? "76rem" : "56rem"};
+  max-inline-size: ${({ $wide, $expanded }) => $wide ? "100%" : $expanded ? "76rem" : "56rem"};
   margin-inline: auto;
   padding-block: 20px;
   > ${PageTitle} h1 { font-size: 1.375rem; }

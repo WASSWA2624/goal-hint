@@ -124,7 +124,7 @@ test("configured admin numbers require the environment password and land on the 
   const request = new Request("https://goal.test/api/account/login", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
     body: JSON.stringify({ phone, password: "configured admin password", return: "/en/subscribe" }) });
   const response = await createMemberAuthHandler("login", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(request);
-  assert.equal(response.status, 200); assert.equal((await response.json()).next, "/admin");
+  assert.equal(response.status, 200); assert.equal((await response.json()).next, "/admin/payments");
 });
 
 test("private administrator password fallback works without hashing on each read and yields only opaque session metadata", async () => {
@@ -587,7 +587,7 @@ test("successful login goes home while administrator and restricted sessions kee
     { flags: {}, next: "/en" },
     { flags: { requiresVerification: true }, next: "/en/account?view=verify&return=%2Fen" },
     { flags: { requiresPasswordChange: true }, next: "/en/account?view=new-password&return=%2Fen" },
-    { flags: { administrator: true }, next: "/admin" },
+    { flags: { administrator: true }, next: "/admin/payments" },
     { flags: { administrator: true, requiresVerification: true }, next: "/en/account?view=verify&return=%2Fen" },
     { flags: { administrator: true, requiresPasswordChange: true }, next: "/en/account?view=new-password&return=%2Fen" },
   ];

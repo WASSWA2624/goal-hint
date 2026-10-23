@@ -17,29 +17,33 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
 } = {}) {
   return {
     async list(tab = "pending"): Promise<PaymentQueue> {
+      const selected = ["pending", "approved", "rejected", "superseded"].includes(tab) ? tab : "pending";
       return database.query(async tx => {
         const at = new Date(now());
-        const rows = await tx.paymentSubmission.findMany({ where: { status: tab === "approved" ? { in: ["approved", "reversed"] } : tab === "rejected" ? "rejected" : { in: ["pending", "superseded"] } },
-          orderBy: [{ submittedAt: tab === "pending" ? "asc" : "desc" }, { id: "asc" }], take: 100, include: { account: { select: { phone: true } }, screenshot: { select: { submissionId: true } } } });
+        const rows = await tx.paymentSubmission.findMany({ where: { status: selected === "approved" ? { in: ["approved", "reversed"] } : selected },
+          orderBy: [{ submittedAt: selected === "pending" ? "asc" : "desc" }, { id: "asc" }], take: 100,
+          select: { id: true, reference: true, accountId: true, payerPhone: true, claimedNetwork: true, claimedTxnRef: true, claimedTxnKey: true,
+            claimedAmountUgx: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
+            transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true } }, screenshot: { select: { submissionId: true } } } });
         // A report without a transaction ID (null key) matches no other report's ID; only real keys are compared.
-        const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []), phones = rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []);
+        const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = [...new Set(rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []))], phones = [...new Set(rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []))];
         const [related, payers, trials, pendingCount] = await Promise.all([
-          tx.paymentSubmission.findMany({ where: { OR: [{ claimedTxnKey: { in: keys } }, { approvedTxnKey: { in: keys.flatMap(k => [`mtn:${k}`, `airtel:${k}`]) } }, { imageSha256: { in: hashes } }] },
-            select: { id: true, accountId: true, reference: true, status: true, claimedTxnKey: true, approvedTxnKey: true, imageSha256: true } }),
-          tx.memberAccount.findMany({ where: { phone: { in: phones } }, select: { id: true, phone: true } }),
-          tx.memberAccount.findMany({ where: { trialRequestedAt: { not: null }, trialDismissedAt: null, blockedAt: null, erasedAt: null, codes: { none: {} } },
-            orderBy: { trialRequestedAt: "asc" }, take: 100, select: { id: true, phone: true, trialRequestedAt: true } }),
+          keys.length || hashes.length ? tx.paymentSubmission.findMany({ where: { OR: [{ claimedTxnKey: { in: keys } }, { approvedTxnKey: { in: keys.flatMap(k => [`mtn:${k}`, `airtel:${k}`]) } }, { imageSha256: { in: hashes } }] },
+            select: { id: true, accountId: true, reference: true, status: true, claimedTxnKey: true, approvedTxnKey: true, imageSha256: true } }) : [],
+          phones.length ? tx.memberAccount.findMany({ where: { phone: { in: phones } }, select: { id: true, phone: true } }) : [],
+          selected === "pending" ? tx.memberAccount.findMany({ where: { trialRequestedAt: { not: null }, trialDismissedAt: null, blockedAt: null, erasedAt: null, codes: { none: {} } },
+            orderBy: { trialRequestedAt: "asc" }, take: 100, select: { id: true, phone: true, trialRequestedAt: true } }) : [],
           tx.paymentSubmission.count({ where: { status: "pending" } }),
         ]);
-        const events = await tx.ownerAuditEvent.findMany({ where: { action: "trial_requested", accountId: { in: trials.map(t => t.id) } }, orderBy: { at: "desc" } });
-        const ipKeys = events.flatMap(e => { const d = e.details as { ipKey?: string }; return d.ipKey ? [d.ipKey] : []; });
-        const buckets = await tx.rateLimitBucket.findMany({ where: { key: { in: ipKeys }, windowStartedAt: new Date(Math.floor(+at / 86_400_000) * 86_400_000) } });
+        const events = trials.length ? await tx.ownerAuditEvent.findMany({ where: { action: "trial_requested", accountId: { in: trials.map(t => t.id) } }, orderBy: { at: "desc" }, select: { accountId: true, details: true } }) : [];
+        const ipKeys = [...new Set(events.flatMap(e => { const d = e.details as { ipKey?: string }; return d.ipKey ? [d.ipKey] : []; }))];
+        const buckets = ipKeys.length ? await tx.rateLimitBucket.findMany({ where: { key: { in: ipKeys }, windowStartedAt: new Date(Math.floor(+at / 86_400_000) * 86_400_000) }, select: { key: true, count: true } }) : [];
         return { pendingCount, trials: trials.map(t => {
           const details = events.find(e => e.accountId === t.id)?.details as { ipKey?: string; ipCount?: number } | undefined;
           return { ...t, trialRequestedAt: t.trialRequestedAt!.toISOString(), ipCount: details?.ipKey ? buckets.find(b => b.key === details.ipKey)?.count ?? 0 : null };
         }), payments: rows.map(r => ({ id: r.id, reference: `P-${r.reference}`, accountId: r.accountId, accountPhone: r.account.phone,
           payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: r.claimedTxnRef ?? "", amount: r.claimedAmountUgx, planId: r.planId,
-          planName: r.planName, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,
+          planName: r.planName, durationDays: r.durationDays, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,
           final: r.transactionRef ? { network: r.network, transactionId: r.transactionRef, amount: r.amountReceivedUgx } : null,
           checks: paymentChecks({ received: r.amountReceivedUgx, price: r.priceUgx, transactionId: !!r.claimedTxnKey,
             approved: r.claimedTxnKey ? reference(related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)) : null,

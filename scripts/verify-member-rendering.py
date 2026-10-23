@@ -122,7 +122,7 @@ def verify_synthetic_api(origin):
 def unified_login(origin):
     admin_phone, admin_password = "256700000991", "Synthetic admin password"
     owner = "goal-hint-analytics=" + "o" * 43
-    for path in ["/admin", "/analytics"]:
+    for path in ["/admin", "/admin/payments", "/analytics"]:
         for member in [None, "a", "v", "r", "b", "e", "x", "s", "m"]:
             cookie = owner + ("; goal-hint-member=" + member * 43 if member else "")
             response = request(origin, path, headers={"Cookie": cookie})
@@ -138,7 +138,7 @@ def unified_login(origin):
         assert session["administrator"] is administrator
     for view in ["login", "register", "forgot"]:
         existing = request(origin, "/en/account?view=" + view, headers={"Cookie": "goal-hint-member=" + "d" * 43})
-        assert existing.status == 307 and existing.headers.get("Location") == "/admin", view
+        assert existing.status == 307 and existing.headers.get("Location") == "/admin/payments", view
     for scenario, expected in [("denied", 401), ("missing", 401), ("blocked", 401), ("rate-limited", 429), ("unavailable", 503)]:
         status, reply, headers = post_fixture(origin, "login", {"phone": admin_phone, "password": admin_password}, scenario)
         assert status == expected and "next" not in reply and not headers.get("Set-Cookie"), (scenario, status, reply)
@@ -147,7 +147,7 @@ def unified_login(origin):
         assert status == 200 and reply["next"] == next_path
         assert not any("analytics-exclude=1" in value for value in headers.get_all("Set-Cookie"))
     status, reply, headers = post_fixture(origin, "login", {"phone": admin_phone, "password": admin_password, "return": "https://outside.example"})
-    assert status == 200 and reply["next"] == "/admin"
+    assert status == 200 and reply["next"] == "/admin/payments"
     cookies = headers.get_all("Set-Cookie")
     assert any("goal-hint-analytics-exclude=1;" in value for value in cookies)
     assert any("goal-hint-analytics=;" in value and "Max-Age=0" in value for value in cookies)

@@ -1,6 +1,7 @@
 """Manual owner payments and access in the production chrome with synthetic services only."""
 import json
 import re
+from html import unescape
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request as HttpRequest, urlopen
@@ -18,9 +19,9 @@ def request(origin, path="/", *, headers=None, **kwargs):
     return raw_request(origin, path, headers={"Cookie": FIXTURE_COOKIE, **(headers or {})}, **kwargs)
 
 
-def fixture_json(origin, path, body=None, method=None):
+def fixture_json(origin, path, body=None, method=None, headers=None):
     outgoing = Request(origin + path, data=None if body is None else json.dumps(body).encode(),
-        headers={"Content-Type": "application/json", "Sec-Fetch-Site": "same-origin"}, method=method or ("GET" if body is None else "POST"))
+        headers={"Content-Type": "application/json", "Sec-Fetch-Site": "same-origin", **(headers or {})}, method=method or ("GET" if body is None else "POST"))
     try:
         response = urlopen(outgoing, timeout=20)
     except HTTPError as error:
@@ -157,6 +158,223 @@ def subscriber_mutations(origin):
         fixture_json(origin, state_path, {})
 
 
+def settings_api(origin):
+    scenarios = ["writable", "managed", "missing", "requirements-race", "save-failed", "saved-without-requirements"]
+    def api(scenario, body=None, path="/api/admin/settings"):
+        return fixture_json(origin, path, body, headers={"X-Settings-Fixture-Scenario": scenario})
+    def snapshot(scenario):
+        status, reply = api(scenario, path="/api/fixture/settings")
+        assert status == 200
+        return reply
+    def reset(scenario):
+        status, _ = api(scenario, {}, "/api/fixture/settings")
+        assert status == 200
+    for scenario in scenarios:
+        reset(scenario)
+    try:
+        status, baseline = api("writable")
+        assert status == 200 and baseline["environmentFields"] == [] and baseline["requirements"] == {"test": [], "on": []}
+        status, saved = api("writable", {"action": "save", "changes": {"paymentNote": "Synthetic saved note", "reviewTime": "Within 20 minutes", "trialDays": 3, "screenshotRetentionDays": 30}})
+        assert status == 200 and saved["settings"]["trialDays"] == 3 and saved["settings"]["paymentNote"] == "Synthetic saved note"
+        assert snapshot("writable")["auditCount"] == 1
+        status, invalid = api("writable", {"action": "save", "changes": {"screenshotRetentionDays": 6}})
+        assert status == 400 and "screenshotRetentionDays" in invalid["errors"]
+        assert snapshot("writable")["settings"]["screenshotRetentionDays"] == 30
+        status, normalized = api("writable", {"action": "save", "changes": {"mtnNumber": "+256 700 000 905"}})
+        assert status == 200 and normalized["settings"]["mtnNumber"] == "256700000905"
+        assert normalized["cleared"] == ["mtnMenuShortcut"] and normalized["settings"]["mtnMenuShortcut"] is None
+        for mode in ["test", "on"]:
+            status, changed = api("writable", {"action": "mode", "mode": mode})
+            assert status == 200 and changed["settings"]["paywallMode"] == mode
+        before = snapshot("writable")
+        status, refused = api("writable", {"action": "save", "changes": {"mtnNumber": None, "airtelNumber": None, "contactPhone": None, "whatsappPhone": None}})
+        assert status == 409 and {row["key"] for row in refused["missing"]} == {"payment-number", "contact"}
+        assert snapshot("writable") == before, "A refused settings change rolls back its row and audit."
+        status, managed = api("managed")
+        assert status == 200 and len(managed["environmentFields"]) == 8
+        before = snapshot("managed")
+        status, refused = api("managed", {"action": "save", "changes": {"mtnNumber": "256700000905"}})
+        assert status == 400 and "mtnNumber" in refused["errors"] and snapshot("managed") == before
+        status, missing = api("missing")
+        assert status == 200 and {item["key"] for item in missing["requirements"]["test"]} == {"plan", "payment-number", "contact"}
+        status, refused = api("missing", {"action": "mode", "mode": "on"})
+        assert status == 409 and len(refused["missing"]) == 5 and snapshot("missing")["settings"]["paywallMode"] == "off"
+        status, ready = api("requirements-race")
+        assert status == 200 and ready["requirements"] == {"test": [], "on": []}
+        status, refused = api("requirements-race", {"action": "mode", "mode": "test"})
+        assert status == 409 and [item["key"] for item in refused["missing"]] == ["plan"]
+        before = snapshot("save-failed")
+        status, failed = api("save-failed", {"action": "save", "changes": {"trialDays": 3}})
+        assert status == 503 and "Synthetic settings storage failure" not in json.dumps(failed) and snapshot("save-failed") == before
+        status, committed = api("saved-without-requirements", {"action": "save", "changes": {"trialDays": 4}})
+        assert status == 200 and committed["settings"]["trialDays"] == 4
+        assert "source" not in committed and "requirements" not in committed
+        assert snapshot("saved-without-requirements")["settings"]["trialDays"] == 4
+        assert api("saved-without-requirements")[1]["requirements"] == {"test": [], "on": []}
+        status, committed_mode = api("saved-without-requirements", {"action": "mode", "mode": "test"})
+        assert status == 200 and committed_mode["settings"]["paywallMode"] == "test" and "requirements" not in committed_mode
+        for headers, expected in [({"Cookie": "synthetic-owner=legacy-token"}, 401), ({"Sec-Fetch-Site": "cross-site"}, 403)]:
+            status, _ = fixture_json(origin, "/api/admin/settings", {"action": "save", "changes": {"trialDays": 3}}, headers=headers)
+            assert status == expected
+    finally:
+        for scenario in scenarios:
+            reset(scenario)
+
+
+def settings_rendering(origin):
+    for scenario in ["writable", "managed", "missing"]:
+        response = request(origin, "/admin/settings?fixture=" + scenario)
+        html = visible_html(response.text)
+        assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
+        match(r'data-settings-editor', html)
+        navigation = match(r'<(?:nav|div)\b[^>]*data-settings-nav[^>]*>([\s\S]*?)</(?:nav|div)>', html).group(1)
+        assert len(re.findall(r'<button\b', navigation)) == 4
+        assert len(re.findall(r'aria-current="page"', navigation)) == 1
+        assert re.findall(r'data-settings-section="([^"]+)"', html) == ["payments"]
+        save = match(r'<button\b(?=[^>]*data-settings-save)[^>]*>', html).group(0)
+        match(r'\bdisabled(?:=""|\s|>)', save)
+        no_match(r'type="password"', html)
+        text = unescape(re.sub(r'<[^>]+>', " ", html))
+        no_match(r'GOAL_HINT_|X-Forwarded-For|X-Real-IP|settingsRules|screenshotRetentionDays|paymentNumbersChangedAt|synthetic-administrator|\{amount\}', text)
+        if scenario == "managed":
+            match(r'data-settings-managed="true"', html)
+            for field in re.findall(r'<(?:input|select|textarea)\b(?=[^>]*id="setting-(?:mtn|airtel)[^"]*")[^>]*>', html):
+                match(r'\b(?:disabled|readonly)(?:=""|\s|>)', field, "Managed payment fields must not be editable.", flags=re.IGNORECASE)
+        else:
+            match(r'id="setting-mtnName"', html)
+
+
+def audit_rendering(origin):
+    expected = ["8", "7", "2", "5", "4", "13", "9", "3", "6", "10", "16", "14", "11", "15", "12", "1", "17"]
+    for action, ids in [("", expected), ("payment_approved", ["2"]), ("member_blocked", ["3"]), ("code_created", ["1"]),
+            ("owner_signed_out", []), ("future_feature_event", expected)]:
+        path = "/admin/audit" + ("?action=" + action if action else "")
+        response = request(origin, path)
+        html = visible_html(response.text)
+        assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
+        match(r'data-audit-report', html)
+        for control in ["audit-search", "audit-category", "audit-action", "audit-period"]:
+            match(rf'id="{control}"', html)
+        match(r'data-audit-count', html)
+        export = match(r'<button\b(?=[^>]*data-audit-export)[^>]*>', html).group(0)
+        found = re.findall(r'<details\b[^>]*data-audit-event="([^"]+)"', html)
+        assert found == ids, (action, found)
+        if not ids:
+            match(r'data-audit-empty', html)
+            match(r'\bdisabled(?:=""|\s|>)', export)
+        summaries = re.findall(r'<details\b[^>]*data-audit-event="([^"]+)"[^>]*>[\s\S]*?<summary\b[^>]*>([\s\S]*?)</summary>', html)
+        summary_text = {key: unescape(re.sub(r'<[^>]+>', " ", summary)) for key, summary in summaries}
+        for value in summary_text.values():
+            no_match(r'member-admin:|code_created|payment_approved|member_blocked|future_feature_event|owner_signed_in|owner_sign_in_refused|member-session|access-code', value)
+            no_match(r'\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b', value, flags=re.IGNORECASE)
+        text = unescape(re.sub(r'<[^>]+>', " ", html))
+        no_match("f" * 64, text, "Device/session hashes must not appear in the audit interface.")
+        if not action:
+            match(r'\b100\b', text, "The audit window limit should be visible.")
+            match(r'payment[\s\S]*approv|approv[\s\S]*payment', summary_text["2"], flags=re.IGNORECASE)
+            match(r'\bAdmin(?:istrator)?\b', summary_text["7"], flags=re.IGNORECASE)
+            match(r'\bSystem\b', summary_text["12"], flags=re.IGNORECASE)
+
+
+def payments_api(origin):
+    endpoint = "/api/fixture/payments"
+    payment = lambda suffix: "00000000-0000-4000-8000-0000000002" + suffix
+    def queue(tab="pending"):
+        status, result = fixture_json(origin, "/api/admin/payments?tab=" + tab)
+        assert status == 200, result
+        return result
+    def decide(suffix, body, expected):
+        status, result = fixture_json(origin, "/api/admin/payments/" + payment(suffix), body)
+        assert status == expected, (status, result)
+        return result
+    fixture_json(origin, endpoint, {"scenario": "review"})
+    try:
+        expected = {"pending": [payment("00"), payment("01"), payment("02")],
+            "approved": [payment("06"), payment("03")], "rejected": [payment("04")], "superseded": [payment("05")]}
+        for tab, ids in expected.items():
+            result = queue(tab)
+            assert [row["id"] for row in result["payments"]] == ids, (tab, result)
+            assert result["pendingCount"] == 3
+            if tab != "pending":
+                assert result["trials"] == [], "Trial requests belong only to the pending queue."
+        assert [row["id"] for row in queue("invalid")["payments"]] == expected["pending"]
+        pending = queue()["payments"]
+        assert [(row["amount"], row["durationDays"]) for row in pending] == [(5000, 7), (15000, 30), (1000, 1)]
+        assert [row["hasImage"] for row in pending] == [False, True, False]
+        assert fixture_json(origin, "/api/admin/payments?count")[1] == {"pendingCount": 3}
+        screenshot = "/api/admin/payments/" + payment("01") + "/screenshot"
+        with urlopen(Request(origin + screenshot), timeout=20) as response:
+            image = response.read()
+            assert response.headers.get("Content-Type") == "image/jpeg" and image[:2] == b"\xff\xd8" and image[-2:] == b"\xff\xd9"
+            assert response.headers.get("Cache-Control") == "no-store"
+            assert response.headers.get("X-Content-Type-Options") == "nosniff"
+            assert "frame-ancestors 'none'" in response.headers.get("Content-Security-Policy", "")
+            assert response.headers.get("Cross-Origin-Resource-Policy") == "same-origin"
+        assert fixture_json(origin, screenshot, headers={"Cookie": ""})[0] == 401
+        decision = {"action": "approve", "network": "airtel", "transactionId": "AIR2026102301", "amount": 15000,
+            "planId": "00000000-0000-4000-8000-000000000003"}
+        assert decide("01", {**decision, "transactionId": ""}, 400)["status"] == "invalid"
+        assert queue()["pendingCount"] == 3
+        reply = decide("01", decision, 201)
+        assert reply["status"] == "approved" and reply["reference"] == "P-DEMO01" and reply["endsAt"]
+        assert not {"code", "password", "sms", "whatsapp", "delivery"}.intersection(reply)
+        assert queue()["pendingCount"] == 2 and payment("01") not in [row["id"] for row in queue()["payments"]]
+        assert any(row["id"] == payment("01") and row["final"]["amount"] == 15000 for row in queue("approved")["payments"])
+        duplicate = decide("00", decision, 409)
+        assert duplicate["status"] == "duplicate" and duplicate["submissionId"] == payment("01")
+        decide("01", {"action": "reverse", "reason": "network-reversal"}, 200)
+        assert any(row["id"] == payment("01") and row["status"] == "reversed" for row in queue("approved")["payments"])
+        granted = [row for row in fixture_json(origin, endpoint)[1]["codes"]
+            if row["accountId"] == "00000000-0000-4000-8000-000000000102" and row["source"] == "payment"]
+        assert len(granted) == 1 and granted[0]["status"] == "revoked"
+        decide("02", {"action": "reject", "reason": "not-received", "text": "No matching synthetic receipt.", "deleteImage": False}, 200)
+        assert queue()["pendingCount"] == 1 and payment("02") in [row["id"] for row in queue("rejected")["payments"]]
+        decide("02", decision, 409)
+        fixture_json(origin, endpoint, {"scenario": "review"})
+        decide("01", {"action": "reject", "reason": "unreadable", "text": "", "deleteImage": True}, 200)
+        assert fixture_json(origin, screenshot)[0] == 404
+        assert fixture_json(origin, "/api/admin/payments/" + payment("00"), decision, headers={"Sec-Fetch-Site": "cross-site"})[0] == 403
+        for suffix in ["00", "02"]:
+            decide(suffix, {"action": "reject", "reason": "not-received", "text": "", "deleteImage": False}, 200)
+        empty = visible_html(request(origin, "/admin/payments").text)
+        match(r'data-payment-empty', empty)
+        no_match(r'data-payment-row=|data-payment-approval', empty)
+    finally:
+        fixture_json(origin, endpoint, {"scenario": "baseline"})
+
+
+def payments_rendering(origin):
+    fixture_json(origin, "/api/fixture/payments", {"scenario": "review"})
+    try:
+        for tab, suffixes in [("pending", ["00", "01", "02"]), ("approved", ["06", "03"]), ("rejected", ["04"]), ("superseded", ["05"]), ("invalid", ["00", "01", "02"])]:
+            response = request(origin, "/admin/payments?tab=" + tab)
+            html = visible_html(response.text)
+            assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
+            match(r'data-payments-editor', html)
+            match(r'id="payment-search"', html)
+            expected = ["00000000-0000-4000-8000-0000000002" + suffix for suffix in suffixes]
+            assert re.findall(r'data-payment-row="([^"]+)"', html) == expected, tab
+            assert re.findall(r'data-payment-review="([^"]+)"', html) == expected[:1], "Only one review should mount."
+            assert len(re.findall(r'<form\b[^>]*data-payment-approval', html)) == (1 if tab in ["pending", "superseded", "invalid"] else 0)
+            if tab in ["pending", "invalid"]:
+                for value in ["7 days", "30 days", "24 hours", "TEST1234", "AIR2026102301"]:
+                    match(value, html)
+                approve = match(r'<button\b(?=[^>]*data-payment-approve)[^>]*>', html).group(0)
+                match(r'\bdisabled(?:=""|\s|>)', approve)
+                for field in ["payment-confirmed-id", "payment-confirmed-amount"]:
+                    control = match(rf'<input\b(?=[^>]*id="{field}")[^>]*>', html).group(0)
+                    match(r'value=""', control, "Reported wallet values must not prefill owner confirmation.")
+                wallet = match(r'<input\b(?=[^>]*id="payment-wallet-confirmed")[^>]*>', html).group(0)
+                no_match(r'\bchecked(?:=""|\s|>)', wallet)
+                trials = match(r'<details\b(?=[^>]*data-payment-trials)[^>]*>', html).group(0)
+                no_match(r'\bopen(?:=""|\s|>)', trials)
+            else:
+                no_match(r'data-payment-trials', html)
+            no_match(r'<img\b[^>]*src="/api/admin/payments/', html, "Attachments load only after explicit disclosure.")
+    finally:
+        fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
+
+
 def main():
     args=parse_args("owner payments",extra=("--fixture",))
     env=environment(GOAL_HINT_DATABASE_ENABLED="false", GOAL_HINT_ADMIN_PHONES='["256700000991"]',
@@ -172,7 +390,7 @@ def main():
         build_fixture(directory,env,timeout=300)
     with Server(directory,env,ready="/api/fixture/health") as server:
         subscriber_directory(server.origin)
-        for path,labels in [("/admin/payments",["Subscriber says","Automatic checks","Paste my SMS","Access goes to account","I found this payment in my account","Grant free trial","Dismiss"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or P-/C-reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Add subscriber","Change number","Reset password","Save note","Delete account"]),("/admin/password-resets",["Password requests","generate a temporary password","expire after 15 minutes","Call member","View account"]),("/admin/audit",["code_created","Action","Subscriber"])]:
+        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or P-/C-reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Add subscriber","Change number","Reset password","Save note","Delete account"]),("/admin/password-resets",["Password requests","generate a temporary password","expire after 15 minutes","Call member","View account"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
             assert response.status==200,(path,response.status)
             for label in labels:assert label in html,(path,label)
@@ -184,6 +402,8 @@ def main():
         for action in ["approve", "trial", "manual"]:
             endpoint = "/api/admin/payments/00000000-0000-4000-8000-000000000200" if action == "approve" else "/api/admin/codes"
             body = {"action": action, "id": "00000000-0000-4000-8000-000000000100", "phone": "256700000101", "planId": "00000000-0000-4000-8000-000000000001", "amount": 0, "note": "Synthetic acceptance grant"}
+            if action == "approve":
+                body.update(network="mtn", transactionId="TEST1234", amount=5000)
             outgoing = Request(server.origin + endpoint, data=json.dumps(body).encode(),
                 headers={"Content-Type": "application/json", "Sec-Fetch-Site": "same-origin"}, method="POST")
             with urlopen(outgoing, timeout=20) as reply:
@@ -194,8 +414,16 @@ def main():
                 assert payload["devicesUnlocked"] >= 0 and payload["endsAt"]
                 assert not {"delivery", "code", "sms", "whatsapp"}.intersection(payload)
         subscriber_mutations(server.origin)
-        print("PASS production owner pages; compact subscriber summary/toolbar/tabs, inactive forms unmounted, search, persisted synthetic account/access actions, confirmation guards and private credential replies.",flush=True)
+        settings_api(server.origin)
+        settings_rendering(server.origin)
+        audit_rendering(server.origin)
+        payments_rendering(server.origin)
+        payments_api(server.origin)
+        print("PASS production owner pages; subscriber actions, Settings saves/modes, audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
         if args.serve:
             print(f"Synthetic administrator browser entry: {server.origin}/api/fixture/session", flush=True)
+            print(f"Settings browser entry: {server.origin}/api/fixture/session?page=settings&scenario=writable", flush=True)
+            print(f"Audit browser entry: {server.origin}/api/fixture/session?page=audit", flush=True)
+            print(f"Payments browser entry: {server.origin}/api/fixture/session?page=payments", flush=True)
             server.serve()
 if __name__=="__main__":main_guard(main)

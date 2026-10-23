@@ -1,6 +1,7 @@
 import "server-only";
 
 import { memberReturnPath } from "../../domain/member-navigation.ts";
+import { adminLandingPath } from "../../domain/admin-navigation.ts";
 import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { getMemberServices, type MemberServices, type MemberServicesSource } from "./member-http.ts";
 import type { AuthBinding, AuthFailure } from "./member-auth.ts";
@@ -67,7 +68,7 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       const restrictedPath = (view: string) => `/en/account?${new URLSearchParams({ view, ...(returnTo ? { return: returnTo } : {}) })}`;
       const next = result.requiresPasswordChange ? restrictedPath("new-password")
         : result.requiresVerification ? restrictedPath("verify")
-        : result.administrator ? "/admin"
+        : result.administrator ? adminLandingPath
         : returnTo ?? (action === "verify" ? "/en"
         : action === "phone" ? "/en/account?status=phone-changed" : action === "password" || action === "reset" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),

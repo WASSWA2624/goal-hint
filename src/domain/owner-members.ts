@@ -1,6 +1,6 @@
 import type { PaymentCheck } from "./payment-checks.ts";
 export type OwnerPayment = Readonly<{ id: string; reference: string; accountId: string; accountPhone: string | null; payerPhone: string | null;
-  network: string; transactionId: string; amount: number; planId: string; planName: string; price: number; submittedAt: string; status: string; hasImage: boolean;
+  network: string; transactionId: string; amount: number; planId: string; planName: string; durationDays: number; price: number; submittedAt: string; status: string; hasImage: boolean;
   final: Readonly<{ network: string | null; transactionId: string; amount: number | null }> | null; checks: readonly PaymentCheck[] }>;
 export type PaymentQueue = Readonly<{ pendingCount: number; trials: readonly Readonly<{ id: string; phone: string | null; trialRequestedAt: string; ipCount: number | null }>[]; payments: readonly OwnerPayment[] }>;
 export type OwnerPaymentSummary = Pick<OwnerPayment, "id" | "reference" | "network" | "amount" | "submittedAt">;

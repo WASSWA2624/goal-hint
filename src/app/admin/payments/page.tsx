@@ -15,9 +15,11 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 export default async function AdminPaymentsPage({ searchParams }: { searchParams: Promise<Record<string,string|string[]|undefined>> }) {
   const page = await adminPageGate(searchParams);
   if (!page.owner) redirectToAccountLogin();
-  const params = await searchParams, tab = typeof params.tab === "string" ? params.tab : "pending";
+  const params = await searchParams, tab = typeof params.tab === "string" && ["pending", "approved", "rejected", "superseded"].includes(params.tab) ? params.tab : "pending";
   const db = page.services.database;
-  const data = db ? await createPaymentReview(db).list(tab).catch(() => null) : null;
-  const plans = db ? await plansServiceFor(db).list().catch(() => []) : [];
+  const [data, plans] = db ? await Promise.all([
+    createPaymentReview(db).list(tab).catch(() => null),
+    plansServiceFor(db).list().catch(() => []),
+  ]) : [null, []] as const;
   return <AdminShell current="payments" username={adminDisplayName(page.owner)} {...(data ? { pendingCount: data.pendingCount } : {})}><PageTitle><h1>Payments</h1></PageTitle>{data ? <PaymentsEditor queue={data} tab={tab} plans={plans} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}</AdminShell>;
 }

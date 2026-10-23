@@ -5,6 +5,7 @@ import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import { SubscribeFlow, SubscribeIntro, SubscribeLayout } from "@/components/members/subscribe-controls";
 import { ButtonLink } from "@/components/ui/controls";
 import { memberReturnPath } from "@/domain/member-navigation";
+import { adminLandingPath } from "@/domain/admin-navigation";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
 import { getAnalyticsServices } from "@/server/analytics/analytics-http";
@@ -45,7 +46,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
     const administrator = !!member && !member.blocked && member.administrator;
     return <PublicShell locale={locale} showAccount><SubscribeLayout>
       <SubscribeIntro locale={locale} /><MemberNavigationRecovery />
-      {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href="/admin" prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>
+      {administrator ? <><p>{m.text("account.noSubscriptionNeeded")}</p><div><ButtonLink href={adminLandingPath} prefetch={false}>{m.text("account.dashboard")}</ButtonLink></div></>
         : settings?.paywallMode === "off" ? <><p>{m.text("account.closed")}</p><div><ButtonLink href="/en/account" prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
         : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
           : member?.blocked ? <p role="status">{m.text("account.refused")}</p>

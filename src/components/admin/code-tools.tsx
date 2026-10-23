@@ -35,10 +35,11 @@ export function ActionNotices({ action }: { action: CodeAction }) {
   return <>{action.notice && <Notice role="status">{action.notice}</Notice>}{action.message && <Notice role="alert" $tone="error">{action.message}{action.duplicateId && <> <a href={`/admin/payments?tab=approved#${action.duplicateId}`}>Earlier payment</a></>}</Notice>}</>;
 }
 export function PlanField({ plans, value, allowCustom = true, onValueChange, disabled }: { plans: readonly SubscriptionPlanView[]; value?: string; allowCustom?: boolean; onValueChange?: (value: string) => void; disabled?: boolean }) { return <FieldBlock>Plan<select name="planId" defaultValue={value ?? plans[0]?.id ?? ""} disabled={disabled} onChange={event => onValueChange?.(event.currentTarget.value)}>{allowCustom && <option value="">Custom days</option>}{plans.map(p => <option key={p.id} value={p.id}>{p.name} · UGX {p.priceUgx.toLocaleString("en-UG")}</option>)}</select></FieldBlock>; }
-export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "", compact = false, fixedPhone = false, onSaved }: { plans: readonly SubscriptionPlanView[]; action: CodeAction; phone?: string; amount?: number; note?: string; compact?: boolean; fixedPhone?: boolean; onSaved?: () => void }) {
+export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "", compact = false, fixedPhone = false, withoutTransaction = false, onStart, onSaved }: { plans: readonly SubscriptionPlanView[]; action: CodeAction; phone?: string; amount?: number; note?: string; compact?: boolean; fixedPhone?: boolean; withoutTransaction?: boolean; onStart?: () => void; onSaved?: () => void }) {
   const [selectedPlan, setSelectedPlan] = useState(plans[0]?.id ?? "");
   async function submit(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const planId = String(f.get("planId") ?? ""), network = String(f.get("network") ?? ""), transactionId = String(f.get("transactionId") ?? "").trim();
     if (action.busy) return;
+    onStart?.();
     const reply = await action.send("/api/admin/codes", { action: "manual", phone: f.get("phone"), note: f.get("note"), amount: Number(f.get("amount")), ...(planId ? { planId } : { days: Number(f.get("days")) }), ...(network ? { network } : {}), ...(transactionId ? { transactionId } : {}) });
     if (reply.ok) onSaved?.(); }
   const transactionFields = <FieldRow><FieldBlock>Network (optional)<select name="network" disabled={action.busy}><option value="">No transaction ID</option><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></FieldBlock><FieldBlock>Transaction ID (optional)<input name="transactionId" maxLength={40} disabled={action.busy} /></FieldBlock></FieldRow>;
@@ -48,7 +49,7 @@ export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "
       {compact && <FieldBlock>Amount received (UGX)<input name="amount" type="number" min={0} max={4294967295} defaultValue={amount} required disabled={action.busy} /></FieldBlock>}</FieldRow>
     {!compact && <FieldBlock>Amount received (UGX)<input name="amount" type="number" min={0} max={4294967295} defaultValue={amount} required disabled={action.busy} /></FieldBlock>}
     <FieldBlock>Required note<textarea name="note" maxLength={200} defaultValue={note} required rows={compact ? 2 : undefined} disabled={action.busy} /></FieldBlock>
-    {compact ? <details><summary>Payment details (optional)</summary>{transactionFields}</details> : transactionFields}
+    {!withoutTransaction && (compact ? <details><summary>Payment details (optional)</summary>{transactionFields}</details> : transactionFields)}
     {!compact && <Muted>The account&apos;s signed-in devices unlock at once; an account without one unlocks when the member signs in.</Muted>}
     <ActionButton type="submit" $variant="primary" disabled={action.busy}>Grant access manually</ActionButton></FormStack></form>;
 }
