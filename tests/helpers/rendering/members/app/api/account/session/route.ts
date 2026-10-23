@@ -1,5 +1,5 @@
-import { fixtureTokens } from "../../../fixture-auth";
-export function GET(request: Request) {
-  const authenticated = request.headers.get("cookie")?.includes(`goal-hint-member=${fixtureTokens.authenticated}`);
-  return Response.json({ phone: authenticated ? "256700000101" : null, administrator: false }, { headers: { "Cache-Control": "no-store" } });
-}
+import { createMemberSessionHandler } from "@/server/members/member-auth-http";
+import type { MemberServices } from "@/server/members/member-http";
+import { fixtureMemberSessions } from "../../../fixture-admin";
+
+export const GET = createMemberSessionHandler(async () => ({ config: { production: false }, sessions: fixtureMemberSessions }) as unknown as MemberServices);

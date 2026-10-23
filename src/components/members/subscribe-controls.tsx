@@ -8,14 +8,13 @@ import { Button, PhoneInput, TextInput } from "@/components/ui/controls";
 import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, DialpadIcon, GiftIcon, HelpIcon, ImageIcon, InfoIcon, LockIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
 import { PageHeading } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { memberNextPath } from "@/domain/member-navigation";
 import { formatPhone, localUgandaPhone, networkForPrefix, normalizePhone, telHref, waHref, type MobileNetwork } from "@/domain/phone";
 import { canOpenMoneyMenu, normalizeTransactionId, type PaymentStatus, type PaymentView } from "@/domain/payment";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
-import { PasswordInput } from "./account-security";
+import { AccountAuthForm } from "./account-auth-form";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
@@ -23,8 +22,8 @@ import { PaymentStatusCard, TrialStatusCard, useApprovalRefresh } from "./paymen
 
 import {
   AccountRow, ActionLink, AmountRow, Assent, CopyButton, Disclosure, FileBox, FileField,
-  HelpActions, HelpTitle, Identity, Intro, Lead, Locked, MenuLink, Note, Optional, PageFooter, Panel, PaymentFields, PaymentTransfer,
-  Plan, PlanDays, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowLink, RowNote, Sheet, SignInForm,
+  HelpActions, HelpTitle, Identity, Intro, Lead, Locked, MenuLink, Note, Optional, PageFooter, PaymentFields, PaymentTransfer,
+  Plan, PlanDays, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowNote, Sheet,
   Step, StepHeading, StepNumber, StepTitle, Submit, Unit, Wallet, WalletChoice, WalletChoices,
   WalletMeta, WalletNumber,
 } from "./subscribe-styles";
@@ -58,31 +57,8 @@ function PaymentHelp({ settings, text, locale }: { settings: HelpSettings; text?
     {settings.whatsappPhone && <ActionLink href={waHref(settings.whatsappPhone, text)} variant="secondary" data-analytics-ignore><ChatIcon />{m.text("subscribe.whatsapp")}</ActionLink>}
   </HelpActions></Row>;
 }
-function SubscribeSignIn({ locale, returnTo }: { locale: string; returnTo: string | null }) {
-  const m = createMessages(locale), [error, setError] = useState(""), [busy, setBusy] = useState(false);
-  const [password, setPassword] = useState("");
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError("");
-    const data = new FormData(event.currentTarget);
-    try {
-      const response = await fetch("/api/account/login", { method: "POST", credentials: "same-origin", headers: { Accept: "application/json", "Content-Type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(data)) });
-      const result = await response.json() as { message?: string; next?: string };
-      if (!response.ok) setError(result.message ?? m.text("account.unavailable"));
-      else location.replace(result.next ?? "/en");
-    } catch { setError(m.text("account.unavailable")); } finally { setBusy(false); }
-  }
-  return <Panel>
-    <SignInForm action="/api/account/login" method="post" onSubmit={submit} data-analytics-ignore>
-        <PhoneInput name="phone" label={m.text("account.phone")} required hint="" />
-        <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current />
-        <Button type="submit" disabled={busy}>{m.text(busy ? "account.working" : "account.login")}</Button>
-        <RowLink variant="quiet" href={`${memberNextPath("account", returnTo)}${returnTo ? "&" : "?"}view=register`} prefetch={false}>{m.text("account.register")}</RowLink>
-      <Note>{m.text("subscribe.numberPrivacy")} <Link href="/en/privacy">{m.text("navigation.privacy")}</Link>.</Note>
-      <input type="hidden" name="destination" value="subscribe" />{returnTo && <input type="hidden" name="return" value={returnTo} />}
-      {error && <p role="alert">{error}</p>}
-    </SignInForm>
-  </Panel>;
+function SubscribeSignIn({ locale, returnTo, settings }: { locale: string; returnTo: string | null; settings: HelpSettings }) {
+  return <AccountAuthForm locale={locale} view="login" returnTo={returnTo} contact={settings} />;
 }
 /** Reuse the trial action in the account page and the compact subscription footer. */
 export function TrialRequest({ locale, days, appearance = "button" }: { locale: string; days: number; appearance?: "button" | "row" }) {
@@ -172,9 +148,9 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     <AccountRow><Identity><VisuallyHidden>{m.text("account.title")} </VisuallyHidden><strong>{formatPhone(account.phone)}</strong></Identity>
       <Button variant="quiet" onClick={() => setChangingAccount(!changingAccount)} aria-expanded={changingAccount} aria-controls={`${ids}-account`}>{m.text("subscribe.change")}</Button>
     </AccountRow>
-    {changingAccount && <div id={`${ids}-account`}><SubscribeSignIn locale={locale} returnTo={returnTo} /></div>}
+    {changingAccount && <div id={`${ids}-account`}><SubscribeSignIn locale={locale} returnTo={returnTo} settings={settings} /></div>}
     {trialPending && <TrialStatusCard locale={locale} settings={settings} phone={account.phone} heading="h2" />}
-  </> : <SubscribeSignIn locale={locale} returnTo={returnTo} />;
+  </> : <SubscribeSignIn locale={locale} returnTo={returnTo} settings={settings} />;
   const footer = <PageFooter>
     {account && view?.trialEligible && <TrialRequest locale={locale} days={settings.trialDays} appearance="row" />}
     {help}

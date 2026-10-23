@@ -3,9 +3,9 @@ import "server-only";
 import { membersPurgeFor } from "../members/purge.ts";
 import { cookies } from "next/headers.js";
 import { connection } from "next/server.js";
-import { getAnalyticsServices, loginNotice, type AnalyticsServices } from "../analytics/analytics-http.ts";
-import { BodyDeadlineError, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
-import { memberCookieName, validMemberToken } from "../members/member-sessions.ts";
+import { getAnalyticsServices, type AnalyticsServices } from "../analytics/analytics-http.ts";
+import { BodyDeadlineError, isSameOrigin, json, readLimitedBody } from "../http/private-http.ts";
+import { memberCookieName } from "../members/member-sessions.ts";
 import { verifyOwner, requireOwner, type Owner, type OwnerServices } from "./owner-auth.ts";
 
 /**
@@ -35,32 +35,32 @@ export function adminRoute(handler: (context: AdminContext) => Promise<Response>
     }
     const resolved = await services();
     if (session === "optional") return (handler as (context: SignOutContext) => Promise<Response>)({ request, services: resolved });
-    if (!resolved.auth && !(resolved.database && validMemberToken(readCookie(request, memberCookieName(resolved.config.production))))) {
-      return json({ error: "unavailable", message: "Owner sign-in is unavailable." }, 503);
+    if (!resolved.database) {
+      return json({ error: "unavailable", message: "Account sign-in is unavailable." }, 503);
     }
     const owner = await requireOwner(resolved, request);
-    if (!owner) return json({ error: "unauthorized", message: "Your owner session has ended. Sign in again on /admin." }, 401);
+    if (!owner) return json({ error: "unauthorized", message: "Sign in with an administrator account." }, 401);
     return handler({ request, owner, services: resolved });
   };
 }
 
 export type AdminPage =
   | Readonly<{ owner: Owner; services: AnalyticsServices }>
-  | Readonly<{ owner: null; services: AnalyticsServices; login: ReturnType<typeof loginNotice> }>;
+  | Readonly<{ owner: null; services: AnalyticsServices }>;
 
 /**
  * The page side of the guard, as in `src/app/analytics/page.tsx`: render at request time, verify the owner session from
- * its cookie, otherwise return what the owner login shows.
+ * its account cookie, otherwise let the page redirect to the shared login.
  */
 export async function adminPageGate(searchParams: Promise<Record<string, string | string[] | undefined>>,
   { services = getAnalyticsServices }: { services?: OwnerServices } = {}): Promise<AdminPage> {
   await connection();
+  await searchParams;
   const resolved = await services();
   const jar = await cookies();
-  const owner = await verifyOwner(resolved, jar.get(resolved.config.cookies.session)?.value, undefined,
-    jar.get(memberCookieName(resolved.config.production))?.value);
+  const owner = await verifyOwner(resolved, jar.get(memberCookieName(resolved.config.production))?.value);
   if (owner) { if (resolved.database) membersPurgeFor(resolved.database).maybePurge(); return { owner, services: resolved }; }
-  return { owner: null, services: resolved, login: loginNotice(resolved, await searchParams) };
+  return { owner: null, services: resolved };
 }
 
 /** Owner actions send small JSON; a larger or slower body is refused before it is parsed. */

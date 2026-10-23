@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
+import { fixtureAdminSessions, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
+after(installAdminFixtureEnvironment());
 import { createMemberSignInHandler, createMemberDevicesHandler } from "../src/server/members/member-http.ts";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -35,7 +37,7 @@ test("member write routes use the shared factories; sign-in and devices enforce 
     assert.match(await source(route), new RegExp(`export const POST = ${factory}\\(\\);`));
   }
   for (const mode of ["off", "test", "on"]) for (const member of [null, { codeEnteredAt: null }, { codeEnteredAt: new Date(0), blocked: false }]) {
-    const services = async () => ({ config: { production: false, cookies: { secure: false } }, settings: { settings: { paywallMode: mode } },
+    const services = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, settings: { settings: { paywallMode: mode } },
     auth: { login: async (_phone, password) => password ? ({ status: "authenticated", token: "t".repeat(43), phone: "256700000101" }) : ({ status: "unauthorized", message: "Enter your password." }) }, sessions: {
       verify: async () => member, signIn: async () => ({ status: "signed-in", token: "t".repeat(43) }), signOutOthers: async () => true,
     } });
@@ -114,6 +116,7 @@ const calls = { login: [], logout: [], verify: [], audit: [], confirm: [] };
  * reads (a transaction) fails, as storage that is down would.
  */
 const client = {
+  memberSession: fixtureAdminSessions({ token, key: (purpose, value) => `${purpose}:${value}` }),
   subscriptionPlan: { async findMany() { return []; }, async count() { return 0; } },
   subscriptionSettings: { async findUnique() { return null; } },
   paymentScreenshot: { async findUnique() { return { data: new Uint8Array([255,216,255,217]) }; } },
@@ -144,7 +147,7 @@ globalThis.goalHintAnalytics = Promise.resolve({
 
 const request = (route, method, headers = {}, body) => new Request(`http://localhost:3000${route.replace(/^src\/app|\/route\.ts$/g, "")}`, {
   method, headers: { host: "localhost:3000", ...headers }, ...(body === undefined || method === "GET" || method === "HEAD" ? {} : { body }) });
-const signedIn = { cookie: `goal-hint-analytics=${token}` };
+const signedIn = { cookie: `goal-hint-member=${token}` };
 const sameOrigin = { "sec-fetch-site": "same-origin", origin: "http://localhost:3000" };
 const refusals = [
   { name: "no session", headers: sameOrigin, status: 401 },
@@ -169,7 +172,7 @@ test("every guarded /api/admin handler refuses missing sessions (401) and cross-
         assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow", label);
         if (route === signOutRoute && refusal.status === 401) {
           // Sign-out needs no verifiable session: whatever cookie arrived is cleared and the owner lands on the sign-in.
-          assert.equal(response.status, 303, label); assert.equal(response.headers.get("location"), "/admin?login=signed-out", label);
+          assert.equal(response.status, 303, label); assert.equal(response.headers.get("location"), "/en/account?view=login&status=signed-out", label);
           assert.match(response.headers.get("set-cookie"), /^goal-hint-analytics=; .*Max-Age=0/, label);
           // Its only session read names the owner for the audit (058) and never extends the session.
           assert.ok(calls.verify.slice(before.verify).every((options) => options.touch === false), `${label} never extends a session`);
@@ -186,35 +189,30 @@ test("every guarded /api/admin handler refuses missing sessions (401) and cross-
   assert.ok(checked >= refusals.length, `ran ${checked} refusal cases`);
 });
 
-test("sign-in (unguarded) refuses cross-site posts, lands on /admin and is audited; sign-out ends the session even while storage fails", async () => {
+test("retired login routes redirect without credential checks or audits; logout clears both kinds of cookie", async () => {
   const { POST: login } = await import(pathToFileURL(path.join(root, loginRoute)).href);
   const form = (password, headers = sameOrigin) => request(loginRoute, "POST", { ...headers, "content-type": "application/x-www-form-urlencoded" },
     new URLSearchParams({ username: "owner", password }).toString());
   const attempts = calls.login.length, audited = calls.audit.length;
   assert.equal((await login(form("right", { "sec-fetch-site": "cross-site" }))).status, 403);
-  assert.equal(calls.login.length, attempts);
-  assert.equal((await login(form("wrong"))).headers.get("location"), "/admin?login=invalid");
-  const ok = await login(form("right"));
-  assert.equal(ok.status, 303); assert.equal(ok.headers.get("location"), "/admin");
-  assert.match(ok.headers.getSetCookie()[0], new RegExp(`^goal-hint-analytics=${token}; Path=/; HttpOnly; SameSite=Strict;`));
-  const { POST: logout } = await import(pathToFileURL(path.join(root, signOutRoute)).href);
-  for (const [label, value] of [["a live session", token], ["a session storage cannot reach", unreachable]]) {
-    const before = { verify: calls.verify.length, logout: calls.logout.length };
-    const out = await logout(request(signOutRoute, "POST", { ...sameOrigin, cookie: `goal-hint-analytics=${value}` }));
-    assert.equal(out.status, 303, label); assert.equal(out.headers.get("location"), "/admin?login=signed-out", label);
-    assert.match(out.headers.get("set-cookie"), /^goal-hint-analytics=; .*Max-Age=0/, `${label}: the cookie is cleared regardless`);
-    assert.deepEqual(calls.logout.slice(before.logout), [value], `${label}: the session the cookie names is deleted`);
-    assert.deepEqual(calls.verify.slice(before.verify), [{ touch: false }], `${label}: signing out never extends the session it ends`);
+  for (const password of ["wrong", "right"]) {
+    const response = await login(form(password));
+    assert.equal(response.status, 303); assert.equal(response.headers.get("location"), "/en/account?view=login");
+    assert.equal(response.headers.get("set-cookie"), null);
   }
-  // The real routes carry the owner audit: the counted refusal, the sign-in and the live session's sign-out. The session that
-  // storage could not read names no owner, so its sign-out writes nothing.
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(calls.audit.slice(audited).map(({ action, actor, targetType, targetId, details }) => ({ action, actor, targetType, targetId, details })), [
-    { action: "owner_sign_in_refused", actor: "unverified", targetType: "owner-session", targetId: "admin", details: { surface: "admin", reason: "invalid" } },
-    { action: "owner_signed_in", actor: "owner", targetType: "owner-session", targetId: "admin", details: { surface: "admin" } },
-    { action: "owner_signed_out", actor: "owner", targetType: "owner-session", targetId: "admin", details: { surface: "admin" } },
-  ]);
-  assert.equal(JSON.stringify(calls.audit.slice(audited)).includes("right"), false, "No password reaches the audit.");
+  assert.equal(calls.login.length, attempts);
+  assert.equal(calls.audit.length, audited, "Retired credential endpoints do not create sign-in audit records.");
+  const { POST: logout } = await import(pathToFileURL(path.join(root, signOutRoute)).href);
+  for (const [label, value] of [["a live legacy session", token], ["legacy storage cannot respond", unreachable]]) {
+    const before = calls.logout.length;
+    const out = await logout(request(signOutRoute, "POST", { ...sameOrigin, cookie: `goal-hint-analytics=${value}` }));
+    assert.equal(out.status, 303, label); assert.equal(out.headers.get("location"), "/en/account?view=login&status=signed-out", label);
+    for (const name of ["goal-hint-member", "goal-hint-analytics"]) assert.ok(out.headers.getSetCookie().some(value => value.startsWith(`${name}=;`) && value.includes("Max-Age=0")), name);
+    assert.deepEqual(calls.logout.slice(before), [value]);
+  }
+  assert.equal(calls.verify.length, 0, "Legacy owner sessions are never an authorization fallback.");
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.audit.length, audited, "An owner-only cookie cannot name an administrator for a sign-out audit.");
 });
 
 const postJson = (route, body, headers = {}) => request(route, "POST", { ...signedIn, ...sameOrigin, "content-type": "application/json", ...headers },
@@ -289,9 +287,12 @@ test("owner screenshot is private JPEG with a sandbox and cannot return data wit
 });
 
 test("owner phone forms have POST fallbacks so disabled JavaScript cannot put phones in URLs",async()=>{
-  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payments-editor.tsx","src/components/admin/subscribers-editor.tsx","src/components/admin/subscriber-directory.tsx"]){
+  assert.match(await source("src/components/admin/subscriber-styles.tsx"), /export const CompactForm\s*=\s*styled\.form\b/u,
+    "The shared subscriber form wrapper remains a native HTML form.");
+  for(const file of ["src/components/admin/code-tools.tsx","src/components/admin/payments-editor.tsx","src/components/admin/subscriber-detail.tsx","src/components/admin/subscriber-credentials.tsx","src/components/admin/subscriber-directory.tsx"]){
     const text=await source(file);
-    const names=["form",...Array.from(text.matchAll(/\b(\w+)\s*=\s*styled\.form\b/gu),match=>match[1])].join("|");
+    const names=["form",...Array.from(text.matchAll(/\b(\w+)\s*=\s*styled\.form\b/gu),match=>match[1]),
+      ...(file.endsWith("subscriber-detail.tsx") || file.endsWith("subscriber-credentials.tsx") ? ["CompactForm"] : [])].join("|");
     const forms=[...text.matchAll(new RegExp(`<(?:${names})\\b[^>]*?onSubmit=`,"gu"))];assert.ok(forms.length>0,file);
     for(const [form] of forms)assert.match(form,/method="post"/u,file);
   }

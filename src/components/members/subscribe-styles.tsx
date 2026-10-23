@@ -25,11 +25,6 @@ export const Intro = styled.div`
 `;
 export const Lead = styled.p`${smallText}`;
 export const Note = styled.p`${smallText}`;
-export const Panel = styled.div`
-  display: grid; gap: 8px; min-inline-size: 0; padding: 12px;
-  background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => `${theme.border.width} solid ${theme.color.border}`};
-`;
 export const Row = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
   min-block-size: 44px; min-inline-size: 0; font-size: 12px; line-height: 18px;
@@ -49,12 +44,7 @@ export const RowButton = styled(Button)`
   justify-content: flex-start; gap: 6px; padding-inline: 0; font-size: 12px;
   ${icons}
 `;
-export const RowLink = styled(ButtonLink)`
-  justify-self: start; padding-inline: 0; font-size: 12px; gap: 6px;
-  ${icons}
-`;
 export const RowNote = styled.p`${smallText}`;
-export const SignInForm = styled.form`display: grid; gap: 8px; min-inline-size: 0;`;
 export const FieldWithAction = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: end; min-inline-size: 0;
   > div:first-child { display: contents; }

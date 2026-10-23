@@ -23,7 +23,7 @@ const ready = { activePlans: 1, privacyReleaseReady: true, termsReleaseReady: tr
 
 function memberFixture({ mode = "test", production = false, member = null } = {}) {
   const calls = { signIn: [], signOut: [], devices: [] };
-  const services = { config: { production, cookies: { secure: production } }, settings: { settings: { ...defaultSubscriptionSettings, paywallMode: mode } },
+  const services = { config: { production, cookies: { secure: production, session: `${production ? "__Host-" : ""}goal-hint-analytics`, exclude: `${production ? "__Host-" : ""}goal-hint-analytics-exclude` } }, settings: { settings: { ...defaultSubscriptionSettings, paywallMode: mode } },
     auth: { async login(phone, password, ...args) { const normalized = normalizePhone(phone); if (!normalized || !password) return { status: "unauthorized", message: "Enter your phone and password." }; calls.signIn.push([normalized, password, ...args]); return { status: "authenticated", token: "t".repeat(43), phone: normalized }; } },
     sessions: { async signIn(...args) { calls.signIn.push(args); return { status: "signed-in", token: "t".repeat(43) }; },
       async verify() { return member; }, async signOut(token) { calls.signOut.push(token); },
@@ -69,9 +69,33 @@ test("member sign-out clears the Lax cookie and cache even with mode off or fail
   fixture.services.sessions.signOut = async () => { throw new Error("down"); };
   const response = await createMemberSignOutHandler(fixture.resolve)(memberRequest({}));
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).next, "/en/account?status=signed-out");
+  assert.equal((await response.json()).next, "/en/account?view=login&status=signed-out");
   assert.equal(response.headers.get("clear-site-data"), '"cache"');
-  assert.match(response.headers.get("set-cookie"), /^goal-hint-member=; .*SameSite=Lax; Max-Age=0$/);
+  assert.match(response.headers.getSetCookie().find(value => value.startsWith("goal-hint-member=")), /^goal-hint-member=; .*SameSite=Lax; Max-Age=0$/);
+});
+
+test("shared logout clears both identities during storage and service outages, with fixed HTML and JSON destinations", async () => {
+  for (const production of [false, true]) for (const failure of ["member-write", "legacy-write", "member-source"]) for (const json of [false, true]) {
+    const prefix = production ? "__Host-" : "", calls = [], config = { production, cookies: { secure: production, session: `${prefix}goal-hint-analytics` } };
+    const source = async () => { calls.push("source"); if (failure === "member-source") throw new Error("unavailable"); return { config, sessions: { async signOut(token) {
+      calls.push(["member", token]); if (failure === "member-write") throw new Error("unavailable");
+    } } }; };
+    const legacy = async () => ({ auth: { async logout(token) { calls.push(["legacy", token]); if (failure === "legacy-write") throw new Error("unavailable"); } } });
+    const handler = createMemberSignOutHandler(source, legacy, async () => config);
+    const crossSite = await handler(memberRequest({}, { headers: { "sec-fetch-site": "cross-site" } }));
+    assert.equal(crossSite.status, 403); assert.deepEqual(calls, []);
+    const response = await handler(memberRequest({}, { json, headers: { cookie: `${prefix}goal-hint-member=member-token; ${prefix}goal-hint-analytics=legacy-token` } }));
+    const next = "/en/account?view=login&status=signed-out";
+    assert.equal(response.status, json ? 200 : 303);
+    if (json) assert.equal((await response.json()).next, next); else assert.equal(response.headers.get("location"), next);
+    assert.equal(response.headers.get("clear-site-data"), '"cache"');
+    for (const name of ["goal-hint-member", "goal-hint-analytics"]) {
+      const cookie = response.headers.getSetCookie().find(value => value.startsWith(`${prefix}${name}=;`));
+      assert.ok(cookie); assert.match(cookie, /Max-Age=0/u); assert.equal(cookie.includes("; Secure"), production);
+    }
+    assert.ok(calls.some(value => Array.isArray(value) && value[0] === "legacy" && value[1] === "legacy-token"));
+    if (failure !== "member-source") assert.ok(calls.some(value => Array.isArray(value) && value[0] === "member" && value[1] === "member-token"));
+  }
 });
 
 test("closed subscriptions allow password sign-in but never accept subscription codes as credentials", async () => {

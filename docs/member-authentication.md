@@ -12,7 +12,7 @@ A phone-number account can be signed in on only one device at a time. The login 
 
 Completing account verification or password recovery follows the same one-device rule. Incorrect credentials do not end an existing login; restricted verification and reset-only sessions do not displace a fully authenticated session until authentication or password reset is completed. Separate browsers and in-app browsers count as separate devices.
 
-The newly signed-in device inherits the account's current approved subscription without changing its expiry. The policy also applies to administrators who sign in with a phone number. The separate owner/analytics username login is unchanged.
+The newly signed-in device inherits the account's current approved subscription without changing its expiry. Administrators and normal users use the same phone-and-password login form and the same one-device policy.
 
 ## Account verification
 
@@ -35,7 +35,11 @@ Production and development delivery setup, country/channel coverage and server-o
 
 ## Administrator access
 
-Configure server-only `GOAL_HINT_ADMIN_PHONES` as a JSON array of canonical numbers, and `GOAL_HINT_ADMIN_PASSWORD_HASH` (preferred) or `GOAL_HINT_ADMIN_PASSWORD`. Generate a scrypt hash with `npm run analytics:hash-password`. `GOAL_HINT_ANALYTICS_SECRET` must be a strong private secret in production. Configured admin numbers authenticate with the environment credential and go to `/admin`. Public registration and member recovery cannot provision/reset an administrator. Removing a configured number or rotating its credential withdraws existing admin access. The separate owner/analytics login remains available.
+Everyone signs in at `/en/account?view=login`. The server determines the role after checking the phone number and password: administrators go to `/admin`; ordinary users go to `/en`. Verification and password-change requirements finish before either destination. A signed-in administrator visiting an account page goes directly to the dashboard. Unauthenticated `/admin/*` and `/analytics` pages redirect to the shared form.
+
+Configure server-only `GOAL_HINT_ADMIN_PHONES` as a JSON array of canonical numbers, and `GOAL_HINT_ADMIN_PASSWORD_HASH` (preferred) or `GOAL_HINT_ADMIN_PASSWORD`. Generate a scrypt hash with `npm run analytics:hash-password`. `GOAL_HINT_ANALYTICS_SECRET` must be a strong private secret in production. Configured admin numbers authenticate with the environment credential. Public registration and member recovery cannot provision/reset an administrator. Removing a configured number or rotating its credential withdraws existing admin access.
+
+The separate admin/analytics username login is retired. Legacy login POST endpoints issue a fixed HTTP 303 to the shared form without accepting or forwarding credentials. Old owner cookies cannot authorize any dashboard or change an account's role. A successful account login clears the old cookie; sign-out clears both account and legacy owner cookies even during storage failures. Existing legacy session tables remain available for cleanup, with no schema migration required. Administrator login retains the analytics browser-exclusion cookie.
 
 ## API
 

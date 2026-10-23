@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
+import { fixtureAdminSessions, installAdminFixtureEnvironment } from "./helpers/admin-fixtures.mjs";
+after(installAdminFixtureEnvironment());
 import { analyticsGoals, analyticsRoute, analyticsRouteLabel, collectPayloadSchema, parseReportParameters, reportParameters } from "../src/domain/analytics.ts";
 import { classifyChannel, isBotUserAgent, normalizeSearchTerm, sanitizeTarget, screenBucket, summarizeClient } from "../src/domain/analytics-classify.ts";
 import { bucketKeys, comparisonRange, granularityFor, parseDateRange, presetRange, weekStart } from "../src/domain/analytics-range.ts";
@@ -234,11 +236,13 @@ test("the collect limiter bounds each visit and the process per window", () => {
 });
 
 function fakeServices({ production = false, admin = true } = {}) {
-  const calls = { collect: [], login: [], logout: [] };
+  const calls = { collect: [], login: [], logout: [], ownerVerify: [], memberLogout: [] };
+  let memberAvailable = admin;
+  const prefix = production ? "__Host-" : "";
   const config = {
     production, collecting: true, admin: { username: "owner", passwordHash: "x" }, adminProblem: null, usingDevelopmentCredentials: false,
     retentionDays: 395, geoSource: "timezone",
-    cookies: { session: production ? "__Host-goal-hint-analytics" : "goal-hint-analytics", exclude: "goal-hint-analytics-exclude", secure: production },
+    cookies: { session: `${prefix}goal-hint-analytics`, exclude: `${prefix}goal-hint-analytics-exclude`, secure: production },
     key: (purpose, value) => `${purpose}:${value}`,
   };
   const report = { range: { from: "2026-10-01", to: "2026-10-14", days: 14, granularity: "day" }, comparison: null, previous: null,
@@ -246,12 +250,13 @@ function fakeServices({ production = false, admin = true } = {}) {
       conversionRate: 0.5, newVisitors: 1, returningVisitors: 1 },
     series: [{ key: "2026-10-14", visitors: 1, visits: 2, pageviews: 3, bounceRate: 0.5, avgVisitMs: 1000, conversions: 1 }],
     breakdowns: { pages: [{ path: "=cmd|' /C calc'!A0", title: "Help", views: 3, visitors: 1, avgMs: 1500, entries: 1, exits: 1, exitRate: 0.333 }] } };
+  const sessions = fixtureAdminSessions({ token: "t".repeat(43), key: config.key, available: () => memberAvailable,
+    remove: hash => { calls.memberLogout.push(hash); memberAvailable = false; } });
   const services = {
-    config, database: {},
+    config, database: { async query(run) { return run({ memberSession: sessions }); } },
     auth: {
-      async verify(token) { return admin && token === "t".repeat(43) ? { username: "owner", expiresAt: new Date() } : null; },
-      async login(username, password, address) { calls.login.push({ username, address }); return password === "right" ? { status: "signed-in", token: "t".repeat(43), expiresAt: new Date() }
-        : password === "locked" ? { status: "locked", retryAfterSeconds: 900 } : { status: "invalid" }; },
+      async verify(token) { calls.ownerVerify.push(token); return admin && token === "t".repeat(43) ? { username: "owner", expiresAt: new Date() } : null; },
+      async login(username, password, address) { calls.login.push({ username, address }); throw new Error("Legacy browser credentials must never be checked."); },
       async logout(token) { calls.logout.push(token); },
     },
     collector: { async collect(body, context) { calls.collect.push({ body, context }); return { accepted: body.events.length, dropped: 0 }; } },
@@ -311,18 +316,22 @@ test("the collector honours origin, privacy signals, admin browsers, bots, size 
   assert.equal(status, 429, "A visit that floods the collector is rate limited.");
 });
 
-test("reporting, live, export and settings APIs require a signed-in session", async () => {
-  const { resolve } = fakeServices();
+test("reporting, live, export and settings APIs require a current administrator member session", async () => {
+  const { resolve, calls } = fakeServices();
   const handlers = [createReportHandler(resolve), createLiveHandler(resolve), createExportHandler(resolve), createSettingsHandlers(resolve).GET];
   const query = "?from=2026-10-01&to=2026-10-14&dataset=pages";
   for (const handler of handlers) {
     const anonymous = await handler(request(`/api/analytics/report${query}`));
     assert.equal(anonymous.status, 401);
     assert.equal(anonymous.headers.get("x-robots-tag"), "noindex, nofollow");
-    const forged = await handler(request(`/api/analytics/report${query}`, { headers: { cookie: "goal-hint-analytics=forged" } }));
-    assert.equal(forged.status, 401);
+    for (const token of ["forged", "t".repeat(43)]) {
+      const legacy = await handler(request(`/api/analytics/report${query}`, { headers: { cookie: `goal-hint-analytics=${token}` } }));
+      assert.equal(legacy.status, 401, "Even a valid legacy owner cookie grants no access.");
+    }
   }
-  const cookie = { cookie: `goal-hint-analytics=${"t".repeat(43)}` };
+  const cookie = { cookie: `goal-hint-member=${"t".repeat(43)}` };
+  for (const handler of handlers) assert.equal((await handler(request(`/api/analytics/report${query}`, { headers: cookie }))).status, 200);
+  assert.deepEqual(calls.ownerVerify, [], "Dashboard authorization never consults legacy owner sessions.");
   const report = await createReportHandler(resolve)(request(`/api/analytics/report${query}`, { headers: cookie }));
   assert.equal(report.status, 200);
   assert.equal((await report.json()).summary.visits, 2);
@@ -345,39 +354,33 @@ test("reporting, live, export and settings APIs require a signed-in session", as
   assert.equal((await saved.json()).retention.lastPurgedAt, "2026-10-14T07:00:00.000Z", "The response reports the purge it just ran.");
 });
 
-test("sign-in and sign-out set hardened cookies and never echo credentials", async () => {
+test("legacy analytics sign-in redirects without authentication; sign-out clears both hardened cookies", async () => {
   for (const production of [false, true]) {
     const { resolve, calls } = fakeServices({ production });
-    const login = createLoginHandler(resolve);
-    const form = (password) => request("/api/analytics/login", { method: "POST", headers: { ...sameSite, "content-type": "application/x-www-form-urlencoded",
-      "x-forwarded-for": "203.0.113.9, 10.0.0.2" }, body: new URLSearchParams({ username: "owner", password }).toString() });
-    assert.equal((await login(request("/api/analytics/login", { method: "POST", headers: { origin: "https://evil.example", host: "localhost:3000" },
-      body: "username=owner&password=right" }))).status, 403);
-    const attempts = calls.login.length;
-    const upload = chunked("/api/analytics/login", 1024 * 1024, { "content-type": "application/x-www-form-urlencoded" });
-    assert.equal((await login(upload.request)).status, 413);
-    assert.ok(upload.progress.pulls < 64, "An oversized chunked form is refused without buffering all of it.");
-    assert.equal(calls.login.length, attempts, "An oversized form never reaches sign-in.");
-    const invalid = await login(form("wrong"));
-    assert.equal(invalid.status, 303); assert.equal(invalid.headers.get("location"), "/analytics?login=invalid");
-    assert.equal(invalid.headers.get("set-cookie"), null);
-    assert.equal((await login(form("locked"))).headers.get("location"), "/analytics?login=locked&retry=900");
-    assert.equal(calls.login.at(-1).address, "10.0.0.2", "Throttling keys use the nearest proxy's address.");
-    const ok = await login(form("right"));
-    assert.equal(ok.headers.get("location"), "/analytics");
-    const cookies = ok.headers.getSetCookie();
-    assert.equal(cookies.length, 2);
-    for (const value of cookies) {
-      assert.match(value, /HttpOnly/); assert.match(value, /SameSite=Strict/); assert.match(value, /Path=\//);
-      assert.equal(/; Secure/.test(value), production);
-      assert.equal(value.includes("right"), false);
-    }
-    assert.match(cookies[0], production ? /^__Host-goal-hint-analytics=t{43};/ : /^goal-hint-analytics=t{43};/);
+    const login = createLoginHandler();
+    const form = request("/api/analytics/login", { method: "POST", headers: { ...sameSite, "content-type": "application/x-www-form-urlencoded" }, body: "username=owner&password=right" });
+    const response = await login(form);
+    assert.equal(response.status, 303); assert.equal(response.headers.get("location"), "/en/account?view=login");
+    assert.equal(response.headers.get("set-cookie"), null); assert.equal(form.bodyUsed, false); assert.deepEqual(calls.login, []);
+    const crossSite = request("/api/analytics/login", { method: "POST", headers: { ...sameSite, "sec-fetch-site": "cross-site" }, body: "username=owner&password=right" });
+    const refused = await login(crossSite);
+    assert.equal(refused.status, 403); assert.equal(refused.headers.get("location"), null);
+    assert.equal(refused.headers.get("set-cookie"), null); assert.equal(crossSite.bodyUsed, false);
+    const prefix = production ? "__Host-" : "";
     const logout = await createLogoutHandler(resolve)(request("/api/analytics/logout", { method: "POST",
-      headers: { ...sameSite, cookie: `${production ? "__Host-" : ""}goal-hint-analytics=${"t".repeat(43)}` } }));
-    assert.equal(logout.status, 303);
-    assert.match(logout.headers.get("set-cookie"), /Max-Age=0/);
+      headers: { ...sameSite, cookie: `${prefix}goal-hint-analytics=${"t".repeat(43)}; ${prefix}goal-hint-member=${"t".repeat(43)}` } }));
+    assert.equal(logout.status, 303); assert.equal(logout.headers.get("location"), "/en/account?view=login&status=signed-out");
+    const cookies = logout.headers.getSetCookie();
+    for (const name of ["goal-hint-member", "goal-hint-analytics"]) {
+      const value = cookies.find(value => value.startsWith(`${prefix}${name}=;`));
+      assert.ok(value, name); assert.match(value, /HttpOnly/u); assert.match(value, /Path=\//u); assert.match(value, /Max-Age=0/u);
+      assert.equal(value.includes("; Secure"), production); assert.equal(value.includes("right"), false);
+      assert.match(value, name === "goal-hint-member" ? /SameSite=Lax/u : /SameSite=Strict/u);
+    }
     assert.deepEqual(calls.logout, ["t".repeat(43)]);
+    assert.equal(calls.memberLogout.length, 1);
+    const ended = await createLiveHandler(resolve)(request("/api/analytics/live", { headers: { cookie: `${prefix}goal-hint-member=${"t".repeat(43)}` } }));
+    assert.equal(ended.status, 401, "Logging out revokes the member session as well as clearing cookies.");
   }
 });
 
@@ -400,8 +403,8 @@ test("services without storage disable collection and sign-in instead of failing
   const response = await createCollectHandler(async () => services)(request("/api/analytics/collect", { method: "POST", headers: sameSite, body: JSON.stringify(payload()) }));
   assert.equal(response.status, 204);
   assert.equal((await createReportHandler(async () => services)(request("/api/analytics/report?from=2026-10-01&to=2026-10-14"))).status, 503);
-  assert.equal((await createLoginHandler(async () => services)(request("/api/analytics/login", { method: "POST", headers: sameSite, body: "" })))
-    .headers.get("location"), "/analytics?login=unavailable");
+  assert.equal((await createLoginHandler()(request("/api/analytics/login", { method: "POST", headers: sameSite, body: "" })))
+    .headers.get("location"), "/en/account?view=login");
 });
 
 

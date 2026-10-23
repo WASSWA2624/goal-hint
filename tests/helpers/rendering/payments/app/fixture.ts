@@ -24,11 +24,11 @@ export function fixtureServices(scenario = "default"): MemberServices {
     payments: { async begin() { return true; }, async submit(_member: MemberIdentity, fields: PaymentFields) {
       if (fields.transactionId === "TEST-FAIL") return { status: "duplicate" };
       const plan = plans.find((row) => row.id === fields.planId)!;
-      state.syntheticPayment = { reference: "P-TEST", status: "pending", rejectText: null, planName: plan.name, priceUgx: plan.priceUgx, endsAt: null };
+      state.syntheticPayment = { reference: "P-TEST", status: "pending", rejectText: null, rejectReason: null, submittedAt: new Date().toISOString(), planName: plan.name, priceUgx: plan.priceUgx, endsAt: null };
       return { status: "saved", reference: "P-TEST" };
     }, async trial() { state.syntheticTrial = true; return "saved"; },
     async view() { return { acceptedTerms: scenario === "active", trialEligible: scenario !== "active" && !state.syntheticTrial, trialRequested: !!state.syntheticTrial,
-      status: ["pending", "approved", "rejected"].includes(scenario) ? { reference: "P-FAKE", status: scenario, rejectText: "Synthetic rejection reason", planName: "Weekly", priceUgx: 5000,
+      status: ["pending", "approved", "rejected"].includes(scenario) ? { reference: "P-FAKE", status: scenario, rejectText: "Synthetic rejection reason", rejectReason: scenario === "rejected" ? "other" : null, submittedAt: new Date().toISOString(), planName: "Weekly", priceUgx: 5000,
         endsAt: scenario === "approved" ? new Date(Date.now() + 7 * 86_400_000).toISOString() : null } : state.syntheticPayment ?? null }; } },
   } as unknown as MemberServices;
 }

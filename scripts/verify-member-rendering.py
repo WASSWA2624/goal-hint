@@ -114,14 +114,60 @@ def verify_synthetic_api(origin):
     except HTTPError as error:
         response = error
     with response:
-        assert response.status == 303 and response.headers["Location"] == "/en/account?status=signed-out"
+        assert response.status == 303 and response.headers["Location"] == "/en/account?view=login&status=signed-out"
         assert "Max-Age=0" in response.headers["Set-Cookie"]
-    match(r'<h1[^>]*>Log in</h1>', request(origin, "/en/account?status=signed-out").text)
+    match(r'<h1[^>]*>Log in</h1>', request(origin, "/en/account?view=login&status=signed-out").text)
+
+
+def unified_login(origin):
+    admin_phone, admin_password = "256700000991", "Synthetic admin password"
+    owner = "goal-hint-analytics=" + "o" * 43
+    for path in ["/admin", "/analytics"]:
+        for member in [None, "a", "v", "r", "b", "e", "x", "s", "m"]:
+            cookie = owner + ("; goal-hint-member=" + member * 43 if member else "")
+            response = request(origin, path, headers={"Cookie": cookie})
+            assert response.status == 307 and response.headers.get("Location") == "/en/account?view=login", (path, member, response.status)
+            no_match(r'Analytics sign-in|Admin sign-in|Owner username|type="password"', visible_html(response.text))
+        accepted = request(origin, path, headers={"Cookie": "goal-hint-member=" + "d" * 43})
+        assert accepted.status == 200 and "data-fixture-" in accepted.text and "Log out" in accepted.text
+    for token, administrator in [("a", False), ("v", False), ("r", False), ("b", False), ("d", True)]:
+        cookie = owner + "; goal-hint-member=" + token * 43
+        status = request(origin, "/api/admin/fixture", headers={"Cookie": cookie})
+        assert status.status == (200 if administrator else 401), (token, status.status)
+        session = json.loads(request(origin, "/api/account/session", headers={"Cookie": cookie}).text)
+        assert session["administrator"] is administrator
+    for view in ["login", "register", "forgot"]:
+        existing = request(origin, "/en/account?view=" + view, headers={"Cookie": "goal-hint-member=" + "d" * 43})
+        assert existing.status == 307 and existing.headers.get("Location") == "/admin", view
+    for scenario, expected in [("denied", 401), ("missing", 401), ("blocked", 401), ("rate-limited", 429), ("unavailable", 503)]:
+        status, reply, headers = post_fixture(origin, "login", {"phone": admin_phone, "password": admin_password}, scenario)
+        assert status == expected and "next" not in reply and not headers.get("Set-Cookie"), (scenario, status, reply)
+    for scenario, next_path in [("pending-verification", "/en/account?view=verify&return=%2Fen"), ("password-reset", "/en/account?view=new-password&return=%2Fen")]:
+        status, reply, headers = post_fixture(origin, "login", {"phone": "256700000101", "password": "Synthetic password"}, scenario)
+        assert status == 200 and reply["next"] == next_path
+        assert not any("analytics-exclude=1" in value for value in headers.get_all("Set-Cookie"))
+    status, reply, headers = post_fixture(origin, "login", {"phone": admin_phone, "password": admin_password, "return": "https://outside.example"})
+    assert status == 200 and reply["next"] == "/admin"
+    cookies = headers.get_all("Set-Cookie")
+    assert any("goal-hint-analytics-exclude=1;" in value for value in cookies)
+    assert any("goal-hint-analytics=;" in value and "Max-Age=0" in value for value in cookies)
+    assert not any(admin_password in value for value in cookies)
+    for path in ["/api/admin/login", "/api/analytics/login"]:
+        outgoing = Request(origin + path, data=b"username=owner&password=private", method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Site": "same-origin"})
+        try:
+            response = build_opener(NoRedirect()).open(outgoing, timeout=20)
+        except HTTPError as error:
+            response = error
+        with response:
+            assert response.status == 303 and response.headers.get("Location") == "/en/account?view=login"
+            assert not response.headers.get("Set-Cookie")
 
 
 def main():
     options = parse_args("member account", extra=("--fixture",))
-    env = environment(GOAL_HINT_DATABASE_ENABLED="false")
+    env = environment(GOAL_HINT_DATABASE_ENABLED="false", GOAL_HINT_ADMIN_PHONES='["256700000991"]',
+        GOAL_HINT_ADMIN_PASSWORD="Synthetic admin password", GOAL_HINT_ADMIN_PASSWORD_HASH="")
     if options.fixture:
         directory = Path(options.fixture).resolve()
         assert directory.is_relative_to(ROOT / ".tmp") and (directory / ".next/BUILD_ID").is_file(), "Reuse a built acceptance fixture inside .tmp."
@@ -145,6 +191,9 @@ def main():
                 match(r'type="password"', response.text)
                 match(r'autoComplete="current-password"', response.text)
                 login_html = auth_card(visible_html(response.text))
+                assert len(re.findall(r'<form\b', login_html)) == 1
+                match(r'action="/api/account/login"', login_html)
+                no_match(r'Analytics sign-in|Admin sign-in|Owner username', login_html)
                 phone_field(login_html)
                 notice = match(r'<details\b([^>]*)>([\s\S]*?Signing in signs out your other device\.[\s\S]*?)</details>', login_html)
                 no_match(r'\bopen(?:\s|=|$)', notice.group(1))
@@ -209,7 +258,8 @@ def main():
             match(r'type="hidden"', canonical)
             match(r'value=""', canonical)
         verify_synthetic_api(server.origin)
-        print("Member HTML and synthetic APIs: minimal auth screens, collapsed login notice, canonical phone forms, persistent support, restricted channels, code privacy, pending sign-out, failure paths and home destinations pass.", flush=True)
+        unified_login(server.origin)
+        print("Member HTML and synthetic APIs: shared member/admin login, private-page redirects and role gates, legacy endpoint redirects, restricted sessions, cookie clearing, phone/OTP controls and home destinations pass.", flush=True)
         if options.serve:
             server.serve()
 

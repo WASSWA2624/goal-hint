@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 import { Panel, PanelHeader } from "@/components/analytics/dashboard/dashboard-styles";
 import { PhoneInput } from "@/components/ui/controls";
 import { ChevronRightIcon, PhoneIcon, SearchIcon, ShieldIcon, UserIcon } from "@/components/ui/icons";
@@ -17,6 +17,7 @@ export type SubscriberDirectoryProps = Readonly<{
   filtering: boolean;
   busy: boolean;
   adminPhone?: string | null;
+  compact?: boolean;
   onSearchChange: (value: string) => void;
   onSearch: (query: string) => void | Promise<void>;
 }>;
@@ -24,7 +25,7 @@ export type SubscriberDirectoryProps = Readonly<{
 const statusLabels: Readonly<Record<string, string>> = { open: "Open", blocked: "Blocked", erased: "Erased" };
 
 /** Account state is separate from paid access. The same directory supports recent accounts and exact phone searches. */
-export function SubscriberDirectory({ accounts, selectedId, search, filtering, busy, adminPhone, onSearchChange, onSearch }: SubscriberDirectoryProps) {
+export function SubscriberDirectory({ accounts, selectedId, search, filtering, busy, adminPhone, compact = false, onSearchChange, onSearch }: SubscriberDirectoryProps) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!busy) void onSearch(search);
@@ -34,12 +35,12 @@ export function SubscriberDirectory({ accounts, selectedId, search, filtering, b
     onSearchChange("");
     void onSearch("");
   }
-  return <Directory data-subscriber-directory aria-busy={busy}>
+  return <Directory $compact={compact} data-subscriber-directory data-subscriber-compact={compact ? "true" : undefined} aria-busy={busy}>
     <PanelHeader>
       <h2>{filtering ? "Search results" : "Recent accounts"}</h2>
       <Count data-subscriber-count role="status">{accounts.length} account{accounts.length === 1 ? "" : "s"} shown</Count>
     </PanelHeader>
-    <SearchForm method="post" action="/api/admin/subscribers" onSubmit={submit} data-subscriber-search>
+    <SearchForm $compact={compact} method="post" action="/api/admin/subscribers" onSubmit={submit} data-subscriber-search>
       <PhoneInput label="Search by phone" name="search" value={search} onValueChange={onSearchChange} hint="" disabled={busy} />
       <SearchButton type="submit" $variant="primary" disabled={busy}><SearchIcon />Search</SearchButton>
     </SearchForm>
@@ -47,12 +48,12 @@ export function SubscriberDirectory({ accounts, selectedId, search, filtering, b
     {accounts.length ? <Results data-subscriber-results>{accounts.map(account => <li key={account.id}>
       <AccountLink href={`/admin/subscribers?${new URLSearchParams({ accountId: account.id })}`} data-subscriber-row={account.id}
         aria-current={selectedId === account.id ? "page" : undefined}>
-        <AccountIcon>{account.phone ? <PhoneIcon /> : <UserIcon />}</AccountIcon>
+        <AccountIcon data-subscriber-row-icon>{account.phone ? <PhoneIcon /> : <UserIcon />}</AccountIcon>
         <AccountIdentity>
           <AccountSummary><strong>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}</strong>
             <AccountStatus data-subscriber-status={account.status} $tone={account.status === "blocked" ? "warning" : "muted"}>{statusLabels[account.status] ?? "Unknown"}</AccountStatus>
           </AccountSummary>
-          <LastSignIn>Last sign-in <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></LastSignIn>
+          <LastSignIn data-subscriber-last-sign-in>Last sign-in <time dateTime={account.lastSignInAt}>{formatPeriodEnd(new Date(account.lastSignInAt))}</time></LastSignIn>
         </AccountIdentity>
         <ChevronRightIcon />
       </AccountLink>
@@ -61,15 +62,28 @@ export function SubscriberDirectory({ accounts, selectedId, search, filtering, b
   </Directory>;
 }
 
-const Directory = styled(Panel)`
+const Directory = styled(Panel)<{ $compact: boolean }>`
   border-radius: 0;
   h2, p { margin: 0; }
   button { border-radius: 0; }
+  ${({ $compact }) => $compact && css`
+    padding: 12px; gap: 10px;
+    > ${PanelHeader} { gap: 6px 10px; }
+    > ${PanelHeader} h2 { font-size: 0.875rem; }
+    [data-subscriber-count] { font-size: 0.6875rem; }
+    [data-subscriber-row] { grid-template-columns: 24px minmax(0, 1fr) 14px; min-block-size: 64px; padding: 8px; gap: 8px; }
+    [data-subscriber-row] strong { font-size: 0.8125rem; }
+    [data-subscriber-row] > svg { inline-size: 14px; block-size: 14px; }
+    [data-subscriber-row-icon] { inline-size: 24px; block-size: 28px; }
+    [data-subscriber-row-icon] svg { inline-size: 16px; block-size: 16px; }
+    [data-subscriber-status] { padding: 2px 6px; font-size: 0.625rem; }
+    [data-subscriber-last-sign-in] { font-size: 0.6875rem; line-height: 1.35; }
+  `}
 `;
 const Count = styled.span`
   color: ${({ theme }) => theme.color.mutedText}; font-size: 0.8125rem; font-variant-numeric: tabular-nums;
 `;
-const SearchForm = styled.form`
+const SearchForm = styled.form<{ $compact: boolean }>`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 6px 8px; min-inline-size: 0;
   /* Let the shared labelled field place validation below the control, keeping the button level with the input. */
   > div { display: contents; }
@@ -80,6 +94,11 @@ const SearchForm = styled.form`
     > div { display: flex; }
     button[type="submit"] { grid-column: 1; grid-row: auto; inline-size: 100%; }
   }
+  ${({ $compact }) => $compact && css`
+    grid-template-columns: minmax(0, 1fr);
+    > div { display: flex; }
+    button[type="submit"] { grid-column: 1; grid-row: auto; inline-size: 100%; }
+  `}
 `;
 const SearchButton = styled(ActionButton)`
   grid-column: 2; grid-row: 2; min-block-size: 44px; block-size: 44px; align-self: start;

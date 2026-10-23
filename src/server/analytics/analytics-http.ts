@@ -9,17 +9,14 @@ import { parseDateRange } from "../../domain/analytics-range.ts";
 import { CalendarValidationError } from "../../domain/calendar.ts";
 import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "./analytics-config.ts";
-import { adminSessionRules, createAdminAuth, type Admin, type AdminAuth, type VerifyOptions } from "./analytics-auth.ts";
+import { createAdminAuth, type Admin, type AdminAuth } from "./analytics-auth.ts";
 import { createAnalyticsCollector, createCollectLimiter, type AnalyticsCollector } from "./analytics-collector.ts";
 import { createAnalyticsReporter, type AnalyticsReporter } from "./analytics-report.ts";
 import { createAnalyticsRetention, isRetentionDays, type AnalyticsRetention } from "./analytics-retention.ts";
-import type { LoginProblem, LoginStatus } from "../../components/analytics/dashboard/analytics-login.tsx";
+import { memberLoginPath } from "../../domain/member-navigation.ts";
 import { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect } from "../http/private-http.ts";
 import { verifyMemberAdminSession } from "../members/member-admin-access.ts";
-import { createMemberSessions, memberCookieName, memberSessionRules } from "../members/member-sessions.ts";
-import { createMemberAuth, type MemberAuth } from "../members/member-auth.ts";
-import { isMemberAdminPhone, memberAdminCredential, memberAdminPhones } from "../members/member-admin.ts";
-import { normalizePhone } from "../../domain/phone.ts";
+import { createMemberSessions, memberCookieName } from "../members/member-sessions.ts";
 
 // Moved to the shared private helpers; re-exported so analytics callers are unchanged.
 export { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect };
@@ -58,34 +55,14 @@ export function getAnalyticsServices(): Promise<AnalyticsServices> {
   return processState.goalHintAnalytics;
 }
 
-/** Shared page/API policy: existing owner login, or a verified member whose number is currently allowlisted. */
-export async function verifyAdminSession(services: AnalyticsServices, ownerToken: string | undefined,
-  memberToken?: string, options?: VerifyOptions): Promise<Admin | null> {
-  try {
-    const owner = await services.auth?.verify(ownerToken, options);
-    if (owner) return owner;
-  } catch { /* Member authorization is independent of the owner password configuration. */ }
+/** Dashboard privileges come only from the current authenticated account, never a legacy owner cookie. */
+export async function verifyAdminSession(services: AnalyticsServices, memberToken: string | undefined): Promise<Admin | null> {
   const member = await verifyMemberAdminSession(services, memberToken);
   return member ? { username: `member-admin:${member.accountId}`, expiresAt: member.expiresAt, memberAccountId: member.accountId } : null;
 }
 
-export function requireAdmin(services: AnalyticsServices, request: Request, options?: VerifyOptions): Promise<Admin | null> {
-  return verifyAdminSession(services, readCookie(request, services.config.cookies.session),
-    readCookie(request, memberCookieName(services.config.production)), options);
-}
-
-const loginStatuses: readonly LoginStatus[] = ["invalid", "locked", "unavailable", "signed-out"];
-
-/** What a sign-in page shows: a configuration problem, or the outcome named by the sign-in handler's fixed redirect. */
-export function loginNotice(services: AnalyticsServices, parameters: Record<string, string | string[] | undefined>) {
-  const status = typeof parameters.login === "string" && (loginStatuses as readonly string[]).includes(parameters.login) ? parameters.login as LoginStatus : null;
-  const retryAfterSeconds = typeof parameters.retry === "string" && /^\d{1,5}$/.test(parameters.retry) ? Number(parameters.retry) : null;
-  let phoneReady = false;
-  if (services.database && memberAdminPhones().length && memberAdminCredential()) {
-    try { services.config.key("member-readiness", "ready"); phoneReady = true; } catch { /* A phone session needs the server key too. */ }
-  }
-  const problem: LoginProblem = phoneReady ? null : services.config.adminProblem ?? (services.auth ? null : "storage");
-  return { status, problem, retryAfterSeconds };
+export function requireAdmin(services: AnalyticsServices, request: Request): Promise<Admin | null> {
+  return verifyAdminSession(services, readCookie(request, memberCookieName(services.config.production)));
 }
 
 function edgeLocation(config: AnalyticsConfig, headers: Headers) {
@@ -143,11 +120,7 @@ export type SignInAuditEvent =
   | Readonly<{ action: "sign-in" | "sign-out"; username: string }>
   | Readonly<{ action: "sign-in-refused"; reason: "invalid" | "locked" }>;
 export type SignInOptions = Readonly<{
-  /** Where every outcome lands, fixed by the route: never taken from the request. */
-  home?: string;
   audit?: ((event: SignInAuditEvent) => Promise<void> | void) | undefined;
-  /** Reuse account authentication for configured administrator phones, including its durable limits and session version. */
-  memberAuth?: ((services: AnalyticsServices) => Pick<MemberAuth, "login"> | null) | undefined;
 }>;
 
 /** An audit failure never blocks signing in or out. */
@@ -155,64 +128,23 @@ async function report(audit: SignInOptions["audit"], event: SignInAuditEvent) {
   try { await audit?.(event); } catch { /* Best effort. */ }
 }
 
-export function createLoginHandler(services: () => Promise<AnalyticsServices> = getAnalyticsServices,
-  { home = analyticsRules.dashboardPath, audit, memberAuth = ({ database, config }) => database ? createMemberAuth({ database, config }) : null }: SignInOptions = {}) {
+/** Old dashboard login endpoints retire credentials with a 303 to the shared account form. */
+export function createLoginHandler() {
   return async function POST(request: Request): Promise<Response> {
     if (!isSameOrigin(request)) return empty(403);
-    const resolved = await services(), { config, auth } = resolved;
-    if (!auth && !resolved.database) return redirect(`${home}?login=unavailable`);
-    if (Number(request.headers.get("content-length") ?? 0) > 4_096) return empty(413);
-    let username = "", password = "";
-    try {
-      const bytes = await readLimitedBody(request, 4_096);
-      if (bytes === null) return empty(413);
-      // Parsed exactly as request.formData() would, from the same bytes and Content-Type.
-      const type = request.headers.get("content-type");
-      const form = await new Response(bytes, type === null ? {} : { headers: { "content-type": type } }).formData();
-      username = String(form.get("username") ?? "").slice(0, 128);
-      password = String(form.get("password") ?? "").slice(0, 1024);
-    } catch { return redirect(`${home}?login=invalid`); }
-    const phone = normalizePhone(username);
-    if (phone && isMemberAdminPhone(phone)) {
-      try {
-        const phoneAuth = memberAuth(resolved);
-        if (!phoneAuth) return redirect(`${home}?login=unavailable`);
-        const name = memberCookieName(config.production);
-        const result = await phoneAuth.login(phone, password, clientAddress(request.headers), readCookie(request, name));
-        if (result.status === "busy") return redirect(`${home}?login=locked&retry=900`);
-        if (result.status !== "authenticated" || !result.administrator || result.requiresPasswordChange) return redirect(`${home}?login=invalid`);
-        await report(audit, { action: "sign-in", username: `member-admin:${result.accountId}` });
-        return redirect(home, [cookie(config, name, result.token, memberSessionRules.cookieSeconds, "Lax"),
-          cookie(config, config.cookies.exclude, "1", adminSessionRules.excludeMaxAgeSeconds)]);
-      } catch { return redirect(`${home}?login=unavailable`); }
-    }
-    if (!auth) return redirect(`${home}?login=unavailable`);
-    let result;
-    try { result = await auth.login(username, password, clientAddress(request.headers)); }
-    catch { return redirect(`${home}?login=unavailable`); }
-    if ((result.status === "invalid" || (result.status === "locked" && result.newlyLocked)) && result.ownerUsername) {
-      // Not awaited, so the response time never shows whether the typed username was the owner's.
-      void report(audit, { action: "sign-in-refused", reason: result.status });
-    }
-    if (result.status === "locked") return redirect(`${home}?login=locked&retry=${result.retryAfterSeconds}`);
-    if (result.status !== "signed-in") return redirect(`${home}?login=${result.status}`);
-    await report(audit, { action: "sign-in", username: result.username });
-    return redirect(home, [
-      cookie(config, config.cookies.session, result.token, Math.floor(adminSessionRules.absoluteMs / 1000)),
-      cookie(config, config.cookies.exclude, "1", adminSessionRules.excludeMaxAgeSeconds),
-    ]);
+    return redirect(memberLoginPath);
   };
 }
 
 export function createLogoutHandler(services: () => Promise<AnalyticsServices> = getAnalyticsServices,
-  { home = analyticsRules.dashboardPath, audit }: SignInOptions = {}) {
+  { audit }: SignInOptions = {}) {
   return async function POST(request: Request): Promise<Response> {
-    const resolved = await services(), { config, auth } = resolved;
     if (!isSameOrigin(request)) return empty(403);
+    const resolved = await services(), { config, auth } = resolved;
     const token = readCookie(request, config.cookies.session);
     // The audit names whose session ended; reading it must not extend the session about to be deleted.
     const memberName = memberCookieName(config.production), memberToken = readCookie(request, memberName);
-    const admin = audit ? await verifyAdminSession(resolved, token, memberToken, { touch: false }) : null;
+    const admin = audit ? await verifyAdminSession(resolved, memberToken) : null;
     try {
       await auth?.logout(token);
       if (admin) await report(audit, { action: "sign-out", username: admin.username });
@@ -220,8 +152,8 @@ export function createLogoutHandler(services: () => Promise<AnalyticsServices> =
     if (memberToken && resolved.database) {
       try { await createMemberSessions({ database: resolved.database, config }).signOut(memberToken); } catch { /* Clear the cookie during an outage too. */ }
     }
-    return redirect(`${home}?login=signed-out`, [cookie(config, config.cookies.session, "", 0),
-      ...(memberToken ? [cookie(config, memberName, "", 0, "Lax")] : [])]);
+    return redirect(`${memberLoginPath}&status=signed-out`, [cookie(config, config.cookies.session, "", 0),
+      cookie(config, memberName, "", 0, "Lax")]);
   };
 }
 

@@ -4,7 +4,7 @@ import { useEffect, useTransition, type ReactNode } from "react";
 import styled from "styled-components";
 import { useRouter } from "next/navigation";
 import Link from "@/components/navigation/navigation-link";
-import { Notice, PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
+import { PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminSections, type AdminSection } from "@/domain/admin-navigation";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
@@ -18,8 +18,8 @@ function pendingTitle(title: string, count: number, payments: boolean) {
 /**
  * One compact page selector serves every owner section. Site navigation and account actions belong to the shared header.
  */
-export function AdminWorkspace({ current, developmentCredentials, children, pendingCount }: {
-  current: AdminSection; developmentCredentials: boolean; children: ReactNode; pendingCount?: number;
+export function AdminWorkspace({ current, children, pendingCount }: {
+  current: AdminSection; children: ReactNode; pendingCount?: number;
 }) {
   const router = useRouter(), [navigating, startNavigation] = useTransition();
   useEffect(() => {
@@ -46,10 +46,7 @@ export function AdminWorkspace({ current, developmentCredentials, children, pend
       </Switcher>
       <noscript><Fallback aria-label="Admin pages">{adminSections.map(({ key, href, label }) =>
         <Link key={key} href={href} aria-current={key === current ? "page" : undefined}>{label}</Link>)}</Fallback></noscript>
-      <Column $wide={current === "analytics"}>
-        {developmentCredentials && <Notice $tone="warning">
-          Development sign-in is active. Production refuses it: set GOAL_HINT_ANALYTICS_ADMIN_USERNAME, GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH and GOAL_HINT_ANALYTICS_SECRET before deploying.
-        </Notice>}
+      <Column $wide={current === "analytics"} $subscribers={current === "subscribers"}>
         {children}
       </Column>
     </Workspace>
@@ -75,11 +72,11 @@ const PageSelect = styled.select`
   inline-size: min(15rem, 72%);
   border-radius: 0;
 `;
-const Column = styled.div<{ $wide: boolean }>`
+const Column = styled.div<{ $wide: boolean; $subscribers: boolean }>`
   display: grid;
   gap: 16px;
   min-inline-size: 0;
-  max-inline-size: ${({ $wide }) => $wide ? "100%" : "56rem"};
+  max-inline-size: ${({ $wide, $subscribers }) => $wide ? "100%" : $subscribers ? "76rem" : "56rem"};
   margin-inline: auto;
   padding-block: 20px;
   > ${PageTitle} h1 { font-size: 1.375rem; }

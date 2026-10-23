@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { MemberForm, MemberNavigationRecovery, MemberPanel, MemberSignOut } from "@/components/members/member-controls";
 import { AccountAuthForm, type AccountAuthView } from "@/components/members/account-auth-form";
 import { AccountSettings, ResetPasswordForm } from "@/components/members/account-security";
@@ -29,21 +30,24 @@ export function createAccountRoute({ services = getMemberServices }: { services?
     const contact = { contactPhone: settings?.contactPhone ?? null, whatsappPhone: settings?.whatsappPhone ?? null, reviewTime: settings?.reviewTime ?? null };
     // Old reset links enter the same code-based recovery flow.
     const authView: AccountAuthView = parameters.view === "register" ? "register" : parameters.view === "forgot" || parameters.view === "reset" ? "forgot" : "login";
+    const mode = settings?.paywallMode;
+    let currentMember: MemberIdentity | null = null, unavailable = mode === undefined || !resolved.sessions;
+    if (resolved.sessions) {
+      try { currentMember = await resolved.sessions.verify(token); }
+      catch { unavailable = true; }
+    }
+    // Administrator sign-in is independent of subscription settings and every account subview.
+    const administrator = !!currentMember && !currentMember.blocked && !!currentMember.administrator;
+    if (administrator) redirect("/admin");
+    const member = mode ? currentMember : null;
     const reset = await resolved.auth?.passwordResetSession(token).catch(() => null);
     if (reset) return <PublicShell locale={locale} showAccount><AccountCard><AccountCardBody><ResetPasswordForm locale={locale} phone={reset.phone} returnTo={returnTo} contact={contact} /></AccountCardBody></AccountCard></PublicShell>;
     if (authView === "forgot") return <PublicShell locale={locale} showAccount><AccountAuthForm locale={locale} view="forgot" returnTo={returnTo} contact={contact} /></PublicShell>;
     const verification = await resolved.auth?.verificationSession(token).catch(() => null);
     if (verification) return <PublicShell locale={locale} showAccount><AccountVerificationForm locale={locale} phone={verification.phone} returnTo={returnTo} contact={contact} /></PublicShell>;
-    const mode = settings?.paywallMode;
-    let member: MemberIdentity | null = null, unavailable = mode === undefined || !resolved.sessions;
-    if (mode && resolved.sessions) {
-      try { member = await resolved.sessions.verify(token); }
-      catch { unavailable = true; }
-    }
-    const administrator = !!member && !member.blocked && !!member.administrator;
     const now = new Date();
-    const view = member?.codeEnteredAt && !member.blocked && !administrator ? await resolved.codes?.accountView(member).catch(() => null) : null;
-    const paymentView = member && !member.blocked && !administrator && settings ? await resolved.payments?.view(member, settings).catch(() => null) : null;
+    const view = member?.codeEnteredAt && !member.blocked ? await resolved.codes?.accountView(member).catch(() => null) : null;
+    const paymentView = member && !member.blocked && settings ? await resolved.payments?.view(member, settings).catch(() => null) : null;
     const active = view?.codes.find((code) => codeStatus(code, now) === "active");
     const queued = view?.codes.filter((code) => codeStatus(code, now) === "queued") ?? [];
     const last = view?.codes.at(-1);
@@ -64,15 +68,13 @@ export function createAccountRoute({ services = getMemberServices }: { services?
         <AccountCardBody>
           {parameters.status === "phone-changed" && <p role="status">{messages.text("account.phoneChanged")}</p>}
           {parameters.status === "password-changed" && <p role="status">{messages.text("account.passwordChanged")}</p>}
-          {mode !== "off" && !administrator && <>
+          {mode !== "off" && <>
             <ApprovalRefresh waiting={waiting || trialPending} />
             {trialPending && <TrialStatusCard locale={locale} settings={contact} phone={member.phone} heading="h2" />}
             <PaymentStatusCard locale={locale} status={status} settings={contact} phone={member.phone} activeUntil={activeUntil} returnTo={returnTo} heading="h2" />
           </>}
-          {!administrator && <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} />}
-          {administrator && <><p>{messages.text("account.administratorAccess")}</p>
-            <ButtonLink href="/admin" prefetch={false}>{messages.text("account.dashboard")}</ButtonLink></>}
-          {mode !== "off" && !administrator && <AccountSection open={status?.status === "rejected" || status?.status === "reversed"}>
+          <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} />
+          {mode !== "off" && <AccountSection open={status?.status === "rejected" || status?.status === "reversed"}>
             <summary>{messages.text("account.accessSettings")}<ChevronDownIcon /></summary><div>
             {view && <>
               {active ? <><p>{messages.text("account.accessUntil", { end: formatPeriodEnd(queued.at(-1)?.endsAt ?? active.endsAt) })}</p>

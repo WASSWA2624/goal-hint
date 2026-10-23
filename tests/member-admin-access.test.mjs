@@ -54,7 +54,7 @@ test("dashboard policy requires an authenticated, current, unblocked allowlisted
   assert.equal(identity.memberAccountId, row.accountId);
   assert.equal(identity.username, `member-admin:${row.accountId}`);
   assert.ok(!identity.username.includes(phone), "Audit identity never embeds a phone number");
-  assert.deepEqual(await verifyOwner(services, undefined, undefined, token), identity, "Page gate shares the same policy");
+  assert.deepEqual(await verifyOwner(services, token), identity, "Page gate shares the same policy");
   for (const cookie of ["", "goal-hint-member=forged", `goal-hint-member=${"f".repeat(43)}`, `phone=${phone}`]) {
     assert.equal(await requireAdmin(services, request("GET", { cookie })), null);
   }
@@ -100,12 +100,21 @@ test("both dashboard reads and writes use verified member authorization and reje
   assert.equal((await route(request("POST", sameOrigin))).status, 401);
 }));
 
-test("the existing owner password session keeps its existing administrative access", async () => {
+test("legacy owner sessions cannot authorize pages, requests or another member's session", () => allowlist(async () => {
   const f = fixture(), owner = { username: "owner", expiresAt: new Date(Date.now() + 1000) };
-  f.services.auth = { async verify(value) { return value === "existing-owner-token" ? owner : null; } };
-  assert.equal(await verifyAdminSession(f.services, "existing-owner-token"), owner);
-  assert.equal(f.reads.length, 0);
-});
+  let ownerReads = 0;
+  f.services.auth = { async verify() { ownerReads++; return owner; } };
+  assert.equal(await verifyAdminSession(f.services, "existing-owner-token"), null);
+  assert.equal(await requireAdmin(f.services, request("GET", { cookie: "owner=existing-owner-token" })), null);
+  assert.equal((await requireAdmin(f.services, request("GET", { cookie: `owner=existing-owner-token; goal-hint-member=${token}` }))).memberAccountId, f.row.accountId);
+  for (const change of [() => { f.row.account.phone = regularPhone; f.row.account.passwordHash = "registered password"; f.row.account.phoneVerifiedAt = new Date(); },
+    () => { f.row.account.phone = phone; f.row.authenticatedAt = null; }, () => { f.row.authenticatedAt = new Date(); f.row.passwordResetAt = new Date(); },
+    () => { f.row.passwordResetAt = null; f.row.account.blockedAt = new Date(); }]) {
+    change();
+    assert.equal(await requireAdmin(f.services, request("GET", { cookie: `owner=existing-owner-token; goal-hint-member=${token}` })), null);
+  }
+  assert.equal(ownerReads, 0, "Legacy owner authorization is never consulted.");
+}));
 
 test("analytics reads and writes share the member authorization policy and withdraw it immediately", () => allowlist(async () => {
   const f = fixture(), changed = [];

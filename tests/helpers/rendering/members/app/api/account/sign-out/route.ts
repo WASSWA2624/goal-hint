@@ -1,4 +1,6 @@
-export function POST() {
-  return new Response(null, { status: 303, headers: { Location: "/en/account?status=signed-out", "Cache-Control": "no-store",
-    "Set-Cookie": "goal-hint-member=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax" } });
-}
+import { createMemberSignOutHandler } from "@/server/members/member-http";
+import type { MemberServices } from "@/server/members/member-http";
+import { fixtureAdminServices, fixtureMemberSessions } from "../../../fixture-admin";
+
+export const POST = createMemberSignOutHandler(async () => ({ config: (await fixtureAdminServices()).config,
+  sessions: fixtureMemberSessions }) as unknown as MemberServices, fixtureAdminServices);

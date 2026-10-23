@@ -99,19 +99,18 @@ neutralised; percentages as 0–100, durations in seconds).
 
 ## Access control
 
-- `/analytics` and every reporting API check a server-side session; there are no
-  credentials in client code. Sign-in is a plain form POST to `/api/analytics/login`.
-- Passwords are stored only as `scrypt:N:r:p:salt:hash` (N=2^15, r=8, p=1).
-- Sessions: 32 random bytes in an HttpOnly, `SameSite=Strict` cookie (`__Host-` and
-  `Secure` in production); only a SHA-256 of the token is stored. They end after 2 idle
-  hours or 12 hours in total, or on sign-out.
-- Five failures within 15 minutes from one client address lock that address, and that
-  username on that address, for 15 minutes. The username alone locks only after 50
-  failures within an hour, so failures from one network never lock the owner out from
-  another (keys are HMACs; no address is stored). Every attempt runs scrypt, so an
-  unknown username takes as long as a wrong password.
-- The private owner dashboard at `/admin` (paid access, prompts 057–067) shares this
-  login, session and cookie; it posts to `/api/admin/login` and lands back on `/admin`.
+- `/analytics`, `/admin` and their reporting/mutation APIs require the current
+  authenticated account to be an unblocked administrator. There are no credentials
+  in client code and no separate dashboard login form.
+- Everyone signs in at `/en/account?view=login` through `/api/account/login`.
+  Administrator roles come from current server configuration after the password is
+  verified. Administrators go to `/admin`; ordinary users go to `/en`.
+- Account passwords, throttling, verification, HttpOnly cookies and one-device
+  sessions follow [member authentication](member-authentication.md). Removing an
+  administrator number or rotating its environment credential withdraws its access.
+- Legacy dashboard login endpoints redirect with HTTP 303 to the shared form without
+  accepting credentials. Legacy owner cookies cannot authorize dashboards. Sign-out
+  revokes the account session and clears both current and legacy cookies.
 - State-changing requests require same-origin Fetch Metadata or `Origin`. Dashboard
   responses are `no-store`, `noindex`, un-frameable; `robots.txt` disallows `/analytics`
   and `/admin`.
@@ -137,14 +136,15 @@ neutralised; percentages as 0–100, durations in seconds).
    | --- | --- | --- |
    | `GOAL_HINT_ANALYTICS_ENABLED` | `true` (default) | `true` |
    | `GOAL_HINT_ANALYTICS_SECRET` | fixed development value | **required**, 32+ random characters |
-   | `GOAL_HINT_ANALYTICS_ADMIN_USERNAME` | `admin` | **required** |
-   | `GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH` | hash of `admin` | **required**; a hash of `admin` is refused |
+   | `GOAL_HINT_ADMIN_PHONES` | configured canonical phone array | **required for dashboard access** |
+   | `GOAL_HINT_ADMIN_PASSWORD_HASH` | configured scrypt hash | **required**, or private `GOAL_HINT_ADMIN_PASSWORD` fallback |
    | `GOAL_HINT_ANALYTICS_RETENTION_DAYS` | 395 | optional; the dashboard can override |
    | `GOAL_HINT_ANALYTICS_GEO_SOURCE` | `timezone` | `timezone`, `cloudflare` or `vercel` |
 
-   **`admin` / `admin` works in development only.** Production disables sign-in until
-   a secret, username and non-default password hash are set, and collects nothing
-   without the secret. Create the hash with `npm run analytics:hash-password` (input
+   Administrator numbers use the same login as ordinary accounts. Legacy username
+   credentials, including `admin` / `admin`, cannot sign in. Production collects
+   nothing without the secret. Create the administrator hash with
+   `npm run analytics:hash-password` (input
    is hidden; at least 12 characters) and paste the printed line into
    `deploy/.env.production.local`, then `python scripts/deploy-cpanel.py --config-push`.
    Generate the secret with e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.

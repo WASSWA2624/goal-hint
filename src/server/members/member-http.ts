@@ -1,8 +1,9 @@
 import "server-only";
 
 import { createPayments, type Payments } from "./payments.ts";
-import { getAnalyticsServices } from "../analytics/analytics-http.ts";
-import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
+import { getAnalyticsServices, type AnalyticsServices } from "../analytics/analytics-http.ts";
+import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
+import { memberLoginPath } from "../../domain/member-navigation.ts";
 import { cookie, isSameOrigin, json, privateHeaders, readCookie, redirect } from "../http/private-http.ts";
 import { createMemberSessions, memberCookieName, type MemberIdentity, type MemberSessions } from "./member-sessions.ts";
 import { settingsServiceFor, type SettingsState } from "./settings.ts";
@@ -50,16 +51,26 @@ export function createMemberSignInHandler(services: MemberServicesSource = getMe
   return async (request: Request) => (await import("./member-auth-http.ts")).createMemberAuthHandler("login", services)(request);
 }
 
-export function createMemberSignOutHandler(services: MemberServicesSource = getMemberServices) {
-  return memberRoute(async ({ request, services: resolved }) => {
-    const name = memberCookieName(resolved.config.production);
-    try { await resolved.sessions?.signOut(readCookie(request, name)); } catch { /* Clear the local cookie even during a storage outage. */ }
-    const cleared = cookie(resolved.config, name, "", 0, "Lax");
-    const response = wantsJson(request) ? json({ next: "/en/account?status=signed-out", phone: null }, 200, { "Set-Cookie": cleared })
-      : redirect("/en/account?status=signed-out", [cleared]);
+/** Both identities are cleared even if their storage is unavailable; old owner sessions never authorize access. */
+export function createMemberSignOutHandler(services: MemberServicesSource = getMemberServices,
+  legacySource: () => Promise<Pick<AnalyticsServices, "auth">> = getAnalyticsServices,
+  configSource: () => Promise<AnalyticsConfig> = getAnalyticsConfig) {
+  return async (request: Request): Promise<Response> => {
+    if (!isSameOrigin(request)) return json({ error: "forbidden", message: memberRefusal }, 403);
+    let resolved: MemberServices | null = null;
+    try { resolved = await services(); } catch { /* Configuration alone is enough to clear both cookies. */ }
+    const config = resolved?.config ?? await configSource(), name = memberCookieName(config.production);
+    try { await resolved?.sessions?.signOut(readCookie(request, name)); } catch { /* Cookie clearing survives a member storage outage. */ }
+    const legacyToken = readCookie(request, config.cookies.session);
+    if (legacyToken !== undefined) {
+      try { await (await legacySource()).auth?.logout(legacyToken); } catch { /* Cookie clearing survives a legacy storage outage. */ }
+    }
+    const next = `${memberLoginPath}&status=signed-out`, cleared = [cookie(config, name, "", 0, "Lax"), cookie(config, config.cookies.session, "", 0)];
+    const response = wantsJson(request) ? json({ next, phone: null }) : redirect(next);
+    for (const value of cleared) response.headers.append("Set-Cookie", value);
     response.headers.set("Clear-Site-Data", '"cache"');
     return response;
-  }, { services, access: "sign-out" });
+  };
 }
 
 export function createMemberDevicesHandler(services: MemberServicesSource = getMemberServices) {

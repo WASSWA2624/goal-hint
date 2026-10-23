@@ -5,8 +5,8 @@ import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody 
 import { getMemberServices, type MemberServices, type MemberServicesSource } from "./member-http.ts";
 import type { AuthBinding, AuthFailure } from "./member-auth.ts";
 import { memberCookieName, memberSessionRules } from "./member-sessions.ts";
-import { getAnalyticsServices } from "../analytics/analytics-http.ts";
-import { requireOwner, type OwnerServices } from "../admin/owner-auth.ts";
+import { adminSessionRules } from "../analytics/analytics-auth.ts";
+import { isMemberAdminPhone } from "./member-admin.ts";
 
 type AuthAction = "register" | "login" | "phone" | "password" | "forgot" | "reset" | "verification" | "verify" | "reset-code";
 const fields: Readonly<Record<AuthAction, readonly string[]>> = {
@@ -65,26 +65,30 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
       // Login and signup finish at home; restricted sessions carry that destination through verification or reset.
       const returnTo = action === "register" || action === "login" ? "/en" : memberReturnPath(body.return);
       const restrictedPath = (view: string) => `/en/account?${new URLSearchParams({ view, ...(returnTo ? { return: returnTo } : {}) })}`;
-      const next = result.administrator ? "/admin" : result.requiresPasswordChange ? restrictedPath("new-password")
+      const next = result.requiresPasswordChange ? restrictedPath("new-password")
         : result.requiresVerification ? restrictedPath("verify")
+        : result.administrator ? "/admin"
         : returnTo ?? (action === "verify" ? "/en"
         : action === "phone" ? "/en/account?status=phone-changed" : action === "password" || action === "reset" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),
         ...(result.requiresVerification ? { requiresVerification: true } : {}),
         ...(typeof result.otherDeviceSignedOut === "boolean" ? { otherDeviceSignedOut: result.otherDeviceSignedOut } : {}) });
       response.headers.append("Set-Cookie", cookie(services.config, memberName, result.token, result.requiresPasswordChange ? 900 : memberSessionRules.cookieSeconds, "Lax"));
+      response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.session, "", 0));
+      if (result.administrator && !result.requiresPasswordChange && !result.requiresVerification)
+        response.headers.append("Set-Cookie", cookie(services.config, services.config.cookies.exclude, "1", adminSessionRules.excludeMaxAgeSeconds));
       return response;
     } catch { return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503); }
   };
 }
 
-export function createMemberSessionHandler(source: MemberServicesSource = getMemberServices, ownerSource: OwnerServices = getAnalyticsServices) {
+export function createMemberSessionHandler(source: MemberServicesSource = getMemberServices) {
   return async (request: Request): Promise<Response> => {
     try {
       const services: MemberServices = await source();
       if (!services.sessions) return json({ phone: null, error: "unavailable" }, 503);
       const member = await services.sessions.verify(readCookie(request, memberCookieName(services.config.production)));
-      const administrator = !!await requireOwner(await ownerSource(), request, { touch: false });
+      const administrator = !!member && !member.blocked && member.administrator === true && isMemberAdminPhone(member.phone);
       return json({ phone: member?.phone ?? null, administrator });
     } catch { return json({ phone: null, error: "unavailable" }, 503); }
   };

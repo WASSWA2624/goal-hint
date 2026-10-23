@@ -1,16 +1,21 @@
 """Production-rendered payment steps and private headers with synthetic services only."""
 import re
+from pathlib import Path
 from lib.rendering import Server, build_fixture, create_fixture, environment, parse_args, request, visible_html
-from lib.runtime import main_guard
+from lib.runtime import ROOT, main_guard
 
 
 def main():
-    args = parse_args("payment steps")
-    directory = create_fixture("payments")
-    config = directory / "next.config.mjs"
-    config.write_text(config.read_text(encoding="utf-8").replace("export default {", 'import production from "../../next.config.ts";\nexport default { headers: production.headers,'), encoding="utf-8")
+    args = parse_args("payment steps", extra=("--fixture",))
     env = environment(GOAL_HINT_DATABASE_ENABLED="false")
-    build_fixture(directory, env, timeout=240)
+    if args.fixture:
+        directory = Path(args.fixture).resolve()
+        assert directory.is_relative_to(ROOT / ".tmp") and (directory / ".next/BUILD_ID").is_file(), "Reuse a built acceptance fixture inside .tmp."
+    else:
+        directory = create_fixture("payments")
+        config = directory / "next.config.mjs"
+        config.write_text(config.read_text(encoding="utf-8").replace("export default {", 'import production from "../../next.config.ts";\nexport default { headers: production.headers,'), encoding="utf-8")
+        build_fixture(directory, env, timeout=240)
     with Server(directory, env, ready="/en/subscribe") as server:
         for state in ["signed-out", "signed-in", "active", "pending", "approved", "rejected", "blocked", "off"]:
             response = request(server.origin, f"/en/subscribe?state={state}")
@@ -25,19 +30,20 @@ def main():
                               "Daily", "Weekly", "Monthly", "Safety tips", "Need help?", "1,000", "5,000", "20,000"]: assert label in html, (state, label)
                 interactive = re.sub(r"<noscript\b[^>]*>[\s\S]*?</noscript>", "", html)
                 assert "0700000901" in interactive and "0700000902" not in interactive, state
-                assert ("Confirm payment" in html) != (state in ["pending", "approved"]), state
-                assert ("Enter your code" in html) == (state in ["pending", "approved"]), state
+                assert "Confirm payment" in html, state
+                assert "Enter your code" not in html and "We sent your code" not in html, state
+                assert len(re.findall(r'<input\b[^>]*type="file"', html)) == (0 if state in ["signed-out", "pending"] else 2), state
                 if state == "signed-out":
-                    assert 'action="/api/account/sign-in"' in html and 'method="post"' in html and "Have a code?" in html
-                    assert "Continue with your number above" in html and "Request 2-day free trial" not in html
+                    assert 'action="/api/account/login"' in html and 'method="post"' in html and 'data-account-auth' in html
+                    assert "Phone number" in html and "Forgot password?" in html and "Request 2-day free trial" not in html
                 else: assert "256 700 000 101" in html and ("Request 2-day free trial" in html) == (state != "active"), state
                 if state in ["signed-in", "active", "rejected"]:
-                    sms = re.search(r'<input[^>]*value=""[^>]*maxlength="12000"[^>]*>|<input[^>]*maxlength="12000"[^>]*>', html, re.I)
-                    assert sms and 'name=' not in sms.group(0)
-                    assert "This form needs JavaScript" in html and "Pasted SMS stays on this device" in html
+                    transaction = re.search(r'<input\b[^>]*maxlength="40"[^>]*>', html, re.I)
+                    assert transaction and 'name=' not in transaction.group(0)
+                    assert "This form needs JavaScript" in html and "Prepared on this device" in html
                     assert ("18 or older" in html) == (state != "active")
-                if state == "pending": assert "Checking your payment" in html and "P-FAKE" in html
-                if state == "approved": assert "Access until" in html and "We sent your code" in html
+                if state == "pending": assert 'data-payment-status="pending"' in html and "P-FAKE" in html
+                if state == "approved": assert 'data-payment-status="approved"' in html and "Access active until" in html
                 if state == "rejected": assert "Synthetic rejection reason" in html
         for agent, allowed in [("Android Chrome", True), ("iPhone Safari", False), ("Android; wv) Chrome", False), ("Android FBAN", False), ("Android Instagram", False)]:
             html = visible_html(request(server.origin, "/en/subscribe", headers={"User-Agent": agent}).text)
@@ -54,7 +60,7 @@ def main():
         assert canonical_inputs and all('type="hidden"' in field for field in canonical_inputs)
         named_phone = [field for field in canonical_inputs if 'name="phone"' in field]
         assert len(named_phone) == 1, "The native form must submit its canonical phone field exactly once."
-        print("PASS 8 server-rendered payment states, 5 user agents, hidden SMS fields, assent, plan order and private headers.", flush=True)
+        print("PASS 8 server-rendered payment states, shared account login, 5 user agents, screenshot/optional fields, assent, plan order and private headers.", flush=True)
         if args.serve: server.serve()
 
 

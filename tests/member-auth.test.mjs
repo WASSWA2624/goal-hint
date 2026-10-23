@@ -123,7 +123,7 @@ test("configured admin numbers require the environment password and land on the 
   assert.equal(noAccount.accounts.size, 1);
   const request = new Request("https://goal.test/api/account/login", { method: "POST", headers: { "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json" },
     body: JSON.stringify({ phone, password: "configured admin password", return: "/en/subscribe" }) });
-  const response = await createMemberAuthHandler("login", async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService }))(request);
+  const response = await createMemberAuthHandler("login", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(request);
   assert.equal(response.status, 200); assert.equal((await response.json()).next, "/admin");
 });
 
@@ -143,6 +143,21 @@ test("private administrator password fallback works without hashing on each read
   assert.equal(memberAdminCredential({ ...environment, GOAL_HINT_ADMIN_PASSWORD_HASH: "malformed hash" }), null);
   assert.equal(memberAdminCredential({ ...environment, GOAL_HINT_ADMIN_PASSWORD_HASH: "   " }), credential);
   assert.equal(memberAdminCredential({ GOAL_HINT_ADMIN_PASSWORD: "        " }), null);
+});
+
+test("shared sign-in cannot provision missing ordinary accounts or authenticate blocked, erased or unconfigured administrator accounts", async () => {
+  const configured = "configured administrator password", hash = await hashPassword(configured);
+  for (const fields of [{ blockedAt: new Date() }, { erasedAt: new Date() }]) {
+    const f = fixture({ admins: [phone], adminHash: hash }); await f.account(fields);
+    assert.equal((await f.service.login(phone, configured, address)).status, "unauthorized");
+    assert.equal(f.sessions.size, 0);
+  }
+  const missingCredential = fixture({ admins: [phone] });
+  assert.equal((await missingCredential.service.login(phone, configured, address)).status, "unauthorized");
+  assert.equal(missingCredential.accounts.size, 0); assert.equal(missingCredential.sessions.size, 0);
+  const ordinary = fixture();
+  assert.equal((await ordinary.service.login(phone, password, address)).status, "unauthorized");
+  assert.equal(ordinary.accounts.size, 0); assert.equal(ordinary.sessions.size, 0);
 });
 
 test("administrator password logins also allow only the latest device", async () => {
@@ -236,7 +251,7 @@ test("a successful login signs out the previous device and denies its profile wr
   assert.equal([...f.sessions.values()].filter(row => row.accountId === first.member.accountId).length, 1);
   assert.equal((await f.service.changePassword("stale device password", password, first)).status, "unauthorized");
   assert.equal((await f.service.changePhone("256700000003", password, first)).status, "unauthorized");
-  const response = await createMemberAuthHandler("password", async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService }))(
+  const response = await createMemberAuthHandler("password", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(
     authRequest("password", { password: "stale HTTP password", currentPassword: password }, first.token));
   assert.equal(response.status, 401); assert.equal(response.headers.get("set-cookie"), null);
   await f.sessionService.signOut(first.token);
@@ -293,7 +308,7 @@ test("failed and blocked logins preserve the existing device", async () => {
 test("a failed replacement transaction restores the active device and issues no cookie", async () => {
   const f = fixture(), active = await f.authenticate();
   f.tx.memberSession.create = async () => { throw new Error("Synthetic session insert failure"); };
-  const response = await createMemberAuthHandler("login", async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService }))(
+  const response = await createMemberAuthHandler("login", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(
     authRequest("login", { phone, password }, undefined));
   assert.equal(response.status, 503); assert.equal(response.headers.get("set-cookie"), null);
   assert.ok(await f.sessionService.verify(active.token)); assert.equal(f.sessions.size, 1);
@@ -550,7 +565,7 @@ const responseToken = response => /^goal-hint-member=([^;]+)/u.exec(response.hea
 
 test("HTTP login reports when another device was signed out and rejects its stale cookie", async () => {
   const f = fixture(); await f.account();
-  const source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService });
+  const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService });
   const login = token => createMemberAuthHandler("login", source)(authRequest("login", { phone, password }, token));
   const first = await login();
   assert.equal(first.status, 200); const firstBody = await first.json();
@@ -573,9 +588,11 @@ test("successful login goes home while administrator and restricted sessions kee
     { flags: { requiresVerification: true }, next: "/en/account?view=verify&return=%2Fen" },
     { flags: { requiresPasswordChange: true }, next: "/en/account?view=new-password&return=%2Fen" },
     { flags: { administrator: true }, next: "/admin" },
+    { flags: { administrator: true, requiresVerification: true }, next: "/en/account?view=verify&return=%2Fen" },
+    { flags: { administrator: true, requiresPasswordChange: true }, next: "/en/account?view=new-password&return=%2Fen" },
   ];
   for (const destination of destinations) for (const { flags, next } of outcomes) {
-    const source = async () => ({ config: { production: false, cookies: { secure: false } }, sessions: { async verify() { return null; } },
+    const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, sessions: { async verify() { return null; } },
       auth: { async login() { return { status: "authenticated", token, phone, ...flags }; } } });
     const response = await createMemberAuthHandler("login", source)(authRequest("login", { phone, password, ...destination }));
     assert.equal(response.status, 200);
@@ -585,13 +602,15 @@ test("successful login goes home while administrator and restricted sessions kee
     assert.equal(result.requiresPasswordChange, flags.requiresPasswordChange);
     assert.equal(responseToken(response), token);
     assert.match(response.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
+    assert.ok(response.headers.getSetCookie().some(value => value.startsWith("goal-hint-analytics=;") && value.includes("Max-Age=0")), "Every successful account sign-in clears the legacy owner identity.");
+    assert.equal(response.headers.getSetCookie().some(value => value.startsWith("goal-hint-analytics-exclude=1;")), !!flags.administrator && !flags.requiresPasswordChange && !flags.requiresVerification);
     if (flags.requiresPasswordChange) assert.match(response.headers.getSetCookie()[0], /Max-Age=900/u);
   }
 });
 
 test("failed login never returns a completion destination or session cookie", async () => {
   for (const [status, expectedStatus] of [["unauthorized", 401], ["invalid", 400], ["busy", 429], ["unavailable", 503]]) {
-    const source = async () => ({ config: { production: false, cookies: { secure: false } }, sessions: { async verify() { return null; } },
+    const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, sessions: { async verify() { return null; } },
       auth: { async login() { return { status, message: "Synthetic sign-in refusal." }; } } });
     const response = await createMemberAuthHandler("login", source)(authRequest("login", { phone, password, return: "/en/matches/example/home-away", destination: "subscribe" }));
     assert.equal(response.status, expectedStatus);
@@ -601,7 +620,7 @@ test("failed login never returns a completion destination or session cookie", as
 });
 
 test("HTTP registration, channel selection, verification and reset codes set restricted HttpOnly cookies", async () => {
-  const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService });
+  const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService });
   const handle = (action, body, token) => createMemberAuthHandler(action, source)(authRequest(action, body, token));
   const registration = await handle("register", { phone, password, return: "/en/matches/example/home-away" });
   assert.equal(registration.status, 200);
@@ -629,7 +648,7 @@ test("signup completion goes home while keeping pending accounts restricted", as
   const token = "s".repeat(43);
   for (const returnTo of [undefined, "/en/matches/example/home-away", "https://evil.test", "/en?phone=256700000001"]) {
     for (const requiresVerification of [false, true]) {
-      const source = async () => ({ config: { production: false, cookies: { secure: false } }, sessions: { async verify() { return null; } },
+      const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, sessions: { async verify() { return null; } },
         auth: { async register() { return { status: "authenticated", token, phone, ...(requiresVerification ? { requiresVerification: true } : {}) }; } } });
       const response = await createMemberAuthHandler("register", source)(authRequest("register", { phone, password, ...(returnTo ? { return: returnTo } : {}) }));
       assert.equal(response.status, 200);
@@ -645,7 +664,7 @@ test("signup completion goes home while keeping pending accounts restricted", as
 test("verification defaults home and keeps safe return destinations for existing account flows", async () => {
   const token = "v".repeat(43), target = "/en/matches/example/home-away";
   const success = async () => ({ status: "authenticated", token, phone });
-  const source = async () => ({ config: { production: false, cookies: { secure: false } }, sessions: { async verify() { return null; } },
+  const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, sessions: { async verify() { return null; } },
     auth: { verifyAccount: success, resetPassword: success } });
   const handle = (action, body) => createMemberAuthHandler(action, source)(authRequest(action, body, token));
   const verified = await handle("verify", { code: "123456" });
@@ -668,14 +687,14 @@ test("all verification writes reject cross-site requests before storage and whit
     const extra = await createMemberAuthHandler(action, async () => { assert.fail("Unexpected fields cannot reach storage"); })(authRequest(action, { ...body, accountId: "other-account" }));
     assert.equal(extra.status, 400);
   }
-  const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService });
+  const f = fixture(), source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService });
   assert.equal((await createMemberAuthHandler("forgot", source)(authRequest("forgot", { phone }))).status, 400);
   assert.equal((await createMemberAuthHandler("verification", source)(authRequest("verification", { channel: "sms" }))).status, 401);
 });
 
 test("HTTP delivery failure returns a generic 503 without provider errors or a credential", async () => {
   const f = fixture({ async send() { throw new Error("private-yoola-token: provider rejected request"); } }), registered = await pending(f);
-  const response = await createMemberAuthHandler("verification", async () => ({ config: { production: false, cookies: { secure: false } }, auth: f.service, sessions: f.sessionService }))(
+  const response = await createMemberAuthHandler("verification", async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, auth: f.service, sessions: f.sessionService }))(
     authRequest("verification", { channel: "sms" }, registered.token));
   assert.equal(response.status, 503); assert.equal(response.headers.get("set-cookie"), null);
   assert.doesNotMatch(JSON.stringify(await response.json()), /private-yoola-token|provider rejected|\d{6}/u);
