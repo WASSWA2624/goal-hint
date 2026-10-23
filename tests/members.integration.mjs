@@ -13,7 +13,7 @@ import { parseRuntimePolicy } from "../src/server/config/runtime-policy.ts";
 import { createDatabase } from "../src/server/database/client.ts";
 import { createPlansService } from "../src/server/members/plans.ts";
 import { accessMode, createSettingsService } from "../src/server/members/settings.ts";
-import { memberSessionRules, memberTokenHash } from "../src/server/members/member-sessions.ts";
+import { createMemberSessions as createRestrictedMemberSessions, memberSessionRules, memberTokenHash } from "../src/server/members/member-sessions.ts";
 import { createAuthenticatedTestSessions as createMemberSessions } from "./helpers/member-fixtures.mjs";
 import { createMemberRateLimit } from "../src/server/members/rate-limit.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
@@ -489,20 +489,23 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal(await database.query((tx) => tx.rateLimitBucket.count()), before);
     });
 
-    await t.test("a sign-in flood preserves unlocked devices and evicts pending and superseded payment sessions last", async () => {
+    await t.test("a restricted sign-in flood preserves authenticated devices and evicts payment sessions last", async () => {
       const config = { key: (purpose, value) => sha256(`${purpose}:${value}`) };
       let instant = now.getTime();
-      const sessions = createMemberSessions({ database, config, now: () => ++instant });
-      const phone = "256700000702", tokens = [];
-      for (let index = 0; index < 10; index++) tokens.push((await sessions.signIn(phone, "unknown")).token);
+      const nowForSessions = () => ++instant;
+      const sessions = createRestrictedMemberSessions({ database, config, now: nowForSessions });
+      const legacy = createMemberSessions({ database, config, now: nowForSessions });
+      const phone = "256700000702", tokens = [(await legacy.signIn(phone, "unknown")).token];
+      for (let index = 1; index < 10; index++) tokens.push((await sessions.signIn(phone, "unknown")).token);
       const member = await sessions.verify(tokens[0]);
       for (const [index, status] of [[0, "pending"], [1, "superseded"]]) await submission(member.accountId, weekly,
         { status, submittedSessionHash: memberTokenHash(tokens[index]) });
       const codeId = await code(member.accountId, { endsAt: new Date(now.getTime() - 1), startsAt: new Date(now.getTime() - 86_400_000) });
-      await app.query("UPDATE MemberSession SET codeEnteredAt = ?, accessCodeId = ? WHERE tokenHash = ?", [now, codeId, memberTokenHash(tokens[2])]);
+      await app.query("UPDATE MemberSession SET authenticatedAt = ?, codeEnteredAt = ?, accessCodeId = ? WHERE tokenHash = ?", [now, now, codeId, memberTokenHash(tokens[2])]);
       await sessions.signIn(phone, "unknown");
       assert.ok(await sessions.verify(tokens[0]));
-      assert.ok(await sessions.verify(tokens[1]));
+      assert.ok(await database.query(tx => tx.memberSession.findUnique({ where: { tokenHash: memberTokenHash(tokens[1]) } })));
+      assert.equal(await sessions.verify(tokens[1]), null, "A number-only session remains unauthenticated");
       assert.ok(await sessions.verify(tokens[2]));
       assert.equal(await sessions.verify(tokens[3]), null);
       assert.equal(await database.query((tx) => tx.memberSession.count({ where: { accountId: member.accountId } })), 10);
@@ -511,11 +514,12 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       assert.equal(await sessions.verify(tokens[0]), null);
       const replacement = await sessions.signIn(phone, "unknown", tokens[2]);
       assert.equal(await sessions.verify(tokens[2]), null, "sign-in replaces the previous browser token");
-      assert.equal((await sessions.verify(replacement.token)).codeEnteredAt, null);
+      assert.equal(await sessions.verify(replacement.token), null);
+      assert.equal((await database.query(tx => tx.memberSession.findUniqueOrThrow({ where: { tokenHash: memberTokenHash(replacement.token) } }))).codeEnteredAt, null);
       await app.query("UPDATE MemberAccount SET blockedAt = ? WHERE id = ?", [now, member.accountId]);
       const blockedSignIn = await sessions.signIn(phone, "unknown");
       assert.equal(blockedSignIn.status, "signed-in");
-      assert.equal((await sessions.verify(blockedSignIn.token)).blocked, true);
+      assert.equal(await sessions.verify(blockedSignIn.token), null);
       await sessions.signOut(blockedSignIn.token);
       assert.equal(await sessions.verify(blockedSignIn.token), null);
     });

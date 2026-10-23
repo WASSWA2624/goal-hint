@@ -10,6 +10,7 @@ import { decide } from "./settings.ts";
 import { isMemberAdminPhone, memberAdminCredential } from "./member-admin.ts";
 
 export const memberSessionRules = Object.freeze({ expiryMs: 90 * 86_400_000, touchAfterMs: 86_400_000,
+  // This storage cap covers restricted flows; an authenticated login always replaces every other session.
   cookieSeconds: 400 * 86_400, maximumSessions: 10 });
 export const memberTokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 export const validMemberToken = (token: unknown): token is string => typeof token === "string" && /^[A-Za-z0-9_-]{43}$/u.test(token);
@@ -19,24 +20,34 @@ export type MemberIdentity = Readonly<{ tokenHash: string; accountId: string; ph
   codeEnteredAt: Date | null; accessCodeId: string | null; expiresAt: Date; administrator?: boolean }>;
 export type MemberSignIn = Readonly<{ status: "signed-in"; token: string }> | Readonly<{ status: "busy" }>;
 
-/** The caller holds the account lock. Pending reports and unlocked devices are kept ahead of idle number-only sessions. */
+/** The caller holds the account lock. A full login replaces every prior session atomically; restricted sessions only use the pending cap. */
 export async function issueMemberSession(tx: Prisma.TransactionClient, accountId: string, at: Date, previous?: string, authenticated = false) {
-  if (validMemberToken(previous)) await tx.memberSession.deleteMany({ where: { tokenHash: memberTokenHash(previous) } });
-  await tx.memberSession.deleteMany({ where: { accountId, expiresAt: { lte: at } } });
-  const sessions = await tx.memberSession.findMany({ where: { accountId }, orderBy: [{ createdAt: "asc" }, { tokenHash: "asc" }],
-    select: { tokenHash: true, codeEnteredAt: true } });
-  const reports = await tx.paymentSubmission.findMany({ where: { accountId, status: { in: ["pending", "superseded"] },
-    submittedSessionHash: { not: null } }, select: { submittedSessionHash: true } });
-  const protectedHashes = new Set(reports.map((row) => row.submittedSessionHash));
-  const candidates = sessions.filter((row) => row.codeEnteredAt === null);
-  candidates.sort((a, b) => Number(protectedHashes.has(a.tokenHash)) - Number(protectedHashes.has(b.tokenHash)));
-  const evict = candidates.slice(0, Math.max(0, sessions.length - memberSessionRules.maximumSessions + 1));
-  if (sessions.length - evict.length >= memberSessionRules.maximumSessions) throw new Error("Session capacity is unavailable.");
-  if (evict.length) await tx.memberSession.deleteMany({ where: { tokenHash: { in: evict.map((row) => row.tokenHash) } } });
+  const previousHash = validMemberToken(previous) ? memberTokenHash(previous) : null;
+  let otherDeviceSignedOut = false;
+  if (authenticated) {
+    const ended = await tx.memberSession.deleteMany({ where: { accountId, authenticatedAt: { not: null }, passwordResetAt: null,
+      expiresAt: { gt: at }, ...(previousHash ? { tokenHash: { not: previousHash } } : {}) } });
+    otherDeviceSignedOut = ended.count > 0;
+    await tx.memberSession.deleteMany({ where: previousHash ? { OR: [{ accountId }, { tokenHash: previousHash }] } : { accountId } });
+  } else {
+    if (previousHash) await tx.memberSession.deleteMany({ where: { tokenHash: previousHash } });
+    await tx.memberSession.deleteMany({ where: { accountId, expiresAt: { lte: at } } });
+    const sessions = await tx.memberSession.findMany({ where: { accountId }, orderBy: [{ createdAt: "asc" }, { tokenHash: "asc" }],
+      select: { tokenHash: true, codeEnteredAt: true, authenticatedAt: true } });
+    const reports = await tx.paymentSubmission.findMany({ where: { accountId, status: { in: ["pending", "superseded"] },
+      submittedSessionHash: { not: null } }, select: { submittedSessionHash: true } });
+    const protectedHashes = new Set(reports.map((row) => row.submittedSessionHash));
+    // Starting verification or recovery must not evict the account's authenticated device.
+    const candidates = sessions.filter((row) => row.codeEnteredAt === null && row.authenticatedAt === null);
+    candidates.sort((a, b) => Number(protectedHashes.has(a.tokenHash)) - Number(protectedHashes.has(b.tokenHash)));
+    const evict = candidates.slice(0, Math.max(0, sessions.length - memberSessionRules.maximumSessions + 1));
+    if (sessions.length - evict.length >= memberSessionRules.maximumSessions) throw new Error("Session capacity is unavailable.");
+    if (evict.length) await tx.memberSession.deleteMany({ where: { tokenHash: { in: evict.map((row) => row.tokenHash) } } });
+  }
   const token = randomBytes(32).toString("base64url");
   const session = await tx.memberSession.create({ data: { tokenHash: memberTokenHash(token), accountId,
     createdAt: at, lastSeenAt: at, authenticatedAt: authenticated ? at : null, expiresAt: new Date(at.getTime() + memberSessionRules.expiryMs) } });
-  return { session, token };
+  return { session, token, otherDeviceSignedOut };
 }
 
 export function createMemberSessions({ database, config, now = Date.now, adminPhone = isMemberAdminPhone, adminPasswordHash = memberAdminCredential }: {

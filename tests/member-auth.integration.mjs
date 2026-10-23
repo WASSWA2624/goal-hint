@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
 import { createMemberSessions } from "../src/server/members/member-sessions.ts";
 import { createSubscribers } from "../src/server/admin/subscribers.ts";
 import { hashPassword } from "../src/server/analytics/analytics-password.ts";
 import { passwordRecoveryRules } from "../src/server/members/password-recovery.ts";
+import { createAccessCodes } from "../src/server/members/access-codes.ts";
+import { createViewerAccess } from "../src/server/members/viewer-access.ts";
+import { defaultSubscriptionSettings } from "../src/domain/subscription-settings.ts";
 import { paidDatabase } from "./helpers/paid-database.mjs";
 import { MysqlServerUnavailableError } from "./helpers/mysql-instance.mjs";
+import { silentPaymentNotifications } from "./helpers/payment-notification-fixtures.mjs";
 
 const phone = "256700001001", password = "correct horse 47", address = "198.51.100.8", DAY = 86_400_000;
 
@@ -38,7 +43,8 @@ test("channel verification, recovery limits and administrator assistance persist
   const proof = await f.database.query(tx => tx.memberVerification.findFirst({ where: { accountId: member.accountId, purpose: "account", channel: "whatsapp" } }));
   assert.notEqual(proof.codeHash, messages.at(-1).code); assert.match(proof.codeHash, /^[a-f0-9]{64}$/u);
   assert.equal(+proof.expiresAt - +proof.createdAt, DAY);
-  assert.equal((await auth.login(phone, password, address)).status, "authenticated");
+  const logged = await auth.login(phone, password, address);
+  assert.equal(logged.status, "authenticated"); assert.equal(await sessions.verify(verified.token), null);
   assert.equal((await auth.requestPasswordReset(phone, address, "sms")).status, "requested");
   assert.equal((await owner.passwordResetRequests())[0].id, member.accountId);
   const resetCode = messages.at(-1).code;
@@ -46,8 +52,10 @@ test("channel verification, recovery limits and administrator assistance persist
   assert.deepEqual(claims.map(result => result.status).sort(), ["authenticated", "unauthorized"]);
   const recovery = claims.find(result => result.status === "authenticated");
   assert.equal(recovery.requiresPasswordChange, true); assert.equal(await sessions.verify(recovery.token), null);
+  assert.ok(await sessions.verify(logged.token), "Reset proof does not prematurely sign out the active device");
   const saved = await auth.resetPassword("self service password", recovery.token, address);
   assert.equal(saved.status, "authenticated"); assert.ok(await sessions.verify(saved.token));
+  assert.equal(await sessions.verify(logged.token), null);
   assert.equal(await sessions.verify(verified.token), null);
   assert.equal((await auth.resetPassword("another password", recovery.token, address)).status, "unauthorized");
   const limited = await auth.changePassword("another password", "self service password", { member: await sessions.verify(saved.token) });
@@ -83,4 +91,67 @@ test("channel verification, recovery limits and administrator assistance persist
   assert.equal(messages.length, before);
   const audits = await f.database.query(tx => tx.ownerAuditEvent.findMany({ where: { action: "password_reset" } }));
   assert.equal(audits.length, 2); assert.ok(!JSON.stringify(audits.map(row => row.details)).includes(reset.temporaryPassword));
+});
+
+test("successful and concurrent password logins transfer one device and premium access on MySQL", { timeout: 180_000 }, async t => {
+  let f;
+  try { f = await paidDatabase(); }
+  catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
+  t.after(() => f.close());
+  const at = new Date("2026-10-23T09:00:00Z"), now = () => +at, messages = [];
+  const config = { ...f.config, production: false, cookies: { session: "synthetic-owner" } };
+  const auth = createMemberAuth({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null,
+    delivery: { async send(message) { messages.push(message); } } });
+  const sessions = createMemberSessions({ database: f.database, config, now, adminPhone: () => false, adminPasswordHash: () => null });
+  const codes = createAccessCodes({ database: f.database, config, now, notifications: silentPaymentNotifications });
+  await f.database.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", maxUnlockedDevices: 1, updatedAt: at, updatedBy: "synthetic-owner" } }));
+  const viewer = createViewerAccess({ services: async () => ({ config, database: f.database, auth: null }), now,
+    settings: async () => ({ settings: { ...defaultSubscriptionSettings, paywallMode: "test", maxUnlockedDevices: 1 } }) });
+  const access = token => viewer(name => name === "goal-hint-member" ? token : undefined);
+  const registered = await auth.register(phone, password, { member: null }, address);
+  await auth.requestVerification("sms", registered.token, address);
+  const first = await auth.verifyAccount(messages.at(-1).code, registered.token, address), original = await sessions.verify(first.token);
+  assert.ok(original);
+  const grant = await codes.manual({ phone, durationDays: 7, amountReceivedUgx: 0, note: "Synthetic one-device entitlement" }, "synthetic-owner");
+  assert.equal(grant.status, "created"); assert.equal((await access(first.token)).tier, "full");
+  assert.equal((await auth.login(phone, "wrong password", address, first.token)).status, "unauthorized");
+  assert.ok(await sessions.verify(first.token)); assert.equal((await access(first.token)).tier, "full");
+  const second = await auth.login(phone, password, "198.51.100.9");
+  assert.equal(second.status, "authenticated"); assert.equal(await sessions.verify(first.token), null);
+  assert.deepEqual(await access(first.token), { tier: "free", signedIn: false, mode: "test" });
+  assert.equal((await access(second.token)).tier, "full");
+  assert.equal((await auth.changePassword("stale device password", password, { member: original })).status, "unauthorized");
+  const completed = [];
+  await Promise.all(Array.from({ length: 3 }, (_, index) => auth.login(phone, password, `198.51.100.${index + 10}`).then(result => completed.push(result))));
+  assert.ok(completed.every(result => result.status === "authenticated"));
+  assert.equal(await sessions.verify(second.token), null);
+  for (const result of completed.slice(0, -1)) {
+    assert.equal(await sessions.verify(result.token), null); assert.equal((await access(result.token)).tier, "free");
+  }
+  const latest = completed.at(-1);
+  assert.ok(await sessions.verify(latest.token)); assert.equal((await access(latest.token)).tier, "full");
+  assert.equal(await f.database.query(tx => tx.memberSession.count({ where: { accountId: first.accountId, authenticatedAt: { not: null } } })), 1);
+
+  await t.test("rollout cleanup keeps the latest full login with deterministic ties and preserves restricted sessions", async () => {
+    const [{ currentTime }] = await f.root.query("SELECT UTC_TIMESTAMP(3) AS currentTime");
+    const stamp = new Date(currentTime), future = new Date(+stamp + DAY), before = new Date(+stamp - 1);
+    await f.database.query(tx => tx.memberSession.deleteMany({ where: { accountId: first.accountId } }));
+    const rows = [
+      { tokenHash: "a".repeat(64), authenticatedAt: before, createdAt: future },
+      { tokenHash: "b".repeat(64), authenticatedAt: stamp, createdAt: before },
+      { tokenHash: "c".repeat(64), authenticatedAt: stamp, createdAt: stamp },
+      { tokenHash: "d".repeat(64), authenticatedAt: stamp, createdAt: stamp },
+      { tokenHash: "e".repeat(64), authenticatedAt: null, createdAt: stamp },
+      { tokenHash: "f".repeat(64), authenticatedAt: null, passwordResetAt: stamp, createdAt: stamp },
+      { tokenHash: "0".repeat(64), authenticatedAt: future, createdAt: stamp, expiresAt: before },
+    ];
+    await f.database.query(tx => tx.memberSession.createMany({ data: rows.map(row => ({ accountId: first.accountId,
+      lastSeenAt: stamp, expiresAt: future, ...row })) }));
+    const migration = await readFile(new URL("../prisma/migrations/20261023130000_single_member_login/migration.sql", import.meta.url), "utf8");
+    await f.root.query(migration);
+    const kept = await f.database.query(tx => tx.memberSession.findMany({ where: { accountId: first.accountId }, orderBy: { tokenHash: "asc" }, select: { tokenHash: true } }));
+    assert.deepEqual(kept.map(row => row.tokenHash), ["0", "d", "e", "f"].map(char => char.repeat(64)));
+    await f.root.query(migration);
+    assert.equal(await f.database.query(tx => tx.memberSession.count({ where: { accountId: first.accountId } })), kept.length, "Cleanup is idempotent");
+  });
 });

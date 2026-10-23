@@ -26,6 +26,11 @@ def main():
                 match(r'value="256"', response.text)
                 match(r'type="password"', response.text)
                 match(r'autoComplete="current-password"', response.text)
+                login_html = visible_html(response.text)
+                warning = match(r'<p[^>]*id="account-single-device-notice"[^>]*role="note"[^>]*>You can be signed in on only one device at a time\. Logging in here will sign you out on the other device\.</p>', login_html)
+                login_button = match(r'<button[^>]*type="submit"[^>]*>Login</button>', login_html)
+                assert warning.end() <= login_button.start(), "The one-device warning must be visible before the login button."
+                match(r'<form[^>]*aria-describedby="account-single-device-notice"', login_html)
             if state == "signed-in":
                 no_match(r'Access until|days left|payment status|accessCodeId|tokenHash', response.text)
             if state in ("signed-in", "active", "ended"):
@@ -37,6 +42,7 @@ def main():
         register = request(server.origin, "/en/account?view=register")
         match("Create account", register.text)
         match(r'autoComplete="new-password"', register.text)
+        no_match(r'id="account-single-device-notice"|role="note"[^>]*>You can be signed in', visible_html(register.text))
         login = visible_html(request(server.origin, "/en/account?return=%2Fen%2Fmatches").text)
         match(r'href="/en/account\?view=forgot&amp;return=%2Fen%2Fmatches"', login)
         for state in ["signed-out", "signed-in", "unverified"]:
@@ -65,7 +71,7 @@ def main():
             match(text, reset)
         match(r'action="/api/account/reset"', reset)
         no_match(r'Your account|action="/api/account/verification"', reset)
-        print("Member HTML: account states, recovery navigation, unselected delivery channels, pending verification, code privacy, country coverage and reset-only forms pass.", flush=True)
+        print("Member HTML: account states, login device warning order, recovery navigation, unselected delivery channels, pending verification, code privacy, country coverage and reset-only forms pass.", flush=True)
         if options.serve:
             server.serve()
 

@@ -14,7 +14,7 @@ function fixtureServices(state: string) {
     sessions: { async verify() { return ["signed-in", "active", "ended", "blocked"].includes(state)
       ? { phone: "256700000101", blocked: state === "blocked", codeEnteredAt: unlocked ? new Date(at) : null } : null; } },
     auth: { async passwordResetSession() { return state === "password-reset" ? { phone: "256700000101" } : null; },
-      async verificationSession() { return ["unverified", "unsupported"].includes(state) ? { phone: state === "unsupported" ? "12025550101" : "256700000101" } : null; } },
+      async verificationSession() { return ["unverified", "unsupported"].includes(state) ? { phone: state === "unsupported" ? "5511999999999" : "256700000101" } : null; } },
     codes: { async accountView() { return { codes: [{ id: "synthetic", planName: "Weekly", durationDays: 7, extensionDays: 0, revokedAt: null,
       startsAt: new Date(at - 86400000 * 8), endsAt: new Date(at + (state === "ended" ? -1 : 7) * 86400000) }], devices: [{ tokenHash: "synthetic", lastSeenAt: new Date(at) }] }; } },
   }) as unknown as MemberServices;

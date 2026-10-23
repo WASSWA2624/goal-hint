@@ -18,7 +18,9 @@ The standard package migration adds missing duration offers: Daily (1 day, UGX 1
 2. Choose MTN Mobile Money or Airtel Money. Check the displayed receiving number and registered name, then pay using the chosen network.
 3. Upload a payment screenshot or take a photo of the proof. The browser prepares a JPEG and the server checks image type, dimensions, size, and duplication. Screenshot proof is required; an optional transaction reference helps manual review. No external payment gateway or message sender is called.
 4. Submit the request. The account displays the pending/rejected/approved status. The administrator sees the private proof and request under Payments, manually verifies the receiving-wallet transaction and account ownership, then approves or rejects it.
-5. Approval creates a single account-bound access period, marks the request approved, and unlocks eligible signed-in devices under the device limit. Existing pages refresh pending status. Subsequent password logins inherit approved access while the period remains valid. A rejected report never unlocks access.
+5. Approval creates a single account-bound access period, marks the request approved, and unlocks the account's signed-in device. Existing pages refresh pending status. Subsequent password logins inherit approved access while the period remains valid and sign out the previous device. A rejected report never unlocks access.
+
+Only one device can be signed in to an account at a time. The login form warns users before they submit. Separate browsers and in-app browsers count as separate devices. Changing devices preserves the account's subscription and remaining time. Legacy subscription device-limit settings remain for compatibility, but cannot permit simultaneous logins under the stricter authentication policy.
 
 After a payment approval or rejection is committed, Goal Hint attempts one YoolaSMS notification to the registered account number, including payments recorded manually with a transaction ID. It never sends to a separate payer number. Approval messages include the package and subscription expiry date and time, with the year in East Africa Time (EAT); renewals use the new period's expiry after the existing access ends. Rejection messages use a standard reason and direct the member to the app or administrator; private freeform review explanations are not included in SMS.
 
@@ -57,6 +59,7 @@ Apply the reviewed migrations in order before deploying this application:
 - `20261021110000_saved_slips`
 - `20261021120000_manual_password_recovery`
 - `20261023090000_member_message_verification`
+- `20261023130000_single_member_login`
 
 They follow the existing subscription/password migrations. Grant the application role SELECT, INSERT, DELETE on `SavedSlip` and SELECT, INSERT on `SavedSlipFixture`, alongside existing member/payment grants. The child links are removed through the foreign-key cascade; no snapshot UPDATE or child DELETE permission is needed. See `deploy/manual-account-grants.sql`. Use DDL-capable migration credentials only for deployment. Keep ordinary application credentials DML-only. No development or production database is migrated by editing the application source.
 

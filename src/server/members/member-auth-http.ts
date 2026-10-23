@@ -69,7 +69,8 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         : memberReturnPath(body.return) ?? (body.destination === "subscribe" ? "/en/subscribe"
         : action === "phone" ? "/en/account?status=phone-changed" : action === "password" || action === "reset" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),
-        ...(result.requiresVerification ? { requiresVerification: true } : {}) });
+        ...(result.requiresVerification ? { requiresVerification: true } : {}),
+        ...(typeof result.otherDeviceSignedOut === "boolean" ? { otherDeviceSignedOut: result.otherDeviceSignedOut } : {}) });
       response.headers.append("Set-Cookie", cookie(services.config, memberName, result.token, result.requiresPasswordChange ? 900 : memberSessionRules.cookieSeconds, "Lax"));
       return response;
     } catch { return json({ error: "unavailable", message: "Account access is unavailable. Try again later." }, 503); }

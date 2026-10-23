@@ -7,6 +7,7 @@ import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
 import { MetadataRecovery } from "@/components/navigation/metadata-recovery";
 import { TruncationTooltips } from "@/components/ui/truncation-tooltips";
+import { MemberLoginNotice } from "@/components/members/member-login-notice";
 import { AnalyticsProvider } from "@/server/analytics/analytics-provider";
 import { consentBootstrapScript, consentInitialStyle } from "@/server/analytics/consent-bootstrap";
 
@@ -48,7 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <Suspense fallback={null}><MetadataRecovery /></Suspense>
         <TruncationTooltips />
-        <StyleProvider>{children}<Suspense fallback={null}><AnalyticsProvider /></Suspense></StyleProvider>
+        <StyleProvider>{children}<Suspense fallback={null}><MemberLoginNotice /><AnalyticsProvider /></Suspense></StyleProvider>
       </body>
     </html>
   );

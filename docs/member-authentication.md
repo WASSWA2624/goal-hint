@@ -2,6 +2,14 @@
 
 Registration requires a supported phone number and a password of 8–128 characters. Numbers are canonicalized with their country code; passwords use salted scrypt hashes. Duplicate registration returns HTTP 409. Registration creates a restricted cookie and redirects to account verification. Password login for an unverified number resumes verification. Pending cookies cannot access member content, payment submissions, trials, profile changes, or administrator pages.
 
+## One active device
+
+A phone-number account can be signed in on only one device at a time. A warning above the login button explains that logging in here signs out the other device. A successful fully authenticated login atomically ends previous sessions for that account before issuing its new session. The destination page confirms a successful login and explicitly confirms that the other device was signed out only when a live authenticated session on another browser was revoked. This dismissible notice has no automatic timeout. A tab-scoped event flag carries it through the redirect without storing account details, session tokens or destinations. If browser storage is blocked, the login form displays the confirmation with a Continue button instead.
+
+Completing account verification or password recovery follows the same one-device rule. Incorrect credentials do not end an existing login; restricted verification and reset-only sessions do not displace a fully authenticated session until authentication or password reset is completed. Separate browsers and in-app browsers count as separate devices.
+
+The newly signed-in device inherits the account's current approved subscription without changing its expiry. The policy also applies to administrators who sign in with a phone number. The separate owner/analytics username login is unchanged.
+
 ## Account verification
 
 The member explicitly chooses SMS or WhatsApp to their registered number, then enters the six-digit code. Delivery uses YoolaSMS in both production and development when server-only credentials are configured. A code expires exactly 24 hours after issuance or immediately after successful use. Every new request invalidates earlier codes for that purpose, including requests from another session or delivery channel. At most three requests per account and purpose are allowed in a rolling 24 hours; changing numbers does not reset the allowance, and a reused number retains its recent requests. Reservations and failed/uncertain deliveries count toward the limit to prevent concurrent or retried sends from exceeding it. Five incorrect guesses invalidate a code. Codes are stored as keyed hashes; no public response, URL, log, or database field contains the plaintext code.
@@ -46,5 +54,7 @@ All writes require same-origin requests. Responses are private and not cached; c
 ## Database rollout
 
 Deploy `20261023090000_member_message_verification` through the existing database deployment workflow before the new code. The migration adds `MemberAccount.phoneVerifiedAt` and `passwordChangedAt`, and restores `MemberVerification` for request/code tracking with a delivery channel. Existing account numbers are grandfathered as verified; new registrations and phone changes require delivery verification. Historical retired challenges are invalidated. Update column-scoped grants for the added account fields, and ensure SELECT/INSERT/UPDATE/DELETE on `MemberVerification` as shown in [manual-account-grants.sql](../deploy/manual-account-grants.sql). Schema generation does not apply the migration to any application database.
+
+Apply `20261023130000_single_member_login` before deploying one-device enforcement. This data-only cleanup retains the newest active fully authenticated session per account and removes older active logins, so existing accounts also meet the policy. Restricted verification and password-reset sessions are preserved. No columns or schema changes are required by this migration.
 
 See [subscriptions.md](subscriptions.md) for payment approval, screenshots, saved slips, and related grants. Never print real environment credentials or phone numbers in deployment logs.

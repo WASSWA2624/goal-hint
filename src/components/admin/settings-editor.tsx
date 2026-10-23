@@ -228,7 +228,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
           <Panel aria-labelledby="access-title">
             <PanelHeader><h2 id="access-title">Access</h2></PanelHeader>
             <FieldRow>
-              {range("maxUnlockedDevices", "Paid access unlocks this many signed-in devices; a new sign-in takes the slot of the device unlocked longest ago.")}
+              {range("maxUnlockedDevices", "Retained for existing subscription grants. Each account can have only one active login, regardless of this value; a new login signs out the previous device.")}
               {range("trialDays", "0 hides the free-trial offer.")}
             </FieldRow>
             <FieldBlock>{settingLabels.screenshotRetentionDays}

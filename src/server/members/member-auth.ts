@@ -20,7 +20,7 @@ import { createYoolaMessaging, type MemberMessaging } from "./yoola-messaging.ts
 export const memberAuthRules = Object.freeze({ passwordMin: 8, passwordMax: 128 });
 export type AuthBinding = Readonly<{ member: MemberIdentity | null }>;
 export type AuthFailure = Readonly<{ status: "invalid" | "unauthorized" | "busy" | "conflict" | "unavailable"; message: string }>;
-type AuthSuccess = Readonly<{ status: "authenticated"; token: string; accountId: string; phone: string; administrator?: boolean; requiresPasswordChange?: boolean; requiresVerification?: boolean }>;
+type AuthSuccess = Readonly<{ status: "authenticated"; token: string; accountId: string; phone: string; administrator?: boolean; requiresPasswordChange?: boolean; requiresVerification?: boolean; otherDeviceSignedOut?: boolean }>;
 type Requested = Readonly<{ status: "requested"; message: string }>;
 const invalid = (message: string): AuthFailure => ({ status: "invalid", message });
 const refused = (): AuthFailure => ({ status: "unauthorized", message: "We couldn't verify these details. Please try again." });
@@ -123,12 +123,13 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
           return { status: "authenticated", token, accountId: current.id, phone, requiresPasswordChange: true };
         }
         const verified = administrator || !!current.phoneVerifiedAt;
-        const { token, session } = await issueMemberSession(tx, current.id, at, previous, verified);
+        const { token, session, otherDeviceSignedOut } = await issueMemberSession(tx, current.id, at, previous, verified);
         if (administrator) await tx.memberSession.update({ where: { tokenHash: session.tokenHash },
           data: { adminPasswordVersion: config.key("admin-password-version", stored) } });
         await tx.memberAccount.update({ where: { id: current.id }, data: { lastSignInAt: at } });
         if (!administrator && verified) await grantSessionAccess(tx, { accountId: current.id, tokenHash: session.tokenHash, at, actor: "member" });
-        return { status: "authenticated", token, accountId: current.id, phone, ...(administrator ? { administrator: true } : {}), ...(!verified ? { requiresVerification: true } : {}) };
+        return { status: "authenticated", token, accountId: current.id, phone, ...(administrator ? { administrator: true } : {}),
+          ...(verified ? { otherDeviceSignedOut } : { requiresVerification: true }) };
       });
     },
 
