@@ -59,7 +59,7 @@ export const QueueList = styled.div`
 `;
 
 export const QueueItem = styled.button<{ $selected: boolean }>`
-  display: grid; gap: 8px; inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 12px;
+  display: grid; gap: 6px; inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 12px;
   border: 0; border-block-end: 1px solid ${({ theme }) => theme.color.border};
   border-inline-start: 3px solid ${({ theme, $selected }) => $selected ? theme.color.link : "transparent"}; border-radius: 0;
   background: ${({ theme, $selected }) => $selected ? theme.color.brandSoft : theme.color.surface};
@@ -71,7 +71,6 @@ export const QueueItem = styled.button<{ $selected: boolean }>`
   > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; min-inline-size: 0; }
   > header strong { font-size: 0.875rem; font-weight: 600; overflow-wrap: anywhere; }
   > header > :last-child:not(:first-child) { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  > div { display: grid; gap: 4px; min-inline-size: 0; }
   small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; overflow-wrap: anywhere; }
 `;
 
@@ -105,6 +104,8 @@ export const PaymentCard = styled(Panel)`
   label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: 8px; min-block-size: 44px; cursor: pointer; }
   input[type="checkbox"] { inline-size: 18px; block-size: 18px; margin: 0; flex: none; }
   form, fieldset { min-inline-size: 0; }
+  > [data-payment-attachment] { display: block; min-inline-size: 0; }
+  > [data-payment-attachment]:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   details > summary { display: flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: 0.8125rem; cursor: pointer; overflow-wrap: anywhere; }
   details > summary:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
 `;
@@ -133,10 +134,8 @@ export const PaymentEvidence = styled.div`
 `;
 
 export const ApprovalFooter = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-inline-size: 0;
-  > label { flex: 1 1 14rem; }
-  > button { flex: 1 1 12rem; min-block-size: 44px; }
-  > span { flex: 1 1 100%; }
+  display: grid; min-inline-size: 0;
+  > button { inline-size: 100%; min-block-size: 44px; }
 `;
 
 export const PaymentHighlight = styled.div`
@@ -152,21 +151,6 @@ export const PaymentVerification = styled.form`
   border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 10px;
   > ${FormStack}, ${FieldRow} { gap: 8px; }
   ${FieldRow} > * { min-inline-size: 0; align-content: start; }
-`;
-
-export const ReportedTransaction = styled.div`
-  display: flex; align-items: center; gap: 6px; min-inline-size: 0;
-  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem;
-  > span { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; }
-  strong { font-weight: 500; }
-  > button { flex: none; inline-size: 44px; padding-inline: 0; }
-`;
-
-export const WalletSms = styled.details`
-  min-inline-size: 0; padding-inline: 12px; border: 1px solid ${({ theme }) => theme.color.border};
-  background: ${({ theme }) => theme.color.brandSoft};
-  > summary { font-weight: 500; }
-  > label { padding-block-end: 12px; }
 `;
 
 export const PaymentWarnings = styled.div`

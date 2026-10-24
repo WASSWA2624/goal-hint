@@ -4,16 +4,16 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/navigation/navigation-link";
 import { TextInput } from "@/components/ui/controls";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, GiftIcon, ImageIcon, ResetIcon, SearchIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronLeftIcon, GiftIcon, ResetIcon, SearchIcon } from "@/components/ui/icons";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
-import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
+import { formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
 import { ActionButton, ButtonRow } from "./admin-form";
 import { ActionNotices, useCodeAction } from "./code-tools";
 import { PaymentReview, type PaymentRecovery } from "./payment-review";
 import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, refreshPendingPayments, subscribePendingPayments } from "./pending-payments";
-import { PaymentBadge, PaymentEmpty, PaymentFeedback, PaymentLayout, PaymentTabs, PaymentToolbar, PaymentWorkspace, QueueHeading, QueueItem, QueueList,
+import { PaymentEmpty, PaymentFeedback, PaymentLayout, PaymentTabs, PaymentToolbar, PaymentWorkspace, QueueHeading, QueueItem, QueueList,
   QueueMeta, QueuePanel, ReviewBack, ReviewPanel, TrialPanel } from "./payment-styles";
 
 const tabLabels = { pending: "Pending", approved: "Approved", rejected: "Rejected", superseded: "Replaced reports" };
@@ -97,11 +97,8 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
       <QueuePanel aria-label="Payment queue"><QueueHeading><h2 id="payment-queue-title" tabIndex={-1}>{tabLabels[tab as keyof typeof tabLabels] ?? "Pending"}</h2><span>{payments.length}</span></QueueHeading>
         <QueueList>{payments.length ? payments.map(payment => <QueueItem key={payment.id} type="button" $selected={selected?.id === payment.id}
           disabled={action.busy} aria-pressed={selected?.id === payment.id} aria-controls="payment-review" onClick={() => select(payment)} data-payment-row={payment.id}>
-          <header><strong>{phoneLabel(payment.accountPhone)}</strong><strong>{formatUgx(payment.final?.amount ?? payment.amount)}</strong></header>
-          <div><span>{payment.planName} · {formatPlanLength(payment.durationDays)}</span><small>{payment.reference} · {payment.network.toUpperCase()}</small>
-            <small>Transaction: {payment.final?.transactionId || payment.transactionId || "Not provided"}</small></div>
-          <QueueMeta><PaymentBadge $status={recoveries[payment.id]?.reversed ? "reversed" : payment.status}>{recoveries[payment.id]?.reversed ? "Reversed" : payment.status === "superseded" ? "Replaced" : tabLabels[payment.status as keyof typeof tabLabels] ?? payment.status}</PaymentBadge>
-            <span>{payment.hasImage ? <><ImageIcon /> Screenshot</> : "No screenshot"}</span><span>{payment.final ? "Received" : "Reported amount"}</span><ChevronRightIcon /></QueueMeta>
+          <header><strong>{payment.payerPhone ? phoneLabel(payment.payerPhone) : "Payer not provided"}</strong><strong>{formatUgx(payment.final?.amount ?? payment.amount)}</strong></header>
+          <small>Transaction ID: {payment.final?.transactionId || payment.transactionId || "Not provided"}</small>
         </QueueItem>) : <PaymentEmpty data-payment-empty><CheckIcon /><p>{search ? "No matching payments" : tab === "pending" ? "No payments waiting" : "No payments here yet"}</p></PaymentEmpty>}</QueueList>
       </QueuePanel>
       <ReviewPanel id="payment-review" aria-label="Review payment" tabIndex={-1}>

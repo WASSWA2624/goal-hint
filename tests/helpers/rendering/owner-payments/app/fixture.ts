@@ -94,6 +94,7 @@ export function loadPaymentsFixture() {
   const original = state.payments[0]!;
   // Keep a visible sender warning in the first review and duplicate evidence on the attached report.
   original.payerPhone = "256700000118";
+  original.claimedAmountUgx = 4500;
   const payment = (suffix: string, values: Partial<FixturePayment>): FixturePayment => ({ ...original,
     id: `00000000-0000-4000-8000-0000000002${suffix}`, reference: `DEMO${suffix}`, accountId: "00000000-0000-4000-8000-000000000102",
     payerPhone: "256700000118", submittedAt: new Date(`2026-10-23T0${Number(suffix)}:00:00Z`), ...values });

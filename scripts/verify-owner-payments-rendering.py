@@ -299,7 +299,7 @@ def payments_api(origin):
                 assert result["trials"] == [], "Trial requests belong only to the pending queue."
         assert [row["id"] for row in queue("invalid")["payments"]] == expected["pending"]
         pending = queue()["payments"]
-        assert [(row["amount"], row["durationDays"]) for row in pending] == [(5000, 7), (15000, 30), (1000, 1)]
+        assert [(row["amount"], row["durationDays"]) for row in pending] == [(4500, 7), (15000, 30), (1000, 1)]
         assert [row["hasImage"] for row in pending] == [False, True, False]
         assert fixture_json(origin, "/api/admin/payments?count")[1] == {"pendingCount": 3}
         screenshot = "/api/admin/payments/" + payment("01") + "/screenshot"
@@ -360,21 +360,28 @@ def payments_rendering(origin):
             match("Refresh queue", html)
             expected = ["00000000-0000-4000-8000-0000000002" + suffix for suffix in suffixes]
             assert re.findall(r'data-payment-row="([^"]+)"', html) == expected, tab
+            rows = re.findall(r'<button\b[^>]*data-payment-row="[^"]+"[^>]*>([\s\S]*?)</button>', html)
+            for row in rows:
+                row_text = unescape(re.sub(r'<[^>]+>', " ", row))
+                match(r'\+\d|Payer not provided', row_text, "Queue rows identify the payer or a missing payer.")
+                match(r'UGX\s+[\d,]+', row_text)
+                match(r'Transaction ID:', row_text)
+                no_match(r'PTEST|PDEMO|Expected|Weekly|Monthly|Daily|EAT|No screenshot|<time\b', row)
             assert re.findall(r'data-payment-review="([^"]+)"', html) == expected[:1], "Only one review should mount."
             assert len(re.findall(r'<form\b[^>]*data-payment-approval', html)) == (1 if tab in ["pending", "superseded", "invalid"] else 0)
             if tab in ["pending", "invalid"]:
-                for value in ["7 days", "30 days", "24 hours", "TEST1234", "AIR2026102301"]:
+                for value in ["7 days", "TEST1234", "AIR2026102301", "Expected payment", "UGX 5,000", "Reported amount: UGX 4,500"]:
                     match(value, html)
+                first_row = unescape(re.sub(r'<[^>]+>', " ", rows[0]))
+                assert "256 700 000 118" in first_row and "4,500" in first_row and "TEST1234" in first_row
+                assert "256 700 000 101" not in first_row, "Queue identifies the payer, not the subscriber account."
                 approve = match(r'<button\b(?=[^>]*data-payment-approve)[^>]*>', html).group(0)
-                match(r'\bdisabled(?:=""|\s|>)', approve)
-                for field in ["payment-confirmed-id", "payment-confirmed-amount"]:
+                no_match(r'\bdisabled(?:=""|\s|>)', approve)
+                for field, value in [("payment-confirmed-id", "TEST1234"), ("payment-confirmed-amount", "4500")]:
                     control = match(rf'<input\b(?=[^>]*id="{field}")[^>]*>', html).group(0)
-                    match(r'value=""', control, "Reported wallet values must not prefill owner confirmation.")
+                    match(rf'value="{value}"', control, "Reported values prefill the editable approval fields.")
                     match(r'\brequired(?:=""|\s|>)', control)
-                wallet = match(r'<input\b(?=[^>]*id="payment-wallet-confirmed")[^>]*>', html).group(0)
-                no_match(r'\bchecked(?:=""|\s|>)', wallet)
-                match(r'\brequired(?:=""|\s|>)', wallet)
-                match("Verify in your wallet", html)
+                no_match(r'payment-wallet-confirmed|Verify in your wallet|Received in my wallet', html)
                 for label in ["Paste wallet SMS", "Change network or plan", "Reject payment"]:
                     disclosure = match(rf'<details\b([^>]*)>\s*<summary[^>]*>(?:(?!</summary>)[\s\S])*{label}', html)
                     no_match(r'\bopen(?:=""|\s|$)', disclosure.group(1))
@@ -386,7 +393,7 @@ def payments_rendering(origin):
                 no_match(r'\bopen(?:=""|\s|>)', trials)
             else:
                 no_match(r'data-payment-trials', html)
-            no_match(r'<img\b[^>]*src="/api/admin/payments/', html, "Attachments load only after explicit disclosure.")
+            no_match(r'<img\b[^>]*src="/api/admin/payments/', html, "The first report in these tab fixtures has no image.")
     finally:
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 
