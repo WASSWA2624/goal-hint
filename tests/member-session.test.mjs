@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   getAdminSessionSnapshot, getServerAdminSessionSnapshot,
   getMemberSessionSnapshot, getServerMemberSessionSnapshot, refreshMemberSession, subscribeMemberSession,
+  getSubscriptionSnapshot, getServerSubscriptionSnapshot,
 } from "../src/components/members/member-session.ts";
 
 test("header identity requests are private, deduplicated and refreshed after another tab signs out", async (t) => {
@@ -95,4 +96,56 @@ test("header identity requests are private, deduplicated and refreshed after ano
   browser.dispatchEvent(new Event("focus"));
   await Promise.resolve();
   assert.equal(requests.length, beforeUnmount, "unmounted headers remove their browser listeners");
+});
+
+test("subscription changes update all headers, poll approval and expire without navigation", async (t) => {
+  const previousWindow = globalThis.window, previousFetch = globalThis.fetch;
+  globalThis.window = new EventTarget();
+  const now = Date.parse("2026-12-31T20:59:00Z");
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
+  let calls = 0, updates = 0;
+  let summary = { activeUntil: null, paymentPending: true, canSubscribe: true };
+  let failure = false;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return failure ? new Response(null, { status: 503 }) : Response.json({ phone: "+256700000003", administrator: false, subscription: summary });
+  };
+  const unsubscribe = subscribeMemberSession(() => { updates += 1; });
+  t.after(() => {
+    unsubscribe();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  });
+  await refreshMemberSession();
+  assert.deepEqual(getSubscriptionSnapshot(), summary);
+  assert.equal(getServerSubscriptionSnapshot(), null, "subscription details never enter public server HTML");
+  const stable = getSubscriptionSnapshot();
+  await refreshMemberSession();
+  assert.equal(getSubscriptionSnapshot(), stable, "unchanged responses retain a stable external-store snapshot");
+  assert.equal(updates, 1);
+
+  summary = { ...summary, activeUntil: new Date(now + 60_000).toISOString(), paymentPending: false };
+  t.mock.timers.tick(20_000);
+  await refreshMemberSession();
+  assert.equal(calls, 3, "the shared pending timer discovers approval");
+  assert.deepEqual(getSubscriptionSnapshot(), summary);
+  assert.equal(updates, 2, "approval notifies even when the phone is unchanged");
+
+  failure = true;
+  await refreshMemberSession();
+  assert.deepEqual(getSubscriptionSnapshot(), summary, "temporary errors preserve confirmed subscription details");
+  t.mock.timers.tick(40_000);
+  assert.equal(getSubscriptionSnapshot().activeUntil, null, "expiry clears at the exact instant even when the network is unavailable");
+  await refreshMemberSession();
+  assert.equal(updates, 3);
+
+  failure = false;
+  summary = { activeUntil: null, paymentPending: true, canSubscribe: true };
+  await refreshMemberSession();
+  unsubscribe();
+  const beforeUnmount = calls;
+  t.mock.timers.tick(60_000);
+  await Promise.resolve();
+  assert.equal(calls, beforeUnmount, "last unmount removes the shared polling timer");
 });

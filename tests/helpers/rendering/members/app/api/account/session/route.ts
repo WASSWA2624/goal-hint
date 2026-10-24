@@ -1,5 +1,4 @@
 import { createMemberSessionHandler } from "@/server/members/member-auth-http";
-import type { MemberServices } from "@/server/members/member-http";
-import { fixtureMemberSessions } from "../../../fixture-admin";
+import { fixtureSubscriptionServices, subscriptionScenarioFromHeaders } from "../../../fixture-subscription";
 
-export const GET = createMemberSessionHandler(async () => ({ config: { production: false }, sessions: fixtureMemberSessions }) as unknown as MemberServices);
+export const GET = (request: Request) => createMemberSessionHandler(async () => fixtureSubscriptionServices(subscriptionScenarioFromHeaders(request.headers)))(request);

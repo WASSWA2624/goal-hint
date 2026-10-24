@@ -55,7 +55,7 @@ def main():
                 if state == "signed-out":
                     assert 'action="/api/account/login"' in html and 'method="post"' in html and 'data-account-auth' in html
                     assert "Phone number" in html and "Forgot password?" in html and "Request 2-day free trial" not in html
-                else: assert "256 700 000 101" in html and ("Request 2-day free trial" in html) == (state != "active"), state
+                else: assert "256 700 000 101" in html and ("Request 2-day free trial" in html) == (state not in ["active", "approved"]), state
                 if state in ["signed-in", "active", "approved", "rejected"]:
                     fields = PaymentFields(html).inputs
                     transaction = [(field, depth) for field, depth in fields if field.get("maxlength") == "40"]
@@ -65,8 +65,12 @@ def main():
                     assert not any(field.get("name") == "amount" or field.get("type") == "number" for field, _ in fields), "The payment amount must remain read-only."
                     assert "Submit payment" in html and "Optional details" in html and "This form needs JavaScript" in html and "Optional screenshot or photo" in html
                     assert ("18 or older" in html) == (state != "active")
-                if state == "approved": assert 'data-payment-status="approved"' in html and "Access active until" in html
+                if state == "approved": assert 'data-payment-status="approved"' in html and "Access active until" in html and " EAT" in html
                 if state == "rejected": assert "Synthetic rejection reason" in html
+        account = visible_html(request(server.origin, "/en/account?state=active").text)
+        assert 'data-subscription-summary="active"' in account and "Active subscription" in account and "Renew" in account
+        assert re.search(r'<time\b[^>]*datetime="[^"]+"[^>]*>[^<]*\b\d{4}\b[^<]*\d{2}:\d{2} EAT</time>', account, re.I), "The active account must show its full expiry date and time."
+        assert 'data-payment-status="approved"' not in account, "The account must not repeat its active subscription summary as an approval card."
         for agent, allowed in [("Android Chrome", True), ("iPhone Safari", False), ("Android; wv) Chrome", False), ("Android FBAN", False), ("Android Instagram", False)]:
             html = visible_html(request(server.origin, "/en/subscribe", headers={"User-Agent": agent}).text)
             assert ("Open MoMo menu" in html) == allowed

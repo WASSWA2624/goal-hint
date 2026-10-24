@@ -6,9 +6,11 @@ import { CheckIcon, ChevronRightIcon, ImageIcon } from "@/components/ui/icons";
 import type { PaymentStatus } from "@/domain/payment";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
+import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import { createMessages } from "@/i18n/messages";
 import { AdminContactLinks } from "./admin-contact";
+import { refreshMemberSession } from "./member-session";
 import { ActionLink, HelpActions, Note, RowButton, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
 
 export type StatusSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone" | "reviewTime">;
@@ -18,19 +20,33 @@ const reasonOf = (code: string | null): RejectReason => rejectReasons.find((reas
 
 /** While a report or trial waits, re-read the page every 20 s and whenever the tab comes back. router.refresh also drops the
  * client router cache, so the render that first shows the approval already carries the unlocked tier to every gated page. */
-export function useApprovalRefresh(waiting: boolean) {
+export function useApprovalRefresh(waiting: boolean, refreshAt: string | null = null) {
   const router = useRouter();
   useEffect(() => {
-    if (!waiting) return;
-    const refresh = () => { if (document.visibilityState === "visible") router.refresh(); };
-    const timer = setInterval(refresh, 20_000);
-    document.addEventListener("visibilitychange", refresh);
-    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
-  }, [router, waiting]);
+    const expiresAt = refreshAt ? Date.parse(refreshAt) : NaN;
+    if (!waiting && !Number.isFinite(expiresAt)) return;
+    void refreshMemberSession();
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      router.refresh(); void refreshMemberSession();
+    };
+    const onRestore = () => { if (waiting || expiresAt <= Date.now()) refresh(); };
+    const timer = waiting ? setInterval(refresh, 20_000) : undefined;
+    let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleExpiry = () => {
+      const delay = expiresAt - Date.now();
+      if (delay <= 0) refresh();
+      else expiryTimer = setTimeout(scheduleExpiry, Math.min(delay, 2_147_483_647));
+    };
+    if (Number.isFinite(expiresAt)) scheduleExpiry();
+    document.addEventListener("visibilitychange", onRestore);
+    window.addEventListener("focus", onRestore);
+    return () => { clearInterval(timer); clearTimeout(expiryTimer); document.removeEventListener("visibilitychange", onRestore); window.removeEventListener("focus", onRestore); };
+  }, [router, waiting, refreshAt]);
 }
 /** The hook for server-rendered pages that only show the card. */
-export function ApprovalRefresh({ waiting }: { waiting: boolean }) {
-  useApprovalRefresh(waiting);
+export function ApprovalRefresh({ waiting, refreshAt = null }: { waiting: boolean; refreshAt?: string | null }) {
+  useApprovalRefresh(waiting, refreshAt);
   return null;
 }
 
@@ -59,7 +75,7 @@ export function PaymentStatusCard({ locale, status, settings, phone, activeUntil
   </StatusBox>;
   if (status.status === "approved") return activeUntil ? <StatusBox data-payment-status="approved">
     <StatusTitle as={heading}><CheckIcon />{m.text("subscribe.approvedTitle")}</StatusTitle>
-    <p>{m.text("subscribe.activeUntil", { end: formatPeriodEnd(new Date(activeUntil)) })}</p>
+    <p>{m.text("subscribe.activeUntil", { end: formatSubscriptionExpiry(new Date(activeUntil)) })}</p>
     <HelpActions><ActionLink href={returnTo ?? "/en"} prefetch={false}>{m.text("subscribe.seePredictions")}<ChevronRightIcon /></ActionLink></HelpActions>
   </StatusBox> : null;
   if (status.status !== "rejected" && status.status !== "reversed") return null;

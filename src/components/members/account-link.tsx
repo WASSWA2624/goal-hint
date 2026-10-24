@@ -13,7 +13,8 @@ import { resolveLocale } from "@/i18n/locales";
 import { formatPhone } from "@/domain/phone";
 import { media } from "@/styles/theme";
 import { MemberSignOut } from "./member-controls";
-import { getMemberSessionSnapshot, getServerMemberSessionSnapshot, refreshMemberSession, subscribeMemberSession } from "./member-session";
+import { getAdminSessionSnapshot, getMemberSessionSnapshot, getServerAdminSessionSnapshot, getServerMemberSessionSnapshot,
+  getServerSubscriptionSnapshot, getSubscriptionSnapshot, refreshMemberSession, subscribeMemberSession } from "./member-session";
 
 const Actions = styled.div`
   display: flex;
@@ -135,17 +136,24 @@ function AccountMenu({ locale, phone, administratorName }: { locale: string; pho
   </Disclosure>;
 }
 
-/** Single Rail: visible guest actions or a generic account avatar, plus the theme action in every header. */
+/** All headers share a visible purchase action and the same private account state. */
 export function AccountLinks({ locale = "en", administratorName }: { locale?: string; showAccount?: boolean; administratorName?: string }) {
   const pathname = usePathname();
   const phone = useSyncExternalStore(subscribeMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot);
+  const administrator = useSyncExternalStore(subscribeMemberSession, getAdminSessionSnapshot, getServerAdminSessionSnapshot);
+  const subscription = useSyncExternalStore(subscribeMemberSession, getSubscriptionSnapshot, getServerSubscriptionSnapshot);
   useEffect(() => { void refreshMemberSession(); }, [pathname]);
   const messages = createMessages(locale);
   const base = `/${resolveLocale(locale)}/account`;
+  const purchase = !administratorName && !administrator && subscription?.canSubscribe && !subscription.activeUntil;
+  const subscribeLink = <AuthLink href={`/${resolveLocale(locale)}/subscribe`} prefetch={false} $primary
+    aria-label={messages.text(subscription?.paymentPending ? "account.paymentPending" : "account.subscribe")}>
+    {messages.text(subscription?.paymentPending ? "account.pending" : "account.subscribe")}
+  </AuthLink>;
   return <Actions data-account-actions>
-    {phone || administratorName ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(administratorName ? { administratorName } : {})} /></> : <>
+    {phone || administratorName ? <>{purchase && subscribeLink}<ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(administratorName ? { administratorName } : {})} /></> : <>
       <AuthLink href={`${base}?view=login`} prefetch={false}><SignInIcon />{messages.text("account.login")}</AuthLink>
-      <AuthLink href={`${base}?view=register`} prefetch={false} $primary><UserPlusIcon />{messages.text("account.register")}</AuthLink>
+      {purchase ? subscribeLink : <AuthLink href={`${base}?view=register`} prefetch={false} $primary><UserPlusIcon />{messages.text("account.register")}</AuthLink>}
       <ThemeToggle locale={locale} />
     </>}
   </Actions>;

@@ -6,6 +6,7 @@ import { formatPaymentReference, normalizeTransactionId, transactionKey } from "
 import { normalizePhone } from "../../domain/phone.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import { chainPeriods, extendPeriods, remainingDays, subscriptionDayMs } from "../../domain/subscription-period.ts";
+import { activeSubscriptionUntil, type SubscriptionStatus } from "../../domain/subscription-summary.ts";
 import { auditTextErrors, writeOwnerAudit, type OwnerAuditAction } from "../admin/audit.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
@@ -306,6 +307,26 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         await tx.memberAccount.update({ where: { id: accountId }, data: { trialDismissedAt: at } });
         await audit(tx, accountId, accountId, "trial_dismissed", actor, at, {}, "member");
         return { status: "saved" };
+      });
+    },
+
+    /** A lightweight account summary for private navigation, independent of the latest payment's decision or session unlock. */
+    async subscriptionStatus(member: MemberIdentity): Promise<SubscriptionStatus | null> {
+      if (member.blocked) return null;
+      return database.query(async (tx) => {
+        const at = new Date(now());
+        const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash }, select: {
+          accountId: true, authenticatedAt: true, passwordResetAt: true, expiresAt: true,
+          account: { select: { blockedAt: true, erasedAt: true,
+            codes: { where: { revokedAt: null, endsAt: { gt: at } }, orderBy: { startsAt: "asc" },
+              select: { startsAt: true, endsAt: true, revokedAt: true } },
+            submissions: { orderBy: [{ submittedAt: "desc" }, { id: "desc" }], take: 1, select: { status: true } },
+          } },
+        } });
+        if (!session || session.accountId !== member.accountId || !session.authenticatedAt || session.passwordResetAt
+          || session.expiresAt <= at || session.account.blockedAt || session.account.erasedAt) return null;
+        return { activeUntil: activeSubscriptionUntil(session.account.codes, at),
+          paymentPending: ["pending", "superseded"].includes(session.account.submissions[0]?.status ?? "") };
       });
     },
 

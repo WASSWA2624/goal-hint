@@ -5,12 +5,20 @@ import styled from "styled-components";
 import { BrandLogo } from "@/components/ui/brand";
 import { compactHeaderBrand } from "@/components/ui/header-controls";
 import { AccountLinks } from "@/components/members/account-link";
+import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { homeHref } from "@/domain/navigation";
 import { createMessages } from "@/i18n/messages";
 import { media } from "@/styles/theme";
 import { NavigationProgress } from "./navigation-progress";
 
 /** Compact app pages share the same full-bleed phone brand bar beneath the desktop-only shell. */
+const Group = styled.div`
+  display: grid;
+  min-inline-size: 0;
+  margin-block-start: -8px;
+  margin-inline: -8px;
+  ${media.desktop} { display: none; }
+`;
 const Bar = styled.div`
   position: relative;
   display: flex;
@@ -19,8 +27,6 @@ const Bar = styled.div`
   gap: 6px;
   min-inline-size: 0;
   min-block-size: 3rem;
-  margin-block-start: -8px;
-  margin-inline: -8px;
   padding-inline: 8px;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.gradient};
@@ -36,11 +42,11 @@ const Home = styled(Link)`
 `;
 
 export function AppBrandBar({ locale, showAccount = true }: { locale: string; showAccount?: boolean }) {
-  return <Bar>
+  return <Group><Bar>
     <Home href={homeHref(locale)} prefetch={false} aria-label={createMessages(locale).text("navigation.home")}>
       <BrandLogo alt="" variant="inverse" />
     </Home>
     <AccountLinks locale={locale} showAccount={showAccount} />
     <NavigationProgress label={createMessages(locale).text("navigation.loading")} />
-  </Bar>;
+  </Bar><SubscriptionStatusBar locale={locale} compact /></Group>;
 }

@@ -164,6 +164,45 @@ def unified_login(origin):
             assert not response.headers.get("Set-Cookie")
 
 
+def subscription_discovery(origin):
+    """The navigation session and visible account summary must agree for every access source."""
+    active = {"active", "manual", "trial", "pending-renewal", "off-active"}
+    scenarios = ["free", "active", "manual", "trial", "pending", "pending-renewal", "expired", "off", "off-active"]
+    for scenario in scenarios:
+        response = request(origin, "/api/account/session", headers={"Cookie": "goal-hint-member=" + "a" * 43,
+            "X-Subscription-Fixture-State": scenario})
+        assert response.status == 200 and response.headers.get("Cache-Control") == "no-store"
+        session = json.loads(response.text)
+        status = session["subscription"]
+        assert session["phone"] == "256700000101" and session["administrator"] is False
+        assert bool(status["activeUntil"]) is (scenario in active), (scenario, status)
+        assert status["paymentPending"] is (scenario in {"pending", "pending-renewal"})
+        assert status["canSubscribe"] is (not scenario.startswith("off"))
+        if scenario == "off":
+            continue  # The existing sales-off account fixture deliberately represents a guest.
+        html = visible_html(request(origin, f"/en/account?state={scenario}", timeout=60).text)
+        summary = match(r'<section\b[^>]*data-subscription-summary="(?:active|inactive)"[^>]*>([\s\S]*?)</section>', html)
+        assert summary.start() < html.index("Change phone"), "Subscription details must precede account settings."
+        no_match(r'<details\b', summary.group(1))
+        if scenario in active:
+            match(r'Expires\s*<time dateTime="[^"]+">\d{1,2} \w+ \d{4}, \d{2}:\d{2} EAT</time>', summary.group(1))
+        else:
+            no_match(r'<time\b', summary.group(1))
+            match("No active subscription", summary.group(1))
+        if status["canSubscribe"]:
+            match(r'href="/en/subscribe[^\"]*"', summary.group(1))
+            match("View payment" if status["paymentPending"] else "Renew" if scenario in active else "Subscribe", summary.group(1))
+        else:
+            no_match(r'href="/en/subscribe', summary.group(1))
+    for token, scenario, can_subscribe in [(None, "free", True), (None, "off", False), ("d", "active", False), ("b", "free", False)]:
+        response = request(origin, "/api/account/session", headers={"Cookie": "goal-hint-member=" + token * 43 if token else "",
+            "X-Subscription-Fixture-State": scenario})
+        assert response.status == 200 and response.headers.get("Cache-Control") == "no-store"
+        status = json.loads(response.text)
+        assert status["administrator"] is (token == "d")
+        assert status["subscription"] == {"activeUntil": None, "paymentPending": False, "canSubscribe": can_subscribe}
+
+
 def main():
     options = parse_args("member account", extra=("--fixture",))
     env = environment(GOAL_HINT_DATABASE_ENABLED="false", GOAL_HINT_ADMIN_PHONES='["256700000991"]',
@@ -178,7 +217,7 @@ def main():
     with Server(directory, env=env, ready="/en/account") as server:
         for state, expected in [("off", "Log in"), ("signed-out", "Phone number"),
                 ("signed-in", "256 700 000 101"), ("unavailable", "Member access is unavailable."),
-                ("active", "Access until"), ("ended", "Your access ended on"), ("blocked", "We couldn&#x27;t complete this.")]:
+                ("active", "Active subscription"), ("ended", "Your access ended on"), ("blocked", "We couldn&#x27;t complete this.")]:
             response = request(server.origin, f"/en/account?state={state}")
             assert response.status == 200
             match(expected, response.text)
@@ -259,7 +298,8 @@ def main():
             match(r'value=""', canonical)
         verify_synthetic_api(server.origin)
         unified_login(server.origin)
-        print("Member HTML and synthetic APIs: shared member/admin login, private-page redirects and role gates, legacy endpoint redirects, restricted sessions, cookie clearing, phone/OTP controls and home destinations pass.", flush=True)
+        subscription_discovery(server.origin)
+        print("Member HTML and synthetic APIs: private subscription status, visible expiry and renewal summaries, shared member/admin login, private-page redirects and role gates, legacy endpoint redirects, restricted sessions, cookie clearing, phone/OTP controls and home destinations pass.", flush=True)
         if options.serve:
             server.serve()
 

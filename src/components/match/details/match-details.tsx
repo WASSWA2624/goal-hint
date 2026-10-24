@@ -3,6 +3,7 @@
 import Link from "@/components/navigation/navigation-link";
 import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import { AccountLinks } from "@/components/members/account-link";
+import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { BrandLogo } from "@/components/ui/brand";
 import { compactHeaderBrand } from "@/components/ui/header-controls";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -42,9 +43,12 @@ const Page = styled.article`
 `;
 const PhoneHeaderGroup = styled.div`
   display: grid;
-  gap: 8px;
+  gap: 0;
   min-inline-size: 0;
   ${desktop} { display: none; }
+`;
+const PhoneSubscriptionStatus = styled(SubscriptionStatusBar)`
+  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
 `;
 /**
  * The phone top bar matches the feed's branded bar and quiet separator, full bleed
@@ -144,6 +148,7 @@ function PhoneHeader() {
       <AccountLinks locale={locale} showAccount={showAccount === true} />
       <NavigationProgress label={messages.text("navigation.loading")} />
     </PhoneBar>
+    <PhoneSubscriptionStatus locale={locale} />
   </PhoneHeaderGroup>;
 }
 

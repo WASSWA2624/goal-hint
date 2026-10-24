@@ -1,0 +1,125 @@
+{
+  "fixture": {
+    "fixtureId": "0b9b7a29-6eea-434b-8d30-48ce38147fc8",
+    "dataVersion": "2",
+    "homeTeam": {
+      "id": "0234048e-7cdd-4cd2-867d-c0fc323f2ec9",
+      "name": "Synthetic club 10",
+      "logoUrl": null
+    },
+    "awayTeam": {
+      "id": "c14ddd67-1e37-4715-ac40-4759ccb10a8a",
+      "name": "Synthetic club 20",
+      "logoUrl": null
+    },
+    "competition": {
+      "id": "f960d2cc-cfb2-438e-94a3-dab29261452f",
+      "name": "Synthetic competition 39",
+      "country": "Synthetic country",
+      "logoUrl": null
+    },
+    "kickoffAt": 1791806400000,
+    "syncedAt": 1791532800000,
+    "status": "scheduled",
+    "score": null,
+    "partialCoverage": false,
+    "cycleId": "717d9de5-a765-4eca-a85c-7eb0b10f3de4",
+    "forecast": null,
+    "cycle": {
+      "state": "open",
+      "mode": "current",
+      "ordinal": 1,
+      "lockedAt": null,
+      "voidReason": null
+    },
+    "unavailableMarkets": [
+      {
+        "family": "match-result",
+        "reason": "not-published"
+      },
+      {
+        "family": "double-chance",
+        "reason": "not-published"
+      },
+      {
+        "family": "total-goals",
+        "reason": "not-published"
+      },
+      {
+        "family": "both-teams-to-score",
+        "reason": "not-published"
+      }
+    ],
+    "update": {
+      "prediction": "updating",
+      "result": "untracked"
+    },
+    "availabilityMessage": null,
+    "scorePeriod": null,
+    "liveClock": null
+  },
+  "asOf": 1791532804000,
+  "run": {
+    "id": "c007f062-2d0a-4dc1-b702-bc5e70743ca1",
+    "sequence": "20261009",
+    "date": "2026-10-09",
+    "phase": "updating",
+    "total": 30,
+    "completed": 0,
+    "terminal": 0,
+    "failed": 0,
+    "published": 0,
+    "partialCoverage": false,
+    "message": null
+  },
+  "route": {
+    "fixtureId": "0b9b7a29-6eea-434b-8d30-48ce38147fc8",
+    "slug": "synthetic-club-10-vs-synthetic-club-20",
+    "path": "/en/matches/synthetic/preview"
+  },
+  "currentRevisionId": null,
+  "selection": "applicable",
+  "selectedCycle": {
+    "id": "717d9de5-a765-4eca-a85c-7eb0b10f3de4",
+    "ordinal": 1,
+    "state": "open",
+    "currentRevisionId": null,
+    "lockedRevisionId": null,
+    "kickoffAt": 1791806400000,
+    "cutoffAt": 1791806100000,
+    "openedAt": 1791532800000,
+    "closedAt": null,
+    "lockedAt": null,
+    "voidedAt": null,
+    "voidReason": null
+  },
+  "snapshot": null,
+  "history": {
+    "limit": 10,
+    "revisions": {
+      "anchor": 0,
+      "entries": [],
+      "next": null
+    },
+    "cycles": {
+      "anchor": 1,
+      "entries": [
+        {
+          "id": "717d9de5-a765-4eca-a85c-7eb0b10f3de4",
+          "ordinal": 1,
+          "state": "open",
+          "currentRevisionId": null,
+          "lockedRevisionId": null,
+          "kickoffAt": 1791806400000,
+          "cutoffAt": 1791806100000,
+          "openedAt": 1791532800000,
+          "closedAt": null,
+          "lockedAt": null,
+          "voidedAt": null,
+          "voidReason": null
+        }
+      ],
+      "next": null
+    }
+  }
+}

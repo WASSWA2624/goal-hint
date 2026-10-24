@@ -4,6 +4,7 @@ import { cache } from "react";
 import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
+import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
 import type { NavigationDestination } from "@/components/navigation/responsive-navigation";
 import { SessionNavigation } from "@/components/navigation/session-navigation";
@@ -78,6 +79,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
         </HeaderContent>
         <NavigationProgress label={messages.text("navigation.loading")} />
       </Header>
+      {!administratorName && <SubscriptionStatusBar locale={language} desktopOnly={app} wide={app || wide} />}
       <PageMain id="main-content" tabIndex={-1} $app={app} $compact={compact} $dashboard={current === "dashboard"}>
         <Container $wide={app || wide}>{children}</Container>
       </PageMain>
