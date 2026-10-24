@@ -1654,6 +1654,8 @@ model PaymentSubmission {
   claimedTxnRef        String?            @db.VarChar(40)
   claimedTxnKey        String?            @db.VarChar(40)
   claimedAmountUgx     Int                @db.UnsignedInt
+  /// The amount the member's browser read from the screenshot: a hint for the owner's review, never the claim.
+  screenshotAmountUgx  Int?               @db.UnsignedInt
   status               String             @db.VarChar(16)
   submittedAt          DateTime           @db.DateTime(3)
   submittedSessionHash String?            @db.Char(64)

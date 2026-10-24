@@ -103,7 +103,7 @@ def create_fixture(name: str, *, directory: Path | None = None) -> Path:
         "exclude": ["node_modules"]})
     (directory / "app").mkdir(exist_ok=True)
     (directory / "app/layout.tsx").write_text('export { default, metadata } from "@/app/layout";\n', encoding="utf-8")
-    for asset in ("brand", "flags", "payment-networks"):
+    for asset in ("brand", "flags", "payment-networks", "ocr"):
         if (ROOT / "public" / asset).exists():
             shutil.copytree(ROOT / "public" / asset, directory / "public" / asset, dirs_exist_ok=True)
     return directory

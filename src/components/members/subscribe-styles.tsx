@@ -18,6 +18,8 @@ export const SubscribeLayout = styled.div`
   inline-size: 100%; max-inline-size: 50rem; min-inline-size: 0; margin-inline: auto;
 `;
 export const Note = styled.p`${smallText}`;
+export const SubmitNote = styled(Note)<{ $warning?: boolean }>`${({ theme, $warning }) => $warning && `color: ${theme.color.outcome.incorrect.text};`}`;
+export const PlanSwitch = styled(Button)`&& { min-block-size: 32px; padding: 2px 6px; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }`;
 export const Row = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
   min-block-size: 44px; min-inline-size: 0; font-size: 12px; line-height: 18px;
@@ -136,6 +138,12 @@ export const FileField = styled.fieldset`
   display: grid; gap: 4px; min-inline-size: 0; margin: 0; padding: 0; border: 0;
   legend { padding: 0; margin-block-end: 6px; font-size: 12px; line-height: 18px; }
 `;
+export const ConfirmDetails = styled.dl`
+  display: grid; gap: 6px; margin: 0 0 10px; min-inline-size: 0;
+  > div { display: grid; grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr); gap: 8px; align-items: baseline; }
+  dt { ${smallText} } dd { margin: 0; min-inline-size: 0; font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
+`;
+export const ConfirmPreview = styled.img`display: block; max-inline-size: 7rem; max-block-size: 9rem; border-radius: ${({ theme }) => theme.border.radius}; object-fit: contain;`;
 export const PasteButton = styled(Button)`&& { gap: 6px; padding-inline: 10px; font-size: 13px; } ${icons}`;
 export const FileChoices = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0;`;
 export const FileBox = styled.label`
@@ -152,7 +160,12 @@ export const Assent = styled.label`
   display: flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: 12px; line-height: 18px;
   input { inline-size: 16px; block-size: 16px; min-block-size: 16px; margin: 0; flex-shrink: 0; accent-color: ${({ theme }) => theme.color.brand}; }
 `;
-export const Submit = styled(Button)`inline-size: 100%; min-block-size: 44px; font-size: 13px; ${icons}`;
+// aria-disabled keeps a blocked Submit focusable so its reason is read, while looking and acting disabled.
+export const Submit = styled(Button)`
+  inline-size: 100%; min-block-size: 44px; font-size: 13px; ${icons}
+  &[aria-disabled="true"] { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface};
+    border-color: ${({ theme }) => theme.color.border}; cursor: not-allowed; }
+`;
 export const Disclosure = styled.details`
   min-inline-size: 0;
   > summary { display: flex; align-items: center; gap: 6px; min-block-size: 44px; list-style: none; cursor: pointer; color: ${({ theme }) => theme.color.link}; font-size: 12px; line-height: 18px; ${icons}

@@ -1,8 +1,9 @@
 import { validMobilePhone, type MobileNetwork } from "./phone.ts";
 
-// The amount is never sent: the server records the chosen plan's price. The owner verifies the transaction ID,
-// money and payer in their own wallet before approving; a screenshot is optional supporting evidence.
-export const paymentFields = ["planId", "payerPhone", "network", "transactionId", "accepted"] as const;
+// The server records the chosen plan's price as the claim. A screenshot and its transaction ID are required; the amount the
+// member's browser read from the screenshot (screenshotAmount, possibly empty) is only a hint for the owner, who verifies
+// the ID, money and payer in their own wallet before approving.
+export const paymentFields = ["planId", "payerPhone", "network", "transactionId", "screenshotAmount", "accepted"] as const;
 /** Payment references are displayed without punctuation; the stored four-character key stays unchanged. */
 export const formatPaymentReference = (reference: string) => `P${reference}`;
 export const normalizeTransactionId = (value: string) => value.trim().toUpperCase().replace(/[\s-]/gu, "");
@@ -11,17 +12,20 @@ export function parseTransactionId(value: unknown): string | null {
   const id = typeof value === "string" ? normalizeTransactionId(value) : "";
   return /^[A-Z0-9.-]{4,40}$/u.test(id) && transactionKey(id) ? id : null;
 }
+/** screenshotAmount is null when the browser could not read an amount; it is never the claimed amount. */
 export type PaymentFields = Readonly<{ planId: string; payerPhone: string; network: MobileNetwork;
-  transactionId: string; accepted: boolean }>;
+  transactionId: string; screenshotAmount: number | null; accepted: boolean }>;
+const parseScreenshotAmount = (value: unknown): number | null | undefined => value === undefined || value === "" ? null
+  : typeof value === "string" && /^[1-9]\d{2,7}$/u.test(value) && Number(value) <= 10_000_000 ? Number(value) : undefined;
 export function parsePaymentFields(input: Record<string, unknown>): PaymentFields | null {
   if (Object.keys(input).some((key) => !(paymentFields as readonly string[]).includes(key))) return null;
   const payerPhone = validMobilePhone(input.payerPhone), network = input.network;
-  const transactionId = parseTransactionId(input.transactionId);
+  const transactionId = parseTransactionId(input.transactionId), screenshotAmount = parseScreenshotAmount(input.screenshotAmount);
   if (!payerPhone || !["mtn", "airtel"].includes(String(network))
-    || !transactionId
+    || !transactionId || screenshotAmount === undefined
     || typeof input.planId !== "string" || !/^[0-9a-f-]{36}$/u.test(input.planId)
     || !["true", "false"].includes(String(input.accepted))) return null;
-  return { planId: input.planId, payerPhone, network: network as MobileNetwork, transactionId, accepted: input.accepted === "true" };
+  return { planId: input.planId, payerPhone, network: network as MobileNetwork, transactionId, screenshotAmount, accepted: input.accepted === "true" };
 }
 export const paymentRules = Object.freeze({ bodyBytes: 3_200_000, imageBytes: 3_000_000, deadlineMs: 90_000,
   sessionStored: 3, sessionAttempts: 10, ipAttempts: 50, ipBytes: 50_000_000, siteBytes: 100_000_000 });

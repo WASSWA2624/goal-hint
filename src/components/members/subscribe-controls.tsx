@@ -9,7 +9,7 @@ import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { formatPhone, localUgandaPhone, networkForPrefix, telHref, validMobilePhone, waHref, type MobileNetwork } from "@/domain/phone";
 import { canOpenMoneyMenu, normalizeTransactionId, parseTransactionId, type PaymentStatus, type PaymentView } from "@/domain/payment";
-import { transactionIdFromText } from "@/domain/payment-sms";
+import { paymentEvidence, sameTransactionId, type PaymentEvidence } from "@/domain/payment-sms";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { createMessages } from "@/i18n/messages";
@@ -17,11 +17,14 @@ import { AccountAuthForm } from "./account-auth-form";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
+import { readScreenshotText } from "./payment-ocr";
+import { EvidenceFindings, ReadingProgress, evidenceRows, type ReadingState } from "./payment-evidence";
+import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { PaymentStatusCard, TrialStatusCard, useApprovalRefresh } from "./payment-status";
 
 import {
-  ActionLink, Assent, CopyButton, Disclosure, FileBox, FileChoices, FileField,
-  HelpActions, HelpTitle, Locked, MenuLink, Note, PageFooter, PasteButton, PaymentTransfer,
+  ActionLink, Assent, ConfirmDetails, ConfirmPreview, CopyButton, Disclosure, FileBox, FileChoices, FileField,
+  HelpActions, HelpTitle, Locked, MenuLink, Note, PageFooter, PasteButton, PaymentTransfer, PlanSwitch, SubmitNote,
   Plan, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowNote, Sheet,
   Step, StepHeading, StepTitle, Submit, Wallet, WalletChoice, WalletChoices,
   WalletMeta, WalletNumber,
@@ -33,6 +36,10 @@ const subscribeNothing = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
 const clipboardReadable = () => typeof navigator.clipboard?.readText === "function";
+const modalDialogs = () => typeof HTMLDialogElement !== "undefined" && typeof HTMLDialogElement.prototype.showModal === "function";
+const noEvidence: PaymentEvidence = { transactionId: null, amount: null, network: null };
+/** idCurrent turns false once a typed or pasted ID replaces the one this screenshot gave. */
+type ShotFindings = Readonly<{ evidence: PaymentEvidence; replaced: string | null; unreadable: boolean; idCurrent: boolean }>;
 const wallets = {
   mtn: { name: "MTN MoMo", short: "MTN", menu: "subscribe.openMtn" },
   airtel: { name: "Airtel Money", short: "Airtel", menu: "subscribe.openAirtel" },
@@ -86,8 +93,18 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     accepted: false, network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial), [edited, recovered, plans, networks, initial]);
   const setDraft = (change: (old: PaymentDraft) => PaymentDraft) => setEdited((old) => change(old ?? draft));
   const [image, setImage] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [busy, setBusy] = useState(false), [percentage, setPercentage] = useState<number | null>(null);
-  const [error, setError] = useState(""), [copied, setCopied] = useState<MobileNetwork | "">(""), [pasteNote, setPasteNote] = useState("");
-  const canPaste = useSyncExternalStore(subscribeNothing, clipboardReadable, serverReady);
+  const [error, setError] = useState(""), [copied, setCopied] = useState<MobileNetwork | "">("");
+  const [idNote, setIdNote] = useState(""), [messageFound, setMessageFound] = useState<PaymentEvidence | null>(null);
+  const [shotState, setShotState] = useState<ReadingState | null>(null), [shotFound, setShotFound] = useState<ShotFindings | null>(null);
+  // The pasted SMS's amount outlives edits to its ID; with the screenshot's, either one below the plan's price blocks submitting.
+  const [messageAmount, setMessageAmount] = useState<number | null>(null);
+  const canPaste = useSyncExternalStore(subscribeNothing, clipboardReadable, serverReady), canConfirm = useSyncExternalStore(subscribeNothing, modalDialogs, serverReady);
+  const [confirming, setConfirming] = useState(false), [announcement, setAnnouncement] = useState("");
+  // Each screenshot read has a number, so a slow read never fills the form after its image was replaced or removed.
+  // idSource says where the current ID came from: a new screenshot replaces any ID, and clears one an earlier screenshot gave.
+  const reading = useRef(0), stopReading = useRef<AbortController | null>(null), submitButton = useRef<HTMLButtonElement>(null);
+  const currentId = useRef(draft.transactionId), currentPlan = useRef(draft.planId), idSource = useRef<"typed" | "message" | "screenshot" | null>(null);
+  useEffect(() => { currentId.current = draft.transactionId; currentPlan.current = draft.planId; }, [draft.transactionId, draft.planId]);
   // Until the refresh after an upload lands, the new report stands in for the server's previous latest report.
   const [sent, setSent] = useState<{ status: PaymentStatus; before: string | null } | null>(null);
   const status = sent && (view?.status?.reference ?? null) === sent.before ? sent.status : view?.status ?? null;
@@ -95,7 +112,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const reportKey = `${account?.id ?? ""}:${status?.reference ?? ""}:${status?.status ?? ""}`;
   const [reportForm, setReportForm] = useState({ reportKey, open: false });
   // Only an explicit choice for this report opens a new form; a different decision resets it.
-  if (reportForm.reportKey !== reportKey) setReportForm({ reportKey, open: false });
+  if (reportForm.reportKey !== reportKey) { setReportForm({ reportKey, open: false }); setConfirming(false); }
   const reversed = status?.status === "reversed", rejected = status?.status === "rejected";
   const statusOnly = waiting || rejected || reversed;
   const showForm = !statusOnly || reportForm.reportKey === reportKey && reportForm.open;
@@ -116,20 +133,77 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const update = (values: Partial<PaymentDraft>) => setDraft((old) => ({ ...old, ...values }));
   function toggleReportForm(focus = `${ids}-transaction`) {
     if (busy) return;
-    setError(""); focusTarget.current = showForm ? `${ids}-form-toggle` : focus;
+    setError(""); setConfirming(false); focusTarget.current = showForm ? `${ids}-form-toggle` : focus;
     setReportForm({ reportKey, open: !showForm });
   }
   const helpText = account && status ? m.text("subscribe.helpPaid", { price: String(status.priceUgx), plan: status.planName, phone: formatPhone(account.phone), reference: status.reference }) : undefined;
-  // A pasted payment SMS keeps only its transaction ID; text without one leaves the field as it was.
-  function pasteTransaction(text: string) {
-    const id = transactionIdFromText(text);
-    if (id) update({ transactionId: id });
-    setPasteNote(id ? "" : m.text("subscribe.pasteNoId"));
+  const owners = { mtn: settings.mtnNumber, airtel: settings.airtelNumber };
+  const networkName = (evidence: PaymentEvidence) => evidence.network && networks.includes(evidence.network) ? wallets[evidence.network].name : null;
+  /** The network a message or screenshot names, as a form change; the member's chosen plan is never changed for them. */
+  function networkChange(evidence: PaymentEvidence): Partial<PaymentDraft> {
+    if (!evidence.network || !networks.includes(evidence.network)) return {};
+    setCopied("");
+    return { network: evidence.network };
+  }
+  /** Says what a paste or read found through the form's live region, judged against the plan chosen when it finished. */
+  function say(evidence: PaymentEvidence, replaced: string | null = null, screenshot = false, showId = true) {
+    const chosen = plans.find((item) => item.id === currentPlan.current) ?? plans[0];
+    if (!chosen) return;
+    announceText(evidenceRows(locale, evidence, chosen, networkName(evidence), replaced, showId, screenshot).map((row) => row.text).join(". "));
+  }
+  // Emptying first makes a repeated, identical text count as new, so it is read again.
+  function announceText(text: string) {
+    setAnnouncement(""); setTimeout(() => setAnnouncement(text), 60);
+  }
+  // A pasted payment SMS keeps only its transaction ID; text without an ID changes nothing and only says so.
+  function pasteMessage(text: string) {
+    const evidence = paymentEvidence(text, owners);
+    if (evidence.transactionId) {
+      update({ ...networkChange(evidence), transactionId: evidence.transactionId });
+      idSource.current = "message"; setMessageAmount(evidence.amount); setMessageFound(evidence);
+      setShotFound((found) => found && { ...found, idCurrent: found.evidence.transactionId === evidence.transactionId });
+    } else setMessageFound(noEvidence);
+    setIdNote(""); say(evidence.transactionId ? evidence : noEvidence);
   }
   async function readClipboard() {
     if (busy) return;
-    try { pasteTransaction(await navigator.clipboard.readText()); }
-    catch { setPasteNote(m.text("subscribe.pasteBlocked")); }
+    try { pasteMessage(await navigator.clipboard.readText()); }
+    catch { setMessageFound(null); setIdNote(m.text("subscribe.pasteBlocked")); }
+  }
+  // A new screenshot's ID replaces the current one; with no readable ID, an ID from an earlier screenshot is cleared. An ID
+  // typed or pasted while the screenshot was being read wins, and the findings then say whether the screenshot agrees.
+  async function readScreenshot(file: Blob) {
+    const attempt = ++reading.current, current = () => attempt === reading.current, controller = new AbortController(), startedWith = currentId.current;
+    stopReading.current?.abort(); stopReading.current = controller;
+    setShotFound(null); setShotState({ stage: "preparing", progress: 0 }); setAnnouncement(m.text("subscribe.reading.reading"));
+    const editedMeanwhile = () => currentId.current !== startedWith && idSource.current !== "screenshot";
+    let text: string;
+    try { text = await readScreenshotText(file, (progress) => { if (current()) setShotState(progress); }, controller.signal); }
+    catch {
+      if (!current()) return;
+      if (idSource.current === "screenshot" && !editedMeanwhile()) { update({ transactionId: "" }); idSource.current = null; }
+      setShotState(null); setShotFound({ evidence: noEvidence, replaced: null, unreadable: true, idCurrent: true });
+      setAnnouncement(m.text("subscribe.screenshotUnreadable"));
+      return;
+    }
+    if (!current()) return;
+    // A short pause on the last step, so the member sees the text being searched rather than a jump.
+    setShotState({ stage: "finding", progress: 100 });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (!current()) return;
+    const evidence = paymentEvidence(text, owners, { bare: false }), id = evidence.transactionId, previous = currentId.current;
+    const kept = editedMeanwhile(), clear = !kept && !id && idSource.current === "screenshot";
+    if (!kept) update({ ...networkChange(evidence), ...(id ? { transactionId: id } : clear ? { transactionId: "" } : {}) });
+    // Only a screenshot that changed the field owns its ID; one that agrees with a pasted or typed ID leaves it theirs.
+    if (!kept && id && id !== previous) { idSource.current = "screenshot"; setIdNote(""); setMessageFound(null); setMessageAmount(null); }
+    else if (clear) idSource.current = null;
+    const replaced = !kept && id && previous && previous !== id ? previous : null;
+    const idCurrent = !kept || previous === id;
+    setShotState(null); setShotFound({ evidence, replaced, unreadable: false, idCurrent }); say(evidence, replaced, true, idCurrent);
+  }
+  function removeScreenshot() {
+    reading.current++; stopReading.current?.abort(); stopReading.current = null;
+    setImage(null); setPreview(""); setPercentage(null); setShotState(null); setShotFound(null);
   }
   async function chooseImage(file: File | undefined) {
     if (!file || busy) return;
@@ -137,29 +211,54 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     try {
       const prepared = await preparePaymentImage(file);
       setImage(prepared); setPreview(URL.createObjectURL(prepared));
+      void readScreenshot(prepared);
     } catch (failure) {
-      setImage(null); setPreview("");
+      // A replacement that cannot be prepared leaves the earlier screenshot and its findings in place.
       setError(failure instanceof Error ? failure.message : m.text("subscribe.chooseImage"));
     } finally { setBusy(false); }
   }
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  // What the screenshot showed, once read: its ID and amount gate submitting.
+  const shot = shotFound && !shotFound.unreadable ? shotFound.evidence : null;
+  /** The details as they would be sent, or the first problem with them. */
+  function checkedDetails() {
+    const payer = validMobilePhone(draft.payerPhone), transactionId = parseTransactionId(draft.transactionId);
+    if (!plan || !account) return { problem: m.text("account.unavailable") };
+    if (!image) return { problem: m.text("subscribe.needScreenshot") };
+    if (!transactionId) return { problem: m.text("subscribe.transactionRequired") };
+    if (!payer) return { problem: m.text("phone.invalid") };
+    return { plan, account, payer, transactionId, image };
+  }
+  // Submitting checks the details, then shows them to confirm before anything is sent.
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
+    if (blocker) { announceText(blocker.text); return; }
     if (busy) return;
-    if (!plan || !account) { setError(m.text("account.unavailable")); return; }
-    const body = new FormData(), payer = validMobilePhone(draft.payerPhone), transactionId = parseTransactionId(draft.transactionId);
-    if (!transactionId) { setError(m.text("subscribe.transactionRequired")); return; }
-    if (!payer) { setError(m.text("phone.invalid")); return; }
-    setBusy(true); setPercentage(image ? 0 : null);
-    // No amount: the server records the plan's price.
-    for (const [key, value] of Object.entries({ planId: plan.id, network: draft.network, payerPhone: payer,
-      transactionId, accepted: String(draft.accepted) })) body.append(key, value);
-    if (image) body.append("image", image, "payment.jpg");
+    const details = checkedDetails();
+    if ("problem" in details) { setError(details.problem ?? ""); return; }
+    if (canConfirm) setConfirming(true); else void send();
+  }
+  async function send() {
+    setConfirming(false);
+    const details = checkedDetails();
+    if (busy || blocker || "problem" in details) return;
+    const { plan, account, payer, transactionId, image: screenshot } = details, body = new FormData();
+    setBusy(true); setPercentage(0);
+    // The server records the plan's price as the claim; the screenshot's amount goes along only as the owner's hint.
+    for (const [key, value] of Object.entries({ planId: plan.id, network: draft.network, payerPhone: payer, transactionId,
+      screenshotAmount: shot?.amount ? String(shot.amount) : "", accepted: String(draft.accepted) })) body.append(key, value);
+    body.append("image", screenshot, "payment.jpg");
+    let failed = false;
     try {
-      const result = await uploadPayment(body, image ? setPercentage : () => {}); clearPaymentDraft(account.id); trackEvent("payment_submitted");
+      const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); trackEvent("payment_submitted");
       setSent({ before: view?.status?.reference ?? null, status: { reference: result.reference, status: "pending", rejectText: null, rejectReason: null,
         planName: plan.name, priceUgx: plan.priceUgx, submittedAt: new Date().toISOString(), endsAt: null } });
-      setEdited(null); setReportForm({ reportKey, open: false }); setImage(null); setPreview(""); setPercentage(null); router.refresh();
-    } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); } finally { setBusy(false); }
+      setEdited(null); setReportForm({ reportKey, open: false }); removeScreenshot(); setMessageFound(null); setMessageAmount(null); setIdNote(""); router.refresh();
+    } catch (failure) { failed = true; setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); }
+    finally {
+      setBusy(false);
+      // The dialog closed while Submit was disabled, so focus went nowhere; after a failure it returns to Submit.
+      if (failed) setTimeout(() => submitButton.current?.focus(), 0);
+    }
   }
   const help = <Disclosure>
     <summary><HelpIcon /><span>{m.text("navigation.help")}</span><ChevronDownIcon /></summary>
@@ -186,6 +285,22 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   if (statusOnly && !showForm) return <>{accountPanel}<Step id="report">{paymentStatus}</Step></>;
   if (!plan || !payNetwork) return <>{accountPanel}{paymentStatus}<p>{m.text(plan ? "account.unavailable" : "subscribe.noPlans")}</p>{footer}</>;
   const wallet = wallets[payNetwork], number = settings[payNetwork === "mtn" ? "mtnNumber" : "airtelNumber"]!;
+  // Submitting opens only when every required detail is present and valid; the first gap is said under the button.
+  // The screenshot is required and must show a readable transaction ID and amount; the ID entered must be the one it shows.
+  const claimedId = parseTransactionId(draft.transactionId), shotId = shot?.transactionId ?? null;
+  const paidAmounts = [messageAmount, shot?.amount ?? null].filter((amount): amount is number => amount !== null);
+  const shortAmount = paidAmounts.length && Math.min(...paidAmounts) < plan.priceUgx ? Math.min(...paidAmounts) : null;
+  // A short amount that is exactly another plan's price offers that plan; the chosen plan never changes by itself.
+  const paidPlan = shortAmount === null ? undefined : plans.find((item) => item.priceUgx === shortAmount);
+  const blocker: Readonly<{ text: string; warning: boolean; switchTo?: SubscriptionPlanView }> | null = !validMobilePhone(draft.payerPhone) ? { text: m.text("subscribe.needPayer"), warning: false }
+    : !image ? { text: m.text("subscribe.needScreenshot"), warning: false }
+    : shotState ? { text: m.text("subscribe.waitReading"), warning: false }
+    : !shotFound?.unreadable && (!shotId || shot?.amount === null || shot?.amount === undefined) ? { text: m.text("subscribe.unclearScreenshot"), warning: true }
+    : !claimedId ? { text: m.text(shotFound?.unreadable && !draft.transactionId ? "subscribe.enterTransaction" : "subscribe.transactionRequired"), warning: true }
+    : shotId && !sameTransactionId(claimedId, shotId) ? { text: m.text("subscribe.idMismatch", { id: shotId }), warning: true }
+    : shortAmount !== null ? { text: m.text("subscribe.amountShort", { amount: m.number(shortAmount), price: m.number(plan.priceUgx),
+      plan: m.plural("paywall.days", plan.durationDays) }), warning: true, ...(paidPlan ? { switchTo: paidPlan } : {}) }
+    : !view?.acceptedTerms && !draft.accepted ? { text: m.text("subscribe.needAssent"), warning: false } : null;
   const name = settings[payNetwork === "mtn" ? "mtnName" : "airtelName"];
   return <>
     {accountPanel}
@@ -229,14 +344,23 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
         {!account ? <Locked><LockIcon /><span>{m.text("subscribe.signInFirst")}</span></Locked> : <>
           {!statusOnly && paymentStatus}
           {showForm && <ReportForm id={`${ids}-form`} onSubmit={submit} data-analytics-ignore>
-            <TextInput id={`${ids}-transaction`} label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId} required disabled={busy}
-              minLength={4} maxLength={40} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false}
-              error={pasteNote || undefined} onPaste={(event) => { event.preventDefault(); pasteTransaction(event.clipboardData.getData("text")); }}
-              onChange={(event) => { setPasteNote(""); update({ transactionId: normalizeTransactionId(event.currentTarget.value) }); }}
-              trailing={canPaste && <PasteButton type="button" variant="secondary" disabled={busy} onClick={readClipboard} data-analytics-ignore
-                aria-label={m.text("subscribe.pasteTransaction")}><ClipboardIcon /><span aria-hidden="true">{m.text("subscribe.paste")}</span></PasteButton>} />
             <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} required hint={false} disabled={busy}
               onValueChange={(value) => update({ payerPhone: value })} />
+            {/* No maxLength: a keyboard's clipboard suggestion inserts a whole SMS as typing, and the browser would cut it short. */}
+            <TextInput id={`${ids}-transaction`} label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId}
+              required disabled={busy} minLength={4} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false} data-transaction-input
+              error={idNote || undefined}
+              hint={messageFound && <EvidenceFindings locale={locale} evidence={messageFound} plan={plan} networkName={networkName(messageFound)} />}
+              onPaste={(event) => { event.preventDefault(); pasteMessage(event.clipboardData.getData("text")); }}
+              onChange={(event) => {
+                const raw = event.currentTarget.value, typed = normalizeTransactionId(raw);
+                if (raw.length > draft.transactionId.length + 1) { pasteMessage(raw); return; }
+                setIdNote(""); setMessageFound(null); setMessageAmount(null); idSource.current = "typed";
+                setShotFound((found) => found && { ...found, idCurrent: false });
+                update({ transactionId: typed.replace(/[^A-Z0-9.-]/gu, "").slice(0, 40) });
+              }}
+              trailing={canPaste && <PasteButton type="button" variant="secondary" disabled={busy} onClick={readClipboard} data-analytics-ignore
+                aria-label={m.text("subscribe.pasteTransaction")}><ClipboardIcon /><span aria-hidden="true">{m.text("subscribe.paste")}</span></PasteButton>} />
             <FileField>
               <legend>{m.text("subscribe.moreDetails")}</legend>
               <FileChoices><FileBox><ImageIcon /><span id={`${ids}-shot`}>{m.text(image ? "subscribe.changeScreenshot" : "subscribe.chooseScreenshot")}</span>
@@ -246,13 +370,36 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
                 <input type="file" accept="image/*" capture="environment" disabled={busy} aria-labelledby={`${ids}-camera`} aria-describedby={`${ids}-shot-hint`}
                   onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox></FileChoices>
               <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
+              {shotState ? <ReadingProgress locale={locale} state={shotState} />
+                : shotFound?.unreadable ? <Note data-screenshot-note>{m.text("subscribe.screenshotUnreadable")}</Note>
+                  : shotFound && <div data-screenshot-note><EvidenceFindings locale={locale} evidence={shotFound.evidence} plan={plan} replaced={shotFound.replaced}
+                    showId={shotFound.idCurrent} networkName={networkName(shotFound.evidence)} needAmount /></div>}
               {image && <><Preview src={preview} alt={m.text("subscribe.preview")} />
-                <RowButton type="button" variant="quiet" disabled={busy} onClick={() => { setImage(null); setPreview(""); setPercentage(null); }}>{m.text("subscribe.removeScreenshot")}</RowButton></>}
+                <RowButton type="button" variant="quiet" disabled={busy} onClick={removeScreenshot}>{m.text("subscribe.removeScreenshot")}</RowButton></>}
             </FileField>
             {!view?.acceptedTerms && <Assent><input type="checkbox" required disabled={busy} checked={draft.accepted} onChange={(event) => update({ accepted: event.currentTarget.checked })} /><span>{m.text("subscribe.assent")}{" "}<Link href="/en/terms">{m.text("account.terms")}</Link>.</span></Assent>}
-            <Submit type="submit" disabled={busy || !restored || !draft.network}>{m.text(busy ? "subscribe.sending" : "subscribe.report")}<ChevronRightIcon /></Submit>
+            <VisuallyHidden role="status">{announcement}</VisuallyHidden>
+            <Submit ref={submitButton} type="submit" disabled={busy || !restored || !draft.network} aria-disabled={blocker ? true : undefined} aria-describedby={blocker ? `${ids}-blocker` : undefined}>
+              {m.text(busy ? "subscribe.sending" : "subscribe.report")}<ChevronRightIcon /></Submit>
+            {blocker && <SubmitNote id={`${ids}-blocker`} $warning={blocker.warning} data-submit-blocker>{blocker.text}
+              {blocker.switchTo && <> <PlanSwitch type="button" variant="quiet" data-plan-switch
+                onClick={() => { update({ planId: blocker.switchTo!.id }); setTimeout(() => submitButton.current?.focus(), 0); }}>
+                {m.text("subscribe.switchPlan", { plan: m.plural("paywall.days", blocker.switchTo.durationDays) })}</PlanSwitch></>}</SubmitNote>}
             {percentage !== null && <div role="status"><progress max={100} value={percentage} aria-label={m.text("subscribe.uploadProgress")} /><span> {percentage}%</span></div>}
           </ReportForm>}
+          {canConfirm && showForm && <CriteriaDialog id={`${ids}-confirm`} title={m.text("subscribe.confirmTitle")} open={confirming} onCancel={() => setConfirming(false)} onApply={() => void send()}
+            applyLabel={m.text("subscribe.confirmSend")} cancelLabel={m.text("subscribe.editDetails")} closeLabel={m.text("subscribe.editDetails")}>
+            <ConfirmDetails data-payment-confirmation>
+              <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{m.plural("paywall.days", plan.durationDays)} · UGX {m.number(plan.priceUgx)}</dd></div>
+              <div><dt>{m.text("subscribe.confirmPaidTo")}</dt><dd>{wallet.name} {localUgandaPhone(number)}{name ? ` · ${name}` : ""}</dd></div>
+              <div><dt>{m.text("subscribe.confirmPaidFrom")}</dt><dd>{formatPhone(validMobilePhone(draft.payerPhone) ?? draft.payerPhone)}</dd></div>
+              <div><dt>{m.text("subscribe.transactionId")}</dt><dd>{claimedId}</dd></div>
+              {shot?.amount && <div><dt>{m.text("subscribe.confirmAmount")}</dt><dd>UGX {m.number(shot.amount)}</dd></div>}
+              {image && <div><dt>{m.text("subscribe.confirmScreenshot")}</dt><dd><ConfirmPreview src={preview} alt={m.text("subscribe.preview")} /></dd></div>}
+            </ConfirmDetails>
+            {/* Contact buttons wait for the "Waiting for approval" card after sending; here the member only checks the details. */}
+            <Note>{m.text("subscribe.confirmReview")}{settings.reviewTime ? ` ${m.text("subscribe.reviewTime", { time: settings.reviewTime })}` : ""} {m.text("subscribe.confirmDelay")}</Note>
+          </CriteriaDialog>}
           <noscript><p>{m.text("subscribe.noJavaScript")}</p></noscript>
         </>}
         {error && <p role="alert">{error}</p>}

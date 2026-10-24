@@ -22,6 +22,7 @@ export async function paidDatabase({ seedPlans = false } = {}) {
     await root.query(await readFile(new URL("../../prisma/migrations/20261021120000_manual_password_recovery/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261023090000_member_message_verification/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261023130000_single_member_login/migration.sql", import.meta.url), "utf8"));
+    await root.query(await readFile(new URL("../../prisma/migrations/20261024200000_payment_screenshot_amount/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
     const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "SavedSlip"]);

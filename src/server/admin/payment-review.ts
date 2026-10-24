@@ -24,7 +24,7 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
         const rows = await tx.paymentSubmission.findMany({ where: { status: selected === "approved" ? { in: ["approved", "reversed"] } : selected },
           orderBy: [{ submittedAt: selected === "pending" ? "asc" : "desc" }, { id: "asc" }], take: 100,
           select: { id: true, reference: true, accountId: true, payerPhone: true, claimedNetwork: true, claimedTxnRef: true, claimedTxnKey: true,
-            claimedAmountUgx: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
+            claimedAmountUgx: true, screenshotAmountUgx: true, planId: true, planName: true, durationDays: true, priceUgx: true, submittedAt: true, status: true, imageSha256: true,
             transactionRef: true, network: true, amountReceivedUgx: true, account: { select: { phone: true } }, screenshot: { select: { submissionId: true } } } });
         // A report without a transaction ID (null key) matches no other report's ID; only real keys are compared.
         const keys = [...new Set(rows.flatMap(r => r.claimedTxnKey ? [r.claimedTxnKey] : []))], hashes = [...new Set(rows.flatMap(r => r.imageSha256 ? [r.imageSha256] : []))], phones = [...new Set(rows.flatMap(r => r.payerPhone ? [r.payerPhone] : []))];
@@ -50,7 +50,8 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
             approved: r.claimedTxnKey ? reference(related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)) : null,
             pending: r.claimedTxnKey ? reference(related.find(s => s.accountId !== r.accountId && s.status === "pending" && s.claimedTxnKey === r.claimedTxnKey)) : null,
             image: r.imageSha256 ? related.filter(s => s.id !== r.id && s.imageSha256 === r.imageSha256).map(s => formatPaymentReference(s.reference))[0] ?? null : null,
-            payerAccount: payers.some(p => p.phone === r.payerPhone && p.id !== r.accountId), payerDiffers: !!r.payerPhone && r.payerPhone !== r.account.phone }) })) };
+            payerAccount: payers.some(p => p.phone === r.payerPhone && p.id !== r.accountId), payerDiffers: !!r.payerPhone && r.payerPhone !== r.account.phone,
+            ...(r.screenshot ? { screenshotAmount: r.screenshotAmountUgx } : {}) }) })) };
       });
     },
     async screenshot(id: string) { return database.query(tx => tx.paymentScreenshot.findUnique({ where: { submissionId: id }, select: { data: true } })); },

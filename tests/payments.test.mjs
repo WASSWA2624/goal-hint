@@ -19,8 +19,12 @@ test("payment fields normalize IDs and numbers, with exact limits and a strict w
   assert.equal(normalizeTransactionId(" tx-100 1 "), "TX1001");
   assert.equal(transactionKey("tx .100-1"), transactionKey("TX1001"));
   assert.deepEqual(parsePaymentFields({ planId: values.planId, payerPhone: "+256 700 000 102", network: "airtel", transactionId: "TX-1234", accepted: "true" }), {
-    planId: values.planId, network: "airtel", accepted: true, payerPhone: "256700000102", transactionId: "TX1234",
+    planId: values.planId, network: "airtel", accepted: true, payerPhone: "256700000102", transactionId: "TX1234", screenshotAmount: null,
   });
+  // The amount read from the screenshot is a bounded whole number of shillings, or empty when none was read.
+  assert.equal(parsePaymentFields(values).screenshotAmount, 5000);
+  for (const screenshotAmount of [undefined, ""]) assert.equal(parsePaymentFields({ ...values, screenshotAmount }).screenshotAmount, null);
+  for (const screenshotAmount of ["99", "10000001", "5e3", "5,000", "-5000", "05000", "abc"]) assert.equal(parsePaymentFields({ ...values, screenshotAmount }), null, screenshotAmount);
   for (const payerPhone of [undefined, null, "", "   ", "256", "0201234567", 256700000101]) assert.equal(parsePaymentFields({ ...values, payerPhone }), null);
   for (const fields of [{ amount: "99" }, { amount: "10000001" }, { amount: "5e3" }, { transactionId: undefined }, { transactionId: null }, { transactionId: "" }, { transactionId: "   " }, { transactionId: "---." }, { transactionId: "abc" }, { transactionId: "<script>" }, { transactionId: "A".repeat(41) }, { payerPhone: "0201234567" }, { network: "other" }, { accepted: "yes" }, { sms: "secret" }]) assert.equal(parsePaymentFields({ ...values, ...fields }), null);
 });
@@ -50,12 +54,17 @@ test("multipart reads are bounded and strict; extra SMS, spoofed content types a
   assert.equal((await f.handler(slow)).status, 408); assert.equal(f.calls.submit.length, 1);
 });
 
-test("screenshots are optional but valid transaction and payer details are required; amount overrides are refused", async () => {
+test("a report needs its screenshot, a valid transaction ID and payer; the screenshot amount is only a hint and amount overrides are refused", async () => {
   const f = fixture();
-  assert.equal((await f.handler(await paymentRequest({ image: null, fields: { payerPhone: "0700000102" } }))).status, 201);
+  assert.equal((await f.handler(await paymentRequest({ fields: { payerPhone: "0700000102" } }))).status, 201);
   assert.equal(f.calls.submit[0][1].payerPhone, "256700000102"); assert.equal(f.calls.submit[0][1].transactionId, "TX.1001");
-  assert.equal(f.calls.submit[0][2], null);
-  for (const transactionId of [undefined, "", "   ", "---.", "<script>"]) {
+  assert.equal(f.calls.submit[0][1].screenshotAmount, 5000); assert.ok(f.calls.submit[0][2]);
+  assert.equal((await f.handler(await paymentRequest({ fields: { screenshotAmount: "" } }))).status, 201, "an unread amount");
+  assert.equal(f.calls.submit[1][1].screenshotAmount, null);
+  assert.equal((await f.handler(await paymentRequest({ image: null }))).status, 400, "no screenshot");
+  assert.equal((await f.handler(await paymentRequest({ fields: { transactionId: "" } }))).status, 400, "no transaction ID");
+  assert.equal((await f.handler(await paymentRequest({ fields: { screenshotAmount: undefined } }))).status, 400, "the amount field is always sent");
+  for (const transactionId of [undefined, "   ", "---.", "<script>"]) {
     assert.equal((await f.handler(await paymentRequest({ fields: { transactionId } }))).status, 400);
     assert.equal((await f.handler(await paymentRequest({ image: null, fields: { transactionId } }))).status, 400);
   }
@@ -65,7 +74,7 @@ test("screenshots are optional but valid transaction and payer details are requi
   }
   assert.equal((await f.handler(await paymentRequest({ fields: { amount: "100" } }))).status, 400);
   assert.equal((await f.handler(await paymentRequest({ image: null, fields: { amount: "100" } }))).status, 400);
-  assert.equal(f.calls.submit.length, 1);
+  assert.equal(f.calls.submit.length, 2);
   f.services.sessions.verify = async () => null;
   const signedOut = await paymentRequest(); assert.equal((await f.handler(signedOut)).status, 403); assert.equal(signedOut.bodyUsed, false);
 });
@@ -77,6 +86,9 @@ test("direct payment submissions cannot substitute the account phone for an abse
   for (const payerPhone of [undefined, null, "", "   ", "256", "0201234567", 256700000101]) {
     assert.deepEqual(await payments.submit(member, { ...values, payerPhone, accepted: true }), { status: "invalid" });
   }
+  // A report without its screenshot, or with a malformed ID beside one, never reaches storage either.
+  assert.deepEqual(await payments.submit(member, { ...values, accepted: true }, null), { status: "invalid" });
+  assert.deepEqual(await payments.submit(member, { ...values, transactionId: "<script>", accepted: true }, jpeg()), { status: "invalid" });
 });
 test("attempt checks precede the body, and only two uploads may be in flight", async () => {
   const f = fixture(); f.services.payments.begin = async () => false;
@@ -125,4 +137,9 @@ test("owner checks flag duplicate proof and payer differences without treating a
   const unverified = paymentChecks({ ...base, received: null, transactionId: false });
   assert.match(unverified[0].text, /Check your wallet/);
   assert.match(unverified[1].text, /No transaction ID/);
+  // The screenshot's amount is the last line: absent without a screenshot, a prompt when unread, a warning when short.
+  assert.equal(paymentChecks(base).length, paymentChecks({ ...base, screenshotAmount: 5000 }).length - 1);
+  assert.deepEqual(paymentChecks({ ...base, screenshotAmount: 5000 }).at(-1), { tone: "good", text: "Screenshot shows UGX 5,000" });
+  assert.deepEqual(paymentChecks({ ...base, screenshotAmount: 1000 }).at(-1), { tone: "warning", text: "Screenshot shows UGX 1,000, below the UGX 5,000 price" });
+  assert.equal(paymentChecks({ ...base, screenshotAmount: null }).at(-1).tone, "info");
 });

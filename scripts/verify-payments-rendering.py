@@ -35,7 +35,7 @@ def compact_status_rendering(origin):
         assert f'data-payment-status="{status}"' in html
         assert ("Submit another payment" if status == "reversed" else "Update payment details") in html and "PFAKE" in html
         assert 'name="plan"' not in html and 'data-payment-logo' not in html and 'type="file"' not in html
-        assert not any(field.get("maxlength") == "40" for field, _ in PaymentFields(html).inputs), "A payment status must not expose its correction form automatically."
+        assert not any("data-transaction-input" in field for field, _ in PaymentFields(html).inputs), "A payment status must not expose its correction form automatically."
         assert "18 or older" not in html
         disclosure = re.search(r'<details\b([^>]*data-payment-details[^>]*)>([\s\S]*?)</details>', html)
         assert disclosure and not re.search(r'\bopen(?:=""|\s|$)', disclosure.group(1)), "Payment details starts collapsed."
@@ -109,16 +109,19 @@ def main():
                     assert not re.search(r'<button\b[^>]*>\s*Change\s*</button>', html)
                 if state in ["signed-in", "active", "approved"]:
                     fields = PaymentFields(html).inputs
-                    transaction = [(field, depth) for field, depth in fields if field.get("maxlength") == "40"]
-                    assert len(transaction) == 1 and "required" in transaction[0][0] and transaction[0][1] == 0, "Transaction ID must be required and visible without opening details."
+                    transaction = [(field, depth) for field, depth in fields if "data-transaction-input" in field]
+                    assert len(transaction) == 1 and "required" in transaction[0][0] and transaction[0][1] == 0, "The transaction ID is required and visible without opening details."
+                    assert "maxlength" not in transaction[0][0], "A whole SMS inserted from the keyboard's clipboard must reach the field uncut."
                     payer = [(field, depth) for field, depth in fields if "data-phone-input" in field]
-                    assert len(payer) == 1 and "required" in payer[0][0] and payer[0][1] == 0, "Paid from must be visible and required, separate from optional screenshots."
+                    assert len(payer) == 1 and "required" in payer[0][0] and payer[0][1] == 0, "Paid from must be visible and required, separate from the screenshot controls."
+                    order = [html.index(marker) for marker in ("data-phone-input", "data-transaction-input", 'type="file"')]
+                    assert order == sorted(order), "Paid from comes first, then the transaction ID, then the proof-of-payment upload."
                     assert payer[0][0].get("value") == "700000101", "The signed-in account number prefills the payer field."
                     screenshots = [(field, depth) for field, depth in fields if field.get("type") == "file"]
-                    assert len(screenshots) == 2 and all("required" not in field and depth == 0 for field, depth in screenshots), "Optional screenshot and camera controls must be visible without opening details."
-                    assert re.search(r'<legend\b[^>]*>Upload proof of payment \(optional\)</legend>', html), "Visible screenshot controls need a fieldset label."
+                    assert len(screenshots) == 2 and all("required" not in field and depth == 0 for field, depth in screenshots), "Screenshot and camera controls must be visible without opening details; the form, not the browser, requires one of them."
+                    assert re.search(r'<legend\b[^>]*>Upload proof of payment</legend>', html), "Visible screenshot controls need a fieldset label."
                     assert not any(field.get("name") == "amount" or field.get("type") == "number" for field, _ in fields), "The payment amount must remain read-only."
-                    assert "Submit payment" in html and "Upload screenshot" in html and "This form needs JavaScript" in html and "Optional screenshot or photo" in html
+                    assert "Submit payment" in html and "Upload screenshot" in html and "This form needs JavaScript" in html and "Both are filled in for you" in html
                     assert ("18 or older" in html) == (state not in ["active", "approved"])
                 if state == "approved": assert 'data-payment-status="approved"' not in html and "Payment approved" not in html, "An approval shows no card on the subscribe page."
         compact_status_rendering(server.origin)
@@ -141,7 +144,7 @@ def main():
         assert canonical_inputs and all('type="hidden"' in field for field in canonical_inputs)
         named_phone = [field for field in canonical_inputs if 'name="phone"' in field]
         assert len(named_phone) == 1, "The native form must submit its canonical phone field exactly once."
-        print("PASS 19 server-rendered payment states, pending contact channels and fallbacks, compact pending/rejected/reversed status with visible rejection reasons, shared account login, 5 user agents, visible required transaction ID and payer, optional screenshots, automatic amount, assent, plan order and private headers.", flush=True)
+        print("PASS 19 server-rendered payment states, pending contact channels and fallbacks, compact pending/rejected/reversed status with visible rejection reasons, shared account login, 5 user agents, visible required transaction ID and payer, required screenshot controls, automatic amount, assent, plan order and private headers.", flush=True)
         if args.serve: server.serve()
 
 

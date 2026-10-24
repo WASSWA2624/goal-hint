@@ -76,9 +76,12 @@ export function createPayments({ database, config, now = Date.now, environment =
     },
 
     async submit(member: MemberIdentity, fields: PaymentFields, image: Buffer | null = null): Promise<Outcome> {
+      // A report needs both its screenshot and the transaction ID it shows.
       const transactionId = parseTransactionId(fields.transactionId), payerPhone = validMobilePhone(fields.payerPhone);
-      if (!transactionId || !payerPhone) return { status: "invalid" };
-      const key = transactionKey(transactionId), imageBytes = image?.length ?? 0;
+      // The browser's reading of the screenshot is kept only as a bounded hint for the owner.
+      const read = fields.screenshotAmount, screenshotAmount = typeof read === "number" && Number.isSafeInteger(read) && read >= 100 && read <= 10_000_000 ? read : null;
+      if (!transactionId || !image || !payerPhone) return { status: "invalid" };
+      const key = transactionKey(transactionId), imageBytes = image.length;
       for (let attempt = 0; ; attempt++) {
         try { return await decide<Outcome>(database, async (tx, rollback) => {
           const at = new Date(now()), current = await currentMember(tx, member, at);
@@ -102,7 +105,7 @@ export function createPayments({ database, config, now = Date.now, environment =
           await tx.paymentSubmission.create({ data: { id, reference, source: "report", accountId: member.accountId,
             planId: plan.id, planName: plan.name, durationDays: plan.durationDays, priceUgx: plan.priceUgx,
             payerPhone, claimedNetwork: fields.network, claimedTxnRef: transactionId,
-            claimedTxnKey: key, claimedAmountUgx: plan.priceUgx, status: "pending", submittedAt: at,
+            claimedTxnKey: key, claimedAmountUgx: plan.priceUgx, screenshotAmountUgx: screenshotAmount, status: "pending", submittedAt: at,
             submittedSessionHash: member.tokenHash, termsVersion: termsNotice.reviewedOn, acceptedAt: at,
             ...(image && dimensions ? { imageSha256: createHash("sha256").update(image).digest("hex"), imageBytes,
               screenshot: { create: { width: dimensions.width, height: dimensions.height, bytes: imageBytes, data: new Uint8Array(image) } } } : {}) } });

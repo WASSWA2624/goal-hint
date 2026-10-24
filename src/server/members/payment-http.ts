@@ -9,7 +9,7 @@ import { duplicatePaymentMessage } from "./payments.ts";
 const processState = globalThis as typeof globalThis & { goalHintPaymentUploads?: number };
 const busy = (status = 429) => json({ error: "busy", message: "Busy, try again later. Call admin for help." }, status, { "Retry-After": "60" });
 const invalid = () => json({ error: "invalid", message: "Check the transaction ID and Paid from number." }, 400);
-const invalidImage = () => json({ error: "invalid", message: "Choose a valid payment screenshot, or submit without one." }, 400);
+const invalidImage = () => json({ error: "invalid", message: "Choose a valid screenshot of the payment." }, 400);
 
 export function createPaymentHandler(services: MemberServicesSource = getMemberServices, { deadlineMs = paymentRules.deadlineMs }: { deadlineMs?: number } = {}) {
   return memberRoute(async ({ request, services: resolved, member }) => {
@@ -31,13 +31,12 @@ export function createPaymentHandler(services: MemberServicesSource = getMemberS
       let data;
       try { data = await new Response(raw, { headers: { "Content-Type": request.headers.get("content-type")! } }).formData(); }
       catch { return invalid(); }
-      // Every payment field is required exactly once; only the screenshot may be left out.
+      // Every payment field and the screenshot are required exactly once.
       const expected: readonly string[] = [...paymentFields, "image"];
-      if ([...data.keys()].some((key) => !expected.includes(key))
-        || expected.some((key) => data.getAll(key).length !== 1 && !(key === "image" && data.getAll(key).length === 0))) return invalid();
+      if ([...data.keys()].some((key) => !expected.includes(key)) || expected.some((key) => data.getAll(key).length !== 1)) return invalid();
       const image = data.get("image"), fields = parsePaymentFields(Object.fromEntries(paymentFields.flatMap((key) => data.has(key) ? [[key, data.get(key)] as const] : [])));
       if (!fields) return invalid();
-      if (image !== null && (!(image instanceof File) || image.size > paymentRules.imageBytes)) return invalidImage();
+      if (!(image instanceof File) || image.size > paymentRules.imageBytes) return invalidImage();
       const buffer = image instanceof File ? Buffer.from(await image.arrayBuffer()) : null;
       if (buffer && !imageInputFormat(buffer, { formats: ["jpeg"], maxBytes: paymentRules.imageBytes, minSide: 200, maxSide: 4096, maxPixels: 12_000_000 })) return invalidImage();
       const result = await resolved.payments.submit(member!, fields, buffer);

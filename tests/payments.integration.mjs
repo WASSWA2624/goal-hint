@@ -25,7 +25,7 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
   await database.query((tx) => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST MTN", airtelNumber: "256700000902", airtelName: "TEST AIRTEL", updatedAt: at, updatedBy: "synthetic-owner" } }));
   await database.query((tx) => tx.subscriptionPlan.create({ data: { id: planId, name: "Weekly", durationDays: 7, priceUgx: 5000, active: true, sortOrder: 1, createdAt: at, updatedAt: at } }));
   async function member(phone) { const signed = await sessions.signIn(phone ?? `25670000${String(++serial).padStart(4, "0")}`, "unknown"); return sessions.verify(signed.token); }
-  const fields = (overrides = {}) => ({ planId, payerPhone: "256700000101", network: "mtn", transactionId: `TEST-${++serial}`, accepted: true, ...overrides });
+  const fields = (overrides = {}) => ({ planId, payerPhone: "256700000101", network: "mtn", transactionId: `TEST-${++serial}`, screenshotAmount: 5000, accepted: true, ...overrides });
   const settings = { ...defaultSubscriptionSettings, paywallMode: "test", trialDays: 2 };
   const image = jpeg();
   async function report(who, values = fields(), screenshot = image) { assert.equal(await payments.begin(who, "unknown", screenshot?.length ?? 1), true); return payments.submit(who, values, screenshot); }
@@ -55,7 +55,7 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
     const row = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: a.reference.slice(1) } }));
     const approved = await codes.approvePayment(row.id, { network: "mtn", transactionRef: transactionId, amountReceivedUgx: 5000, planId }, "synthetic-owner"); assert.equal(approved.status, "created");
     const before = await count();
-    const result = await report(await member(), fields({ transactionId: transactionId.replace(/[.-]/gu, ""), network: "airtel" }), null);
+    const result = await report(await member(), fields({ transactionId: transactionId.replace(/[.-]/gu, ""), network: "airtel" }));
     assert.equal(result.status, "duplicate"); assert.equal(await count(), before);
     const otherDevice = await payments.view(await member(first.phone), settings); assert.equal(otherDevice.status.reference, a.reference);
     const visible = await payments.view(first, settings); assert.equal(visible.status.reference, a.reference); assert.ok(visible.status.endsAt);
@@ -70,12 +70,12 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
     assert.equal((await payments.view(locked, settings)).acceptedTerms, true);
     assert.equal((await report(locked, fields({ accepted: false }))).status, "saved");
   });
-  await t.test("reports without screenshots use the supplied payer and plan price; approval preserves the paid-for offer", async () => {
-    const who = await member(), transactionId = `OPTIONAL-${++serial}`, sent = await report(who, fields({ payerPhone: "0700000199", transactionId }), null);
+  await t.test("reports use the supplied payer and plan price and keep the screenshot's amount only as a hint; approval preserves the paid-for offer", async () => {
+    const who = await member(), transactionId = `HINTED-${++serial}`, sent = await report(who, fields({ payerPhone: "0700000199", transactionId, screenshotAmount: 4000 }));
     const before = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: sent.reference.slice(1) }, include: { screenshot: true } }));
     assert.equal(before.payerPhone, "256700000199"); assert.equal(before.claimedAmountUgx, 5000); assert.equal(before.claimedTxnKey, transactionId.replace("-", ""));
-    assert.equal(before.claimedTxnRef, transactionId.replace("-", ""));
-    assert.equal(before.status, "pending"); assert.equal(before.screenshot, null); assert.equal(before.imageSha256, null); assert.equal(before.imageBytes, null);
+    assert.equal(before.claimedTxnRef, transactionId.replace("-", "")); assert.equal(before.screenshotAmountUgx, 4000, "the browser's reading, never the claim");
+    assert.equal(before.status, "pending"); assert.ok(before.screenshot); assert.ok(before.imageSha256); assert.equal(before.imageBytes, image.length);
     assert.equal(await database.query((tx) => tx.accessCode.count({ where: { accountId: who.accountId } })), 0);
     assert.equal((await database.query((tx) => tx.memberSession.findUniqueOrThrow({ where: { tokenHash: who.tokenHash } }))).codeEnteredAt, null);
     await database.query((tx) => tx.subscriptionPlan.update({ where: { id: planId }, data: { priceUgx: 7000, durationDays: 30 } }));
@@ -97,17 +97,28 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
     assert.equal(await count(), before);
     assert.equal((await database.query(tx => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: sent.reference.slice(1) } }))).status, "pending");
   });
-  await t.test("reports without screenshots still consume the stored-submission cap and retain an audit trail", async () => {
+  await t.test("a report without its screenshot stores nothing, and an out-of-range screenshot amount is kept as unread", async () => {
+    const who = await member(), before = await count();
+    assert.equal((await payments.submit(who, fields(), null)).status, "invalid");
+    assert.equal(await count(), before);
+    // A fresh member each time: one session may store only three reports.
+    for (const screenshotAmount of [null, 99, 10_000_001, 1.5]) {
+      const sent = await report(await member(), fields({ screenshotAmount }));
+      assert.equal(sent.status, "saved", String(screenshotAmount));
+      assert.equal((await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: sent.reference.slice(1) } }))).screenshotAmountUgx, null);
+    }
+  });
+  await t.test("every report consumes the stored-submission cap and retains an audit trail", async () => {
     const who = await member();
-    const outcomes = await Promise.all(Array.from({ length: 6 }, () => payments.submit(who, fields())));
+    const outcomes = await Promise.all(Array.from({ length: 6 }, () => payments.submit(who, fields(), image)));
     assert.equal(outcomes.filter(row => row.status === "saved").length, 3);
     assert.equal(outcomes.filter(row => row.status === "busy").length, 3);
     assert.equal(await payments.begin(who, "unknown", 100), false);
     const counter = await database.query(tx => tx.rateLimitBucket.findUniqueOrThrow({ where: { key: config.key("member-upload-stored", who.tokenHash) } }));
-    assert.equal(counter.count, 3); assert.equal(counter.bytes, 0);
+    assert.equal(counter.count, 3); assert.equal(counter.bytes, 3 * image.length);
     const audits = await database.query(tx => tx.ownerAuditEvent.findMany({ where: { accountId: who.accountId, action: "payment_submitted" } }));
     assert.equal(audits.length, 3);
-    assert.equal(await database.query(tx => tx.paymentScreenshot.count({ where: { submission: { accountId: who.accountId } } })), 0);
+    assert.equal(await database.query(tx => tx.paymentScreenshot.count({ where: { submission: { accountId: who.accountId } } })), 3);
   });
   await t.test("stored and attempted uploads have independent daily caps, including concurrent storage", async () => {
     const who = await member();

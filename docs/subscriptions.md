@@ -64,6 +64,7 @@ Apply the reviewed migrations in order before deploying this application:
 - `20261021120000_manual_password_recovery`
 - `20261023090000_member_message_verification`
 - `20261023130000_single_member_login`
+- `20261024200000_payment_screenshot_amount`: adds the nullable `PaymentSubmission.screenshotAmountUgx` column, a plain ALTER valid on MySQL and MariaDB. Payment reports and the owner's payment review read and write it, so apply it before deploying this release.
 
 They follow the existing subscription/password migrations. Grant the application role SELECT, INSERT, DELETE on `SavedSlip` and SELECT, INSERT on `SavedSlipFixture`, alongside existing member/payment grants. The child links are removed through the foreign-key cascade; no snapshot UPDATE or child DELETE permission is needed. See `deploy/manual-account-grants.sql`. Use DDL-capable migration credentials only for deployment. Keep ordinary application credentials DML-only. No development or production database is migrated by editing the application source.
 
