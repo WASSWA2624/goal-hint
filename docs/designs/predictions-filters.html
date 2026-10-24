@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>Goal Hint · Predictions filter designs</title>
+<title>Goal Hint · Desktop filter designs</title>
 <style>
 :root { color-scheme:light; --page:#edf7ff; --paper:#fff; --ink:#05234e; --muted:#536b88; --line:#c5d8ef; --control:#aec8e8; --blue:#0065f8; --tint:#edf4ff; --disabled:#f0f3f7; --backdrop:#071c3e80; }
 * { box-sizing:border-box; }
@@ -36,93 +36,79 @@ label { min-width:0; }
 .pair { display:grid; grid-template-columns:minmax(0,1fr) 390px; gap:24px; align-items:start; }
 .preview-label { color:var(--muted); font-size:12px; margin-bottom:8px; }
 .preview { min-width:0; }
-.surface { background:var(--page); border-top:2px solid #18a2ff; padding:14px; min-width:0; }
+.surface { --space:10px; background:var(--page); border-top:2px solid #18a2ff; padding:var(--space); min-width:0; }
+.desktop .surface { max-width:700px; margin-inline:auto; --space:12px; }
 .fp { display:grid; align-items:center; gap:8px; min-width:0; }
-.fp h2 { grid-area:heading; margin:0; font-size:21px; font-weight:600; line-height:1.25; }
-.fp .search { grid-area:search; }
-.fp .period { grid-area:period; }
-.fp .options { grid-area:options; }
-.fp .picks { grid-area:picks; }
-.fp .sort { grid-area:sort; }
-.fp .actions { grid-area:actions; }
-.search { display:flex; align-items:center; gap:8px; min-width:0; border:1px solid var(--control); background:var(--paper); padding-inline:9px; }
+.fp-heading,.search-row { display:flex; align-items:center; gap:10px; min-width:0; }
+.fp h2 { flex:1; margin:0; font-size:21px; font-weight:600; line-height:1.25; min-width:0; }
+.period { display:flex; align-items:center; gap:7px; color:var(--muted); width:166px; flex:none; min-width:0; }
+.period > span { font-size:11px; }
+.period select { color:var(--ink); font-size:12px; }
+.search { display:flex; flex:1; align-items:center; gap:8px; min-width:0; border:1px solid var(--control); background:var(--paper); padding-inline:9px; }
 .search::before { content:'⌕'; flex:none; color:var(--muted); font-size:22px; line-height:1; }
 .search input:not([type=checkbox]) { border:0; background:transparent; padding-inline:0; }
-.period,.sort { display:flex; align-items:center; gap:7px; color:var(--muted); min-width:0; }
-.period > span,.sort > span { flex:none; font-size:11px; }
-.period select,.sort select { color:var(--ink); font-size:12px; }
 .options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; min-width:0; }
 .option { display:flex; align-items:center; justify-content:center; gap:5px; min-width:0; padding:6px; font-size:12px; line-height:1.25; min-height:38px; }
 .option > span { min-width:0; }
-.filter-count { display:inline-flex; align-items:center; justify-content:center; flex:none; min-width:19px; height:19px; padding:1px 4px; background:var(--tint); color:var(--blue); font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; }
+.filter-count { display:inline-flex; align-items:center; justify-content:center; flex:none; min-width:17px; height:17px; padding:1px 3px; background:var(--tint); color:var(--blue); font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; }
 .option[data-edited=true] { background:var(--tint); border-color:#8db7ee; }
-.picks { display:flex; align-items:center; gap:7px; font-size:12px; white-space:nowrap; min-height:36px; }
-.actions { display:flex; align-items:center; justify-content:flex-end; gap:6px; min-width:0; }
-.actions button { font-size:12px; white-space:nowrap; }
+.footer { display:flex; flex-wrap:nowrap; align-items:center; gap:6px; min-width:0; }
+.picks { display:flex; flex:1; align-items:center; gap:6px; min-height:36px; font-size:12px; white-space:nowrap; }
+.footer > button,.sort-button { padding-inline:10px; font-size:12px; white-space:nowrap; }
 .reset { color:var(--muted); }
-.sr { position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-.footnote { margin:20px 0 0; color:var(--muted); font-size:12px; }
-.preset-buttons { display:none; }
-.preset-buttons button { padding:6px 10px; font-size:12px; }
-.preset-buttons button[aria-pressed=true] { color:var(--blue); background:var(--tint); border-color:#8db7ee; }
-.desktop .fp { grid-template-columns:minmax(0,1fr) 178px 166px; grid-template-areas:'heading heading period' 'search search search' 'options options options' 'picks sort actions'; }
-.desktop .options { max-width:640px; }
-.desktop .sort { justify-self:end; width:178px; }
-.mobile .surface { padding:10px; }
-.mobile .fp { grid-template-columns:minmax(100px,1fr) minmax(0,1.5fr); grid-template-areas:'heading heading' 'search search' 'period sort' 'options options' 'picks actions'; gap:7px; }
-.mobile .fp h2 { font-size:19px; }
-.mobile .option { min-height:44px; font-size:12px; padding:5px 3px; }
-.mobile input:not([type=checkbox]),.mobile select { min-height:40px; }
-.mobile .search input { font-size:16px; }
-.mobile .picks { min-height:40px; }
-.mobile .actions button { min-height:40px; }
-.mobile .period select { font-size:13px; }
+.sort { position:relative; flex:none; }
+.sort-button { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; }
+.sort-button[data-active=true] { color:var(--blue); background:var(--tint); }
+.sort-menu { position:absolute; z-index:12; top:calc(100% + 4px); left:0; width:168px; padding:4px; border:1px solid var(--control); background:var(--paper); box-shadow:0 4px 14px #071c3e17; }
+.sort-menu button { display:flex; align-items:center; gap:7px; width:100%; min-height:36px; padding:7px 6px; text-align:left; border:0; font-size:12px; font-weight:400; }
+.sort-menu button[aria-checked=true] { color:var(--blue); background:var(--tint); }
+.sort-menu .checkmark { width:12px; flex:none; }
+.mobile { container-type:inline-size; }
+.mobile .fp { gap:7px; }
+.mobile .fp h2 { font-size:17px; }
+.mobile .fp-heading,.mobile .search-row { gap:7px; }
+.mobile .period { width:131px; }
 .mobile .period > span { display:none; }
-.mobile .sort > span { display:none; }
-/* Each variant changes composition while preserving the same complete controls. */
-[data-concept=balanced] .desktop .fp { grid-template-columns:minmax(0,1fr) 180px 166px; grid-template-areas:'heading heading period' 'search search search' 'options options options' 'picks sort actions'; }
-[data-concept=stack] .desktop .fp { max-width:620px; margin:auto; grid-template-columns:minmax(0,1fr) 178px; grid-template-areas:'heading period' 'search search' 'options options' 'picks sort' 'actions actions'; }
-[data-concept=toolbar] .desktop .fp { grid-template-columns:minmax(170px,1fr) 178px 166px; grid-template-areas:'heading heading picks' 'search options options' 'period sort actions'; }
-[data-concept=toolbar] .desktop .options { gap:4px; }
-[data-concept=toolbar] .desktop .picks { justify-self:end; }
-[data-concept=toolbar] .mobile .fp { grid-template-areas:'heading heading' 'search search' 'options options' 'period sort' 'picks actions'; }
-[data-concept=stack] .mobile .fp { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); grid-template-areas:'heading period' 'search search' 'options options' 'picks sort' 'actions actions'; }
-[data-concept=stack] .mobile .fp h2 { font-size:17px; }
-[data-concept=split] .desktop .fp { grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:18px; grid-template-areas:'heading heading' 'search options' 'period sort' 'picks actions'; }
-[data-concept=split] .desktop .sort { width:100%; }
-[data-concept=search] .desktop .fp { grid-template-columns:minmax(0,1fr) 180px 166px; grid-template-areas:'heading heading period' 'search search actions' 'options options options' 'picks sort sort'; }
-[data-concept=search] .mobile .fp { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:'heading heading' 'search actions' 'period period' 'options options' 'picks sort'; }
-[data-concept=search] .mobile .actions { flex-direction:column-reverse; position:relative; }
-[data-concept=search] .mobile .actions .reset { position:absolute; inset-block-start:calc(100% + 7px); min-height:40px; min-width:74px; }
-[data-concept=search] .mobile .period { margin-right:80px; }
-[data-concept=search] .mobile .sort { max-width:165px; justify-self:end; }
-[data-concept=period] .desktop .fp { grid-template-columns:minmax(0,1fr) 230px 230px; grid-template-areas:'heading period period' 'search search search' 'options options options' 'picks sort actions'; }
-[data-concept=period] .period > span:not(.preset-buttons),[data-concept=period] .period > select { display:none; }
-[data-concept=period] .preset-buttons { display:flex; gap:5px; width:100%; justify-content:flex-end; }
-[data-concept=period] .mobile .fp { grid-template-areas:'heading heading' 'period period' 'search search' 'options options' 'picks sort' 'actions actions'; }
-[data-concept=period] .mobile .preset-buttons { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
-[data-concept=period] .mobile .preset-buttons button { font-size:11px; min-height:38px; padding:4px 2px; }
-[data-concept=quiet] .surface { border-top:2px solid #18a2ff; background:var(--paper); }
-[data-concept=quiet] .fp { gap:10px; }
-[data-concept=quiet] .option { border:0; border-bottom:1px solid var(--control); background:transparent; }
-[data-concept=quiet] .search { border:0; border-bottom:1px solid var(--control); padding-inline:0; }
-[data-concept=quiet] .desktop .fp { grid-template-columns:minmax(0,1fr) 178px 166px; grid-template-areas:'heading heading period' 'search search search' 'options options options' 'picks sort actions'; }
-[data-concept=ledger] .desktop .fp { grid-template-columns:180px minmax(0,1fr) 166px; column-gap:18px; grid-template-areas:'heading search search' 'period options options' 'picks sort actions'; }
-[data-concept=ledger] .desktop .fp h2 { font-size:20px; max-width:160px; }
-[data-concept=ledger] .desktop .period { display:block; }
-[data-concept=ledger] .desktop .period > span:not(.preset-buttons) { display:block; margin-bottom:3px; }
-[data-concept=ledger] .mobile .fp { grid-template-areas:'heading heading' 'period sort' 'search search' 'options options' 'picks actions'; }
-[data-concept=connected] .desktop .fp { grid-template-columns:minmax(0,1fr) 178px 166px; grid-template-areas:'heading heading period' 'search options options' 'picks sort actions'; }
+.mobile .period select { font-size:12px; }
+.mobile .search input { font-size:16px; }
+.mobile input:not([type=checkbox]),.mobile select { min-height:40px; }
+.mobile .option { min-height:44px; font-size:12px; padding:5px 3px; }
+.mobile .footer { gap:4px; }
+.mobile .picks { flex:none; min-height:40px; gap:5px; }
+.mobile .sort { flex:1; min-width:0; }
+.mobile .footer > button,.mobile .sort-button { min-height:40px; font-size:12px; padding-inline:6px; }
+.mobile .sort-button { gap:4px; }
+/* Every sample preserves the same stack and the single action row. */
+[data-concept=search] .desktop .surface { max-width:700px; }
+[data-concept=search] .search-row .period { width:166px; }
+[data-concept=joined] .search-row { gap:0; border:1px solid var(--control); background:var(--paper); }
+[data-concept=joined] .search-row .search { border:0; }
+[data-concept=joined] .search-row .period { width:154px; }
+[data-concept=joined] .search-row .period > span { display:none; }
+[data-concept=joined] .search-row .period select { border:0; border-left:1px solid var(--line); }
 [data-concept=connected] .options { gap:0; }
 [data-concept=connected] .option + .option { border-left:0; }
-[data-concept=rail] .desktop .fp { grid-template-columns:minmax(0,1fr) 178px 166px; grid-template-areas:'heading heading period' 'search search search' 'options options options' 'picks sort actions'; padding-bottom:0; }
-[data-concept=rail] .actions { padding-top:8px; border-top:1px solid var(--line); }
-[data-concept=rail] .desktop .picks,[data-concept=rail] .desktop .sort { padding-top:8px; border-top:1px solid var(--line); }
-[data-concept=rail] .desktop .picks { height:45px; }
-[data-concept=rail] .mobile .fp { grid-template-areas:'heading heading' 'search search' 'period period' 'options options' 'picks sort' 'actions actions'; }
-[data-concept=rail] .mobile .actions { padding:8px 0 0; }
-[data-concept=balanced] .desktop .fp { grid-template-columns:minmax(0,1fr) 180px 166px; }
+[data-concept=quiet] .surface { background:var(--paper); border-top:1px solid var(--line); }
+[data-concept=quiet] .search { border:0; border-bottom:1px solid var(--control); padding-inline:0; }
+[data-concept=quiet] .option { border:0; border-bottom:1px solid var(--line); background:transparent; }
+[data-concept=quiet] .fp { gap:10px; }
+[data-concept=framed] .surface { background:var(--paper); border:1px solid var(--control); }
+[data-concept=framed] .fp-heading { padding-bottom:7px; border-bottom:1px solid var(--line); }
+[data-concept=inset] .footer { background:var(--paper); padding:8px var(--space); margin:0 calc(-1 * var(--space)) calc(-1 * var(--space)); border-top:1px solid var(--line); }
+[data-concept=slim] .fp h2 { font-size:17px; }
+[data-concept=slim] .desktop .surface { max-width:660px; }
+[data-concept=slim] .fp-heading { border-bottom:1px solid var(--line); padding-bottom:5px; }
+[data-concept=dense] .surface { --space:8px; }
+[data-concept=dense] .fp { gap:5px; }
+[data-concept=dense] .options { gap:4px; }
+[data-concept=dense] .fp h2 { font-size:17px; }
+[data-concept=dense] .desktop .surface { max-width:640px; }
+[data-concept=tap] .fp { gap:9px; }
+[data-concept=tap] .fp input:not([type=checkbox]),[data-concept=tap] .fp select,[data-concept=tap] .fp button,[data-concept=tap] .picks { min-height:44px; }
+[data-concept=tap] .mobile .footer { gap:5px; }
 .preview-status { min-height:20px; padding-top:5px; font-size:11px; color:var(--muted); }
+.footnote { margin:20px 0 0; color:var(--muted); font-size:12px; }
+.sr { position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 dialog { width:440px; max-width:calc(100vw - 24px); max-height:calc(100dvh - 24px); padding:0; border:1px solid var(--control); color:var(--ink); background:var(--paper); box-shadow:0 12px 45px #071c3e24; }
 dialog.phone-dialog { width:366px; }
 dialog[open] { display:flex; flex-direction:column; }
@@ -147,16 +133,111 @@ dialog::backdrop { background:var(--backdrop); }
 fieldset:disabled { color:var(--muted); }
 fieldset:disabled input { background:var(--disabled); color:var(--muted); cursor:default; }
 .error { margin:0 0 10px; color:#b7192d; font-size:12px; }
-@media(max-width:1100px) { .pair { grid-template-columns:minmax(0,1fr) 360px; gap:16px; } .desktop .fp { column-gap:6px!important; } .desktop .fp h2 { font-size:19px; } .desktop .period,.desktop .sort { display:block; } .desktop .period > span,.desktop .sort > span { display:none; } }
+@container(max-width:340px) {
+  .mobile .fp-heading { gap:6px; }
+  .mobile .fp h2 { font-size:16px; }
+  .mobile .period { width:116px; }
+  .mobile .period select { font-size:11px; padding-inline:5px; }
+  .mobile .footer { gap:3px; }
+  .mobile .picks { font-size:11px; gap:4px; }
+  .mobile .footer > button,.mobile .sort-button { font-size:11px; padding-inline:5px; }
+  .mobile .option { font-size:11px; }
+  [data-concept=search] .mobile .search-row .period,[data-concept=joined] .mobile .search-row .period { width:112px; }
+}
+@media(max-width:1100px) { .pair { grid-template-columns:minmax(0,1fr) 360px; gap:16px; } .desktop .period { width:146px; } .desktop .period > span { display:none; } }
 @media(max-width:1000px) { .pair { grid-template-columns:1fr; } .mobile { max-width:390px; margin-inline:auto; width:100%; } .top-inner { flex-wrap:wrap; padding:10px 16px; } .top-title { flex-basis:100%; } .gallery { padding:0 16px 24px; margin-top:16px; } .concept-heading { display:block; margin-bottom:14px; } .concept-heading p { margin-top:3px; } }
-@media(max-width:600px) { .desktop { overflow-x:auto; } .desktop .surface { width:820px; } .mobile { grid-row:1; } .top-inner { gap:6px; } .design-label { flex:1; min-width:0; } .design-label > span { display:none; } .design-label select { width:100%; } .counter { display:none; } .top-inner > button { width:35px; padding:0; font-size:0; } #previous::after { content:'‹'; font-size:22px; } #next::after { content:'›'; font-size:22px; } .top-title { font-size:14px; } }
-@media(max-width:360px) { .mobile .fp h2 { font-size:18px; } .mobile .surface { padding:8px; } .mobile .option { font-size:11px; } .mobile .actions button { padding-inline:9px; } .fields,.check-grid { grid-template-columns:1fr; } }
+@media(max-width:600px) { .desktop { overflow-x:auto; } .desktop .surface { width:700px; } .mobile { grid-row:1; } .top-inner { gap:6px; } .design-label { flex:1; min-width:0; } .design-label > span { display:none; } .design-label select { width:100%; } .counter { display:none; } .top-inner > button { width:35px; padding:0; font-size:0; } #previous::after { content:'‹'; font-size:22px; } #next::after { content:'›'; font-size:22px; } .top-title { font-size:14px; } }
+@media(max-width:360px) { .mobile .surface { --space:8px; } .fields,.check-grid { grid-template-columns:1fr; } }
+
+/* Desktop finishes are intentionally isolated from the retained mobile component. */
+.desktop-gallery .gallery { max-width:1232px; }
+.desktop-gallery .pair { display:block; }
+.desktop-gallery .mobile { display:none; }
+.desktop-gallery .desktop { overflow:visible; padding-bottom:0; }
+.desktop[data-finish] .surface {
+  --space:14px; --desktop-line:#c9d4e2; --desktop-field:#fff; --desktop-muted:#5b6c83;
+  width:100%; min-width:820px; max-width:1120px; margin-inline:auto; padding:var(--space);
+  border:1px solid var(--desktop-line); border-top:2px solid #0065f8; background:#fff;
+  color:#112b4d; font-size:14px;
+}
+.desktop[data-finish] .fp { gap:8px; }
+.desktop[data-finish] .fp-heading { gap:14px; padding:0; margin:0; border:0; background:transparent; }
+.desktop[data-finish] .fp h2 { max-width:none; font-size:22px; font-weight:600; letter-spacing:-.35px; line-height:1.3; }
+.desktop[data-finish] .period { width:214px; gap:9px; display:flex; }
+.desktop[data-finish] .period > span { display:block; font-size:12px; color:var(--desktop-muted); }
+.desktop[data-finish] .period select { min-height:40px; padding:8px 11px; font-size:14px; color:inherit; border:1px solid var(--desktop-line); background:var(--desktop-field); }
+.desktop[data-finish] .search-row { gap:8px; border:0; background:transparent; }
+.desktop[data-finish] .search-row .search { padding-inline:12px; gap:9px; border:1px solid var(--desktop-line); background:var(--desktop-field); }
+.desktop[data-finish] .search::before { display:none; }
+.desktop[data-finish] .search input { min-height:40px; padding-block:8px; font-size:14px; }
+.desktop[data-finish] .search input::placeholder { color:var(--desktop-muted); }
+.desktop[data-finish] .search:focus-within { border-color:var(--blue); box-shadow:0 0 0 2px #0065f81a; }
+.desktop[data-finish] .search input:focus-visible { outline:0; }
+.desktop[data-finish] .control-icon { width:17px; height:17px; flex:none; color:var(--desktop-muted); }
+.desktop[data-finish] .control-icon.icon-chevron { width:13px; height:13px; }
+.desktop[data-finish] .options { gap:8px; }
+.desktop[data-finish] .option {
+  min-height:42px; gap:9px; padding:9px 12px; border:1px solid var(--desktop-line);
+  background:var(--desktop-field); color:inherit; font-size:14px; font-weight:500; text-align:left;
+}
+.desktop[data-finish] .option > .option-label { flex:1; }
+.desktop[data-finish] .option[data-edited=true] { color:#0057d5; border-color:#95b6e6; background:#f0f6ff; }
+.desktop[data-finish] .filter-count { min-width:20px; height:20px; padding:2px 5px; background:#eaf2ff; color:#0059da; font-size:12px; font-weight:600; }
+.desktop[data-finish] .footer { gap:8px; padding:0; margin:0; border:0; background:transparent; }
+.desktop[data-finish] .picks { gap:7px; min-height:40px; font-size:13px; color:#354c68; cursor:pointer; }
+.desktop[data-finish] .picks input { width:16px; height:16px; }
+.desktop[data-finish] .footer > button,.desktop[data-finish] .sort-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:8px 12px; font-size:13px; font-weight:500; border-color:var(--desktop-line); }
+.desktop[data-finish] .sort-button { background:var(--desktop-field); color:#425873; }
+.desktop[data-finish] .sort-current { color:#112b4d; font-size:13px; font-weight:500; }
+.desktop[data-finish] .sort-current::before { content:'·'; margin-right:7px; color:#9aabba; }
+.desktop[data-finish] .sort-button[data-active=true] { background:#f0f6ff; border-color:#95b6e6; }
+.desktop[data-finish] .reset { border-color:transparent!important; color:#536881; background:transparent; }
+.desktop[data-finish] .footer > .primary { min-width:128px; border-color:var(--blue); color:#fff; background:var(--blue); font-weight:600; }
+.desktop[data-finish] .primary .control-icon { color:currentColor; }
+.desktop[data-finish] .option:hover,.desktop[data-finish] .sort-button:hover,.desktop[data-finish] .period select:hover { border-color:#7fa4d0; background:#f7faff; }
+.desktop[data-finish] .reset:hover { background:#f1f5fa; }
+.desktop[data-finish] .footer > .primary:hover { background:#0054d1; border-color:#0054d1; }
+.desktop[data-finish] .sort-menu { width:216px; padding:5px; border-color:var(--desktop-line); box-shadow:0 5px 18px #102a4e14; }
+.desktop[data-finish] .sort-menu button { min-height:40px; padding:8px; font-size:13px; }
+/* Ten component treatments; the four compact bands and all behavior are shared. */
+.desktop[data-finish=soft] .surface { --desktop-field:#f7f9fd; --desktop-line:#d7e0ed; border-top:1px solid #d7e0ed; background:#fff; }
+.desktop[data-finish=soft] .option { border-color:transparent; }
+.desktop[data-finish=soft] .option:hover { border-color:#a5bee0; }
+.desktop[data-finish=connected] .options { gap:0; }
+.desktop[data-finish=connected] .option + .option { border-left:0; }
+.desktop[data-finish=connected] .surface { border-top:1px solid var(--desktop-line); background:#f8fbff; }
+.desktop[data-finish=header] .surface { border-top:1px solid var(--desktop-line); }
+.desktop[data-finish=header] .fp-heading { margin:calc(-1 * var(--space)) calc(-1 * var(--space)) 0; padding:12px var(--space); border-bottom:1px solid var(--desktop-line); background:#f2f6fc; }
+.desktop[data-finish=framed] .surface { --desktop-line:#aebed2; background:#f7faff; border:1px solid #95a9c3; }
+.desktop[data-finish=rules] .surface { border:0; background:transparent; }
+.desktop[data-finish=rules] .search-row .search { padding-inline:0; border:0; border-bottom:1px solid #aebed2; background:transparent; }
+.desktop[data-finish=rules] .option { padding-inline:8px; border:0; border-bottom:1px solid #c3cfdf; background:transparent; }
+.desktop[data-finish=rules] .footer { padding-top:5px; border-top:1px solid #d7e0ec; }
+.desktop[data-finish=compact] .surface { --space:12px; --desktop-line:#b7c7dc; max-width:1000px; }
+.desktop[data-finish=compact] .fp { gap:6px; }
+.desktop[data-finish=compact] .fp h2 { font-size:20px; }
+.desktop[data-finish=compact] .fp input:not([type=checkbox]),.desktop[data-finish=compact] .fp select,.desktop[data-finish=compact] .option,.desktop[data-finish=compact] .footer > button,.desktop[data-finish=compact] .sort-button,.desktop[data-finish=compact] .picks { min-height:38px; }
+.desktop[data-finish=neutral] .surface { --desktop-field:#f1f4f8; --desktop-line:#aebccc; border:1px solid #b4c1d1; }
+.desktop[data-finish=neutral] .option { color:#213b5a; }
+.desktop[data-finish=neutral] .option .control-icon { color:#4b6079; }
+.desktop[data-finish=shelf] .surface { border-top:1px solid var(--desktop-line); }
+.desktop[data-finish=shelf] .footer { margin:0 calc(-1 * var(--space)) calc(-1 * var(--space)); padding:10px var(--space); border-top:1px solid var(--desktop-line); background:#f1f6fd; }
+.desktop[data-finish=aligned] .surface { max-width:1040px; border-top:1px solid var(--desktop-line); }
+.desktop[data-finish=aligned] .option .icon-leading { display:none; }
+.desktop[data-finish=aligned] .option { min-height:44px; padding-inline:14px; font-weight:500; }
+.desktop[data-finish=aligned] .fp-heading { padding-bottom:3px; }
+.desktop-gallery .footnote { margin-top:20px; }
+@media(max-width:850px) {
+  .desktop-gallery .desktop { overflow-x:auto; padding-bottom:8px; }
+  .desktop-gallery .desktop:has(.sort-menu:not([hidden])) { padding-bottom:190px; }
+}
+
 </style>
 </head>
-<body>
+<body class="desktop-gallery">
 <header class="top">
   <div class="top-inner">
-    <div class="top-title">Predictions · Essentials + Dialogs<small>10 interactive design samples · Section only</small></div>
+    <div class="top-title">Desktop refinements · 10 samples<small>Compact Stack · Mobile retained unchanged</small></div>
     <label class="design-label" for="design"><span>Design</span><select id="design" aria-label="Choose design"></select></label>
     <button id="previous" aria-label="Previous design" type="button">Previous</button>
     <span class="counter" id="counter" aria-live="polite"></span>
@@ -166,7 +247,7 @@ fieldset:disabled input { background:var(--disabled); color:var(--muted); cursor
 <main class="gallery">
   <div class="concept-heading"><h1 id="concept-name"></h1><p id="concept-description"></p></div>
   <div id="sample" class="pair"></div>
-  <p class="footnote">Open any optional section to explore its dialog. Reset restores unrestricted limits to “Any”. These samples do not change the app.</p>
+  <p class="footnote">Desktop design samples. Explore the dialogs, period choices and sorting. The mobile design is unchanged.</p>
 </main>
 <dialog id="settings" aria-labelledby="dialog-title">
   <div class="dialog-head"><h2 id="dialog-title"></h2><button type="button" id="close-dialog" aria-label="Close dialog">×</button></div>
@@ -177,18 +258,19 @@ fieldset:disabled input { background:var(--disabled); color:var(--muted); cursor
 (() => {
   'use strict';
   const concepts = [
-    ['balanced','Balanced','A clear search row with optional settings below.'],
-    ['stack','Compact Stack','A narrow, consistent stack on both screens.'],
-    ['toolbar','Single Toolbar','Search and optional settings share the desktop row.'],
-    ['split','Split Workspace','Everyday choices beside the optional settings.'],
-    ['search','Search & Apply','One primary action beside the search field.'],
-    ['period','Period First','Quick date choices lead the section.'],
-    ['quiet','Quiet Rows','Simple controls with minimal framing.'],
-    ['ledger','Compact Ledger','A small heading column beside the controls.'],
-    ['connected','Connected Controls','The three optional sections form one compact strip.'],
-    ['rail','Action Rail','A clear action row beneath the essentials.'],
+    ['stack','Crisp Outline','Clean white controls with precise borders and a clear primary action.'],
+    ['search','Soft Surface','Subtle field surfaces with quieter outlines.'],
+    ['joined','Connected Sections','One continuous strip for the optional sections.'],
+    ['connected','Defined Header','A restrained heading band gives the controls a clear starting point.'],
+    ['quiet','Framed Workspace','A single frame and stronger field definition.'],
+    ['framed','Quiet Rules','Minimal framing with simple horizontal rules.'],
+    ['inset','Compact Professional','Tighter geometry with full-size, readable labels.'],
+    ['slim','Neutral Contrast','Stronger neutral controls with blue reserved for emphasis.'],
+    ['dense','Action Shelf','One calm surface groups the four footer controls.'],
+    ['tap','Aligned Fields','Text-led controls with consistent counts and dropdown cues.'],
   ];
-  const periods = [['last30','Last 30 days'],['today','Today'],['next3','Next 3 days'],['next7','Next 7 days'],['next30','Next 30 days'],['custom','Custom dates']];
+  const desktopFinishes=['crisp','soft','connected','header','framed','rules','compact','neutral','shelf','aligned'];
+  const periods = [['last30','Last 30 days'],['last7','Last 7 days'],['last3','Last 3 days'],['yesterday','Yesterday'],['today','Today'],['tomorrow','Tomorrow'],['custom','Custom dates']];
   const sorts = ['Latest first','Earliest first','Highest chance','Lowest chance'];
   const marketNames = ['Match result','Double chance','Total goals (2.5)','Both teams to score'];
   const leagueNames = ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1','Uganda Premier League'];
@@ -207,33 +289,51 @@ fieldset:disabled input { background:var(--disabled); color:var(--muted); cursor
   function setPeriod(state,period) {
     state.period = period;
     if(period==='custom') return;
-    state.dateFrom = period==='last30'?'2026-09-25':'2026-10-24';
-    state.dateTo = period==='last30'||period==='today'?'2026-10-24':dateAfter('2026-10-24',Number(period.slice(4))-1);
+    const offsets={last30:[-29,0],last7:[-6,0],last3:[-2,0],yesterday:[-1,-1],today:[0,0],tomorrow:[1,1]}[period];
+    if(!offsets) return;
+    state.dateFrom=dateAfter('2026-10-24',offsets[0]);
+    state.dateTo=dateAfter('2026-10-24',offsets[1]);
   }
   function edited(group,state) {
     if(group==='dates') return state.dateFrom!=='2026-09-25'||state.dateTo!=='2026-10-24'||state.timeFrom!=='00:00'||state.timeTo!=='23:59'||state.zone!=='eat';
     if(group==='competitions') return state.leagues.length>0||state.countries.length>0;
     return state.markets.length!==4||state.probMin!==''||state.probMax!=='';
   }
-  function trigger(group,label,state) {
+  // Shared stroke geometry from the app's existing icon set.
+  function icon(name) {
+    const shapes={
+      search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+      dates:'<rect x="3" y="5" width="18" height="16"/><path d="M7 3v4M17 3v4M3 11h18"/>',
+      competitions:'<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/>',
+      limits:'<path d="M4 7h4M12 7h8M4 17h8M16 17h4M8 4v6M16 14v6"/>',
+      chevron:'<path d="m6 9 6 6 6-6"/>',
+      reset:'<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/>',
+      filter:'<path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z"/>',
+    };
+    return `<svg class="control-icon icon-${name} ${['dates','competitions','limits'].includes(name)?'icon-leading':''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${shapes[name]}</svg>`;
+  }
+  function trigger(group,label,state,device) {
     const count=group==='dates' ? Number(state.dateFrom!=='2026-09-25'||state.dateTo!=='2026-10-24')+Number(state.timeFrom!=='00:00'||state.timeTo!=='23:59'||state.zone!=='eat')
       : group==='competitions' ? state.leagues.length+state.countries.length : state.markets.length+Number(state.probMin!==''||state.probMax!=='');
     const description=group==='dates' ? `${count} active ${count===1?'range':'ranges'}`
       : group==='competitions' ? count?`${count} selected ${count===1?'competition or country':'competitions and countries'}`:'All leagues and countries'
       : `${state.markets.length} selected markets${state.probMin!==''||state.probMax!==''?', 1 active probability range':''}`;
-    return `<button class="option" type="button" data-dialog="${group}" data-edited="${edited(group,state)}" aria-haspopup="dialog" aria-label="${escape(label)}, ${escape(description)}" title="${escape(description)}"><span>${escape(label)}</span>${count?`<b class="filter-count" aria-hidden="true">${count}</b>`:''}</button>`;
+    return `<button class="option" type="button" data-dialog="${group}" data-edited="${edited(group,state)}" aria-haspopup="dialog" aria-label="${escape(label)}, ${escape(description)}" title="${escape(description)}">${device==='desktop'?icon(group):''}<span${device==='desktop'?' class="option-label"':''}>${escape(label)}</span>${count?`<b class="filter-count" aria-hidden="true">${count}</b>`:''}${device==='desktop'?icon('chevron'):''}</button>`;
   }
   function screen(device) {
-    const state = states[index];
-    const compactPreset = (value,label) => `<button type="button" data-preset="${value}" aria-pressed="${state.period===value}">${label}</button>`;
-    return `<section class="preview ${device}" aria-label="${device==='desktop'?'Desktop':'Mobile'} preview"><div class="preview-label">${device==='desktop'?'Desktop':'Mobile · 390 px'}</div><div class="surface"><form class="fp" data-device="${device}">
-      <h2>Football Predictions</h2>
-      <label class="search"><span class="sr">Team or league</span><input type="search" name="search" aria-label="Team or league" maxlength="120" placeholder="Team or league" value="${escape(state.search)}"></label>
-      <div class="period"><span>Period</span><select name="period" aria-label="Prediction period">${optionHtml(periods,state.period)}</select><span class="preset-buttons">${compactPreset('last30','Last 30 days')}${compactPreset('today','Today')}${compactPreset('next3','Next 3 days')}${compactPreset('next7','Next 7 days')}${compactPreset('next30','Next 30 days')}</span></div>
-      <div class="options">${trigger('dates','Match Date & Time',state)}${trigger('competitions','Leagues & Countries',state)}${trigger('limits','Markets & Limits',state)}</div>
-      <label class="picks"><input type="checkbox" name="picks" ${state.picks?'checked':''}>Picks only</label>
-      <label class="sort"><span>Sort</span><select name="sort" aria-label="Sort predictions">${optionHtml(sorts,state.sort)}</select></label>
-      <div class="actions"><button class="reset" type="button" data-reset>Reset</button><button class="primary" type="submit">Apply filters</button></div>
+    const state = states[index],periodInSearch=device==='mobile'&&['search','joined'].includes(concepts[index][0]);
+    const period=`<div class="period"><span>Period</span><select name="period" aria-label="Prediction period">${optionHtml(periods,state.period)}</select></div>`;
+    const sortOptions=sorts.map(value=>`<button type="button" role="menuitemradio" tabindex="-1" aria-checked="${state.sort===value}" data-sort-option="${escape(value)}"><span class="checkmark" aria-hidden="true">${state.sort===value?'✓':''}</span>${escape(value)}</button>`).join('');
+    return `<section class="preview ${device}" ${device==='desktop'?`data-finish="${desktopFinishes[index]}" `:''}aria-label="${device==='desktop'?'Desktop':'Mobile'} preview"><div class="preview-label">${device==='desktop'?'Desktop':'Mobile'}</div><div class="surface"><form class="fp" data-device="${device}">
+      <div class="fp-heading"><h2>Football Predictions</h2>${periodInSearch?'':period}</div>
+      <div class="search-row"><label class="search">${device==='desktop'?icon('search'):''}<span class="sr">Team or league</span><input type="search" name="search" aria-label="Team or league" maxlength="120" placeholder="Team or league" value="${escape(state.search)}"></label>${periodInSearch?period:''}</div>
+      <div class="options">${trigger('dates','Match Date & Time',state,device)}${trigger('competitions','Leagues & Countries',state,device)}${trigger('limits','Markets & Limits',state,device)}</div>
+      <div class="footer">
+        <label class="picks"><input type="checkbox" name="picks" ${state.picks?'checked':''}>Picks only</label>
+        <div class="sort"><input type="hidden" name="sort" value="${escape(state.sort)}"><button type="button" class="sort-button" data-sort-toggle data-active="${state.sort!=='Latest first'}" aria-haspopup="menu" aria-expanded="false" aria-controls="sort-${device}" aria-label="Sort by: ${escape(state.sort)}" title="${escape(state.sort)}">${device==='desktop'?`<span>Sort by</span><b class="sort-current">${escape(state.sort)}</b>${icon('chevron')}`:'Sort by <span aria-hidden="true">⌄</span>'}</button><div class="sort-menu" id="sort-${device}" role="menu" aria-label="Sort predictions" hidden>${sortOptions}</div></div>
+        <button class="reset" type="button" data-reset>${device==='desktop'?icon('reset'):''}Reset</button>
+        <button class="primary" type="submit">${device==='desktop'?icon('filter'):''}Apply filters</button>
+      </div>
     </form></div><div class="preview-status" aria-live="polite"></div></section>`;
   }
   function render() {
@@ -248,8 +348,8 @@ fieldset:disabled input { background:var(--disabled); color:var(--muted); cursor
     document.getElementById('next').disabled = index===9;
   }
   function choose(value) {
-    const next = concepts.findIndex(item=>item[0]===value);
-    if(next<0) return;
+    const found = concepts.findIndex(item=>item[0]===value);
+    const next = found<0?0:found;
     if(dialog.open) closeDialog();
     index = next; history.replaceState(null,'',`#${concepts[index][0]}`); render();
   }
@@ -289,8 +389,36 @@ fieldset:disabled input { background:var(--disabled); color:var(--muted); cursor
     const button=event.target.closest('button'); if(!button) return;
     const device=button.closest('form')?.dataset.device;
     if(button.hasAttribute('data-reset')) { states[index]=defaults(); render(); sample.querySelector(`form[data-device="${device}"] [data-reset]`)?.focus(); return; }
-    if(button.dataset.preset) { setPeriod(states[index],button.dataset.preset); render(); sample.querySelector(`form[data-device="${device}"] [data-preset="${button.dataset.preset}"]`)?.focus(); return; }
+    if(button.hasAttribute('data-sort-toggle')) {
+      const menu=button.nextElementSibling,wasOpen=button.getAttribute('aria-expanded')==='true';
+      closeSortMenus();
+      if(!wasOpen) { menu.hidden=false; button.setAttribute('aria-expanded','true'); menu.querySelector('[aria-checked="true"]')?.focus(); }
+      return;
+    }
+    if(button.dataset.sortOption) {
+      states[index].sort=button.dataset.sortOption; render();
+      sample.querySelector(`form[data-device="${device}"] [data-sort-toggle]`)?.focus(); return;
+    }
     if(button.dataset.dialog) openDialog(button.dataset.dialog,button.closest('form').dataset.device);
+  });
+  function closeSortMenus() {
+    sample.querySelectorAll('[data-sort-toggle]').forEach(button=>button.setAttribute('aria-expanded','false'));
+    sample.querySelectorAll('.sort-menu').forEach(menu=>menu.hidden=true);
+  }
+  document.addEventListener('click',event=>{if(!event.target.closest('.sort'))closeSortMenus();});
+  sample.addEventListener('focusout',event=>{
+    const sort=event.target.closest('.sort');
+    if(sort&&!sort.contains(event.relatedTarget))closeSortMenus();
+  });
+  sample.addEventListener('keydown',event=>{
+    const sort=event.target.closest('.sort'); if(!sort)return;
+    const menu=sort.querySelector('.sort-menu'),button=sort.querySelector('[data-sort-toggle]');
+    if(event.key==='Escape') { event.preventDefault(); closeSortMenus(); button.focus(); return; }
+    if(!['ArrowDown','ArrowUp','Home','End'].includes(event.key))return;
+    event.preventDefault(); menu.hidden=false; button.setAttribute('aria-expanded','true');
+    const items=Array.from(menu.querySelectorAll('button')),current=items.indexOf(document.activeElement);
+    const next=event.key==='Home'?0:event.key==='End'?items.length-1:event.key==='ArrowDown'?(current+1)%items.length:current<0?items.length-1:(current-1+items.length)%items.length;
+    items[next].focus();
   });
   const field=(label,name,type='number',extra='')=>`<label class="field">${label}<input name="${name}" type="${type}" value="${escape(dialogDraft[name]??'')}" ${type==='number'?'placeholder="Any" step="any"':''} ${extra}></label>`;
   const check=(name,value,checked)=>`<label class="check"><input type="checkbox" name="${name}" value="${escape(value)}" ${checked?'checked':''}>${escape(value)}</label>`;
@@ -351,7 +479,7 @@ fieldset:disabled input { background:var(--disabled); color:var(--muted); cursor
   dialog.addEventListener('cancel',event=>{event.preventDefault();closeDialog();});
   dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const bounds=dialog.getBoundingClientRect();if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)closeDialog();});
   dialog.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target.tagName==='INPUT'&&event.target.type!=='search'){event.preventDefault();saveDialog();}});
-  choose(location.hash.slice(1)||'balanced');
+  choose(location.hash.slice(1)||'stack');
 })();
 </script>
 </body>

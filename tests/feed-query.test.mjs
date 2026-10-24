@@ -8,7 +8,7 @@ import { fullDayKickoffTime } from "../src/domain/kickoff-time.ts";
 import { query, today } from "./helpers/client-state-fixtures.mjs";
 
 test("URL queries round trip with one canonical order and explicit EAT context", () => {
-  for (const parameters of ["", "when=last-30-days", "when=today", "when=tomorrow", "when=next-3-days", "when=next-7-days", "when=next-30-days", "date=2020-02-29",
+  for (const parameters of ["", "when=last-30-days", "when=last-7-days", "when=last-3-days", "when=yesterday", "when=today", "when=tomorrow", "when=next-3-days", "when=next-7-days", "when=next-30-days", "date=2020-02-29",
     "from=2020-02-29&to=2020-03-06", "from=2026-10-01&to=2026-10-31",
     "q=Example+FC&league=league-b,league-a&country=Spain,England&status=live&market=total-goals,match-result&prob=55-90&sort=probability&dir=asc&page=3&pageSize=40",
     "sort=probability", "sort=kickoff&dir=desc", "sort=kickoff&dir=asc", "status=finished", "market=both-teams-to-score", "market=double-chance", "prob=0-60", "picks=only"]) {
@@ -58,6 +58,28 @@ test("home resolves the rolling last 30 calendar days inclusively across month, 
   assert.equal(feedQueryHref(explicit, today), "/en/predictions/2026-09-10?to=2026-10-09");
   assert.equal(feedQueryHref(query("when=today"), today), "/en/matches?when=today");
   assert.equal(resolveFeedDates(query("when=today"), today).dayCount, 1);
+});
+
+test("recent-day presets stay relative across leap-day and year boundaries", () => {
+  for (const [kind, count, from, to, nextFrom, nextTo] of [
+    ["last-7-days", 7, "2024-02-24", "2024-03-01", "2024-02-25", "2024-03-02"],
+    ["last-3-days", 3, "2024-02-28", "2024-03-01", "2024-02-29", "2024-03-02"],
+    ["yesterday", 1, "2024-02-29", "2024-02-29", "2024-03-01", "2024-03-01"],
+  ]) {
+    const current = parseReportingDate("2024-03-01"), nextDay = parseReportingDate("2024-03-02");
+    const selected = parseFeedQuery({ when: kind }, { today: current });
+    const range = resolveFeedDates(selected, current), shifted = resolveFeedDates(selected, nextDay);
+    assert.equal(range.startDate, from); assert.equal(range.endDate, to); assert.equal(range.dayCount, count);
+    assert.equal(shifted.startDate, nextFrom); assert.equal(shifted.endDate, nextTo); assert.equal(shifted.dayCount, count);
+    assert.equal(feedQueryHref(selected, current), `/en/matches?when=${kind}`);
+    assert.notEqual(feedQueryKey(selected, current), feedQueryKey(selected, nextDay));
+  }
+  const newYear = parseReportingDate("2026-01-02");
+  for (const [kind, from, to] of [["last-7-days", "2025-12-27", "2026-01-02"],
+    ["last-3-days", "2025-12-31", "2026-01-02"], ["yesterday", "2026-01-01", "2026-01-01"]]) {
+    const range = resolveFeedDates(parseFeedQuery({ when: kind }, { today: newYear }), newYear);
+    assert.equal(range.startDate, from); assert.equal(range.endDate, to);
+  }
 });
 
 test("full-day time bounds are unrestricted and canonicalize without adding an active filter", () => {

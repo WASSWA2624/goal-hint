@@ -12,7 +12,7 @@ import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import { providerImageSource } from "@/components/ui/provider-image";
 import { isLocalCountryFlagAsset } from "@/domain/country-flag";
 import type { FilterOption } from "@/domain/feed-presentation";
-import { footballSearchTiers, prepareFootballSearch } from "@/domain/football-search";
+import { searchFilterOptions } from "@/domain/filter-option-search";
 import { media, type AccentName } from "@/styles/theme";
 
 export const focusRing = css`
@@ -356,19 +356,7 @@ export function OptionPicker({ title, options, selected, onToggle, findLabel, em
     };
   }, [open, close]);
   const needle = filter.trim();
-  const search = useMemo(() => prepareFootballSearch(needle), [needle]);
-  const { exact, similar } = useMemo(() => {
-    if (!needle) return { exact: options, similar: [] };
-    const labels = (option: FilterOption) => option.detail ? [option.label, option.detail, `${option.label} ${option.detail}`] : [option.label];
-    // Words like "Reading" that resemble a generic word identify a team once any listed name contains them.
-    const named = options.reduce((bits, option) => labels(option).reduce((all, label) => all | (search.match(label)?.named ?? 0), bits), 0);
-    const ranked = options.map((option, index) => ({
-      option, index, score: Math.max(...labels(option).map((label) => search.score(label, named))),
-    })).filter(({ score }) => score > 0)
-      .sort((left, right) => right.score - left.score || left.index - right.index);
-    return { exact: ranked.filter(({ score }) => score >= footballSearchTiers.exact).map(({ option }) => option),
-      similar: ranked.filter(({ score }) => score < footballSearchTiers.exact).map(({ option }) => option) };
-  }, [needle, options, search]);
+  const { exact, similar } = useMemo(() => searchFilterOptions(options, needle), [needle, options]);
   // Tabbing between checkboxes skips the heading, so each similar option is described by it.
   const row = (option: FilterOption, similarOption = false) => <li key={option.value}><label>
     <input type="checkbox" checked={selected.includes(option.value)} onChange={() => onToggle(option.value)}

@@ -6,6 +6,7 @@ import styled from "styled-components";
 import { FeedActiveFilterSummary, FeedAppliedSummary, FeedNote, SubscriberFeedBanner } from "@/components/match/feed-controls";
 import { FeedFilterActions, FeedFilters, type FeedFilterDraftStatus } from "@/components/match/feed-filters";
 import { FeedFilterToolbar, FeedHeader, ResultsToolbar } from "@/components/match/feed-header";
+import { DesktopFeedFilters } from "@/components/match/desktop-feed-filters";
 import { plainClick } from "@/components/match/filter-parts";
 import { useLiveRefresh } from "@/components/match/use-live-refresh";
 import { feedRefreshInterval } from "@/domain/live-refresh";
@@ -17,6 +18,7 @@ import { ButtonLink } from "@/components/ui/controls";
 import { EmptyState } from "@/components/ui/feedback";
 import { Stack } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import type { ReportingDate } from "@/domain/calendar";
 import { feedQueryHref, isFeedDatePreset, resolveFeedDates, type FeedQuery } from "@/domain/feed-query";
 import { feedRowNumber } from "@/domain/feed-presentation";
@@ -90,17 +92,31 @@ function searchAnnouncement(data: MatchFeedResponse, query: FeedQuery, count: st
     : `${count}. ${messages.text("feed.search.similarFrom", { position: messages.number(search.exact + 1) })}`;
 }
 
+/** The server/phone interface keeps its existing controls and owns its sheet lifecycle. */
+function FallbackFeedControls({ query, today, leagues, onApply, showAccount, subscriberOnly, signedIn }: {
+  query: FeedQuery; today: ReportingDate; leagues: MatchFeedResponse["leagues"]; onApply: (query: FeedQuery) => void;
+  showAccount: boolean; subscriberOnly: boolean; signedIn: boolean;
+}) {
+  const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId(), filtersFormId = useId();
+  const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true, changed: false });
+  const filterActions = useMemo(() => <FeedFilterActions formId={filtersFormId} locale={query.locale} status={filterStatus} />,
+    [filterStatus, filtersFormId, query.locale]);
+  return <>
+    <FeedHeader query={query} today={today} onApply={onApply} showAccount={showAccount} />
+    {subscriberOnly && <SubscriberFeedBanner locale={query.locale} signedIn={signedIn} />}
+    <FeedFilters subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={onApply}
+      open={filtersOpen} panelId={filtersId} onOpenChange={setFiltersOpen} formId={filtersFormId} onDraftStatus={setFilterStatus}
+      controls={<FeedFilterToolbar subscriberOnly={subscriberOnly} query={query} onApply={onApply} actions={filterActions}
+        summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
+  </>;
+}
+
 /** Successful server projections remain visible if a later navigation fails. */
 function FeedSurfaceContent({ query, today, result, controls, pagination, showAccount = false, subscriberOnly = result.data?.access.tier === "free" }: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
 }) {
   const router = useRouter(), [pending, startTransition] = useTransition();
-  // Phones edit filters in a sheet; search, days, sort and the applied summary stay in the page.
-  const [filtersOpen, setFiltersOpen] = useState(false), filtersId = useId();
-  const filtersFormId = useId();
-  const [filterStatus, setFilterStatus] = useState<FeedFilterDraftStatus>({ valid: true, changed: false });
-  const filterActions = useMemo(() => <FeedFilterActions formId={filtersFormId} locale={query.locale} status={filterStatus} />,
-    [filterStatus, filtersFormId, query.locale]);
+  const desktopLayout = useDesktopLayout();
   const [paginationStatus, setPaginationStatus] = useState<{ href: string; message: string } | null>(null);
   const onPaginationStatus = useCallback((href: string, message: string) => { setPaginationStatus({ href, message }); }, []);
   const [previous, setPrevious] = useState(result.data ? { query, today, data: result.data } : null);
@@ -128,12 +144,11 @@ function FeedSurfaceContent({ query, today, result, controls, pagination, showAc
     : result.data.state === "ready" || result.data.state === "insufficient-data" ? searchAnnouncement(result.data, query, messages.plural("feed.matchCount", result.data.total))
     : messages.text(`feed.state.${result.data.state}`);
   return <FeedStack $gap="sm">
-    <FeedHeader query={query} today={today} onApply={apply} showAccount={showAccount} />
-    {subscriberOnly && <SubscriberFeedBanner locale={query.locale} signedIn={result.data?.access.signedIn ?? false} />}
-    <FeedFilters subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={apply}
-      open={filtersOpen} panelId={filtersId} onOpenChange={setFiltersOpen} formId={filtersFormId} onDraftStatus={setFilterStatus}
-      controls={<FeedFilterToolbar subscriberOnly={subscriberOnly} query={query} onApply={apply} actions={filterActions}
-        summary={<FeedActiveFilterSummary query={query} today={today} leagues={leagues} />} />} />
+    {desktopLayout ? <>
+      <DesktopFeedFilters key={`${href}:${today}`} subscriberOnly={subscriberOnly} query={query} today={today} leagues={leagues} onApply={apply} pending={pending} />
+      {subscriberOnly && <SubscriberFeedBanner locale={query.locale} signedIn={result.data?.access.signedIn ?? false} />}
+    </> : <FallbackFeedControls query={query} today={today} leagues={leagues} onApply={apply} showAccount={showAccount}
+      subscriberOnly={subscriberOnly} signedIn={result.data?.access.signedIn ?? false} />}
     {controls}
     <VisuallyHidden role="status" aria-live="polite" aria-atomic="true">{announcement}</VisuallyHidden>
     <Results $gap="md" aria-busy={pending} data-feed-results>

@@ -10,11 +10,12 @@ import { resolveLocale, type Locale } from "../i18n/locales.ts";
 
 export const feedStatuses = ["all", "scheduled", "live", "finished", "postponed", "canceled", "abandoned", "awarded", "unknown"] as const;
 export type FeedStatus = (typeof feedStatuses)[number];
-export const feedDatePresets = ["last-30-days", "today", "tomorrow", "next-3-days", "next-7-days", "next-30-days"] as const;
+export const feedDatePresets = ["last-30-days", "last-7-days", "last-3-days", "yesterday", "today", "tomorrow", "next-3-days", "next-7-days", "next-30-days"] as const;
 export type FeedDatePreset = (typeof feedDatePresets)[number];
 export const defaultFeedDatePreset: FeedDatePreset = "last-30-days";
 const presetDays: Readonly<Record<FeedDatePreset, { offset: number; days: number }>> = Object.freeze({
   "last-30-days": { offset: -29, days: 30 },
+  "last-7-days": { offset: -6, days: 7 }, "last-3-days": { offset: -2, days: 3 }, yesterday: { offset: -1, days: 1 },
   today: { offset: 0, days: 1 }, tomorrow: { offset: 1, days: 1 }, "next-3-days": { offset: 0, days: 3 },
   "next-7-days": { offset: 0, days: 7 }, "next-30-days": { offset: 0, days: 30 },
 });

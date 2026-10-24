@@ -85,12 +85,14 @@ const Body = styled.div`
 const Actions = styled.footer`
   display: flex;
   flex: none;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
   padding: 10px 12px;
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
 
+  > [data-dialog-reset] { margin-inline-end: auto; flex: none; }
   [data-enhanced="false"] > & { display: none; }
 `;
 
@@ -105,6 +107,8 @@ const ActionButton = styled(Button)`
   }
 `;
 
+type ResetAction = { onReset: () => void; resetLabel: string } | { onReset?: never; resetLabel?: never };
+
 export type CriteriaDialogProps = Readonly<{
   id: string;
   group?: string;
@@ -117,10 +121,10 @@ export type CriteriaDialogProps = Readonly<{
   closeLabel: string;
   children: ReactNode;
   className?: string;
-}>;
+} & ResetAction>;
 
 /** Native modality and focus handling, retaining inline GET-form fields without JavaScript. */
-export function CriteriaDialog({ id, group, title, open, onCancel, onApply, applyLabel, cancelLabel, closeLabel, children, className }: CriteriaDialogProps) {
+export function CriteriaDialog({ id, group, title, open, onCancel, onApply, onReset, applyLabel, cancelLabel, closeLabel, resetLabel, children, className }: CriteriaDialogProps) {
   const root = useRef<HTMLDialogElement>(null);
   const enhanced = useSyncExternalStore(subscribe, supportsModalDialog, serverSnapshot);
   const titleId = `${id}-title`;
@@ -151,6 +155,7 @@ export function CriteriaDialog({ id, group, title, open, onCancel, onApply, appl
     <Header><h2 id={titleId}>{title}</h2><CloseButton type="button" variant="quiet" aria-label={closeLabel} onClick={onCancel}><CloseIcon /></CloseButton></Header>
     <Body>{children}</Body>
     <Actions>
+      {onReset && <ActionButton type="button" variant="secondary" data-dialog-reset onClick={onReset}>{resetLabel}</ActionButton>}
       <ActionButton type="button" variant="secondary" onClick={onCancel}>{cancelLabel}</ActionButton>
       <ActionButton type="button" onClick={onApply}>{applyLabel}</ActionButton>
     </Actions>
