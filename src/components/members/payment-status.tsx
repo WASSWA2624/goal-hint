@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ImageIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ClockIcon, InfoIcon, ResetIcon } from "@/components/ui/icons";
 import type { PaymentStatus } from "@/domain/payment";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
@@ -11,7 +11,7 @@ import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import { createMessages } from "@/i18n/messages";
 import { AccountSupportLink, AdminContactLinks } from "./admin-contact";
 import { refreshMemberSession } from "./member-session";
-import { Action, ActionLink, Disclosure, HelpActions, Note, RowButton, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
+import { Action, ActionLink, Disclosure, HelpActions, Note, PaymentReviewBox, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
 
 export type StatusSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone" | "reviewTime">;
 const rejectReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
@@ -50,55 +50,67 @@ export function ApprovalRefresh({ waiting, refreshAt = null }: { waiting: boolea
   return null;
 }
 
-/** The account's latest report: waiting (with the admin's numbers), approved while its period runs, or refused with a reason.
+function PaymentDetails({ locale, status, pending, reviewTime }: {
+  locale: string; status: PaymentStatus; pending: boolean; reviewTime?: string | null;
+}) {
+  const m = createMessages(locale);
+  const sent = <div><dt>{m.text("subscribe.sentLabel")}</dt><dd>{formatPeriodEnd(new Date(status.submittedAt))}</dd></div>;
+  return <>
+    <StatusFacts aria-label={m.text("subscribe.paymentDetails")} data-payment-summary>
+      <div><dt>{m.text("subscribe.referenceLabel")}</dt><dd>{status.reference}</dd></div>
+      <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{status.planName}</dd></div>
+      <div><dt>{m.text("subscribe.amountLabel")}</dt><dd>UGX {m.number(status.priceUgx)}</dd></div>
+      {pending && sent}
+    </StatusFacts>
+    {(!pending || reviewTime) && <Disclosure key={status.reference} data-payment-details>
+      <summary>{m.text("subscribe.morePaymentDetails")}<ChevronDownIcon /></summary><div>
+        {!pending && <StatusFacts>{sent}</StatusFacts>}
+        {reviewTime && <Note>{m.text("subscribe.reviewTime", { time: reviewTime })}</Note>}
+      </div>
+    </Disclosure>}
+  </>;
+}
+
+/** The account's latest report: under review, approved while its period runs, or refused with a reason.
  * Approval needs nothing from the member: access opens on the account's signed-in devices by itself. */
 export function PaymentStatusCard({ locale, status, settings, phone, activeUntil, returnTo, heading = "h3", replace, newPayment }: {
   locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string; activeUntil: string | null; returnTo: string | null;
-  heading?: "h2" | "h3"; replace?: Readonly<{ open: boolean; controls: string; toggle: () => void }> | undefined;
-  newPayment?: Readonly<{ start: () => void }> | undefined;
+  heading?: "h2" | "h3"; replace?: Readonly<{ open: boolean; controls: string; toggle: () => void; disabled?: boolean }> | undefined;
+  newPayment?: Readonly<{ controls: string; start: () => void }> | undefined;
 }) {
   const m = createMessages(locale);
   if (!status) return null;
-  const facts = (sent: boolean) => <StatusFacts>
-    <div><dt>{m.text("subscribe.referenceLabel")}</dt><dd>{status.reference}</dd></div>
-    <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{status.planName}</dd></div>
-    <div><dt>{m.text("subscribe.amountLabel")}</dt><dd>UGX {m.number(status.priceUgx)}</dd></div>
-    {sent && <div><dt>{m.text("subscribe.sentLabel")}</dt><dd>{formatPeriodEnd(new Date(status.submittedAt))}</dd></div>}
-  </StatusFacts>;
-  if (status.status === "pending" || status.status === "superseded") return <StatusBox role="status" data-payment-status="pending">
-    <StatusTitle as={heading}>{m.text("subscribe.pendingTitle")}</StatusTitle>
-    <p>{m.text("subscribe.pendingLead")}</p>
-    {facts(true)}
-    {settings.reviewTime && <Note>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</Note>}
-    <AdminContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpPaid", { price: String(status.priceUgx), plan: status.planName,
-      phone: formatPhone(phone), reference: status.reference })} />
-    {replace && <RowButton variant="quiet" aria-expanded={replace.open} aria-controls={replace.controls} onClick={replace.toggle}><ImageIcon />{m.text("subscribe.replace")}</RowButton>}
-  </StatusBox>;
   if (status.status === "approved") return activeUntil ? <StatusBox data-payment-status="approved">
     <StatusTitle as={heading}><CheckIcon />{m.text("subscribe.approvedTitle")}</StatusTitle>
     <p>{m.text("subscribe.activeUntil", { end: formatSubscriptionExpiry(new Date(activeUntil)) })}</p>
     <HelpActions><ActionLink href={returnTo ?? "/en"} prefetch={false}>{m.text("subscribe.seePredictions")}<ChevronRightIcon /></ActionLink></HelpActions>
   </StatusBox> : null;
-  if (status.status === "reversed") return <StatusBox role="status" data-payment-status="reversed">
-    <StatusTitle as={heading}>{m.text("subscribe.reversedTitle")}</StatusTitle>
-    <p>{m.text("subscribe.reversedLead")}</p>
-    <Disclosure key={status.reference} data-payment-details>
-      <summary>{m.text("subscribe.paymentDetails")}<ChevronDownIcon /></summary><div>{facts(false)}</div>
-    </Disclosure>
-    <HelpActions>
-      <AccountSupportLink locale={locale} contact={settings} text={m.text("subscribe.helpReversed", { reference: status.reference, phone: formatPhone(phone) })} />
-      {newPayment && <Action type="button" variant="secondary" onClick={newPayment.start} data-payment-resubmit>{m.text("subscribe.submitAnother")}</Action>}
-    </HelpActions>
-  </StatusBox>;
-  if (status.status !== "rejected") return null;
-  // Rejections retain the owner's explanation and existing correction flow.
-  return <StatusBox role="status" data-payment-status={status.status}>
-    <StatusTitle as={heading}>{m.text("subscribe.rejectedTitle")}</StatusTitle>
-    <p>{status.rejectText ?? m.text(`subscribe.reason.${reasonOf(status.rejectReason)}`)}</p>
-    {facts(false)}
-    <Note>{m.text("subscribe.rejectedNext")}</Note>
-    <AdminContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpRejected", { reference: status.reference, phone: formatPhone(phone) })} />
-  </StatusBox>;
+  const pending = status.status === "pending" || status.status === "superseded", rejected = status.status === "rejected", reversed = status.status === "reversed";
+  if (!pending && !rejected && !reversed) return null;
+  const StatusIcon = pending ? ClockIcon : rejected ? InfoIcon : ResetIcon;
+  const title = pending ? "subscribe.pendingTitle" : rejected ? "subscribe.rejectedTitle" : "subscribe.reversedTitle";
+  const message = rejected ? status.rejectText ?? m.text(`subscribe.reason.${reasonOf(status.rejectReason)}`)
+    : m.text(pending ? "subscribe.pendingLead" : "subscribe.reversedLead");
+  const contactDetails = { reference: status.reference, phone: formatPhone(phone) };
+  const supportText = pending ? m.text("subscribe.helpPaid", { ...contactDetails, price: String(status.priceUgx), plan: status.planName })
+    : m.text(reversed ? "subscribe.helpReversed" : "subscribe.helpRejected", contactDetails);
+  const nextAction = reversed
+    ? newPayment && <Action id={`${newPayment.controls}-toggle`} type="button" variant="quiet" onClick={newPayment.start} data-payment-resubmit>{m.text("subscribe.submitAnother")}</Action>
+    : replace && <Action id={`${replace.controls}-toggle`} type="button" variant="quiet" disabled={replace.disabled}
+      aria-expanded={replace.open} aria-controls={replace.controls} onClick={replace.toggle} data-payment-update>
+      {m.text(replace.open ? "subscribe.hidePaymentForm" : "subscribe.replace")}
+    </Action>;
+  return <PaymentReviewBox data-payment-status={pending ? "pending" : status.status}>
+    <header role="status">
+      <StatusTitle as={heading}><StatusIcon />{m.text(title)}</StatusTitle>
+      <p>{message}</p>
+    </header>
+    <PaymentDetails locale={locale} status={status} pending={pending} reviewTime={pending ? settings.reviewTime : null} />
+    {settings.contactPhone || settings.whatsappPhone
+      ? <AdminContactLinks locale={locale} contact={settings} compact text={supportText} />
+      : <AccountSupportLink locale={locale} contact={settings} />}
+    {nextAction}
+  </PaymentReviewBox>;
 }
 
 /** A requested trial waits for the owner's Grant free trial, which unlocks the account's devices by itself. */

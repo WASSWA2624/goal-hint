@@ -64,14 +64,14 @@ export function createMemberAuthHandler(action: AuthAction, source: MemberServic
         : action === "reset" ? await services.auth.resetPassword(body.password, currentToken, address)
         : await services.auth.changePassword(body.password, body.currentPassword, binding);
       if (result.status !== "authenticated") return failure(result);
-      // Login and signup finish at home; restricted sessions carry that destination through verification or reset.
-      const returnTo = action === "register" || action === "login" ? "/en" : memberReturnPath(body.return);
+      // Authentication finishes at home; restricted sessions complete their required step first.
+      const returnTo = ["register", "login", "verify", "reset"].includes(action) ? "/en" : memberReturnPath(body.return);
       const restrictedPath = (view: string) => `/en/account?${new URLSearchParams({ view, ...(returnTo ? { return: returnTo } : {}) })}`;
       const next = result.requiresPasswordChange ? restrictedPath("new-password")
         : result.requiresVerification ? restrictedPath("verify")
         : result.administrator ? adminLandingPath
-        : returnTo ?? (action === "verify" ? "/en"
-        : action === "phone" ? "/en/account?status=phone-changed" : action === "password" || action === "reset" ? "/en/account?status=password-changed" : "/en/account");
+        : returnTo ?? (action === "phone" ? "/en/account?status=phone-changed"
+        : action === "password" ? "/en/account?status=password-changed" : "/en/account");
       const response = json({ next, phone: result.phone, ...(result.requiresPasswordChange ? { requiresPasswordChange: true } : {}),
         ...(result.requiresVerification ? { requiresVerification: true } : {}),
         ...(typeof result.otherDeviceSignedOut === "boolean" ? { otherDeviceSignedOut: result.otherDeviceSignedOut } : {}) });

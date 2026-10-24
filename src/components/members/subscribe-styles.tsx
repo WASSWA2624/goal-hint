@@ -29,16 +29,6 @@ export const Row = styled.div`
   min-block-size: 44px; min-inline-size: 0; font-size: 12px; line-height: 18px;
   ${icons}
 `;
-export const AccountRow = styled(Row)`
-  column-gap: 6px; border-block-end: 1px solid ${({ theme }) => theme.color.border};
-  > :last-child:not(:first-child) { margin-inline-start: auto; }
-  form { display: flex; }
-  button, a { font-size: 12px; padding-inline: 4px; }
-`;
-export const Identity = styled.p`
-  min-inline-size: 0; color: ${({ theme }) => theme.color.mutedText};
-  strong { color: ${({ theme }) => theme.color.text}; font-weight: ${({ theme }) => theme.typography.weight.bold}; font-variant-numeric: tabular-nums; white-space: nowrap; }
-`;
 export const RowButton = styled(Button)`
   justify-content: flex-start; gap: 6px; padding-inline: 0; font-size: 12px;
   ${icons}
@@ -127,6 +117,13 @@ export const StatusTitle = styled.h3`
   && { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
   ${icons}
 `;
+export const PaymentReviewBox = styled(StatusBox)`
+  border-block-start: 3px solid ${({ theme }) => theme.color.brand}; padding: 16px; gap: 12px;
+  > header { display: grid; gap: 6px; }
+  > header p { color: ${({ theme }) => theme.color.mutedText}; }
+  > [data-payment-summary] { padding-block: 8px; border-block: 1px solid ${({ theme }) => theme.color.border}; }
+  > [data-payment-update], > [data-payment-resubmit] { inline-size: 100%; border-block-start-color: ${({ theme }) => theme.color.border}; }
+`;
 export const StatusFacts = styled.dl`
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; margin: 0; font-size: 12px; line-height: 18px;
   > div { display: contents; }
@@ -139,7 +136,10 @@ export const ReportForm = styled.form`
   input:not([type="checkbox"], [type="radio"]) { min-block-size: 44px; }
   > div { min-inline-size: 0; }
 `;
-export const FileField = styled.div`display: grid; gap: 4px; min-inline-size: 0;`;
+export const FileField = styled.fieldset`
+  display: grid; gap: 4px; min-inline-size: 0; margin: 0; padding: 0; border: 0;
+  legend { padding: 0; margin-block-end: 6px; font-size: 12px; line-height: 18px; }
+`;
 export const FileBox = styled.label`
   position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding: 8px; cursor: pointer;
   border: 1px dashed ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface}; font-size: 12px; line-height: 18px;
@@ -170,4 +170,7 @@ export const PageFooter = styled.footer`
   > ${Disclosure}[open] { flex-basis: 100%; order: 1; }
 `;
 export const HelpTitle = styled.h2`font-size: 13px; line-height: 20px;`;
-export const HelpActions = styled.div`display: flex; flex-wrap: wrap; gap: 8px;`;
+export const HelpActions = styled.div<{ $equal?: boolean }>`
+  display: ${({ $equal }) => $equal ? "grid" : "flex"}; flex-wrap: wrap; gap: 8px;
+  ${({ $equal }) => $equal && css`grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);`}
+`;

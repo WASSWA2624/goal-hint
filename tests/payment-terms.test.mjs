@@ -6,7 +6,7 @@ import { createPayments } from "../src/server/members/payments.ts";
 
 const instant = Date.parse("2026-10-24T12:00:00Z"), at = new Date(instant);
 const settings = { ...defaultSubscriptionSettings, paywallMode: "test", mtnNumber: "256700000901" };
-const fields = { planId: "plan", network: "mtn", payerPhone: null, transactionId: "NEW1234", accepted: false };
+const fields = { planId: "plan", network: "mtn", payerPhone: "256700000101", transactionId: "NEW1234", accepted: false };
 
 // A small in-memory query adapter exercises the service's account, relation and consent filters without a database.
 function matches(value, filter) {

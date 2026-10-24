@@ -641,7 +641,13 @@ test("HTTP registration, channel selection, verification and reset codes set res
   assert.equal(reset.status, 200); assert.equal((await reset.json()).requiresPasswordChange, true);
   const resetToken = responseToken(reset); assert.equal(await f.sessionService.verify(resetToken), null);
   assert.match(reset.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax; Max-Age=900/u);
-  assert.equal((await handle("reset", { password: "replacement HTTP password" }, resetToken)).status, 200);
+  const completed = await handle("reset", { password: "replacement HTTP password" }, resetToken);
+  assert.equal(completed.status, 200); assert.equal((await completed.json()).next, "/en");
+  const completedToken = responseToken(completed);
+  assert.ok(completedToken); assert.notEqual(completedToken, resetToken);
+  assert.equal((await f.sessionService.verify(completedToken)).phone, phone);
+  assert.equal(await f.service.passwordResetSession(resetToken), null);
+  assert.match(completed.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
 });
 
 test("signup completion goes home while keeping pending accounts restricted", async () => {
@@ -661,21 +667,29 @@ test("signup completion goes home while keeping pending accounts restricted", as
   }
 });
 
-test("verification defaults home and keeps safe return destinations for existing account flows", async () => {
-  const token = "v".repeat(43), target = "/en/matches/example/home-away";
-  const success = async () => ({ status: "authenticated", token, phone });
+test("successful verification goes home regardless of the supplied return destination", async () => {
+  const token = "v".repeat(43);
   const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, sessions: { async verify() { return null; } },
-    auth: { verifyAccount: success, resetPassword: success } });
-  const handle = (action, body) => createMemberAuthHandler(action, source)(authRequest(action, body, token));
-  const verified = await handle("verify", { code: "123456" });
-  assert.equal(verified.status, 200); assert.equal((await verified.json()).next, "/en");
-  for (const [action, body] of [["verify", { code: "123456" }], ["reset", { password: "new HTTP password" }]]) {
-    const response = await handle(action, { ...body, return: target });
-    assert.equal(response.status, 200); assert.equal((await response.json()).next, target);
-  }
-  for (const returnTo of ["https://evil.test", "//evil.test", "/en?phone=256700000001", "/en/matches/example/%2f", "/en/../admin"]) {
-    const response = await handle("verify", { code: "123456", return: returnTo });
+    auth: { async verifyAccount() { return { status: "authenticated", token, phone }; } } });
+  for (const returnTo of [undefined, "/en", "/en/matches", "/en/slips", "/en/matches/example/home-away", "/en/account",
+    "https://evil.test", "//evil.test", "/en?phone=256700000001", "/en/matches/example/%2f", "/en/../admin"]) {
+    const response = await createMemberAuthHandler("verify", source)(authRequest("verify", { code: "123456", ...(returnTo ? { return: returnTo } : {}) }, token));
     assert.equal(response.status, 200); assert.equal((await response.json()).next, "/en");
+    assert.equal(responseToken(response), token);
+    assert.match(response.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
+  }
+});
+
+test("successful password reset goes home regardless of the supplied return destination", async () => {
+  const token = "r".repeat(43);
+  const source = async () => ({ config: { production: false, cookies: { secure: false, session: "goal-hint-analytics", exclude: "goal-hint-analytics-exclude" } }, sessions: { async verify() { return null; } },
+    auth: { async resetPassword() { return { status: "authenticated", token, phone }; } } });
+  for (const returnTo of [undefined, "/en", "/en/matches", "/en/slips", "/en/matches/example/home-away", "/en/account",
+    "https://evil.test", "//evil.test", "/en?phone=256700000001", "/en/matches/example/%2f", "/en/../admin"]) {
+    const response = await createMemberAuthHandler("reset", source)(authRequest("reset", { password: "new HTTP password", ...(returnTo ? { return: returnTo } : {}) }, token));
+    assert.equal(response.status, 200); assert.equal((await response.json()).next, "/en");
+    assert.equal(responseToken(response), token);
+    assert.match(response.headers.getSetCookie()[0], /HttpOnly; SameSite=Lax/u);
   }
 });
 

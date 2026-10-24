@@ -73,11 +73,11 @@ export function createAccountRoute({ services = getMemberServices }: { services?
           {parameters.status === "phone-changed" && <p role="status">{messages.text("account.phoneChanged")}</p>}
           {parameters.status === "password-changed" && <p role="status">{messages.text("account.passwordChanged")}</p>}
           <ApprovalRefresh waiting={waiting || trialPending} refreshAt={activeUntil} />
-          <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={salesOpen} returnTo={returnTo} paymentReversed={status?.status === "reversed"} />
+          <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={salesOpen} returnTo={returnTo} paymentNeedsAttention={status?.status === "rejected" || status?.status === "reversed"} />
           {trialPending && <TrialStatusCard locale={locale} settings={contact} phone={member.phone} heading="h2" />}
           {status?.status !== "approved" && <PaymentStatusCard locale={locale} status={status} settings={contact} phone={member.phone} activeUntil={activeUntil} returnTo={returnTo} heading="h2" />}
           <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} />
-          {(view || salesOpen && paymentView?.trialEligible) && <AccountSection open={status?.status === "rejected"}>
+          {(view || salesOpen && paymentView?.trialEligible) && <AccountSection>
             <summary>{messages.text("account.accessSettings")}<ChevronDownIcon /></summary><div>
             {view && <>
               {!activeUntil && last && <p>{messages.text("account.accessEnded", { end: formatPeriodEnd(last.endsAt) })}</p>}

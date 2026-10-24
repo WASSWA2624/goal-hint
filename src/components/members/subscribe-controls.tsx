@@ -5,7 +5,7 @@ import Link from "next/link";
 import { trackEvent } from "@/components/analytics/tracker";
 import { useRouter } from "next/navigation";
 import { Button, PhoneInput, TextInput } from "@/components/ui/controls";
-import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CopyIcon, DialpadIcon, GiftIcon, HelpIcon, ImageIcon, LockIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
+import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, DialpadIcon, GiftIcon, HelpIcon, ImageIcon, LockIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
 import { PageHeading } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { formatPhone, localUgandaPhone, networkForPrefix, normalizePhone, telHref, waHref, type MobileNetwork } from "@/domain/phone";
@@ -21,8 +21,8 @@ import { preparePaymentImage, uploadPayment } from "./payment-image";
 import { PaymentStatusCard, TrialStatusCard, useApprovalRefresh } from "./payment-status";
 
 import {
-  AccountRow, ActionLink, Assent, CopyButton, Disclosure, FileBox, FileField,
-  HelpActions, HelpTitle, Identity, Intro, Locked, MenuLink, Note, PageFooter, PaymentTransfer,
+  ActionLink, Assent, CopyButton, Disclosure, FileBox, FileField,
+  HelpActions, HelpTitle, Intro, Locked, MenuLink, Note, PageFooter, PaymentTransfer,
   Plan, PlanDays, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowNote, Sheet,
   Step, StepHeading, StepTitle, Submit, Unit, Wallet, WalletChoice, WalletChoices,
   WalletMeta, WalletNumber,
@@ -38,12 +38,6 @@ const wallets = {
   airtel: { name: "Airtel Money", short: "Airtel", menu: "subscribe.openAirtel" },
 } as const;
 const waitingStatuses: readonly string[] = ["pending", "superseded"];
-/** Open optional details before the browser focuses an invalid payer number. */
-const revealInvalid = (event: FormEvent<HTMLFormElement>) => {
-  const details = event.target instanceof Element ? event.target.closest("details") : null;
-  if (details && !details.open) details.open = true;
-};
-
 export function SubscribeIntro({ locale }: { locale: string }) {
   const m = createMessages(locale);
   return <Intro><PageHeading>{m.text("subscribe.title")}</PageHeading></Intro>;
@@ -93,7 +87,6 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const draft = useMemo(() => edited ?? (recovered && plans.some((item) => item.id === recovered.planId) ? { ...recovered,
     accepted: false, network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial), [edited, recovered, plans, networks, initial]);
   const setDraft = (change: (old: PaymentDraft) => PaymentDraft) => setEdited((old) => change(old ?? draft));
-  const [changingAccount, setChangingAccount] = useState(false), [replacing, setReplacing] = useState(false);
   const [image, setImage] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [busy, setBusy] = useState(false), [percentage, setPercentage] = useState<number | null>(null);
   const [error, setError] = useState(""), [copied, setCopied] = useState<MobileNetwork | "">("");
   // Until the refresh after an upload lands, the new report stands in for the server's previous latest report.
@@ -101,26 +94,32 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const status = sent && (view?.status?.reference ?? null) === sent.before ? sent.status : view?.status ?? null;
   const waiting = !!status && waitingStatuses.includes(status.status);
   const reportKey = `${account?.id ?? ""}:${status?.reference ?? ""}:${status?.status ?? ""}`;
-  const [newPayment, setNewPayment] = useState({ reportKey, open: false });
+  const [reportForm, setReportForm] = useState({ reportKey, open: false });
   // Only an explicit choice for this report opens a new form; a different decision resets it.
-  if (newPayment.reportKey !== reportKey) setNewPayment({ reportKey, open: false });
-  const reversed = status?.status === "reversed";
-  const showForm = (!waiting || replacing) && (!reversed || newPayment.reportKey === reportKey && newPayment.open);
-  const focusPlan = useRef(false);
+  if (reportForm.reportKey !== reportKey) setReportForm({ reportKey, open: false });
+  const reversed = status?.status === "reversed", rejected = status?.status === "rejected";
+  const statusOnly = waiting || rejected || reversed;
+  const showForm = !statusOnly || reportForm.reportKey === reportKey && reportForm.open;
+  const focusTarget = useRef<string | null>(null);
   useApprovalRefresh(!!account && (waiting || trialPending));
   useEffect(() => { if (restored && account && showForm) savePaymentDraft(account.id, draft); }, [account, draft, restored, showForm]);
   useEffect(() => {
-    if (!showForm || !focusPlan.current) return;
-    focusPlan.current = false;
-    const heading = document.getElementById(`${ids}-plan`);
-    heading?.focus({ preventScroll: true }); heading?.scrollIntoView({ block: "start" });
-  }, [ids, showForm]);
+    if (!focusTarget.current) return;
+    const target = document.getElementById(focusTarget.current);
+    focusTarget.current = null;
+    target?.focus({ preventScroll: true }); target?.scrollIntoView({ block: "center" });
+  }, [showForm]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const plan = plans.find((candidate) => candidate.id === draft.planId) ?? plans[0];
   const menu = canOpenMoneyMenu(userAgent);
   const payNetwork = networks.find((network) => network === draft.network) ?? networks[0];
   const shortcut = payNetwork && plan ? settings[payNetwork === "mtn" ? "mtnMenuShortcut" : "airtelMenuShortcut"]?.replaceAll("{amount}", String(plan.priceUgx)) : undefined;
   const update = (values: Partial<PaymentDraft>) => setDraft((old) => ({ ...old, ...values }));
+  function toggleReportForm(focus = `${ids}-transaction`) {
+    if (busy) return;
+    setError(""); focusTarget.current = showForm ? `${ids}-form-toggle` : focus;
+    setReportForm({ reportKey, open: !showForm });
+  }
   const helpText = account && status ? m.text("subscribe.helpPaid", { price: String(status.priceUgx), plan: status.planName, phone: formatPhone(account.phone), reference: status.reference }) : undefined;
   async function chooseImage(file: File | undefined) {
     if (!file || busy) return;
@@ -139,16 +138,17 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     if (!plan || !account) { setError(m.text("account.unavailable")); return; }
     const body = new FormData(), payer = normalizePhone(draft.payerPhone), transactionId = parseTransactionId(draft.transactionId);
     if (!transactionId) { setError(m.text("subscribe.transactionRequired")); return; }
+    if (!payer) { setError(m.text("phone.invalid")); return; }
     setBusy(true); setPercentage(image ? 0 : null);
-    // No amount: the server records the plan's price. A missing payer is the account number.
-    for (const [key, value] of Object.entries({ planId: plan.id, network: draft.network, ...(payer ? { payerPhone: payer } : {}),
+    // No amount: the server records the plan's price.
+    for (const [key, value] of Object.entries({ planId: plan.id, network: draft.network, payerPhone: payer,
       transactionId, accepted: String(draft.accepted) })) body.append(key, value);
     if (image) body.append("image", image, "payment.jpg");
     try {
       const result = await uploadPayment(body, image ? setPercentage : () => {}); clearPaymentDraft(account.id); trackEvent("payment_submitted");
       setSent({ before: view?.status?.reference ?? null, status: { reference: result.reference, status: "pending", rejectText: null, rejectReason: null,
         planName: plan.name, priceUgx: plan.priceUgx, submittedAt: new Date().toISOString(), endsAt: null } });
-      setEdited(null); setReplacing(false); setNewPayment({ reportKey, open: false }); setImage(null); setPreview(""); setPercentage(null); router.refresh();
+      setEdited(null); setReportForm({ reportKey, open: false }); setImage(null); setPreview(""); setPercentage(null); router.refresh();
     } catch (failure) { setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); } finally { setBusy(false); }
   }
   const help = <Disclosure>
@@ -163,26 +163,25 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       </ul></Disclosure>
     </div>
   </Disclosure>;
-  const accountPanel = account ? <>
-    <AccountRow><Identity><VisuallyHidden>{m.text("account.title")} </VisuallyHidden><strong>{formatPhone(account.phone)}</strong></Identity>
-      <Button variant="quiet" onClick={() => setChangingAccount(!changingAccount)} aria-expanded={changingAccount} aria-controls={`${ids}-account`}>{m.text("subscribe.change")}</Button>
-    </AccountRow>
-    {changingAccount && <div id={`${ids}-account`}><SubscribeSignIn locale={locale} returnTo={returnTo} settings={settings} /></div>}
-    {trialPending && <TrialStatusCard locale={locale} settings={settings} phone={account.phone} heading="h2" />}
-  </> : <SubscribeSignIn locale={locale} returnTo={returnTo} settings={settings} />;
+  const accountPanel = account
+    ? trialPending && <TrialStatusCard locale={locale} settings={settings} phone={account.phone} heading="h2" />
+    : <SubscribeSignIn locale={locale} returnTo={returnTo} settings={settings} />;
   const footer = <PageFooter>
     {account && view?.trialEligible && <TrialRequest locale={locale} days={settings.trialDays} appearance="row" />}
     {help}
   </PageFooter>;
-  const paymentStatus = account && <PaymentStatusCard locale={locale} status={status} settings={settings} phone={account.phone} activeUntil={activeUntil} returnTo={returnTo} heading={reversed && !showForm ? "h2" : "h3"}
-    replace={waiting ? { open: replacing, controls: `${ids}-form`, toggle: () => setReplacing(!replacing) } : undefined}
-    newPayment={reversed && !showForm && plan && payNetwork ? { start: () => { focusPlan.current = true; setNewPayment({ reportKey, open: true }); } } : undefined} />;
-  if (reversed && !showForm) return <>{accountPanel}<Step id="report">{paymentStatus}</Step></>;
+  const paymentStatus = account && <PaymentStatusCard locale={locale} status={status} settings={settings} phone={account.phone} activeUntil={activeUntil} returnTo={returnTo} heading={statusOnly && !showForm ? "h2" : "h3"}
+    replace={(waiting || rejected) && plan && payNetwork ? { open: showForm, controls: `${ids}-form`, disabled: busy, toggle: () => toggleReportForm() } : undefined}
+    newPayment={reversed && !showForm && plan && payNetwork ? { controls: `${ids}-form`, start: () => toggleReportForm(`${ids}-plan`) } : undefined} />;
+  if (statusOnly && !showForm) return <>{accountPanel}<Step id="report">{paymentStatus}</Step></>;
   if (!plan || !payNetwork) return <>{accountPanel}{paymentStatus}<p>{m.text(plan ? "account.unavailable" : "subscribe.noPlans")}</p>{footer}</>;
   const wallet = wallets[payNetwork], number = settings[payNetwork === "mtn" ? "mtnNumber" : "airtelNumber"]!;
   const name = settings[payNetwork === "mtn" ? "mtnName" : "airtelName"];
   return <>
     {accountPanel}
+    {statusOnly && showForm && <RowButton type="button" variant="quiet" disabled={busy} onClick={() => toggleReportForm()} data-payment-back>
+      <ChevronLeftIcon />{m.text("subscribe.backToPaymentStatus")}
+    </RowButton>}
     <Sheet data-subscribe-layout="compact-stacked">
       {showForm && <>
       <Step id="plans" aria-labelledby={`${ids}-plan`}>
@@ -220,34 +219,28 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       </>}
       <Step id="report" aria-label={m.text("subscribe.confirmPayment")}>
         {!account ? <Locked><LockIcon /><span>{m.text("subscribe.signInFirst")}</span></Locked> : <>
-          {paymentStatus}
-          {showForm && <ReportForm id={`${ids}-form`} onSubmit={submit} onInvalidCapture={revealInvalid} data-analytics-ignore>
-            {waiting && status && <Note>{m.text("subscribe.replaces", { reference: status.reference })}</Note>}
-            <TextInput label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId} required disabled={busy}
+          {!statusOnly && paymentStatus}
+          {showForm && <ReportForm id={`${ids}-form`} onSubmit={submit} data-analytics-ignore>
+            <TextInput id={`${ids}-transaction`} label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId} required disabled={busy}
               minLength={4} maxLength={40} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false}
               onChange={(event) => update({ transactionId: normalizeTransactionId(event.currentTarget.value) })} />
-            <Disclosure>
-              <summary>{m.text("subscribe.moreDetails")}<ChevronDownIcon /></summary>
-              <div>
-                <FileField>
-                  <FileBox><ImageIcon /><span id={`${ids}-shot`}>{m.text(image ? "subscribe.changeScreenshot" : "subscribe.chooseScreenshot")}</span>
-                    <input type="file" accept="image/*" disabled={busy} aria-labelledby={`${ids}-shot`} aria-describedby={`${ids}-shot-hint`}
-                      onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox>
-                  <FileBox><ImageIcon /><span id={`${ids}-camera`}>{m.text("subscribe.takePhoto")}</span>
-                    <input type="file" accept="image/*" capture="environment" disabled={busy} aria-labelledby={`${ids}-camera`} aria-describedby={`${ids}-shot-hint`}
-                      onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox>
-                  <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
-                </FileField>
-                {image && <><Preview src={preview} alt={m.text("subscribe.preview")} />
-                  <RowButton type="button" variant="quiet" disabled={busy} onClick={() => { setImage(null); setPreview(""); setPercentage(null); }}>{m.text("subscribe.removeScreenshot")}</RowButton></>}
-                <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} hint={false} disabled={busy} onValueChange={(value) => update({ payerPhone: value })} />
-                <Note>{m.text("subscribe.moreDetailsHint")}</Note>
-              </div>
-            </Disclosure>
+            <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} required hint={false} disabled={busy}
+              onValueChange={(value) => update({ payerPhone: value })} />
+            <FileField>
+              <legend>{m.text("subscribe.moreDetails")}</legend>
+              <FileBox><ImageIcon /><span id={`${ids}-shot`}>{m.text(image ? "subscribe.changeScreenshot" : "subscribe.chooseScreenshot")}</span>
+                <input type="file" accept="image/*" disabled={busy} aria-labelledby={`${ids}-shot`} aria-describedby={`${ids}-shot-hint`}
+                  onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox>
+              <FileBox><ImageIcon /><span id={`${ids}-camera`}>{m.text("subscribe.takePhoto")}</span>
+                <input type="file" accept="image/*" capture="environment" disabled={busy} aria-labelledby={`${ids}-camera`} aria-describedby={`${ids}-shot-hint`}
+                  onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox>
+              <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
+              {image && <><Preview src={preview} alt={m.text("subscribe.preview")} />
+                <RowButton type="button" variant="quiet" disabled={busy} onClick={() => { setImage(null); setPreview(""); setPercentage(null); }}>{m.text("subscribe.removeScreenshot")}</RowButton></>}
+            </FileField>
             {!view?.acceptedTerms && <Assent><input type="checkbox" required disabled={busy} checked={draft.accepted} onChange={(event) => update({ accepted: event.currentTarget.checked })} /><span>{m.text("subscribe.assent")}{" "}<Link href="/en/terms">{m.text("account.terms")}</Link>.</span></Assent>}
             <Submit type="submit" disabled={busy || !restored || !draft.network}>{m.text(busy ? "subscribe.sending" : "subscribe.report")}<ChevronRightIcon /></Submit>
             {percentage !== null && <div role="status"><progress max={100} value={percentage} aria-label={m.text("subscribe.uploadProgress")} /><span> {percentage}%</span></div>}
-            <Note>{m.text("subscribe.afterApproval")}</Note>
           </ReportForm>}
           <noscript><p>{m.text("subscribe.noJavaScript")}</p></noscript>
         </>}

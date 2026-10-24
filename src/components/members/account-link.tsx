@@ -156,7 +156,7 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
   const base = `/${resolveLocale(locale)}/account`;
   const purchase = !administratorName && !administrator && subscription?.canSubscribe && !subscription.activeUntil;
   const subscribeLink = <AuthLink href={`/${resolveLocale(locale)}/subscribe`} prefetch={false} $primary
-    aria-label={messages.text(subscription?.paymentPending ? "account.paymentPending" : "account.subscribe")}>
+    aria-label={messages.text(subscription?.paymentPending ? "account.pending" : "account.subscribe")}>
     {messages.text(subscription?.paymentPending ? "account.pending" : "account.subscribe")}
   </AuthLink>;
   return <Actions data-account-actions>

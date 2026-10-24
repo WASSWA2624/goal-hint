@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import { formatPaymentReference, parseTransactionId, paymentRules, transactionKey, type PaymentFields, type PaymentView } from "../../domain/payment.ts";
+import { normalizePhone } from "../../domain/phone.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import type { SubscriptionIdentity, SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
@@ -75,8 +76,8 @@ export function createPayments({ database, config, now = Date.now, environment =
     },
 
     async submit(member: MemberIdentity, fields: PaymentFields, image: Buffer | null = null): Promise<Outcome> {
-      const transactionId = parseTransactionId(fields.transactionId);
-      if (!transactionId) return { status: "invalid" };
+      const transactionId = parseTransactionId(fields.transactionId), payerPhone = normalizePhone(fields.payerPhone);
+      if (!transactionId || !payerPhone) return { status: "invalid" };
       const key = transactionKey(transactionId), imageBytes = image?.length ?? 0;
       for (let attempt = 0; ; attempt++) {
         try { return await decide<Outcome>(database, async (tx, rollback) => {
@@ -100,7 +101,7 @@ export function createPayments({ database, config, now = Date.now, environment =
           // The claimed amount is the plan's price, never a browser value; the owner records the amount actually received.
           await tx.paymentSubmission.create({ data: { id, reference, source: "report", accountId: member.accountId,
             planId: plan.id, planName: plan.name, durationDays: plan.durationDays, priceUgx: plan.priceUgx,
-            payerPhone: fields.payerPhone ?? current.account.phone, claimedNetwork: fields.network, claimedTxnRef: transactionId,
+            payerPhone, claimedNetwork: fields.network, claimedTxnRef: transactionId,
             claimedTxnKey: key, claimedAmountUgx: plan.priceUgx, status: "pending", submittedAt: at,
             submittedSessionHash: member.tokenHash, termsVersion: termsNotice.reviewedOn, acceptedAt: at,
             ...(image && dimensions ? { imageSha256: createHash("sha256").update(image).digest("hex"), imageBytes,

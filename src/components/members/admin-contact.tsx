@@ -12,12 +12,12 @@ import { ActionLink, HelpActions } from "./subscribe-styles";
 export type AdminContact = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone">;
 
 /** A call is the primary route to the admin and a WhatsApp chat the written fallback; an unset number hides its link. */
-export function AdminContactLinks({ locale, contact, text }: { locale: string; contact: AdminContact; text?: string | undefined }) {
+export function AdminContactLinks({ locale, contact, text, compact = false }: { locale: string; contact: AdminContact; text?: string | undefined; compact?: boolean }) {
   const m = createMessages(locale);
   if (!contact.contactPhone && !contact.whatsappPhone) return null;
-  return <HelpActions data-admin-contact>
-    {contact.contactPhone && <ActionLink href={telHref(contact.contactPhone)} data-analytics-ignore><PhoneIcon />{m.text("subscribe.callAdmin")}</ActionLink>}
-    {contact.whatsappPhone && <ActionLink href={waHref(contact.whatsappPhone, text)} variant="secondary" data-analytics-ignore><ChatIcon />{m.text("subscribe.whatsappAdmin")}</ActionLink>}
+  return <HelpActions $equal={compact} data-admin-contact>
+    {contact.contactPhone && <ActionLink href={telHref(contact.contactPhone)} data-analytics-ignore><PhoneIcon />{m.text(compact ? "subscribe.call" : "subscribe.callAdmin")}</ActionLink>}
+    {contact.whatsappPhone && <ActionLink href={waHref(contact.whatsappPhone, text)} variant="secondary" data-analytics-ignore><ChatIcon />{m.text(compact ? "subscribe.whatsapp" : "subscribe.whatsappAdmin")}</ActionLink>}
   </HelpActions>;
 }
 

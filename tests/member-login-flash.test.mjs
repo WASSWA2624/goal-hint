@@ -29,7 +29,7 @@ test("invalid flash data is discarded instead of displayed as a logout confirmat
   assert.equal(storage.values.size, 0);
 });
 
-test("blocked storage selects the inline confirmation fallback without breaking login", () => {
+test("blocked storage drops the optional notice without throwing", () => {
   const blocked = { setItem() { throw new Error("blocked"); }, getItem() { throw new Error("blocked"); }, removeItem() { throw new Error("blocked"); } };
   assert.equal(saveMemberLoginFlash(true, blocked), false);
   assert.equal(consumeMemberLoginFlash(blocked), null);

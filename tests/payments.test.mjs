@@ -4,6 +4,7 @@ import { canOpenMoneyMenu, formatPaymentReference, normalizeTransactionId, parse
 import { imageInputFormat } from "../src/server/images/image-format.ts";
 import { badgeInputFormat } from "../src/server/images/provider-badge.ts";
 import { createPaymentHandler } from "../src/server/members/payment-http.ts";
+import { createPayments } from "../src/server/members/payments.ts";
 import { uploadPayment } from "../src/components/members/payment-image.ts";
 
 import { jpeg, paymentRequest, values } from "./helpers/payment-fixtures.mjs";
@@ -17,9 +18,10 @@ test("payment fields normalize IDs and numbers, with exact limits and a strict w
   assert.equal(parsePaymentFields(values).transactionId, "TX.1001"); assert.equal(parsePaymentFields(values).payerPhone, "256700000101");
   assert.equal(normalizeTransactionId(" tx-100 1 "), "TX1001");
   assert.equal(transactionKey("tx .100-1"), transactionKey("TX1001"));
-  assert.deepEqual(parsePaymentFields({ planId: values.planId, network: "airtel", transactionId: "TX-1234", accepted: "true" }), {
-    planId: values.planId, network: "airtel", accepted: true, payerPhone: null, transactionId: "TX1234",
+  assert.deepEqual(parsePaymentFields({ planId: values.planId, payerPhone: "+256 700 000 102", network: "airtel", transactionId: "TX-1234", accepted: "true" }), {
+    planId: values.planId, network: "airtel", accepted: true, payerPhone: "256700000102", transactionId: "TX1234",
   });
+  for (const payerPhone of [undefined, null, "", "   ", "256", "0201234567", 256700000101]) assert.equal(parsePaymentFields({ ...values, payerPhone }), null);
   for (const fields of [{ amount: "99" }, { amount: "10000001" }, { amount: "5e3" }, { transactionId: undefined }, { transactionId: null }, { transactionId: "" }, { transactionId: "   " }, { transactionId: "---." }, { transactionId: "abc" }, { transactionId: "<script>" }, { transactionId: "A".repeat(41) }, { payerPhone: "0201234567" }, { network: "other" }, { accepted: "yes" }, { sms: "secret" }]) assert.equal(parsePaymentFields({ ...values, ...fields }), null);
 });
 
@@ -48,20 +50,33 @@ test("multipart reads are bounded and strict; extra SMS, spoofed content types a
   assert.equal((await f.handler(slow)).status, 408); assert.equal(f.calls.submit.length, 1);
 });
 
-test("a transaction ID can be submitted without proof or payer details; missing IDs and amount overrides are refused", async () => {
+test("screenshots are optional but valid transaction and payer details are required; amount overrides are refused", async () => {
   const f = fixture();
-  assert.equal((await f.handler(await paymentRequest({ image: null, fields: { payerPhone: undefined } }))).status, 201);
-  assert.equal(f.calls.submit[0][1].payerPhone, null); assert.equal(f.calls.submit[0][1].transactionId, "TX.1001");
+  assert.equal((await f.handler(await paymentRequest({ image: null, fields: { payerPhone: "0700000102" } }))).status, 201);
+  assert.equal(f.calls.submit[0][1].payerPhone, "256700000102"); assert.equal(f.calls.submit[0][1].transactionId, "TX.1001");
   assert.equal(f.calls.submit[0][2], null);
   for (const transactionId of [undefined, "", "   ", "---.", "<script>"]) {
     assert.equal((await f.handler(await paymentRequest({ fields: { transactionId } }))).status, 400);
     assert.equal((await f.handler(await paymentRequest({ image: null, fields: { transactionId } }))).status, 400);
+  }
+  for (const payerPhone of [undefined, null, "", "   ", "256", "0201234567"]) {
+    assert.equal((await f.handler(await paymentRequest({ fields: { payerPhone } }))).status, 400);
+    assert.equal((await f.handler(await paymentRequest({ image: null, fields: { payerPhone } }))).status, 400);
   }
   assert.equal((await f.handler(await paymentRequest({ fields: { amount: "100" } }))).status, 400);
   assert.equal((await f.handler(await paymentRequest({ image: null, fields: { amount: "100" } }))).status, 400);
   assert.equal(f.calls.submit.length, 1);
   f.services.sessions.verify = async () => null;
   const signedOut = await paymentRequest(); assert.equal((await f.handler(signedOut)).status, 403); assert.equal(signedOut.bodyUsed, false);
+});
+
+test("direct payment submissions cannot substitute the account phone for an absent or invalid payer", async () => {
+  const payments = createPayments({ database: { async transaction() { assert.fail("Invalid payer data must not reach storage."); } },
+    config: { key: () => "unused" }, environment: null });
+  const member = { accountId: "account", tokenHash: "session", phone: "256700000101" };
+  for (const payerPhone of [undefined, null, "", "   ", "256", "0201234567", 256700000101]) {
+    assert.deepEqual(await payments.submit(member, { ...values, payerPhone, accepted: true }), { status: "invalid" });
+  }
 });
 test("attempt checks precede the body, and only two uploads may be in flight", async () => {
   const f = fixture(); f.services.payments.begin = async () => false;

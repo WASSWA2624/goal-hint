@@ -70,10 +70,10 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
     assert.equal((await payments.view(locked, settings)).acceptedTerms, true);
     assert.equal((await report(locked, fields({ accepted: false }))).status, "saved");
   });
-  await t.test("ID-only reports use the account phone and plan price; approval preserves the paid-for offer", async () => {
-    const who = await member(), transactionId = `OPTIONAL-${++serial}`, sent = await report(who, fields({ payerPhone: null, transactionId }), null);
+  await t.test("reports without screenshots use the supplied payer and plan price; approval preserves the paid-for offer", async () => {
+    const who = await member(), transactionId = `OPTIONAL-${++serial}`, sent = await report(who, fields({ payerPhone: "0700000199", transactionId }), null);
     const before = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: sent.reference.slice(1) }, include: { screenshot: true } }));
-    assert.equal(before.payerPhone, who.phone); assert.equal(before.claimedAmountUgx, 5000); assert.equal(before.claimedTxnKey, transactionId.replace("-", ""));
+    assert.equal(before.payerPhone, "256700000199"); assert.equal(before.claimedAmountUgx, 5000); assert.equal(before.claimedTxnKey, transactionId.replace("-", ""));
     assert.equal(before.claimedTxnRef, transactionId.replace("-", ""));
     assert.equal(before.status, "pending"); assert.equal(before.screenshot, null); assert.equal(before.imageSha256, null); assert.equal(before.imageBytes, null);
     assert.equal(await database.query((tx) => tx.accessCode.count({ where: { accountId: who.accountId } })), 0);

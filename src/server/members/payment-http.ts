@@ -1,6 +1,6 @@
 import "server-only";
 
-import { optionalPaymentFields, parsePaymentFields, paymentFields, paymentRules } from "../../domain/payment.ts";
+import { parsePaymentFields, paymentFields, paymentRules } from "../../domain/payment.ts";
 import { clientAddress, json, readLimitedBody } from "../http/private-http.ts";
 import { imageInputFormat } from "../images/image-format.ts";
 import { getMemberServices, memberRefusal, memberRoute, type MemberServicesSource } from "./member-http.ts";
@@ -8,7 +8,7 @@ import { duplicatePaymentMessage } from "./payments.ts";
 
 const processState = globalThis as typeof globalThis & { goalHintPaymentUploads?: number };
 const busy = (status = 429) => json({ error: "busy", message: "Busy, try again later. Call admin for help." }, status, { "Retry-After": "60" });
-const invalid = () => json({ error: "invalid", message: "Check the payment details and transaction ID." }, 400);
+const invalid = () => json({ error: "invalid", message: "Check the transaction ID and Paid from number." }, 400);
 const invalidImage = () => json({ error: "invalid", message: "Choose a valid payment screenshot, or submit without one." }, 400);
 
 export function createPaymentHandler(services: MemberServicesSource = getMemberServices, { deadlineMs = paymentRules.deadlineMs }: { deadlineMs?: number } = {}) {
@@ -31,10 +31,10 @@ export function createPaymentHandler(services: MemberServicesSource = getMemberS
       let data;
       try { data = await new Response(raw, { headers: { "Content-Type": request.headers.get("content-type")! } }).formData(); }
       catch { return invalid(); }
-      // Only the known fields, each at most once; the payer and screenshot may be left out.
+      // Every payment field is required exactly once; only the screenshot may be left out.
       const expected: readonly string[] = [...paymentFields, "image"];
       if ([...data.keys()].some((key) => !expected.includes(key))
-        || expected.some((key) => data.getAll(key).length !== 1 && !((key === "image" || optionalPaymentFields.includes(key)) && data.getAll(key).length === 0))) return invalid();
+        || expected.some((key) => data.getAll(key).length !== 1 && !(key === "image" && data.getAll(key).length === 0))) return invalid();
       const image = data.get("image"), fields = parsePaymentFields(Object.fromEntries(paymentFields.flatMap((key) => data.has(key) ? [[key, data.get(key)] as const] : [])));
       if (!fields) return invalid();
       if (image !== null && (!(image instanceof File) || image.size > paymentRules.imageBytes)) return invalidImage();

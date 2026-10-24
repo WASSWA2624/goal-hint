@@ -7,13 +7,13 @@ import { createMessages } from "@/i18n/messages";
 import { MemberPanel } from "./member-controls";
 
 /** The same account summary remains visible for payment approvals, manual grants and renewals. */
-export function SubscriptionSummaryCard({ locale, subscription, canSubscribe, returnTo, paymentReversed = false }: {
-  locale: string; subscription: SubscriptionStatus | null; canSubscribe: boolean; returnTo: string | null; paymentReversed?: boolean;
+export function SubscriptionSummaryCard({ locale, subscription, canSubscribe, returnTo, paymentNeedsAttention = false }: {
+  locale: string; subscription: SubscriptionStatus | null; canSubscribe: boolean; returnTo: string | null; paymentNeedsAttention?: boolean;
 }) {
   const messages = createMessages(locale);
   if (!subscription) return <MemberPanel data-subscription-summary="unavailable"><p role="status">{messages.text("account.subscriptionUnavailable")}</p></MemberPanel>;
   const { activeUntil, paymentPending } = subscription;
-  const viewPayment = paymentPending || paymentReversed;
+  const viewPayment = paymentPending || paymentNeedsAttention;
   const destination = memberNextPath("subscribe", returnTo);
   return <MemberPanel data-subscription-summary={activeUntil ? "active" : "inactive"}><Stack $gap="sm">
     <h2>{messages.text(activeUntil ? "account.activeSubscription" : "account.noActiveSubscription")}</h2>
