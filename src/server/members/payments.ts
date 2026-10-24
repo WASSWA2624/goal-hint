@@ -42,8 +42,16 @@ export function createPayments({ database, config, now = Date.now, environment =
     return account && !account.blockedAt && !account.erasedAt && account.phone && session?.accountId === account.id
       && session.authenticatedAt && !session.passwordResetAt && session.expiresAt > at ? { account, session } : null;
   }
-  async function acceptedTerms(tx: Pick<Prisma.TransactionClient, "accessCode">, member: MemberIdentity): Promise<boolean> {
-    return !!member.codeEnteredAt && await tx.accessCode.count({ where: { accountId: member.accountId, termsVersion: termsNotice.reviewedOn } }) > 0;
+  /** Consent belongs to the account and terms version, independently of payment status or a device's access. */
+  async function acceptedTerms(tx: Pick<Prisma.TransactionClient, "memberAccount">, member: MemberIdentity, at: Date): Promise<boolean> {
+    return !!await tx.memberAccount.findFirst({ where: { id: member.accountId, phone: { not: null }, blockedAt: null, erasedAt: null,
+      sessions: { some: { tokenHash: member.tokenHash, authenticatedAt: { not: null }, passwordResetAt: null, expiresAt: { gt: at } } },
+      OR: [
+        { submissions: { some: { source: "report", termsVersion: termsNotice.reviewedOn, acceptedAt: { not: null } } } },
+        // Existing access records retain consent from member reports or historical code entry; owner grants have no version.
+        { codes: { some: { termsVersion: termsNotice.reviewedOn } } },
+      ],
+    }, select: { id: true } });
   }
   return Object.freeze({
     /** Reserve attempts and declared IP bytes before touching the body. Failed reads never consume stored-submission allowances. */
@@ -79,7 +87,7 @@ export function createPayments({ database, config, now = Date.now, environment =
           if (settings.paywallMode === "off") return rollback({ status: "refused" });
           const plan = await tx.subscriptionPlan.findUnique({ where: { id: fields.planId } });
           if (!plan?.active || !settings[fields.network === "mtn" ? "mtnNumber" : "airtelNumber"]
-            || !fields.accepted && !await acceptedTerms(tx, { ...member, codeEnteredAt: current.session.codeEnteredAt })) return rollback({ status: "invalid" });
+            || !fields.accepted && !await acceptedTerms(tx, member, at)) return rollback({ status: "invalid" });
           if (await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: { in: [`mtn:${key}`, `airtel:${key}`] } }, select: { id: true } })) return rollback({ status: "duplicate" });
           const stored = await bucket(tx, "upload-stored", member.tokenHash, at), site = await bucket(tx, "upload-site", "all", at);
           if (stored.count >= paymentRules.sessionStored) return rollback({ status: "busy" });
@@ -130,7 +138,7 @@ export function createPayments({ database, config, now = Date.now, environment =
       return database.query(async (tx) => {
         const [account, codes, terms, status] = await Promise.all([
           tx.memberAccount.findUnique({ where: { id: member.accountId }, select: { trialRequestedAt: true, trialDismissedAt: true } }),
-          tx.accessCode.count({ where: { accountId: member.accountId } }), acceptedTerms(tx, member),
+          tx.accessCode.count({ where: { accountId: member.accountId } }), acceptedTerms(tx, member, new Date(now())),
           tx.paymentSubmission.findFirst({ where: { accountId: member.accountId, account: { blockedAt: null, erasedAt: null,
             sessions: { some: { tokenHash: member.tokenHash, authenticatedAt: { not: null }, expiresAt: { gt: new Date(now()) } } } } },
             orderBy: [{ submittedAt: "desc" }, { id: "desc" }], select: { reference: true, status: true, rejectText: true, rejectReason: true,

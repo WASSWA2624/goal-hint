@@ -13,6 +13,7 @@ import { resolveLocale } from "@/i18n/locales";
 import { formatPhone } from "@/domain/phone";
 import { media } from "@/styles/theme";
 import { MemberSignOut } from "./member-controls";
+import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, subscribePendingPayments } from "@/components/admin/pending-payments";
 import { getAdminSessionSnapshot, getMemberSessionSnapshot, getServerAdminSessionSnapshot, getServerMemberSessionSnapshot,
   getServerSubscriptionSnapshot, getSubscriptionSnapshot, refreshMemberSession, subscribeMemberSession } from "./member-session";
 
@@ -136,6 +137,14 @@ function AccountMenu({ locale, phone, administratorName }: { locale: string; pho
   </Disclosure>;
 }
 
+function AdminPaymentsLink() {
+  const count = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
+  const label = count === null ? "Payments" : count === 0 ? "Payments, none awaiting review" : `${count} payment${count === 1 ? "" : "s"} awaiting review`;
+  return <AuthLink href="/admin/payments?tab=pending" prefetch={false} $primary={!!count} aria-label={label} title={label} data-admin-payments-link>
+    Payments{count !== null && count > 0 && <strong aria-live="polite" aria-atomic="true">{count > 99 ? "99+" : count}</strong>}
+  </AuthLink>;
+}
+
 /** All headers share a visible purchase action and the same private account state. */
 export function AccountLinks({ locale = "en", administratorName }: { locale?: string; showAccount?: boolean; administratorName?: string }) {
   const pathname = usePathname();
@@ -151,6 +160,7 @@ export function AccountLinks({ locale = "en", administratorName }: { locale?: st
     {messages.text(subscription?.paymentPending ? "account.pending" : "account.subscribe")}
   </AuthLink>;
   return <Actions data-account-actions>
+    {(administratorName || administrator) && <AdminPaymentsLink />}
     {phone || administratorName ? <>{purchase && subscribeLink}<ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(administratorName ? { administratorName } : {})} /></> : <>
       <AuthLink href={`${base}?view=login`} prefetch={false}><SignInIcon />{messages.text("account.login")}</AuthLink>
       {purchase ? subscribeLink : <AuthLink href={`${base}?view=register`} prefetch={false} $primary><UserPlusIcon />{messages.text("account.register")}</AuthLink>}

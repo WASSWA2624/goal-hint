@@ -21,6 +21,23 @@ class PaymentFields(HTMLParser):
         if tag == "details": self.details -= 1
 
 
+def reversed_rendering(origin):
+    for state in ["reversed", "reversed-terms-required", "reversed-active"]:
+        response = request(origin, f"/en/subscribe?state={state}")
+        html = visible_html(response.text)
+        assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
+        assert 'data-payment-status="reversed"' in html and "Payment reversed" in html
+        assert "Submit another payment" in html and "PFAKE" in html
+        assert 'name="plan"' not in html and 'data-payment-logo' not in html and 'type="file"' not in html
+        assert not any(field.get("maxlength") == "40" for field, _ in PaymentFields(html).inputs), "Reversed status must not expose a new payment form automatically."
+        assert "18 or older" not in html
+        disclosure = re.search(r'<details\b([^>]*data-payment-details[^>]*)>', html)
+        assert disclosure and not re.search(r'\bopen(?:=""|\s|$)', disclosure.group(1)), "Payment details starts collapsed."
+        for label in ["Payment details", "Contact support"]:
+            assert html.count(label) == 1, f"One clear {label} entry is enough."
+        assert "Need help?" not in html, "The compact status must not repeat the support entry below the card."
+
+
 def main():
     args = parse_args("payment steps", extra=("--fixture",))
     env = environment(GOAL_HINT_DATABASE_ENABLED="false")
@@ -64,9 +81,10 @@ def main():
                     assert len(screenshots) == 2 and all("required" not in field and depth > 0 for field, depth in screenshots), "Screenshots must be optional and inside details."
                     assert not any(field.get("name") == "amount" or field.get("type") == "number" for field, _ in fields), "The payment amount must remain read-only."
                     assert "Submit payment" in html and "Optional details" in html and "This form needs JavaScript" in html and "Optional screenshot or photo" in html
-                    assert ("18 or older" in html) == (state != "active")
+                    assert ("18 or older" in html) == (state not in ["active", "approved"])
                 if state == "approved": assert 'data-payment-status="approved"' in html and "Access active until" in html and " EAT" in html
                 if state == "rejected": assert "Synthetic rejection reason" in html
+        reversed_rendering(server.origin)
         account = visible_html(request(server.origin, "/en/account?state=active").text)
         assert 'data-subscription-summary="active"' in account and "Active subscription" in account and "Renew" in account
         assert re.search(r'<time\b[^>]*datetime="[^"]+"[^>]*>[^<]*\b\d{4}\b[^<]*\d{2}:\d{2} EAT</time>', account, re.I), "The active account must show its full expiry date and time."
@@ -86,7 +104,7 @@ def main():
         assert canonical_inputs and all('type="hidden"' in field for field in canonical_inputs)
         named_phone = [field for field in canonical_inputs if 'name="phone"' in field]
         assert len(named_phone) == 1, "The native form must submit its canonical phone field exactly once."
-        print("PASS 8 server-rendered payment states, shared account login, 5 user agents, visible required transaction ID, optional screenshots, automatic amount, assent, plan order and private headers.", flush=True)
+        print("PASS 11 server-rendered payment states, collapsed reversed status, shared account login, 5 user agents, visible required transaction ID, optional screenshots, automatic amount, assent, plan order and private headers.", flush=True)
         if args.serve: server.serve()
 
 

@@ -60,13 +60,15 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
     const otherDevice = await payments.view(await member(first.phone), settings); assert.equal(otherDevice.status.reference, a.reference);
     const visible = await payments.view(first, settings); assert.equal(visible.status.reference, a.reference); assert.ok(visible.status.endsAt);
   });
-  await t.test("current assent waives only an unlocked session's checkbox without code entry", async () => {
+  await t.test("current account assent survives reversal and a new locked device", async () => {
     const who = await member(); assert.equal((await report(who, fields({ accepted: false }))).status, "invalid");
     const submitted = await report(who), row = await database.query((tx) => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: submitted.reference.slice(1) } }));
+    assert.equal((await payments.view(who, settings)).acceptedTerms, true, "The accepted report records consent before approval.");
     const approved = await codes.approvePayment(row.id, { planId, network: "mtn", transactionRef: fields().transactionId, amountReceivedUgx: 5000 }, "synthetic-owner"); assert.equal(approved.status, "created");
-    const unlocked = { ...who, codeEnteredAt: (await database.query((tx) => tx.memberSession.findUniqueOrThrow({ where: { tokenHash: who.tokenHash } }))).codeEnteredAt };
-    assert.equal((await report(unlocked, fields({ accepted: false }))).status, "saved");
-    const numberOnly = await member(who.phone); assert.equal((await report(numberOnly, fields({ accepted: false }))).status, "invalid");
+    assert.equal((await codes.reversePayment(row.id, "network-reversal", "synthetic-owner")).status, "saved");
+    const locked = await member(who.phone); assert.equal(locked.codeEnteredAt, null);
+    assert.equal((await payments.view(locked, settings)).acceptedTerms, true);
+    assert.equal((await report(locked, fields({ accepted: false }))).status, "saved");
   });
   await t.test("ID-only reports use the account phone and plan price; approval preserves the paid-for offer", async () => {
     const who = await member(), transactionId = `OPTIONAL-${++serial}`, sent = await report(who, fields({ payerPhone: null, transactionId }), null);

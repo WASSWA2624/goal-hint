@@ -1,3 +1,3 @@
 import { createPaymentHandler } from "@/server/members/payment-http";
-import { fixtureServices } from "../../../fixture";
-export const POST = createPaymentHandler(async () => fixtureServices());
+import { fixtureScenarioFromHeaders, fixtureServices } from "../../../fixture";
+export const POST = (request: Request) => createPaymentHandler(async () => fixtureServices(fixtureScenarioFromHeaders(request.headers)))(request);

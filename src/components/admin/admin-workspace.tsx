@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useTransition, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import styled from "styled-components";
 import { useRouter } from "next/navigation";
 import Link from "@/components/navigation/navigation-link";
@@ -8,6 +8,7 @@ import { PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminSections, type AdminSection } from "@/domain/admin-navigation";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
+import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
 
 /** A background tab shows "(n) Payments · …" while payments wait; the page's own title stays after it, and returns at 0. */
 function pendingTitle(title: string, count: number, payments: boolean) {
@@ -22,17 +23,13 @@ export function AdminWorkspace({ current, children, pendingCount }: {
   current: AdminSection; children: ReactNode; pendingCount?: number;
 }) {
   const router = useRouter(), [navigating, startNavigation] = useTransition();
+  const count = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, () => pendingCount ?? null);
   useEffect(() => {
-    const refreshCount = () => {
-      void fetch("/api/admin/payments?count=1", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then((v: { pendingCount: number } | null) => {
-        if (v) { document.title = pendingTitle(document.title, v.pendingCount, current === "payments"); if (current === "payments") router.refresh(); }
-      }).catch(() => {});
-    };
-    if (pendingCount === undefined) refreshCount();
-    else document.title = pendingTitle(document.title, pendingCount, current === "payments");
-    const timer = setInterval(refreshCount, 60000);
-    return () => clearInterval(timer);
-  }, [current, pendingCount, router]);
+    if (pendingCount !== undefined) seedPendingPayments(pendingCount);
+  }, [pendingCount]);
+  useEffect(() => {
+    document.title = pendingTitle(document.title, count ?? 0, current === "payments");
+  }, [current, count]);
   return (
     <Workspace data-analytics-ignore>
       <Switcher aria-label="Admin pages" aria-busy={navigating}>
@@ -41,7 +38,7 @@ export function AdminWorkspace({ current, children, pendingCount }: {
           const section = adminSections.find(({ key }) => key === event.target.value);
           if (section && section.key !== current) startNavigation(() => router.push(section.href));
         }}>
-          {adminSections.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
+          {adminSections.map(({ key, label }) => <option key={key} value={key}>{label}{key === "payments" && count !== null && count > 0 ? ` (${count})` : ""}</option>)}
         </PageSelect>
       </Switcher>
       <noscript><Fallback aria-label="Admin pages">{adminSections.map(({ key, href, label }) =>

@@ -92,6 +92,8 @@ export function loadPaymentsFixture() {
   if (state.paymentsExpanded) return;
   state.paymentsExpanded = true;
   const original = state.payments[0]!;
+  // Keep a visible sender warning in the first review and duplicate evidence on the attached report.
+  original.payerPhone = "256700000118";
   const payment = (suffix: string, values: Partial<FixturePayment>): FixturePayment => ({ ...original,
     id: `00000000-0000-4000-8000-0000000002${suffix}`, reference: `DEMO${suffix}`, accountId: "00000000-0000-4000-8000-000000000102",
     payerPhone: "256700000118", submittedAt: new Date(`2026-10-23T0${Number(suffix)}:00:00Z`), ...values });
@@ -107,7 +109,7 @@ export function loadPaymentsFixture() {
       amountReceivedUgx: 5000, network: "mtn", transactionRef: "MTN2026102203", approvedTxnKey: "mtn:MTN2026102203" }),
     payment("04", { status: "rejected", claimedTxnRef: "MTN2026102204", claimedTxnKey: "MTN2026102204",
       rejectReason: "not-received", rejectText: "Synthetic wallet check found no matching receipt." }),
-    payment("05", { status: "superseded", claimedTxnRef: "AIR2026102301", claimedTxnKey: "AIR2026102301" }),
+    payment("05", { status: "superseded", accountId, claimedTxnRef: "AIR2026102301", claimedTxnKey: "AIR2026102301", imageSha256: "a".repeat(64) }),
     payment("06", { status: "reversed", claimedTxnRef: "MTN2026102206", claimedTxnKey: "MTN2026102206",
       amountReceivedUgx: 5000, network: "mtn", transactionRef: "MTN2026102206", approvedTxnKey: "mtn:MTN2026102206" }),
   );

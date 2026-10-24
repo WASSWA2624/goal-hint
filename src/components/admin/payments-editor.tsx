@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/navigation/navigation-link";
 import { TextInput } from "@/components/ui/controls";
@@ -12,6 +12,7 @@ import type { OwnerPayment, PaymentQueue } from "@/domain/owner-members";
 import { ActionButton, ButtonRow } from "./admin-form";
 import { ActionNotices, useCodeAction } from "./code-tools";
 import { PaymentReview, type PaymentRecovery } from "./payment-review";
+import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, refreshPendingPayments, subscribePendingPayments } from "./pending-payments";
 import { PaymentBadge, PaymentEmpty, PaymentFeedback, PaymentLayout, PaymentTabs, PaymentToolbar, PaymentWorkspace, QueueHeading, QueueItem, QueueList,
   QueueMeta, QueuePanel, ReviewBack, ReviewPanel, TrialPanel } from "./payment-styles";
 
@@ -22,6 +23,7 @@ const searchText = (value: string) => value.toLowerCase().replace(/[\s()+.-]/gu,
 /** Payment decisions share one queue; only the selected report mounts a review form. */
 export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; plans: readonly SubscriptionPlanView[]; tab: string }) {
   const router = useRouter(), action = useCodeAction();
+  const liveCount = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot);
   const [search, setSearch] = useState(""), [selectedId, setSelectedId] = useState(queue.payments[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(false), [completed, setCompleted] = useState<readonly string[]>([]);
   const [recoveries, setRecoveries] = useState<Record<string, PaymentRecovery>>({});
@@ -35,6 +37,7 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
   const selected = payments.find(payment => payment.id === selectedId) ?? payments[0];
   const selectedKey = selected?.id;
   const pendingCount = Math.max(0, queue.pendingCount - queue.payments.filter(payment => payment.status === "pending" && completed.includes(payment.id)).length);
+  const queueChanged = liveCount !== null && liveCount !== pendingCount;
 
   useEffect(() => {
     const readHash = () => {
@@ -82,11 +85,12 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
   return <PaymentLayout data-payments-editor data-analytics-ignore>
     <PaymentTabs aria-label="Payment status">{Object.entries(tabLabels).map(([value, label]) => <Link key={value} href={`/admin/payments?tab=${value}`}
       prefetch={false} aria-current={tab === value ? "page" : undefined} aria-disabled={action.busy || undefined}
-      onClick={event => { if (action.busy) event.preventDefault(); else setDetailOpen(false); }}>{label}{value === "pending" && ` (${pendingCount})`}</Link>)}</PaymentTabs>
+      onClick={event => { if (action.busy) event.preventDefault(); else setDetailOpen(false); }}>{label}{value === "pending" && ` (${liveCount ?? pendingCount})`}</Link>)}</PaymentTabs>
     <PaymentToolbar $reviewing={detailOpen}><TextInput id="payment-search" type="search" label="Find a payment" placeholder="Phone, transaction ID or reference" leading={<SearchIcon />}
       value={search} maxLength={100} disabled={action.busy} autoComplete="off" onChange={event => setSearch(event.target.value)} />
       <QueueMeta><span data-payment-count>{payments.length} {tab === "pending" ? "waiting" : "reports"}</span><span>Up to 100 · {tab === "pending" ? "Oldest first" : "Newest first"}</span>
-        <ActionButton type="button" disabled={action.busy} onClick={() => router.refresh()}><ResetIcon />Refresh</ActionButton></QueueMeta>
+        {queueChanged && <span role="status" data-payment-queue-updated>Queue updated</span>}
+        <ActionButton type="button" $variant={queueChanged ? "primary" : "secondary"} disabled={action.busy} onClick={() => { void refreshPendingPayments(true); router.refresh(); }}><ResetIcon />Refresh queue</ActionButton></QueueMeta>
     </PaymentToolbar>
     {(feedback.notice || feedback.message) && <PaymentFeedback id="payment-feedback" tabIndex={-1} aria-label="Payment result"><ActionNotices action={feedback} /></PaymentFeedback>}
     <PaymentWorkspace $detailOpen={detailOpen} data-payment-workspace>

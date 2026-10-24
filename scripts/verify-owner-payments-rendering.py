@@ -316,7 +316,7 @@ def payments_api(origin):
         assert decide("01", {**decision, "transactionId": ""}, 400)["status"] == "invalid"
         assert queue()["pendingCount"] == 3
         reply = decide("01", decision, 201)
-        assert reply["status"] == "approved" and reply["reference"] == "P-DEMO01" and reply["endsAt"]
+        assert reply["status"] == "approved" and reply["reference"] == "PDEMO01" and reply["endsAt"]
         assert not {"code", "password", "sms", "whatsapp", "delivery"}.intersection(reply)
         assert queue()["pendingCount"] == 2 and payment("01") not in [row["id"] for row in queue()["payments"]]
         assert any(row["id"] == payment("01") and row["final"]["amount"] == 15000 for row in queue("approved")["payments"])
@@ -346,12 +346,18 @@ def payments_api(origin):
 def payments_rendering(origin):
     fixture_json(origin, "/api/fixture/payments", {"scenario": "review"})
     try:
+        session_status, session = fixture_json(origin, "/api/account/session")
+        assert session_status == 200 and session["administrator"] is True
+        assert session["subscription"]["canSubscribe"] is False
         for tab, suffixes in [("pending", ["00", "01", "02"]), ("approved", ["06", "03"]), ("rejected", ["04"]), ("superseded", ["05"]), ("invalid", ["00", "01", "02"])]:
             response = request(origin, "/admin/payments?tab=" + tab)
             html = visible_html(response.text)
             assert response.status == 200 and "no-store" in response.headers.get("Cache-Control", "")
             match(r'data-payments-editor', html)
+            badge = match(r'<a\b(?=[^>]*data-admin-payments-link)[^>]*>', html).group(0)
+            match(r'href="/admin/payments\?tab=pending"', badge)
             match(r'id="payment-search"', html)
+            match("Refresh queue", html)
             expected = ["00000000-0000-4000-8000-0000000002" + suffix for suffix in suffixes]
             assert re.findall(r'data-payment-row="([^"]+)"', html) == expected, tab
             assert re.findall(r'data-payment-review="([^"]+)"', html) == expected[:1], "Only one review should mount."
@@ -364,8 +370,18 @@ def payments_rendering(origin):
                 for field in ["payment-confirmed-id", "payment-confirmed-amount"]:
                     control = match(rf'<input\b(?=[^>]*id="{field}")[^>]*>', html).group(0)
                     match(r'value=""', control, "Reported wallet values must not prefill owner confirmation.")
+                    match(r'\brequired(?:=""|\s|>)', control)
                 wallet = match(r'<input\b(?=[^>]*id="payment-wallet-confirmed")[^>]*>', html).group(0)
                 no_match(r'\bchecked(?:=""|\s|>)', wallet)
+                match(r'\brequired(?:=""|\s|>)', wallet)
+                match("Verify in your wallet", html)
+                for label in ["Paste wallet SMS", "Change network or plan", "Reject payment"]:
+                    disclosure = match(rf'<details\b([^>]*)>\s*<summary[^>]*>(?:(?!</summary>)[\s\S])*{label}', html)
+                    no_match(r'\bopen(?:=""|\s|$)', disclosure.group(1))
+                warning = "Payer has its own Goal Hint account"
+                assert html.count(warning) == 1, "Warnings stay visible without being repeated inside checks."
+                match(r'aria-label="Payment warnings"', html)
+                no_match(r'No screenshot available', html)
                 trials = match(r'<details\b(?=[^>]*data-payment-trials)[^>]*>', html).group(0)
                 no_match(r'\bopen(?:=""|\s|>)', trials)
             else:

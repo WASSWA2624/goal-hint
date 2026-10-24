@@ -1,6 +1,6 @@
 import { readJsonBody } from "@/server/admin/admin-http";
 import { json } from "@/server/http/private-http";
-import { normalizeTransactionId, transactionKey } from "@/domain/payment";
+import { formatPaymentReference, normalizeTransactionId, transactionKey } from "@/domain/payment";
 import { rejectionReasons } from "@/server/admin/payment-review";
 import { chainPeriods } from "@/domain/subscription-period";
 import { fixturePaymentPlans, fixtureState, grantFixtureAccess, recordFixtureAudit } from "./fixture";
@@ -51,5 +51,5 @@ export async function paymentAction(request: Request) {
   payment.approvedTxnKey = `${payment.network}:${key}`;payment.amountReceivedUgx = body.amount;
   const grant = grantFixtureAccess(account, payment.durationDays, "payment", payment.planName, payment.id);
   recordFixtureAudit("payment_approved", payment.accountId, "payment", payment.id);
-  return json({ ...grant, status: "approved", reference: `P-${payment.reference}`, notification: "sent" }, 201);
+  return json({ ...grant, status: "approved", reference: formatPaymentReference(payment.reference), notification: "sent" }, 201);
 }

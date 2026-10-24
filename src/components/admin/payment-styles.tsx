@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 import { Panel } from "@/components/analytics/dashboard/dashboard-styles";
-import { ActionButton } from "./admin-form";
+import { ActionButton, FieldRow, FormStack } from "./admin-form";
 
 export const PaymentLayout = styled.div`
   display: grid; gap: 14px; min-inline-size: 0;
@@ -96,7 +96,7 @@ export const ReviewPanel = styled.section`
 `;
 
 export const PaymentCard = styled(Panel)`
-  display: grid; gap: 14px; padding: 16px; min-inline-size: 0;
+  display: grid; gap: 10px; padding: 12px; min-inline-size: 0;
   h2, h3, p { margin: 0; }
   h3 { font-size: 0.875rem; }
   label { font-size: 0.8125rem; }
@@ -122,7 +122,7 @@ export const PaymentFacts = styled.dl`
   dt { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
   dd { min-inline-size: 0; margin: 0; font-size: 0.875rem; font-weight: 500; overflow-wrap: anywhere; }
   button { justify-self: start; }
-  @media(min-width: 1200px) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media(max-width: 359px) { grid-template-columns: minmax(0, 1fr); }
 `;
 
 export const PaymentEvidence = styled.div`
@@ -140,15 +140,39 @@ export const ApprovalFooter = styled.div`
 `;
 
 export const PaymentHighlight = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px;
   min-inline-size: 0; background: ${({ theme }) => theme.color.brandSoft};
-  border-radius: ${({ theme }) => theme.border.radius};
+  > div { display: grid; gap: 4px; min-inline-size: 0; }
   strong { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   span { font-size: 0.8125rem; overflow-wrap: anywhere; }
+  small { font-size: 0.75rem; overflow-wrap: anywhere; }
+`;
+
+export const PaymentVerification = styled.form`
+  border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 10px;
+  > ${FormStack}, ${FieldRow} { gap: 8px; }
+  ${FieldRow} > * { min-inline-size: 0; align-content: start; }
+`;
+
+export const ReportedTransaction = styled.div`
+  display: flex; align-items: center; gap: 6px; min-inline-size: 0;
+  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem;
+  > span { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; }
+  strong { font-weight: 500; }
+  > button { flex: none; inline-size: 44px; padding-inline: 0; }
+`;
+
+export const WalletSms = styled.details`
+  min-inline-size: 0; padding-inline: 12px; border: 1px solid ${({ theme }) => theme.color.border};
+  background: ${({ theme }) => theme.color.brandSoft};
+  > summary { font-weight: 500; }
+  > label { padding-block-end: 12px; }
 `;
 
 export const PaymentWarnings = styled.div`
-  display: grid; gap: 6px; min-inline-size: 0;
+  display: grid; gap: 6px; min-inline-size: 0; padding: 10px 12px;
+  border-inline-start: 3px solid ${({ theme }) => theme.color.outcome.pending.text};
+  background: ${({ theme }) => theme.color.outcome.pending.background};
   > p { margin: 0; color: ${({ theme }) => theme.color.outcome.pending.text}; font-size: 0.75rem; overflow-wrap: anywhere; }
 `;
 

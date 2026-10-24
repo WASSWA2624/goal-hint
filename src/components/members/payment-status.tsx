@@ -2,16 +2,16 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, ChevronRightIcon, ImageIcon } from "@/components/ui/icons";
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ImageIcon } from "@/components/ui/icons";
 import type { PaymentStatus } from "@/domain/payment";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import { createMessages } from "@/i18n/messages";
-import { AdminContactLinks } from "./admin-contact";
+import { AccountSupportLink, AdminContactLinks } from "./admin-contact";
 import { refreshMemberSession } from "./member-session";
-import { ActionLink, HelpActions, Note, RowButton, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
+import { Action, ActionLink, Disclosure, HelpActions, Note, RowButton, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
 
 export type StatusSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone" | "reviewTime">;
 const rejectReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
@@ -52,9 +52,10 @@ export function ApprovalRefresh({ waiting, refreshAt = null }: { waiting: boolea
 
 /** The account's latest report: waiting (with the admin's numbers), approved while its period runs, or refused with a reason.
  * Approval needs nothing from the member: access opens on the account's signed-in devices by itself. */
-export function PaymentStatusCard({ locale, status, settings, phone, activeUntil, returnTo, heading = "h3", replace }: {
+export function PaymentStatusCard({ locale, status, settings, phone, activeUntil, returnTo, heading = "h3", replace, newPayment }: {
   locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string; activeUntil: string | null; returnTo: string | null;
   heading?: "h2" | "h3"; replace?: Readonly<{ open: boolean; controls: string; toggle: () => void }> | undefined;
+  newPayment?: Readonly<{ start: () => void }> | undefined;
 }) {
   const m = createMessages(locale);
   if (!status) return null;
@@ -78,11 +79,22 @@ export function PaymentStatusCard({ locale, status, settings, phone, activeUntil
     <p>{m.text("subscribe.activeUntil", { end: formatSubscriptionExpiry(new Date(activeUntil)) })}</p>
     <HelpActions><ActionLink href={returnTo ?? "/en"} prefetch={false}>{m.text("subscribe.seePredictions")}<ChevronRightIcon /></ActionLink></HelpActions>
   </StatusBox> : null;
-  if (status.status !== "rejected" && status.status !== "reversed") return null;
-  // The owner's own words win; otherwise the reason code becomes a plain sentence. A reversal keeps its reason off this table.
+  if (status.status === "reversed") return <StatusBox role="status" data-payment-status="reversed">
+    <StatusTitle as={heading}>{m.text("subscribe.reversedTitle")}</StatusTitle>
+    <p>{m.text("subscribe.reversedLead")}</p>
+    <Disclosure key={status.reference} data-payment-details>
+      <summary>{m.text("subscribe.paymentDetails")}<ChevronDownIcon /></summary><div>{facts(false)}</div>
+    </Disclosure>
+    <HelpActions>
+      <AccountSupportLink locale={locale} contact={settings} text={m.text("subscribe.helpReversed", { reference: status.reference, phone: formatPhone(phone) })} />
+      {newPayment && <Action type="button" variant="secondary" onClick={newPayment.start} data-payment-resubmit>{m.text("subscribe.submitAnother")}</Action>}
+    </HelpActions>
+  </StatusBox>;
+  if (status.status !== "rejected") return null;
+  // Rejections retain the owner's explanation and existing correction flow.
   return <StatusBox role="status" data-payment-status={status.status}>
-    <StatusTitle as={heading}>{m.text(status.status === "reversed" ? "subscribe.reversedTitle" : "subscribe.rejectedTitle")}</StatusTitle>
-    <p>{status.rejectText ?? (status.status === "reversed" ? m.text("subscribe.reversedLead") : m.text(`subscribe.reason.${reasonOf(status.rejectReason)}`))}</p>
+    <StatusTitle as={heading}>{m.text("subscribe.rejectedTitle")}</StatusTitle>
+    <p>{status.rejectText ?? m.text(`subscribe.reason.${reasonOf(status.rejectReason)}`)}</p>
     {facts(false)}
     <Note>{m.text("subscribe.rejectedNext")}</Note>
     <AdminContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpRejected", { reference: status.reference, phone: formatPhone(phone) })} />
