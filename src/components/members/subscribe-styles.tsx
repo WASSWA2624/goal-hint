@@ -61,7 +61,6 @@ export const Plan = styled.label`
 `;
 export const PlanName = styled.span`font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere;`;
 export const PlanPrice = styled.span`grid-column: 1 / -1; font-size: 16px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;`;
-export const PlanDays = styled.span`grid-column: 1 / -1; ${smallText}`;
 export const WalletChoices = styled.fieldset`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
   min-inline-size: 0; margin: 0; padding: 0; border: 0;

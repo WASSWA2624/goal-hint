@@ -43,7 +43,7 @@ export const en = {
   "subscribe.toNumbers": "to one of these numbers",
   "subscribe.toNumber": "to this number",
   "subscribe.dial": "Dial",
-  "subscribe.copy": "Copy",
+  "subscribe.copy": "Copy number",
   "subscribe.copyNetwork": "Copy {network} number",
   "subscribe.confirmPayment": "Confirm payment",
   "subscribe.report": "Submit payment",

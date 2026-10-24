@@ -93,7 +93,8 @@ def main():
             else:
                 assert "MTN MoMo" in html and "Airtel Money" in html and "momoapi" not in html and "airtelstream" not in html
                 for label in ["Choose plan", "Pay UGX 1,000", 'data-subscribe-layout="compact-stacked"', "Pay to:", "Names:", "0700000901", "0700000902", "TEST MTN PAYEE",
-                              "Daily", "Weekly", "Monthly", "Safety tips", "Need help?", "1,000", "5,000", "20,000"]: assert label in html, (state, label)
+                              ">1 day<", ">7 days<", ">30 days<", ">Copy number<", "Safety tips", "Need help?", "1,000", "5,000", "20,000"]: assert label in html, (state, label)
+                assert not re.search(r">(Daily|Weekly|Monthly)<", html), "Plan choices show their length, not their name."
                 interactive = re.sub(r"<noscript\b[^>]*>[\s\S]*?</noscript>", "", html)
                 assert "0700000901" in interactive and "0700000902" not in interactive, state
                 assert 'aria-label="Confirm payment"' in html and ">Confirm payment</h2>" not in html, state

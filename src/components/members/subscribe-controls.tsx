@@ -22,7 +22,7 @@ import { PaymentStatusCard, TrialStatusCard, useApprovalRefresh } from "./paymen
 import {
   ActionLink, Assent, CopyButton, Disclosure, FileBox, FileField,
   HelpActions, HelpTitle, Locked, MenuLink, Note, PageFooter, PaymentTransfer,
-  Plan, PlanDays, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowNote, Sheet,
+  Plan, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowNote, Sheet,
   Step, StepHeading, StepTitle, Submit, Unit, Wallet, WalletChoice, WalletChoices,
   WalletMeta, WalletNumber,
 } from "./subscribe-styles";
@@ -187,7 +187,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
         <StepHeading><StepTitle id={`${ids}-plan`} tabIndex={-1}>{m.text("subscribe.pickPlan")}</StepTitle><Unit>UGX</Unit></StepHeading>
         <Plans aria-labelledby={`${ids}-plan`} $columns={Math.min(plans.length, 3)}>{plans.map((item) => <Plan key={item.id}>
           <input type="radio" name="plan" value={item.id} checked={draft.planId === item.id} onChange={() => update({ planId: item.id })} />
-          <PlanName>{item.name}</PlanName><PlanPrice>{m.number(item.priceUgx)}</PlanPrice><PlanDays>{m.plural("paywall.days", item.durationDays)}</PlanDays>
+          <PlanName>{m.plural("paywall.days", item.durationDays)}</PlanName><PlanPrice>{m.number(item.priceUgx)}</PlanPrice>
         </Plan>)}</Plans>
         {activeUntil && <Note>{m.text("subscribe.renewal", { end: formatPeriodEnd(new Date(activeUntil)), days: String(plan.durationDays) })}</Note>}
       </Step>
