@@ -1,0 +1,184 @@
+<!-- 09 Unit badges -->
+<style>
+.d09 .d09-targets { margin: 0; border: 0; min-inline-size: 0; }
+.d09 .d09-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px 0; }
+.d09 .d09-group { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; min-inline-size: 0; }
+.d09 .d09-group + .d09-group { margin-inline-start: 14px; padding-inline-start: 14px; border-inline-start: 1px solid var(--gh-border); }
+.d09 .d09-title { display: block; font-size: 0.8125rem; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.d09 .d09-pair { display: flex; align-items: center; gap: 6px; }
+.d09 .d09-word { flex: none; font-size: 0.75rem; font-weight: 500; line-height: 1.3; color: var(--gh-muted); }
+.d09 .d09-field { position: relative; display: inline-flex; flex: none; align-items: center; gap: 4px; inline-size: 6.5rem; min-block-size: var(--gh-control-h); padding-inline-end: 5px;
+  border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); cursor: text; }
+.d09 .d09-field--matches { inline-size: 6.75rem; }
+.d09 .d09-field:focus-within { border-color: var(--gh-focus); outline: 2px solid var(--gh-focus); outline-offset: 2px; }
+.d09 .d09-field[data-invalid="true"] { border-color: var(--gh-error); }
+.d09 .d09-input { flex: 1 1 auto; align-self: stretch; min-inline-size: 0; inline-size: 100%; min-block-size: 0; margin: 0; padding: 4px 0 4px 8px; border: 0; border-radius: 0; background: transparent;
+  color: var(--gh-text); font-size: 0.9375rem; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.d09 .d09-input:focus, .d09 .d09-input:focus-visible { outline: none; }
+.d09 .d09-input::placeholder { font-weight: 500; }
+.d09 .d09-unit { flex: none; display: inline-flex; align-items: center; justify-content: center; min-inline-size: 1.125rem; block-size: 1.125rem; padding-inline: 4px; border-radius: var(--gh-radius);
+  background: var(--gh-brand-soft); color: var(--gh-link); font-size: 0.6875rem; font-weight: 700; line-height: 1; letter-spacing: 0.01em; white-space: nowrap; pointer-events: none; }
+.d09 .d09-unit--times { padding-inline: 3px; font-size: 0.8125rem; }
+.d09 .d09-field[data-empty="true"] .d09-unit { background: transparent; color: var(--gh-muted); }
+.d09 .d09-field[data-invalid="true"] .d09-unit { background: transparent; color: var(--gh-error); }
+.d09 .d09-note { margin: 6px 0 0; font-size: 0.6875rem; font-weight: 600; line-height: 1.3; color: var(--gh-error); }
+
+@container panel (min-width: 641px) and (max-width: 999px) {
+  .d09 .gh-form { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .d09 .gh-form > .gh-targets { padding: 12px 12px 0; }
+  .d09 .gh-form > .gh-options { padding: 10px 12px 12px; }
+}
+@container panel (min-width: 1000px) {
+  .d09 .gh-form { grid-template-columns: minmax(0, max-content) minmax(0, 1fr); }
+}
+@container panel (max-width: 640px) {
+  .d09 .d09-row { flex-direction: column; gap: 10px; }
+  .d09 .d09-group + .d09-group { margin-inline-start: 0; padding-inline-start: 0; border-inline-start: 0; padding-block-start: 10px; border-block-start: 1px solid var(--gh-border); }
+  .d09 .d09-field { flex: 1 1 0; inline-size: auto; }
+  .d09 .d09-input { font-size: 1rem; }
+}
+@media (pointer: coarse) {
+  .d09 .d09-field { min-block-size: 44px; }
+}
+</style>
+<section class="gh-builder d09">
+  <header class="gh-head">
+    <h1>Slip builder</h1>
+    <label class="gh-slips">Number of slips <input type="number" value="3" min="1" max="10" step="1" inputmode="numeric" aria-label="Number of slips"></label>
+  </header>
+  <div class="gh-panel">
+    <form class="gh-form" onsubmit="return false">
+      <fieldset class="gh-targets d09-targets">
+        <legend class="sr-only">Your slips</legend>
+        <div class="d09-row">
+          <div class="d09-group" role="group" aria-labelledby="d09-total-title">
+            <span class="d09-title" id="d09-total-title">Total odds per slip</span>
+            <div class="d09-pair">
+              <label class="d09-word" for="d09-total-min">from</label>
+              <label class="d09-field d09-field--odds" data-empty="false" data-invalid="false">
+                <input class="d09-input" id="d09-total-min" name="totalMin" type="number" inputmode="decimal" min="1.01" max="100000" step="0.01" value="2.5" placeholder="Any" autocomplete="off" aria-label="Total odds per slip, from" aria-describedby="d09-total-hint">
+                <span class="d09-unit d09-unit--times" aria-hidden="true">&times;</span>
+              </label>
+              <label class="d09-word" for="d09-total-max">to</label>
+              <label class="d09-field d09-field--odds" data-empty="true" data-invalid="false">
+                <input class="d09-input" id="d09-total-max" name="totalMax" type="number" inputmode="decimal" min="1.01" max="100000" step="0.01" value="" placeholder="Any" autocomplete="off" aria-label="Total odds per slip, to" aria-describedby="d09-total-hint">
+                <span class="d09-unit d09-unit--times" aria-hidden="true">&times;</span>
+              </label>
+            </div>
+            <span class="sr-only" id="d09-total-hint">Decimal odds, 1.01 to 100000. Leave blank for any. Escape clears the field.</span>
+          </div>
+          <div class="d09-group" role="group" aria-labelledby="d09-teams-title">
+            <span class="d09-title" id="d09-teams-title">Matches per slip</span>
+            <div class="d09-pair">
+              <label class="d09-word" for="d09-teams-min">from</label>
+              <label class="d09-field d09-field--matches" data-empty="false" data-invalid="false">
+                <input class="d09-input" id="d09-teams-min" name="teamsMin" type="number" inputmode="numeric" min="1" max="8" step="1" value="2" placeholder="Any" autocomplete="off" aria-label="Matches per slip, from" aria-describedby="d09-teams-hint">
+                <span class="d09-unit" aria-hidden="true">matches</span>
+              </label>
+              <label class="d09-word" for="d09-teams-max">to</label>
+              <label class="d09-field d09-field--matches" data-empty="false" data-invalid="false">
+                <input class="d09-input" id="d09-teams-max" name="teamsMax" type="number" inputmode="numeric" min="1" max="8" step="1" value="5" placeholder="Any" autocomplete="off" aria-label="Matches per slip, to" aria-describedby="d09-teams-hint">
+                <span class="d09-unit" aria-hidden="true">matches</span>
+              </label>
+            </div>
+            <span class="sr-only" id="d09-teams-hint">Whole number, 1 to 8. Leave blank for any. Escape clears the field.</span>
+          </div>
+        </div>
+        <p class="d09-note" id="d09-note" role="status" hidden></p>
+      </fieldset>
+      <div class="gh-options">
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match limits</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match Date &amp; Time</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog" data-edited="false">Markets <small aria-hidden="true">4</small></button>
+      </div>
+      <div class="gh-actions">
+        <a class="gh-button" href="#">Reset</a>
+        <button type="submit" class="gh-button gh-primary">Build slips</button>
+      </div>
+    </form>
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.querySelector('.d09');
+  if (!root) return;
+
+  function q(sel) { return root.querySelector(sel); }
+
+  var groups = [
+    { label: 'Total odds', min: q('#d09-total-min'), max: q('#d09-total-max'), lo: 1.01, hi: 100000, dp: 2 },
+    { label: 'Matches', min: q('#d09-teams-min'), max: q('#d09-teams-max'), lo: 1, hi: 8, dp: 0 }
+  ];
+  var note = q('#d09-note');
+
+  function parse(el) {
+    var v = (el.value || '').trim();
+    if (!v) return null;
+    var n = Number(v.replace(',', '.'));
+    return isFinite(n) ? n : null;
+  }
+
+  function clamp(n, g) {
+    n = Math.min(g.hi, Math.max(g.lo, n));
+    return g.dp ? Math.round(n * 100) / 100 : Math.round(n);
+  }
+
+  function format(n, g) { return g.dp ? n.toFixed(g.dp) : String(n); }
+
+  function fieldOf(el) { return el.closest ? el.closest('.d09-field') : null; }
+
+  function reflect(el) {
+    var f = fieldOf(el);
+    if (f) f.setAttribute('data-empty', el.value === '' ? 'true' : 'false');
+  }
+
+  function setNote(text) {
+    if (!note) return;
+    if (note.textContent === text) return;
+    note.textContent = text;
+    note.hidden = !text;
+  }
+
+  function validate() {
+    var messages = [];
+    groups.forEach(function (g) {
+      if (!g.min || !g.max) return;
+      var a = parse(g.min), b = parse(g.max);
+      var bad = a !== null && b !== null && a > b;
+      [g.min, g.max].forEach(function (el) {
+        el.setAttribute('aria-invalid', bad ? 'true' : 'false');
+        var f = fieldOf(el);
+        if (f) f.setAttribute('data-invalid', bad ? 'true' : 'false');
+      });
+      if (bad) messages.push(g.label + ': "from" can\'t be higher than "to".');
+    });
+    setNote(messages.join(' '));
+  }
+
+  function commit(el, g) {
+    var n = parse(el);
+    el.value = n === null ? '' : format(clamp(n, g), g);
+    reflect(el);
+    validate();
+  }
+
+  function clear(el) {
+    el.value = '';
+    reflect(el);
+    validate();
+  }
+
+  groups.forEach(function (g) {
+    [g.min, g.max].forEach(function (el) {
+      if (!el) return;
+      el.addEventListener('input', function () { reflect(el); validate(); });
+      el.addEventListener('change', function () { commit(el, g); });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && el.value !== '') { e.preventDefault(); e.stopPropagation(); clear(el); }
+        else if (e.key === 'Enter') { commit(el, g); }
+      });
+      commit(el, g);
+    });
+  });
+})();
+</script>

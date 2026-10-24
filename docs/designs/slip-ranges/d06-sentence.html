@@ -1,0 +1,155 @@
+<!-- 06 Sentence form -->
+<style>
+/* 06 Sentence form: both ranges read as one line of prose; the four bounds are underlined blanks that grow with their content. */
+.d06 .gh-form > .gh-targets { border: 0; margin: 0; min-inline-size: 0; }
+@container panel (min-width: 641px) {
+  .d06 .gh-form { grid-template-columns: minmax(0, 1fr) fit-content(42%); }
+  .d06 .gh-form > .gh-targets { padding-block-start: 10px; }
+}
+@container panel (max-width: 640px) {
+  .d06 .gh-form > .gh-targets { padding-block-end: 2px; }
+}
+.d06 .d06-sentence { margin: 0; color: var(--gh-text); font-size: 0.8125rem; font-weight: 400; line-height: 1.5; }
+.d06 .d06-term { font-weight: 700; }
+.d06 .d06-range { white-space: nowrap; }
+.d06 .d06-field { --d06-pad: 2px; position: relative; display: inline-block; vertical-align: middle; padding-block: var(--d06-pad); font-size: 1rem; font-weight: 700; line-height: 2rem; font-variant-numeric: tabular-nums; cursor: text; }
+.d06 .d06-field::after { content: attr(data-value); display: block; min-inline-size: 2.75ch; block-size: 2rem; padding: 0 4px; visibility: hidden; white-space: pre; }
+.d06 .d06-field::before { content: ""; position: absolute; inset-inline: 0; inset-block-end: var(--d06-pad); z-index: 1; block-size: 2px; background: var(--gh-brand); transform: scaleX(0); transition: transform 160ms ease; pointer-events: none; }
+.d06 .d06-field > input { position: absolute; inset-inline: 0; inset-block: var(--d06-pad); inline-size: 100%; min-inline-size: 0; block-size: 2rem; margin: 0; padding: 0 4px; border: 0; border-block-end: 1px solid var(--gh-control-border); border-radius: var(--gh-radius) var(--gh-radius) 0 0; background: transparent; color: var(--gh-text); text-align: center; font: inherit; font-variant-numeric: tabular-nums; transition: background-color 120ms ease; }
+.d06 .d06-field > input::placeholder { color: var(--gh-muted); font-weight: 600; }
+@media (hover: hover) { .d06 .d06-field:hover > input { background: var(--gh-surface-muted); } }
+.d06 .d06-field > input:focus-visible { outline: none; }
+.d06 .d06-field:focus-within > input { background: var(--gh-brand-soft); }
+.d06 .d06-field:focus-within::before { transform: scaleX(1); }
+.d06 .d06-field > input[aria-invalid="true"] { color: var(--gh-error); border-block-end-color: var(--gh-error); }
+.d06 .d06-field:has(> input[aria-invalid="true"])::before { background: var(--gh-error); transform: scaleX(1); }
+.d06 .d06-note { margin: 4px 0 0; color: var(--gh-error); font-size: 0.6875rem; font-weight: 600; line-height: 1.4; }
+@media (pointer: coarse) { .d06 .d06-field { --d06-pad: 6px; } }
+@media (prefers-reduced-motion: reduce) { .d06 .d06-field::before, .d06 .d06-field > input { transition: none; } }
+@media (forced-colors: active) { .d06 .d06-field > input:focus-visible { outline: 2px solid; outline-offset: 2px; } }
+</style>
+<section class="gh-builder d06">
+  <!-- KEEP -->
+  <header class="gh-head">
+    <h1>Slip builder</h1>
+    <label class="gh-slips">Number of slips <input type="number" value="3" min="1" max="10" step="1" inputmode="numeric" aria-label="Number of slips"></label>
+  </header>
+  <div class="gh-panel">
+    <form class="gh-form" onsubmit="return false">
+      <fieldset class="gh-targets d06-targets">
+        <legend class="sr-only">Your slips</legend>
+        <p class="d06-sentence">Build slips with <b class="d06-term">total odds</b> <span class="d06-range">from <label class="d06-field" data-value="2.5"><span class="sr-only">Total odds per slip, minimum</span><input type="number" name="totalMin" id="d06-total-min" value="2.5" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="Any" autocomplete="off" enterkeyhint="done"></label> to <label class="d06-field" data-value="Any"><span class="sr-only">Total odds per slip, maximum</span><input type="number" name="totalMax" id="d06-total-max" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="Any" autocomplete="off" enterkeyhint="done"></label>,</span> using <span class="d06-range"><label class="d06-field" data-value="2"><span class="sr-only">Matches per slip, minimum</span><input type="number" name="teamsMin" id="d06-teams-min" value="2" min="1" max="8" step="1" inputmode="numeric" placeholder="Any" autocomplete="off" enterkeyhint="done"></label> to <label class="d06-field" data-value="5"><span class="sr-only">Matches per slip, maximum</span><input type="number" name="teamsMax" id="d06-teams-max" value="5" min="1" max="8" step="1" inputmode="numeric" placeholder="Any" autocomplete="off" enterkeyhint="done"></label></span> <span class="d06-range"><b class="d06-term">matches</b> each.</span></p>
+        <p class="d06-note" id="d06-note" role="status" hidden></p>
+      </fieldset>
+      <!-- KEEP (the three dialog buttons; do not restyle them) -->
+      <div class="gh-options">
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match limits</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match Date &amp; Time</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog" data-edited="false">Markets <small aria-hidden="true">4</small></button>
+      </div>
+      <!-- KEEP -->
+      <div class="gh-actions">
+        <a class="gh-button" href="#">Reset</a>
+        <button type="submit" class="gh-button gh-primary">Build slips</button>
+      </div>
+    </form>
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.querySelector('.d06');
+  if (!root) return;
+  var note = root.querySelector('#d06-note');
+  function byId(id) { return root.querySelector('#' + id); }
+  var pairs = [
+    { label: 'Total odds', min: byId('d06-total-min'), max: byId('d06-total-max'), lo: 1.01, hi: 100000, decimals: 2, step: 0.1, bigStep: 1 },
+    { label: 'Matches', min: byId('d06-teams-min'), max: byId('d06-teams-max'), lo: 1, hi: 8, decimals: 0, step: 1, bigStep: 1 }
+  ].filter(function (pair) { return pair.min && pair.max; });
+  if (!pairs.length) return;
+
+  function read(input) {
+    var text = String(input.value || '').trim();
+    if (!text) return null;
+    var number = Number(text);
+    return isFinite(number) ? number : null;
+  }
+  function write(input, number, pair) {
+    var factor = Math.pow(10, pair.decimals);
+    var clamped = Math.min(pair.hi, Math.max(pair.lo, number));
+    input.value = String(Math.round(clamped * factor) / factor);
+  }
+  function fit(input) {
+    var wrap = input.parentNode;
+    if (wrap && wrap.setAttribute) wrap.setAttribute('data-value', input.value || input.placeholder || 'Any');
+  }
+  function mark(input, invalid) {
+    if (invalid) {
+      input.setAttribute('aria-invalid', 'true');
+      if (note) input.setAttribute('aria-describedby', note.id);
+    } else {
+      input.removeAttribute('aria-invalid');
+      input.removeAttribute('aria-describedby');
+    }
+  }
+  function validate() {
+    var problems = [];
+    pairs.forEach(function (pair) {
+      var low = read(pair.min);
+      var high = read(pair.max);
+      var crossed = low !== null && high !== null && low > high;
+      mark(pair.min, crossed);
+      mark(pair.max, crossed);
+      if (crossed) problems.push(pair.label + ': the first number can’t be higher than the second.');
+    });
+    if (!note) return;
+    if (problems.length) {
+      note.hidden = false;
+      note.textContent = problems.join(' ');
+    } else {
+      note.textContent = '';
+      note.hidden = true;
+    }
+  }
+  function commit(pair, input) {
+    var number = read(input);
+    if (number === null) input.value = '';
+    else write(input, number, pair);
+    fit(input);
+    validate();
+  }
+  function nudge(pair, input, partner, direction, big) {
+    var number = read(input);
+    if (number === null) {
+      var other = read(partner);
+      number = other !== null ? other : pair.lo;
+    } else {
+      number += direction * (big ? pair.bigStep : pair.step);
+    }
+    write(input, number, pair);
+    fit(input);
+    validate();
+  }
+  function selectAll(input) {
+    setTimeout(function () {
+      if (document.activeElement !== input) return;
+      try { input.select(); } catch (error) { /* selection not supported */ }
+    }, 0);
+  }
+
+  pairs.forEach(function (pair) {
+    [pair.min, pair.max].forEach(function (input, index) {
+      var partner = index === 0 ? pair.max : pair.min;
+      input.addEventListener('input', function () { fit(input); validate(); });
+      input.addEventListener('change', function () { commit(pair, input); });
+      input.addEventListener('focus', function () { selectAll(input); });
+      input.addEventListener('keydown', function (event) {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+        event.preventDefault();
+        nudge(pair, input, partner, event.key === 'ArrowUp' ? 1 : -1, event.shiftKey);
+      });
+      fit(input);
+    });
+  });
+  validate();
+})();
+</script>

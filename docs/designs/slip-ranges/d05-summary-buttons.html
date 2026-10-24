@@ -1,0 +1,301 @@
+<!-- 05 Summary buttons -->
+<style>
+/* Targets block: two summary buttons that match the three dialog buttons */
+.d05 .d05-targets { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; border: 0; min-inline-size: 0; }
+.d05 .d05-range { position: relative; min-inline-size: 0; }
+
+/* Summary button: a clone of the dialog-button look (the originals are untouched) */
+.d05 .d05-trigger { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 4px; inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 6px 4px;
+  border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); color: var(--gh-text);
+  font-size: 0.75rem; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; cursor: pointer; }
+.d05 .d05-trigger:hover { background: var(--gh-surface-muted); }
+.d05 .d05-trigger[data-edited="true"] { color: var(--gh-link); background: var(--gh-brand-soft); }
+.d05 .d05-trigger[aria-expanded="true"] { border-color: var(--gh-brand); }
+.d05 .d05-trigger[data-invalid="true"] > .d05-value { color: var(--gh-error); }
+.d05 .d05-sep { color: var(--gh-muted); font-weight: 400; }
+.d05 .d05-trigger > small { flex: none; display: inline-flex; align-items: center; justify-content: center; min-inline-size: 1rem; block-size: 1rem; padding-inline: 2px;
+  border: 1px solid var(--gh-border); border-radius: var(--gh-radius); font-size: 0.625rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+
+/* Anchored popover (not modal) */
+.d05 .d05-pop { position: absolute; inset-block-start: calc(100% + 4px); inset-inline-start: 0; z-index: 5; display: block; inline-size: 272px; max-inline-size: calc(100cqi - 24px); padding: 10px;
+  border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); color: var(--gh-text); box-shadow: 0 4px 12px rgba(7, 23, 71, 0.12);
+  font-size: 0.75rem; line-height: 1.3; text-align: start; animation: d05-pop-in 120ms ease-out; }
+@keyframes d05-pop-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+.d05 .d05-pop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-block-end: 8px; }
+.d05 .d05-pop-title { font-size: 0.8125rem; font-weight: 700; line-height: 1.3; }
+.d05 .d05-pop-hint { font-size: 0.6875rem; color: var(--gh-muted); white-space: nowrap; }
+.d05 .d05-fields { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 6px; align-items: end; }
+.d05 .d05-field { display: block; min-inline-size: 0; }
+.d05 .d05-field-label { display: block; margin-block-end: 3px; font-size: 0.6875rem; font-weight: 400; line-height: 1.3; color: var(--gh-muted); }
+.d05 .d05-input { inline-size: 100%; min-inline-size: 0; min-block-size: 2.125rem; padding: 4px 6px; border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius);
+  background: var(--gh-surface); color: var(--gh-text); font-size: 0.875rem; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.d05 .d05-input[aria-invalid="true"] { border-color: var(--gh-error); }
+.d05 .d05-dash { display: flex; align-items: center; min-block-size: 2.125rem; color: var(--gh-muted); font-size: 0.875rem; }
+.d05 .d05-error { margin: 6px 0 0; font-size: 0.6875rem; font-weight: 600; line-height: 1.3; color: var(--gh-error); }
+.d05 .d05-pop-foot { display: flex; align-items: center; gap: 6px; margin-block-start: 10px; }
+.d05 .d05-spacer { flex: 1 1 auto; }
+.d05 .d05-btn { display: inline-flex; align-items: center; justify-content: center; min-block-size: 2rem; padding: 4px 10px; border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius);
+  background: var(--gh-surface); color: var(--gh-text); font-size: 0.75rem; font-weight: 700; line-height: 1.25; cursor: pointer; }
+.d05 .d05-btn:hover { background: var(--gh-surface-muted); }
+.d05 .d05-btn-primary { background: var(--gh-brand); border-color: var(--gh-brand); color: var(--gh-surface); }
+.d05 .d05-btn-primary:hover { background: var(--gh-brand-hover); border-color: var(--gh-brand-hover); }
+.d05 .d05-link { display: inline-flex; align-items: center; min-block-size: 2rem; padding: 0 2px; border: 0; background: none; color: var(--gh-link);
+  font-size: 0.75rem; font-weight: 700; line-height: 1.25; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.d05 .d05-link:hover { color: var(--gh-brand-hover); }
+
+/* Desktop: one uniform row of five buttons (2 + 3), equal widths, equal heights */
+@container panel (min-width: 641px) {
+  .d05 .gh-form { grid-template-columns: calc((100% - 48px) * 0.4 + 18px) calc((100% - 48px) * 0.6 + 24px); column-gap: 6px; align-items: stretch; }
+  .d05 .gh-form > .gh-targets { padding: 12px 0 12px 12px; }
+  .d05 .gh-form > .gh-options { padding-block-start: 12px; }
+  .d05 .d05-trigger { min-block-size: var(--gh-control-h); }
+}
+
+/* Phone: two buttons above the three, read as one group */
+@container panel (max-width: 640px) {
+  .d05 .gh-form > .gh-options { padding-block-start: 6px; }
+  .d05 .d05-range:last-child > .d05-pop { inset-inline-start: auto; inset-inline-end: 0; }
+}
+
+@media (pointer: coarse) { .d05 .d05-trigger, .d05 .d05-input, .d05 .d05-btn, .d05 .d05-link { min-block-size: 44px; } }
+@media (prefers-reduced-motion: reduce) { .d05 .d05-pop { animation: none; } }
+</style>
+<section class="gh-builder d05">
+  <!-- KEEP -->
+  <header class="gh-head">
+    <h1>Slip builder</h1>
+    <label class="gh-slips">Number of slips <input type="number" value="3" min="1" max="10" step="1" inputmode="numeric" aria-label="Number of slips"></label>
+  </header>
+  <div class="gh-panel">
+    <form class="gh-form" onsubmit="return false">
+      <fieldset class="gh-targets d05-targets">
+        <legend class="sr-only">Your slips</legend>
+
+        <div class="d05-range" data-range="total">
+          <button type="button" class="d05-trigger" id="d05-total-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="d05-total-pop" data-edited="true" data-invalid="false">
+            <span class="d05-name">Total odds</span><span class="d05-sep" aria-hidden="true">&middot;</span><span class="d05-value" id="d05-total-value">2.50+</span><small aria-hidden="true">1</small>
+          </button>
+          <div class="d05-pop" id="d05-total-pop" role="dialog" aria-labelledby="d05-total-title" hidden>
+            <div class="d05-pop-head">
+              <strong class="d05-pop-title" id="d05-total-title">Total odds per slip</strong>
+              <span class="d05-pop-hint" id="d05-total-hint">Blank = Any</span>
+            </div>
+            <div class="d05-fields">
+              <label class="d05-field" for="d05-total-min">
+                <span class="d05-field-label">Min</span>
+                <input class="d05-input" id="d05-total-min" type="number" name="totalMin" value="2.50" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="Any" autocomplete="off" aria-label="Minimum total odds per slip" aria-describedby="d05-total-hint">
+              </label>
+              <span class="d05-dash" aria-hidden="true">&ndash;</span>
+              <label class="d05-field" for="d05-total-max">
+                <span class="d05-field-label">Max</span>
+                <input class="d05-input" id="d05-total-max" type="number" name="totalMax" value="" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="Any" autocomplete="off" aria-label="Maximum total odds per slip" aria-describedby="d05-total-hint">
+              </label>
+            </div>
+            <p class="d05-error" id="d05-total-error" role="status" hidden></p>
+            <div class="d05-pop-foot">
+              <button type="button" class="d05-link" data-action="clear" aria-label="Clear total odds back to Any">Clear</button>
+              <span class="d05-spacer"></span>
+              <button type="button" class="d05-btn" data-action="cancel">Cancel</button>
+              <button type="button" class="d05-btn d05-btn-primary" data-action="apply">Apply</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="d05-range" data-range="teams">
+          <button type="button" class="d05-trigger" id="d05-teams-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="d05-teams-pop" data-edited="true" data-invalid="false">
+            <span class="d05-name">Matches</span><span class="d05-sep" aria-hidden="true">&middot;</span><span class="d05-value" id="d05-teams-value">2&ndash;5</span><small aria-hidden="true">2</small>
+          </button>
+          <div class="d05-pop" id="d05-teams-pop" role="dialog" aria-labelledby="d05-teams-title" hidden>
+            <div class="d05-pop-head">
+              <strong class="d05-pop-title" id="d05-teams-title">Matches per slip</strong>
+              <span class="d05-pop-hint" id="d05-teams-hint">Blank = Any</span>
+            </div>
+            <div class="d05-fields">
+              <label class="d05-field" for="d05-teams-min">
+                <span class="d05-field-label">Min</span>
+                <input class="d05-input" id="d05-teams-min" type="number" name="teamsMin" value="2" min="1" max="8" step="1" inputmode="numeric" placeholder="Any" autocomplete="off" aria-label="Minimum matches per slip" aria-describedby="d05-teams-hint">
+              </label>
+              <span class="d05-dash" aria-hidden="true">&ndash;</span>
+              <label class="d05-field" for="d05-teams-max">
+                <span class="d05-field-label">Max</span>
+                <input class="d05-input" id="d05-teams-max" type="number" name="teamsMax" value="5" min="1" max="8" step="1" inputmode="numeric" placeholder="Any" autocomplete="off" aria-label="Maximum matches per slip" aria-describedby="d05-teams-hint">
+              </label>
+            </div>
+            <p class="d05-error" id="d05-teams-error" role="status" hidden></p>
+            <div class="d05-pop-foot">
+              <button type="button" class="d05-link" data-action="clear" aria-label="Clear matches back to Any">Clear</button>
+              <span class="d05-spacer"></span>
+              <button type="button" class="d05-btn" data-action="cancel">Cancel</button>
+              <button type="button" class="d05-btn d05-btn-primary" data-action="apply">Apply</button>
+            </div>
+          </div>
+        </div>
+
+      </fieldset>
+      <!-- KEEP (the three dialog buttons; do not restyle them) -->
+      <div class="gh-options">
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match limits</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match Date &amp; Time</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog" data-edited="false">Markets <small aria-hidden="true">4</small></button>
+      </div>
+      <!-- KEEP -->
+      <div class="gh-actions">
+        <a class="gh-button" href="#">Reset</a>
+        <button type="submit" class="gh-button gh-primary">Build slips</button>
+      </div>
+    </form>
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.querySelector('.d05');
+  if (!root) return;
+
+  var SPECS = {
+    total: { label: 'Total odds per slip', min: 1.01, max: 100000, decimals: 2, rangeMsg: 'Odds go from 1.01 to 100000.' },
+    teams: { label: 'Matches per slip', min: 1, max: 8, decimals: 0, rangeMsg: 'Between 1 and 8 matches.' }
+  };
+  var ranges = [];
+  var openRange = null;
+
+  function fmt(spec, n) { return spec.decimals ? n.toFixed(spec.decimals) : String(Math.round(n)); }
+
+  function read(input) {
+    if (input.validity && input.validity.badInput) return { bad: true, value: null };
+    var raw = String(input.value).trim();
+    if (!raw) return { bad: false, value: null };
+    var n = Number(raw);
+    return isFinite(n) ? { bad: false, value: n } : { bad: true, value: null };
+  }
+
+  function check(r) {
+    var s = r.spec, lo = read(r.min), hi = read(r.max), badMin = lo.bad, badMax = hi.bad, msg = '';
+    if (badMin || badMax) {
+      msg = 'Enter a number.';
+    } else {
+      if (lo.value !== null && (lo.value < s.min || lo.value > s.max)) badMin = true;
+      if (hi.value !== null && (hi.value < s.min || hi.value > s.max)) badMax = true;
+      if (badMin || badMax) msg = s.rangeMsg;
+      else if (lo.value !== null && hi.value !== null && lo.value > hi.value) { badMin = badMax = true; msg = 'Min can’t be above Max.'; }
+    }
+    r.min.setAttribute('aria-invalid', badMin ? 'true' : 'false');
+    r.max.setAttribute('aria-invalid', badMax ? 'true' : 'false');
+    if (r.error) { r.error.textContent = msg; r.error.hidden = !msg; }
+    return { lo: lo.value, hi: hi.value, msg: msg };
+  }
+
+  function describe(s, lo, hi) {
+    if (lo === null && hi === null) return { text: 'Any', speech: 'any', count: 0 };
+    if (hi === null) return { text: fmt(s, lo) + '+', speech: fmt(s, lo) + ' or more', count: 1 };
+    if (lo === null) return { text: 'up to ' + fmt(s, hi), speech: 'up to ' + fmt(s, hi), count: 1 };
+    if (lo === hi) return { text: fmt(s, lo), speech: 'exactly ' + fmt(s, lo), count: 2 };
+    return { text: fmt(s, lo) + '–' + fmt(s, hi), speech: fmt(s, lo) + ' to ' + fmt(s, hi), count: 2 };
+  }
+
+  function refresh(r) {
+    var v = check(r), d = describe(r.spec, v.lo, v.hi);
+    r.value.textContent = d.text;
+    if (r.badge) { r.badge.textContent = String(d.count); r.badge.hidden = d.count === 0; }
+    r.button.setAttribute('data-edited', d.count ? 'true' : 'false');
+    r.button.setAttribute('data-invalid', v.msg ? 'true' : 'false');
+    r.button.setAttribute('aria-label', r.spec.label + ': ' + d.speech + (v.msg ? '. ' + v.msg : ''));
+  }
+
+  function normalise(r) {
+    var s = r.spec, k = Math.pow(10, s.decimals), lo = read(r.min).value, hi = read(r.max).value;
+    function clamp(n) { return Math.round(Math.min(s.max, Math.max(s.min, n)) * k) / k; }
+    if (lo !== null) lo = clamp(lo);
+    if (hi !== null) hi = clamp(hi);
+    if (lo !== null && hi !== null && lo > hi) { var t = lo; lo = hi; hi = t; }
+    r.min.value = lo === null ? '' : fmt(s, lo);
+    r.max.value = hi === null ? '' : fmt(s, hi);
+  }
+
+  function show(r) {
+    if (openRange && openRange !== r) hide(openRange, true, false);
+    r.snapshot = [r.min.value, r.max.value];
+    r.pop.hidden = false;
+    r.button.setAttribute('aria-expanded', 'true');
+    openRange = r;
+    try { r.min.focus({ preventScroll: true }); } catch (e) { r.min.focus(); }
+  }
+
+  function hide(r, commit, refocus) {
+    if (r.pop.hidden) return;
+    if (commit) normalise(r);
+    else if (r.snapshot) { r.min.value = r.snapshot[0]; r.max.value = r.snapshot[1]; }
+    refresh(r);
+    r.pop.hidden = true;
+    r.button.setAttribute('aria-expanded', 'false');
+    if (openRange === r) openRange = null;
+    if (refocus) r.button.focus();
+  }
+
+  Array.prototype.forEach.call(root.querySelectorAll('.d05-range'), function (wrap) {
+    var spec = SPECS[wrap.getAttribute('data-range')];
+    var r = {
+      spec: spec, wrap: wrap,
+      button: wrap.querySelector('.d05-trigger'),
+      value: wrap.querySelector('.d05-value'),
+      badge: wrap.querySelector('.d05-trigger > small'),
+      pop: wrap.querySelector('.d05-pop'),
+      min: wrap.querySelector('input[name$="Min"]'),
+      max: wrap.querySelector('input[name$="Max"]'),
+      error: wrap.querySelector('.d05-error')
+    };
+    if (!spec || !r.button || !r.value || !r.pop || !r.min || !r.max) return;
+    ranges.push(r);
+    refresh(r);
+
+    r.button.addEventListener('click', function () {
+      if (openRange === r) hide(r, true, true); else show(r);
+    });
+
+    [r.min, r.max].forEach(function (input) {
+      input.addEventListener('input', function () { refresh(r); });
+      input.addEventListener('blur', function () {
+        var v = read(input).value;
+        if (v !== null && spec.decimals) input.value = v.toFixed(spec.decimals);
+      });
+    });
+
+    wrap.addEventListener('keydown', function (e) {
+      if (r.pop.hidden) return;
+      if (e.key === 'Escape' || e.key === 'Esc') { e.preventDefault(); e.stopPropagation(); hide(r, false, true); }
+      else if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') { e.preventDefault(); hide(r, true, true); }
+    });
+
+    r.pop.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest ? e.target.closest('[data-action]') : null;
+      if (!btn || !r.pop.contains(btn)) return;
+      var action = btn.getAttribute('data-action');
+      if (action === 'apply') hide(r, true, true);
+      else if (action === 'cancel') hide(r, false, true);
+      else if (action === 'clear') { r.min.value = ''; r.max.value = ''; refresh(r); r.min.focus(); }
+    });
+
+    wrap.addEventListener('focusout', function (e) {
+      var next = e.relatedTarget;
+      if (!next || r.pop.hidden || wrap.contains(next)) return;
+      hide(r, true, false);
+    });
+  });
+
+  document.addEventListener('pointerdown', function (e) {
+    if (!openRange || openRange.wrap.contains(e.target)) return;
+    hide(openRange, true, false);
+  });
+
+  var reset = root.querySelector('.gh-actions a.gh-button');
+  if (reset) {
+    reset.addEventListener('click', function (e) {
+      e.preventDefault();
+      ranges.forEach(function (r) {
+        if (!r.pop.hidden) hide(r, false, false);
+        r.min.value = ''; r.max.value = '';
+        refresh(r);
+      });
+    });
+  }
+})();
+</script>

@@ -1,0 +1,280 @@
+<!-- 10 Range band -->
+<style>
+/* 10 Range band: each range is a brand-blue band whose endpoints are the inputs. Type, step with arrows, or drag. */
+.d10 .d10-targets { margin: 0; border: 0; min-inline-size: 0; }
+@container panel (min-width: 641px) {
+  .d10 .gh-form { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+}
+.d10 .d10-group { display: grid; grid-template-columns: 8.75rem minmax(0, 1fr); column-gap: 10px; align-items: center; min-inline-size: 0; }
+.d10 .d10-group + .d10-group { margin-block-start: 8px; }
+.d10 .d10-name { font-size: 0.75rem; font-weight: 700; line-height: 1.3; color: var(--gh-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.d10 .d10-track { --d10-hw: 4.25rem; --d10-hh: 30px; position: relative; block-size: var(--d10-hh); padding-inline: var(--d10-hw); min-inline-size: 0; cursor: ew-resize; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.d10 .d10-group[data-kind="int"] .d10-track { --d10-hw: 3rem; }
+.d10 .d10-rail { position: relative; block-size: 100%; }
+.d10 .d10-rail::before { content: ""; position: absolute; inset-inline: 0; inset-block-start: calc(50% - 1px); block-size: 2px; background: var(--gh-border); }
+.d10 .d10-pips { position: absolute; inset: 0; pointer-events: none; }
+.d10 .d10-pips > i { position: absolute; inset-block-start: calc(50% - 3px); inline-size: 6px; block-size: 6px; margin-inline-start: -3px; border-radius: var(--gh-radius); background: var(--gh-control-border); }
+.d10 .d10-band { position: absolute; inset-block-start: calc(50% - 4px); left: 0; right: 0; block-size: 8px; background: var(--gh-brand); }
+.d10 .d10-handle { position: absolute; inset-block: 0; inline-size: var(--d10-hw); display: flex; overflow: hidden; border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); cursor: ew-resize; touch-action: none; }
+.d10 .d10-handle.d10-min { right: 100%; }
+.d10 .d10-handle.d10-max { left: 100%; }
+.d10 .d10-tab { flex: none; inline-size: 8px; background: var(--gh-brand); }
+.d10 .d10-field { flex: 1 1 auto; inline-size: 100%; min-inline-size: 0; block-size: 100%; margin: 0; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: var(--gh-text);
+  font-size: 0.8125rem; font-weight: 700; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; cursor: text; user-select: text; -webkit-user-select: text; }
+.d10 .d10-field:focus, .d10 .d10-field:focus-visible { outline: none; }
+.d10 .d10-field::placeholder { color: var(--gh-muted); font-weight: 600; }
+.d10 .d10-handle:hover { border-color: var(--gh-text); }
+.d10 .d10-handle.d10-any { border-style: dashed; }
+.d10 .d10-handle.d10-any .d10-tab { background: var(--gh-brand-soft); }
+.d10 .d10-handle:focus-within { border-style: solid; border-color: var(--gh-brand); outline: 2px solid var(--gh-focus); outline-offset: 2px; }
+.d10 .d10-handle[data-invalid="true"], .d10 .d10-handle[data-invalid="true"]:focus-within { border-color: var(--gh-error); }
+.d10 .d10-handle[data-invalid="true"] .d10-tab { background: var(--gh-error); }
+.d10 .d10-handle[data-invalid="true"] .d10-field { color: var(--gh-error); }
+.d10 .d10-group[data-invalid="true"] .d10-band { background: var(--gh-error); }
+.d10 .d10-track.d10-dragging .d10-field { pointer-events: none; }
+@container panel (max-width: 640px) {
+  .d10 .d10-group { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .d10 .d10-group + .d10-group { margin-block-start: 10px; }
+  .d10 .d10-name { white-space: normal; overflow: visible; }
+  .d10 .d10-track { --d10-hh: 36px; }
+}
+@media (pointer: coarse) {
+  .d10 .d10-track { --d10-hh: 44px; }
+  .d10 .d10-field { font-size: 0.875rem; }
+}
+</style>
+<section class="gh-builder d10">
+  <!-- KEEP -->
+  <header class="gh-head">
+    <h1>Slip builder</h1>
+    <label class="gh-slips">Number of slips <input type="number" value="3" min="1" max="10" step="1" inputmode="numeric" aria-label="Number of slips"></label>
+  </header>
+  <div class="gh-panel">
+    <form class="gh-form" onsubmit="return false">
+      <fieldset class="gh-targets d10-targets">
+        <legend class="sr-only">Your slips</legend>
+        <div class="d10-group" id="d10-total" data-kind="log" data-invalid="false" role="group" aria-labelledby="d10-total-name">
+          <span class="d10-name" id="d10-total-name">Total odds per slip</span>
+          <div class="d10-track">
+            <div class="d10-rail">
+              <span class="d10-band" aria-hidden="true"></span>
+              <span class="d10-handle d10-min" data-end="min" data-invalid="false">
+                <input class="d10-field" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" enterkeyhint="done" name="totalMin" id="d10-total-min" value="2.50" placeholder="Any" aria-label="Total odds per slip, minimum" aria-describedby="d10-help">
+                <i class="d10-tab" aria-hidden="true"></i>
+              </span>
+              <span class="d10-handle d10-max d10-any" data-end="max" data-invalid="false">
+                <i class="d10-tab" aria-hidden="true"></i>
+                <input class="d10-field" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" enterkeyhint="done" name="totalMax" id="d10-total-max" value="" placeholder="Any" aria-label="Total odds per slip, maximum" aria-describedby="d10-help">
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="d10-group" id="d10-teams" data-kind="int" data-invalid="false" role="group" aria-labelledby="d10-teams-name">
+          <span class="d10-name" id="d10-teams-name">Matches per slip</span>
+          <div class="d10-track">
+            <div class="d10-rail">
+              <span class="d10-pips" aria-hidden="true"><i style="left:0%"></i><i style="left:14.2857%"></i><i style="left:28.5714%"></i><i style="left:42.8571%"></i><i style="left:57.1429%"></i><i style="left:71.4286%"></i><i style="left:85.7143%"></i><i style="left:100%"></i></span>
+              <span class="d10-band" aria-hidden="true"></span>
+              <span class="d10-handle d10-min" data-end="min" data-invalid="false">
+                <input class="d10-field" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" enterkeyhint="done" name="teamsMin" id="d10-teams-min" value="2" placeholder="Any" aria-label="Matches per slip, minimum" aria-describedby="d10-help">
+                <i class="d10-tab" aria-hidden="true"></i>
+              </span>
+              <span class="d10-handle d10-max" data-end="max" data-invalid="false">
+                <i class="d10-tab" aria-hidden="true"></i>
+                <input class="d10-field" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" enterkeyhint="done" name="teamsMax" id="d10-teams-max" value="5" placeholder="Any" aria-label="Matches per slip, maximum" aria-describedby="d10-help">
+              </span>
+            </div>
+          </div>
+        </div>
+        <p class="sr-only" id="d10-help">Type a number, press the up or down arrow to step it, or drag the box along the band. Leave it blank for any.</p>
+      </fieldset>
+      <!-- KEEP (the three dialog buttons; do not restyle them) -->
+      <div class="gh-options">
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match limits</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match Date &amp; Time</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog" data-edited="false">Markets <small aria-hidden="true">4</small></button>
+      </div>
+      <!-- KEEP -->
+      <div class="gh-actions">
+        <a class="gh-button" href="#">Reset</a>
+        <button type="submit" class="gh-button gh-primary">Build slips</button>
+      </div>
+    </form>
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.querySelector('.d10');
+  if (!root) return;
+
+  /* lo/hi = allowed values; railHi = value at the right end of the drawn rail (odds beyond it pin to the end, Any is the handle's rest). */
+  var defs = [
+    { id: 'd10-total', kind: 'log', lo: 1.01, hi: 100000, railHi: 1000 },
+    { id: 'd10-teams', kind: 'int', lo: 1, hi: 8, railHi: 8 }
+  ];
+  for (var i = 0; i < defs.length; i++) {
+    var el = root.querySelector('#' + defs[i].id);
+    if (el) setup(el, defs[i]);
+  }
+
+  function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+  function round2(v) { return Math.round(v * 100) / 100; }
+
+  function setup(el, def) {
+    var track = el.querySelector('.d10-track');
+    var rail = el.querySelector('.d10-rail');
+    var band = el.querySelector('.d10-band');
+    var h = { min: el.querySelector('.d10-handle[data-end="min"]'), max: el.querySelector('.d10-handle[data-end="max"]') };
+    if (!track || !rail || !band || !h.min || !h.max) return;
+    var f = { min: h.min.querySelector('input'), max: h.max.querySelector('input') };
+    if (!f.min || !f.max) return;
+
+    var isLog = def.kind === 'log', lo = def.lo, hi = def.hi;
+    var lnLo = Math.log(lo), lnSpan = Math.log(def.railHi) - lnLo, linSpan = def.railHi - lo;
+    var val = { min: null, max: null };      /* number, or null = Any */
+    var bad = { min: false, max: false };    /* text that does not parse / out of range while typing */
+    var last = 'min';
+    var drag = null;
+
+    function toPos(v) { return clamp(isLog ? (Math.log(v) - lnLo) / lnSpan : (v - lo) / linSpan, 0, 1); }
+    function fromPos(t) {
+      if (!isLog) return Math.round(lo + t * linSpan);
+      var v = Math.exp(lnLo + t * lnSpan);
+      var mag = Math.pow(10, Math.floor(Math.log(v) / Math.LN10) - 2);
+      return clamp(round2(Math.round(v / mag) * mag), lo, def.railHi);
+    }
+    function fmt(v) { return v == null ? '' : !isLog ? String(v) : v < 100 ? v.toFixed(2) : String(round2(v)); }
+    function parse(text) {
+      var s = String(text).replace(/\s+/g, '').replace(',', '.');
+      if (s === '') return null;
+      if (!/^\d+\.?\d*$|^\.\d+$/.test(s)) return NaN;
+      var n = Number(s);
+      if (!isFinite(n) || (!isLog && n !== Math.floor(n))) return NaN;
+      return n;
+    }
+    function crossed() { return val.min != null && val.max != null && val.min > val.max; }
+    function pos(k) { return val[k] == null ? (k === 'min' ? 0 : 1) : toPos(val[k]); }
+
+    function render() {
+      var pMin = pos('min'), pMax = pos('max'), x = crossed();
+      if (x) { if (last === 'min') pMin = pMax; else pMax = pMin; }
+      h.min.style.right = (100 - pMin * 100).toFixed(3) + '%';
+      h.max.style.left = (pMax * 100).toFixed(3) + '%';
+      band.style.left = (pMin * 100).toFixed(3) + '%';
+      band.style.right = (100 - pMax * 100).toFixed(3) + '%';
+      var keys = ['min', 'max'];
+      for (var j = 0; j < keys.length; j++) {
+        var k = keys[j], inv = bad[k] || x;
+        h[k].classList.toggle('d10-any', val[k] == null && !bad[k]);
+        h[k].setAttribute('data-invalid', inv ? 'true' : 'false');
+        f[k].setAttribute('aria-invalid', inv ? 'true' : 'false');
+      }
+      el.setAttribute('data-invalid', (x || bad.min || bad.max) ? 'true' : 'false');
+    }
+    function set(k, v) { val[k] = v; bad[k] = false; last = k; f[k].value = fmt(v); render(); }
+    function read(k, commit) {
+      var n = parse(f[k].value);
+      last = k;
+      if (n !== n) { bad[k] = true; }
+      else if (n == null) { val[k] = null; bad[k] = false; }
+      else { val[k] = clamp(n, lo, hi); bad[k] = !commit && (n < lo || n > hi); }
+      if (commit && !bad[k] && val[k] != null) { val[k] = isLog ? round2(val[k]) : Math.round(val[k]); f[k].value = fmt(val[k]); }
+      render();
+    }
+
+    /* Dragging: a handle (or the nearest handle when the track itself is pressed). A tap on a handle focuses its input. */
+    function railT(clientX) { var r = rail.getBoundingClientRect(); return r.width > 0 ? clamp((clientX - r.left) / r.width, 0, 1) : 0; }
+    function nearest(clientX) {
+      var r = rail.getBoundingClientRect();
+      var xMin = r.left + pos('min') * r.width, xMax = r.left + pos('max') * r.width;
+      var dMin = Math.abs(clientX - xMin), dMax = Math.abs(clientX - xMax);
+      return dMin < dMax || (dMin === dMax && clientX < xMin) ? 'min' : 'max';
+    }
+    function moveTo(k, clientX) {
+      var t = railT(clientX), v;
+      if (k === 'min') {
+        v = t <= 0.01 ? null : fromPos(t);
+        if (v != null && v <= lo) v = null;
+        if (v != null && val.max != null && v > val.max) v = val.max;
+      } else {
+        v = t >= 0.99 ? null : fromPos(t);
+        if (v != null && v >= hi) v = null;
+        if (v != null && val.min != null && v < val.min) v = val.min;
+      }
+      if (v !== val[k] || bad[k] || f[k].value !== fmt(v)) set(k, v);
+    }
+    function startMove(clientX) {
+      drag.moved = true;
+      track.classList.add('d10-dragging');
+      if (document.activeElement === f[drag.k]) f[drag.k].blur();
+      moveTo(drag.k, clientX + drag.offset);
+    }
+    function endDrag(e, cancelled) {
+      if (!drag || e.pointerId !== drag.id) return;
+      var d = drag;
+      drag = null;
+      track.classList.remove('d10-dragging');
+      try { track.releasePointerCapture(e.pointerId); } catch (err) {}
+      if (!d.moved && d.onHandle && !cancelled) { f[d.k].focus(); try { f[d.k].select(); } catch (err) {} }
+    }
+    track.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      var handle = e.target && e.target.closest ? e.target.closest('.d10-handle') : null;
+      if (handle && !track.contains(handle)) handle = null;
+      var k = handle ? handle.getAttribute('data-end') : nearest(e.clientX);
+      if (k !== 'min' && k !== 'max') return;
+      e.preventDefault();
+      var offset = 0;
+      if (handle) { var hr = handle.getBoundingClientRect(); offset = (k === 'min' ? hr.right : hr.left) - e.clientX; }
+      drag = { k: k, id: e.pointerId, x0: e.clientX, offset: offset, moved: false, onHandle: !!handle };
+      try { track.setPointerCapture(e.pointerId); } catch (err) {}
+      if (!handle) startMove(e.clientX);
+    });
+    track.addEventListener('pointermove', function (e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (!drag.moved) { if (Math.abs(e.clientX - drag.x0) < 4) return; startMove(e.clientX); return; }
+      moveTo(drag.k, e.clientX + drag.offset);
+    });
+    track.addEventListener('pointerup', function (e) { endDrag(e, false); });
+    track.addEventListener('pointercancel', function (e) { endDrag(e, true); });
+
+    /* Typing and arrow keys. Up/Down step (PageUp/PageDown step x10); stepping past the outer end returns the bound to Any. */
+    function step(k, dir, big) {
+      var cur = bad[k] ? null : val[k], v;
+      if (cur == null) v = k === 'min' ? lo : hi;
+      else if (k === 'min' && dir < 0 && cur <= lo) v = null;
+      else if (k === 'max' && dir > 0 && cur >= hi) v = null;
+      else {
+        var s = 1;
+        if (isLog) {
+          var a = dir < 0 ? cur - 1e-9 : cur;
+          s = a < 10 ? 0.1 : a < 100 ? 1 : a < 1000 ? 10 : a < 10000 ? 100 : 1000;
+          if (big) s *= 10;
+        }
+        v = dir > 0 ? Math.floor((cur + s) / s + 1e-9) * s : Math.ceil((cur - s) / s - 1e-9) * s;
+        v = clamp(isLog ? round2(v) : Math.round(v), lo, hi);
+        if (k === 'min' && val.max != null && v > val.max) v = val.max;
+        if (k === 'max' && val.min != null && v < val.min) v = val.min;
+      }
+      set(k, v);
+    }
+    function bind(k) {
+      f[k].addEventListener('input', function () { read(k, false); });
+      f[k].addEventListener('blur', function () { read(k, true); });
+      f[k].addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { read(k, true); return; }
+        var dir = (e.key === 'ArrowUp' || e.key === 'PageUp') ? 1 : (e.key === 'ArrowDown' || e.key === 'PageDown') ? -1 : 0;
+        if (!dir) return;
+        e.preventDefault();
+        step(k, dir, e.key === 'PageUp' || e.key === 'PageDown');
+      });
+    }
+    bind('min');
+    bind('max');
+
+    read('min', true);
+    read('max', true);
+    last = 'min';
+  }
+})();
+</script>

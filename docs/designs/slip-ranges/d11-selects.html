@@ -1,0 +1,282 @@
+<!-- 11 Curated selects -->
+<style>
+/* 11 Curated selects: two native selects per range with hand-picked stops; "Other…" swaps in a small number field.
+   Chevron hex values mirror --gh-muted (#486B9F) and --gh-link (#005BD6); data URIs cannot read custom properties. */
+.d11 .d11-targets { margin: 0; border: 0; min-inline-size: 0; }
+.d11 .d11-groups { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 0; }
+.d11 .d11-group { min-inline-size: 0; }
+.d11 .d11-group + .d11-group { margin-inline-start: 18px; padding-inline-start: 18px; border-inline-start: 1px solid var(--gh-border); }
+.d11 .d11-legend { display: flex; align-items: baseline; margin: 0 0 4px; font-size: 0.8125rem; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.d11 .d11-note { font-size: 0.6875rem; font-weight: 600; line-height: 1.3; color: var(--gh-error); }
+.d11 .d11-note:not(:empty) { margin-inline-start: 8px; }
+.d11 .d11-row { display: flex; align-items: center; gap: 6px; }
+.d11 .d11-pair { display: inline-flex; align-items: center; gap: 6px; min-inline-size: 0; }
+.d11 .d11-pair + .d11-pair { margin-inline-start: 6px; }
+.d11 .d11-k { font-size: 0.6875rem; font-weight: 700; line-height: 1; color: var(--gh-muted); }
+.d11 .d11-select, .d11 .d11-free { inline-size: 5.5rem; min-inline-size: 0; min-block-size: var(--gh-control-h); margin: 0; padding: 0 0.5rem;
+  border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background-color: var(--gh-surface); color: var(--gh-text);
+  font-size: 0.875rem; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.d11 .d11-select { -webkit-appearance: none; appearance: none; padding-inline-end: 1.5rem; white-space: nowrap; text-overflow: ellipsis; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2.2 3.6 5 6.4l2.8-2.8' fill='none' stroke='%23486B9F' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 10px 10px; }
+.d11 .d11-select:hover { background-color: var(--gh-surface-muted); }
+.d11 .d11-select[data-set="false"] { color: var(--gh-muted); font-weight: 600; }
+.d11 .d11-select[data-set="true"] { color: var(--gh-link); background-color: var(--gh-brand-soft);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2.2 3.6 5 6.4l2.8-2.8' fill='none' stroke='%23005BD6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.d11 .d11-select[data-set="true"]:hover { background-color: var(--gh-surface-muted); background-color: color-mix(in srgb, var(--gh-brand-soft) 90%, var(--gh-brand)); }
+.d11 .d11-select option { color: var(--gh-text); background-color: var(--gh-surface); font-weight: 600; }
+.d11 .d11-free { border-color: var(--gh-brand); }
+.d11 .d11-free::placeholder { font-weight: 400; }
+.d11 .d11-select[aria-invalid="true"], .d11 .d11-free[aria-invalid="true"] { border-color: var(--gh-error); }
+@container panel (min-width: 641px) {
+  .d11 .gh-form { grid-template-columns: max-content minmax(0, 1fr); column-gap: 24px; }
+}
+@container panel (min-width: 641px) and (max-width: 919px) {
+  .d11 .d11-groups { flex-direction: column; align-items: stretch; }
+  .d11 .d11-group + .d11-group { margin-inline-start: 0; padding-inline-start: 0; border-inline-start: 0; }
+}
+@container panel (max-width: 640px) {
+  .d11 .d11-groups { flex-direction: column; align-items: stretch; gap: 10px; }
+  .d11 .d11-group + .d11-group { margin-inline-start: 0; padding-inline-start: 0; border-inline-start: 0; }
+  .d11 .d11-row { gap: 8px; }
+  .d11 .d11-pair { flex: 1 1 0; gap: 8px; }
+  .d11 .d11-pair + .d11-pair { margin-inline-start: 4px; }
+  .d11 .d11-select, .d11 .d11-free { flex: 1 1 auto; inline-size: auto; min-block-size: 44px; }
+}
+@media (pointer: coarse) {
+  .d11 .d11-select, .d11 .d11-free { min-block-size: 44px; }
+}
+</style>
+<section class="gh-builder d11">
+  <!-- KEEP -->
+  <header class="gh-head">
+    <h1>Slip builder</h1>
+    <label class="gh-slips">Number of slips <input type="number" value="3" min="1" max="10" step="1" inputmode="numeric" aria-label="Number of slips"></label>
+  </header>
+  <div class="gh-panel">
+    <form class="gh-form" onsubmit="return false">
+      <fieldset class="gh-targets d11-targets">
+        <legend class="sr-only">Your slips</legend>
+        <div class="d11-groups">
+          <div class="d11-group" role="group" aria-labelledby="d11-total-title">
+            <div class="d11-legend"><span id="d11-total-title">Total odds per slip</span><span class="d11-note" id="d11-total-note" role="status"></span></div>
+            <div class="d11-row">
+              <span class="d11-pair">
+                <label class="d11-k" id="d11-total-min-k" for="d11-total-min">Min</label>
+                <select class="d11-select" id="d11-total-min" data-set="true" aria-labelledby="d11-total-title d11-total-min-k" aria-describedby="d11-total-note">
+                  <option value="">Any</option>
+                  <option value="1.5">1.5</option>
+                  <option value="2">2</option>
+                  <option value="2.5" data-d11-custom="true" selected>2.5</option>
+                  <option value="3">3</option>
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="500">500</option>
+                  <option value="1000">1&nbsp;000</option>
+                  <option value="__other">Other…</option>
+                </select>
+                <input class="d11-free" type="number" id="d11-total-min-free" name="totalMin" value="2.5" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="e.g. 2.5" aria-labelledby="d11-total-title d11-total-min-k" aria-describedby="d11-total-note" hidden>
+              </span>
+              <span class="d11-pair">
+                <label class="d11-k" id="d11-total-max-k" for="d11-total-max">Max</label>
+                <select class="d11-select" id="d11-total-max" data-set="false" aria-labelledby="d11-total-title d11-total-max-k" aria-describedby="d11-total-note">
+                  <option value="" selected>Any</option>
+                  <option value="1.5">1.5</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="500">500</option>
+                  <option value="1000">1&nbsp;000</option>
+                  <option value="__other">Other…</option>
+                </select>
+                <input class="d11-free" type="number" id="d11-total-max-free" name="totalMax" value="" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="e.g. 25" aria-labelledby="d11-total-title d11-total-max-k" aria-describedby="d11-total-note" hidden>
+              </span>
+            </div>
+          </div>
+          <div class="d11-group" role="group" aria-labelledby="d11-teams-title">
+            <div class="d11-legend"><span id="d11-teams-title">Matches per slip</span><span class="d11-note" id="d11-teams-note" role="status"></span></div>
+            <div class="d11-row">
+              <span class="d11-pair">
+                <label class="d11-k" id="d11-teams-min-k" for="d11-teams-min">Min</label>
+                <select class="d11-select" id="d11-teams-min" data-set="true" aria-labelledby="d11-teams-title d11-teams-min-k" aria-describedby="d11-teams-note">
+                  <option value="">Any</option>
+                  <option value="1">1</option>
+                  <option value="2" selected>2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                </select>
+                <input class="d11-free" type="number" id="d11-teams-min-free" name="teamsMin" value="2" min="1" max="8" step="1" inputmode="numeric" aria-labelledby="d11-teams-title d11-teams-min-k" aria-describedby="d11-teams-note" hidden>
+              </span>
+              <span class="d11-pair">
+                <label class="d11-k" id="d11-teams-max-k" for="d11-teams-max">Max</label>
+                <select class="d11-select" id="d11-teams-max" data-set="true" aria-labelledby="d11-teams-title d11-teams-max-k" aria-describedby="d11-teams-note">
+                  <option value="">Any</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5" selected>5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                </select>
+                <input class="d11-free" type="number" id="d11-teams-max-free" name="teamsMax" value="5" min="1" max="8" step="1" inputmode="numeric" aria-labelledby="d11-teams-title d11-teams-max-k" aria-describedby="d11-teams-note" hidden>
+              </span>
+            </div>
+          </div>
+        </div>
+      </fieldset>
+      <!-- KEEP (the three dialog buttons; do not restyle them) -->
+      <div class="gh-options">
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match limits</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match Date &amp; Time</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog" data-edited="false">Markets <small aria-hidden="true">4</small></button>
+      </div>
+      <!-- KEEP -->
+      <div class="gh-actions">
+        <a class="gh-button" href="#">Reset</a>
+        <button type="submit" class="gh-button gh-primary">Build slips</button>
+      </div>
+    </form>
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.querySelector('.d11');
+  if (!root) return;
+  var OTHER = '__other';
+  var NBSP = ' ';
+  var groups = [
+    { key: 'total', min: 1.01, max: 100000, decimals: 2 },
+    { key: 'teams', min: 1, max: 8, decimals: 0 }
+  ];
+
+  function parse(s) {
+    if (s == null) return null;
+    s = String(s).replace(/[\s ]/g, '').replace(',', '.');
+    if (s === '') return null;
+    var n = Number(s);
+    return isFinite(n) ? n : null;
+  }
+  function normalise(group, v) {
+    if (v == null) return null;
+    if (v < group.min) v = group.min;
+    if (v > group.max) v = group.max;
+    return Number(v.toFixed(group.decimals));
+  }
+  function fmt(v, decimals) {
+    var s = v.toFixed(decimals);
+    if (s.indexOf('.') > -1) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    var parts = s.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
+    return parts.join('.');
+  }
+  function curatedOption(select, value) {
+    for (var i = 0; i < select.options.length; i++) {
+      var o = select.options[i];
+      if (o.value === value && !o.hasAttribute('data-d11-custom')) return o;
+    }
+    return null;
+  }
+  function placeCustom(select, custom, v) {
+    /* Keep the list ordered: slot the custom stop before the first curated stop above it, else before "Other…". */
+    var anchor = null;
+    for (var i = 0; i < select.options.length; i++) {
+      var o = select.options[i];
+      if (o === custom || o.value === '') continue;
+      if (o.value === OTHER || Number(o.value) > v) { anchor = o; break; }
+    }
+    select.insertBefore(custom, anchor);
+  }
+  function setBound(b, v) {
+    var str = v == null ? '' : String(v);
+    var custom = b.select.querySelector('option[data-d11-custom]');
+    if (str !== '' && !curatedOption(b.select, str)) {
+      if (!custom) { custom = document.createElement('option'); custom.setAttribute('data-d11-custom', 'true'); }
+      custom.value = str;
+      custom.textContent = fmt(v, b.group.decimals);
+      placeCustom(b.select, custom, v);
+    } else if (custom && custom.parentNode) {
+      custom.parentNode.removeChild(custom);
+    }
+    b.select.value = str;
+    b.input.value = str;
+    b.select.setAttribute('data-set', str === '' ? 'false' : 'true');
+  }
+  function setInvalid(el, bad) {
+    if (bad) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid');
+  }
+  function validate(group) {
+    if (!group.min || !group.max) return;
+    var lo = parse(group.min.input.value), hi = parse(group.max.input.value);
+    var bad = lo != null && hi != null && lo > hi;
+    [group.min, group.max].forEach(function (b) { setInvalid(b.select, bad); setInvalid(b.input, bad); });
+    if (group.note) group.note.textContent = bad ? 'Min is above Max' : '';
+  }
+  function makeBound(group, which) {
+    var select = root.querySelector('#d11-' + group.key + '-' + which);
+    var input = root.querySelector('#d11-' + group.key + '-' + which + '-free');
+    if (!select || !input) return null;
+    var b = { group: group, select: select, input: input, editing: false, prev: '' };
+
+    function close(focusSelect) {
+      b.editing = false;
+      input.hidden = true;
+      select.hidden = false;
+      if (focusSelect) { try { select.focus(); } catch (e) {} }
+    }
+    function open() {
+      b.prev = input.value;
+      b.editing = true;
+      select.hidden = true;
+      input.hidden = false;
+      try { input.focus(); input.select(); } catch (e) {}
+    }
+    function commit(focusSelect) {
+      if (!b.editing) return;
+      var v = normalise(group, parse(input.value));
+      close(focusSelect);
+      setBound(b, v);
+      validate(group);
+    }
+    function cancel() {
+      if (!b.editing) return;
+      var prev = b.prev;
+      close(true);
+      setBound(b, normalise(group, parse(prev)));
+      validate(group);
+    }
+
+    select.addEventListener('change', function () {
+      if (select.value === OTHER) { select.value = input.value; open(); return; }
+      setBound(b, normalise(group, parse(select.value)));
+      validate(group);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+      else if (e.key === 'Escape' || e.key === 'Esc') { e.preventDefault(); e.stopPropagation(); cancel(); }
+    });
+    input.addEventListener('blur', function () { commit(false); });
+    return b;
+  }
+
+  groups.forEach(function (group) {
+    group.min = makeBound(group, 'min');
+    group.max = makeBound(group, 'max');
+    group.note = root.querySelector('#d11-' + group.key + '-note');
+    [group.min, group.max].forEach(function (b) { if (b) setBound(b, normalise(group, parse(b.input.value))); });
+    validate(group);
+  });
+})();
+</script>

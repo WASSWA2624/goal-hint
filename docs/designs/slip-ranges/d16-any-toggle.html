@@ -1,0 +1,177 @@
+<!-- 16 Any toggle -->
+<style>
+.d16 .d16-targets { margin: 0; border: 0; min-inline-size: 0; }
+.d16 .d16-rows { --d16-h: 2rem; --d16-sep: 1.25rem; display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); align-items: center; column-gap: 10px; row-gap: 8px; min-inline-size: 0; }
+.d16 .d16-group { display: contents; --d16-ew: calc(2 * var(--d16-fw) + var(--d16-sep) + 2px); }
+.d16 .d16-group[data-kind="odds"] { --d16-fw: 4.75rem; }
+.d16 .d16-group[data-kind="matches"] { --d16-fw: 3rem; }
+.d16 .d16-name { font-size: 0.8125rem; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.d16 .d16-ctx { font-size: 0.6875rem; font-weight: 400; color: var(--gh-muted); }
+
+/* Any switch: on = no bounds, off = the Min–Max editor slides out to the right */
+.d16 .d16-switch { display: inline-flex; align-items: center; gap: 6px; min-block-size: var(--d16-h); margin: 0; padding: 0 2px 0 0; border: 0; border-radius: var(--gh-radius); background: none; color: var(--gh-muted); font-size: 0.8125rem; font-weight: 700; line-height: 1; cursor: pointer; transition: color .2s ease; }
+.d16 .d16-switch[aria-checked="true"] { color: var(--gh-text); }
+.d16 .d16-track { position: relative; flex: none; inline-size: 2.25rem; block-size: 1.25rem; border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); transition: background-color .2s ease, border-color .2s ease; }
+.d16 .d16-thumb { position: absolute; inset-block-start: 2px; inset-inline-start: 2px; inline-size: 0.875rem; block-size: 0.875rem; border-radius: var(--gh-radius); background: var(--gh-control-border); transition: transform .2s cubic-bezier(.2, .7, .2, 1), background-color .2s ease; }
+.d16 .d16-switch:hover .d16-track { border-color: var(--gh-text); }
+.d16 .d16-switch[aria-checked="true"] .d16-track { background: var(--gh-brand); border-color: var(--gh-brand); }
+.d16 .d16-switch[aria-checked="true"]:hover .d16-track { background: var(--gh-brand-hover); border-color: var(--gh-brand-hover); }
+.d16 .d16-switch[aria-checked="true"] .d16-thumb { background: var(--gh-surface); transform: translateX(1rem); }
+
+/* Joined Min–Max editor, revealed with a width slide when Any is off */
+.d16 .d16-reveal { display: flex; justify-self: start; inline-size: var(--d16-ew); block-size: var(--d16-h); overflow: hidden; opacity: 1; visibility: visible; transition: inline-size .3s cubic-bezier(.2, .7, .2, 1), opacity .2s ease .06s, visibility 0s linear 0s; }
+.d16 .d16-group[data-any="true"] .d16-reveal { inline-size: 0; opacity: 0; visibility: hidden; transition: inline-size .22s cubic-bezier(.4, 0, .6, 1), opacity .14s ease, visibility 0s linear .22s; }
+.d16 .d16-editor { display: flex; flex: none; align-items: stretch; inline-size: var(--d16-ew); block-size: var(--d16-h); border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); transition: border-color .15s ease; }
+.d16 .d16-editor:focus-within { border-color: var(--gh-brand); }
+.d16 .d16-field { flex: none; inline-size: var(--d16-fw); min-inline-size: 0; block-size: 100%; margin: 0; padding: 0 6px; border: 0; border-radius: var(--gh-radius); background: none; color: var(--gh-text); font-size: 0.875rem; line-height: 1.25; text-align: center; font-variant-numeric: tabular-nums; }
+.d16 .d16-field:focus-visible { outline-offset: -2px; }
+.d16 .d16-sep { display: inline-flex; flex: none; align-items: center; justify-content: center; inline-size: var(--d16-sep); color: var(--gh-muted); font-size: 0.875rem; line-height: 1; user-select: none; }
+.d16 .d16-group[data-invalid="true"] .d16-editor { border-color: var(--gh-error); }
+.d16 .d16-group[data-invalid="true"] .d16-field,
+.d16 .d16-group[data-invalid="true"] .d16-sep { color: var(--gh-error); }
+
+@container panel (min-width: 641px) {
+  .d16 .gh-form { align-items: center; }
+}
+@container panel (max-width: 640px) {
+  .d16 .d16-rows { --d16-h: 2.75rem; column-gap: 8px; }
+  .d16 .d16-group[data-kind="odds"] { --d16-fw: 4.5rem; }
+  .d16 .d16-ctx { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+}
+@media (pointer: coarse) {
+  .d16 .d16-rows { --d16-h: 2.75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d16 .d16-switch, .d16 .d16-track, .d16 .d16-thumb, .d16 .d16-reveal, .d16 .d16-editor { transition: none; }
+}
+</style>
+<section class="gh-builder d16">
+  <!-- KEEP -->
+  <header class="gh-head">
+    <h1>Slip builder</h1>
+    <label class="gh-slips">Number of slips <input type="number" value="3" min="1" max="10" step="1" inputmode="numeric" aria-label="Number of slips"></label>
+  </header>
+  <div class="gh-panel">
+    <form class="gh-form" onsubmit="return false">
+      <fieldset class="gh-targets d16-targets">
+        <legend class="sr-only">Your slips</legend>
+        <div class="d16-rows">
+          <div class="d16-group" data-kind="odds" data-any="false" data-invalid="false">
+            <span class="d16-name" id="d16-odds-name">Total odds <span class="d16-ctx">per slip</span></span>
+            <button type="button" class="d16-switch" id="d16-odds-any" role="switch" aria-checked="false" aria-labelledby="d16-odds-name d16-odds-anytext" aria-controls="d16-odds-editor">
+              <span class="d16-track" aria-hidden="true"><span class="d16-thumb"></span></span>
+              <span class="d16-anytext" id="d16-odds-anytext">Any</span>
+            </button>
+            <div class="d16-reveal" id="d16-odds-editor">
+              <div class="d16-editor">
+                <input class="d16-field" data-bound="min" type="number" name="totalMin" id="d16-total-min" value="2.5" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="Any" autocomplete="off" aria-label="Minimum total odds per slip" aria-describedby="d16-odds-live">
+                <span class="d16-sep" aria-hidden="true">&ndash;</span>
+                <input class="d16-field" data-bound="max" type="number" name="totalMax" id="d16-total-max" value="" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="Any" autocomplete="off" aria-label="Maximum total odds per slip" aria-describedby="d16-odds-live">
+              </div>
+            </div>
+            <span class="sr-only d16-live" id="d16-odds-live" aria-live="polite"></span>
+          </div>
+          <div class="d16-group" data-kind="matches" data-any="false" data-invalid="false">
+            <span class="d16-name" id="d16-matches-name">Matches <span class="d16-ctx">per slip</span></span>
+            <button type="button" class="d16-switch" id="d16-matches-any" role="switch" aria-checked="false" aria-labelledby="d16-matches-name d16-matches-anytext" aria-controls="d16-matches-editor">
+              <span class="d16-track" aria-hidden="true"><span class="d16-thumb"></span></span>
+              <span class="d16-anytext" id="d16-matches-anytext">Any</span>
+            </button>
+            <div class="d16-reveal" id="d16-matches-editor">
+              <div class="d16-editor">
+                <input class="d16-field" data-bound="min" type="number" name="teamsMin" id="d16-teams-min" value="2" min="1" max="8" step="1" inputmode="numeric" placeholder="Any" autocomplete="off" aria-label="Minimum matches per slip" aria-describedby="d16-matches-live">
+                <span class="d16-sep" aria-hidden="true">&ndash;</span>
+                <input class="d16-field" data-bound="max" type="number" name="teamsMax" id="d16-teams-max" value="5" min="1" max="8" step="1" inputmode="numeric" placeholder="Any" autocomplete="off" aria-label="Maximum matches per slip" aria-describedby="d16-matches-live">
+              </div>
+            </div>
+            <span class="sr-only d16-live" id="d16-matches-live" aria-live="polite"></span>
+          </div>
+        </div>
+      </fieldset>
+      <!-- KEEP (the three dialog buttons; do not restyle them) -->
+      <div class="gh-options">
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match limits</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match Date &amp; Time</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog" data-edited="false">Markets <small aria-hidden="true">4</small></button>
+      </div>
+      <!-- KEEP -->
+      <div class="gh-actions">
+        <a class="gh-button" href="#">Reset</a>
+        <button type="submit" class="gh-button gh-primary">Build slips</button>
+      </div>
+    </form>
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.querySelector('.d16');
+  if (!root) return;
+  var groups = root.querySelectorAll('.d16-group');
+  Array.prototype.forEach.call(groups, function (group) {
+    var sw = group.querySelector('.d16-switch');
+    var editor = group.querySelector('.d16-editor');
+    var minEl = group.querySelector('.d16-field[data-bound="min"]');
+    var maxEl = group.querySelector('.d16-field[data-bound="max"]');
+    var live = group.querySelector('.d16-live');
+    if (!sw || !editor || !minEl || !maxEl) return;
+    var whole = group.getAttribute('data-kind') === 'matches';
+    var lo = parseFloat(minEl.getAttribute('min'));
+    var hi = parseFloat(minEl.getAttribute('max'));
+    var msg = 'Minimum is above maximum.';
+
+    function read(el) {
+      var v = String(el.value || '').trim();
+      if (!v) return null;
+      var n = Number(v);
+      return isFinite(n) ? n : null;
+    }
+    function fmt(n) {
+      return whole ? String(Math.round(n)) : String(Math.round(n * 100) / 100);
+    }
+    function validate() {
+      var a = read(minEl), b = read(maxEl);
+      var bad = a !== null && b !== null && a > b;
+      [minEl, maxEl].forEach(function (el) {
+        if (bad) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid');
+      });
+      group.setAttribute('data-invalid', bad ? 'true' : 'false');
+      if (bad) editor.setAttribute('title', msg); else editor.removeAttribute('title');
+      if (live) live.textContent = bad ? msg : '';
+      return !bad;
+    }
+    function commit(el) {
+      var n = read(el);
+      if (n === null) {
+        el.value = '';
+      } else {
+        if (whole) n = Math.round(n);
+        if (!isNaN(lo) && n < lo) n = lo;
+        if (!isNaN(hi) && n > hi) n = hi;
+        el.value = fmt(n);
+      }
+      validate();
+    }
+    function setAny(on) {
+      sw.setAttribute('aria-checked', on ? 'true' : 'false');
+      group.setAttribute('data-any', on ? 'true' : 'false');
+      if (on) { minEl.value = ''; maxEl.value = ''; validate(); }
+    }
+
+    sw.addEventListener('click', function (e) {
+      var on = sw.getAttribute('aria-checked') !== 'true';
+      setAny(on);
+      /* Pointer users land straight in the Min field; keyboard users Tab to it. */
+      if (!on && e && e.detail > 0) {
+        try { minEl.focus({ preventScroll: true }); } catch (err) { minEl.focus(); }
+      }
+    });
+    [minEl, maxEl].forEach(function (el) {
+      el.addEventListener('input', validate);
+      el.addEventListener('change', function () { commit(el); });
+    });
+
+    setAny(read(minEl) === null && read(maxEl) === null);
+    validate();
+  });
+})();
+</script>

@@ -1,0 +1,184 @@
+<!-- 20 Operator glyphs -->
+<style>
+.d20 .d20-targets { margin: 0; border: 0; min-inline-size: 0; }
+.d20 .d20-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; row-gap: 6px; min-inline-size: 0; }
+.d20 .d20-group { display: flex; align-items: center; gap: 4px; min-inline-size: 0; }
+.d20 .d20-name { margin-inline-end: 4px; font-size: 0.8125rem; font-weight: 700; line-height: 1.3; white-space: nowrap; }
+.d20 .d20-field { position: relative; display: inline-flex; align-items: center; inline-size: 6.5rem; min-block-size: var(--gh-control-h); border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); cursor: text; }
+.d20 .d20-field--int { inline-size: 4.5rem; }
+.d20 .d20-field:focus-within { outline: 2px solid var(--gh-focus); outline-offset: 2px; }
+.d20 .d20-field[data-invalid="true"] { border-color: var(--gh-error); }
+.d20 .d20-glyph { flex: none; display: inline-flex; align-items: center; justify-content: center; inline-size: 1.5rem; align-self: stretch; color: var(--gh-brand); cursor: text; }
+.d20 .d20-glyph > svg { inline-size: 0.75rem; block-size: 0.75rem; }
+.d20 .d20-field[data-invalid="true"] .d20-glyph { color: var(--gh-error); }
+.d20 .d20-field > input { flex: 1 1 auto; align-self: stretch; min-inline-size: 0; inline-size: 100%; margin: 0; padding: 0 6px 0 0; border: 0; border-radius: 0; background: transparent; color: var(--gh-text); font-size: 0.875rem; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.d20 .d20-field > input:focus, .d20 .d20-field > input:focus-visible { outline: none; }
+.d20 .d20-field > input::placeholder { font-weight: 400; }
+.d20 .d20-clear { flex: none; display: none; align-items: center; justify-content: center; inline-size: 1.5rem; block-size: 1.5rem; margin-inline-end: 2px; padding: 0; border: 0; border-radius: var(--gh-radius); background: transparent; color: var(--gh-muted); cursor: pointer; }
+.d20 .d20-clear > svg { inline-size: 0.625rem; block-size: 0.625rem; }
+.d20 .d20-clear:hover { color: var(--gh-text); background: var(--gh-surface-muted); }
+.d20 .d20-field[data-filled="true"]:hover > .d20-clear, .d20 .d20-field[data-filled="true"]:focus-within > .d20-clear { display: inline-flex; }
+.d20 .d20-hint { margin: 4px 0 0; font-size: 0.6875rem; line-height: 1.3; color: var(--gh-muted); font-variant-numeric: tabular-nums; }
+.d20 .d20-hint[data-state="error"] { color: var(--gh-error); font-weight: 600; }
+@container panel (min-width: 641px) {
+  .d20 .gh-form { align-items: start; }
+  .d20 .gh-form > .gh-targets { padding-block-start: 10px; }
+}
+@container panel (max-width: 640px) {
+  .d20 .d20-row { flex-direction: column; align-items: stretch; }
+  .d20 .d20-name { flex: 0 0 5.25rem; }
+  .d20 .d20-field, .d20 .d20-field--int { flex: 1 1 0; inline-size: auto; min-block-size: 44px; }
+  .d20 .d20-glyph { inline-size: 1.75rem; }
+}
+@media (pointer: coarse) {
+  .d20 .d20-field { min-block-size: 44px; }
+  .d20 .d20-clear { inline-size: 2.75rem; block-size: auto; align-self: stretch; margin-inline-end: 0; }
+}
+</style>
+<section class="gh-builder d20">
+  <!-- KEEP -->
+  <header class="gh-head">
+    <h1>Slip builder</h1>
+    <label class="gh-slips">Number of slips <input type="number" value="3" min="1" max="10" step="1" inputmode="numeric" aria-label="Number of slips"></label>
+  </header>
+  <div class="gh-panel">
+    <form class="gh-form" onsubmit="return false">
+      <fieldset class="gh-targets d20-targets">
+        <legend class="sr-only">Your slips</legend>
+        <div class="d20-row">
+          <div class="d20-group">
+            <span class="d20-name">Total odds</span>
+            <div class="d20-field" data-filled="true" data-invalid="false">
+              <label class="d20-glyph" for="d20-total-min" title="At least"><svg viewBox="0 0 14 14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 3l7 3.25-7 3.25"/><path d="M3.5 12h7"/></svg></label>
+              <input type="number" id="d20-total-min" name="totalMin" value="2.50" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="Any" autocomplete="off" aria-label="Total odds per slip, minimum" aria-invalid="false">
+              <button type="button" class="d20-clear" tabindex="-1" aria-label="Clear total odds minimum (Any)"><svg viewBox="0 0 10 10" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l6 6M8 2l-6 6"/></svg></button>
+            </div>
+            <div class="d20-field" data-filled="false" data-invalid="false">
+              <label class="d20-glyph" for="d20-total-max" title="At most"><svg viewBox="0 0 14 14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 3l-7 3.25 7 3.25"/><path d="M3.5 12h7"/></svg></label>
+              <input type="number" id="d20-total-max" name="totalMax" value="" min="1.01" max="100000" step="0.01" inputmode="decimal" placeholder="Any" autocomplete="off" aria-label="Total odds per slip, maximum" aria-invalid="false">
+              <button type="button" class="d20-clear" tabindex="-1" aria-label="Clear total odds maximum (Any)"><svg viewBox="0 0 10 10" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l6 6M8 2l-6 6"/></svg></button>
+            </div>
+          </div>
+          <div class="d20-group">
+            <span class="d20-name">Matches</span>
+            <div class="d20-field d20-field--int" data-filled="true" data-invalid="false">
+              <label class="d20-glyph" for="d20-teams-min" title="At least"><svg viewBox="0 0 14 14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 3l7 3.25-7 3.25"/><path d="M3.5 12h7"/></svg></label>
+              <input type="number" id="d20-teams-min" name="teamsMin" value="2" min="1" max="8" step="1" inputmode="numeric" placeholder="Any" autocomplete="off" aria-label="Matches per slip, minimum" aria-invalid="false">
+              <button type="button" class="d20-clear" tabindex="-1" aria-label="Clear matches minimum (Any)"><svg viewBox="0 0 10 10" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l6 6M8 2l-6 6"/></svg></button>
+            </div>
+            <div class="d20-field d20-field--int" data-filled="true" data-invalid="false">
+              <label class="d20-glyph" for="d20-teams-max" title="At most"><svg viewBox="0 0 14 14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 3l-7 3.25 7 3.25"/><path d="M3.5 12h7"/></svg></label>
+              <input type="number" id="d20-teams-max" name="teamsMax" value="5" min="1" max="8" step="1" inputmode="numeric" placeholder="Any" autocomplete="off" aria-label="Matches per slip, maximum" aria-invalid="false">
+              <button type="button" class="d20-clear" tabindex="-1" aria-label="Clear matches maximum (Any)"><svg viewBox="0 0 10 10" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 2l6 6M8 2l-6 6"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <p class="d20-hint" id="d20-hint" role="status" data-state="ok">blank = Any</p>
+      </fieldset>
+      <!-- KEEP (the three dialog buttons; do not restyle them) -->
+      <div class="gh-options">
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match limits</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match Date &amp; Time</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog" data-edited="false">Markets <small aria-hidden="true">4</small></button>
+      </div>
+      <!-- KEEP -->
+      <div class="gh-actions">
+        <a class="gh-button" href="#">Reset</a>
+        <button type="submit" class="gh-button gh-primary">Build slips</button>
+      </div>
+    </form>
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.querySelector('.d20');
+  if (!root) return;
+
+  var hint = root.querySelector('#d20-hint');
+  var defaultHint = hint ? hint.textContent : '';
+  var groups = [
+    { name: 'Total odds', min: root.querySelector('#d20-total-min'), max: root.querySelector('#d20-total-max'), lo: 1.01, hi: 100000, dec: 2 },
+    { name: 'Matches', min: root.querySelector('#d20-teams-min'), max: root.querySelector('#d20-teams-max'), lo: 1, hi: 8, dec: 0 }
+  ];
+
+  function num(input) {
+    var v = String(input.value || '').trim();
+    if (v === '') return null;
+    var n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+  function fieldOf(input) {
+    return input.closest ? input.closest('.d20-field') : null;
+  }
+  function markFilled(input) {
+    var f = fieldOf(input);
+    var filled = num(input) !== null || (input.validity && input.validity.badInput);
+    if (f) f.setAttribute('data-filled', filled ? 'true' : 'false');
+  }
+  function setInvalid(input, bad) {
+    input.setAttribute('aria-invalid', bad ? 'true' : 'false');
+    var f = fieldOf(input);
+    if (f) f.setAttribute('data-invalid', bad ? 'true' : 'false');
+  }
+  function validate() {
+    var messages = [];
+    groups.forEach(function (g) {
+      if (!g.min || !g.max) return;
+      var a = num(g.min), b = num(g.max);
+      var bad = a !== null && b !== null && a > b;
+      setInvalid(g.min, bad);
+      setInvalid(g.max, bad);
+      if (bad) messages.push(g.name + ': min must be ≤ max');
+    });
+    if (hint) {
+      hint.textContent = messages.length ? messages.join(' · ') : defaultHint;
+      hint.setAttribute('data-state', messages.length ? 'error' : 'ok');
+    }
+  }
+  function normalise(input, g) {
+    var n = num(input);
+    if (n === null) { input.value = ''; return; }
+    if (g.dec === 0) n = Math.round(n);
+    n = Math.min(g.hi, Math.max(g.lo, n));
+    input.value = g.dec ? n.toFixed(g.dec) : String(n);
+  }
+  function clear(input) {
+    input.value = '';
+    markFilled(input);
+    validate();
+  }
+
+  groups.forEach(function (g) {
+    [g.min, g.max].forEach(function (input) {
+      if (!input) return;
+      markFilled(input);
+      input.addEventListener('input', function () { markFilled(input); validate(); });
+      input.addEventListener('change', function () { normalise(input, g); markFilled(input); validate(); });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && input.value !== '') { e.preventDefault(); clear(input); }
+      });
+    });
+  });
+
+  Array.prototype.forEach.call(root.querySelectorAll('.d20-clear'), function (btn) {
+    btn.addEventListener('click', function () {
+      var f = btn.closest ? btn.closest('.d20-field') : null;
+      var input = f ? f.querySelector('input') : null;
+      if (!input) return;
+      clear(input);
+      input.focus();
+    });
+  });
+
+  Array.prototype.forEach.call(root.querySelectorAll('.d20-field'), function (f) {
+    f.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t && t.closest && t.closest('input, button, label')) return;
+      var input = f.querySelector('input');
+      if (input) input.focus();
+    });
+  });
+
+  validate();
+})();
+</script>

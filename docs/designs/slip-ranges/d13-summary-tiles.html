@@ -1,0 +1,249 @@
+<!-- 13 Summary tiles -->
+<style>
+/* 13 Summary tiles: two button-height tiles that flip in place into an inline Min/Max editor. */
+.d13 .d13-targets { margin: 0; border: 0; min-inline-size: 0; }
+.d13 .d13-tiles { container: d13tiles / inline-size; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+@container d13tiles (min-width: 32rem) { .d13 .d13-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Tile shell (shared by both faces) */
+.d13 .d13-tile { container: d13tile / inline-size; position: relative; min-inline-size: 0; min-block-size: var(--gh-control-h); border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); perspective: 40rem; }
+.d13 .d13-tile[data-mode="edit"] { border-color: var(--gh-brand); background: var(--gh-brand-soft); }
+.d13 .d13-face { min-inline-size: 0; border-radius: var(--gh-radius); }
+
+/* Front face: caption + prominent range + pencil */
+.d13 .d13-view { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 8px; align-content: center; align-items: center; inline-size: 100%; min-block-size: calc(var(--gh-control-h) - 2px); padding: 3px 8px 3px 10px; border: 0; background: transparent; text-align: start; cursor: pointer; }
+.d13 .d13-view:hover { background: var(--gh-surface-muted); }
+.d13 .d13-view:focus-visible { outline-offset: 1px; }
+.d13 .d13-cap { display: block; min-inline-size: 0; font-size: 0.6875rem; font-weight: 600; line-height: 12px; color: var(--gh-muted); white-space: nowrap; }
+.d13 .d13-val { display: block; min-inline-size: 0; font-size: 0.9375rem; font-weight: 700; line-height: 16px; color: var(--gh-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.d13 .d13-n { font-weight: 700; }
+.d13 .d13-n.is-any { color: var(--gh-muted); font-weight: 600; }
+.d13 .d13-dash { margin-inline: 0.3em; color: var(--gh-muted); font-weight: 400; }
+.d13 .d13-ico { grid-row: 1 / span 2; grid-column: 2; display: block; color: var(--gh-muted); }
+.d13 .d13-view:hover .d13-ico { color: var(--gh-link); }
+
+/* Back face: inline Min – Max editor with a Done tick */
+.d13 .d13-edit { display: flex; align-items: center; gap: 6px; min-block-size: calc(var(--gh-control-h) - 2px); padding: 4px 4px 4px 10px; }
+.d13 .d13-edit .d13-cap { flex: none; margin-inline-end: 2px; }
+.d13 .d13-edit.has-msg .d13-cap { display: none; }
+.d13 .d13-msg { flex: none; margin-inline-end: 2px; font-size: 0.6875rem; font-weight: 600; line-height: 12px; color: var(--gh-error); white-space: nowrap; }
+.d13 .d13-msg:empty { display: none; }
+.d13 .d13-edit .d13-dash { margin-inline: 0; }
+.d13 .d13-k { flex: none; font-size: 0.6875rem; font-weight: 600; line-height: 1; color: var(--gh-muted); }
+.d13 .d13-in { flex: 1 1 3.5rem; min-inline-size: 2.75rem; max-inline-size: 5rem; min-block-size: 1.625rem; padding: 0 6px; border: 1px solid var(--gh-control-border); border-radius: var(--gh-radius); background: var(--gh-surface); color: var(--gh-text); font-size: 0.875rem; font-weight: 600; line-height: 1.25; text-align: center; font-variant-numeric: tabular-nums; }
+.d13 .d13-in:focus { border-color: var(--gh-brand); }
+.d13 .d13-in[aria-invalid="true"] { border-color: var(--gh-error); color: var(--gh-error); }
+.d13 .d13-done { flex: none; display: inline-flex; align-items: center; justify-content: center; inline-size: 1.625rem; min-block-size: 1.625rem; margin-inline-start: auto; padding: 0; border: 1px solid var(--gh-brand); border-radius: var(--gh-radius); background: var(--gh-brand); color: var(--gh-surface); cursor: pointer; }
+.d13 .d13-done:hover { background: var(--gh-brand-hover); border-color: var(--gh-brand-hover); }
+.d13 .d13-done > svg { display: block; }
+/* Narrow tiles: Min/Max labels stay for assistive tech, the dash carries the meaning visually */
+@container d13tile (max-width: 20.5rem) { .d13 .d13-k { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; } }
+
+/* The flip */
+@keyframes d13-flip-in { from { transform: rotateX(-90deg); opacity: 0; } to { transform: rotateX(0deg); opacity: 1; } }
+.d13 .d13-tile.is-flipping > .d13-face:not([hidden]) { animation: d13-flip-in 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both; transform-origin: 50% 50%; backface-visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .d13 .d13-tile.is-flipping > .d13-face:not([hidden]) { animation: none; } }
+
+/* Phone: tiles stack, grow to the 44px control height */
+@container panel (max-width: 640px) {
+  .d13 .d13-tile { min-block-size: 44px; }
+  .d13 .d13-view, .d13 .d13-edit { min-block-size: 42px; }
+  .d13 .d13-view { padding-block: 6px; }
+  .d13 .d13-val { font-size: 1rem; line-height: 18px; }
+  .d13 .d13-in { min-block-size: 2.125rem; max-inline-size: 6rem; font-size: 1rem; }
+  .d13 .d13-done { inline-size: 2.125rem; min-block-size: 2.125rem; }
+}
+@media (pointer: coarse) {
+  .d13 .d13-tile { min-block-size: 44px; }
+  .d13 .d13-view { min-block-size: 42px; }
+  .d13 .d13-in, .d13 .d13-done { min-block-size: 44px; }
+  .d13 .d13-done { inline-size: 44px; }
+}
+</style>
+<section class="gh-builder d13">
+  <!-- KEEP -->
+  <header class="gh-head">
+    <h1>Slip builder</h1>
+    <label class="gh-slips">Number of slips <input type="number" value="3" min="1" max="10" step="1" inputmode="numeric" aria-label="Number of slips"></label>
+  </header>
+  <div class="gh-panel">
+    <form class="gh-form" onsubmit="return false">
+      <fieldset class="gh-targets d13-targets">
+        <legend class="sr-only">Your slips</legend>
+        <div class="d13-tiles">
+
+          <div class="d13-tile" data-group="total" data-mode="view">
+            <button type="button" class="d13-face d13-view">
+              <span class="d13-cap"><span class="sr-only">Edit </span>Total odds per slip</span>
+              <span class="d13-val"><b class="d13-n" data-slot="min">2.5</b><span class="d13-dash" aria-hidden="true">–</span><span class="sr-only"> to </span><b class="d13-n is-any" data-slot="max">Any</b></span>
+              <svg class="d13-ico" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M11.5 2.5l2 2L5 13H3v-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9.5 4.5l2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="d13-face d13-edit" role="group" aria-labelledby="d13-total-cap" hidden>
+              <span class="d13-cap" id="d13-total-cap">Total odds</span>
+              <span class="d13-msg" id="d13-total-msg" role="status" aria-live="polite"></span>
+              <label class="d13-k" for="d13-total-min">Min</label>
+              <input class="d13-in" id="d13-total-min" name="totalMin" data-bound="min" type="number" inputmode="decimal" min="1.01" max="100000" step="0.01" placeholder="Any" value="2.5" autocomplete="off" aria-describedby="d13-total-hint d13-total-msg">
+              <span class="d13-dash" aria-hidden="true">–</span>
+              <label class="d13-k" for="d13-total-max">Max</label>
+              <input class="d13-in" id="d13-total-max" name="totalMax" data-bound="max" type="number" inputmode="decimal" min="1.01" max="100000" step="0.01" placeholder="Any" value="" autocomplete="off" aria-describedby="d13-total-hint d13-total-msg">
+              <button type="button" class="d13-done" aria-label="Done, apply total odds"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <span class="sr-only" id="d13-total-hint">Decimal odds from 1.01 to 100000. Leave blank for Any. Enter applies, Escape cancels.</span>
+            </div>
+          </div>
+
+          <div class="d13-tile" data-group="teams" data-mode="view">
+            <button type="button" class="d13-face d13-view">
+              <span class="d13-cap"><span class="sr-only">Edit </span>Matches per slip</span>
+              <span class="d13-val"><b class="d13-n" data-slot="min">2</b><span class="d13-dash" aria-hidden="true">–</span><span class="sr-only"> to </span><b class="d13-n" data-slot="max">5</b></span>
+              <svg class="d13-ico" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M11.5 2.5l2 2L5 13H3v-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9.5 4.5l2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </button>
+            <div class="d13-face d13-edit" role="group" aria-labelledby="d13-teams-cap" hidden>
+              <span class="d13-cap" id="d13-teams-cap">Matches</span>
+              <span class="d13-msg" id="d13-teams-msg" role="status" aria-live="polite"></span>
+              <label class="d13-k" for="d13-teams-min">Min</label>
+              <input class="d13-in" id="d13-teams-min" name="teamsMin" data-bound="min" type="number" inputmode="numeric" min="1" max="8" step="1" placeholder="Any" value="2" autocomplete="off" aria-describedby="d13-teams-hint d13-teams-msg">
+              <span class="d13-dash" aria-hidden="true">–</span>
+              <label class="d13-k" for="d13-teams-max">Max</label>
+              <input class="d13-in" id="d13-teams-max" name="teamsMax" data-bound="max" type="number" inputmode="numeric" min="1" max="8" step="1" placeholder="Any" value="5" autocomplete="off" aria-describedby="d13-teams-hint d13-teams-msg">
+              <button type="button" class="d13-done" aria-label="Done, apply matches per slip"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 8.5l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <span class="sr-only" id="d13-teams-hint">Whole number from 1 to 8. Leave blank for Any. Enter applies, Escape cancels.</span>
+            </div>
+          </div>
+
+        </div>
+      </fieldset>
+      <!-- KEEP (the three dialog buttons; do not restyle them) -->
+      <div class="gh-options">
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match limits</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog">Match Date &amp; Time</button>
+        <button type="button" class="gh-trigger" aria-haspopup="dialog" data-edited="false">Markets <small aria-hidden="true">4</small></button>
+      </div>
+      <!-- KEEP -->
+      <div class="gh-actions">
+        <a class="gh-button" href="#">Reset</a>
+        <button type="submit" class="gh-button gh-primary">Build slips</button>
+      </div>
+    </form>
+  </div>
+</section>
+<script>
+(function () {
+  var root = document.querySelector('.d13');
+  if (!root) return;
+
+  var SPEC = {
+    total: { lo: 1.01, hi: 100000, dp: 2, range: '1.01 to 100000' },
+    teams: { lo: 1, hi: 8, dp: 0, range: '1 to 8' }
+  };
+  var reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+
+  function num(str) { var n = parseFloat(str); return isFinite(n) ? n : null; }
+  function round(n, dp) { var f = Math.pow(10, dp); return Math.round(n * f) / f; }
+  function fmt(n, spec) { return String(round(n, spec.dp)); }
+  function clamp(n, spec) { return round(Math.min(spec.hi, Math.max(spec.lo, n)), spec.dp); }
+
+  function setup(tile) {
+    var spec = SPEC[tile.getAttribute('data-group')];
+    var view = tile.querySelector('.d13-view');
+    var edit = tile.querySelector('.d13-edit');
+    var minIn = tile.querySelector('input[data-bound="min"]');
+    var maxIn = tile.querySelector('input[data-bound="max"]');
+    var slotMin = tile.querySelector('[data-slot="min"]');
+    var slotMax = tile.querySelector('[data-slot="max"]');
+    var done = tile.querySelector('.d13-done');
+    var msg = tile.querySelector('.d13-msg');
+    if (!spec || !view || !edit || !minIn || !maxIn) return;
+
+    var saved = { min: minIn.value, max: maxIn.value };
+    var flipTimer = 0;
+
+    function renderSlot(slot, value) {
+      if (!slot) return;
+      var n = num(value);
+      slot.textContent = n === null ? 'Any' : fmt(n, spec);
+      slot.classList.toggle('is-any', n === null);
+    }
+    function render() { renderSlot(slotMin, minIn.value); renderSlot(slotMax, maxIn.value); }
+
+    function validate() {
+      var a = num(minIn.value), b = num(maxIn.value);
+      var aOut = a !== null && (a < spec.lo || a > spec.hi);
+      var bOut = b !== null && (b < spec.lo || b > spec.hi);
+      var crossed = a !== null && b !== null && a > b;
+      minIn.setAttribute('aria-invalid', (aOut || crossed) ? 'true' : 'false');
+      maxIn.setAttribute('aria-invalid', (bOut || crossed) ? 'true' : 'false');
+      var text = crossed ? 'Min above max' : (aOut || bOut) ? spec.range : '';
+      if (msg) msg.textContent = text;
+      edit.classList.toggle('has-msg', !!text);
+    }
+
+    function normalize() {
+      var a = num(minIn.value), b = num(maxIn.value);
+      if (a !== null) a = clamp(a, spec);
+      if (b !== null) b = clamp(b, spec);
+      if (a !== null && b !== null && a > b) { var t = a; a = b; b = t; }
+      minIn.value = a === null ? '' : fmt(a, spec);
+      maxIn.value = b === null ? '' : fmt(b, spec);
+    }
+
+    function flip(mode) {
+      tile.setAttribute('data-mode', mode);
+      view.hidden = mode === 'edit';
+      edit.hidden = mode !== 'edit';
+      if (reduceMotion && reduceMotion.matches) return;
+      tile.classList.remove('is-flipping');
+      void tile.offsetWidth;
+      tile.classList.add('is-flipping');
+      clearTimeout(flipTimer);
+      flipTimer = setTimeout(function () { tile.classList.remove('is-flipping'); }, 300);
+    }
+
+    function open() {
+      saved = { min: minIn.value, max: maxIn.value };
+      validate();
+      flip('edit');
+      try { minIn.focus(); minIn.select(); } catch (e) { /* ignore */ }
+    }
+    function commit(refocus) {
+      normalize();
+      validate();
+      render();
+      saved = { min: minIn.value, max: maxIn.value };
+      flip('view');
+      if (refocus) { try { view.focus(); } catch (e) { /* ignore */ } }
+    }
+    function cancel() {
+      minIn.value = saved.min;
+      maxIn.value = saved.max;
+      validate();
+      flip('view');
+      try { view.focus(); } catch (e) { /* ignore */ }
+    }
+
+    view.addEventListener('click', open);
+    if (done) done.addEventListener('click', function () { commit(true); });
+    edit.addEventListener('input', validate);
+    edit.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+    /* Keep focus inside while clicking the tile's own chrome (caption, dash, Done) so focusout cannot pre-empt the click. */
+    edit.addEventListener('mousedown', function (e) {
+      var t = e.target;
+      if (t && t.closest && !t.closest('input')) e.preventDefault();
+    });
+    /* Clicking or tabbing away applies the edit, like a spreadsheet cell. */
+    tile.addEventListener('focusout', function () {
+      setTimeout(function () {
+        if (tile.getAttribute('data-mode') === 'edit' && !tile.contains(document.activeElement)) commit(false);
+      }, 0);
+    });
+
+    render();
+    validate();
+  }
+
+  var tiles = root.querySelectorAll('.d13-tile');
+  for (var i = 0; i < tiles.length; i++) setup(tiles[i]);
+})();
+</script>
