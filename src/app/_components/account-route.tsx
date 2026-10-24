@@ -75,7 +75,7 @@ export function createAccountRoute({ services = getMemberServices }: { services?
           <ApprovalRefresh waiting={waiting || trialPending} refreshAt={activeUntil} />
           <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={salesOpen} returnTo={returnTo} paymentNeedsAttention={status?.status === "rejected" || status?.status === "reversed"} />
           {trialPending && <TrialStatusCard locale={locale} settings={contact} phone={member.phone} heading="h2" />}
-          {status?.status !== "approved" && <PaymentStatusCard locale={locale} status={status} settings={contact} phone={member.phone} activeUntil={activeUntil} returnTo={returnTo} heading="h2" />}
+          <PaymentStatusCard locale={locale} status={status} settings={contact} phone={member.phone} heading="h2" />
           <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} />
           {(view || salesOpen && paymentView?.trialEligible) && <AccountSection>
             <summary>{messages.text("account.accessSettings")}<ChevronDownIcon /></summary><div>

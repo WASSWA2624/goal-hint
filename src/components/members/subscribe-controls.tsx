@@ -6,7 +6,6 @@ import { trackEvent } from "@/components/analytics/tracker";
 import { useRouter } from "next/navigation";
 import { Button, PhoneInput, TextInput } from "@/components/ui/controls";
 import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CopyIcon, DialpadIcon, GiftIcon, HelpIcon, ImageIcon, LockIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
-import { PageHeading } from "@/components/ui/layout";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { formatPhone, localUgandaPhone, networkForPrefix, normalizePhone, telHref, waHref, type MobileNetwork } from "@/domain/phone";
 import { canOpenMoneyMenu, normalizeTransactionId, parseTransactionId, type PaymentStatus, type PaymentView } from "@/domain/payment";
@@ -22,7 +21,7 @@ import { PaymentStatusCard, TrialStatusCard, useApprovalRefresh } from "./paymen
 
 import {
   ActionLink, Assent, CopyButton, Disclosure, FileBox, FileField,
-  HelpActions, HelpTitle, Intro, Locked, MenuLink, Note, PageFooter, PaymentTransfer,
+  HelpActions, HelpTitle, Locked, MenuLink, Note, PageFooter, PaymentTransfer,
   Plan, PlanDays, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowNote, Sheet,
   Step, StepHeading, StepTitle, Submit, Unit, Wallet, WalletChoice, WalletChoices,
   WalletMeta, WalletNumber,
@@ -40,7 +39,7 @@ const wallets = {
 const waitingStatuses: readonly string[] = ["pending", "superseded"];
 export function SubscribeIntro({ locale }: { locale: string }) {
   const m = createMessages(locale);
-  return <Intro><PageHeading>{m.text("subscribe.title")}</PageHeading></Intro>;
+  return <VisuallyHidden as="h1">{m.text("subscribe.title")}</VisuallyHidden>;
 }
 type HelpSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone">;
 function PaymentHelp({ settings, text, locale }: { settings: HelpSettings; text?: string | undefined; locale: string }) {
@@ -170,7 +169,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     {account && view?.trialEligible && <TrialRequest locale={locale} days={settings.trialDays} appearance="row" />}
     {help}
   </PageFooter>;
-  const paymentStatus = account && <PaymentStatusCard locale={locale} status={status} settings={settings} phone={account.phone} activeUntil={activeUntil} returnTo={returnTo} heading={statusOnly && !showForm ? "h2" : "h3"}
+  const paymentStatus = account && <PaymentStatusCard locale={locale} status={status} settings={settings} phone={account.phone} heading={statusOnly && !showForm ? "h2" : "h3"}
     replace={(waiting || rejected) && plan && payNetwork ? { open: showForm, controls: `${ids}-form`, disabled: busy, toggle: () => toggleReportForm() } : undefined}
     newPayment={reversed && !showForm && plan && payNetwork ? { controls: `${ids}-form`, start: () => toggleReportForm(`${ids}-plan`) } : undefined} />;
   if (statusOnly && !showForm) return <>{accountPanel}<Step id="report">{paymentStatus}</Step></>;

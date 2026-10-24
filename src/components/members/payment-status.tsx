@@ -2,16 +2,15 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CheckIcon, ChevronDownIcon, ChevronRightIcon, ClockIcon, InfoIcon, ResetIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, ClockIcon, InfoIcon, ResetIcon } from "@/components/ui/icons";
 import type { PaymentStatus } from "@/domain/payment";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
-import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import { createMessages } from "@/i18n/messages";
 import { AccountSupportLink, AdminContactLinks } from "./admin-contact";
 import { refreshMemberSession } from "./member-session";
-import { Action, ActionLink, Disclosure, HelpActions, Note, PaymentReviewBox, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
+import { Action, Disclosure, Note, PaymentReviewBox, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
 
 export type StatusSettings = Pick<SubscriptionSettings, "contactPhone" | "whatsappPhone" | "reviewTime">;
 const rejectReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
@@ -71,20 +70,15 @@ function PaymentDetails({ locale, status, pending, reviewTime }: {
   </>;
 }
 
-/** The account's latest report: under review, approved while its period runs, or refused with a reason.
- * Approval needs nothing from the member: access opens on the account's signed-in devices by itself. */
-export function PaymentStatusCard({ locale, status, settings, phone, activeUntil, returnTo, heading = "h3", replace, newPayment }: {
-  locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string; activeUntil: string | null; returnTo: string | null;
+/** The account's latest report while it waits for review or after it was refused or reversed.
+ * An approval shows no card: access opens on the account's signed-in devices by itself. */
+export function PaymentStatusCard({ locale, status, settings, phone, heading = "h3", replace, newPayment }: {
+  locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string;
   heading?: "h2" | "h3"; replace?: Readonly<{ open: boolean; controls: string; toggle: () => void; disabled?: boolean }> | undefined;
   newPayment?: Readonly<{ controls: string; start: () => void }> | undefined;
 }) {
   const m = createMessages(locale);
   if (!status) return null;
-  if (status.status === "approved") return activeUntil ? <StatusBox data-payment-status="approved">
-    <StatusTitle as={heading}><CheckIcon />{m.text("subscribe.approvedTitle")}</StatusTitle>
-    <p>{m.text("subscribe.activeUntil", { end: formatSubscriptionExpiry(new Date(activeUntil)) })}</p>
-    <HelpActions><ActionLink href={returnTo ?? "/en"} prefetch={false}>{m.text("subscribe.seePredictions")}<ChevronRightIcon /></ActionLink></HelpActions>
-  </StatusBox> : null;
   const pending = status.status === "pending" || status.status === "superseded", rejected = status.status === "rejected", reversed = status.status === "reversed";
   if (!pending && !rejected && !reversed) return null;
   const StatusIcon = pending ? ClockIcon : rejected ? InfoIcon : ResetIcon;

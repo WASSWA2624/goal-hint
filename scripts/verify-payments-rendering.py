@@ -118,7 +118,7 @@ def main():
                     assert not any(field.get("name") == "amount" or field.get("type") == "number" for field, _ in fields), "The payment amount must remain read-only."
                     assert "Submit payment" in html and "Screenshot (optional)" in html and "This form needs JavaScript" in html and "Optional screenshot or photo" in html
                     assert ("18 or older" in html) == (state not in ["active", "approved"])
-                if state == "approved": assert 'data-payment-status="approved"' in html and "Access active until" in html and " EAT" in html
+                if state == "approved": assert 'data-payment-status="approved"' not in html and "Payment approved" not in html, "An approval shows no card on the subscribe page."
         compact_status_rendering(server.origin)
         account = visible_html(request(server.origin, "/en/account?state=active").text)
         assert 'data-subscription-summary="active"' in account and "Active subscription" in account and "Renew" in account

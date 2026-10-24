@@ -2,7 +2,6 @@
 
 import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
-import { media } from "@/styles/theme";
 
 const focusRing = css`
   outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
@@ -17,11 +16,6 @@ const icons = css`svg { inline-size: 16px; block-size: 16px; flex-shrink: 0; }`;
 export const SubscribeLayout = styled.div`
   display: flex; flex-direction: column; gap: 12px;
   inline-size: 100%; max-inline-size: 50rem; min-inline-size: 0; margin-inline: auto;
-`;
-export const Intro = styled.div`
-  display: grid; gap: 4px;
-  h1 { font-size: 24px; line-height: 30px; letter-spacing: -0.02em; }
-  ${media.tablet} { h1 { font-size: 28px; line-height: 34px; } }
 `;
 export const Note = styled.p`${smallText}`;
 export const Row = styled.div`
