@@ -3,6 +3,7 @@ import { randomInt } from "node:crypto";
 import { getReportingDate, getReportingDayBounds, addReportingDays, parseReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
 import type { OwnerOverview, OwnerAccount, OwnerSubscriber, OwnerAuditRow, OwnerPaymentSummary } from "../../domain/owner-members.ts";
 import { normalizePhone } from "../../domain/phone.ts";
+import { formatPaymentReference } from "../../domain/payment.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword } from "../analytics/analytics-password.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -31,7 +32,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
       return database.query(async tx => (await tx.paymentSubmission.findMany({ where: { status: "pending" },
         orderBy: [{ submittedAt: "asc" }, { id: "asc" }], take: 2,
         select: { id: true, reference: true, claimedNetwork: true, claimedAmountUgx: true, submittedAt: true } }))
-        .map(row => ({ id: row.id, reference: `P-${row.reference}`, network: row.claimedNetwork,
+        .map(row => ({ id: row.id, reference: formatPaymentReference(row.reference), network: row.claimedNetwork,
           amount: row.claimedAmountUgx, submittedAt: row.submittedAt.toISOString() })));
     },
     async passwordResetRequests(): Promise<readonly Readonly<{ id: string; phone: string; requestedAt: string }>[]> {
@@ -82,7 +83,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
           tx.ownerAuditEvent.count({ where: { accountId: id, action: "device_unlocked", at: { gte: new Date(+at - 30 * 86_400_000), lte: at } } }),
         ]);
         return { ...account, blockedAt: account.blockedAt?.toISOString() ?? null, erasedAt: account.erasedAt?.toISOString() ?? null, lastSignInAt: account.lastSignInAt.toISOString(), codes,
-          submissions: submissions.map(r => ({ ...r, reference: `P-${r.reference}`, submittedAt: r.submittedAt.toISOString() })),
+          submissions: submissions.map(r => ({ ...r, reference: formatPaymentReference(r.reference), submittedAt: r.submittedAt.toISOString() })),
           devices: devices.map(r => ({ createdAt: r.createdAt.toISOString(), lastSeenAt: r.lastSeenAt.toISOString(), expiresAt: r.expiresAt.toISOString() })), unlocks };
       });
     },

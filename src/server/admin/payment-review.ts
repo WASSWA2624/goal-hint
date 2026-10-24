@@ -1,6 +1,7 @@
 import "server-only";
 import type { PaymentQueue, OwnerCode } from "../../domain/owner-members.ts";
 import { paymentChecks } from "../../domain/payment-checks.ts";
+import { formatPaymentReference, normalizeTransactionId } from "../../domain/payment.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import { codeStatus } from "../../domain/subscription-period.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -11,7 +12,7 @@ import { createPaymentNotifications, type PaymentNotifications, type PaymentReje
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 
 export const rejectionReasons = ["unreadable", "amount-mismatch", "not-received", "duplicate", "wrong-number", "other"] as const;
-const reference = (row?: { reference: string }) => row ? `P-${row.reference}` : null;
+const reference = (row?: { reference: string }) => row ? formatPaymentReference(row.reference) : null;
 export function createPaymentReview(database: DatabaseRuntime, now = Date.now, { notifications = createPaymentNotifications({ database, now }) }: {
   notifications?: PaymentNotifications;
 } = {}) {
@@ -41,14 +42,14 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
         return { pendingCount, trials: trials.map(t => {
           const details = events.find(e => e.accountId === t.id)?.details as { ipKey?: string; ipCount?: number } | undefined;
           return { ...t, trialRequestedAt: t.trialRequestedAt!.toISOString(), ipCount: details?.ipKey ? buckets.find(b => b.key === details.ipKey)?.count ?? 0 : null };
-        }), payments: rows.map(r => ({ id: r.id, reference: `P-${r.reference}`, accountId: r.accountId, accountPhone: r.account.phone,
-          payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: r.claimedTxnRef ?? "", amount: r.claimedAmountUgx, planId: r.planId,
+        }), payments: rows.map(r => ({ id: r.id, reference: formatPaymentReference(r.reference), accountId: r.accountId, accountPhone: r.account.phone,
+          payerPhone: r.payerPhone, network: r.claimedNetwork, transactionId: normalizeTransactionId(r.claimedTxnRef ?? ""), amount: r.claimedAmountUgx, planId: r.planId,
           planName: r.planName, durationDays: r.durationDays, price: r.priceUgx, submittedAt: r.submittedAt.toISOString(), status: r.status, hasImage: !!r.screenshot,
-          final: r.transactionRef ? { network: r.network, transactionId: r.transactionRef, amount: r.amountReceivedUgx } : null,
+          final: r.transactionRef ? { network: r.network, transactionId: normalizeTransactionId(r.transactionRef), amount: r.amountReceivedUgx } : null,
           checks: paymentChecks({ received: r.amountReceivedUgx, price: r.priceUgx, transactionId: !!r.claimedTxnKey,
             approved: r.claimedTxnKey ? reference(related.find(s => s.id !== r.id && s.approvedTxnKey?.split(":")[1] === r.claimedTxnKey)) : null,
             pending: r.claimedTxnKey ? reference(related.find(s => s.accountId !== r.accountId && s.status === "pending" && s.claimedTxnKey === r.claimedTxnKey)) : null,
-            image: r.imageSha256 ? related.filter(s => s.id !== r.id && s.imageSha256 === r.imageSha256).map(s => `P-${s.reference}`)[0] ?? null : null,
+            image: r.imageSha256 ? related.filter(s => s.id !== r.id && s.imageSha256 === r.imageSha256).map(s => formatPaymentReference(s.reference))[0] ?? null : null,
             payerAccount: payers.some(p => p.phone === r.payerPhone && p.id !== r.accountId), payerDiffers: !!r.payerPhone && r.payerPhone !== r.account.phone }) })) };
       });
     },
@@ -67,7 +68,7 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
           ...(deleteImage ? { imagePurgedAt: at } : {}) } });
         if (deleteImage) await tx.paymentScreenshot.deleteMany({ where: { submissionId: id } });
         await writeOwnerAudit(tx, { at, actor, action: "payment_rejected", accountId: row.accountId, targetType: "payment", targetId: id, details: { reason, deleteImage } });
-        payment = { paymentId: id, accountId: row.accountId, phone: account?.phone ?? null, reference: `P-${row.reference}`, reason: reason as string };
+        payment = { paymentId: id, accountId: row.accountId, phone: account?.phone ?? null, reference: formatPaymentReference(row.reference), reason: reason as string };
         return { status: "saved" };
       });
       if (outcome.status !== "saved" || !payment) return outcome;
@@ -77,7 +78,8 @@ export function createPaymentReview(database: DatabaseRuntime, now = Date.now, {
       return { ...outcome, notification };
     },
     async codes(search = "", status = "all", accountId?: string): Promise<readonly OwnerCode[]> {
-      const phone = normalizePhone(search), ref = search.trim().toUpperCase().replace(/^[PC]-/u, "");
+      // Accept current and historical payment references without mistaking a raw four-character key for a prefix.
+      const phone = normalizePhone(search), ref = search.trim().toUpperCase().replace(/^[PC]-|^P(?=[0-9A-HJKMNP-TV-Z]{4}$)/u, "");
       return database.query(async tx => {
         const at = new Date(now());
         const statusWhere = status === "revoked" ? { revokedAt: { not: null } } : status === "active" ? { revokedAt: null, startsAt: { lte: at }, endsAt: { gt: at } }

@@ -20,7 +20,7 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
  const planId=randomUUID();await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"test",mtnNumber:"256700000901",mtnName:"TEST",airtelNumber:"256700000902",airtelName:"TEST",paymentNumbersChangedAt:new Date(base),updatedAt:new Date(base),updatedBy:"owner"}}));await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Weekly",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:new Date(base),updatedAt:new Date(base)}}));
  async function member(){const r=await sessions.signIn(`25670000${++n}`,"unknown");return sessions.verify(r.token);}
  async function manual(who,amount=3000){const r=await codes.manual({phone:who.phone,planId,amountReceivedUgx:amount,note:"Synthetic code"},"owner");assert.equal(r.status,"created");return r.ready;}
- async function report(who,tid=`TEST${++n}`){const r=await payments.submit(who,{planId,payerPhone:who.phone,network:"mtn",transactionId:tid,amount:5000,accepted:true},jpeg());assert.equal(r.status,"saved");return db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{reference:r.reference.slice(2)}}));}
+ async function report(who,tid=`TEST${++n}`){const r=await payments.submit(who,{planId,payerPhone:who.phone,network:"mtn",transactionId:tid,amount:5000,accepted:true},jpeg());assert.equal(r.status,"saved");return db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{reference:r.reference.slice(1)}}));}
  const fields=(id,amount=5000,network="mtn")=>({network,transactionRef:id,planId,amountReceivedUgx:amount});
  await t.test("EAT week/month revenue counts both submission sources and manual money, excluding trials/replacements/reversals",async()=>{
   const bounds=revenueBounds(base);assert.equal(bounds.week.toISOString(),"2026-11-08T21:00:00.000Z");assert.equal(bounds.month.toISOString(),"2026-10-31T21:00:00.000Z");
@@ -87,7 +87,7 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   for(let i=0;i<3;i++){clock=base+(i+1)*HOUR;submitted.push(await report(await member(),`PREVIEW${i}`));}
   const rows=await members.pendingPayments();
   assert.deepEqual(rows.map(row=>row.id),submitted.slice(0,2).map(row=>row.id));
-  assert.equal(rows[0].amount,5000);assert.equal(rows[0].reference,`P-${submitted[0].reference}`);
+  assert.equal(rows[0].amount,5000);assert.equal(rows[0].reference,`P${submitted[0].reference}`);
   assert.deepEqual(Object.keys(rows[0]).sort(),["amount","id","network","reference","submittedAt"]);
   await db.query(tx=>tx.paymentSubmission.update({where:{id:submitted[0].id},data:{status:"rejected"}}));
   assert.deepEqual((await members.pendingPayments()).map(row=>row.id),submitted.slice(1).map(row=>row.id));
@@ -132,7 +132,7 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
   const otherVerification=await verification(other),ownSlip=await slip(who),otherSlip=await slip(other);
   const ownedAudit=await audit({accountId:who.id,targetId:who.id}),targetAudit=await audit({targetType:"payment",targetId:ownPayment.id}),actorAudit=await audit({actor:`member-admin:${who.id}`});
   await audit({actor:who.id});
-  const sharedAudit=await audit({accountId:other.id,targetId:other.id,details:{previousAccountId:who.id,codeId:ownCode.id,liveCodeId:ownCycle.id,unrelated:"retained"}});
+  const sharedAudit=await audit({accountId:other.id,targetId:other.id,details:{previousAccountId:who.id,codeId:ownCode.id,liveCodeId:ownCycle.id,paymentReference:`P${ownPayment.reference}`,legacyPaymentReference:`P-${ownPayment.reference}`,unrelated:"retained"}});
   const cleanAudit=await audit({accountId:other.id,targetId:other.id,details:{note:"Retained unrelated event"}});
   const ownKeys=[config.key("member-current-password-account",who.id),config.key("member-save-slip",who.id),...([who.phone,oldPhone].flatMap(phone=>[config.key("member-password-login-phone",phone),config.key("member-register-phone",phone)])),...([tokenHash,historicalHash].flatMap(session=>[config.key("member-upload-attempts",session),config.key("member-upload-stored",session),config.key("member-trial-session",session)]))];
   const sharedKey=config.key("member-sign-ins","198.51.100.100"),otherKey=config.key("member-save-slip",other.id);
@@ -147,7 +147,7 @@ test("permanent subscriber deletion on restricted MySQL", {timeout:180000}, asyn
   assert.equal(await db.query(tx=>tx.memberVerification.count({where:{phone:{in:[who.phone,oldPhone]}}})),0);
   assert.equal(await db.query(tx=>tx.ownerAuditEvent.count({where:{id:{in:[ownedAudit.id,targetAudit.id,actorAudit.id]}}})),0);
   const remainingAudit=await db.query(tx=>tx.ownerAuditEvent.findMany());
-  for(const privateValue of [who.id,ownCode.id,ownCycle.id,ownPayment.id,tokenHash])assert.ok(!JSON.stringify(remainingAudit,(_key,value)=>typeof value==="bigint"?String(value):value).includes(privateValue),`audit removed ${privateValue}`);
+  for(const privateValue of [who.id,ownCode.id,ownCycle.id,ownPayment.id,`P${ownPayment.reference}`,`P-${ownPayment.reference}`,tokenHash])assert.ok(!JSON.stringify(remainingAudit,(_key,value)=>typeof value==="bigint"?String(value):value).includes(privateValue),`audit removed ${privateValue}`);
   assert.equal((await db.query(tx=>tx.ownerAuditEvent.findUnique({where:{id:sharedAudit.id}}))).details.unrelated,"retained");
   assert.deepEqual(await db.query(tx=>tx.ownerAuditEvent.findUnique({where:{id:cleanAudit.id}})),cleanAudit);
   const retained=await db.query(tx=>tx.accessCode.findUniqueOrThrow({where:{id:foreignCode.id}}));

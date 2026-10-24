@@ -72,13 +72,33 @@ test("review exposes the saved duration and safe evidence while preserving dupli
   const card = (await f.review.list()).payments.find(row => row.id === current.id);
   assert.equal(card.durationDays, 17, "Duration comes from the submission snapshot.");
   assert.equal(card.planName, "Saved offer");
+  assert.equal(card.reference, "PREPORT");
+  assert.equal(card.transactionId, "SAMEID");
   assert.equal(card.hasImage, true);
   assert.equal(card.final, null);
   assert.ok(card.checks.some(check => /Check your wallet SMS/u.test(check.text)));
-  for (const text of ["Already approved in P-PREVIOUS", "Also in P-OTHER", "Same file as P-PREVIOUS", "Payer has its own", "verify the sender"]) {
+  for (const text of ["Already approved in PPREVIOUS", "Also in POTHER", "Same file as PPREVIOUS", "Payer has its own", "verify the sender"]) {
     assert.ok(card.checks.some(check => check.tone === "warning" && check.text.includes(text)), text);
   }
   assert.doesNotMatch(JSON.stringify(card), /never-expose|image-digest|approvedTxnKey|submittedSessionHash/u);
+});
+
+test("legacy confirmed transaction IDs are displayed without hyphens while storage is preserved", async () => {
+  const row = payment("paid", "approved", { transactionRef: "LEGACY-ID-001", network: "mtn", amountReceivedUgx: 5000 });
+  const card = (await fixture([row]).review.list("approved")).payments[0];
+  assert.equal(card.final.transactionId, "LEGACYID001");
+  assert.equal(row.transactionRef, "LEGACY-ID-001");
+});
+
+test("code lookup accepts current and legacy payment references and preserves raw keys", async () => {
+  const queries = [];
+  const review = createPaymentReview({ query: run => run({ accessCode: { async findMany(query) { queries.push(query); return []; } } }) }, () => clock, { notifications: silentPaymentNotifications });
+  for (const [search, key] of [["PABCD", "ABCD"], ["P-ABCD", "ABCD"], ["C-ABCD", "ABCD"], ["ABCD", "ABCD"], ["PABC", "PABC"], ["PPABC", "PABC"]]) {
+    await review.codes(search);
+    const conditions = queries.at(-1).where.OR;
+    assert.equal(conditions[1].reference, key);
+    assert.equal(conditions[2].paymentSubmission.reference, key);
+  }
 });
 
 test("empty queues avoid unrelated proof, payer and trial evidence queries", async () => {

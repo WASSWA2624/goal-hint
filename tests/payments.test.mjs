@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canOpenMoneyMenu, parsePaymentFields, paymentRules, transactionKey } from "../src/domain/payment.ts";
+import { canOpenMoneyMenu, formatPaymentReference, normalizeTransactionId, parsePaymentFields, paymentRules, transactionKey } from "../src/domain/payment.ts";
 import { imageInputFormat } from "../src/server/images/image-format.ts";
 import { badgeInputFormat } from "../src/server/images/provider-badge.ts";
 import { createPaymentHandler } from "../src/server/members/payment-http.ts";
@@ -10,16 +10,22 @@ import { jpeg, paymentRequest, values } from "./helpers/payment-fixtures.mjs";
 const fixture = () => {
   const calls = { begin: 0, submit: [] }, services = { config: { production: false }, settings: { settings: { paywallMode: "test" } },
     sessions: { verify: async () => ({ accountId: "account", tokenHash: "hash", blocked: false }) }, payments: {
-      begin: async () => { calls.begin++; return true; }, submit: async (...args) => { calls.submit.push(args); return { status: "saved", reference: "P-TEST" }; } } };
+      begin: async () => { calls.begin++; return true; }, submit: async (...args) => { calls.submit.push(args); return { status: "saved", reference: "PTEST" }; } } };
   return { calls, services, handler: createPaymentHandler(async () => services, { deadlineMs: 30 }) };
 };
 test("payment fields normalize IDs and numbers, with exact limits and a strict whitelist", () => {
-  assert.equal(parsePaymentFields(values).transactionId, "TX.100-1"); assert.equal(parsePaymentFields(values).payerPhone, "256700000101");
+  assert.equal(parsePaymentFields(values).transactionId, "TX.1001"); assert.equal(parsePaymentFields(values).payerPhone, "256700000101");
+  assert.equal(normalizeTransactionId(" tx-100 1 "), "TX1001");
   assert.equal(transactionKey("tx .100-1"), transactionKey("TX1001"));
-  assert.deepEqual(parsePaymentFields({ planId: values.planId, network: "airtel", accepted: "true" }), {
-    planId: values.planId, network: "airtel", accepted: true, payerPhone: null, transactionId: null,
+  assert.deepEqual(parsePaymentFields({ planId: values.planId, network: "airtel", transactionId: "TX-1234", accepted: "true" }), {
+    planId: values.planId, network: "airtel", accepted: true, payerPhone: null, transactionId: "TX1234",
   });
-  for (const fields of [{ amount: "99" }, { amount: "10000001" }, { amount: "5e3" }, { transactionId: "---." }, { transactionId: "abc" }, { transactionId: "<script>" }, { payerPhone: "0201234567" }, { network: "other" }, { accepted: "yes" }, { sms: "secret" }]) assert.equal(parsePaymentFields({ ...values, ...fields }), null);
+  for (const fields of [{ amount: "99" }, { amount: "10000001" }, { amount: "5e3" }, { transactionId: undefined }, { transactionId: null }, { transactionId: "" }, { transactionId: "   " }, { transactionId: "---." }, { transactionId: "abc" }, { transactionId: "<script>" }, { transactionId: "A".repeat(41) }, { payerPhone: "0201234567" }, { network: "other" }, { accepted: "yes" }, { sms: "secret" }]) assert.equal(parsePaymentFields({ ...values, ...fields }), null);
+});
+
+test("payment display references omit the separator and preserve their stored key", () => {
+  assert.equal(formatPaymentReference("ABCD"), "PABCD");
+  assert.equal(formatPaymentReference("PABC"), "PPABC");
 });
 test("image policy trusts magic and bounded dimensions while preserving the provider badge policy", () => {
   const policy = { formats: ["jpeg"], maxBytes: paymentRules.imageBytes, minSide: 200, maxSide: 4096, maxPixels: 12_000_000 };
@@ -32,7 +38,7 @@ test("image policy trusts magic and bounded dimensions while preserving the prov
 });
 test("multipart reads are bounded and strict; extra SMS, spoofed content types and unsupported files never reach storage", async () => {
   const f = fixture(); assert.equal((await f.handler(await paymentRequest())).status, 201); assert.equal(f.calls.submit.length, 1);
-  for (const options of [{ extra: true }, { image: Buffer.from("png bytes"), type: "image/jpeg" }, { image: jpeg(6000, 6000) }, { image: Buffer.alloc(3_000_001) }]) assert.equal((await f.handler(await paymentRequest(options))).status, 400);
+  for (const options of [{ extra: true }, { duplicateFields: ["image"] }, { image: null, duplicateFields: ["transactionId"] }, { image: null, duplicateFields: ["payerPhone"] }, { image: Buffer.from("png bytes"), type: "image/jpeg" }, { image: jpeg(6000, 6000) }, { image: Buffer.alloc(0) }, { image: Buffer.alloc(3_000_001) }, { image: null, fields: { image: "not a file" } }]) assert.equal((await f.handler(await paymentRequest(options))).status, 400);
   assert.equal(f.calls.submit.length, 1);
   assert.equal((await f.handler(await paymentRequest({ headers: { "content-length": "3200001" } }))).status, 413);
   const missing = await paymentRequest(); missing.headers.delete("content-length"); assert.equal((await f.handler(missing)).status, 411);
@@ -42,11 +48,17 @@ test("multipart reads are bounded and strict; extra SMS, spoofed content types a
   assert.equal((await f.handler(slow)).status, 408); assert.equal(f.calls.submit.length, 1);
 });
 
-test("proof can omit optional payment details while amount overrides and unauthenticated uploads are refused", async () => {
+test("a transaction ID can be submitted without proof or payer details; missing IDs and amount overrides are refused", async () => {
   const f = fixture();
-  assert.equal((await f.handler(await paymentRequest({ fields: { payerPhone: "", transactionId: "" } }))).status, 201);
-  assert.equal(f.calls.submit[0][1].payerPhone, null); assert.equal(f.calls.submit[0][1].transactionId, null);
+  assert.equal((await f.handler(await paymentRequest({ image: null, fields: { payerPhone: undefined } }))).status, 201);
+  assert.equal(f.calls.submit[0][1].payerPhone, null); assert.equal(f.calls.submit[0][1].transactionId, "TX.1001");
+  assert.equal(f.calls.submit[0][2], null);
+  for (const transactionId of [undefined, "", "   ", "---.", "<script>"]) {
+    assert.equal((await f.handler(await paymentRequest({ fields: { transactionId } }))).status, 400);
+    assert.equal((await f.handler(await paymentRequest({ image: null, fields: { transactionId } }))).status, 400);
+  }
   assert.equal((await f.handler(await paymentRequest({ fields: { amount: "100" } }))).status, 400);
+  assert.equal((await f.handler(await paymentRequest({ image: null, fields: { amount: "100" } }))).status, 400);
   assert.equal(f.calls.submit.length, 1);
   f.services.sessions.verify = async () => null;
   const signedOut = await paymentRequest(); assert.equal((await f.handler(signedOut)).status, 403); assert.equal(signedOut.bodyUsed, false);
@@ -74,7 +86,7 @@ test("browser upload reports progress, sets its deadline and preserves multipart
       observed.push({ body, timeout: this.timeout });
       queueMicrotask(() => {
         this.upload.onprogress({ lengthComputable: true, loaded: 200, total: 400 });
-        this.status = fail ? 503 : 201; this.responseText = fail ? JSON.stringify({ message: "Busy, try again later" }) : JSON.stringify({ reference: "P-TEST" });
+        this.status = fail ? 503 : 201; this.responseText = fail ? JSON.stringify({ message: "Busy, try again later" }) : JSON.stringify({ reference: "PTEST" });
         this.onload();
       });
     }
@@ -83,7 +95,7 @@ test("browser upload reports progress, sets its deadline and preserves multipart
   const progress = [];
   await assert.rejects(uploadPayment(body, (value) => progress.push(value)), /Busy/);
   assert.equal(body.get("transactionId"), "TEST-1234"); fail = false;
-  assert.deepEqual(await uploadPayment(body, (value) => progress.push(value)), { reference: "P-TEST" });
+  assert.deepEqual(await uploadPayment(body, (value) => progress.push(value)), { reference: "PTEST" });
   assert.deepEqual(progress, [50, 50]); assert.ok(observed.filter((entry) => entry.timeout).every((entry) => entry.timeout === 90_000 && entry.body === body));
 });
 
@@ -91,10 +103,10 @@ test("owner checks flag duplicate proof and payer differences without treating a
   const { paymentChecks } = await import("../src/domain/payment-checks.ts");
   const base = { received:5000,price:5000,transactionId:true,approved:null,pending:null,image:null,payerAccount:false,payerDiffers:false };
   assert.equal(paymentChecks(base).filter(c=>c.tone==="warning").length,0);
-  const all = paymentChecks({...base,received:1000,approved:"P-AAAA",pending:"P-BBBB",image:"P-CCCC",payerAccount:true,payerDiffers:true});
+  const all = paymentChecks({...base,received:1000,approved:"PAAAA",pending:"PBBBB",image:"PCCCC",payerAccount:true,payerDiffers:true});
   assert.equal(all.filter(c=>c.tone==="warning").length,6);
   assert.equal(paymentChecks({...base,payerDiffers:true})[5].tone,"info");
-  for (const companion of [{image:"P-CCCC"},{payerAccount:true}]) assert.equal(paymentChecks({...base,payerDiffers:true,...companion})[5].tone,"warning");
+  for (const companion of [{image:"PCCCC"},{payerAccount:true}]) assert.equal(paymentChecks({...base,payerDiffers:true,...companion})[5].tone,"warning");
   const unverified = paymentChecks({ ...base, received: null, transactionId: false });
   assert.match(unverified[0].text, /Check your wallet/);
   assert.match(unverified[1].text, /No transaction ID/);

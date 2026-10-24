@@ -19,7 +19,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   const planId=randomUUID(); await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"test",mtnNumber:"256700000901",mtnName:"TEST",airtelNumber:"256700000902",airtelName:"TEST AIRTEL",updatedAt:new Date(clock),updatedBy:"owner"}}));
   await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Weekly",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:new Date(clock),updatedAt:new Date(clock)}}));
   async function member(){ const signed=await sessions.signIn(`25670000${String(++n).padStart(4,"0")}`,"unknown"); return sessions.verify(signed.token); }
-  async function report(who,tid,other={}){ const r=await payments.submit(who,{planId,payerPhone:who.phone,network:"mtn",transactionId:tid,amount:5000,accepted:true,...other},jpeg()); assert.equal(r.status,"saved"); return db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{reference:r.reference.slice(2)}})); }
+  async function report(who,tid,other={}){ const r=await payments.submit(who,{planId,payerPhone:who.phone,network:"mtn",transactionId:tid,amount:5000,accepted:true,...other},jpeg()); assert.equal(r.status,"saved"); return db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{reference:r.reference.slice(1)}})); }
   const fields=(tid,other={})=>({planId,network:"mtn",transactionRef:tid,amountReceivedUgx:5000,...other});
   await t.test("two reports, punctuation variants and a manual code race all serialize to one approval",async()=>{
     for(const pair of [["RACEA","RACEA"],["RACE.B","RACEB"]]){const a=await report(await member(),pair[0]),b=await report(await member(),pair[1]);const r=await Promise.all([codes.approvePayment(a.id,fields(pair[0]),"owner"),codes.approvePayment(b.id,fields(pair[1]),"owner")]);assert.deepEqual(r.map(x=>x.status).sort(),["created","duplicate"]);}
@@ -27,7 +27,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   });
   await t.test("edited values persist; renewal carries entitlement with no further code entry",async()=>{
     const who=await member(), row=await report(who,"EDITOLD"); const first=await codes.approvePayment(row.id,fields("EDIT-NEW",{network:"airtel",amountReceivedUgx:6000}),"owner");assert.equal(first.status,"created");assert.equal(+first.grant.startsAt,clock);assert.equal(first.grant.devicesUnlocked,1);
-    const stored=await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:row.id}}));assert.equal(stored.transactionRef,"EDIT-NEW");assert.equal(stored.network,"airtel");assert.equal(stored.amountReceivedUgx,6000);
+    const stored=await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:row.id}}));assert.equal(stored.transactionRef,"EDITNEW");assert.equal(stored.network,"airtel");assert.equal(stored.amountReceivedUgx,6000);
     const unlocked={...who,codeEnteredAt:new Date(clock)};const next=await report(unlocked,"EDITRENEW");const renewed=await codes.approvePayment(next.id,fields("EDITRENEW"),"owner");assert.equal(+renewed.grant.startsAt,+first.grant.endsAt);assert.equal(renewed.notification,"sent");assert.equal(+notifications.approvals.at(-1).expiresAt,+renewed.grant.endsAt);assert.equal(notifications.approvals.at(-1).phone,who.phone);clock=+first.grant.endsAt+1;
     const view=await codes.accountView(unlocked);assert.ok(view.codes.some(c=>+c.startsAt<=clock&&+c.endsAt>clock));assert.ok(!("ready" in renewed));
     const list=await review.codes();assert.equal(list.find(c=>c.id===first.grant.id).planName,"Weekly");assert.ok(!JSON.stringify(list).includes("codeHash"));
@@ -44,7 +44,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   await t.test("stolen-ID recovery keeps the ID unapprovable and records the real money once",async()=>{
     const stranger=await member(),payer=await member(),p=await report(stranger,"STOLEN.TEST",{payerPhone:payer.phone});await codes.approvePayment(p.id,fields("STOLEN.TEST"),"owner");
     assert.equal((await payments.submit(payer,{planId,payerPhone:payer.phone,network:"airtel",transactionId:"STOLENTEST",amount:5000,accepted:true},jpeg())).status,"duplicate");
-    assert.equal((await codes.reversePayment(p.id,"wrong-account","owner")).status,"saved");assert.equal((await codes.manual({phone:payer.phone,planId,amountReceivedUgx:5000,note:`for P-${p.reference}`},"owner")).status,"created");
+    assert.equal((await codes.reversePayment(p.id,"wrong-account","owner")).status,"saved");assert.equal((await codes.manual({phone:payer.phone,planId,amountReceivedUgx:5000,note:`for P${p.reference}`},"owner")).status,"created");
     assert.equal((await codes.manual({phone:payer.phone,planId,network:"airtel",transactionRef:"STOLENTEST",amountReceivedUgx:5000,note:"Synthetic duplicate"},"owner")).status,"duplicate");
     const [paid,manual]=await db.query(tx=>Promise.all([tx.paymentSubmission.aggregate({where:{id:p.id,status:"approved"},_sum:{amountReceivedUgx:true}}),tx.accessCode.aggregate({where:{accountId:payer.accountId,source:"manual"},_sum:{amountReceivedUgx:true}})]));assert.equal((paid._sum.amountReceivedUgx??0)+(manual._sum.amountReceivedUgx??0),5000);
   });

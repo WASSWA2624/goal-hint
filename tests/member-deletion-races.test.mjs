@@ -53,7 +53,7 @@ for (const decision of ["approved", "rejected"]) {
     const notifications = createPaymentNotifications({ database: f.database, now: () => instant,
       delivery: { async sendSms() { assert.equal(f.inTransaction, false, "provider delivery holds no account lock"); started(); await response; } } });
     const result = notifications[decision]({ accountId: f.member.accountId, paymentId: randomUUID(), phone: f.member.phone,
-      reference: "P-ABCD", planName: "Weekly", expiresAt: new Date(instant + 86_400_000), reason: "not-received" });
+      reference: "PABCD", planName: "Weekly", expiresAt: new Date(instant + 86_400_000), reason: "not-received" });
     await sending; await f.removeAccount(); finish();
     assert.equal(await result, "sent", "deletion does not change the completed provider result");
     assert.deepEqual(f.audits, []);
@@ -63,7 +63,7 @@ for (const decision of ["approved", "rejected"]) {
 
 test("notification auditing skips erased accounts and remains best effort", async () => {
   const f = fixture(); f.account.erasedAt = new Date(instant);
-  const notification = { accountId: f.member.accountId, paymentId: randomUUID(), phone: f.member.phone, reference: "P-ABCD", reason: "other" };
+  const notification = { accountId: f.member.accountId, paymentId: randomUUID(), phone: f.member.phone, reference: "PABCD", reason: "other" };
   const delivery = { async sendSms() {} };
   assert.equal(await createPaymentNotifications({ database: f.database, delivery }).rejected(notification), "sent");
   assert.deepEqual(f.audits, []);

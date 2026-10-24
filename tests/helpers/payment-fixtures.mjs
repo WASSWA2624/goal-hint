@@ -4,10 +4,12 @@ export function jpeg(width = 1080, height = 2400) {
   bytes.writeUInt16BE(height, 7); bytes.writeUInt16BE(width, 9); return bytes;
 }
 export const values = { planId: randomUUID(), payerPhone: "0700000101", network: "mtn", transactionId: " tx.100-1 ", accepted: "true" };
-export async function paymentRequest({ fields = {}, image = jpeg(), type = "image/jpeg", headers = {}, extra = false } = {}) {
+export async function paymentRequest({ fields = {}, image = jpeg(), type = "image/jpeg", headers = {}, extra = false, duplicateFields = [] } = {}) {
   const data = new FormData();
-  for (const [key, value] of Object.entries({ ...values, ...fields })) data.set(key, value);
-  data.set("image", new File([image], "payment.jpg", { type })); if (extra) data.set("sms", "private message");
+  for (const [key, value] of Object.entries({ ...values, ...fields })) if (value !== undefined) data.set(key, value);
+  if (image !== null) data.set("image", new File([image], "payment.jpg", { type }));
+  if (extra) data.set("sms", "private message");
+  for (const key of duplicateFields) data.append(key, data.get(key));
   const encoded = new Response(data), buffer = await encoded.arrayBuffer();
   return new Request("http://localhost/api/account/payments", { method: "POST", headers: { "sec-fetch-site": "same-origin", "content-length": String(buffer.byteLength), "content-type": encoded.headers.get("content-type"), ...headers }, body: buffer });
 }

@@ -16,8 +16,8 @@ The standard package migration adds missing duration offers: Daily (1 day, UGX 1
 
 1. Log in and choose an available daily, weekly, or monthly package. The server supplies its amount; the client cannot choose a cheaper amount.
 2. Choose MTN Mobile Money or Airtel Money. Check the displayed receiving number and registered name, then pay using the chosen network.
-3. Upload a payment screenshot or take a photo of the proof. The browser prepares a JPEG and the server checks image type, dimensions, size, and duplication. Screenshot proof is required; an optional transaction reference helps manual review. No external payment gateway or message sender is called.
-4. Submit the request. The account displays the pending/rejected/approved status. The administrator sees the private proof and request under Payments, manually verifies the receiving-wallet transaction and account ownership, then approves or rejects it.
+3. Enter the required transaction ID from the payment SMS. Optional details hold screenshot/photo controls and the payer number, which defaults to the account number. If an image is attached, the browser prepares a JPEG and the server checks image type, dimensions, and size; duplicate images are flagged for review. Submitting without an image still counts toward request limits. No external payment gateway or message sender is called during submission.
+4. Submit the request. The account displays the pending/rejected/approved status. The administrator sees the transaction ID, request, and any private proof under Payments, manually verifies the receiving-wallet transaction and account ownership, then approves or rejects it.
 5. Approval creates a single account-bound access period, marks the request approved, and unlocks the account's signed-in device. Existing pages refresh pending status. Subsequent password logins inherit approved access while the period remains valid and sign out the previous device. A rejected report never unlocks access.
 
 Only one device can be signed in to an account at a time. The login form warns users before they submit. Separate browsers and in-app browsers count as separate devices. Changing devices preserves the account's subscription and remaining time. Legacy subscription device-limit settings remain for compatibility, but cannot permit simultaneous logins under the stricter authentication policy.
@@ -27,6 +27,8 @@ After a payment approval or rejection is committed, Goal Hint attempts one Yoola
 The admin success notice separately reports whether Yoola accepted the SMS or delivery could not be confirmed. Unsupported destinations or accounts without a registered number also prompt the administrator to contact the member. Missing credentials or delivery failure do not reverse the payment decision or access grant. Refused or repeated decisions send no further message. Delivery is a best-effort attempt after commit, with no automatic retry or durable queue; a process interruption between commit and sending can leave the member without an SMS. Yoola acceptance does not confirm handset receipt. The three-message verification-code allowance does not apply to these payment decision notifications.
 
 Submitted requests retain their package name, price, and duration, even if an admin later edits the offer. Duplicate transaction/image checks and locked account/payment decisions protect against repeated approval. Receipts are evidence for manual review, not automatic payment confirmation. Reversal and blocking revoke access without deleting the payment/audit history.
+
+Payment references display as `P1234` without a separator. Transaction IDs are normalized to uppercase without spaces or hyphens; duplicate detection still uses the same canonical key. Historical references with the `P-` prefix remain searchable.
 
 The user can call the administrator if approval is delayed. Optional support-chat links are user-initiated only; no WhatsApp message or SMS activates the account.
 

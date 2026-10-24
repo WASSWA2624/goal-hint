@@ -15,7 +15,7 @@ const smallText = css`
 const icons = css`svg { inline-size: 16px; block-size: 16px; flex-shrink: 0; }`;
 
 export const SubscribeLayout = styled.div`
-  display: flex; flex-direction: column; gap: 16px;
+  display: flex; flex-direction: column; gap: 12px;
   inline-size: 100%; max-inline-size: 50rem; min-inline-size: 0; margin-inline: auto;
 `;
 export const Intro = styled.div`
@@ -23,7 +23,6 @@ export const Intro = styled.div`
   h1 { font-size: 24px; line-height: 30px; letter-spacing: -0.02em; }
   ${media.tablet} { h1 { font-size: 28px; line-height: 34px; } }
 `;
-export const Lead = styled.p`${smallText}`;
 export const Note = styled.p`${smallText}`;
 export const Row = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
@@ -31,7 +30,7 @@ export const Row = styled.div`
   ${icons}
 `;
 export const AccountRow = styled(Row)`
-  column-gap: 6px; padding-block: 4px; border-block: 1px solid ${({ theme }) => theme.color.border};
+  column-gap: 6px; border-block-end: 1px solid ${({ theme }) => theme.color.border};
   > :last-child:not(:first-child) { margin-inline-start: auto; }
   form { display: flex; }
   button, a { font-size: 12px; padding-inline: 4px; }
@@ -54,18 +53,13 @@ export const FieldWithAction = styled.div`
   > button { grid-column: 2; grid-row: 2; min-block-size: 44px; }
   ${icons}
 `;
-export const Optional = styled.span`font-weight: 400; color: ${({ theme }) => theme.color.mutedText};`;
 
 /** Keep payment confirmation below the recipient details at every screen size. */
 export const Sheet = styled.div`
-  display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-inline-size: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-inline-size: 0;
 `;
-export const Step = styled.section`display: grid; align-content: start; gap: 10px; min-inline-size: 0;`;
+export const Step = styled.section`display: grid; align-content: start; gap: 8px; min-inline-size: 0;`;
 export const StepHeading = styled.div`display: flex; align-items: baseline; gap: 8px; min-inline-size: 0;`;
-export const StepNumber = styled.span<{ $muted?: boolean }>`
-  color: ${({ theme, $muted }) => $muted ? theme.color.mutedText : theme.color.link};
-  font-size: 12px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.bold};
-`;
 export const StepTitle = styled.h2`font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy};`;
 export const Unit = styled.span`${smallText} margin-inline-start: auto;`;
 export const Plans = styled.fieldset<{ $columns: number }>`
@@ -74,7 +68,7 @@ export const Plans = styled.fieldset<{ $columns: number }>`
 `;
 export const Plan = styled.label`
   position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 3px 6px; align-content: start;
-  min-inline-size: 0; padding: 10px 8px; cursor: pointer;
+  min-inline-size: 0; padding: 8px; cursor: pointer;
   border: 1px solid ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface};
   border-radius: ${({ theme }) => theme.border.radius};
   input { inline-size: 14px; block-size: 14px; margin: 2px 0 0; accent-color: ${({ theme }) => theme.color.brand}; }
@@ -82,7 +76,7 @@ export const Plan = styled.label`
   &:has(input:focus-visible) { ${focusRing} }
 `;
 export const PlanName = styled.span`font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere;`;
-export const PlanPrice = styled.span`grid-column: 1 / -1; font-size: 18px; line-height: 24px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;`;
+export const PlanPrice = styled.span`grid-column: 1 / -1; font-size: 16px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;`;
 export const PlanDays = styled.span`grid-column: 1 / -1; ${smallText}`;
 export const WalletChoices = styled.fieldset`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
@@ -94,8 +88,9 @@ export const WalletChoice = styled.label`
   border-radius: ${({ theme }) => theme.border.radius};
   &:has(input:checked) { border-color: ${({ theme }) => theme.color.brand}; }
   input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
-  > span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-block-size: 88px; padding: 8px; border-radius: inherit; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
-  > span > svg { position: absolute; inset-block-start: 4px; inset-inline-end: 4px; inline-size: 14px; block-size: 14px; visibility: hidden; }
+  > span { display: flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 6px; border-radius: inherit; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
+  [data-payment-logo] { inline-size: 40px; block-size: 24px; }
+  > span > svg { flex-shrink: 0; inline-size: 12px; block-size: 12px; visibility: hidden; }
   input:checked + span { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link}; box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand}; }
   input:checked + span > svg { visibility: visible; }
   input:focus-visible + span { ${focusRing}; outline-offset: -3px; }
@@ -111,8 +106,8 @@ export const WalletNumber = styled.span`
 `;
 export const WalletMeta = styled.span`grid-column: 1; min-inline-size: 0; overflow-wrap: anywhere; ${smallText}`;
 export const PaymentTransfer = styled.div`
-  display: flex; flex-wrap: wrap; gap: 8px; min-inline-size: 0;
-  > ${WalletChoices} { flex: 1 1 8rem; }
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-inline-size: 0;
+  > ${WalletChoices} { flex: 1 1 19rem; }
   > ${Wallet} { flex: 2 1 15rem; align-content: center; }
   > ${Note} { align-self: center; }
 `;
@@ -138,21 +133,10 @@ export const StatusFacts = styled.dl`
   dt { color: ${({ theme }) => theme.color.mutedText}; }
   dd { margin: 0; min-inline-size: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 `;
-/** The amount is the chosen plan's price, shown read-only; the server records the same price. */
-export const AmountRow = styled.p`
-  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; min-inline-size: 0; margin: 0; padding: 10px;
-  border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText}
-  border-radius: ${({ theme }) => theme.border.radius};
-  strong { color: ${({ theme }) => theme.color.text}; font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-`;
 export const ReportForm = styled.form`
   display: grid; gap: 10px; min-inline-size: 0;
   label { font-size: 12px; line-height: 18px; }
   input:not([type="checkbox"], [type="radio"]) { min-block-size: 44px; }
-  > div { min-inline-size: 0; }
-`;
-export const PaymentFields = styled.div`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: end; min-inline-size: 0;
   > div { min-inline-size: 0; }
 `;
 export const FileField = styled.div`display: grid; gap: 4px; min-inline-size: 0;`;

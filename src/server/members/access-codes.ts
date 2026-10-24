@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { accessCodeAlphabet, normalizeCode } from "../../domain/access-code.ts";
-import { transactionKey } from "../../domain/payment.ts";
+import { formatPaymentReference, normalizeTransactionId, transactionKey } from "../../domain/payment.ts";
 import { normalizePhone } from "../../domain/phone.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import { chainPeriods, extendPeriods, remainingDays, subscriptionDayMs } from "../../domain/subscription-period.ts";
@@ -30,7 +30,7 @@ const validAmount = (amount: number) => Number.isInteger(amount) && amount >= 0 
 const invalid = (message = "Check the values and try again."): CodeFailure => ({ status: "invalid", message });
 const refused = (): CodeFailure => ({ status: "refused", message: "We couldn't complete this. Please contact us." });
 
-/** A new access period and the account's signed-in devices it unlocked; `payment` is the approved P- reference, if any. */
+/** A new access period and the account's signed-in devices it unlocked; `payment` is its formatted payment reference, if any. */
 export type AccessGrant = Readonly<{ id: string; accountId: string; reference: string; planName: string; startsAt: Date; endsAt: Date;
   source: string; devicesUnlocked: number; payment?: string; paymentSubmissionId?: string }>;
 export type CodeFailure = Readonly<{ status: "invalid" | "refused" | "duplicate" | "not-found"; message: string; submissionId?: string }>;
@@ -117,8 +117,8 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
 
   async function approval(tx: Prisma.TransactionClient, account: { id: string; phone: string | null }, fields: PaymentApproval,
     actor: string, at: Date, submissionId?: string, note?: string): Promise<CodeOutcome> {
-    const key = transactionKey(fields.transactionRef);
-    if (!key || fields.transactionRef.length > 40 || !["mtn", "airtel"].includes(fields.network) || !validAmount(fields.amountReceivedUgx)) return invalid();
+    const transactionRef = normalizeTransactionId(fields.transactionRef), key = transactionKey(transactionRef);
+    if (!key || transactionRef.length > 40 || !["mtn", "airtel"].includes(fields.network) || !validAmount(fields.amountReceivedUgx)) return invalid();
     // The existing singleton lock serializes owner confirmations across accounts and networks, independently of key rotation.
     const settings = await lockSettings(tx, actor, at);
     const duplicate = await tx.paymentSubmission.findFirst({ where: { approvedTxnKey: { in: [`mtn:${key}`, `airtel:${key}`] } }, select: { id: true } });
@@ -131,7 +131,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
     // a package's price or duration while a report waits cannot silently change the pending purchase.
     const offer = existing?.planId === plan.id ? existing : plan;
     const final = { planId: plan.id, planName: "planName" in offer ? offer.planName : offer.name, durationDays: offer.durationDays, priceUgx: offer.priceUgx,
-      status: "approved", network: fields.network, transactionRef: fields.transactionRef.toUpperCase().replace(/\s/gu, ""),
+      status: "approved", network: fields.network, transactionRef,
       amountReceivedUgx: fields.amountReceivedUgx, approvedTxnKey: `${fields.network}:${key}`, decidedAt: at, decidedBy: actor };
     const submission = existing ? await tx.paymentSubmission.update({ where: { id: existing.id }, data: final })
       : await tx.paymentSubmission.create({ data: { ...final, id: randomUUID(), accountId: account.id, reference: newReference().slice(2), source: "owner",
@@ -141,7 +141,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       durationDays: final.durationDays, priceUgx: final.priceUgx, termsVersion: existing?.termsVersion ?? null, ...(note ? { note } : {}) }, actor, at,
       { maximum: settings.maxUnlockedDevices, prefer: existing?.submittedSessionHash ? [existing.submittedSessionHash] : [] });
     await audit(tx, account.id, submission.id, "payment_approved", actor, at, { codeId: grant.id, amountReceivedUgx: fields.amountReceivedUgx }, "payment");
-    return { status: "created", grant: { ...grant, payment: `P-${submission.reference}` } };
+    return { status: "created", grant: { ...grant, payment: formatPaymentReference(submission.reference) } };
   }
 
   async function notifyApproval(outcome: CodeOutcome, phone: string | null): Promise<CodeOutcome> {

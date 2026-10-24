@@ -8,14 +8,15 @@ import { duplicatePaymentMessage } from "./payments.ts";
 
 const processState = globalThis as typeof globalThis & { goalHintPaymentUploads?: number };
 const busy = (status = 429) => json({ error: "busy", message: "Busy, try again later. Call admin for help." }, status, { "Retry-After": "60" });
-const invalid = () => json({ error: "invalid", message: "Check the payment details and choose a JPEG screenshot." }, 400);
+const invalid = () => json({ error: "invalid", message: "Check the payment details and transaction ID." }, 400);
+const invalidImage = () => json({ error: "invalid", message: "Choose a valid payment screenshot, or submit without one." }, 400);
 
 export function createPaymentHandler(services: MemberServicesSource = getMemberServices, { deadlineMs = paymentRules.deadlineMs }: { deadlineMs?: number } = {}) {
   return memberRoute(async ({ request, services: resolved, member }) => {
     if (member!.blocked) return json({ error: "forbidden", message: memberRefusal }, 403);
     if (!resolved.payments) return busy(503);
     const length = request.headers.get("content-length");
-    if (!length || !/^\d+$/u.test(length)) return json({ error: "length-required", message: "Send a screenshot with its file size." }, 411);
+    if (!length || !/^\d+$/u.test(length)) return json({ error: "length-required", message: "Payment could not be sent. Please try again." }, 411);
     const bytes = Number(length);
     if (bytes <= 0 || bytes > paymentRules.bodyBytes) return json({ error: "too-large", message: "Choose a smaller screenshot." }, 413);
     if ((processState.goalHintPaymentUploads ?? 0) >= 2) return busy(503);
@@ -24,20 +25,21 @@ export function createPaymentHandler(services: MemberServicesSource = getMemberS
       if (!await resolved.payments.begin(member!, clientAddress(request.headers), bytes)) return busy();
       let raw;
       try { raw = await readLimitedBody(request, bytes, { deadlineMs }); }
-      catch { return json({ error: "timeout", message: "The upload took too long. Your details are kept; try again." }, 408); }
+      catch { return json({ error: "timeout", message: "Sending took too long. Your details are kept; try again." }, 408); }
       if (!raw) return json({ error: "too-large", message: "Choose a smaller screenshot." }, 413);
       if (raw.byteLength !== bytes || !/^multipart\/form-data;\s*boundary=/iu.test(request.headers.get("content-type") ?? "")) return invalid();
       let data;
       try { data = await new Response(raw, { headers: { "Content-Type": request.headers.get("content-type")! } }).formData(); }
       catch { return invalid(); }
-      // Only the known fields, each at most once; the payer and transaction ID may be left out.
+      // Only the known fields, each at most once; the payer and screenshot may be left out.
       const expected: readonly string[] = [...paymentFields, "image"];
       if ([...data.keys()].some((key) => !expected.includes(key))
-        || expected.some((key) => data.getAll(key).length !== 1 && !(optionalPaymentFields.includes(key) && data.getAll(key).length === 0))) return invalid();
+        || expected.some((key) => data.getAll(key).length !== 1 && !((key === "image" || optionalPaymentFields.includes(key)) && data.getAll(key).length === 0))) return invalid();
       const image = data.get("image"), fields = parsePaymentFields(Object.fromEntries(paymentFields.flatMap((key) => data.has(key) ? [[key, data.get(key)] as const] : [])));
-      if (!fields || !(image instanceof File) || image.size > paymentRules.imageBytes) return invalid();
-      const buffer = Buffer.from(await image.arrayBuffer());
-      if (!imageInputFormat(buffer, { formats: ["jpeg"], maxBytes: paymentRules.imageBytes, minSide: 200, maxSide: 4096, maxPixels: 12_000_000 })) return invalid();
+      if (!fields) return invalid();
+      if (image !== null && (!(image instanceof File) || image.size > paymentRules.imageBytes)) return invalidImage();
+      const buffer = image instanceof File ? Buffer.from(await image.arrayBuffer()) : null;
+      if (buffer && !imageInputFormat(buffer, { formats: ["jpeg"], maxBytes: paymentRules.imageBytes, minSide: 200, maxSide: 4096, maxPixels: 12_000_000 })) return invalidImage();
       const result = await resolved.payments.submit(member!, fields, buffer);
       if (result.status === "busy") return busy();
       if (result.status === "duplicate") return json({ error: "duplicate", message: duplicatePaymentMessage }, 409);

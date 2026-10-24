@@ -10,7 +10,7 @@
       "text": "MTN MoMo: You have sent UGX 5,000 to TEST PAYEE 0700000901. Fee UGX 500. Balance UGX 20,000. Transaction ID: TEST-MTN-001.",
       "expected": {
         "amount": 5000,
-        "transactionId": "TEST-MTN-001",
+        "transactionId": "TESTMTN001",
         "network": "mtn",
         "counterparty": "256700000901"
       }
@@ -20,7 +20,7 @@
       "text": "MTN: You received UGX 1,000 from TEST PAYER 0700000101. TID: TEST-MTN-002. Balance UGX 40,000. Fee UGX 0.",
       "expected": {
         "amount": 1000,
-        "transactionId": "TEST-MTN-002",
+        "transactionId": "TESTMTN002",
         "network": "mtn",
         "counterparty": "256700000101"
       }
@@ -40,7 +40,7 @@
       "text": "Airtel Money: Sent UGX 5,000 to TEST PAYEE 0700000902. Transaction ID: TEST-AIR-001. Fee UGX 200. Balance UGX 30,000.",
       "expected": {
         "amount": 5000,
-        "transactionId": "TEST-AIR-001",
+        "transactionId": "TESTAIR001",
         "network": "airtel",
         "counterparty": "256700000902"
       }
@@ -50,7 +50,7 @@
       "text": "Airtel Money: Received UGX 1,000 from TEST PAYER 0700000102. TID: TEST-AIR-002. Balance UGX 11,000. Fee UGX 0.",
       "expected": {
         "amount": 1000,
-        "transactionId": "TEST-AIR-002",
+        "transactionId": "TESTAIR002",
         "network": "airtel",
         "counterparty": "256700000102"
       }

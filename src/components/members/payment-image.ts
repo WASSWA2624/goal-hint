@@ -37,12 +37,12 @@ export function uploadPayment(body: FormData, progress: (percentage: number) => 
     xhr.open("POST", "/api/account/payments"); xhr.timeout = 90_000;
     xhr.setRequestHeader("Accept", "application/json");
     xhr.upload.onprogress = (event) => { if (event.lengthComputable) progress(Math.round(event.loaded / event.total * 100)); };
-    xhr.onerror = xhr.ontimeout = () => reject(new Error("The upload did not finish. Your details are kept; try again."));
+    xhr.onerror = xhr.ontimeout = () => reject(new Error("Couldn't confirm submission. Your details are kept; try again."));
     xhr.onload = () => {
       let result;
       try { result = JSON.parse(xhr.responseText) as { reference?: string; message?: string }; } catch { /* A proxy may return a plain error page. */ }
       if (xhr.status >= 200 && xhr.status < 300 && result?.reference) resolve({ reference: result.reference });
-      else reject(new Error(result?.message ?? "The upload did not finish. Your details are kept; try again."));
+      else reject(new Error(result?.message ?? "Couldn't confirm submission. Your details are kept; try again."));
     };
     xhr.send(body);
   });

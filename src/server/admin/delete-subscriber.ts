@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
+import { formatPaymentReference } from "../../domain/payment.ts";
 import { DatabaseOperationError, type DatabaseRuntime } from "../database/client.ts";
 import { Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount, type CodeOutcome } from "../members/access-codes.ts";
@@ -34,7 +35,7 @@ async function deletionScope(tx: Client, id: string) {
   const sessionHashes = unique([...sessions.map(row => row.tokenHash), ...payments.map(row => row.submittedSessionHash)]);
   const actors = [id, `member-admin:${id}`];
   const identifiers = unique([id, ...actors, ...codes.flatMap(row => [row.id, `C-${row.reference}`]),
-    ...payments.flatMap(row => [row.id, `P-${row.reference}`]), ...sessionHashes,
+    ...payments.flatMap(row => [row.id, formatPaymentReference(row.reference), `P-${row.reference}`]), ...sessionHashes,
     ...verifications.map(row => row.id), ...unbound.map(row => row.id), ...slips.map(row => row.id)]);
   return { id, actors, exclusivePhones, phoneAccountIds: phoneAccounts.map(row => row.id),
     sessionHashes, identifiers, codeIds: codes.map(row => row.id), paymentIds: payments.map(row => row.id) };

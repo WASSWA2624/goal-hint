@@ -1,4 +1,5 @@
 import { normalizePhone, type MobileNetwork } from "./phone.ts";
+import { parseTransactionId } from "./payment.ts";
 
 export type PaymentSms = Readonly<{ amount?: number; transactionId?: string; network?: MobileNetwork; counterparty?: string; foreignRecipient?: string }>;
 /** Label-based suggestions only. Raw messages are never persisted or submitted. */
@@ -8,7 +9,8 @@ export function parsePaymentSms(text: string, ownerNumbers: Readonly<Partial<Rec
   const amount = /\b(?:sent|send|paid|received|transferred)\s+(?:(?:an?\s+)?amount\s+(?:of\s+)?)?(?:UGX|USh|Shs)\.?\s*([\d,]+)(?:\.\d{1,2})?\b/iu.exec(text);
   if (amount) { const value = Number(amount[1]!.replaceAll(",", "")); if (Number.isSafeInteger(value) && value >= 100 && value <= 10_000_000) result.amount = value; }
   const id = /\b(?:transaction\s*(?:id|ref(?:erence)?)|trans\s*id|tid)\s*[:#=.-]?\s*([A-Z0-9][A-Z0-9.-]{3,39})(?![A-Z0-9.-])/iu.exec(text)?.[1]?.replace(/[.,]+$/u, "").toUpperCase();
-  if (id && id.length >= 4) result.transactionId = id;
+  const transactionId = parseTransactionId(id);
+  if (transactionId) result.transactionId = transactionId;
   if (/\bAirtel\b/iu.test(text)) result.network = "airtel";
   else if (/\bMTN\b|\bMoMo\b/iu.test(text)) result.network = "mtn";
   const recipient = /\b(?:to|recipient|receiver)\s*[:=]?\s*(?:[^\d\n]{0,60}?)((?:\+?256[ -]?)?0?7\d{2}(?:[ -]?\d{3}){2})(?!\d)/iu.exec(text)?.[1];
