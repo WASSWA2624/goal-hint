@@ -35,7 +35,7 @@ export function AccountAuthForm({ locale, view = "login", returnTo, contact }: {
     <AccountCardHeading><UserIcon /><h1>{m.text(view === "register" ? "account.register" : "account.login")}</h1></AccountCardHeading>
     <AccountCardBody>
       <MemberForm method="post" action={`/api/account/${view}`} onSubmit={submit} data-analytics-ignore aria-busy={busy}>
-        <PhoneInput name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} required disabled={busy} hint="" />
+        <PhoneInput name="phone" label={m.text("account.phoneNumber")} value={phone} onValueChange={setPhone} lookup={view === "login"} required disabled={busy} hint="" />
         <PasswordInput label={m.text("account.password")} value={password} onChange={setPassword} current={view === "login"}
           placeholder={m.text("account.passwordPlaceholder")} disabled={busy} />
         {view === "login" && <AccountActions>

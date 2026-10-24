@@ -133,7 +133,7 @@ function ChangeNumber({ path, action, onSaved }: { path: string; action: CodeAct
     if (reply.ok) onSaved();
   }
   return <CompactForm method="post" action={path} onSubmit={submit}><MutedText>Move remaining access to the new number&apos;s account. Old sessions lose access.</MutedText>
-    <PhoneInput label="New phone number" name="newPhone" required disabled={action.busy} hint="" />
+    <PhoneInput label="New phone number" name="newPhone" lookup required disabled={action.busy} hint="" />
     <FieldBlock>Verified by<select name="verifiedBy" required disabled={action.busy}><option value="">Choose verification</option><option value="old-number">Old number</option><option value="payment-details">Payment details</option></select></FieldBlock>
     <label><input type="checkbox" name="confirmed" required disabled={action.busy} /> I verified this request.</label>
     <ActionButton type="submit" $variant="primary" disabled={action.busy}>Change number and move access</ActionButton>

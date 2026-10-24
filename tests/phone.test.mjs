@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   formatPhone, isCanonicalPhone, localUgandaPhone, maskPhone, mobileNetworks, networkForPrefix, networkPrefixes, normalizePhone,
-  outsideUgandaHint, phoneHint, phoneInputIssue, smsHref, telHref, waHref,
+  outsideUgandaHint, phoneHint, phoneInputIssue, smsHref, telHref, validMobilePhone, waHref,
 } from "../src/domain/phone.ts";
 
 // Every number here is invented; none belongs to the owner or a subscriber.
@@ -11,9 +11,9 @@ const ugandan = "256772123456";
 test("phone input validation agrees with normalization, distinguishes empty optional fields, and bounds pastes", () => {
   assert.equal(phoneInputIssue(""), null);
   assert.equal(phoneInputIssue("   ", true), "required");
-  for (const value of ["0772 123 456", "+256 (772) 123-456", "2560772123456", "0044 7946 001234", "123456789012345"]) {
+  for (const value of ["0772 123 456", "+256 (772) 123-456", "2560772123456", "0044 7946 001234", "+254 712 345 678", "+1 415 555 0123"]) {
     assert.equal(phoneInputIssue(value, true), null, value);
-    assert.ok(normalizePhone(value));
+    assert.ok(validMobilePhone(value));
   }
   for (const value of ["256", "07", "077212345", "07721234567", "abc", "+256772123456 ext 1"]) {
     assert.equal(phoneInputIssue(value, true), "invalid", value);
@@ -22,6 +22,21 @@ test("phone input validation agrees with normalization, distinguishes empty opti
   assert.equal(phoneInputIssue("256254712345678"), "country-code");
   assert.equal(phoneInputIssue("1234567890123456"), "too-long");
   assert.equal(phoneInputIssue("x".repeat(65)), "too-long");
+});
+
+test("a new number must be a mobile number for its country; a lookup still accepts any stored canonical number", () => {
+  // Canonical, but too short or long for Kenya, a landline, or no country at all.
+  for (const value of ["25471234567", "2547123456789", "254202012345", "123456789012345", "447700900123", "80012345678", "883510012345"]) {
+    assert.ok(normalizePhone(value), value);
+    assert.equal(validMobilePhone(value), null, value);
+    assert.equal(phoneInputIssue(value, true), "not-mobile", value);
+    assert.equal(phoneInputIssue(value, true, true), null, value);
+  }
+  for (const [input, phone] of [["0772123456", ugandan], ["+254 712 345 678", "254712345678"], ["255712345678", "255712345678"],
+    ["+250 788 123 456", "250788123456"], ["+211 912 345 678", "211912345678"], ["+44 7946 001234", "447946001234"]]) {
+    assert.equal(validMobilePhone(input), phone, input);
+  }
+  for (const value of [undefined, null, 256772123456, "", "0772 123 45"]) assert.equal(validMobilePhone(value), null, String(value));
 });
 
 test("every input in the plan's phone table normalizes or is refused as listed (section 9)", () => {

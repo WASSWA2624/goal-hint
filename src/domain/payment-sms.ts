@@ -8,7 +8,7 @@ export function parsePaymentSms(text: string, ownerNumbers: Readonly<Partial<Rec
   const result: { -readonly [K in keyof PaymentSms]: PaymentSms[K] } = {};
   const amount = /\b(?:sent|send|paid|received|transferred)\s+(?:(?:an?\s+)?amount\s+(?:of\s+)?)?(?:UGX|USh|Shs)\.?\s*([\d,]+)(?:\.\d{1,2})?\b/iu.exec(text);
   if (amount) { const value = Number(amount[1]!.replaceAll(",", "")); if (Number.isSafeInteger(value) && value >= 100 && value <= 10_000_000) result.amount = value; }
-  const id = /\b(?:transaction\s*(?:id|ref(?:erence)?)|trans\s*id|tid)\s*[:#=.-]?\s*([A-Z0-9][A-Z0-9.-]{3,39})(?![A-Z0-9.-])/iu.exec(text)?.[1]?.replace(/[.,]+$/u, "").toUpperCase();
+  const id = /\b(?:transaction\s*(?:id|ref(?:erence)?)|trans\s*id|txn\s*id|tid|id(?=\s*[:#]))\s*[:#=.-]?\s*([A-Z0-9][A-Z0-9.-]{3,39})(?![A-Z0-9.-])/iu.exec(text)?.[1]?.replace(/[.,]+$/u, "").toUpperCase();
   const transactionId = parseTransactionId(id);
   if (transactionId) result.transactionId = transactionId;
   if (/\bAirtel\b/iu.test(text)) result.network = "airtel";
@@ -23,4 +23,14 @@ export function parsePaymentSms(text: string, ownerNumbers: Readonly<Partial<Rec
     else if (recipient) result.foreignRecipient = counterparty;
   }
   return result;
+}
+
+const onlyIdCharacters = /^[A-Z0-9.\-\s]{4,60}$/iu;
+/**
+ * The transaction ID in what a member copied: the labelled ID of a whole payment SMS, else the copied text itself when it is
+ * only an ID. Null otherwise, so a pasted sentence never lands in the field.
+ */
+export function transactionIdFromText(text: string): string | null {
+  const labelled = parsePaymentSms(text, {}).transactionId, trimmed = text.trim();
+  return labelled ?? (onlyIdCharacters.test(trimmed) ? parseTransactionId(trimmed) : null);
 }

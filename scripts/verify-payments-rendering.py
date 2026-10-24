@@ -92,8 +92,9 @@ def main():
             elif state == "blocked": assert "We couldn" in html and "TEST MTN" not in html
             else:
                 assert "MTN MoMo" in html and "Airtel Money" in html and "momoapi" not in html and "airtelstream" not in html
-                for label in ["Choose plan", "Pay UGX 1,000", 'data-subscribe-layout="compact-stacked"', "Pay to:", "Names:", "0700000901", "0700000902", "TEST MTN PAYEE",
-                              ">1 day<", ">7 days<", ">30 days<", ">Copy number<", "Safety tips", "Need help?", "1,000", "5,000", "20,000"]: assert label in html, (state, label)
+                for label in ["Choose plan", "Pay UGX 1,000 to", 'data-subscribe-layout="compact-stacked"', "Names:", "0700000901", "0700000902", "TEST MTN PAYEE",
+                              ">1 day<", ">7 days<", ">30 days<", ">Copy number<", "Safety tips", "Need help?", "<small>UGX</small> <span>1,000</span>", "<small>UGX</small> <span>5,000</span>",
+                              "<small>UGX</small> <span>20,000</span>"]: assert label in html, (state, label)
                 assert not re.search(r">(Daily|Weekly|Monthly)<", html), "Plan choices show their length, not their name."
                 interactive = re.sub(r"<noscript\b[^>]*>[\s\S]*?</noscript>", "", html)
                 assert "0700000901" in interactive and "0700000902" not in interactive, state
@@ -115,9 +116,9 @@ def main():
                     assert payer[0][0].get("value") == "700000101", "The signed-in account number prefills the payer field."
                     screenshots = [(field, depth) for field, depth in fields if field.get("type") == "file"]
                     assert len(screenshots) == 2 and all("required" not in field and depth == 0 for field, depth in screenshots), "Optional screenshot and camera controls must be visible without opening details."
-                    assert re.search(r'<legend\b[^>]*>Screenshot \(optional\)</legend>', html), "Visible screenshot controls need a fieldset label."
+                    assert re.search(r'<legend\b[^>]*>Upload proof of payment \(optional\)</legend>', html), "Visible screenshot controls need a fieldset label."
                     assert not any(field.get("name") == "amount" or field.get("type") == "number" for field, _ in fields), "The payment amount must remain read-only."
-                    assert "Submit payment" in html and "Screenshot (optional)" in html and "This form needs JavaScript" in html and "Optional screenshot or photo" in html
+                    assert "Submit payment" in html and "Upload screenshot" in html and "This form needs JavaScript" in html and "Optional screenshot or photo" in html
                     assert ("18 or older" in html) == (state not in ["active", "approved"])
                 if state == "approved": assert 'data-payment-status="approved"' not in html and "Payment approved" not in html, "An approval shows no card on the subscribe page."
         compact_status_rendering(server.origin)

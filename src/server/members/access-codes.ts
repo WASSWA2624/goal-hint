@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomBytes, randomInt, randomUUID } from "node:crypto";
 import { accessCodeAlphabet, normalizeCode } from "../../domain/access-code.ts";
 import { formatPaymentReference, normalizeTransactionId, transactionKey } from "../../domain/payment.ts";
-import { normalizePhone } from "../../domain/phone.ts";
+import { normalizePhone, validMobilePhone } from "../../domain/phone.ts";
 import type { PaymentNotificationStatus } from "../../domain/payment-notification.ts";
 import { chainPeriods, extendPeriods, remainingDays, subscriptionDayMs } from "../../domain/subscription-period.ts";
 import { activeSubscriptionUntil, type SubscriptionStatus } from "../../domain/subscription-summary.ts";
@@ -29,6 +29,7 @@ const options = { isolationLevel: "ReadCommitted", timeout: 15_000 } as const;
 const validDays = (days: number, maximum = 366) => Number.isInteger(days) && days >= 1 && days <= maximum;
 const validAmount = (amount: number) => Number.isInteger(amount) && amount >= 0 && amount <= 4_294_967_295;
 const invalid = (message = "Check the values and try again."): CodeFailure => ({ status: "invalid", message });
+const newNumberInvalid = "Enter a mobile number that is valid for its country.";
 const refused = (): CodeFailure => ({ status: "refused", message: "We couldn't complete this. Please contact us." });
 
 /** A new access period and the account's signed-in devices it unlocked; `payment` is its formatted payment reference, if any. */
@@ -164,7 +165,10 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       if (!phone || !note || note.length > 200 || !validAmount(input.amountReceivedUgx)
         || (!!input.network !== !!input.transactionRef) || input.transactionRef && !input.planId) return invalid();
       const outcome = await codeTransaction<CodeOutcome>(database, async (tx, rollback) => {
-        const at = new Date(now()), account = await accountForPhone(tx, phone, at);
+        const at = new Date(now());
+        // A grant may create the account, which then needs a valid mobile number; an existing account keeps its number.
+        if (!validMobilePhone(phone) && !await tx.memberAccount.findUnique({ where: { phone } })) return rollback(invalid(newNumberInvalid));
+        const account = await accountForPhone(tx, phone, at);
         if (account.blockedAt || account.erasedAt) return rollback(refused());
         if (input.network && input.transactionRef && input.planId) {
           const outcome = await approval(tx, account, { network: input.network, transactionRef: input.transactionRef,
@@ -235,7 +239,10 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       return codeTransaction(database, async (tx, rollback) => {
         const at = new Date(now());
         let destination = await tx.memberAccount.findUnique({ where: { phone } });
-        if (!destination) destination = await tx.memberAccount.create({ data: { id: randomUUID(), phone, createdAt: at, lastSignInAt: at } });
+        if (!destination) {
+          if (!validMobilePhone(phone)) return rollback(invalid(newNumberInvalid));
+          destination = await tx.memberAccount.create({ data: { id: randomUUID(), phone, createdAt: at, lastSignInAt: at } });
+        }
         if (destination.id === accountId) return rollback(invalid());
         for (const id of [accountId, destination.id].sort()) await lockMemberAccount(tx, id);
         const old = await tx.memberAccount.findUnique({ where: { id: accountId } });

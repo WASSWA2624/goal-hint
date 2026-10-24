@@ -41,7 +41,7 @@ export function SubscriberDirectory({ accounts, selectedId, search, filtering, b
       <Count data-subscriber-count role="status">{accounts.length} account{accounts.length === 1 ? "" : "s"} shown</Count>
     </PanelHeader>
     <SearchForm $compact={compact} method="post" action="/api/admin/subscribers" onSubmit={submit} data-subscriber-search>
-      <PhoneInput label="Search by phone" name="search" value={search} onValueChange={onSearchChange} hint="" disabled={busy} />
+      <PhoneInput label="Search by phone" name="search" value={search} onValueChange={onSearchChange} lookup hint="" disabled={busy} />
       <SearchButton type="submit" $variant="primary" disabled={busy}><SearchIcon />Search</SearchButton>
     </SearchForm>
     {filtering && <FilterSummary><span>Filtered by phone</span><ActionButton type="button" $variant="quiet" disabled={busy} onClick={showAll}>Show all</ActionButton></FilterSummary>}

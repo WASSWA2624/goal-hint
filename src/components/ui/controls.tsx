@@ -3,7 +3,7 @@
 import Link from "@/components/navigation/navigation-link";
 import { useEffect, useId, useImperativeHandle, useRef, useState, type ComponentPropsWithRef, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { parsePhoneNumberFromString } from "libphonenumber-js/min";
+import { parsePhoneNumberFromString } from "libphonenumber-js/mobile";
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { normalizePhone, phoneInputIssue, phoneInputMaxLength } from "@/domain/phone";
@@ -31,7 +31,11 @@ type FieldContent = {
   error?: ReactNode;
 };
 
-export type TextInputProps = Omit<ComponentPropsWithRef<"input">, "children"> & FieldContent & { leading?: ReactNode };
+export type TextInputProps = Omit<ComponentPropsWithRef<"input">, "children"> & FieldContent & {
+  leading?: ReactNode;
+  /** A control at the field's end, such as a Paste button. */
+  trailing?: ReactNode;
+};
 export type SelectInputProps = ComponentPropsWithRef<"select"> & FieldContent;
 
 const focusTreatment = css`
@@ -207,9 +211,10 @@ const inputTreatment = css<{ $invalid: boolean }>`
   ${focusTreatment}
 `;
 
-const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean }>`
+const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean; $trailing?: boolean }>`
   ${inputTreatment}
   ${({ $leading }) => $leading && css`padding-inline-start: 38px;`}
+  ${({ $trailing }) => $trailing && css`padding-inline-end: 92px;`}
   &[data-phone-input] { min-block-size: 44px; font-size: 1rem; letter-spacing: 0.02em; }
 
   &::placeholder {
@@ -225,6 +230,7 @@ const InputFrame = styled.div`
   > input[data-password-input] { padding-inline-end: 48px; }
   svg { inline-size: 18px; block-size: 18px; }
 `;
+const TrailingSlot = styled.div`position: absolute; inset-block: 4px; inset-inline-end: 4px; display: flex; > * { min-block-size: 0; }`;
 const PasswordToggle = styled(Button)`
   && {
     position: absolute; inset-inline-end: 1px; inset-block: 1px;
@@ -302,26 +308,27 @@ export function TextLink(props: TextLinkProps) {
   return <TextAnchor {...props} />;
 }
 
-export function TextInput({ label, hint, error, leading, type = "text", ...props }: TextInputProps) {
+export function TextInput({ label, hint, error, leading, trailing, type = "text", ...props }: TextInputProps) {
   const field = useFieldAccessibility({ ...props, hint, error });
   const [passwordVisible, setPasswordVisible] = useState(false);
   const password = type === "password";
   const toggleLabel = password ? createMessages().text(passwordVisible ? "account.hidePassword" : "account.showPassword") : "";
   const control = <InputControl {...props} id={field.id} type={password && passwordVisible ? "text" : type} aria-describedby={field.describedBy}
-    aria-invalid={field.invalid} $invalid={field.isInvalid} $leading={hasContent(leading)}
+    aria-invalid={field.invalid} $invalid={field.isInvalid} $leading={hasContent(leading)} $trailing={hasContent(trailing)}
     spellCheck={password ? false : props.spellCheck} autoCapitalize={password ? "none" : props.autoCapitalize}
     {...(password ? { "data-password-input": true, "data-analytics-ignore": true } : {})} />;
 
   return (
     <Field>
       <FieldLabel htmlFor={field.id}>{label}</FieldLabel>
-      {hasContent(leading) || password ? <InputFrame>
+      {hasContent(leading) || hasContent(trailing) || password ? <InputFrame>
         {hasContent(leading) && <span aria-hidden="true">{leading}</span>}{control}
         {password && <PasswordToggle type="button" variant="quiet" disabled={props.disabled} data-analytics-ignore
           aria-label={toggleLabel}
           aria-controls={field.id} aria-pressed={passwordVisible} onClick={() => setPasswordVisible((visible) => !visible)}>
           <Icon><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" />{passwordVisible && <path d="m3 3 18 18" />}</Icon>
         </PasswordToggle>}
+        {hasContent(trailing) && <TrailingSlot>{trailing}</TrailingSlot>}
       </InputFrame> : control}
       {field.hasHint && <FieldMessage id={field.hintId}>{hint}</FieldMessage>}
       {field.hasError && (
@@ -333,17 +340,19 @@ export function TextInput({ label, hint, error, leading, type = "text", ...props
   );
 }
 
-export type PhoneInputProps = Omit<TextInputProps, "type" | "inputMode" | "autoComplete" | "value" | "defaultValue" | "onChange" | "onPaste" | "leading"> & {
+export type PhoneInputProps = Omit<TextInputProps, "type" | "inputMode" | "autoComplete" | "value" | "defaultValue" | "onChange" | "onPaste" | "leading" | "trailing"> & {
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
+  /** The field finds an existing account (sign-in, recovery, search), so a number stored before the mobile check still passes. */
+  lookup?: boolean;
 };
 
 type PhoneDraft = PhoneValueParts & Readonly<{ value: string }>;
 type CountryMenuPosition = Readonly<{ left: number; top: number; width: number; maxHeight: number }>;
 
 /** A fixed country prefix and a national field share the original canonical-value and native validation contract. */
-export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, label, name, hint, error, onBlur, onInvalid, ...props }: PhoneInputProps) {
+export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, lookup = false, label, name, hint, error, onBlur, onInvalid, ...props }: PhoneInputProps) {
   const [draft, setDraft] = useState<PhoneDraft>(() => ({ ...splitPhoneValue(value ?? defaultValue), value: value ?? defaultValue }));
   const [touched, setTouched] = useState(false), [pasteError, setPasteError] = useState<string | null>(null);
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
@@ -356,9 +365,9 @@ export function PhoneInput({ ref, value, defaultValue = "256", onValueChange, la
   const parts = current === draft.value ? draft : splitPhoneValue(current, draft.country ?? "UG");
   const country = parts.country ? phoneCountry(parts.country) : null;
   const fullValue = composePhoneValue(parts), canonical = normalizePhone(fullValue);
-  const issue = phoneInputIssue(fullValue, props.required);
-  const message = props.disabled || props.readOnly ? "" : pasteError ?? (issue === "country-code" ? messages.text("phone.invalid")
-    : issue ? messages.text(`phone.${issue}`) : "");
+  const issue = phoneInputIssue(fullValue, props.required, lookup);
+  const message = props.disabled || props.readOnly ? "" : pasteError ?? (issue === "not-mobile" && country ? messages.text("phone.not-mobile", { country: country.name })
+    : issue === "country-code" || issue === "not-mobile" ? messages.text("phone.invalid") : issue ? messages.text(`phone.${issue}`) : "");
   const shownError = hasContent(error) ? error : touched && message ? message : undefined;
   const field = useFieldAccessibility({ ...props, hint, error: shownError });
   const menuId = `${field.id}-countries`, searchId = `${field.id}-country-search`;

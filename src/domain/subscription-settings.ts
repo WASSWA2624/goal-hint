@@ -1,4 +1,4 @@
-import { normalizePhone, outsideUgandaHint, phoneHint } from "./phone.ts";
+import { normalizePhone, outsideUgandaHint, phoneHint, validMobilePhone } from "./phone.ts";
 
 /**
  * Paid-access settings the owner edits on /admin/settings (prompts/monetization.md 5.7). They live in one row, id = 1, of
@@ -144,8 +144,9 @@ export function parseSettingsChanges(input: unknown): ParsedChanges {
     const key = field as EditableSettingField;
     if (phoneFields.has(key)) {
       if (value === null || value === "") { changes[key] = null; continue; }
-      const phone = normalizePhone(value);
-      if (phone === null) errors[key] = phoneHint(value) === "outside-uganda" ? `${outsideUgandaHint}.` : "Enter a full number, for example 256 772 123 456.";
+      const phone = validMobilePhone(value);
+      if (phone === null) errors[key] = phoneHint(value) === "outside-uganda" ? `${outsideUgandaHint}.`
+        : normalizePhone(value) ? "Enter a mobile number that is valid for its country." : "Enter a full number, for example 256 772 123 456.";
       else changes[key] = phone;
     } else if (shortcutFields.has(key)) {
       if (value !== null && typeof value !== "string") { errors[key] = "Enter the menu shortcut."; continue; }

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import styled from "styled-components";
 import Link from "@/components/navigation/navigation-link";
 import { Container } from "@/components/ui/layout";
-import { formatSubscriptionExpiry } from "@/domain/subscription-expiry";
+import { subscriptionExpiryParts, subscriptionTimeLeft } from "@/domain/subscription-expiry";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media } from "@/styles/theme";
@@ -45,20 +45,28 @@ const Action = styled(Link)`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.header.text}; outline-offset: -2px; }
 `;
 
+const minute = 60_000;
+const subscribeMinute = (notify: () => void) => { const timer = setInterval(notify, minute); return () => clearInterval(timer); };
+const currentMinute = () => Math.floor(Date.now() / minute) * minute;
+const serverMinute = () => 0;
+
 /** One private expiry line, shared by the desktop shell and the app's separate phone headers. */
 export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = false, compact = false, wide = false }: {
   locale?: string; className?: string; desktopOnly?: boolean; compact?: boolean; wide?: boolean;
 }) {
   const subscription = useSyncExternalStore(subscribeMemberSession, getSubscriptionSnapshot, getServerSubscriptionSnapshot);
-  const pathname = usePathname(), messages = createMessages(locale);
+  const pathname = usePathname(), messages = createMessages(locale), now = useSyncExternalStore(subscribeMinute, currentMinute, serverMinute);
   if (!subscription?.activeUntil) return null;
-  const subscribePath = `/${resolveLocale(locale)}/subscribe`;
+  const until = new Date(subscription.activeUntil), left = subscriptionTimeLeft(until, now);
+  const subscribePath = `/${resolveLocale(locale)}/subscribe`, subscribing = pathname === subscribePath;
   return <Bar className={className} $desktopOnly={desktopOnly} aria-label={messages.text("account.accessSettings")} data-subscription-status-bar>
     <Row $wide={wide} $compact={compact}>
-      <span>{messages.text("account.subscriptionExpires")} <time dateTime={subscription.activeUntil}>{formatSubscriptionExpiry(new Date(subscription.activeUntil))}</time></span>
-      {subscription.canSubscribe && pathname !== subscribePath && <Action href={subscribePath} prefetch={false}>
+      <span>{messages.text("account.expiresOn")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAt", subscriptionExpiryParts(until))}</time>
+        {left && ` (${left.unit === "day" ? messages.plural("account.leftDays", left.count)
+          : left.count ? messages.plural("account.leftHours", left.count) : messages.text("account.underAnHourLeft")})`}</span>
+      {subscription.canSubscribe && (subscribing ? !subscription.paymentPending && <span data-renewal-note>{messages.text("account.renewalExtends")}</span> : <Action href={subscribePath} prefetch={false}>
         {messages.text(subscription.paymentPending ? "account.viewPayment" : "account.renew")}
-      </Action>}
+      </Action>)}
     </Row>
   </Bar>;
 }

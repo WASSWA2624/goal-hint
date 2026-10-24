@@ -49,7 +49,7 @@ export function ManualCodeForm({ plans, action, phone = "", amount = 0, note = "
     if (reply.ok) onSaved?.(); }
   const transactionFields = <FieldRow><FieldBlock>Network (optional)<select name="network" disabled={action.busy}><option value="">No transaction ID</option><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></FieldBlock><FieldBlock>Transaction ID (optional)<input name="transactionId" maxLength={40} disabled={action.busy} /></FieldBlock></FieldRow>;
   return <form method="post" action="/api/admin/codes" onSubmit={submit} data-analytics-ignore><FormStack>
-    {fixedPhone ? <input type="hidden" name="phone" value={phone} /> : <PhoneInput label="Account number" name="phone" defaultValue={phone || "256"} required disabled={action.busy} {...(compact ? { hint: "" } : {})} />}
+    {fixedPhone ? <input type="hidden" name="phone" value={phone} /> : <PhoneInput label="Account number" name="phone" defaultValue={phone || "256"} lookup required disabled={action.busy} {...(compact ? { hint: "" } : {})} />}
     <FieldRow><PlanField plans={plans} disabled={action.busy} {...(compact ? { onValueChange: setSelectedPlan } : {})} />{(!compact || !selectedPlan) && <FieldBlock>Custom days (1–366)<input name="days" type="number" min={1} max={366} defaultValue={1} required disabled={action.busy} /></FieldBlock>}
       {compact && <FieldBlock>Amount received (UGX)<input name="amount" type="number" min={0} max={4294967295} defaultValue={amount} required disabled={action.busy} /></FieldBlock>}</FieldRow>
     {!compact && <FieldBlock>Amount received (UGX)<input name="amount" type="number" min={0} max={4294967295} defaultValue={amount} required disabled={action.busy} /></FieldBlock>}

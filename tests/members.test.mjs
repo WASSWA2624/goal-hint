@@ -125,10 +125,10 @@ test("a subscription code cannot bypass password authentication or call legacy r
 
 test("settings fields parse to canonical numbers, tested shortcuts, trimmed text and in-range whole numbers", () => {
   const parsed = parseSettingsChanges({ mtnNumber: "0700 000 901", airtelNumber: "+256 700-000-903", contactPhone: "2560700000902",
-    whatsappPhone: "447700900001", mtnName: "  TEST PAYEE  ", mtnMenuShortcut: " *165*3* {amount} # ", airtelName: "", copyFormat: "local",
+    whatsappPhone: "447946000001", mtnName: "  TEST PAYEE  ", mtnMenuShortcut: " *165*3* {amount} # ", airtelName: "", copyFormat: "local",
     paymentNote: "Line one\r\nLine two ", reviewTime: "Usually within 30 minutes", maxUnlockedDevices: 5, trialDays: 0, screenshotRetentionDays: 7 });
   assert.deepEqual(parsed, { ok: true, changes: { mtnNumber: OWNER_MTN, airtelNumber: "256700000903", contactPhone: OWNER_CONTACT,
-    whatsappPhone: "447700900001", mtnName: "TEST PAYEE", mtnMenuShortcut: "*165*3*{amount}#", airtelName: null, copyFormat: "local",
+    whatsappPhone: "447946000001", mtnName: "TEST PAYEE", mtnMenuShortcut: "*165*3*{amount}#", airtelName: null, copyFormat: "local",
     paymentNote: "Line one\nLine two", reviewTime: "Usually within 30 minutes", maxUnlockedDevices: 5, trialDays: 0, screenshotRetentionDays: 7 } });
   assert.deepEqual(parseSettingsChanges({ mtnNumber: "", contactPhone: null }), { ok: true, changes: { mtnNumber: null, contactPhone: null } },
     "An empty number clears it.");
@@ -139,6 +139,8 @@ test("settings fields parse to canonical numbers, tested shortcuts, trimmed text
   assert.deepEqual(Object.keys(refused.errors).sort(), ["airtelMenuShortcut", "airtelNumber", "copyFormat", "maxUnlockedDevices", "mtnMenuShortcut",
     "mtnName", "mtnNumber", "paymentNote", "reviewTime", "screenshotRetentionDays", "trialDays"].sort());
   assert.match(refused.errors.mtnNumber, /^For a number outside Uganda, delete 256/);
+  assert.deepEqual(parseSettingsChanges({ whatsappPhone: "447700900001" }), { ok: false, errors: { whatsappPhone: "Enter a mobile number that is valid for its country." } },
+    "A canonical number that is not a mobile number for its country is refused.");
   for (const [field, values] of [["maxUnlockedDevices", [0, 1.5, "2"]], ["trialDays", [-1]], ["screenshotRetentionDays", [366]]]) {
     for (const value of values) assert.equal(parseSettingsChanges({ [field]: value }).ok, false, `${field} = ${value}`);
   }

@@ -45,7 +45,6 @@ export const Sheet = styled.div`
 export const Step = styled.section`display: grid; align-content: start; gap: 8px; min-inline-size: 0;`;
 export const StepHeading = styled.div`display: flex; align-items: baseline; gap: 8px; min-inline-size: 0;`;
 export const StepTitle = styled.h2`font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy};`;
-export const Unit = styled.span`${smallText} margin-inline-start: auto;`;
 export const Plans = styled.fieldset<{ $columns: number }>`
   display: grid; grid-template-columns: repeat(${({ $columns }) => $columns}, minmax(0, 1fr)); gap: 8px;
   min-inline-size: 0; margin: 0; padding: 0; border: 0;
@@ -60,7 +59,11 @@ export const Plan = styled.label`
   &:has(input:focus-visible) { ${focusRing} }
 `;
 export const PlanName = styled.span`font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere;`;
-export const PlanPrice = styled.span`grid-column: 1 / -1; font-size: 16px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;`;
+export const PlanPrice = styled.span`
+  grid-column: 1 / -1; font-size: 16px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums;
+  small { font-size: 11px; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  span { white-space: nowrap; }
+`;
 export const WalletChoices = styled.fieldset`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
   min-inline-size: 0; margin: 0; padding: 0; border: 0;
@@ -133,6 +136,8 @@ export const FileField = styled.fieldset`
   display: grid; gap: 4px; min-inline-size: 0; margin: 0; padding: 0; border: 0;
   legend { padding: 0; margin-block-end: 6px; font-size: 12px; line-height: 18px; }
 `;
+export const PasteButton = styled(Button)`&& { gap: 6px; padding-inline: 10px; font-size: 13px; } ${icons}`;
+export const FileChoices = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-inline-size: 0;`;
 export const FileBox = styled.label`
   position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding: 8px; cursor: pointer;
   border: 1px dashed ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface}; font-size: 12px; line-height: 18px;

@@ -1,4 +1,5 @@
-import { getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/min";
+import { getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/mobile";
+import metadata from "libphonenumber-js/metadata.mobile.json";
 import { iso31661 } from "iso-3166";
 import { normalizePhone, phoneInputMaxLength } from "./phone.ts";
 
@@ -18,6 +19,8 @@ export const phoneCountries: readonly PhoneCountry[] = Object.freeze(getCountrie
 
 const byCountry = new Map(phoneCountries.map(country => [country.iso2, country]));
 const callingCodes = [...new Set(phoneCountries.map(country => country.callingCode))].sort((a, b) => b.length - a.length);
+/** Each calling code's countries, main country first (`39`: Italy, then Vatican City). */
+const mainCountries: Readonly<Record<string, readonly CountryCode[] | undefined>> = metadata.country_calling_codes;
 const searchKey = (value: string) => value.normalize("NFKD").replace(/\p{M}+/gu, "").toLowerCase().replace(/[^a-z0-9]/gu, "");
 const countryAliases: Readonly<Partial<Record<CountryCode, readonly string[]>>> = { AE: ["UAE"], CD: ["DRC"], GB: ["UK", "Britain"] };
 const countrySearch = new Map(phoneCountries.map(country => {
@@ -49,8 +52,9 @@ export function splitPhoneValue(value: string, preferredCountry: CountryCode = "
   const parsed = canonical ? parsePhoneNumberFromString(`+${canonical}`, { extract: false }) : undefined;
   const callingCode = parsed?.countryCallingCode ?? callingCodes.find(code => digits.startsWith(code));
   if (callingCode) {
-    const country = preferred.callingCode === callingCode ? preferredCountry : parsed?.country
-      ?? (callingCode === "1" ? "US" : callingCode === "44" ? "GB" : phoneCountries.find(row => row.callingCode === callingCode)?.iso2 ?? null);
+    // The metadata knows mobile numbers only, so a country is read from a valid mobile number, else the code's main country.
+    const country = preferred.callingCode === callingCode ? preferredCountry
+      : (parsed?.isValid() ? parsed.country : undefined) ?? mainCountries[callingCode]?.[0] ?? null;
     return { country, callingCode, national: digits.slice(callingCode.length) };
   }
   // Existing generic/non-geographic numbers still obey normalizePhone; do not reinterpret them as Ugandan numbers.

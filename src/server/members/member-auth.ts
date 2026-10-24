@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { normalizePhone } from "../../domain/phone.ts";
+import { normalizePhone, validMobilePhone } from "../../domain/phone.ts";
 import { passwordChangeWindowMs, supportedMessageChannels, type MessageChannel } from "../../domain/member-verification.ts";
 import type { AnalyticsConfig } from "../analytics/analytics-config.ts";
 import { hashPassword, verifyPassword } from "../analytics/analytics-password.ts";
@@ -140,8 +140,8 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
 
     /** Public registration never replaces an existing identity or provisions an administrator. */
     async register(phoneInput: unknown, password: unknown, binding: AuthBinding, address: string): Promise<AuthSuccess | AuthFailure> {
-      const phone = normalizePhone(phoneInput), at = new Date(now());
-      if (!phone || binding.member || !validMemberPassword(password)) return invalid("Enter a valid phone and a password of 8–128 characters.");
+      const phone = validMobilePhone(phoneInput), at = new Date(now());
+      if (!phone || binding.member || !validMemberPassword(password)) return invalid("Enter a valid mobile number and a password of 8–128 characters.");
       if (!await limit({ purpose: "register-address", value: safeAddress(address), maximum: 10, windowMs: 3_600_000 })
         || !await limit({ purpose: "register-phone", value: phone, maximum: 5, windowMs: 3_600_000 })) return busy();
       if (adminPhone(phone)) return reserved();
@@ -249,10 +249,10 @@ export function createMemberAuth({ database, config, now = Date.now, adminPhone 
 
     /** A new phone requires a new ownership check before the account is usable. */
     async changePhone(phoneInput: unknown, password: unknown, binding: AuthBinding): Promise<AuthSuccess | AuthFailure> {
-      const phone = normalizePhone(phoneInput), at = new Date(now());
+      const phone = validMobilePhone(phoneInput), at = new Date(now());
       if (!binding.member) return refused();
       if (adminPhone(binding.member.phone)) return invalid("Administrator credentials are managed in the environment.");
-      if (!phone) return invalid("Enter a valid new phone number with its country code.");
+      if (!phone) return invalid("Enter a valid new mobile number with its country code.");
       if (!supportedMessageChannels(phone).length) return invalid("Messaging is unavailable for this country. Contact the admin for assistance.");
       const checked = await currentPassword(binding.member, password);
       if (typeof checked !== "string") return checked;

@@ -1,4 +1,4 @@
-import { normalizePhone, type MobileNetwork } from "./phone.ts";
+import { validMobilePhone, type MobileNetwork } from "./phone.ts";
 
 // The amount is never sent: the server records the chosen plan's price. The owner verifies the transaction ID,
 // money and payer in their own wallet before approving; a screenshot is optional supporting evidence.
@@ -15,7 +15,7 @@ export type PaymentFields = Readonly<{ planId: string; payerPhone: string; netwo
   transactionId: string; accepted: boolean }>;
 export function parsePaymentFields(input: Record<string, unknown>): PaymentFields | null {
   if (Object.keys(input).some((key) => !(paymentFields as readonly string[]).includes(key))) return null;
-  const payerPhone = normalizePhone(input.payerPhone), network = input.network;
+  const payerPhone = validMobilePhone(input.payerPhone), network = input.network;
   const transactionId = parseTransactionId(input.transactionId);
   if (!payerPhone || !["mtn", "airtel"].includes(String(network))
     || !transactionId

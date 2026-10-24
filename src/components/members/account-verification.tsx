@@ -85,7 +85,7 @@ function AccountCodeForm({ locale, returnTo, contact, ...flow }: CodeFormProps) 
       {step === "delivery" ? <>
         <MemberForm method="post" action={`/api/account/${recovery ? "forgot" : "verification"}`} onSubmit={request}
           data-account-step-form="delivery" data-analytics-ignore aria-busy={busy === "request"}>
-          {recovery && <PhoneInput name="phone" label={m.text("account.registeredNumber")} value={phone} onValueChange={changePhone} required disabled={!!busy} hint="" />}
+          {recovery && <PhoneInput name="phone" label={m.text("account.registeredNumber")} value={phone} onValueChange={changePhone} lookup required disabled={!!busy} hint="" />}
           {channels.length > 0 ? <SegmentedChoice<MessageChannel | ""> name="channel" label={m.text("account.deliveryChannel")} value={selectedChannel}
             options={channels.map(value => ({ value, label: value === "sms" ? "SMS" : "WhatsApp" }))} onValueChange={setChannel} disabled={!!busy} />
             : <AccountNote role="status">{m.text("account.countryUnsupported")}</AccountNote>}

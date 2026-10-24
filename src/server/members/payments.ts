@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import { formatPaymentReference, parseTransactionId, paymentRules, transactionKey, type PaymentFields, type PaymentView } from "../../domain/payment.ts";
-import { normalizePhone } from "../../domain/phone.ts";
+import { validMobilePhone } from "../../domain/phone.ts";
 import { termsNotice } from "../../domain/terms-notice.ts";
 import type { SubscriptionIdentity, SubscriptionSettings } from "../../domain/subscription-settings.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
@@ -76,7 +76,7 @@ export function createPayments({ database, config, now = Date.now, environment =
     },
 
     async submit(member: MemberIdentity, fields: PaymentFields, image: Buffer | null = null): Promise<Outcome> {
-      const transactionId = parseTransactionId(fields.transactionId), payerPhone = normalizePhone(fields.payerPhone);
+      const transactionId = parseTransactionId(fields.transactionId), payerPhone = validMobilePhone(fields.payerPhone);
       if (!transactionId || !payerPhone) return { status: "invalid" };
       const key = transactionKey(transactionId), imageBytes = image?.length ?? 0;
       for (let attempt = 0; ; attempt++) {
