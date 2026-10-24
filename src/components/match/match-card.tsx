@@ -52,7 +52,6 @@ const countryFlagUrl = (fixture: FixtureSnapshot) => fixture.competition.country
 const tile = media.belowDesktop, table = media.desktop, wideTable = media.wide;
 const pulse = keyframes`0%, 100% { opacity: 1; } 50% { opacity: 0.35; }`;
 const ellipsis = css`min-inline-size: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;`;
-const tileRadius = "0px";
 const settledOutcome = (outcome: OutcomeTone) => outcome === "correct" || outcome === "incorrect" || outcome === "void";
 const Card = styled.article`
   position: relative;
@@ -78,7 +77,7 @@ const Card = styled.article`
     grid-template-areas: "meta result" "teams teams" "pick pick";
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
     box-shadow: none;
-    border-radius: ${tileRadius};
+    border-radius: ${({ theme }) => theme.border.radius};
   }
   ${table} {
     grid-template-columns: ${matchTableColumns.compact};
@@ -592,7 +591,7 @@ const Open = styled(Link)`
   /* The link covers the tile, so its press tint lands at once over everything, chips included, in place of the
    * browser's tap overlay, inside the card's border. */
   ${tile} {
-    border-radius: ${tileRadius};
+    border-radius: ${({ theme }) => theme.border.radius};
     -webkit-tap-highlight-color: transparent;
     &:active { background: color-mix(in srgb, ${({ theme }) => theme.color.text} 8%, transparent); }
   }

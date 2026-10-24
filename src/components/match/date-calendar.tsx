@@ -56,7 +56,7 @@ const BarButton = styled.button`
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -126,7 +126,7 @@ const Footer = styled.div`
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.border.radius};
     font: inherit;
     font-size: 0.8125rem;
     font-weight: ${({ theme }) => theme.typography.weight.bold};

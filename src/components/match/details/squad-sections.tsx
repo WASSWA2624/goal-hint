@@ -83,7 +83,7 @@ const Pitch = styled.ol`
   padding: 10px 6px;
   list-style: none;
   background: repeating-linear-gradient(180deg, #15803D 0 2.5rem, #16A34A 2.5rem 5rem);
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.border.radius};
   > li { display: flex; justify-content: space-around; gap: 4px; }
   button {
     display: grid;
@@ -95,7 +95,7 @@ const Pitch = styled.ol`
     color: #fff;
     background: none;
     border: 0;
-    border-radius: 4px;
+    border-radius: ${({ theme }) => theme.border.radius};
     font: inherit;
     font-size: ${size("micro")};
     line-height: 1.15;

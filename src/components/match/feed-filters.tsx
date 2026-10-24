@@ -76,13 +76,14 @@ const SearchField = styled.label`
   padding-inline: 10px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  /* The same faint border and hover/focus feedback as the filter selects. */
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  /* Editable field boundaries stay distinct from quiet section frames. */
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border-radius: ${({ theme }) => theme.border.radius};
   ${controlFeedback}
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 1rem; }
   > input {
     inline-size: 100%; min-inline-size: 0; min-block-size: 2.5rem; padding: 0;
-    border: 0; background: transparent; color: inherit; font: inherit; font-size: 1rem;
+    border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; font-size: 1rem;
     &::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
     ${focusRing}
   }
@@ -104,7 +105,7 @@ const SearchButton = styled.button`
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.875rem;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
@@ -163,7 +164,7 @@ const FilterToggle = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   ${buttonBorder}
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -212,6 +213,7 @@ const FilterFieldsGroup = styled.div<{ $open: boolean }>`
     display: grid;
     padding: 4px 8px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-radius: ${({ theme }) => theme.border.radius};
   }
 `;
 /** Desktop keeps dates and times side by side above the filter row; phones stack sections and scroll. */
@@ -277,7 +279,7 @@ const MarketToggle = styled.button<{ $family: MarketFamily }>`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   ${buttonBorder}
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -320,11 +322,11 @@ const PhonePicker = styled(OptionPicker)`
     max-inline-size: 100%;
     inline-size: 100%;
     margin-block-start: 6px;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.border.radius};
     box-shadow: none;
     padding: 8px;
     gap: 8px;
-    > input { min-inline-size: 0; min-block-size: 2.75rem; border-radius: 0; font-size: 16px; }
+    > input { min-inline-size: 0; min-block-size: 2.75rem; border-radius: ${({ theme }) => theme.border.radius}; font-size: 16px; }
     label { min-block-size: 2.75rem; border-radius: 0; font-size: 0.875rem; }
     label > span { overflow-wrap: anywhere; }
   }
@@ -350,8 +352,9 @@ const ProbabilityInputs = styled.div`
     gap: 4px;
     min-inline-size: 0;
     padding-inline: 5px;
-    /* The same faint border and hover/focus feedback as the filter selects. */
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    /* Editable field boundaries stay distinct from quiet section frames. */
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border-radius: ${({ theme }) => theme.border.radius};
     ${controlFeedback}
     background: ${({ theme }) => theme.color.surface};
     color: ${({ theme }) => theme.color.mutedText};
@@ -364,6 +367,7 @@ const ProbabilityInputs = styled.div`
     min-block-size: 1.75rem;
     padding: 0;
     border: 0;
+    border-radius: 0;
     background: transparent;
     color: ${({ theme }) => theme.color.text};
     font: inherit;
@@ -382,7 +386,8 @@ const ProbabilityInputs = styled.div`
       inline-size: 100%;
       min-block-size: 2.5rem;
       padding: 4px 8px;
-      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+      border-radius: ${({ theme }) => theme.border.radius};
       ${controlFeedback}
       font-size: 16px;
       &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.accent.red.text}; }
@@ -408,7 +413,7 @@ const QuietButton = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font-size: 0.6875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   white-space: nowrap;
@@ -453,7 +458,7 @@ const Field = styled.div<{ $accent: AccentName; $disabled?: boolean }>`
   padding-inline: 10px 4px;
   background: ${({ theme, $disabled }) => $disabled ? theme.color.cardHeader : theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   &:focus-within { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; }
   ${media.hover} { &:hover { border-color: ${({ theme, $accent, $disabled }) => $disabled ? theme.color.border : theme.color.accent[$accent].solid}; } }
 `;
@@ -503,7 +508,7 @@ const ApplyButton = styled.button`
   background: ${({ theme }) => theme.gradient.action};
   border: 0;
   ${media.belowDesktop} { ${buttonBorder} }
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
@@ -516,7 +521,7 @@ const ApplyButton = styled.button`
 `;
 const OutlineButton = styled(QuietButton)`
   min-block-size: 2rem;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font-size: 0.8125rem;
   border-color: transparent;
   background: transparent;

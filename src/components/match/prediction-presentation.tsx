@@ -31,7 +31,7 @@ export const ProbabilityBar = styled.span<{ $family: MarketFamily }>`
   > span { display: block; block-size: 100%; background: ${({ theme, $family }) => theme.color.market[$family].solid}; }
 `;
 
-/** Shared square outcome styling keeps valid result labels prominent in every match presentation. */
+/** Shared outcome styling keeps valid result labels prominent in every match presentation. */
 export const OutcomeBadge = styled.span<{ $outcome: OutcomeTone }>`
   display: inline-flex;
   align-items: center;
@@ -41,7 +41,7 @@ export const OutcomeBadge = styled.span<{ $outcome: OutcomeTone }>`
   color: ${({ theme, $outcome }) => theme.color.outcome[$outcome].text};
   background: ${({ theme, $outcome }) => theme.color.outcome[$outcome].background};
   border: ${({ theme }) => theme.border.width} solid ${({ theme, $outcome }) => theme.color.outcome[$outcome].border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font-size: 0.8125rem;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   line-height: 1.2;

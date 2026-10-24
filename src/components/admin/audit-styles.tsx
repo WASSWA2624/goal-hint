@@ -6,9 +6,9 @@ import { Panel } from "@/components/analytics/dashboard/dashboard-styles";
 export const AuditLayout = styled.div`display: grid; gap: 14px; min-inline-size: 0;`;
 
 export const AuditToolbar = styled(Panel)`
-  display: grid; gap: 12px; padding: 14px; border-radius: 0;
+  display: grid; gap: 12px; padding: 14px;
   label { font-size: 0.8125rem; }
-  input, select, button { min-block-size: 44px; border-radius: 0; }
+  input, select, button { min-block-size: 44px; }
   input, select { font-size: 16px; }
 `;
 
@@ -32,7 +32,7 @@ export const AuditSummary = styled.div`
 `;
 
 export const AuditFeed = styled.section`
-  display: grid; gap: 0; min-inline-size: 0; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 0;
+  display: grid; gap: 0; min-inline-size: 0; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius};
   background: ${({ theme }) => theme.color.surface};
   scroll-margin-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
 `;
@@ -56,7 +56,7 @@ export const AuditEvent = styled.details`
 `;
 
 export const EventIcon = styled.span<{ $category: string }>`
-  display: grid; place-items: center; inline-size: 32px; block-size: 32px; flex: none; border-radius: 0;
+  display: grid; place-items: center; inline-size: 32px; block-size: 32px; flex: none; border-radius: ${({ theme }) => theme.border.radius};
   background: ${({ theme, $category }) => $category === "payments" ? theme.color.accent.emerald.soft
     : $category === "security" ? theme.color.accent.amber.soft : theme.color.brandSoft};
   color: ${({ theme, $category }) => $category === "payments" ? theme.color.accent.emerald.text
@@ -78,7 +78,7 @@ export const EventWhen = styled.div`
 
 export const EventDetails = styled.div`
   display: grid; gap: 12px; min-inline-size: 0; padding: 0 14px 14px;
-  a { min-block-size: 44px; border-radius: 0; }
+  a { min-block-size: 44px; }
 `;
 
 export const AuditFacts = styled.dl`
@@ -98,5 +98,5 @@ export const AuditEmpty = styled.div`
 
 export const AuditPagination = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-inline-size: 0;
-  button { min-block-size: 44px; border-radius: 0; }
+  button { min-block-size: 44px; }
 `;

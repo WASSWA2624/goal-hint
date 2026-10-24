@@ -53,7 +53,8 @@ editable and disable Apply. Date steppers, date popovers and time mode menus are
 absent. Historical queries retain the MySQL-supported years 1000–9999. Direct
 invalid or incompatible dates/queries return the existing 404 shell.
 
-The page uses the shared light or dark shell, square controls, feedback and match cards.
+The page uses the shared light or dark shell, controls, feedback and match cards
+with the subtle 2px `theme.border.radius` token. Connected table and row edges remain square.
 Cards form one column below 64rem and an aligned table above it. Every feed logo
 is lazy with reserved dimensions and initials fallbacks; an eager logo would be
 hoisted as a third-party image preload competing with the page's own font, CSS
@@ -108,7 +109,7 @@ or expanded state, and the button's accessible name and title say Show advanced
 filters or Hide advanced filters. Checklist popovers retain their own
 outside-click and Escape dismissal. The common range controls render once:
 initial HTML contains exactly two date and two time inputs while collapsed.
-Full From date, To date, From time and To time labels sit inside their square
+Full From date, To date, From time and To time labels sit inside their subtly rounded
 controls, above each native value in narrower layouts and to its left in wider layouts.
 Each pair occupies one phone row and is directly editable when expanded.
 Compact padding preserves readable text and lets the expanded controls scroll
@@ -128,7 +129,7 @@ directly editable minimum/maximum fields, accepting decimal percentages from
 The muted Odds unavailable explanation remains compact. Mobile filter edits
 remain drafts until Apply; no timer applies them automatically.
 
-On phones and tablets, Advanced filters, Clear and Apply always retain visible backgrounds and solid 1px borders, with square corners.
+On phones and tablets, Advanced filters, Clear and Apply always retain visible backgrounds and solid 1px borders, with the shared 2px corner radius.
 One persistent action row below the filter options stays outside the mobile
 collapsible section and places Sort by first, followed by Clear and Apply
 filters. The action group aligns right on desktop, while mobile keeps Sort on
@@ -163,7 +164,7 @@ left of that same row.
 
 Mobile cards use the approved flat-dividers presentation: tiny Market, Pick,
 Prob. and Result captions above compact values, with exact available
-odds beneath the prediction. White or dark surfaces, fine borders and square
+odds beneath the prediction. White or dark surfaces, fine borders and subtly rounded
 edges separate cards from the darker page canvas. Textual Win, Loss and Pending
 labels carry green, red and amber semantic tones. Desktop retains its table
 composition and adds the aligned Result column. Missing predictions use dashes

@@ -311,8 +311,9 @@ const Tooltip = styled.div`
   pointer-events: none;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  box-shadow: 0 6px 18px rgb(16 42 58 / 0.18);
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.border.radius};
+  box-shadow: 0 6px 18px rgb(16 42 58 / 0.10);
   font-size: ${({ theme }) => theme.typography.scale.secondary};
 `;
 const TooltipLabel = styled.span`
@@ -358,6 +359,7 @@ const barRow = `
 `;
 const BarButton = styled.button`
   ${barRow}
+  border-radius: ${({ theme }) => theme.border.radius};
   cursor: pointer;
   @media (hover: hover) { &:hover { background: ${({ theme }) => theme.color.rowHover}; } }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }

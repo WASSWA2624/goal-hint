@@ -131,7 +131,7 @@ export const IconBadge = styled.span<{ $accent: AccentName }>`
   block-size: 1.25rem;
   color: ${({ theme, $accent }) => theme.color.accent[$accent].solid};
   background: ${({ theme, $accent }) => theme.color.accent[$accent].soft};
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.border.radius};
   font-size: ${size("secondary")};
   ${desktop} { inline-size: 1.625rem; block-size: 1.625rem; font-size: 0.9375rem; }
 `;
@@ -247,7 +247,7 @@ export const Choices = styled.div`
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surfaceMuted};
     border: ${({ theme }) => theme.border.width} solid transparent;
-    border-radius: 4px;
+    border-radius: ${({ theme }) => theme.border.radius};
     font: inherit;
     font-size: ${size("caption")};
     font-weight: ${({ theme }) => theme.typography.weight.medium};
@@ -294,7 +294,7 @@ const Track = styled.span<{ $accent?: AccentName; $reverse?: boolean }>`
   block-size: 6px;
   overflow: hidden;
   background: ${({ theme }) => theme.color.surfaceMuted};
-  border-radius: 3px;
+  border-radius: ${({ theme }) => theme.border.radius};
   &::after {
     content: "";
     position: absolute;
@@ -302,7 +302,7 @@ const Track = styled.span<{ $accent?: AccentName; $reverse?: boolean }>`
     ${({ $reverse }) => $reverse ? "inset-inline-end: 0;" : "inset-inline-start: 0;"}
     inline-size: calc(var(--track, 0) * 100%);
     background: ${({ theme, $accent = "orange" }) => theme.color.accent[$accent].gradient};
-    border-radius: 3px;
+    border-radius: ${({ theme }) => theme.border.radius};
   }
 `;
 /** A probability or comparison bar; `value` is clamped to 0–1. */
@@ -417,6 +417,7 @@ export const RowButton = styled.button`
   color: ${({ theme }) => theme.color.text};
   background: none;
   border: 0;
+  border-radius: 0;
   font: inherit;
   font-size: ${size("secondary")};
   text-align: start;
@@ -437,7 +438,7 @@ export const Pill = styled.span<{ $accent?: AccentName; $solid?: boolean }>`
   overflow: hidden;
   color: ${({ theme, $accent = "blue", $solid }) => $solid ? theme.color.onBrand : theme.color.accent[$accent].text};
   background: ${({ theme, $accent = "blue", $solid }) => $solid ? theme.color.accent[$accent].solid : theme.color.accent[$accent].soft};
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.border.radius};
   font-size: ${size("caption")};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   line-height: 1.5;

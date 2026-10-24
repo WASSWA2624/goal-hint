@@ -59,6 +59,7 @@ const Box = styled.section`
     margin-inline: 0;
     padding: 15px 24px 18px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-radius: ${({ theme }) => theme.border.radius};
   }
 `;
 /**
@@ -128,7 +129,7 @@ const Versus = styled.div`
     padding-inline: 6px;
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surfaceMuted};
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.border.radius};
     font-size: ${size("body")};
     font-variant-numeric: tabular-nums;
   }

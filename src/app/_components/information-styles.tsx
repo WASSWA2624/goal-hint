@@ -38,8 +38,8 @@ export const HelpSection = styled.section`
   padding: 12px;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-block-start: 2px solid ${({ theme }) => theme.color.accent.teal.solid};
-  border-radius: 0;
+  border-block-start: 2px solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.border.radius};
 `;
 export const HelpList = styled.dl`
   display: grid;

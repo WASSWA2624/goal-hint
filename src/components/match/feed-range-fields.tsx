@@ -36,9 +36,9 @@ export const RangeFields = styled.div`
     min-block-size: 1.875rem;
     padding-inline: 4px;
     background: ${({ theme }) => theme.color.surface};
-    /* The same faint border and hover/focus feedback as the filter selects. */
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 0;
+    /* Editable field boundaries stay distinct from quiet section frames. */
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border-radius: ${({ theme }) => theme.border.radius};
     ${controlFeedback}
     &:has(input:focus-visible) { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
     &:has(input[aria-invalid="true"]) { border-color: ${({ theme }) => theme.color.outcome.incorrect.border}; }
@@ -90,7 +90,8 @@ export const RangeFields = styled.div`
       min-block-size: 2.5rem;
       padding: 4px 8px;
       background: ${({ theme }) => theme.color.surface};
-      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+      border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+      border-radius: ${({ theme }) => theme.border.radius};
       font-size: 16px;
       line-height: 1.2;
       ${controlFeedback}

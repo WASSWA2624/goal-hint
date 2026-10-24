@@ -57,7 +57,7 @@ const PresetList = styled.div`
     color: ${({ theme }) => theme.color.text};
     background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-    border-radius: 6px;
+    border-radius: ${({ theme }) => theme.border.radius};
     font-size: 0.8125rem;
     font-weight: ${({ theme }) => theme.typography.weight.medium};
     white-space: nowrap;
@@ -114,7 +114,7 @@ const dayCell = css`
   justify-items: center;
   gap: 0;
   min-block-size: 2.75rem;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
   text-decoration: none;

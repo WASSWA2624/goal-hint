@@ -67,7 +67,7 @@ export function SubscribersEditor({ accounts, detail: selected, plans }: { accou
 const Workspace = styled.div`display: grid; gap: 12px; min-inline-size: 0;`;
 const WorkspaceTools = styled.div`
   display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
-  button { min-block-size: 44px; gap: 6px; padding-inline: 10px; font-size: 0.8125rem; border-radius: 0; }
+  button { min-block-size: 44px; gap: 6px; padding-inline: 10px; font-size: 0.8125rem; }
   svg { inline-size: 17px; block-size: 17px; flex: none; }
   @media(max-width: 540px) { > button { flex: 1 1 auto; } }
 `;

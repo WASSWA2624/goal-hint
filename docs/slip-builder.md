@@ -4,14 +4,15 @@
 slips. Each slip has its total odds, average forecast
 probability and selection count in its title, with one semantic table row per match.
 The shared navigation includes Slip builder; its More menu holds the items that exceed the compact primary
-navigation. Controls and results use the existing square, themed components.
+navigation. Controls use the shared themed components with a subtle 2px corner radius;
+connected result-table edges remain square.
 
 ## Responsive criteria layout
 
 Number of slips sits beside the title. Total odds per slip and Matches per slip stay
 visible, followed by one row of Match limits, Match Date & Time and Markets buttons on both
 desktop and mobile. Detailed criteria open in native modal dialogs instead of
-expanding the form. Inputs use the existing square, themed controls.
+expanding the form. Inputs and dialogs use the shared `theme.border.radius` token.
 
 The buttons show counts for their current settings. Match limits counts custom
 odds and probability ranges, up to two. Match Date & Time counts a custom date

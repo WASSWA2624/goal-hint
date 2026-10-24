@@ -130,7 +130,7 @@ const ButtonControl = styled.button<{ $variant: ButtonVariant; $large?: boolean 
   &:disabled {
     color: ${({ theme }) => theme.color.disabledText};
     background: ${({ theme }) => theme.color.disabledSurface};
-    border-color: ${({ theme }) => theme.color.controlBorder};
+    border-color: ${({ theme }) => theme.color.border};
     cursor: not-allowed;
   }
 `;
@@ -210,7 +210,7 @@ const inputTreatment = css<{ $invalid: boolean }>`
 const InputControl = styled.input<{ $invalid: boolean; $leading?: boolean }>`
   ${inputTreatment}
   ${({ $leading }) => $leading && css`padding-inline-start: 38px;`}
-  &[data-phone-input] { min-block-size: 44px; border-radius: 0; font-size: 1rem; letter-spacing: 0.02em; }
+  &[data-phone-input] { min-block-size: 44px; font-size: 1rem; letter-spacing: 0.02em; }
 
   &::placeholder {
     color: ${({ theme }) => theme.color.mutedText};
@@ -491,7 +491,7 @@ const PhoneControl = styled.div`
 `;
 const CountryTrigger = styled.button`
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 6px 8px;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0;
+  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; font: inherit; font-size: 0.875rem;
   white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums;
   > svg { inline-size: 14px; block-size: 14px; flex: none; }
@@ -507,12 +507,12 @@ const DialFlagFallback = styled.span`
 `;
 const CountryMenu = styled.div`
   position: fixed; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; box-sizing: border-box; padding: 10px;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0; overflow: hidden;
+  border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius}; overflow: hidden;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
 `;
 const CountrySearch = styled.input`
   box-sizing: border-box; min-inline-size: 0; inline-size: 100%; min-block-size: 44px; padding: 8px 10px;
-  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0; font: inherit; font-size: 1rem;
+  border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: ${({ theme }) => theme.border.radius}; font: inherit; font-size: 1rem;
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface}; ${focusTreatment}
 `;
 const CountrySearchLabel = styled.label`

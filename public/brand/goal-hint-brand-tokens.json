@@ -7,7 +7,7 @@
     "paper": "#EFF7FF",
     "white": "#FFFFFF",
     "muted": "#456A9D",
-    "border": "#BDD9F6"
+    "border": "#DFE6EE"
   },
   "typography": {
     "family": "Manrope, Arial, sans-serif",
@@ -16,6 +16,6 @@
     "wordmarkWeight": 800
   },
   "shape": {
-    "componentRadius": "0px"
+    "componentRadius": "2px"
   }
 }

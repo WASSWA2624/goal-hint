@@ -10,7 +10,6 @@ import { paymentDraftStoragePrefix } from "@/domain/member-navigation";
 export const MemberPanel = styled(Surface)`
   inline-size: 100%;
   max-inline-size: 36rem;
-  border-radius: 0;
   button, a { min-block-size: 44px; }
   input { min-block-size: 44px; font-size: 16px; }
 `;

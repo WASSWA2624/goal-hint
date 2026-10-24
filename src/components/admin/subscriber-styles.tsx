@@ -7,11 +7,10 @@ import { ActionButton, Badge, FormStack } from "./admin-form";
 /** Retain the admin controls' 44px targets while reducing surrounding space. */
 export const DetailLayout = styled.div`display: grid; gap: 12px; min-inline-size: 0;`;
 export const DetailPanel = styled(Panel)`
-  display: grid; gap: 12px; margin: 0; padding: 16px; min-inline-size: 0; border-radius: 0;
+  display: grid; gap: 12px; margin: 0; padding: 16px; min-inline-size: 0;
   h2, h3, p { margin: 0; }
   h2 { font-size: 1rem; } h3 { font-size: 0.875rem; }
   p { overflow-wrap: anywhere; }
-  button, input, textarea, select { border-radius: 0; }
   button { font-size: 0.8125rem; gap: 6px; }
   form, fieldset { min-inline-size: 0; }
   textarea { min-block-size: 64px; }
@@ -33,7 +32,7 @@ export const DetailHeading = styled.div`
   > div { min-inline-size: 0; }
 `;
 export const StatusRow = styled.div`display: flex; flex-wrap: wrap; gap: 6px; margin-block-start: 8px;`;
-export const Status = styled(Badge)`border-radius: 0; font-size: 0.75rem;`;
+export const Status = styled(Badge)`font-size: 0.75rem;`;
 export const Stats = styled.dl`
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border-block: 1px solid ${({ theme }) => theme.color.border};
   > div { padding: 10px 8px; min-inline-size: 0; display: grid; grid-template-rows: auto 1fr; gap: 3px; }
@@ -52,7 +51,7 @@ export const Tabs = styled.div`
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface}; min-inline-size: 0;
   button { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 3px 5px; border: 0; border-block-end: 3px solid transparent;
-    min-inline-size: 0; min-block-size: 48px; padding: 6px 3px; color: ${({ theme }) => theme.color.mutedText}; background: transparent; font-size: 0.75rem; cursor: pointer; }
+    min-inline-size: 0; min-block-size: 48px; padding: 6px 3px; border-radius: 0; color: ${({ theme }) => theme.color.mutedText}; background: transparent; font-size: 0.75rem; cursor: pointer; }
   button[aria-selected="true"] { color: ${({ theme }) => theme.color.link}; border-block-end-color: ${({ theme }) => theme.color.link}; font-weight: 700; }
   button:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
   span { font-size: 0.6875rem; font-variant-numeric: tabular-nums; }

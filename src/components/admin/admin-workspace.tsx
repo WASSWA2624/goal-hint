@@ -70,7 +70,6 @@ const Switcher = styled.nav`
 const PageSelect = styled.select`
   ${adminControl}
   inline-size: min(15rem, 72%);
-  border-radius: 0;
 `;
 const Column = styled.div<{ $wide: boolean; $expanded: boolean }>`
   display: grid;

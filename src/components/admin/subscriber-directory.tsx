@@ -63,9 +63,7 @@ export function SubscriberDirectory({ accounts, selectedId, search, filtering, b
 }
 
 const Directory = styled(Panel)<{ $compact: boolean }>`
-  border-radius: 0;
   h2, p { margin: 0; }
-  button { border-radius: 0; }
   ${({ $compact }) => $compact && css`
     padding: 12px; gap: 10px;
     > ${PanelHeader} { gap: 6px 10px; }
@@ -126,6 +124,7 @@ const AccountLink = styled.a`
 `;
 const AccountIcon = styled.span`
   display: grid; place-items: center; inline-size: 32px; block-size: 32px;
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.mutedText}; background: ${({ theme }) => theme.color.surfaceMuted};
   svg { inline-size: 18px; block-size: 18px; }
   @media(max-width: 380px) { inline-size: 24px; block-size: 28px; }
@@ -135,7 +134,7 @@ const AccountSummary = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px;
   strong { font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 `;
-const AccountStatus = styled(Badge)`border-radius: 0; white-space: nowrap; flex: none;`;
+const AccountStatus = styled(Badge)`white-space: nowrap; flex: none;`;
 const LastSignIn = styled.span`
   color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.45;
   time { font-variant-numeric: tabular-nums; }
@@ -143,6 +142,7 @@ const LastSignIn = styled.span`
 const EmptyState = styled.div`
   display: grid; justify-items: center; gap: 10px; padding: 28px 12px;
   color: ${({ theme }) => theme.color.mutedText}; border: 1px solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.border.radius};
   text-align: center; font-size: 0.875rem;
   > svg { inline-size: 24px; block-size: 24px; }
 `;

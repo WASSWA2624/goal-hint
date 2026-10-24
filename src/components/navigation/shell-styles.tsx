@@ -47,6 +47,7 @@ export const SkipLink = styled.a`
   /* Above the sticky phone brand bar (30); below the filter popovers (35) and sheets. */
   z-index: 31;
   padding: ${({ theme }) => theme.space.sm};
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
 
@@ -68,7 +69,7 @@ export const SkipLink = styled.a`
 `;
 
 /**
- * The branded bar: solid navy/charcoal behind the inverse logo, with the teal brand edge along
+ * The branded bar: solid navy/charcoal behind the inverse logo, with a quiet edge along
  * the bottom. App pages own their phone bar (same fill), so this one is desktop-only there.
  */
 export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "data-app-header": "" })<{ $app?: boolean }>`
@@ -78,7 +79,7 @@ export const Header = styled.header.attrs<{ "data-app-header"?: string }>({ "dat
   display: ${({ $app }) => $app ? "none" : "block"};
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.gradient};
-  border-block-end: var(--app-header-border-width, 2px) solid ${({ theme }) => theme.header.accent};
+  border-block-end: var(--app-header-border-width, 2px) solid ${({ theme }) => theme.header.border};
   box-shadow: ${({ theme }) => theme.header.shadow};
   ${desktop} { display: block; }
 `;
@@ -272,7 +273,7 @@ export const MoreList = styled.ul<{ $mobile?: boolean }>`
   list-style: none;
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
   a {
     display: flex;
@@ -308,7 +309,7 @@ export const TabBar = styled.nav`
   z-index: 20;
   padding-block-end: env(safe-area-inset-bottom);
   background: ${({ theme }) => theme.header.navigationBackground};
-  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.controlBorder};
+  border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.header.border};
   box-shadow: none;
   ${desktop} { display: none; }
 `;
@@ -368,7 +369,7 @@ export const FooterLink = styled(Link)`
   min-block-size: 1.75rem;
   padding-inline: 8px;
   color: ${({ theme }) => theme.color.mutedText};
-  border-radius: 4px;
+  border-radius: ${({ theme }) => theme.border.radius};
   font-weight: ${({ theme }) => theme.typography.weight.medium};
   text-decoration: none;
   ${media.hover} { &:hover { color: ${({ theme }) => theme.color.accent.blue.solid}; background: ${({ theme }) => theme.color.surfaceMuted}; } }

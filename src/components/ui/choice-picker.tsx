@@ -14,6 +14,7 @@ const Root = styled.details`
     min-block-size: 2rem; padding: 4px 6px; list-style: none;
     color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border-radius: ${({ theme }) => theme.border.radius};
     font-size: 0.75rem; cursor: pointer;
     &::-webkit-details-marker { display: none; }
     > span { min-inline-size: 0; overflow-wrap: anywhere; }
@@ -24,7 +25,8 @@ const Root = styled.details`
   > fieldset {
     position: absolute; inset-inline: 0; inset-block-start: calc(100% + 3px); z-index: 35;
     margin: 0; padding: 4px; min-inline-size: 0; max-block-size: min(20rem, 60dvh); overflow-y: auto;
-    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    border-radius: ${({ theme }) => theme.border.radius};
     background: ${({ theme }) => theme.color.surface}; box-shadow: 0 4px 12px #0002;
     > label, > button { display: flex; align-items: center; gap: 6px; min-block-size: 2rem; padding: 4px; font-size: 0.75rem; cursor: pointer; }
     > button { inline-size: 100%; border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface}; color: ${({ theme }) => theme.color.text}; }

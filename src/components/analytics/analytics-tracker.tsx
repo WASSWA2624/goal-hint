@@ -94,8 +94,8 @@ const Banner = styled.section`
   padding: 14px 16px;
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
-  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  box-shadow: 0 12px 32px rgb(16 42 58 / 0.28);
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  box-shadow: 0 12px 32px rgb(16 42 58 / 0.12);
   ${media.desktop} {
     inset-inline: auto 24px;
     inset-block-end: 24px;

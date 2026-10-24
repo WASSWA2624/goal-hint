@@ -6,7 +6,6 @@ import { ActionButton } from "./admin-form";
 
 export const PaymentLayout = styled.div`
   display: grid; gap: 14px; min-inline-size: 0;
-  button, input, textarea, select { border-radius: 0; }
 `;
 
 export const PaymentFeedback = styled.div`
@@ -17,7 +16,7 @@ export const PaymentFeedback = styled.div`
 export const PaymentTabs = styled.nav`
   display: flex; flex-wrap: wrap; gap: 4px; min-inline-size: 0;
   a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 8px 14px;
-    border: 1px solid ${({ theme }) => theme.color.border}; border-radius: 0; color: ${({ theme }) => theme.color.mutedText};
+    border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius}; color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surface}; font-size: 0.8125rem; font-weight: 500; text-decoration: none; }
   a[aria-current="page"] { border-color: ${({ theme }) => theme.color.link}; color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
   a[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
@@ -25,7 +24,7 @@ export const PaymentTabs = styled.nav`
 `;
 
 export const PaymentToolbar = styled(Panel)<{ $reviewing: boolean }>`
-  display: grid; gap: 10px; padding: 14px; border-radius: 0;
+  display: grid; gap: 10px; padding: 14px;
   @media(min-width: 1000px) { grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 20px; }
   @media(max-width: 999px) { display: ${({ $reviewing }) => $reviewing ? "none" : "grid"}; }
   label { font-size: 0.8125rem; }
@@ -86,7 +85,7 @@ export const QueueMeta = styled.div`
 
 const statusTone = (status: string) => status === "pending" ? "pending" : status === "approved" ? "correct" : status === "rejected" ? "incorrect" : "void";
 export const PaymentBadge = styled.span<{ $status: string }>`
-  display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; border-radius: 0;
+  display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; border-radius: ${({ theme }) => theme.border.radius};
   background: ${({ theme, $status }) => theme.color.outcome[statusTone($status)].background};
   color: ${({ theme, $status }) => theme.color.outcome[statusTone($status)].text}; font-size: 0.6875rem; line-height: 1.4; font-weight: 500;
 `;
@@ -97,7 +96,7 @@ export const ReviewPanel = styled.section`
 `;
 
 export const PaymentCard = styled(Panel)`
-  display: grid; gap: 14px; padding: 16px; min-inline-size: 0; border-radius: 0;
+  display: grid; gap: 14px; padding: 16px; min-inline-size: 0;
   h2, h3, p { margin: 0; }
   h3 { font-size: 0.875rem; }
   label { font-size: 0.8125rem; }
@@ -143,6 +142,7 @@ export const ApprovalFooter = styled.div`
 export const PaymentHighlight = styled.div`
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px;
   min-inline-size: 0; background: ${({ theme }) => theme.color.brandSoft};
+  border-radius: ${({ theme }) => theme.border.radius};
   strong { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   span { font-size: 0.8125rem; overflow-wrap: anywhere; }
 `;
@@ -163,7 +163,7 @@ export const ReceiptPreview = styled.img`display: block; max-inline-size: 100%; 
 
 export const ReviewActions = styled.div`
   display: flex; flex-wrap: wrap; gap: 8px; min-inline-size: 0;
-  > button { flex: 1; min-block-size: 44px; border-radius: 0; }
+  > button { flex: 1; min-block-size: 44px; }
 `;
 
 export const PaymentEmpty = styled.div`
@@ -177,6 +177,7 @@ export const ReviewBack = styled(ActionButton)`display: inline-flex; justify-sel
 
 export const TrialPanel = styled.details`
   min-inline-size: 0; padding: 12px; border: 1px solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.border.radius};
   background: ${({ theme }) => theme.color.surface};
   > summary { display: flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: 0.875rem; cursor: pointer; }
   > summary:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }

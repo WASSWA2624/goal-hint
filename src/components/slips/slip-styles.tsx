@@ -6,6 +6,8 @@ import { PageHeading, Stack, Surface } from "@/components/ui/layout";
 import type { MarketFamily } from "@/domain/markets";
 import { media } from "@/styles/theme";
 
+const compactControlHeight = "2.125rem";
+
 export const SlipStack = styled(Stack)`gap: 10px; ${media.desktop} { gap: 12px; }`;
 export const SlipHeading = styled(PageHeading)`font-size: 1.25rem; ${media.desktop} { font-size: 1.5rem; }`;
 export const HeadingRow = styled.div`
@@ -15,7 +17,7 @@ export const HeadingRow = styled.div`
 `;
 export const Note = styled.p`color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.45;`;
 export const CriteriaPanel = styled(Surface)`
-  && { padding: 8px; border-radius: 0; }
+  && { padding: 8px; border-radius: ${({ theme }) => theme.border.radius}; }
   ${media.desktop} { && { padding: 10px; } }
 `;
 export const BuilderPanel = styled(CriteriaPanel)`&& { padding: 0; }`;
@@ -24,7 +26,7 @@ export const BuilderHeader = styled.div`
   > h1 { font-size: 1.1875rem; }
   > div { flex: none; display: flex; flex-direction: row; align-items: center; gap: 7px; }
   > div > label { font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; color: ${({ theme }) => theme.color.mutedText}; }
-  > div > input { inline-size: 3rem; min-block-size: 2.125rem; padding: 4px 6px; border-radius: 0; font-size: 1rem; }
+  > div > input { inline-size: 3rem; min-block-size: ${compactControlHeight}; padding: 4px 6px; border-radius: ${({ theme }) => theme.border.radius}; font-size: 1rem; }
   ${media.desktop} { > h1 { font-size: 1.375rem; } }
   @media (pointer: coarse) { > div > input { min-block-size: 44px; } }
 `;
@@ -48,16 +50,19 @@ export const CriteriaOptions = styled.div`
 export const CriteriaTrigger = styled(Button)`
   && {
     inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 6px 4px;
-    flex-direction: row; gap: 4px; border-radius: 0; font-size: 0.75rem; line-height: 1.25;
+    flex-direction: row; gap: 4px; border-radius: ${({ theme }) => theme.border.radius}; font-size: 0.75rem; line-height: 1.25;
     > [data-criteria-label] { min-inline-size: 0; white-space: normal; }
     > [data-criteria-count] {
       flex: none; display: inline-flex; align-items: center; justify-content: center;
-      min-inline-size: 1rem; block-size: 1rem; padding-inline: 2px; border: 1px solid currentColor;
+      min-inline-size: 1rem; block-size: 1rem; padding-inline: 2px; border: 1px solid ${({ theme }) => theme.color.border};
+      border-radius: ${({ theme }) => theme.border.radius};
       font-size: 0.625rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; font-variant-numeric: tabular-nums; line-height: 1;
     }
     &[data-edited="true"] { color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
     @media (max-width: 22.5rem) { font-size: 0.6875rem; }
   }
+  ${media.desktop} { && { min-block-size: ${compactControlHeight}; } }
+  @media (pointer: coarse) { && { min-block-size: 44px; } }
 `;
 export const FieldGroup = styled.fieldset`
   border: 0; padding: 0; margin: 0; min-inline-size: 0;
@@ -67,7 +72,7 @@ export const Fields = styled.div`
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px;
   > div { gap: 2px; }
   > div > label { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; font-weight: ${({ theme }) => theme.typography.weight.body}; }
-  > div > input { min-block-size: 2.125rem; padding: 4px 6px; border-radius: 0; font-size: 1rem; }
+  > div > input { min-block-size: ${compactControlHeight}; padding: 4px 6px; border-radius: ${({ theme }) => theme.border.radius}; font-size: 1rem; }
   ${media.desktop} { > div > input { font-size: 0.875rem; } }
   @media (max-width: 22.5rem) { &[data-kickoff-fields] { grid-template-columns: minmax(0, 1fr); } }
   @media (pointer: coarse) { > div > input { min-block-size: 44px; } }
@@ -117,11 +122,11 @@ export const Actions = styled.div`
   border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
 `;
 export const BuildButton = styled(Button)`
-  && { min-block-size: 2.5rem; border-radius: 0; padding: 6px 10px; font-size: 0.8125rem; }
+  && { min-block-size: 2.5rem; border-radius: ${({ theme }) => theme.border.radius}; padding: 6px 10px; font-size: 0.8125rem; }
   ${media.desktop} { && { min-block-size: 2.25rem; } }
 `;
 export const ClearLink = styled(ButtonLink)`
-  && { min-block-size: 2.5rem; border-radius: 0; padding: 6px 10px; font-size: 0.8125rem; }
+  && { min-block-size: 2.5rem; border-radius: ${({ theme }) => theme.border.radius}; padding: 6px 10px; font-size: 0.8125rem; }
   ${media.desktop} { && { min-block-size: 2.25rem; } }
 `;
 export const CriteriaError = styled.p`color: ${({ theme }) => theme.color.outcome.incorrect.text}; font-size: 0.8125rem;`;

@@ -43,7 +43,9 @@ export interface GoalHintTheme {
     readonly page: string;
     readonly surface: string;
     readonly surfaceMuted: string;
+    /** Quiet outlines and dividers for non-interactive surfaces. */
     readonly border: string;
+    /** Neutral, contrasting boundaries for editable and clickable controls. */
     readonly controlBorder: string;
     readonly brand: string;
     /** Text links also remain readable on the darker page background. */
@@ -99,6 +101,8 @@ export interface GoalHintTheme {
     /** The search pill; `fieldFillActive` on hover and focus. */
     readonly fieldFill: string;
     readonly fieldFillActive: string;
+    /** Quiet separators on the branded bar, separate from control and focus outlines. */
+    readonly border: string;
     readonly controlBorder: string;
     /** Light section-icon tints on the bar: 3:1 or better on every stop. */
     readonly tone: Readonly<Record<AccentName, string>>;
@@ -187,9 +191,9 @@ export const lightTheme: GoalHintTheme = {
     page: "#EFF8FF",
     surface: brandTokens.colors.white,
     surfaceMuted: "#E6F3FF",
-    // Brand dividers are decorative; controls need a stronger accessible boundary.
-    border: "#BEDFFF",
-    controlBorder: "#668ABA",
+    // Neutral section dividers stay quiet; controls retain a contrasting boundary.
+    border: brandTokens.colors.border,
+    controlBorder: "#7D8997",
     brand: "#0066F5",
     link: "#005BD6",
     brandHover: "#0054CC",
@@ -265,7 +269,7 @@ export const lightTheme: GoalHintTheme = {
   breakpoint: { md: "48rem", lg: "64rem", xl: "80rem" },
   border: {
     width: "1px",
-    radius: "0",
+    radius: brandTokens.shape.componentRadius,
     pillRadius: "999px",
     focusWidth: "3px",
     focusOffset: "3px",
@@ -292,7 +296,8 @@ export const lightTheme: GoalHintTheme = {
     controlHover: "#103778",
     fieldFill: "#082C6B",
     fieldFillActive: "#103778",
-    controlBorder: "#779DCE",
+    border: "#244873",
+    controlBorder: "#798EA8",
     tone: {
       teal: "#7DDFFF", blue: "#93C5FD", violet: "#C4B5FD", orange: "#FDBA74",
       pink: "#F9A8D4", amber: "#FCD34D", emerald: "#6EE7B7", red: "#FCA5A5",
@@ -316,8 +321,8 @@ export const darkTheme: GoalHintTheme = {
     page: "#03111F",
     surface: "#041525",
     surfaceMuted: "#06203B",
-    border: "#124B76",
-    controlBorder: "#447BA8",
+    border: "#203448",
+    controlBorder: "#597895",
     brand: "#00B9F2",
     link: "#00B9F2",
     brandHover: "#79DCFF",
@@ -372,7 +377,8 @@ export const darkTheme: GoalHintTheme = {
     controlHover: "#10385D",
     fieldFill: "#06264A",
     fieldFillActive: "#10385D",
-    controlBorder: "#447BA8",
+    border: "#17334F",
+    controlBorder: "#6785A1",
   },
 };
 

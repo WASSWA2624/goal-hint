@@ -93,7 +93,7 @@ The native fragment skip link moves keyboard focus to the main landmark.
 
 Client styling stays in `src/components/navigation/shell-styles.tsx` and the
 existing `ui/` primitives. One root style provider/registry, named first-party
-logo, light tokens, square corners and logical spacing are reused.
+logo, light tokens, the shared subtle 2px corner radius and logical spacing are reused.
 The earlier development primitive demo is no longer mounted on public pages;
 the isolated `test:styling` fixture remains available.
 
@@ -111,7 +111,7 @@ The desktop header keeps these links on one row, preserves search on pages that
 use the shell search and keeps the theme control at the far right. The phone bar
 gives each rendered primary link and More an equal-width column. Hidden inert
 measurement spans reuse the link styles without creating extra interactive links.
-Its square More popup opens upward, stays within the viewport and scrolls
+Its More popup uses `theme.border.radius`, opens upward, stays within the viewport and scrolls
 when necessary. Native
 `details`/`summary` toggling keeps those links usable without JavaScript; Escape,
 outside-click dismissal and focus restoration enhance the hydrated menu.

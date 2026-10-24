@@ -20,6 +20,7 @@ export const SettingsLayout = styled.div`
 export const SettingsNav = styled.nav`
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
   min-inline-size: 0; padding: 4px; border: 1px solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.border.radius};
   background: ${({ theme }) => theme.color.surface};
   @media (min-width: 1000px) {
     position: sticky; inset-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
@@ -50,10 +51,9 @@ export const SettingsContent = styled.div`
 `;
 
 export const SettingsCard = styled(Panel)`
-  gap: 14px; margin: 0; padding: 16px; border-radius: 0;
+  gap: 14px; margin: 0; padding: 16px;
   h2, h3, p { margin: 0; }
   label { font-size: 0.8125rem; line-height: 1.45; }
-  button, input, textarea, select { border-radius: 0; }
   input:not([type="checkbox"], [type="radio"], [type="hidden"]), select, textarea { min-block-size: 44px; font-size: 16px; }
   button { min-block-size: 44px; }
   textarea { min-block-size: 88px; }
@@ -80,7 +80,8 @@ export const SettingsGrid = styled.div`
 export const NetworkCard = styled.section<{ $network?: "mtn" | "airtel" }>`
   display: grid; gap: 12px; min-inline-size: 0; padding: 12px;
   border: 1px solid ${({ theme }) => theme.color.border};
-  border-block-start: 3px solid ${({ theme, $network }) => $network === "mtn" ? theme.color.accent.amber.solid : $network === "airtel" ? theme.color.accent.red.solid : theme.color.border};
+  border-radius: ${({ theme }) => theme.border.radius};
+  border-block-start: 3px solid ${({ theme }) => theme.color.border};
   background: ${({ theme }) => theme.color.surface};
 `;
 
@@ -94,10 +95,10 @@ export const CardTitle = styled.h3`
 export const SaveBar = styled.div`
   position: static; z-index: 5;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-inline-size: 0;
-  padding: 12px; border: 1px solid ${({ theme }) => theme.color.controlBorder}; border-radius: 0;
-  background: ${({ theme }) => theme.color.surface}; box-shadow: 0 -3px 12px rgb(0 0 0 / 0.05);
+  padding: 12px; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius};
+  background: ${({ theme }) => theme.color.surface}; box-shadow: 0 -3px 12px rgb(0 0 0 / 0.04);
   > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-inline-size: 0; }
-  button { min-block-size: 44px; border-radius: 0; white-space: nowrap; }
+  button { min-block-size: 44px; white-space: nowrap; }
   > div:last-child:not(:first-child) { margin-inline-start: auto; }
   ${media.desktop} { position: sticky; inset-block-end: 16px; }
 `;
@@ -116,6 +117,7 @@ export const ModeOptions = styled.fieldset`
 export const ModeOption = styled.label<{ $selected: boolean; $unavailable?: boolean }>`
   position: relative; display: grid; min-inline-size: 0; min-block-size: 82px; cursor: pointer;
   border: 1px solid ${({ theme, $selected }) => $selected ? theme.color.link : theme.color.controlBorder};
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme, $selected }) => $selected ? theme.color.link : theme.color.text};
   background: ${({ theme, $selected }) => $selected ? theme.color.brandSoft : theme.color.surface};
   box-shadow: ${({ theme, $selected }) => $selected ? `inset 0 -2px ${theme.color.link}` : "none"};
@@ -149,6 +151,7 @@ export const SettingsHint = styled.p`
 export const ManagedBadge = styled.span`
   display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 3px 6px;
   border: 1px solid ${({ theme }) => theme.color.border}; color: ${({ theme }) => theme.color.mutedText};
+  border-radius: ${({ theme }) => theme.border.radius};
   background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 0.6875rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.medium};
   svg { inline-size: 12px; block-size: 12px; flex: none; }
 `;
@@ -164,6 +167,7 @@ export const SettingsFacts = styled.dl`
 export const SettingsConfirmation = styled.div`
   display: grid; gap: 10px; min-inline-size: 0; padding: 12px;
   border: 1px solid ${({ theme }) => theme.color.outcome.pending.border};
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
   p { margin: 0; font-size: 0.8125rem; line-height: 1.5; }
 `;

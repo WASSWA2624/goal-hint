@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType } from "react";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
-import { CalendarIcon, ChevronDownIcon, FilterIcon, GlobeIcon, ResetIcon, SearchIcon, SlidersIcon, type IconProps } from "@/components/ui/icons";
+import { CalendarIcon, ChevronDownIcon, FilterIcon, GlobeIcon, GridIcon, ResetIcon, SearchIcon, SlidersIcon, TrophyIcon, type IconProps } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { countryFlagAsset } from "@/domain/country-flag";
@@ -13,6 +13,7 @@ import { defaultMarkets, feedQueryHref, feedQueryRules, formatProbabilityValue, 
 import { fullDayKickoffTime, isAnyKickoffTime, validKickoffTime } from "@/domain/kickoff-time";
 import type { MatchFeedResponse } from "@/domain/match-feed";
 import type { MarketFamily } from "@/domain/markets";
+import { oddsRules } from "@/domain/odds";
 import { publicPolicy } from "@/domain/public-policy";
 import { createMessages } from "@/i18n/messages";
 import { useDeviceTimeZone } from "@/i18n/use-messages";
@@ -31,8 +32,10 @@ type Draft = {
   probability: { min: string; max: string };
 };
 const periods: readonly FeedDatePreset[] = ["last-30-days", "last-7-days", "last-3-days", "yesterday", "today", "tomorrow"];
-const sections: readonly FeedFilterSection[] = ["dates", "competitions", "limits"];
-const sectionIcons: Record<FeedFilterSection, ComponentType<IconProps>> = { dates: CalendarIcon, competitions: GlobeIcon, limits: SlidersIcon };
+const sections: readonly FeedFilterSection[] = ["dates", "leagues", "countries", "markets", "limits"];
+const sectionIcons: Record<FeedFilterSection, ComponentType<IconProps>> = {
+  dates: CalendarIcon, leagues: TrophyIcon, countries: GlobeIcon, markets: GridIcon, limits: SlidersIcon,
+};
 
 function probabilityInputs(query: FeedQuery) {
   return { min: query.probability.min === 0 ? "" : formatProbabilityValue(query.probability.min),
@@ -60,9 +63,11 @@ function copySection(current: Draft, source: Draft, section: FeedFilterSection):
   switch (section) {
     case "dates": return { ...current, dates: source.dates, times: source.times,
       query: { ...current.query, dates: source.query.dates, time: source.query.time ?? null, zone: source.query.zone ?? null } };
-    case "competitions": return { ...current, query: { ...current.query, leagues: source.query.leagues, countries: source.query.countries } };
+    case "leagues": return { ...current, query: { ...current.query, leagues: source.query.leagues } };
+    case "countries": return { ...current, query: { ...current.query, countries: source.query.countries } };
+    case "markets": return { ...current, query: { ...current.query, markets: source.query.markets } };
     case "limits": return { ...current, probability: source.probability,
-      query: { ...current.query, markets: source.query.markets, probability: source.query.probability, odds: source.query.odds } };
+      query: { ...current.query, probability: source.query.probability, odds: source.query.odds } };
   }
 }
 
@@ -83,7 +88,7 @@ const OptionChecklist = memo(function OptionChecklist({ kind, options, selected,
       onChange={() => onChange(selected.includes(option.value) ? selected.filter((value) => value !== option.value) : [...selected, option.value].sort())} />
     <OptionLogo url={option.logoUrl} /><span>{option.label}{option.detail && <small> · {option.detail}</small>}</span>
   </label>;
-  return <fieldset><legend>{label}</legend>
+  return <fieldset><VisuallyHidden as="legend">{label}</VisuallyHidden>
     <input data-option-search type="search" value={search} aria-label={messages.text("feed.filters.findOption", { label })}
       placeholder={messages.text("feed.filters.findOption", { label })} onChange={(event) => setSearch(event.target.value)}
       onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
@@ -123,13 +128,19 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
   const changeCountries = useCallback((values: string[]) => setDraft((current) => ({ ...current, query: { ...current.query, countries: values } })), []);
   const reset = resetFeedFilters(draft.query), resetRange = resolveFeedDates(reset, today), currentRange = resolveFeedDates(draft.query, today);
   const probability = parseProbabilityInputs(draft.probability);
-  const restrictedProbability = probability === null || probability.min !== 0 || probability.max !== 100;
+  const probabilityLimits = probability === null
+    ? Number(draft.probability.min.trim() !== "") + Number(draft.probability.max.trim() !== "")
+    : Number(probability.min !== 0) + Number(probability.max !== 100);
+  const oddsLimits = draft.query.odds === null ? 0
+    : Number(draft.query.odds.min !== oddsRules.minimumHundredths) + Number(draft.query.odds.max !== oddsRules.maximumHundredths);
   const datesChanged = draft.dates.from !== resetRange.startDate || draft.dates.to !== resetRange.endDate;
   const counts = { dates: Number(datesChanged) + Number(!isAnyKickoffTime(draft.times)),
-    competitions: draft.query.leagues.length + draft.query.countries.length, limits: draft.query.markets.length + Number(restrictedProbability) };
-  const modified = { dates: counts.dates > 0, competitions: counts.competitions > 0,
-    limits: draft.query.markets.length !== defaultMarkets.length || restrictedProbability };
-  const titles = { dates: messages.text("feed.filters.matchDateTime"), competitions: messages.text("feed.filters.competitions"), limits: messages.text("feed.filters.limits") };
+    leagues: draft.query.leagues.length, countries: draft.query.countries.length, markets: draft.query.markets.length,
+    limits: probabilityLimits + oddsLimits };
+  const modified = { dates: counts.dates > 0, leagues: counts.leagues > 0, countries: counts.countries > 0,
+    markets: draft.query.markets.length !== defaultMarkets.length, limits: counts.limits > 0 || probability === null };
+  const titles = { dates: messages.text("feed.filters.matchDateTime"), leagues: messages.text("feed.filters.leagues"),
+    countries: messages.text("feed.filters.countries"), markets: messages.text("feed.filters.markets"), limits: messages.text("feed.filters.limits") };
   const period = (periods as readonly string[]).includes(draft.query.dates.kind)
     && draft.dates.from === currentRange.startDate && draft.dates.to === currentRange.endDate ? draft.query.dates.kind : "custom";
   const errorId = `${prefix}-error`;
@@ -206,7 +217,8 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
       </SectionButton>;
     })}</OptionsRow>
     {sections.map((section) => <VisuallyHidden id={`${prefix}-${section}-summary`} key={section}>
-      {messages.text("feed.filters.selectedCount", { count: messages.number(counts[section]) })}
+      {section === "dates" || section === "limits" ? messages.plural("feed.filters.configuredCount", counts[section])
+        : messages.text("feed.filters.selectedCount", { count: messages.number(counts[section]) })}
     </VisuallyHidden>)}
     <ActionRow data-desktop-filter-actions>
       <div data-picks><PicksOnlyFilter locale={query.locale} checked={draft.query.picks === "only"} disabled={subscriberOnly && query.status !== "finished"}
@@ -239,18 +251,16 @@ export function DesktopFeedFilters({ query, today, leagues, onApply, subscriberO
             const zone = event.target.value; setDraft((current) => ({ ...current, query: { ...current.query, zone } }));
           }}>{[...new Set([publicPolicy.reportingTimeZone, deviceZone, zone])].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         </div>}
-        {section === "competitions" && <>
-          <OptionChecklist key={`leagues-${dialogVersion}`} kind="leagues" options={leagueList} selected={draft.query.leagues} onChange={changeLeagues} messages={messages} />
-          <OptionChecklist key={`countries-${dialogVersion}`} kind="countries" options={countryList} selected={draft.query.countries} onChange={changeCountries} messages={messages} />
-        </>}
-        {section === "limits" && <>
-          <fieldset><legend>{messages.text("feed.filters.markets")}</legend>{publicPolicy.markets.map((family: MarketFamily) => <label data-choice key={family}>
+        {section === "leagues" && <OptionChecklist key={`leagues-${dialogVersion}`} kind="leagues" options={leagueList} selected={draft.query.leagues} onChange={changeLeagues} messages={messages} />}
+        {section === "countries" && <OptionChecklist key={`countries-${dialogVersion}`} kind="countries" options={countryList} selected={draft.query.countries} onChange={changeCountries} messages={messages} />}
+        {section === "markets" && <fieldset><VisuallyHidden as="legend">{messages.text("feed.filters.markets")}</VisuallyHidden>{publicPolicy.markets.map((family: MarketFamily) => <label data-choice key={family}>
             <input type="checkbox" name="market" value={family} checked={draft.query.markets.includes(family)}
               disabled={draft.query.markets.length === 1 && draft.query.markets.includes(family)}
               title={draft.query.markets.length === 1 ? messages.text("feed.filters.oneMarket") : undefined}
               onChange={() => setDraft((current) => ({ ...current, query: { ...current.query, markets: current.query.markets.includes(family)
                 ? current.query.markets.filter((market) => market !== family) : [...current.query.markets, family] } }))} />{messages.text(`market.family.${family}`)}
-          </label>)}</fieldset>
+          </label>)}</fieldset>}
+        {section === "limits" && <>
           <fieldset><legend>{messages.text("feed.filters.probabilityLabel")} %</legend><div data-fields>
             {input(messages.text("feed.filters.min"), "probMin", draft.probability.min, (min) => setDraft((current) => ({ ...current, probability: { ...current.probability, min } })))}
             {input(messages.text("feed.filters.max"), "probMax", draft.probability.max, (max) => setDraft((current) => ({ ...current, probability: { ...current.probability, max } })))}

@@ -76,6 +76,7 @@ export const Plan = styled.label`
   position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 3px 6px; align-content: start;
   min-inline-size: 0; padding: 10px 8px; cursor: pointer;
   border: 1px solid ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface};
+  border-radius: ${({ theme }) => theme.border.radius};
   input { inline-size: 14px; block-size: 14px; margin: 2px 0 0; accent-color: ${({ theme }) => theme.color.brand}; }
   &:has(input:checked) { background: ${({ theme }) => theme.color.brandSoft}; border-color: ${({ theme }) => theme.color.brand}; box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand}; }
   &:has(input:focus-visible) { ${focusRing} }
@@ -90,9 +91,10 @@ export const WalletChoices = styled.fieldset`
 export const WalletChoice = styled.label`
   position: relative; min-inline-size: 0; cursor: pointer;
   border: 1px solid ${({ theme }) => theme.color.controlBorder};
+  border-radius: ${({ theme }) => theme.border.radius};
   &:has(input:checked) { border-color: ${({ theme }) => theme.color.brand}; }
   input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
-  > span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-block-size: 88px; padding: 8px; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
+  > span { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-block-size: 88px; padding: 8px; border-radius: inherit; font-size: 12px; line-height: 18px; font-weight: ${({ theme }) => theme.typography.weight.bold}; background: ${({ theme }) => theme.color.surface}; }
   > span > svg { position: absolute; inset-block-start: 4px; inset-inline-end: 4px; inline-size: 14px; block-size: 14px; visibility: hidden; }
   input:checked + span { background: ${({ theme }) => theme.color.brandSoft}; color: ${({ theme }) => theme.color.link}; box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand}; }
   input:checked + span > svg { visibility: visible; }
@@ -101,6 +103,7 @@ export const WalletChoice = styled.label`
 export const Wallet = styled.div`
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; align-items: center; min-inline-size: 0; padding: 10px;
   background: ${({ theme }) => theme.color.surfaceMuted}; border: 1px solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.border.radius};
 `;
 export const WalletNumber = styled.span`
   grid-column: 1; min-inline-size: 0; font-size: 18px; line-height: 24px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums;
@@ -117,9 +120,10 @@ export const Action = styled(Button)`font-size: 12px; gap: 6px; min-block-size: 
 export const ActionLink = styled(ButtonLink)`font-size: 12px; gap: 6px; min-block-size: 44px; ${icons}`;
 export const CopyButton = styled(Action)`grid-column: 2; grid-row: 1 / 3; padding-inline: 8px;`;
 export const MenuLink = styled(ActionLink)`justify-self: start; padding-inline: 0;`;
-export const Locked = styled.p`display: flex; align-items: center; gap: 8px; padding: 12px; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText} ${icons}`;
+export const Locked = styled.p`display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: ${({ theme }) => theme.border.radius}; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText} ${icons}`;
 export const StatusBox = styled.div`
   display: grid; gap: 8px; min-inline-size: 0; padding: 12px; background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 13px; line-height: 20px;
+  border-radius: ${({ theme }) => theme.border.radius};
   p { margin: 0; }
   ${RowButton} { justify-self: start; min-block-size: 44px; }
 `;
@@ -138,6 +142,7 @@ export const StatusFacts = styled.dl`
 export const AmountRow = styled.p`
   display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; min-inline-size: 0; margin: 0; padding: 10px;
   border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surfaceMuted}; ${smallText}
+  border-radius: ${({ theme }) => theme.border.radius};
   strong { color: ${({ theme }) => theme.color.text}; font-size: 14px; line-height: 20px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 `;
 export const ReportForm = styled.form`
@@ -154,6 +159,7 @@ export const FileField = styled.div`display: grid; gap: 4px; min-inline-size: 0;
 export const FileBox = styled.label`
   position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-block-size: 44px; padding: 8px; cursor: pointer;
   border: 1px dashed ${({ theme }) => theme.color.controlBorder}; background: ${({ theme }) => theme.color.surface}; font-size: 12px; line-height: 18px;
+  border-radius: ${({ theme }) => theme.border.radius};
   > span { min-inline-size: 0; overflow-wrap: anywhere; }
   ${icons}
   input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: pointer; }

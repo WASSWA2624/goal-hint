@@ -47,7 +47,7 @@ const PhoneHeaderGroup = styled.div`
   ${desktop} { display: none; }
 `;
 /**
- * The phone top bar matches the feed's solid branded bar and teal edge, full bleed
+ * The phone top bar matches the feed's branded bar and quiet separator, full bleed
  * past the page gutter and up through the app page's 10px top padding, with white text and icons.
  */
 const PhoneBar = styled.div`
@@ -62,7 +62,7 @@ const PhoneBar = styled.div`
   padding-inline: 8px;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.gradient};
-  border-block-end: 2px solid ${({ theme }) => theme.header.accent};
+  border-block-end: 2px solid ${({ theme }) => theme.header.border};
   ${desktop} { display: none; }
 `;
 const PhoneHome = styled(Link)`
@@ -82,7 +82,7 @@ const RoundLink = styled(Link)`
   inline-size: 1.5rem;
   block-size: 2rem;
   color: ${({ theme }) => theme.header.text};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font-size: 1.375rem;
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlFill}; } }
   ${barFocus}

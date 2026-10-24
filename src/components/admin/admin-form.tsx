@@ -22,6 +22,7 @@ export const adminControl = css`
   min-block-size: ${({ theme }) => theme.control.minHeight};
   padding: 8px 10px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   font-size: 1rem;
@@ -66,7 +67,7 @@ export const ButtonRow = styled.div`
 export const Badge = styled.span<{ $tone?: "good" | "muted" | "warning" }>`
   display: inline-block;
   padding: 2px 8px;
-  border-radius: ${({ theme }) => theme.border.pillRadius};
+  border-radius: ${({ theme }) => theme.border.radius};
   font-size: ${({ theme }) => theme.typography.scale.caption};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
   ${({ theme, $tone = "muted" }) => {

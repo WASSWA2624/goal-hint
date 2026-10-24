@@ -56,12 +56,12 @@ test('Apply drops full-day time bounds while retaining the browsing zone and exp
   assert.equal(feedQueryHref(applied, today), '/en/predictions/2026-10-07?tz=America%2FNew_York');
 });
 
-test('dialog resets change only their group and preserve the original draft', () => {
+test('each dialog reset changes only its own filters and preserves the original draft', () => {
   const applied = parseFeedQuery({ from: '2026-10-02', to: '2026-10-08', q: 'team', league: 'league-a', country: 'Spain',
     status: 'finished', market: 'total-goals', prob: '65-90', odds: '1.50-3.00', timeFrom: '08:00', timeTo: '18:00',
     tz: 'America/New_York', picks: 'only', sort: 'probability', dir: 'asc', page: '4', pageSize: '40' }, { today, providerOdds: true });
   const draft = Object.freeze({ ...applied, search: '  Raw team  ' }), original = structuredClone(draft);
-  const groupFields = { dates: ['dates', 'time'], competitions: ['leagues', 'countries'], limits: ['markets', 'probability', 'odds'] };
+  const groupFields = { dates: ['dates', 'time'], leagues: ['leagues'], countries: ['countries'], markets: ['markets'], limits: ['probability', 'odds'] };
   for (const [section, fields] of Object.entries(groupFields)) {
     const reset = resetFeedFilterSection(draft, section);
     assert.notEqual(reset, draft); assert.equal(reset.page, 1);
@@ -71,10 +71,13 @@ test('dialog resets change only their group and preserve the original draft', ()
     if (section === 'dates') {
       assert.deepEqual(reset.dates, { kind: 'last-30-days' }); assert.equal(reset.time, undefined);
       assert.equal(reset.zone, 'America/New_York');
-    } else if (section === 'competitions') {
-      assert.deepEqual(reset.leagues, []); assert.deepEqual(reset.countries, []);
-    } else {
+    } else if (section === 'leagues') {
+      assert.deepEqual(reset.leagues, []);
+    } else if (section === 'countries') {
+      assert.deepEqual(reset.countries, []);
+    } else if (section === 'markets') {
       assert.deepEqual(reset.markets, defaultMarkets); assert.notEqual(reset.markets, defaultMarkets);
+    } else {
       assert.deepEqual(reset.probability, { min: 0, max: 100 }); assert.equal(reset.odds, null);
     }
     assert.deepEqual(draft, original); assert.deepEqual(applied.search, 'team');
@@ -86,7 +89,7 @@ test('local dialog resets remain draft edits without replacing the applied query
   const query = parseFeedQuery({ when: 'last-7-days', q: 'team', league: 'league-a', country: 'Spain', market: 'total-goals',
     prob: '65-90', timeFrom: '08:00', timeTo: '18:00', tz: 'Africa/Kampala', picks: 'only', sort: 'probability' }, { today });
   const store = makeStore({ query, today, data: null }), applied = store.getState().feed.query;
-  for (const section of ['dates', 'competitions', 'limits']) {
+  for (const section of ['dates', 'leagues', 'countries', 'markets', 'limits']) {
     store.dispatch(draftChanged(resetFeedFilterSection(store.getState().feed.draft, section)));
     assert.equal(store.getState().feed.query, applied);
     assert.deepEqual(store.getState().feed.query, query);
@@ -94,6 +97,24 @@ test('local dialog resets remain draft edits without replacing the applied query
   assert.equal(store.getState().feed.draft.search, 'team');
   assert.equal(store.getState().feed.draft.picks, 'only');
   assert.deepEqual(store.getState().feed.draft.sort, query.sort);
+});
+
+test('discarding a local reset restores its draft without changing the applied query', () => {
+  const query = parseFeedQuery({ when: 'last-7-days', league: 'league-a', country: 'Spain', market: 'total-goals',
+    prob: '65-90', timeFrom: '08:00', timeTo: '18:00', tz: 'Africa/Kampala', page: '3' }, { today });
+  const store = makeStore({ query, today, data: null });
+  store.dispatch(draftChanged({ ...query, search: '  Unsaved team  ', picks: 'only' }));
+  const applied = store.getState().feed.query;
+  for (const section of ['dates', 'leagues', 'countries', 'markets', 'limits']) {
+    const snapshot = store.getState().feed.draft;
+    store.dispatch(draftChanged(resetFeedFilterSection(snapshot, section)));
+    assert.equal(store.getState().feed.query, applied, `${section} reset must stay in the draft`);
+    store.dispatch(draftChanged(snapshot));
+    assert.deepEqual(store.getState().feed.draft, snapshot, `${section} reset can be discarded`);
+    assert.equal(store.getState().feed.draft.search, '  Unsaved team  ');
+    assert.equal(store.getState().feed.draft.picks, 'only');
+    assert.equal(store.getState().feed.query, applied, `${section} discard must preserve the applied query`);
+  }
 });
 
 test('Any probability inputs accept open bounds while incomplete or invalid numeric drafts cannot apply', () => {

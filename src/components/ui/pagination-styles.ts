@@ -1,5 +1,5 @@
 import { css } from "styled-components";
-/** Numbered links and scroll-only arrow buttons share one square control treatment. */
+/** Numbered links and scroll-only arrow buttons share the theme's compact control treatment. */
 export const paginationControlStyles = css`
   display: grid;
   place-items: center;
@@ -9,7 +9,7 @@ export const paginationControlStyles = css`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   font: inherit;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;

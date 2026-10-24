@@ -48,7 +48,20 @@ Its [SIL Open Font License](../assets/brand/source/fonts/OFL.txt) remains
 alongside the source and covers the subset, which keeps the license name records. Typography uses rem units with a 16px default.
 Spacing and the page gutter use fixed pixel tokens so enlarging text leaves
 usable content width. Controls have a 2.75rem (44px) minimum height from 64rem;
-phones and tablets use the 2.25rem (36px) compact height. Components have square corners.
+phones and tablets use the 2.25rem (36px) compact height.
+
+Use `theme.border.radius` for the shared subtle 2px corner radius, sourced from
+`shape.componentRadius` in `assets/brand/brand-tokens.json`. Apply it consistently
+to fields, buttons, menus, dialogs and standalone panels on every screen size.
+Keep joined control edges, tables and dense row structures square where they
+meet. Preserve functional circular or pill shapes and the logo's artwork geometry.
+
+Keep passive frames quiet with `theme.color.border`: neutral `#DFE6EE` in light
+mode and `#203448` in dark mode. Use it for section and card outlines, dialog
+frames, menu containers and dividers. Editable fields and outlined controls use
+`theme.color.controlBorder` (`#7D8997` light, `#597895` dark) so they remain easy
+to recognize. Preserve existing border widths, dimensions and layout; focus,
+selection, validation and outcome indicators retain their meaningful colors.
 
 ## Reusable exports
 
@@ -123,34 +136,32 @@ remain direct browser requests.
 
 ## Contrast and motion
 
-White text on brand teal has a 4.86:1 contrast ratio. Navy text on white is
-16.69:1; muted text on white is 5.98:1. Outcome text on its own background is
-at least 6.10:1. Input and secondary-button boundaries use the stronger
-`controlBorder` token (3.54:1 on white and 3.32:1 on paper); the lighter brand
-border is reserved for decorative divisions. On light surfaces focus uses a
-3px navy outline with a 3px offset. On the dark header bars it is a 3px
-inverse-teal (#39D5CA, `theme.header.accent`) ring instead: drawn 4px inside
+Body, caption, link and outcome text keep at least 4.5:1 contrast against their
+intended surfaces. Input and secondary-button boundaries use the stronger
+`controlBorder` token, which keeps at least 3:1 contrast against the main page,
+surface and muted-surface colors in both themes. The quieter `border` token is
+reserved for passive frames and divisions. On light surfaces focus uses the
+3px blue `theme.color.focus` outline with a 3px offset; dark surfaces use the
+same token's cyan value. On the dark header bars it is a 3px
+cyan (`theme.header.accent`, `#00B9F2`) ring instead: drawn 4px inside
 the desktop nav links and 6px inside the desktop logo link so the sticky bar
 never clips it, and 2px outside the phone bars' logo, back and round buttons.
-The skip link keeps a navy ring inside its white box and adds a 3px
-inverse-teal halo, so it reads over the bar and the light page alike. Windows
+The skip link uses the theme's focus ring inside its surface and adds a 3px
+header-accent halo, so it reads over the bar and the page alike. Windows
 display scaling may return fractional computed outline widths. Reduced-motion
 preference removes meaningful animation and transition duration. No motion is
 needed to understand the interface.
 
 `theme.header` holds the tokens shared by the desktop shell header and every
 phone top bar (content pages, the feed's brand bar and match details). They
-are the navy-to-teal `background` (#0B1F33, #12294F, #0C4F5E), white `text`,
-82% white `mutedText` for resting links, a 78% white search `placeholder`, the
-inverse-teal `accent` with navy `onAccent`, translucent white control and
-field fills, light section-icon `tone` tints, a 3.25rem `phoneHeight` and a
-soft `shadow`. Ratios are measured on every stop, with each translucent fill
-composited over the bar in 8-bit colour; the #0C4F5E end is always the worst
-case. White text keeps 9.15:1, resting links 6.72:1, the placeholder 4.55:1
-on the focused field and white icons 5.08:1 on `controlHover`. The `accent`
-indicator and focus ring keep 5.03:1, navy on an `accent` fill 9.18:1, and
-the section-icon tints at least 4.82:1. New small text on the bar must keep
-4.5:1 on that teal stop.
+include the navy-to-blue branded background, inverse `text`, `mutedText` for
+resting links, search `placeholder`, cyan `accent` with navy `onAccent`, control
+and field fills, light section-icon `tone` tints and a 3.25rem `phoneHeight`.
+Use `theme.header.border` for passive separators and
+`theme.header.controlBorder` for actual control boundaries (`#798EA8` light,
+`#6785A1` dark). Keep focus and active-navigation accents distinct from these
+quiet frames. New small text on the bar must keep 4.5:1 contrast on every
+background stop and relevant control fill.
 
 ## Development and acceptance
 
@@ -194,4 +205,4 @@ and the installed Next.js 16.4 documentation. The components use
 and [transient props](https://styled-components.com/docs/api#transient-props).
 Font delivery uses [Next.js local fonts](https://nextjs.org/docs/app/api-reference/components/font#local-fonts).
 
-Feed surfaces use a cool blue-gray canvas, white square cards with fine borders, a restrained teal-to-blue header edge, and teal utility selections. Semantic prediction and result colors retain their existing meaning.
+Feed surfaces use a cool blue-gray canvas, white cards with quiet neutral borders and the shared subtle radius, and clear control and selection states. Connected table and row edges remain square. Semantic prediction and result colors retain their existing meaning.

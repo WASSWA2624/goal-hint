@@ -30,7 +30,7 @@ const LoginNotice = styled(Notice)`
   background: ${({ theme }) => theme.color.outcome.correct.background};
   border-color: ${({ theme }) => theme.color.outcome.correct.border};
   box-shadow: ${({ theme }) => theme.shadow.cardHover};
-  button { flex: none; min-block-size: 44px; margin: 0; border-radius: 0; }
+  button { flex: none; min-block-size: 44px; margin: 0; }
 `;
 
 /** Global placement also confirms phone-admin logins and logins returning to a match. */

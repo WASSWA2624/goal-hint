@@ -12,7 +12,7 @@ const fieldControl = css`
   min-block-size: 40px;
   padding: 8px 11px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   font: inherit;
@@ -33,8 +33,8 @@ export const Panel = styled.form`
   min-inline-size: 0;
   padding: 14px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-block-start: 2px solid ${({ theme }) => theme.color.brand};
-  border-radius: 0;
+  border-block-start: 2px solid ${({ theme }) => theme.color.border};
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
 `;
@@ -76,7 +76,7 @@ export const SearchField = styled.label`
   min-block-size: 40px;
   padding-inline: 12px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 17px; }
@@ -101,7 +101,7 @@ export const SearchField = styled.label`
 
 export const OptionsRow = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(0, 1fr));
   gap: 8px;
   min-inline-size: 0;
 `;
@@ -114,7 +114,7 @@ export const SectionButton = styled.button`
   min-block-size: 42px;
   padding: 9px 12px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   font: inherit;
@@ -125,7 +125,8 @@ export const SectionButton = styled.button`
   cursor: pointer;
   > svg { flex: none; color: ${({ theme }) => theme.color.mutedText}; font-size: 17px; }
   > svg:last-child { font-size: 13px; }
-  > [data-section-label] { flex: 1; min-inline-size: 0; }
+  > [data-section-label] { flex: 1; min-inline-size: 0; white-space: nowrap; }
+  @media (max-width: 74.99rem) { gap: 7px; padding-inline: 8px; }
   &[data-active="true"], &[aria-expanded="true"] { color: ${({ theme }) => theme.color.link}; border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.brandSoft}; }
   ${media.hover} { &:hover:enabled { border-color: ${({ theme }) => theme.color.brand}; background: ${({ theme }) => theme.color.rowHover}; } }
   &:disabled { color: ${({ theme }) => theme.color.disabledText}; background: ${({ theme }) => theme.color.disabledSurface}; cursor: not-allowed; }
@@ -140,7 +141,7 @@ export const Count = styled.span`
   min-inline-size: 20px;
   block-size: 20px;
   padding: 2px 5px;
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.link};
   background: ${({ theme }) => theme.color.brandSoft};
   font-size: 0.75rem;
@@ -180,7 +181,7 @@ export const SortField = styled.label`
   min-block-size: 40px;
   padding-inline: 11px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-  border-radius: 0;
+  border-radius: ${({ theme }) => theme.border.radius};
   color: ${({ theme }) => theme.color.mutedText};
   background: ${({ theme }) => theme.color.surface};
   font-size: 0.8125rem;
@@ -207,7 +208,7 @@ export const ActionButton = styled(Button)`
     min-inline-size: 0;
     min-block-size: 40px;
     padding: 8px 12px;
-    border-radius: 0;
+    border-radius: ${({ theme }) => theme.border.radius};
     font-size: 0.8125rem;
     line-height: 1.25;
     white-space: nowrap;

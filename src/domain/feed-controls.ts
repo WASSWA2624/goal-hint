@@ -16,7 +16,7 @@ export function parseProbabilityInputs(values: { min: string; max: string }): Pr
   return min !== null && max !== null && validProbabilityRange({ min, max }) ? { min, max } : null;
 }
 
-export type FeedFilterSection = "dates" | "competitions" | "limits";
+export type FeedFilterSection = "dates" | "leagues" | "countries" | "markets" | "limits";
 
 /** A dialog reset changes only its own draft fields; applying remains a separate action. */
 export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSection): FeedQuery {
@@ -26,8 +26,10 @@ export function resetFeedFilterSection(draft: FeedQuery, section: FeedFilterSect
       delete reset.time;
       return reset;
     }
-    case "competitions": return { ...draft, leagues: [], countries: [], page: 1 };
-    case "limits": return { ...draft, markets: [...defaultMarkets], probability: anyProbability, odds: null, page: 1 };
+    case "leagues": return { ...draft, leagues: [], page: 1 };
+    case "countries": return { ...draft, countries: [], page: 1 };
+    case "markets": return { ...draft, markets: [...defaultMarkets], page: 1 };
+    case "limits": return { ...draft, probability: anyProbability, odds: null, page: 1 };
   }
 }
 

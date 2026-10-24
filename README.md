@@ -20,7 +20,7 @@ production requires its own hashed credentials).
 - [Brand preview](assets/brand/goal-hint-brand-preview.html): open locally to inspect the complete identity.
 - [Brand sheet](assets/brand/goal-hint-brand-sheet.png): shareable visual overview.
 
-Production-ready artwork is in `public/brand/`; editable sources, tokens and the original logo reference are in `assets/brand/`. Use “Goal Hint” consistently, with deep navy, teal and square component corners.
+Production-ready artwork is in `public/brand/`; editable sources, tokens and the original logo reference are in `assets/brand/`. Use “Goal Hint” consistently, with deep navy, teal and the shared subtle 2px component radius.
 
 ## Local development
 
@@ -295,7 +295,7 @@ selection and qualifying observations remain pending; **014 remains unchecked**.
 The application uses the existing navy/teal brand, locally loaded Manrope and
 one streamed styled-components registry with a light theme. Reusable layout,
 brand image, button/link, labeled field, status and empty-state primitives use
-square corners, visible focus and responsive logical spacing. Component previews
+the shared 2px corner radius, visible focus and responsive logical spacing. Component previews
 live in isolated rendering fixtures, outside the shipped application.
 Read the [styling runbook](docs/brand-styling.md) for exports
 and accessibility contracts. `npm run test:styling` verifies production initial

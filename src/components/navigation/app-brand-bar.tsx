@@ -24,7 +24,7 @@ const Bar = styled.div`
   padding-inline: 8px;
   color: ${({ theme }) => theme.header.text};
   background: ${({ theme }) => theme.header.gradient};
-  border-block-end: 2px solid ${({ theme }) => theme.header.accent};
+  border-block-end: 2px solid ${({ theme }) => theme.header.border};
   ${media.desktop} { display: none; }
 `;
 const Home = styled(Link)`

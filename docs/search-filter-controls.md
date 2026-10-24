@@ -3,12 +3,12 @@
 The feed uses labeled native fields and editable drafts; URLs and stored server
 projections remain authoritative. At desktop widths (64rem and above), the
 Crisp Outline controls show the page title and Period dropdown, a full-width
-search field, three optional-filter buttons, and one action row ordered Picks
-only, Sort by, Reset, Apply filters. Square fields, neutral borders, compact
-icons and a single blue Apply action follow the existing themed controls.
-The optional sections are Match Date & Time, Leagues & Countries, and Markets &
-Limits. Each opens a modal dialog; detailed fields and duplicate default-summary
-chips do not occupy the desktop section.
+search field, five optional-filter buttons on one horizontal row, and one action
+row ordered Picks only, Sort by, Reset, Apply filters. Compact fields, neutral
+borders, compact icons and a single blue Apply action follow the existing themed controls.
+The optional sections are Match Date & Time, Leagues, Countries, Markets, and
+Limits, in that order. Each opens its own modal dialog; detailed fields and
+duplicate default-summary chips do not occupy the desktop section.
 
 Phones and tablets retain the Day Strip layout: full-width search; a day strip
 with earlier/later scroll buttons and a Calendar button; then the existing row
@@ -56,29 +56,36 @@ returns focus to Advanced filters. Apply and Reset close the sheet. Widening to 
 closes it. The sheet is a fixed element inside the form, so no ancestor of the
 form may be a CSS size container.
 
-The desktop Match Date & Time dialog holds both date and time pairs; Leagues &
-Countries holds the two searchable selections; Markets & Limits holds the market
-choices, probability bounds and current Odds availability. Each dialog has its
-own Reset, Cancel and Done controls. Local Reset changes only that dialog's
-draft and keeps it open: dates return to Last 30 days and 00:00–23:59; leagues and
-countries return to all; markets return to all supported families and probability
-and odds return to Any. The browsing zone is retained. Search, Picks only, sorting
-and the other dialogs' settings are unaffected. Local Reset does not navigate or
-fetch a result.
+The desktop Match Date & Time dialog holds both date and time pairs. Leagues and
+Countries each hold their own searchable selection. Markets holds the market
+choices; Limits holds probability bounds and current Odds availability. Each
+dialog has its own Reset, Cancel and Done controls. Local Reset changes only that dialog's
+draft and keeps it open: dates return to Last 30 days and 00:00–23:59; Leagues
+returns to all leagues, Countries to all countries, Markets to all supported
+families, and Limits returns probability and odds to Any. Resetting one selection
+does not reset any of the others. The browsing zone is retained. Search, Picks
+only, sorting and the other dialogs' settings are unaffected. Local Reset does
+not navigate or fetch a result.
 
 Done validates and retains that section's draft; it does not submit the
 whole feed. Cancel, Escape, the close button and backdrop dismissal restore the
 section's values from when it opened, including undoing a local Reset. Native
 dialog behavior contains focus and restores it to the trigger on close. Count
-badges replace an Edited label: date/time counts active ranges, competitions
-count selected leagues and countries, and Markets & Limits counts selected markets
-and active range restrictions. Zero active date/competition counts are hidden.
+badges replace an Edited label: Match Date & Time counts active date/time ranges;
+Leagues and Countries each count their own selections; Markets counts selected
+market families; Limits counts configured numeric bounds, with minimum and maximum
+counted separately. Two restricted probability endpoints count as two; non-default
+odds endpoints also count when present. Odds fields remain disabled until provider
+odds display is enabled. Market defaults show all four supported families on the
+Markets control only. Zero counts are hidden.
+Accessible summaries describe selection counts as selected and date/time or Limits
+counts as filters set.
 
 The common range controls are rendered once, so the initial HTML contains exactly
 two date and two time inputs, including when the mobile sheet is closed. Enhanced
 desktop dialog fields mount when their section opens, using the options already
 supplied with the page; opening a dialog adds no feed request. Mobile labels sit
-above square 40px native fields with 16px values. Dates and
+above 40px native fields with 16px values and the shared 2px corner radius. Dates and
 times are paired; the date pair stacks below 361px, and both pairs stack when
 their container or larger text needs more room. Match dates and Kickoff time
 headings, optional time guidance and the browsing zone are visible. Desktop
@@ -177,7 +184,7 @@ Advanced filters badges the number of applied filters. The applied summary appea
 phones under Showing only when a filter or search is applied. These describe
 the applied query, rather than unsent edits. In the sheet, a Changes ready to
 apply notice distinguishes valid unsent edits. Phone controls retain visible
-backgrounds and solid 1px borders, with square corners and button targets of
+backgrounds and solid 1px borders, with the shared 2px corner radius and button targets of
 at least 44px. The phone match count updates with the displayed projection,
 including live refreshes; desktop shows it with the results. It is omitted when
 no successful projection is available. Draft edits make no count-preview
@@ -229,7 +236,7 @@ skill. Production routes contain no fixture switch.
 
 For desktop interaction acceptance, open the full-access local feed capture at
 `/en/matches?pageSize=30` and run `playwright-cli run-code --filename
-scripts/verify-desktop-feed-controls.js`. It checks all three local resets,
+scripts/verify-desktop-feed-controls.js`. It checks all five local resets,
 Cancel rollback, unrelated draft preservation, no edit-time feed requests,
 complete Apply and Back restoration. Its navigation cases use the captured
 default and Earliest first queries; arbitrary newly edited queries need a
