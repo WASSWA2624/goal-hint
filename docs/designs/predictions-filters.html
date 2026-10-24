@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Goal Hint · Predictions filter designs</title>
+<style>
+:root { color-scheme:light; --page:#edf7ff; --paper:#fff; --ink:#05234e; --muted:#536b88; --line:#c5d8ef; --control:#aec8e8; --blue:#0065f8; --tint:#edf4ff; --disabled:#f0f3f7; --backdrop:#071c3e80; }
+* { box-sizing:border-box; }
+[hidden] { display:none!important; }
+body { margin:0; color:var(--ink); background:#f3f6fa; font:400 13px/1.4 'Segoe UI',Arial,sans-serif; }
+button,input,select { font:inherit; color:inherit; border-radius:0; }
+button,select,input[type=checkbox] { cursor:pointer; }
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+button { border:1px solid var(--control); background:var(--paper); padding:7px 11px; min-height:36px; font-weight:600; }
+button:hover { background:var(--tint); }
+button:disabled { opacity:.45; cursor:default; }
+button.primary { background:var(--blue); border-color:var(--blue); color:#fff; }
+button.primary:hover { background:#0054ce; }
+input:not([type=checkbox]),select { min-width:0; width:100%; min-height:36px; padding:7px 9px; background:var(--paper); border:1px solid var(--control); }
+input::placeholder { color:var(--muted); opacity:1; }
+input[type=checkbox] { margin:0; width:16px; height:16px; flex:none; accent-color:var(--blue); }
+label { min-width:0; }
+.top { position:sticky; inset-block-start:0; z-index:20; background:var(--paper); border-bottom:1px solid var(--line); }
+.top-inner { max-width:1540px; padding:13px 24px; margin:auto; display:flex; align-items:center; gap:10px; }
+.top-title { margin-right:auto; font-size:15px; font-weight:600; }
+.top-title small { display:block; color:var(--muted); font-size:12px; font-weight:400; }
+.design-label { display:flex; align-items:center; gap:8px; }
+.design-label select { width:250px; }
+.counter { min-width:43px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
+.gallery { max-width:1540px; margin:22px auto; padding:0 24px 40px; }
+.concept-heading { display:flex; align-items:baseline; gap:14px; margin-bottom:18px; }
+.concept-heading h1 { margin:0; font-size:19px; font-weight:600; }
+.concept-heading p { margin:0; color:var(--muted); }
+.pair { display:grid; grid-template-columns:minmax(0,1fr) 390px; gap:24px; align-items:start; }
+.preview-label { color:var(--muted); font-size:12px; margin-bottom:8px; }
+.preview { min-width:0; }
+.surface { background:var(--page); border-top:2px solid #18a2ff; padding:14px; min-width:0; }
+.fp { display:grid; align-items:center; gap:8px; min-width:0; }
+.fp h2 { grid-area:heading; margin:0; font-size:21px; font-weight:600; line-height:1.25; }
+.fp .search { grid-area:search; }
+.fp .period { grid-area:period; }
+.fp .options { grid-area:options; }
+.fp .picks { grid-area:picks; }
+.fp .sort { grid-area:sort; }
+.fp .actions { grid-area:actions; }
+.search { display:flex; align-items:center; gap:8px; min-width:0; border:1px solid var(--control); background:var(--paper); padding-inline:9px; }
+.search::before { content:'⌕'; flex:none; color:var(--muted); font-size:22px; line-height:1; }
+.search input:not([type=checkbox]) { border:0; background:transparent; padding-inline:0; }
+.period,.sort { display:flex; align-items:center; gap:7px; color:var(--muted); min-width:0; }
+.period > span,.sort > span { flex:none; font-size:11px; }
+.period select,.sort select { color:var(--ink); font-size:12px; }
+.options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; min-width:0; }
+.option { display:flex; align-items:center; justify-content:center; gap:5px; min-width:0; padding:6px; font-size:12px; line-height:1.25; min-height:38px; }
+.option > span { min-width:0; }
+.filter-count { display:inline-flex; align-items:center; justify-content:center; flex:none; min-width:19px; height:19px; padding:1px 4px; background:var(--tint); color:var(--blue); font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; }
+.option[data-edited=true] { background:var(--tint); border-color:#8db7ee; }
+.picks { display:flex; align-items:center; gap:7px; font-size:12px; white-space:nowrap; min-height:36px; }
+.actions { display:flex; align-items:center; justify-content:flex-end; gap:6px; min-width:0; }
+.actions button { font-size:12px; white-space:nowrap; }
+.reset { color:var(--muted); }
+.sr { position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.footnote { margin:20px 0 0; color:var(--muted); font-size:12px; }
+.preset-buttons { display:none; }
+.preset-buttons button { padding:6px 10px; font-size:12px; }
+.preset-buttons button[aria-pressed=true] { color:var(--blue); background:var(--tint); border-color:#8db7ee; }
+.desktop .fp { grid-template-columns:minmax(0,1fr) 178px 166px; grid-template-areas:'heading heading period' 'search search search' 'options options options' 'picks sort actions'; }
+.desktop .options { max-width:640px; }
+.desktop .sort { justify-self:end; width:178px; }
+.mobile .surface { padding:10px; }
+.mobile .fp { grid-template-columns:minmax(100px,1fr) minmax(0,1.5fr); grid-template-areas:'heading heading' 'search search' 'period sort' 'options options' 'picks actions'; gap:7px; }
+.mobile .fp h2 { font-size:19px; }
+.mobile .option { min-height:44px; font-size:12px; padding:5px 3px; }
+.mobile input:not([type=checkbox]),.mobile select { min-height:40px; }
+.mobile .search input { font-size:16px; }
+.mobile .picks { min-height:40px; }
+.mobile .actions button { min-height:40px; }
+.mobile .period select { font-size:13px; }
+.mobile .period > span { display:none; }
+.mobile .sort > span { display:none; }
+/* Each variant changes composition while preserving the same complete controls. */
+[data-concept=balanced] .desktop .fp { grid-template-columns:minmax(0,1fr) 180px 166px; grid-template-areas:'heading heading period' 'search search search' 'options options options' 'picks sort actions'; }
+[data-concept=stack] .desktop .fp { max-width:620px; margin:auto; grid-template-columns:minmax(0,1fr) 178px; grid-template-areas:'heading period' 'search search' 'options options' 'picks sort' 'actions actions'; }
+[data-concept=toolbar] .desktop .fp { grid-template-columns:minmax(170px,1fr) 178px 166px; grid-template-areas:'heading heading picks' 'search options options' 'period sort actions'; }
+[data-concept=toolbar] .desktop .options { gap:4px; }
+[data-concept=toolbar] .desktop .picks { justify-self:end; }
+[data-concept=toolbar] .mobile .fp { grid-template-areas:'heading heading' 'search search' 'options options' 'period sort' 'picks actions'; }
+[data-concept=stack] .mobile .fp { grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); grid-template-areas:'heading period' 'search search' 'options options' 'picks sort' 'actions actions'; }
+[data-concept=stack] .mobile .fp h2 { font-size:17px; }
+[data-concept=split] .desktop .fp { grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:18px; grid-template-areas:'heading heading' 'search options' 'period sort' 'picks actions'; }
+[data-concept=split] .desktop .sort { width:100%; }
+[data-concept=search] .desktop .fp { grid-template-columns:minmax(0,1fr) 180px 166px; grid-template-areas:'heading heading period' 'search search actions' 'options options options' 'picks sort sort'; }
+[data-concept=search] .mobile .fp { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:'heading heading' 'search actions' 'period period' 'options options' 'picks sort'; }
+[data-concept=search] .mobile .actions { flex-direction:column-reverse; position:relative; }
+[data-concept=search] .mobile .actions .reset { position:absolute; inset-block-start:calc(100% + 7px); min-height:40px; min-width:74px; }
+[data-concept=search] .mobile .period { margin-right:80px; }
+[data-concept=search] .mobile .sort { max-width:165px; justify-self:end; }
+[data-concept=period] .desktop .fp { grid-template-columns:minmax(0,1fr) 230px 230px; grid-template-areas:'heading period period' 'search search search' 'options options options' 'picks sort actions'; }
+[data-concept=period] .period > span:not(.preset-buttons),[data-concept=period] .period > select { display:none; }
+[data-concept=period] .preset-buttons { display:flex; gap:5px; width:100%; justify-content:flex-end; }
+[data-concept=period] .mobile .fp { grid-template-areas:'heading heading' 'period period' 'search search' 'options options' 'picks sort' 'actions actions'; }
+[data-concept=period] .mobile .preset-buttons { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
+[data-concept=period] .mobile .preset-buttons button { font-size:11px; min-height:38px; padding:4px 2px; }
+[data-concept=quiet] .surface { border-top:2px solid #18a2ff; background:var(--paper); }
+[data-concept=quiet] .fp { gap:10px; }
+[data-concept=quiet] .option { border:0; border-bottom:1px solid var(--control); background:transparent; }
+[data-concept=quiet] .search { border:0; border-bottom:1px solid var(--control); padding-inline:0; }
+[data-concept=quiet] .desktop .fp { grid-template-columns:minmax(0,1fr) 178px 166px; grid-template-areas:'heading heading period' 'search search search' 'options options options' 'picks sort actions'; }
+[data-concept=ledger] .desktop .fp { grid-template-columns:180px minmax(0,1fr) 166px; column-gap:18px; grid-template-areas:'heading search search' 'period options options' 'picks sort actions'; }
+[data-concept=ledger] .desktop .fp h2 { font-size:20px; max-width:160px; }
+[data-concept=ledger] .desktop .period { display:block; }
+[data-concept=ledger] .desktop .period > span:not(.preset-buttons) { display:block; margin-bottom:3px; }
+[data-concept=ledger] .mobile .fp { grid-template-areas:'heading heading' 'period sort' 'search search' 'options options' 'picks actions'; }
+[data-concept=connected] .desktop .fp { grid-template-columns:minmax(0,1fr) 178px 166px; grid-template-areas:'heading heading period' 'search options options' 'picks sort actions'; }
+[data-concept=connected] .options { gap:0; }
+[data-concept=connected] .option + .option { border-left:0; }
+[data-concept=rail] .desktop .fp { grid-template-columns:minmax(0,1fr) 178px 166px; grid-template-areas:'heading heading period' 'search search search' 'options options options' 'picks sort actions'; padding-bottom:0; }
+[data-concept=rail] .actions { padding-top:8px; border-top:1px solid var(--line); }
+[data-concept=rail] .desktop .picks,[data-concept=rail] .desktop .sort { padding-top:8px; border-top:1px solid var(--line); }
+[data-concept=rail] .desktop .picks { height:45px; }
+[data-concept=rail] .mobile .fp { grid-template-areas:'heading heading' 'search search' 'period period' 'options options' 'picks sort' 'actions actions'; }
+[data-concept=rail] .mobile .actions { padding:8px 0 0; }
+[data-concept=balanced] .desktop .fp { grid-template-columns:minmax(0,1fr) 180px 166px; }
+.preview-status { min-height:20px; padding-top:5px; font-size:11px; color:var(--muted); }
+dialog { width:440px; max-width:calc(100vw - 24px); max-height:calc(100dvh - 24px); padding:0; border:1px solid var(--control); color:var(--ink); background:var(--paper); box-shadow:0 12px 45px #071c3e24; }
+dialog.phone-dialog { width:366px; }
+dialog[open] { display:flex; flex-direction:column; }
+dialog::backdrop { background:var(--backdrop); }
+.dialog-head { display:flex; gap:12px; align-items:center; justify-content:space-between; padding:11px 14px; border-bottom:1px solid var(--line); flex:none; }
+.dialog-head h2 { margin:0; font-size:16px; font-weight:600; }
+.dialog-head button { border:0; min-width:36px; padding:0; font-size:22px; font-weight:400; }
+.dialog-body { padding:14px; min-height:0; overflow-y:auto; }
+.dialog-actions { display:flex; justify-content:flex-end; gap:7px; padding:10px 14px; border-top:1px solid var(--line); flex:none; }
+.fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.field { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
+.field input,.field select { color:var(--ink); font-size:14px; }
+.full { grid-column:1/-1; }
+.dialog-body fieldset { border:0; margin:0; padding:0; min-width:0; }
+.dialog-body legend { font-size:13px; font-weight:600; padding:0; margin-bottom:7px; }
+.dialog-body fieldset + fieldset { margin-top:15px; padding-top:13px; border-top:1px solid var(--line); }
+.check { display:flex; align-items:center; min-height:36px; gap:8px; font-size:13px; }
+.check-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px 8px; }
+.check-grid .check { font-size:12px; }
+.checks-search { margin:0 0 7px; }
+.hint { margin:7px 0 0; font-size:11px; color:var(--muted); }
+fieldset:disabled { color:var(--muted); }
+fieldset:disabled input { background:var(--disabled); color:var(--muted); cursor:default; }
+.error { margin:0 0 10px; color:#b7192d; font-size:12px; }
+@media(max-width:1100px) { .pair { grid-template-columns:minmax(0,1fr) 360px; gap:16px; } .desktop .fp { column-gap:6px!important; } .desktop .fp h2 { font-size:19px; } .desktop .period,.desktop .sort { display:block; } .desktop .period > span,.desktop .sort > span { display:none; } }
+@media(max-width:1000px) { .pair { grid-template-columns:1fr; } .mobile { max-width:390px; margin-inline:auto; width:100%; } .top-inner { flex-wrap:wrap; padding:10px 16px; } .top-title { flex-basis:100%; } .gallery { padding:0 16px 24px; margin-top:16px; } .concept-heading { display:block; margin-bottom:14px; } .concept-heading p { margin-top:3px; } }
+@media(max-width:600px) { .desktop { overflow-x:auto; } .desktop .surface { width:820px; } .mobile { grid-row:1; } .top-inner { gap:6px; } .design-label { flex:1; min-width:0; } .design-label > span { display:none; } .design-label select { width:100%; } .counter { display:none; } .top-inner > button { width:35px; padding:0; font-size:0; } #previous::after { content:'‹'; font-size:22px; } #next::after { content:'›'; font-size:22px; } .top-title { font-size:14px; } }
+@media(max-width:360px) { .mobile .fp h2 { font-size:18px; } .mobile .surface { padding:8px; } .mobile .option { font-size:11px; } .mobile .actions button { padding-inline:9px; } .fields,.check-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="top-title">Predictions · Essentials + Dialogs<small>10 interactive design samples · Section only</small></div>
+    <label class="design-label" for="design"><span>Design</span><select id="design" aria-label="Choose design"></select></label>
+    <button id="previous" aria-label="Previous design" type="button">Previous</button>
+    <span class="counter" id="counter" aria-live="polite"></span>
+    <button id="next" aria-label="Next design" type="button">Next</button>
+  </div>
+</header>
+<main class="gallery">
+  <div class="concept-heading"><h1 id="concept-name"></h1><p id="concept-description"></p></div>
+  <div id="sample" class="pair"></div>
+  <p class="footnote">Open any optional section to explore its dialog. Reset restores unrestricted limits to “Any”. These samples do not change the app.</p>
+</main>
+<dialog id="settings" aria-labelledby="dialog-title">
+  <div class="dialog-head"><h2 id="dialog-title"></h2><button type="button" id="close-dialog" aria-label="Close dialog">×</button></div>
+  <div class="dialog-body" id="dialog-body"></div>
+  <div class="dialog-actions"><button type="button" id="cancel-dialog">Cancel</button><button type="button" class="primary" id="save-dialog">Done</button></div>
+</dialog>
+<script>
+(() => {
+  'use strict';
+  const concepts = [
+    ['balanced','Balanced','A clear search row with optional settings below.'],
+    ['stack','Compact Stack','A narrow, consistent stack on both screens.'],
+    ['toolbar','Single Toolbar','Search and optional settings share the desktop row.'],
+    ['split','Split Workspace','Everyday choices beside the optional settings.'],
+    ['search','Search & Apply','One primary action beside the search field.'],
+    ['period','Period First','Quick date choices lead the section.'],
+    ['quiet','Quiet Rows','Simple controls with minimal framing.'],
+    ['ledger','Compact Ledger','A small heading column beside the controls.'],
+    ['connected','Connected Controls','The three optional sections form one compact strip.'],
+    ['rail','Action Rail','A clear action row beneath the essentials.'],
+  ];
+  const periods = [['last30','Last 30 days'],['today','Today'],['next3','Next 3 days'],['next7','Next 7 days'],['next30','Next 30 days'],['custom','Custom dates']];
+  const sorts = ['Latest first','Earliest first','Highest chance','Lowest chance'];
+  const marketNames = ['Match result','Double chance','Total goals (2.5)','Both teams to score'];
+  const leagueNames = ['Premier League','La Liga','Serie A','Bundesliga','Ligue 1','Uganda Premier League'];
+  const countryNames = ['England','Spain','Italy','Germany','France','Uganda'];
+  const defaults = () => ({ search:'',period:'last30',dateFrom:'2026-09-25',dateTo:'2026-10-24',timeFrom:'00:00',timeTo:'23:59',zone:'eat',leagues:[],countries:[],markets:[...marketNames],probMin:'',probMax:'',picks:false,sort:'Latest first' });
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const states = concepts.map(defaults);
+  const selector = document.getElementById('design');
+  const sample = document.getElementById('sample');
+  const dialog = document.getElementById('settings');
+  const dialogBody = document.getElementById('dialog-body');
+  let index = 0, active = null, dialogDraft = null;
+  const escape = value => String(value).replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+  const optionHtml = (items,selected) => items.map(item => { const [value,label] = Array.isArray(item) ? item : [item,item]; return `<option value="${escape(value)}" ${selected===value?'selected':''}>${escape(label)}</option>`; }).join('');
+  const dateAfter = (value,days) => { const date = new Date(`${value}T12:00:00Z`); date.setUTCDate(date.getUTCDate()+days); return date.toISOString().slice(0,10); };
+  function setPeriod(state,period) {
+    state.period = period;
+    if(period==='custom') return;
+    state.dateFrom = period==='last30'?'2026-09-25':'2026-10-24';
+    state.dateTo = period==='last30'||period==='today'?'2026-10-24':dateAfter('2026-10-24',Number(period.slice(4))-1);
+  }
+  function edited(group,state) {
+    if(group==='dates') return state.dateFrom!=='2026-09-25'||state.dateTo!=='2026-10-24'||state.timeFrom!=='00:00'||state.timeTo!=='23:59'||state.zone!=='eat';
+    if(group==='competitions') return state.leagues.length>0||state.countries.length>0;
+    return state.markets.length!==4||state.probMin!==''||state.probMax!=='';
+  }
+  function trigger(group,label,state) {
+    const count=group==='dates' ? Number(state.dateFrom!=='2026-09-25'||state.dateTo!=='2026-10-24')+Number(state.timeFrom!=='00:00'||state.timeTo!=='23:59'||state.zone!=='eat')
+      : group==='competitions' ? state.leagues.length+state.countries.length : state.markets.length+Number(state.probMin!==''||state.probMax!=='');
+    const description=group==='dates' ? `${count} active ${count===1?'range':'ranges'}`
+      : group==='competitions' ? count?`${count} selected ${count===1?'competition or country':'competitions and countries'}`:'All leagues and countries'
+      : `${state.markets.length} selected markets${state.probMin!==''||state.probMax!==''?', 1 active probability range':''}`;
+    return `<button class="option" type="button" data-dialog="${group}" data-edited="${edited(group,state)}" aria-haspopup="dialog" aria-label="${escape(label)}, ${escape(description)}" title="${escape(description)}"><span>${escape(label)}</span>${count?`<b class="filter-count" aria-hidden="true">${count}</b>`:''}</button>`;
+  }
+  function screen(device) {
+    const state = states[index];
+    const compactPreset = (value,label) => `<button type="button" data-preset="${value}" aria-pressed="${state.period===value}">${label}</button>`;
+    return `<section class="preview ${device}" aria-label="${device==='desktop'?'Desktop':'Mobile'} preview"><div class="preview-label">${device==='desktop'?'Desktop':'Mobile · 390 px'}</div><div class="surface"><form class="fp" data-device="${device}">
+      <h2>Football Predictions</h2>
+      <label class="search"><span class="sr">Team or league</span><input type="search" name="search" aria-label="Team or league" maxlength="120" placeholder="Team or league" value="${escape(state.search)}"></label>
+      <div class="period"><span>Period</span><select name="period" aria-label="Prediction period">${optionHtml(periods,state.period)}</select><span class="preset-buttons">${compactPreset('last30','Last 30 days')}${compactPreset('today','Today')}${compactPreset('next3','Next 3 days')}${compactPreset('next7','Next 7 days')}${compactPreset('next30','Next 30 days')}</span></div>
+      <div class="options">${trigger('dates','Match Date & Time',state)}${trigger('competitions','Leagues & Countries',state)}${trigger('limits','Markets & Limits',state)}</div>
+      <label class="picks"><input type="checkbox" name="picks" ${state.picks?'checked':''}>Picks only</label>
+      <label class="sort"><span>Sort</span><select name="sort" aria-label="Sort predictions">${optionHtml(sorts,state.sort)}</select></label>
+      <div class="actions"><button class="reset" type="button" data-reset>Reset</button><button class="primary" type="submit">Apply filters</button></div>
+    </form></div><div class="preview-status" aria-live="polite"></div></section>`;
+  }
+  function render() {
+    const concept = concepts[index];
+    sample.dataset.concept = concept[0];
+    sample.innerHTML = screen('desktop') + screen('mobile');
+    document.getElementById('concept-name').textContent = `${index+1}. ${concept[1]}`;
+    document.getElementById('concept-description').textContent = concept[2];
+    document.getElementById('counter').textContent = `${index+1} / 10`;
+    selector.value = concept[0];
+    document.getElementById('previous').disabled = index===0;
+    document.getElementById('next').disabled = index===9;
+  }
+  function choose(value) {
+    const next = concepts.findIndex(item=>item[0]===value);
+    if(next<0) return;
+    if(dialog.open) closeDialog();
+    index = next; history.replaceState(null,'',`#${concepts[index][0]}`); render();
+  }
+  selector.innerHTML = concepts.map((item,number)=>`<option value="${item[0]}">${number+1}. ${item[1]}</option>`).join('');
+  selector.addEventListener('change',()=>choose(selector.value));
+  document.getElementById('previous').addEventListener('click',()=>choose(concepts[Math.max(0,index-1)][0]));
+  document.getElementById('next').addEventListener('click',()=>choose(concepts[Math.min(9,index+1)][0]));
+  window.addEventListener('hashchange',()=>choose(location.hash.slice(1)));
+  function copyControls(target) {
+    const form = target.closest('form');
+    if(!form) return;
+    const state = states[index];
+    state.search = form.elements.search.value;
+    state.picks = form.elements.picks.checked;
+    state.sort = form.elements.sort.value;
+    if(target.name==='period'&&target.value!=='custom') setPeriod(state,target.value);
+    sample.querySelectorAll('form').forEach(other=>{
+      if(other===form) return;
+      other.elements.search.value=state.search; other.elements.picks.checked=state.picks; other.elements.sort.value=state.sort; other.elements.period.value=state.period;
+    });
+  }
+  sample.addEventListener('input',event=>copyControls(event.target));
+  sample.addEventListener('change',event=>{
+    const target=event.target,device=target.closest('form')?.dataset.device;
+    copyControls(target);
+    if(target.name==='period') {
+      render();
+      if(target.value==='custom') openDialog('dates',device);
+      else sample.querySelector(`form[data-device="${device}"] [name="period"]`)?.focus();
+    }
+  });
+  sample.addEventListener('submit',event=>{
+    event.preventDefault(); copyControls(event.target.elements.search);
+    sample.querySelectorAll('.preview-status').forEach(element=>element.textContent='Filters applied to this preview.');
+  });
+  sample.addEventListener('click',event=>{
+    const button=event.target.closest('button'); if(!button) return;
+    const device=button.closest('form')?.dataset.device;
+    if(button.hasAttribute('data-reset')) { states[index]=defaults(); render(); sample.querySelector(`form[data-device="${device}"] [data-reset]`)?.focus(); return; }
+    if(button.dataset.preset) { setPeriod(states[index],button.dataset.preset); render(); sample.querySelector(`form[data-device="${device}"] [data-preset="${button.dataset.preset}"]`)?.focus(); return; }
+    if(button.dataset.dialog) openDialog(button.dataset.dialog,button.closest('form').dataset.device);
+  });
+  const field=(label,name,type='number',extra='')=>`<label class="field">${label}<input name="${name}" type="${type}" value="${escape(dialogDraft[name]??'')}" ${type==='number'?'placeholder="Any" step="any"':''} ${extra}></label>`;
+  const check=(name,value,checked)=>`<label class="check"><input type="checkbox" name="${name}" value="${escape(value)}" ${checked?'checked':''}>${escape(value)}</label>`;
+  function openDialog(group,device) {
+    active={group,device}; dialogDraft=clone(states[index]);
+    dialog.classList.toggle('phone-dialog',device==='mobile');
+    document.getElementById('dialog-title').textContent={dates:'Match Date & Time',competitions:'Leagues & Countries',limits:'Markets & Limits'}[group];
+    if(group==='dates') dialogBody.innerHTML=`<div class="fields">${field('From date','dateFrom','date')}${field('To date','dateTo','date')}${field('From time','timeFrom','time')}${field('To time','timeTo','time')}<label class="field full">Timezone<select name="zone">${optionHtml([['eat','EAT · Africa/Kampala'],['local','My local timezone']],dialogDraft.zone)}</select></label></div>`;
+    if(group==='competitions') dialogBody.innerHTML=[['leagues','Leagues',leagueNames],['countries','Countries',countryNames]].map(([name,label,names])=>`<fieldset><legend>${label}</legend><input class="checks-search" type="search" data-search-list="${name}" aria-label="Search ${label.toLowerCase()}" placeholder="Search ${label.toLowerCase()}"><label class="check"><input type="checkbox" data-all="${name}" ${dialogDraft[name].length===0?'checked':''}>All ${label.toLowerCase()}</label><div class="check-grid" data-list="${name}">${names.map(value=>check(name,value,dialogDraft[name].includes(value))).join('')}</div></fieldset>`).join('');
+    if(group==='limits') dialogBody.innerHTML=`<fieldset><legend>Markets</legend>${marketNames.map(value=>check('markets',value,dialogDraft.markets.includes(value))).join('')}</fieldset><fieldset><legend>Probability %</legend><div class="fields">${field('Min','probMin','number','min="0" max="100"')}${field('Max','probMax','number','min="0" max="100"')}</div></fieldset><fieldset disabled><legend>Odds · unavailable</legend><div class="fields"><label class="field">Min<input type="number" placeholder="Any" disabled></label><label class="field">Max<input type="number" placeholder="Any" disabled></label></div></fieldset>`;
+    dialog.showModal();
+    dialogBody.querySelector('input,select')?.focus();
+  }
+  function closeDialog() {
+    const previous=active; dialog.close(); active=null; dialogDraft=null;
+    sample.querySelector(`form[data-device="${previous?.device}"] [data-dialog="${previous?.group}"]`)?.focus();
+  }
+  dialogBody.addEventListener('input',event=>{
+    const target=event.target;
+    if(target.dataset.searchList) {
+      const list=dialogBody.querySelector(`[data-list="${target.dataset.searchList}"]`);
+      list.querySelectorAll('label').forEach(label=>label.hidden=!label.textContent.toLowerCase().includes(target.value.toLowerCase())); return;
+    }
+    if(target.name&&target.type!=='checkbox') dialogDraft[target.name]=target.value;
+  });
+  dialogBody.addEventListener('change',event=>{
+    const target=event.target;
+    if(target.dataset.all) { dialogDraft[target.dataset.all]=[]; dialogBody.querySelectorAll(`input[name="${target.dataset.all}"]`).forEach(input=>input.checked=false); target.checked=true; return; }
+    if(target.type==='checkbox'&&target.name) {
+      dialogDraft[target.name]=Array.from(dialogBody.querySelectorAll(`input[name="${target.name}"]:checked`),input=>input.value);
+      const all=dialogBody.querySelector(`[data-all="${target.name}"]`); if(all) all.checked=dialogDraft[target.name].length===0;
+    } else if(target.name) dialogDraft[target.name]=target.value;
+  });
+  function saveDialog() {
+    dialogBody.querySelector('.error')?.remove();
+    let error='';
+    if(active.group==='dates') {
+      const days=(new Date(dialogDraft.dateTo)-new Date(dialogDraft.dateFrom))/86400000;
+      if(!dialogDraft.dateFrom||!dialogDraft.dateTo||!Number.isFinite(days)||days<0||days>365) error='Choose a valid date range of up to 366 days.';
+      else if(!dialogDraft.timeFrom||!dialogDraft.timeTo||dialogDraft.timeFrom>dialogDraft.timeTo) error='Choose a valid daily time range.';
+      const before=states[index];
+      if(dialogDraft.dateFrom!==before.dateFrom||dialogDraft.dateTo!==before.dateTo) dialogDraft.period='custom';
+    }
+    if(active.group==='limits') {
+      const min=dialogDraft.probMin===''?0:Number(dialogDraft.probMin),max=dialogDraft.probMax===''?100:Number(dialogDraft.probMax);
+      if(!dialogDraft.markets.length) error='Select at least one market.';
+      else if(!Number.isFinite(min)||!Number.isFinite(max)||min<0||max>100||min>max) error='Enter a probability range between 0 and 100%.';
+      if(!error) { if(min===0) dialogDraft.probMin=''; if(max===100) dialogDraft.probMax=''; }
+    }
+    if(error) { const notice=document.createElement('p'); notice.className='error'; notice.role='alert'; notice.textContent=error; dialogBody.prepend(notice); return; }
+    const previous={...active};
+    states[index]=clone(dialogDraft); dialog.close(); active=null; dialogDraft=null; render();
+    sample.querySelector(`form[data-device="${previous.device}"] [data-dialog="${previous.group}"]`)?.focus();
+  }
+  document.getElementById('close-dialog').addEventListener('click',closeDialog);
+  document.getElementById('cancel-dialog').addEventListener('click',closeDialog);
+  document.getElementById('save-dialog').addEventListener('click',saveDialog);
+  dialog.addEventListener('cancel',event=>{event.preventDefault();closeDialog();});
+  dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const bounds=dialog.getBoundingClientRect();if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)closeDialog();});
+  dialog.addEventListener('keydown',event=>{if(event.key==='Enter'&&event.target.tagName==='INPUT'&&event.target.type!=='search'){event.preventDefault();saveDialog();}});
+  choose(location.hash.slice(1)||'balanced');
+})();
+</script>
+</body>
+</html>

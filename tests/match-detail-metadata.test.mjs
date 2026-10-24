@@ -33,3 +33,20 @@ test('undated, missing and failed records never borrow predictions or dates', ()
   const failed = matchDetailMetadata({ data: null, error: 'unavailable' }, 'en', false, approved);
   assert.equal(failed.robots.index, false); assert.doesNotMatch(failed.description, /Void forecast record|estimate:|%/);
 });
+
+test('publication eligibility survives full and free projections without indexing empty forecasts', () => {
+  for (const status of ['scheduled', 'finished-regulation']) {
+    const published = cardFixture({ status, score: null }, 'ai', null);
+    const unpublished = { ...published, forecast: null };
+    const empty = { ...published, forecast: { ...published.forecast, markets: [] } };
+    for (const [stored, indexable] of [[published, true], [unpublished, false], [empty, false]]) {
+      for (const tier of ['full', 'free']) {
+        const fixture = gateFixture(stored, { tier, signedIn: tier === 'full' });
+        const metadata = metadataFor(fixture);
+        assert.equal(metadata.robots.index, indexable, `${status}, ${tier}, ${stored.forecast?.markets.length ?? 'unpublished'}`);
+        assert.equal(metadata.alternates.canonical, `https://goalhint.com${path}`);
+        assert.equal(metadataFor(fixture, 'off', true).robots.index, false, 'History stays excluded under either projection.');
+      }
+    }
+  }
+});

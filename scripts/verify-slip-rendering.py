@@ -1,5 +1,6 @@
 """Build the real slip UI against isolated synthetic stored records and verify anonymous SSR markup."""
 from html.parser import HTMLParser
+from decimal import Decimal
 import re
 from urllib.parse import urlencode
 
@@ -67,36 +68,56 @@ CRITERIA_GROUP_FIELDS = {
     "markets": [],
 }
 
+NUMERIC_RANGE_LIMITS = {
+    "totalMin": "1.01", "totalMax": "100000", "teamsMin": "1", "teamsMax": "8",
+    "oddsMin": "1.01", "oddsMax": "1000", "probMin": "0", "probMax": "100",
+}
+
 
 def criteria_groups(document, path, error_group=None):
-    groups = document.nodes("details", "data-slip-criteria-group")
-    assert len(groups) == 3, f"{path}: three native criteria accordions"
+    groups = document.nodes("dialog", "data-slip-criteria-group")
+    assert len(groups) == 3, f"{path}: three native criteria dialogs"
     by_name = {group.attrs["data-slip-criteria-group"]: group for group in groups}
     assert set(by_name) == set(CRITERIA_GROUP_FIELDS), f"{path}: limits, kickoff and markets groups"
-    summaries = {}
+    option_rows = document.nodes(attr="data-slip-criteria-options")
+    assert len(option_rows) == 1, f"{path}: one compact row of optional criteria"
+    triggers = option_rows[0].nodes("button")
+    assert len(triggers) == 3, f"{path}: three optional criteria buttons"
+    assert all(button.attrs.get("type") == "button" and button.attrs.get("aria-haspopup") == "dialog" for button in triggers), f"{path}: optional criteria open dialogs without submitting"
+    values = {}
     for name, group in by_name.items():
-        assert ("open" in group.attrs) == (name == error_group), f"{path}: {name} starts closed unless invalid"
-        summary = [child for child in group.children if isinstance(child, Element) and child.tag == "summary"]
-        assert len(summary) == 1 and summary[0].text.strip(), f"{path}: native {name} summary"
-        summaries[name] = summary[0].text
+        assert "open" in group.attrs and group.attrs.get("data-enhanced") == "false", f"{path}: {name} stays available inline before hydration"
+        assert len([button for button in triggers if button.attrs.get("aria-controls") == group.attrs.get("id")]) == 1, f"{path}: one trigger targets the {name} dialog"
+        labelled_by = group.attrs.get("aria-labelledby")
+        assert labelled_by and any(node.attrs.get("id") == labelled_by and node.text.strip() for node in group.nodes()), f"{path}: accessible {name} dialog title"
+        buttons = group.nodes("button")
+        assert any(button.text.strip() == "Cancel" and button.attrs.get("type") == "button" for button in buttons), f"{path}: {name} has a non-submitting Cancel action"
+        assert any(button.text.strip() == "Apply" and button.attrs.get("type") == "button" for button in buttons), f"{path}: {name} has a non-submitting Apply action"
         inputs = group.nodes("input")
+        values[name] = tuple((node.attrs.get("name"), node.attrs.get("value", ""), "checked" in node.attrs) for node in inputs)
         for field in CRITERIA_GROUP_FIELDS[name]:
             controls = [node for node in inputs if node.attrs.get("name") == field]
             assert len(controls) == 1 and "disabled" not in controls[0].attrs, f"{path}: {name} keeps enabled native {field}"
             assert len([node for node in document.nodes("input") if node.attrs.get("name") == field]) == 1, f"{path}: no duplicated {field}"
-        assert all("disabled" not in fieldset.attrs for fieldset in group.nodes("fieldset")), f"{path}: collapsing {name} does not disable native submission"
+        assert all("disabled" not in fieldset.attrs for fieldset in group.nodes("fieldset")), f"{path}: dialog presentation does not disable native submission"
+        if name == error_group:
+            assert any(node.attrs.get("aria-invalid") == "true" for node in group.nodes()), f"{path}: {name} exposes the invalid controls"
+            assert group.nodes(attr="role") and any(node.attrs.get("role") == "alert" for node in group.nodes()), f"{path}: {name} contains its validation message"
     markets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "markets"]
-    assert len(markets) == 1 and markets[0] in by_name["markets"].nodes(), f"{path}: market toggles and outcomes share their own accordion"
+    assert len(markets) == 1 and markets[0] in by_name["markets"].nodes(), f"{path}: market toggles and outcomes share their own dialog"
     targets = [node for node in document.nodes(attr="data-criteria-field") if node.attrs["data-criteria-field"] == "targets"]
     assert len(targets) == 1 and all(targets[0] not in group.nodes() for group in groups), f"{path}: essential slip targets always stay visible"
     for name in ["slips", "totalMin", "totalMax", "teamsMin", "teamsMax"]:
-        controls = [node for node in targets[0].nodes("input") if node.attrs.get("name") == name]
+        controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
         assert len(controls) == 1 and "disabled" not in controls[0].attrs, f"{path}: one enabled essential target {name}"
+        assert all(controls[0] not in group.nodes() for group in groups), f"{path}: essential {name} remains outside dialogs"
     inputs = document.nodes("input")
     reuse = [node for node in inputs if node.attrs.get("name") == "reuse"]
-    choices = markets[0].nodes("input")
+    choices = [node for node in markets[0].nodes("input")
+               if node.attrs.get("name") == "markets" or (node.attrs.get("name") or "").startswith("picks.")]
+    assert len(reuse) == 2 and all(node in by_name["markets"].nodes() for node in reuse), f"{path}: hidden reuse value and checkbox belong to Markets"
     assert reuse and choices and min(inputs.index(node) for node in reuse) > max(inputs.index(node) for node in choices), f"{path}: match reuse follows Markets in native keyboard order"
-    return summaries
+    return values
 
 
 def inspect(origin, path, directory, name, expected_state, expected_slips, selections_per_slip=2, error_group=None):
@@ -161,10 +182,14 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
 
 
 def native_inputs(document):
-    """Successful native form controls, preserving repeated checkbox keys and the hidden reuse=0 value."""
+    """Successful GET controls, including the title's form-associated slip count."""
     form = next(node for node in document.nodes("form") if node.attrs.get("action") == "/en/slips")
+    descendants = form.nodes("input")
+    form_id = form.attrs.get("id")
     fields = []
-    for node in form.nodes("input"):
+    for node in document.nodes("input"):
+        if node not in descendants and not (form_id and node.attrs.get("form") == form_id):
+            continue
         name = node.attrs.get("name")
         if not name or "disabled" in node.attrs or node.attrs.get("type") in ("button", "submit", "reset"):
             continue
@@ -174,6 +199,29 @@ def native_inputs(document):
     return fields
 
 
+def verify_defaults(document):
+    fields = dict(native_inputs(document))
+    assert fields["slips"] == "3", "SSR default requests three slips"
+    for name in NUMERIC_RANGE_LIMITS:
+        controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
+        assert len(controls) == 1 and fields[name] == "", f"Default {name}: blank means any supported bound"
+        assert controls[0].attrs.get("placeholder") == "Any", f"Default {name}: blank numeric range displays Any"
+    assert fields["dateFrom"] == "2026-10-13" and fields["dateTo"] == "2026-11-12", "SSR defaults use the fixture's reporting date and inclusive 31-day range"
+    assert fields["timeFrom"] == "00:00" and fields["timeTo"] == "23:59", "SSR defaults explicitly select all-day kickoff times"
+    assert fields["reuse"] == "0", "SSR default leaves match reuse off"
+    assert len([name for name, _ in native_inputs(document) if name == "slips"]) == 1, "The title count remains part of native GET submission"
+
+
+def verify_custom_numeric_bounds(document, expected):
+    fields = dict(native_inputs(document))
+    for name, limit in NUMERIC_RANGE_LIMITS.items():
+        if name in expected:
+            if Decimal(expected[name]) == Decimal(limit):
+                assert fields[name] == "", f"Unrestricted {name}: explicit supported boundary displays Any"
+            else:
+                assert Decimal(fields[name]) == Decimal(expected[name]), f"Custom {name}: expected {expected[name]}, found {fields[name]}"
+
+
 def verify(origin, directory):
     for scenario, (state, count) in SCENARIOS.items():
         document = inspect(origin, f"/cases/{scenario}", directory, scenario, state, count,
@@ -181,6 +229,10 @@ def verify(origin, directory):
         if scenario == "limited":
             assert "search reached its limit" in document.text and "Fixture coverage is incomplete" in document.text, "Source and search limits remain visible"
     idle = inspect(origin, "/en/slips", directory, "route-idle", "idle", 0)
+    verify_defaults(idle)
+    explicit_defaults = [(name, NUMERIC_RANGE_LIMITS.get(name, value)) for name, value in native_inputs(idle) if name != "build"]
+    canonical = inspect(origin, "/en/slips?" + urlencode(explicit_defaults), directory, "route-default-bounds", "idle", 0)
+    verify_defaults(canonical)
     query = [
         ("dateFrom", "2026-10-13"), ("dateTo", "2026-10-19"), ("timeFrom", ""), ("timeTo", ""),
         ("markets", "match-result"), ("markets", "total-goals"), ("markets", "both-teams-to-score"),
@@ -189,17 +241,20 @@ def verify(origin, directory):
         ("slips", "3"), ("reuse", "0"), ("reuse", "1"), ("build", "1"),
     ]
     generated = inspect(origin, "/en/slips?" + urlencode(query), directory, "route-build", "generated", 3)
-    initial_summaries = criteria_groups(generated, "/en/slips?build=1")
+    verify_custom_numeric_bounds(generated, dict(query))
+    initial_groups = criteria_groups(generated, "/en/slips?build=1")
     for group, changes in [
         ("limits", {"oddsMin": "1.50", "oddsMax": "2.50", "probMin": "75", "probMax": "90"}),
         ("kickoff", {"dateTo": "2026-10-15", "timeFrom": "12:30", "timeTo": "18:00"}),
     ]:
         changed = [(field, changes.get(field, value)) for field, value in query]
         draft = inspect(origin, "/en/slips?" + urlencode(changed), directory, f"route-{group}-summary", "generated", 3)
-        assert criteria_groups(draft, f"{group} draft")[group] != initial_summaries[group], f"{group} summary reflects changed native draft values"
+        verify_custom_numeric_bounds(draft, dict(changed))
+        assert criteria_groups(draft, f"{group} draft")[group] != initial_groups[group], f"{group} dialog retains changed native draft values"
     chosen_query = query + [("picks.match-result", "home-win")]
     chosen = inspect(origin, "/en/slips?" + urlencode(chosen_query), directory, "route-market-summary", "generated", 3)
-    assert "1 with chosen results" in criteria_groups(chosen, "manual market summary")["markets"], "Market summary distinguishes manual results from Automatic"
+    chosen_inputs = criteria_groups(chosen, "manual market draft")["markets"]
+    assert ("picks.match-result", "home-win", True) in chosen_inputs, "Markets dialog retains manually selected results"
     no_markets = [(name, value) for name, value in query if name != "markets"]
     invalid_markets = inspect(origin, "/en/slips?" + urlencode(no_markets), directory, "route-invalid-markets", "idle", 0, error_group="markets")
     assert "Select at least one market" in invalid_markets.text, "No-market validation opens the market controls"
@@ -230,7 +285,7 @@ def verify(origin, directory):
     row = selected.nodes("tr", "data-slip-selection")[0]
     assert row.attrs["data-slip-selection"] == "synthetic-slip-7" and "Home win" in row.text and "20.0%" in row.text and "2.00" in row.text, "Manual Home win uses its own 20% probability and 2.00 price, though Away win was the published top pick"
     assert row.nodes(attr="data-pick-odds")[0].text == "(2.00)" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
-    print("Slip rendering verification passed: compact native accordions, draft summaries, validation expansion, 10 isolated states and native GET builds/cutoff/manual alternatives.", flush=True)
+    print("Slip rendering verification passed: Balanced dialogs, blank Any bounds, retained custom numeric values, inline native fallback, 10 isolated states and native GET builds/cutoff/manual alternatives.", flush=True)
 
 
 def main():

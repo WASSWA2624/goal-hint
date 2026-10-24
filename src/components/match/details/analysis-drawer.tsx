@@ -19,7 +19,7 @@ function summary(messages: Messages, data: MatchDetailResponse): string {
     : messages.text("details.notAvailable");
 }
 
-/** Why we think so: the revision's reasons and key risk, one tap from the verdict; open by default on desktop. */
+/** Keep the revision's reasons and key risk in the document when the phone drawer is collapsed. */
 export const AnalysisDrawer = memo(function AnalysisDrawer() {
   const { data, messages } = useStableDetails();
   const byDefault = useOpenByDefault();
@@ -31,7 +31,7 @@ export const AnalysisDrawer = memo(function AnalysisDrawer() {
     <CardHeader icon={<ReasonIcon />} title={messages.text("details.why")} meta={summary(messages, data)} open={open} controls="section-analysis"
       onToggle={() => setChoice(!open)} headingId="section-analysis-title" />
     <div id="section-analysis" hidden={!open}>
-      {open && <Panel><Explanation /><Note>{messages.text("detail.probabilityDisclosure")}</Note></Panel>}
+      <Panel><Explanation /><Note>{messages.text("detail.probabilityDisclosure")}</Note></Panel>
     </div>
   </Card>;
 });

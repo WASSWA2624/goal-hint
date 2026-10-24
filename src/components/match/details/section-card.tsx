@@ -23,6 +23,7 @@ function useDisclosure(): SectionDisclosure {
 /**
  * Drawer row → section → item. A closed row shows only the section's one-line summary; an open one shows the
  * complete section beneath the row, with breadcrumbs inside an item and an explicit collapse action.
+ * Collapsing hides the existing content instead of removing server-rendered previews from mobile pages.
  */
 export function SectionCard({ section, icon, title, meta, itemLabel, children }: {
   section: MatchSection; icon: ReactNode; title: string; meta?: ReactNode; itemLabel?: string | null; children: ReactNode;
@@ -31,26 +32,28 @@ export function SectionCard({ section, icon, title, meta, itemLabel, children }:
   const { open, byDefault, reveal, toggle } = useDisclosure();
   const panelId = `section-${section}`, headingId = `${panelId}-title`;
   const button = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   // An item opened from a deep link focuses itself instead of the section heading.
   const heading = useRevealOnOpen<HTMLHeadingElement>(open && reveal > 0 && view.item === null, `${section}:${reveal}`, "card");
   const wasOpen = useRef(open);
   useEffect(() => {
-    // Collapsing from inside the panel (its collapse link disappears with it) returns focus to the heading.
-    if (wasOpen.current && !open && (document.activeElement === null || document.activeElement === document.body)) button.current?.focus();
+    // A retained hidden panel must not keep focus on one of its descendants after collapsing.
+    if (wasOpen.current && !open && (document.activeElement === null || document.activeElement === document.body ||
+        panel.current?.contains(document.activeElement))) button.current?.focus();
     wasOpen.current = open;
   }, [open]);
   const closeItem = () => update((current) => ({ ...current, item: null }));
   return <Card data-section={section} data-open={open || undefined} data-open-by-default={byDefault || undefined} aria-labelledby={headingId}>
     <CardHeader icon={icon} title={title} meta={meta} open={open} controls={panelId} onToggle={toggle}
       headingId={headingId} buttonRef={button} />
-    <div id={panelId} hidden={!open}>
-      {open && <Panel>
+    <div ref={panel} id={panelId} hidden={!open}>
+      <Panel>
         <Crumbs shallow={!itemLabel} items={[{ label: messages.text("details.title"), onSelect: () => update((current) => openSection(current, null)) },
           itemLabel ? { label: title, onSelect: closeItem } : { label: title }, ...(itemLabel ? [{ label: itemLabel }] : [])]} />
         <HiddenHeading ref={heading} tabIndex={-1}>{title}</HiddenHeading>
         {children}
         <LinkButton type="button" onClick={toggle}>{messages.text("details.collapse", { section: title })}</LinkButton>
-      </Panel>}
+      </Panel>
     </div>
   </Card>;
 }

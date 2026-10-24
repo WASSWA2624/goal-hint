@@ -7,8 +7,9 @@ A free football prediction website with estimated probabilities, clear analysis 
 The Next.js application includes a responsive match feed, match details, revision
 history, live refresh, stored-data APIs, and private football processing workers.
 Visitors read published data; public requests never trigger provider imports.
-Public search indexing remains disabled until the recorded launch requirements
-are satisfied; see [SEO and discovery](docs/seo-discovery.md).
+Public search indexing requires the production runtime and recorded release
+approval; page-specific publication controls still apply. The current hosting
+suspension blocks live verification; see [SEO and discovery](docs/seo-discovery.md).
 Consent-gated first-party visitor analytics and the private `/analytics` dashboard
 are described in [analytics](docs/analytics.md) (development sign-in: `admin`/`admin`;
 production requires its own hashed credentials).

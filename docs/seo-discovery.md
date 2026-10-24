@@ -10,6 +10,11 @@ suspension affecting public pages, APIs, robots and sitemaps. Earlier successful
 deployment checks are historical evidence; production availability and indexing
 must be verified again after hosting is restored.
 
+The [23 October follow-up](reports/seo-followup-2026-10-23.md) retains available
+stored analysis and section content in collapsed mobile accordions and strengthens
+production HTML/sitemap verification, with fresh availability evidence and
+Search Console recovery steps.
+
 ## Canonical pages and metadata
 
 `publicPolicy.origin` fixes the metadata base and canonical origin to

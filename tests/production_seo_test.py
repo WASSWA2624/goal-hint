@@ -33,7 +33,8 @@ def page(path, index=True):
     return response(f'<html lang="en"><head><link rel="canonical" href="{canonical}">'
         f'<meta name="robots" content="{"index" if index else "noindex"}, follow">'
         f'<meta property="og:url" content="{canonical}">'
-        '<meta name="description" content="Synthetic fixture for SEO acceptance."></head></html>')
+        '<meta name="description" content="Synthetic fixture for SEO acceptance.">'
+        '<title>Synthetic page | Goal Hint</title></head><body><h1>Synthetic <span>fixture</span></h1></body></html>')
 
 
 def sitemap(paths, *, index=False):
@@ -79,7 +80,9 @@ class ProductionSeoTests(unittest.TestCase):
     def verify(self):
         output = io.StringIO()
         with patch.dict(seo['verify'].__globals__, {'get': self.read,
-                'notices': lambda: {key: {'releaseReady': False} for key in ('privacyNotice', 'termsNotice')}}), redirect_stdout(output):
+                'notices': lambda: {'privacyNotice': {'releaseReady': False}, 'termsNotice': {'releaseReady': False},
+                    'contactNotice': {'releaseReady': True}, 'todayPath': '/en/predictions/' + TODAY,
+                    'informationPages': ['help', 'privacy', 'terms', 'contact']}}), redirect_stdout(output):
             seo['verify']('http://127.0.0.1', today=TODAY)
         return json.loads(output.getvalue())
 
@@ -114,6 +117,59 @@ class ProductionSeoTests(unittest.TestCase):
             with self.subTest(extra=extra):
                 valid = page('/en')
                 self.overrides['/en'] = Response(200, valid.headers, valid.text.replace('</head>', extra + '</head>'))
+                with self.assertRaises(AssertionError):
+                    self.verify()
+
+    def test_title_and_main_heading_must_be_unique_and_server_rendered(self):
+        valid = page('/en')
+        for before, after in (('<title>Synthetic page | Goal Hint</title>', ''),
+                ('<title>Synthetic page | Goal Hint</title>', '<title> </title>'),
+                ('</head>', '<title>Duplicate title</title></head>'),
+                ('<h1>Synthetic <span>fixture</span></h1>', ''),
+                ('<h1>Synthetic <span>fixture</span></h1>', '<h1> </h1>'),
+                ('</body>', '<h1>Duplicate heading</h1></body>'),
+                ('<h1>Synthetic <span>fixture</span></h1>',
+                    '<script>const shell = "<h1>Client-only heading</h1>";</script>'),
+                ('<h1>Synthetic <span>fixture</span></h1>', '<template><h1>Inert heading</h1></template>')):
+            with self.subTest(after=after):
+                self.overrides['/en'] = Response(200, valid.headers, valid.text.replace(before, after))
+                with self.assertRaises(AssertionError):
+                    self.verify()
+
+    def test_svg_titles_and_inert_descendants_do_not_conflict_with_document_metadata(self):
+        valid = page('/en')
+        self.overrides['/en'] = Response(200, valid.headers, valid.text.replace(
+            '<h1>Synthetic <span>fixture</span></h1>',
+            '<h1><svg><title>Decorative icon</title></svg>'
+            '<template><h1>Ignored heading</h1><title>Ignored title</title></template>Visible heading</h1>'))
+        self.assertGreater(self.verify()['passed'], 0)
+
+    def test_every_sitemap_location_must_use_the_canonical_origin_and_clean_url(self):
+        for url in ('https://other.example/en', 'http://goalhint.com/en', '//goalhint.com/en',
+                'https://www.goalhint.com/en', ORIGIN + '/en?status=live', ORIGIN + '/en#section'):
+            with self.subTest(url=url):
+                invalid = sitemap(['/en'])
+                self.overrides['/sitemap.xml'] = Response(200, invalid.headers,
+                    invalid.text.replace(ORIGIN + '/en', escape(url)))
+                with self.assertRaises(AssertionError):
+                    self.verify()
+
+    def test_wrong_sitemap_document_missing_locations_and_duplicates_fail(self):
+        for invalid in (sitemap(['/en'], index=True), sitemap(['/en', '/en']),
+                response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                    '<url xmlns=""><loc>https://other.example/en</loc></url></urlset>', Content_Type='application/xml'),
+                response('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url/></urlset>',
+                    Content_Type='application/xml')):
+            with self.subTest(xml=invalid.text):
+                self.overrides['/sitemap.xml'] = invalid
+                with self.assertRaises(AssertionError):
+                    self.verify()
+
+    def test_private_unpublished_and_missing_landing_pages_cannot_pass_sitemap_checks(self):
+        for paths in (['/en'], ['/en', '/en/matches', '/en/account'], ['/en', '/en/matches', '/admin/payments'],
+                ['/en', '/en/matches', '/en/privacy'], ['/en', '/en/matches', '/en/terms']):
+            with self.subTest(paths=paths):
+                self.overrides['/sitemap.xml'] = sitemap(paths)
                 with self.assertRaises(AssertionError):
                     self.verify()
 

@@ -13,19 +13,44 @@ from lib.runtime import CommandError, main_guard
 ORIGIN = CANONICAL_ORIGIN
 
 
-class Head(HTMLParser):
+class PageMarkup(HTMLParser):
+    ignored_tags = frozenset(('script', 'style', 'template', 'svg', 'math'))
+
     def __init__(self, source):
         super().__init__()
         self.meta, self.canonicals = {}, []
+        self.titles, self.headings = [], []
+        self.active_text = None
+        self.ignored = 0
         self.feed(source)
 
     def handle_starttag(self, tag, attributes):
+        if tag in self.ignored_tags:
+            self.ignored += 1
+        if self.ignored:
+            return
+        if tag in ('title', 'h1'):
+            values = self.titles if tag == 'title' else self.headings
+            values.append('')
+            self.active_text = values
         attributes = dict(attributes)
         if tag == 'meta':
             name = attributes.get('name') or attributes.get('property')
             self.meta.setdefault(name.lower() if name else None, []).append(attributes.get('content'))
         if tag == 'link' and attributes.get('rel') == 'canonical':
             self.canonicals.append(attributes.get('href'))
+
+    def handle_endtag(self, tag):
+        if self.ignored:
+            if tag in self.ignored_tags:
+                self.ignored -= 1
+            return
+        if tag in ('title', 'h1'):
+            self.active_text = None
+
+    def handle_data(self, value):
+        if self.active_text is not None and not self.ignored:
+            self.active_text[-1] += value
 
 
 def verify(origin, *, today=None):
@@ -43,7 +68,9 @@ def verify(origin, *, today=None):
     def page(path, canonical, index):
         nonlocal checks
         response = read(path)
-        head = Head(response.text)
+        head = PageMarkup(response.text)
+        assert len(head.titles) == 1 and head.titles[0].strip(), 'One nonempty page title is required.'
+        assert len(head.headings) == 1 and head.headings[0].strip(), 'One server-rendered main heading is required.'
         assert head.canonicals == [ORIGIN + canonical], path
         assert head.meta.get('robots') == ['index, follow' if index else 'noindex, follow'], path
         assert head.meta.get('og:url') == [ORIGIN + canonical], path
@@ -67,7 +94,7 @@ def verify(origin, *, today=None):
     for path in ('/admin', '/en/account', '/en/subscribe'):
         response = read(path)
         private_response(response, path, require_private=False)
-        assert any('noindex' in value.lower() for value in Head(response.text).meta.get('robots', []) if value), path
+        assert any('noindex' in value.lower() for value in PageMarkup(response.text).meta.get('robots', []) if value), path
         assert 'noindex' in response.headers.get('X-Robots-Tag', ''), path
         checks += 1
     robots = read('/robots.txt').text
@@ -87,16 +114,39 @@ def verify(origin, *, today=None):
             assert rules.can_fetch(crawler, ORIGIN + path), 'Public landing pages are blocked by robots.txt.'
     checks += 1
 
-    def locations(path):
+    def locations(path, *, index=False):
         response = read(path)
         assert 'xml' in response.headers.get('content-type', ''), path
-        return [node.text for node in ElementTree.fromstring(response.text).iter() if node.tag.endswith('}loc')]
+        namespace = '{http://www.sitemaps.org/schemas/sitemap/0.9}'
+        document = ElementTree.fromstring(response.text)
+        assert document.tag == namespace + ('sitemapindex' if index else 'urlset'), path
+        entries = list(document)
+        assert all(entry.tag == namespace + ('sitemap' if index else 'url') for entry in entries), 'Invalid sitemap entry namespace or type.'
+        urls = []
+        for entry in entries:
+            values = entry.findall(namespace + 'loc')
+            assert len(values) == 1 and values[0].text, 'Every sitemap entry needs one location.'
+            url = values[0].text
+            parsed = urlsplit(url)
+            assert parsed.scheme == 'https' and parsed.netloc == 'goalhint.com' and parsed.path.startswith('/'), 'Noncanonical sitemap location.'
+            assert not parsed.query and not parsed.fragment, 'Sitemaps must exclude query and fragment variants.'
+            if not index:
+                assert not any(parsed.path == base or parsed.path.startswith(base + '/')
+                    for base in ('/admin', '/analytics', '/api', '/en/account', '/en/subscribe')), 'Private URLs must not appear in sitemaps.'
+                for name, notice in publication.items():
+                    if name.endswith('Notice') and not notice['releaseReady']:
+                        assert parsed.path != '/en/' + name.removesuffix('Notice'), 'Unpublished information page in sitemap.'
+            urls.append(url)
+        assert len(urls) == len(set(urls)), 'Duplicate sitemap locations.'
+        return urls
 
-    maps = locations('/sitemap-index.xml')
+    maps = locations('/sitemap-index.xml', index=True)
     assert ORIGIN + '/sitemap.xml' in maps
     for url in maps:
         assert urlsplit(url).netloc == 'goalhint.com' and urlsplit(url).path.count('/') == 1, url
         urls = locations(urlsplit(url).path)
+        if url == ORIGIN + '/sitemap.xml':
+            assert {ORIGIN + '/en', ORIGIN + '/en/matches'} <= set(urls), 'Public landing pages are missing from the sitemap.'
         if '/sitemap-matches-' in url and urls:
             path = urlsplit(urls[0]).path
             page(path, path, True)

@@ -1,39 +1,39 @@
 # Slip builder
 
-`/en/slips` implements the Essentials first mobile layout with the Four folds
-Markets & results section and the existing classic table slips. All criteria
-expand on desktop. Each slip has its total odds, average forecast
+`/en/slips` uses the Balanced slip builder with the existing classic table
+slips. Each slip has its total odds, average forecast
 probability and selection count in its title, with one semantic table row per match.
 The shared navigation includes Slip builder; its More menu holds the items that exceed the compact primary
 navigation. Controls and results use the existing square, themed components.
 
 ## Responsive criteria layout
 
-Mobile keeps the slip count, total odds range and picks-per-slip range visible
-in one compact row. Three native `<details>` sections follow: Each pick,
-Kickoff and Markets & results. All three start closed. Their summaries show
-the current draft ranges, selected markets and Automatic/manual outcome mode,
-so collapsed sections still explain their settings. With JavaScript,
-these summaries update as fields change, without submitting a build. Desktop
-keeps all three groups expanded and the fields visible.
+Number of slips sits beside the title. Total odds per slip and Matches per slip stay
+visible, followed by one row of Match limits, Match Date & Time and Markets buttons on both
+desktop and mobile. Detailed criteria open in native modal dialogs instead of
+expanding the form. Inputs use the existing square, themed controls.
 
-Markets & results opens to one row per market, pairing its checkbox with the
-existing multi-result picker. Match reuse follows Markets in both the
-visual layout and keyboard order, followed by Reset and Build slips.
-Collapsing a group hides its controls visually while retaining
-the enabled, named inputs in the same native GET form; date, time and numeric
-ranges continue to submit without JavaScript. Native summaries can open the
-sections without JavaScript as well. Mobile sections opened before hydration
-keep that native open state when the enhanced controls attach.
+The buttons show counts for their current settings. Match limits counts custom
+odds and probability ranges, up to two. Match Date & Time counts a custom date
+range and a custom daily time window, also up to two. Markets shows the number
+of selected market families, starting at four. A range counts once even when
+both its minimum and maximum are changed. Limits and date/time hide their count
+when zero; Markets always shows its selected-family count.
 
-A validation error opens the group containing its invalid controls on every
-failed submission, even if the group was subsequently closed. Target validation
-keeps the already-visible essential inputs marked invalid. The entered
-draft remains editable, the offending fields retain their accessible error
-association, and the error explanation stays visible. The responsive layout
-changes neither the criteria contract nor the stored-data generation rules.
-When resizing to desktop hides a focused accordion summary, focus moves to its
-first input so keyboard navigation retains a visible target.
+Apply validates and retains the current dialog's changes. Cancel, Escape and
+backdrop dismissal discard changes made since that dialog opened. Native dialog
+behavior contains keyboard focus while open and returns it to the trigger after
+closing. Markets retains multi-result choices and the match-reuse checkbox.
+
+All fields remain uniquely named and associated with the same native GET form.
+Before JavaScript attaches, dialogs render as visible inline sections so the
+complete form remains usable without JavaScript. Hydration enables the modal
+presentation and the three compact triggers.
+
+A validation error exposes its invalid optional group; essential target errors
+stay beside the visible controls. Draft values remain editable and retain their
+accessible error association. The layout does not change the domain criteria,
+stored-data generation rules, navigation, or generated and completed slip UI.
 
 ## Criteria and submission
 
@@ -42,20 +42,24 @@ browser-safe `src/domain/slip-builder.ts` contract:
 
 | Criteria | Supported values | Default |
 | --- | --- | --- |
-| Kickoff date range | Inclusive reporting dates, up to 31 days | Any within today through 30 days later |
-| Kickoff time range | Inclusive daily minutes in Africa/Kampala (EAT) | Both blank, meaning all day |
+| Kickoff date range | Inclusive reporting dates, up to 31 days | Today through 30 days later |
+| Kickoff time range | Inclusive daily minutes in Africa/Kampala (EAT) | 00:00–23:59, all day |
 | Markets | One or more match result, double chance, total goals or both teams to score | All four |
 | Market outcomes | Automatic or one or more supported results within each selected family | Any (Automatic) |
-| Total odds | Inclusive minimum and maximum, 1.01–100,000.00 | Any supported odds |
-| Individual selection odds | Inclusive minimum and maximum, 1.01–1,000.00 | Any supported odds |
-| Selection probability | Inclusive unrounded percentage bounds, 0–100 | Any supported probability |
-| Selection count | Minimum and maximum of 1–8 matches per slip | Any supported count |
+| Total odds | Inclusive minimum and maximum, 1.01–100,000.00 | Blank (Any supported odds) |
+| Individual selection odds | Inclusive minimum and maximum, 1.01–1,000.00 | Blank (Any supported odds) |
+| Selection probability | Inclusive unrounded percentage bounds, 0–100 | Blank (Any supported probability) |
+| Selection count | Minimum and maximum of 1–8 matches per slip | Blank (Any supported count) |
 | Number of slips | 1–10 | 3 |
 | Reuse matches | Allow a fixture in multiple separate slips | Off |
 
-Reset restores the blank Any criteria, all markets with Automatic outcomes,
-three requested slips and disabled match reuse. The underlying default date
-range remains bounded to 31 days. Blank date-from means today; blank date-to
+The numeric range fields start blank and display Any as their placeholder.
+Explicit supported lower or upper bounds in a criteria URL also display Any;
+custom limits retain their numeric values.
+Reset restores those blank Any bounds, today's 31-day date range,
+00:00–23:59, all markets with Automatic outcomes, three requested slips and
+disabled match reuse, including after loading a criteria query. Blank date-from
+still means today; blank date-to
 means 30 days after the chosen date-from. An explicit single date bound is
 accepted when the resulting range is valid and no longer than 31 days.
 
@@ -205,8 +209,8 @@ outcome, manual choices using their own probabilities and quotes, multi-result
 combinations, missing outcome prices and invalid outcome-family mappings.
 
 `npm run test:slips:rendering` builds the isolated Next.js fixture and verifies
-real server-rendered controls, the three native accordion groups and their
-default states, retained inputs in collapsed sections, draft summaries and
-validation-driven expansion. It also checks result states, native GET builds, invalid criteria,
+real server-rendered controls, the three dialog groups and their inline
+no-JavaScript fallback, blank Any defaults, retained custom numeric bounds, and
+unique form-associated inputs. It also checks result states, native GET builds, invalid criteria,
 navigation overflow, summaries inside slip titles and one row per selection.
 Its `--serve` option keeps the fixture available for browser inspection.

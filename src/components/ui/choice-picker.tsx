@@ -34,21 +34,44 @@ const Root = styled.details`
     input { flex: none; inline-size: 1rem; block-size: 1rem; accent-color: ${({ theme }) => theme.color.brand}; }
   }
 `;
+const InlineChoices = styled.fieldset`
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 14px;
+  min-inline-size: 0; margin: 0; padding: 0; border: 0;
+  > label {
+    display: inline-flex; align-items: center; gap: 6px; min-block-size: 2rem;
+    color: ${({ theme }) => theme.color.text}; font-size: 0.75rem; cursor: pointer;
+  }
+  input {
+    flex: none; inline-size: 1rem; block-size: 1rem; margin: 0;
+    accent-color: ${({ theme }) => theme.color.brand};
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  }
+  &:disabled > label { color: ${({ theme }) => theme.color.disabledText}; cursor: default; }
+  @media (pointer: coarse) { > label { min-block-size: 2.75rem; } }
+`;
 const subscribeNever = () => () => {};
 const clientReady = () => true;
 const serverReady = () => false;
 
 /** Native disclosure keeps named inputs available to GET forms, including without JavaScript. */
-export function ChoicePicker({ name, label, automaticLabel, automaticHint, options, selected, onChange, disabled = false, invalid = false, describedBy }: {
+export function ChoicePicker({ name, label, automaticLabel, automaticHint, options, selected, onChange, disabled = false, invalid = false, describedBy, inline = false }: {
   name: string; label: string; automaticLabel: string; automaticHint: string; options: readonly Option[]; selected: readonly string[];
-  onChange: (values: readonly string[]) => void; disabled?: boolean; invalid?: boolean; describedBy?: string;
+  onChange: (values: readonly string[]) => void; disabled?: boolean; invalid?: boolean; describedBy?: string; inline?: boolean;
 }) {
   const root = useRef<HTMLDetailsElement>(null), panelId = useId(), [open, setOpen] = useState(false);
   const hydrated = useSyncExternalStore(subscribeNever, clientReady, serverReady);
   const inactive = disabled && hydrated;
   const close = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
-  useOutsideDismiss({ enabled: open, root, onDismiss: close });
+  useOutsideDismiss({ enabled: open && !inline, root, onDismiss: close });
   const summary = selected.length ? options.filter((option) => selected.includes(option.value)).map((option) => option.label).join(", ") : automaticLabel;
+  const choices = options.map((option) => <label key={option.value}><input type="checkbox" name={name} value={option.value} checked={selected.includes(option.value)}
+    onChange={() => onChange(selected.includes(option.value) ? selected.filter((value) => value !== option.value) : [...selected, option.value])} />{option.label}</label>);
+  if (inline) return <InlineChoices data-choice-inline disabled={inactive} aria-invalid={invalid || undefined}
+    {...(describedBy ? { "aria-describedby": describedBy } : {})}>
+    <legend><VisuallyHidden>{label}</VisuallyHidden></legend>
+    <label><input type="checkbox" checked={selected.length === 0} onChange={() => onChange([])} />{automaticLabel}</label>
+    {choices}
+  </InlineChoices>;
   return <Root ref={root} data-disabled={inactive} onToggle={(event) => setOpen(event.currentTarget.open)} onKeyDown={(event) => {
     if (event.key === "Escape" && root.current?.open) { event.preventDefault(); event.stopPropagation(); close(); root.current.querySelector("summary")?.focus(); }
   }}>
@@ -58,8 +81,7 @@ export function ChoicePicker({ name, label, automaticLabel, automaticHint, optio
     <fieldset id={panelId} disabled={inactive}><legend><VisuallyHidden>{label}</VisuallyHidden></legend>
       {hydrated && <button type="button" aria-pressed={selected.length === 0} onClick={() => onChange([])}>{automaticLabel}</button>}
       <p>{automaticHint}</p>
-      {options.map((option) => <label key={option.value}><input type="checkbox" name={name} value={option.value} checked={selected.includes(option.value)}
-        onChange={() => onChange(selected.includes(option.value) ? selected.filter((value) => value !== option.value) : [...selected, option.value])} />{option.label}</label>)}
+      {choices}
     </fieldset>
   </Root>;
 }
