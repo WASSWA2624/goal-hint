@@ -13,10 +13,13 @@ import { ActionButton, ButtonRow, DangerButton, FieldBlock, FieldRow, FormStack,
 import { refreshPendingPayments } from "./pending-payments";
 /** Keep the access decision visible alongside the separate payment notification outcome. */
 export function grantNotice(body: AdminReply["body"]): string | null {
+  const credit = typeof body.creditAddedUgx === "number" && typeof body.balanceUgx === "number"
+    ? `UGX ${body.creditAddedUgx.toLocaleString("en-UG")} added to credit (balance UGX ${body.balanceUgx.toLocaleString("en-UG")})` : "";
+  if (body.status === "credited") return [`Approved · ${credit}`, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
   if (typeof body.endsAt !== "string" || typeof body.devicesUnlocked !== "number") return null;
   const n = body.devicesUnlocked, line = `${body.status === "approved" ? "Approved" : "Granted"} · access until ${formatPeriodEnd(new Date(body.endsAt))} · ${n} device${n === 1 ? "" : "s"} unlocked`;
   const grant = n ? line : `${line}. Devices already unlocked keep access; the member's next sign-in unlocks one.`;
-  return [grant, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
+  return [grant, credit, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
 }
 export function useCodeAction() {
   const router = useRouter(), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [notice, setNotice] = useState(""), [duplicateId, setDuplicateId] = useState<string | null>(null);

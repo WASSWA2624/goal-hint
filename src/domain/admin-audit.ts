@@ -53,6 +53,11 @@ const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze(
   payment_sms_attempted: { label: "Payment notification attempted", category: "payments" },
   trial_requested: { label: "Trial requested", category: "access" },
   uploads_busy: { label: "Payment upload limit reached", category: "system" },
+  credit_spent: { label: "Plan bought with credit", category: "payments" },
+  credit_renewed: { label: "Plan renewed from credit", category: "payments" },
+  credit_adjusted: { label: "Credit adjusted", category: "payments" },
+  credit_forfeited: { label: "Credit forfeited at erasure", category: "accounts" },
+  auto_renew_changed: { label: "Auto-renewal changed", category: "access" },
 });
 
 const targetLabels: Readonly<Record<string, string>> = Object.freeze({

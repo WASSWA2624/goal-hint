@@ -64,7 +64,8 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
       <span>{messages.text("account.expiresOn")} <time dateTime={subscription.activeUntil}>{messages.text("account.expiresAt", subscriptionExpiryParts(until))}</time>
         {left && ` (${left.unit === "day" ? messages.plural("account.leftDays", left.count)
           : left.count ? messages.plural("account.leftHours", left.count) : messages.text("account.underAnHourLeft")})`}</span>
-      {subscription.canSubscribe && (subscribing ? !subscription.paymentPending && <span data-renewal-note>{messages.text("account.renewalExtends")}</span> : <Action href={subscribePath} prefetch={false}>
+      {subscription.renewsFromCredit ? <span data-renewal-note>{messages.text("account.renewsFromCredit")}</span>
+        : subscription.canSubscribe && (subscribing ? !subscription.paymentPending && <span data-renewal-note>{messages.text("account.renewalExtends")}</span> : <Action href={subscribePath} prefetch={false}>
         {messages.text(subscription.paymentPending ? "account.viewPayment" : "account.renew")}
       </Action>)}
     </Row>

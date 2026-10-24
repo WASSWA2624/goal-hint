@@ -56,7 +56,7 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
           : member?.blocked ? <p role="status">{m.text("account.refused")}</p>
             : <SubscribeFlow key={member?.tokenHash ?? "signed-out"} locale={locale} settings={settings!} plans={offers}
               account={member ? { id: member.accountId, phone: member.phone } : null} view={view} returnTo={returnTo} userAgent={userAgent}
-              trialPending={!!view?.trialPending && !activeUntil} />}
+              trialPending={!!view?.trialPending && !activeUntil} startWithTopUp={parameters.add === "credit"} />}
     </SubscribeLayout></PublicShell>;
   };
 }

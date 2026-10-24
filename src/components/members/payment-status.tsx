@@ -57,7 +57,8 @@ function PaymentDetails({ locale, status, pending, reviewTime }: {
   return <>
     <StatusFacts aria-label={m.text("subscribe.paymentDetails")} data-payment-summary>
       <div><dt>{m.text("subscribe.referenceLabel")}</dt><dd>{status.reference}</dd></div>
-      <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{status.planName}</dd></div>
+      {status.purpose === "topup" ? <div><dt>{m.text("credit.forLabel")}</dt><dd>{m.text("credit.topUp")}</dd></div>
+        : <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{status.planName}</dd></div>}
       <div><dt>{m.text("subscribe.amountLabel")}</dt><dd>UGX {m.number(status.priceUgx)}</dd></div>
       {pending && sent}
     </StatusFacts>
@@ -83,8 +84,11 @@ export function PaymentStatusCard({ locale, status, settings, phone, heading = "
   if (!pending && !rejected && !reversed) return null;
   const StatusIcon = pending ? ClockIcon : rejected ? InfoIcon : ResetIcon;
   const title = pending ? "subscribe.pendingTitle" : rejected ? "subscribe.rejectedTitle" : "subscribe.reversedTitle";
-  const message = rejected ? status.rejectText ?? m.text(`subscribe.reason.${reasonOf(status.rejectReason)}`)
-    : m.text(pending ? "subscribe.pendingLead" : "subscribe.reversedLead");
+  // A top-up gives credit, not access: its waiting and reversed states say what happens to the credit.
+  const topUp = status.purpose === "topup";
+  const reason = reasonOf(status.rejectReason);
+  const message = rejected ? status.rejectText ?? m.text(topUp && reason === "amount-mismatch" ? "credit.reason.amount-mismatch" : `subscribe.reason.${reason}`)
+    : m.text(pending ? topUp ? "credit.pendingLead" : "subscribe.pendingLead" : topUp ? "credit.reversedLead" : "subscribe.reversedLead");
   const contactDetails = { reference: status.reference, phone: formatPhone(phone) };
   const supportText = pending ? m.text("subscribe.helpPaid", { ...contactDetails, price: String(status.priceUgx), plan: status.planName })
     : m.text(reversed ? "subscribe.helpReversed" : "subscribe.helpRejected", contactDetails);

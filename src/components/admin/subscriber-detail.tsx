@@ -5,6 +5,7 @@ import type { OwnerSubscriber } from "@/domain/owner-members";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
+import { formatCredit, formatCreditChange, walletKindLabels, walletRules } from "@/domain/wallet";
 import { PhoneInput } from "@/components/ui/controls";
 import { GiftIcon, KeyIcon, PhoneIcon, ShieldIcon, SignOutIcon, TrashIcon } from "@/components/ui/icons";
 import { ActionButton, DangerButton, FieldBlock } from "./admin-form";
@@ -14,9 +15,9 @@ import { ActionClose, CompactForm, DetailHeading, DetailLayout, DetailPanel, Mut
   Records, SectionHeader, SensitiveOptions, Stats, Status, StatusRow, Tabs } from "./subscriber-styles";
 
 type AccountAction = "grant" | "number" | "password" | "block" | "devices" | "delete" | "erase";
-type Tab = "overview" | "access" | "payments" | "devices";
-const tabs: readonly Tab[] = ["overview", "access", "payments", "devices"];
-const tabLabels = { overview: "Overview", access: "Access", payments: "Payments", devices: "Devices" };
+type Tab = "overview" | "access" | "payments" | "credit" | "devices";
+const tabs: readonly Tab[] = ["overview", "access", "payments", "credit", "devices"];
+const tabLabels = { overview: "Overview", access: "Access", payments: "Payments", credit: "Credit", devices: "Devices" };
 const actionTitles: Record<AccountAction, string> = { grant: "Grant access", number: "Change number", password: "Reset password",
   block: "Account restriction", devices: "Sign out all devices", delete: "Permanently delete account", erase: "Erase personal data" };
 
@@ -27,7 +28,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal }
   const id = useId(), heading = useRef<HTMLHeadingElement>(null);
   const path = `/api/admin/subscribers/${account.id}`, erased = !!account.erasedAt;
   const access = account.codes.some(code => code.status === "active") ? "Active access" : account.codes.some(code => code.status === "queued") ? "Queued access" : "No current access";
-  const counts = { overview: null, access: account.codes.length, payments: account.submissions.length, devices: account.devices.length };
+  const counts = { overview: null, access: account.codes.length, payments: account.submissions.length, credit: null, devices: account.devices.length };
   useEffect(() => { if (active) heading.current?.focus(); }, [active]);
   function closeAction() {
     if (action.busy) return;
@@ -53,7 +54,8 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal }
         <StatusRow><Status $tone={erased ? "muted" : account.blockedAt ? "warning" : "good"}>{erased ? "Erased" : account.blockedAt ? "Blocked" : "Open"}</Status>
           <Status $tone={access === "Active access" ? "good" : "muted"}>{access}</Status></StatusRow>
       </div></DetailHeading>
-      <Stats><div><dt>Unlocked devices</dt><dd>{account.devices.length}</dd></div><div><dt>Access periods</dt><dd>{account.codes.length}</dd></div><div><dt>Unlocks · 30 days</dt><dd>{account.unlocks}</dd></div></Stats>
+      <Stats><div><dt>Unlocked devices</dt><dd>{account.devices.length}</dd></div><div><dt>Access periods</dt><dd>{account.codes.length}</dd></div><div><dt>Unlocks · 30 days</dt><dd>{account.unlocks}</dd></div>
+        <div><dt>Credit</dt><dd data-subscriber-credit>{formatCredit(account.creditUgx)}</dd></div></Stats>
       {account.blockedReason && <MutedText role="note">Blocked: {account.blockedReason}</MutedText>}
       <QuickActions aria-label="Account actions" data-subscriber-actions>
         {!erased && <>
@@ -106,9 +108,20 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal }
       {tab === "payments" && <><h2>Payment submissions</h2>{account.submissions.length ? <Records>{account.submissions.map(payment => <li key={payment.id}>
         <RecordHeader><a href={`/admin/payments?tab=${payment.status === "approved" || payment.status === "reversed" ? "approved" : payment.status === "rejected" ? "rejected" : "pending"}#${payment.id}`}>{payment.reference}</a>
           <Status $tone={payment.status === "approved" ? "good" : payment.status === "pending" ? "warning" : "muted"}>{payment.status}</Status></RecordHeader>
-        <p>{payment.planName} · UGX {(payment.amountReceivedUgx ?? payment.claimedAmountUgx).toLocaleString("en-UG")}</p>
+        <p>{payment.purpose === "topup" ? "Credit top-up" : payment.planName} · UGX {(payment.amountReceivedUgx ?? payment.claimedAmountUgx).toLocaleString("en-UG")}</p>
         <small>{formatPeriodEnd(new Date(payment.submittedAt))}</small>
       </li>)}</Records> : <MutedText>No payment submissions.</MutedText>}</>}
+      {tab === "credit" && <><SectionHeader><h2>Credit · {formatCredit(account.creditUgx)}</h2></SectionHeader>
+        <MutedText>{account.creditUgx < 0 ? "A reversed payment's credit was already spent. Spending stays blocked until a top-up clears the balance."
+          : "Plan-only and non-refundable. Approved top-ups and amounts paid above a plan's price add to it."}</MutedText>
+        <StatusRow><Status $tone={account.autoRenew ? "good" : "muted"}>{account.autoRenew ? `Auto-renews ${account.autoRenewPlanName ?? "a plan"}` : "Auto-renewal off"}</Status></StatusRow>
+        {!erased && account.autoRenew && <ActionButton type="button" disabled={action.busy} onClick={() => void action.send(path, { action: "auto-renew-off" }, "Auto-renewal turned off.")}>Turn off auto-renewal</ActionButton>}
+        {!erased && <CreditAdjust path={path} action={action} />}
+        <h3>History</h3>
+        {account.wallet.length ? <Records data-subscriber-wallet>{account.wallet.map(entry => <li key={entry.id}><RecordHeader><strong>{walletKindLabels[entry.kind]} · {formatCreditChange(entry.amountUgx)}</strong>
+          <span>{formatCredit(entry.balanceAfter)}</span></RecordHeader>
+          <p>{[entry.payment, entry.period, entry.note].filter(Boolean).join(" · ") || (entry.actor === "system" ? "Automatic" : entry.actor === "member" ? "By the member" : "By the owner")}</p>
+          <small>{formatPeriodEnd(new Date(entry.createdAt))}</small></li>)}</Records> : <MutedText>No credit history.</MutedText>}</>}
       {tab === "devices" && <><SectionHeader><h2>Unlocked devices</h2>{!erased && account.devices.length > 0 && <ActionButton type="button" disabled={action.busy} onClick={() => setActive("devices")}>Sign out all</ActionButton>}</SectionHeader>
         {account.devices.length ? <Records>{account.devices.map((device, index) => <li key={`${device.createdAt}-${index}`}><strong>Device {index + 1}</strong><p>Last seen {formatPeriodEnd(new Date(device.lastSeenAt))}</p><small>Expires {formatPeriodEnd(new Date(device.expiresAt))}</small></li>)}</Records> : <MutedText>No unlocked devices.</MutedText>}</>}
     </DetailPanel>
@@ -125,14 +138,30 @@ function OwnerNote({ account, action }: { account: OwnerSubscriber; action: Code
   </CompactForm>;
 }
 
+/** A correction with a reason the ledger keeps; a negative amount takes credit away but never below zero. */
+function CreditAdjust({ path, action }: { path: string; action: CodeAction }) {
+  const [amount, setAmount] = useState(""), [note, setNote] = useState(""), [confirmed, setConfirmed] = useState(false);
+  const value = Number(amount), valid = /^-?\d+$/u.test(amount.trim()) && value !== 0 && Math.abs(value) <= walletRules.adjustmentMaxUgx && !!note.trim();
+  return <details data-subscriber-credit-adjust><summary>Correct credit</summary><CompactForm method="post" action={path} onSubmit={async event => {
+    event.preventDefault(); if (action.busy || !valid || !confirmed) return;
+    const reply = await action.send(path, { action: "credit-adjust", amount: value, note, confirmed }, `Credit ${value > 0 ? "added" : "removed"}.`);
+    if (reply.ok) { setAmount(""); setNote(""); setConfirmed(false); }
+  }}><MutedText>Use a negative amount to remove credit. Top-ups are approved from the payment instead.</MutedText>
+    <FieldBlock>Amount · UGX<input name="amount" inputMode="numeric" required value={amount} disabled={action.busy} onChange={event => setAmount(event.currentTarget.value)} placeholder="e.g. 5000 or -5000" /></FieldBlock>
+    <FieldBlock>Reason<input name="note" required maxLength={200} value={note} disabled={action.busy} onChange={event => setNote(event.currentTarget.value)} placeholder="Shown in the credit history" /></FieldBlock>
+    <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => setConfirmed(event.target.checked)} /> I checked this correction.</label>
+    <ActionButton type="submit" $variant="primary" disabled={action.busy || !valid || !confirmed}>Save correction</ActionButton>
+  </CompactForm></details>;
+}
+
 function ChangeNumber({ path, action, onSaved }: { path: string; action: CodeAction; onSaved: () => void }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (action.busy) return;
     const data = new FormData(event.currentTarget);
-    const reply = await action.send(path, { action: "change-number", newPhone: data.get("newPhone"), verifiedBy: data.get("verifiedBy"), confirmed: data.get("confirmed") === "on" }, "Remaining access moved to the new number. Old sessions no longer have access.");
+    const reply = await action.send(path, { action: "change-number", newPhone: data.get("newPhone"), verifiedBy: data.get("verifiedBy"), confirmed: data.get("confirmed") === "on" }, "Remaining access and credit moved to the new number. Old sessions no longer have access.");
     if (reply.ok) onSaved();
   }
-  return <CompactForm method="post" action={path} onSubmit={submit}><MutedText>Move remaining access to the new number&apos;s account. Old sessions lose access.</MutedText>
+  return <CompactForm method="post" action={path} onSubmit={submit}><MutedText>Move remaining access, credit and auto-renewal to the new number&apos;s account. Old sessions lose access. Both accounts can then be erased but not permanently deleted.</MutedText>
     <PhoneInput label="New phone number" name="newPhone" lookup required disabled={action.busy} hint="" />
     <FieldBlock>Verified by<select name="verifiedBy" required disabled={action.busy}><option value="">Choose verification</option><option value="old-number">Old number</option><option value="payment-details">Payment details</option></select></FieldBlock>
     <label><input type="checkbox" name="confirmed" required disabled={action.busy} /> I verified this request.</label>
@@ -150,7 +179,7 @@ function ConfirmedRemoval({ kind, account, action, onSaved }: { kind: "delete" |
   return <CompactForm method="post" action={`/api/admin/subscribers/${account.id}`} onSubmit={submit} data-subscriber-removal={kind}>
     <strong>{account.phone ? `+${formatPhone(account.phone)}` : `Erased account · ${account.id}`}</strong>
     <MutedText>{deleting ? "Permanently removes the account and all related information, including payments, screenshots, access, saved slips and audit records. Payment totals will change. This cannot be undone."
-      : "Clears numbers, passwords, notes, sessions and screenshots. Payment amounts, IDs and access history remain for accounting. This cannot be undone."}</MutedText>
+      : `Clears numbers, passwords, notes, sessions and screenshots.${account.creditUgx > 0 ? ` The ${formatCredit(account.creditUgx)} credit is forfeited.` : ""} Payment amounts, IDs and access history remain for accounting. This cannot be undone.`}</MutedText>
     <label><input type="checkbox" name="confirmed" required checked={confirmed} disabled={action.busy} onChange={event => setConfirmed(event.target.checked)} /> I verified this account and understand this cannot be undone.</label>
     <DangerButton type="submit" disabled={action.busy || !confirmed}>{deleting ? "Permanently delete account" : "Erase personal data"}</DangerButton>
   </CompactForm>;

@@ -2,7 +2,7 @@ import "server-only";
 
 import { memberReturnPath } from "../../domain/member-navigation.ts";
 import { adminLandingPath } from "../../domain/admin-navigation.ts";
-import type { SubscriptionSummary } from "../../domain/subscription-summary.ts";
+import { noCredit, type SubscriptionSummary } from "../../domain/subscription-summary.ts";
 import { clientAddress, cookie, isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { getMemberServices, type MemberServices, type MemberServicesSource } from "./member-http.ts";
 import type { AuthBinding, AuthFailure } from "./member-auth.ts";
@@ -93,12 +93,14 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       const administrator = !!member && !member.blocked && member.administrator === true && isMemberAdminPhone(member.phone);
       const salesOpen = !!services.settings?.settings && services.settings.settings.paywallMode !== "off";
       const subscription: SubscriptionSummary = { activeUntil: null, paymentPending: false,
-        canSubscribe: salesOpen && !member?.blocked && !administrator };
+        canSubscribe: salesOpen && !member?.blocked && !administrator, ...noCredit };
       if (!member || member.blocked || administrator) return json({ phone: member?.phone ?? null, administrator, subscription });
       if (!services.codes) return json({ phone: null, error: "unavailable" }, 503);
+      // A chain that ended (or ends within the lead) renews from credit on this request when auto-renewal is on.
+      try { await services.codes.renewDue(member.accountId, { prefer: [member.tokenHash] }); } catch { /* The summary below still answers. */ }
       const status = await services.codes.subscriptionStatus(member);
       // The verified session may have been removed or blocked while its subscription was being read.
-      if (!status) return json({ phone: null, administrator: false, subscription: { activeUntil: null, paymentPending: false, canSubscribe: false } });
+      if (!status) return json({ phone: null, administrator: false, subscription: { activeUntil: null, paymentPending: false, canSubscribe: false, ...noCredit } });
       return json({ phone: member.phone, administrator, subscription: { ...subscription, ...status } });
     } catch { return json({ phone: null, error: "unavailable" }, 503); }
   };

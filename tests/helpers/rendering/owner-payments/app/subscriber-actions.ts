@@ -40,6 +40,7 @@ export async function subscriberAction(request: Request) {
       const destination = fixtureAccountForPhone(phone), result = grantFixtureAccess(destination, days, "number-change", "Transferred access");
       for (const code of codes) code.revokedAt = at;
       for (const device of state.devices.filter(row => row.accountId === account.id)) device.unlocked = false;
+      (state.movedAccountIds ??= []).push(account.id, destination.id);
       recordFixtureAudit("number_changed", destination.id);return json(result, 201);
     }
     case "erase": {
@@ -49,6 +50,9 @@ export async function subscriberAction(request: Request) {
       recordFixtureAudit("member_erased", account.id);break;
     }
     case "delete":
+      if (state.movedAccountIds?.includes(account.id)) return json({ status: "refused", message: account.erasedAt
+        ? "This account's access or credit moved between numbers, so its records stay for accounting and it can't be deleted."
+        : "This account's access or credit moved between numbers, so it can't be deleted. Erase its personal data instead." }, 409);
       state.accounts = state.accounts.filter(row => row.id !== account.id);state.devices = state.devices.filter(row => row.accountId !== account.id);
       state.codes = state.codes.filter(row => row.accountId !== account.id);state.payments = state.payments.filter(row => row.accountId !== account.id);
       state.audits = state.audits.filter(row => row.accountId !== account.id);break;

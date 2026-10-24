@@ -10,13 +10,19 @@ import type { PaymentNotifications } from "../members/payment-notifications.ts";
 export const storageUnavailable = () => json({ message: "Member storage is unavailable. Try again shortly." }, 503);
 export const invalidAction = () => json({ message: "Check the action and values." }, 400);
 export const uuid = (value: unknown): value is string => typeof value === "string" && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu.test(value);
-/** A new period answers 201 with access and payment SMS status; credentials and message bodies stay server-side. */
+/**
+ * A new period answers 201 with access and payment SMS status, plus any credit the payment added; an approved top-up answers
+ * 201 `credited` with the credit added and the new balance. Credentials and message bodies stay server-side.
+ */
 export function codeAnswer(outcome: CodeOutcome) {
   if (outcome.status === "created") { const { grant } = outcome;
     return json({ status: grant.payment ? "approved" : "granted", ...(grant.payment ? { reference: grant.payment } : {}), endsAt: grant.endsAt.toISOString(),
-      devicesUnlocked: grant.devicesUnlocked, ...(outcome.notification ? { notification: outcome.notification } : {}) }, 201); }
+      devicesUnlocked: grant.devicesUnlocked, ...(grant.credit ? { creditAddedUgx: grant.credit.addedUgx, balanceUgx: grant.credit.balanceUgx } : {}),
+      ...(outcome.notification ? { notification: outcome.notification } : {}) }, 201); }
+  if (outcome.status === "credited") return json({ status: "credited", reference: outcome.payment, creditAddedUgx: outcome.credit.addedUgx,
+    balanceUgx: outcome.credit.balanceUgx, ...(outcome.notification ? { notification: outcome.notification } : {}) }, 201);
   if (outcome.status === "saved") return json(outcome);
-  return json(outcome, outcome.status === "duplicate" || outcome.status === "refused" ? 409 : 400);
+  return json(outcome, outcome.status === "duplicate" || outcome.status === "refused" || outcome.status === "insufficient" ? 409 : 400);
 }
 export function createCodesHandlers({ notifications }: { notifications?: PaymentNotifications } = {}) {
   return {
@@ -76,8 +82,10 @@ export function createReviewHandlers({ notifications }: { notifications?: Paymen
       const b = read.body, codes = createAccessCodes({ database: services.database, config: services.config, ...(notifications ? { notifications } : {}) });
       try {
         if (b.action === "approve") {
-          if (!["mtn", "airtel"].includes(String(b.network)) || typeof b.transactionId !== "string" || !uuid(b.planId) || typeof b.amount !== "number") return invalidAction();
-          return codeAnswer(await codes.approvePayment(id, { network: b.network as "mtn" | "airtel", transactionRef: normalizeTransactionId(b.transactionId), amountReceivedUgx: b.amount, planId: b.planId }, owner.username));
+          // A top-up report needs no plan: the stored report, never the request, decides that it is a top-up.
+          if (!["mtn", "airtel"].includes(String(b.network)) || typeof b.transactionId !== "string" || b.planId !== undefined && !uuid(b.planId) || typeof b.amount !== "number") return invalidAction();
+          return codeAnswer(await codes.approvePayment(id, { network: b.network as "mtn" | "airtel", transactionRef: normalizeTransactionId(b.transactionId), amountReceivedUgx: b.amount,
+            ...(uuid(b.planId) ? { planId: b.planId } : {}) }, owner.username));
         }
         if (b.action === "reject") { const outcome = await createPaymentReview(services.database, Date.now, notifications ? { notifications } : {}).reject(id, b.reason, b.text ?? "", b.deleteImage === true, owner.username); return json(outcome, outcome.status === "saved" ? 200 : 400); }
         if (b.action === "reverse" && ["network-reversal", "wrong-account"].includes(String(b.reason))) return codeAnswer(await codes.reversePayment(id, b.reason as "network-reversal" | "wrong-account", owner.username));

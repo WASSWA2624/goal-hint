@@ -15,3 +15,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON `goal_hint_db`.`MemberVerification` TO '
 GRANT DELETE ON `goal_hint_db`.`PaymentSubmission` TO 'goal_hint_app'@'application-host';
 GRANT DELETE ON `goal_hint_db`.`AccessCode` TO 'goal_hint_app'@'application-host';
 GRANT DELETE ON `goal_hint_db`.`OwnerAuditEvent` TO 'goal_hint_app'@'application-host';
+
+-- Account credit: WalletEntry is an append-only ledger. Review after deploying 20261024210000_account_credit.
+-- No UPDATE or DELETE: its triggers refuse both, and permanent account deletion removes rows by foreign-key cascade.
+-- The new MemberAccount and PaymentSubmission columns are covered by existing table-scoped grants.
+GRANT SELECT, INSERT ON `goal_hint_db`.`WalletEntry` TO 'goal_hint_app'@'application-host';
+-- AccountMove records number changes for reversals to follow; append-only the same way, and it blocks deleting the accounts it names.
+GRANT SELECT, INSERT ON `goal_hint_db`.`AccountMove` TO 'goal_hint_app'@'application-host';

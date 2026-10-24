@@ -19,13 +19,16 @@ const reasonLabels = { unreadable: "Unreadable receipt", "amount-mismatch": "Wro
 const phoneLabel = (phone: string | null) => phone ? `+${formatPhone(phone)}` : "Erased account";
 const networkLabel = (network: string) => network === "mtn" ? "MTN MoMo" : network === "airtel" ? "Airtel Money" : network.toUpperCase();
 
-/** Reported values remain editable; approval is an explicit administrative decision. */
+/**
+ * Reported values remain editable; approval is an explicit administrative decision. A top-up has no plan: everything recorded as
+ * received becomes credit. A plan payment's amount above its price becomes credit too.
+ */
 export function PaymentReview({ payment: p, plans, action, recovery, onStart, onResolved, onRecovery }: {
   payment: OwnerPayment; plans: readonly SubscriptionPlanView[]; action: CodeAction; recovery: PaymentRecovery | undefined;
   onStart: () => void; onResolved: () => void; onRecovery: (value: PaymentRecovery) => void;
 }) {
   const [network, setNetwork] = useState(p.network), [id, setId] = useState(() => normalizeTransactionId(p.transactionId || "")), [amount, setAmount] = useState(String(p.amount));
-  const [planId, setPlanId] = useState(p.planId);
+  const topUp = p.purpose === "topup", [planId, setPlanId] = useState(p.planId ?? "");
   const [sms, setSms] = useState<PaymentSms>({}), [hasSms, setHasSms] = useState(false);
   const [copied, setCopied] = useState(false);
   const pending = ["pending", "superseded"].includes(p.status), reversed = recovery?.reversed || p.status === "reversed";
@@ -34,7 +37,8 @@ export function PaymentReview({ payment: p, plans, action, recovery, onStart, on
   const changedPlan = planId === p.planId ? undefined : plans.find(plan => plan.id === planId);
   const reportedId = p.final?.transactionId || p.transactionId, receivedAmount = p.final?.amount;
   const validAmount = amount.trim() !== "" && /^\d+$/u.test(amount) && Number.isSafeInteger(Number(amount)) && Number(amount) <= 4_294_967_295;
-  const validPlan = !!planId && (planId === p.planId || plans.some(plan => plan.id === planId && plan.active));
+  const validPlan = topUp || !!planId && (planId === p.planId || plans.some(plan => plan.id === planId && plan.active));
+  const price = changedPlan?.priceUgx ?? p.price, excess = !topUp && validAmount ? Number(amount) - price : 0;
   const canApprove = !!p.accountPhone && !!parseTransactionId(id) && validAmount && ["mtn", "airtel"].includes(network) && validPlan;
 
   function parse(text: string) {
@@ -46,7 +50,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, onStart, on
     event.preventDefault();
     if (action.busy || !canApprove) return;
     onStart();
-    const reply = await action.send(`/api/admin/payments/${p.id}`, { action: "approve", network, transactionId: id, amount: Number(amount), planId });
+    const reply = await action.send(`/api/admin/payments/${p.id}`, { action: "approve", network, transactionId: id, amount: Number(amount), ...(topUp ? {} : { planId }) });
     if (reply.ok) onResolved();
   }
   const copyId = () => { void navigator.clipboard?.writeText(reportedId).then(() => setCopied(true), () => setCopied(false)); };
@@ -57,7 +61,8 @@ export function PaymentReview({ payment: p, plans, action, recovery, onStart, on
     <PaymentHighlight><div><span>{typeof receivedAmount === "number" ? "Amount received" : "Expected payment"}</span><strong>{formatUgx(receivedAmount ?? p.price)}</strong>
       {pending && <small>Paid from {p.payerPhone ? phoneLabel(p.payerPhone) : "an unspecified number"}</small>}
       {pending && p.amount !== p.price && <small>Reported amount: {formatUgx(p.amount)}</small>}</div>
-      <div><span>{p.planName} · {formatPlanLength(p.durationDays)}</span><span>{networkLabel(p.final?.network || p.network)}</span></div></PaymentHighlight>
+      <div><span>{topUp || p.durationDays === null ? "Credit top-up" : `${p.planName} · ${formatPlanLength(p.durationDays)}`}</span><span>{networkLabel(p.final?.network || p.network)}</span>
+        <span>Credit now {formatUgx(p.accountCreditUgx)}</span></div></PaymentHighlight>
     {!pending && <PaymentFacts>
       <div><dt>{p.final ? "Confirmed transaction ID" : "Reported transaction ID"}</dt><dd data-payment-transaction>{reportedId || "Not provided"}</dd>
         {reportedId && <ActionButton type="button" onClick={copyId}><CopyIcon />{copied ? "Copied" : "Copy ID"}</ActionButton>}</div>
@@ -74,12 +79,14 @@ export function PaymentReview({ payment: p, plans, action, recovery, onStart, on
           value={id} disabled={action.busy} onChange={event => setId(normalizeTransactionId(event.target.value))} data-payment-transaction /></FieldBlock>
           <FieldBlock>Amount received · UGX<input id="payment-confirmed-amount" name="amount" type="number" min={0} max={4294967295} step={1} required value={amount} disabled={action.busy}
             onChange={event => setAmount(event.target.value)} /></FieldBlock></FieldRow>
-        <ApprovalFooter><ActionButton type="submit" $variant="primary" disabled={action.busy || !canApprove} data-payment-approve><CheckIcon />{action.busy ? "Saving…" : "Approve payment"}</ActionButton></ApprovalFooter>
-        <details><summary>{network !== p.network || changedPlan ? `${networkLabel(network)} · ${changedPlan?.name ?? p.planName} · Edit` : "Change network or plan"}<ChevronDownIcon /></summary><FieldRow><FieldBlock>Network<select name="network" value={network} disabled={action.busy} onChange={event => setNetwork(event.target.value)}><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></FieldBlock>
-          <FieldBlock>Subscription<select name="planId" value={planId} disabled={action.busy} onChange={event => setPlanId(event.target.value)}>
+        {validAmount && (topUp ? <Hint role="status" data-payment-credit>{formatUgx(Number(amount))} will be added to the account&apos;s credit.</Hint>
+          : excess > 0 && <Hint role="status" data-payment-credit>{formatUgx(excess)} above the price will be added to the account&apos;s credit.</Hint>)}
+        <ApprovalFooter><ActionButton type="submit" $variant="primary" disabled={action.busy || !canApprove} data-payment-approve><CheckIcon />{action.busy ? "Saving…" : topUp ? "Approve top-up" : "Approve payment"}</ActionButton></ApprovalFooter>
+        <details><summary>{network !== p.network || changedPlan ? `${networkLabel(network)}${topUp ? "" : ` · ${changedPlan?.name ?? p.planName}`} · Edit` : topUp ? "Change network" : "Change network or plan"}<ChevronDownIcon /></summary><FieldRow><FieldBlock>Network<select name="network" value={network} disabled={action.busy} onChange={event => setNetwork(event.target.value)}><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></FieldBlock>
+          {!topUp && p.planId && p.durationDays !== null && <FieldBlock>Subscription<select name="planId" value={planId} disabled={action.busy} onChange={event => setPlanId(event.target.value)}>
             <option value={p.planId}>{p.planName} · {formatPlanLength(p.durationDays)} · {formatUgx(p.price)}</option>
             {plans.filter(plan => plan.active && plan.id !== p.planId).map(plan => <option key={plan.id} value={plan.id}>{plan.name} · {formatPlanLength(plan.durationDays)} · {formatUgx(plan.priceUgx)}</option>)}
-          </select></FieldBlock></FieldRow></details>
+          </select></FieldBlock>}</FieldRow></details>
         <details data-payment-sms><summary>Paste wallet SMS · optional<ChevronDownIcon /></summary><FieldBlock>Received-payment message<textarea maxLength={12000} disabled={action.busy} rows={3}
           placeholder="Paste the SMS to update the payment fields" onChange={event => parse(event.target.value)} /></FieldBlock>
           {hasSms && <Hint role="status">{sms.transactionId && sms.amount !== undefined ? "Payment details updated." : "Enter the missing details above."}
@@ -108,7 +115,9 @@ export function PaymentReview({ payment: p, plans, action, recovery, onStart, on
       <label><input type="checkbox" required disabled={action.busy} />End access from this payment</label>
       <DangerButton type="submit" disabled={action.busy}>Confirm reversal</DangerButton></FormStack></form></details>}
     {recovery?.carried && <Notice $tone="warning">Other days moved with this payment. Restore any verified remaining access manually.</Notice>}
-    {recovery?.recovery && <FormStack><h3>Grant access to the real payer</h3><Hint>Leave the transaction ID empty here so the payment is counted once.</Hint>
+    {recovery?.recovery && p.purpose === "topup" && <Notice $tone="warning">This was a credit top-up. Add {formatUgx(p.final?.amount ?? p.amount)} to the real payer&apos;s account
+      with Subscribers → Credit → Correct credit, noting {p.reference}.</Notice>}
+    {recovery?.recovery && p.purpose !== "topup" && <FormStack><h3>Grant access to the real payer</h3><Hint>Leave the transaction ID empty here so the payment is counted once.</Hint>
       <ManualCodeForm compact withoutTransaction plans={plans} action={action} onStart={onStart} phone={p.payerPhone ?? ""} amount={p.final?.amount ?? p.amount} note={`for ${p.reference}`} /></FormStack>}
   </PaymentCard>;
 }

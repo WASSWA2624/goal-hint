@@ -1,5 +1,6 @@
 import "server-only";
 
+import { autoRenewFor } from "../members/auto-renew.ts";
 import { membersPurgeFor } from "../members/purge.ts";
 import { randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -36,6 +37,7 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
   try {
     while (!signal.aborted) {
       membersPurgeFor(runtime.database).maybePurge();
+      autoRenewFor(runtime.database).maybeSweep();
       const now = Date.now(), day = runtime.quota.current();
       if (!day || now - accountCheckedAt >= 10 * MINUTE) {
         try {

@@ -87,6 +87,7 @@
     "test:seo:rendering": "python scripts/verify-seo-rendering.py",
     "analytics:hash-password": "node --conditions=react-server src/workers/analytics.ts hash-password",
     "members:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/members.ts purge",
+    "members:renew": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/members.ts renew",
     "analytics:purge": "node --conditions=react-server --env-file-if-exists=.env.local src/workers/analytics.ts purge",
     "test:analytics": "node --conditions=react-server --test tests/analytics.test.mjs tests/analytics.integration.mjs",
     "test:admin": "node --conditions=react-server --test tests/admin.test.mjs tests/admin-routes.test.mjs",
@@ -94,7 +95,7 @@
     "test:scripts": "python -m unittest discover -s tests -p \"*_test.py\"",
     "test:scripts:integration": "python tests/scripts_integration.py",
     "test:payments:rendering": "python scripts/verify-payments-rendering.py",
-    "test:payments": "node --conditions=react-server --test --test-concurrency=1 tests/payment-sms.test.mjs tests/payments.test.mjs tests/payments.integration.mjs tests/payments-admin.integration.mjs tests/subscription-packages.integration.mjs",
+    "test:payments": "node --conditions=react-server --test --test-concurrency=1 tests/payment-sms.test.mjs tests/payments.test.mjs tests/payments.integration.mjs tests/payments-admin.integration.mjs tests/subscription-packages.integration.mjs tests/wallet.test.mjs tests/wallet.integration.mjs",
     "test:paywall": "node --conditions=react-server --test tests/paywall.test.mjs",
     "test:paywall:rendering": "python scripts/verify-paywall-rendering.py"
   },

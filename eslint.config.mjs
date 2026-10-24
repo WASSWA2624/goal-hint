@@ -18,7 +18,7 @@ export default defineConfig([
   globalIgnores([
     ".next/**", "out/**", "build/**", ".tmp/**", "output/playwright/**",
     ".playwright-cli/**", ".playwright-mcp/**", ".claude/worktrees/**", "chrome-filters/**",
-    "src/server/generated/**", "next-env.d.ts",
+    "src/server/generated/**", "next-env.d.ts", "public/ocr/**",
   ]),
   {
     files: ["src/{components,domain,i18n,state,styles}/**/*.{ts,tsx}"],

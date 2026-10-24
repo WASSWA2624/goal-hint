@@ -33,7 +33,7 @@ type FixturePayment = { id: string; reference: string; accountId: string; payerP
 type FixtureAudit = { id: bigint; at: Date; actor: string; action: string; accountId: string | null;
   targetType: string; targetId: string; details: Record<string, unknown> };
 export type FixtureState = { accounts: FixtureAccount[]; codes: FixtureCode[]; devices: FixtureDevice[];
-  payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean };
+  payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; movedAccountIds?: string[] };
 const fixtureGlobal = globalThis as typeof globalThis & { goalHintOwnerFixture?: FixtureState; goalHintAnalytics?: Promise<AnalyticsServices>;
   goalHintOwnerServices?: Map<boolean, AnalyticsServices> };
 
@@ -213,11 +213,14 @@ function createClient(emptySubscribers: boolean) {
           account: { phone: fixtureAdminPhone, passwordHash: null, phoneVerifiedAt: now, blockedAt: null, erasedAt: null } };
       }, updateMany: async () => ({ count: 0 }) },
     subscriptionPlan: { findMany: async () => state.paymentsExpanded ? fixturePaymentPlans : [fixturePlan] },
-    paymentSubmission: { findMany: async (query?: PaymentQuery) => paymentRows(state.payments, query).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
+    paymentSubmission: { findMany: async (query?: PaymentQuery) => paymentRows(state.payments, query).map(row => ({ purpose: "plan", ...row, account: { phone: phoneFor(row.accountId), creditUgx: 0 } })),
       count: async (query?: PaymentQuery) => paymentRows(state.payments, query).length, aggregate: async () => ({ _sum: { amountReceivedUgx: 5000 } }) },
     paymentScreenshot: { findUnique: async ({ where }: { where: { submissionId: string } }) => state.payments.some(row => row.id === where.submissionId && row.screenshot)
       ? { data: fixturePaymentProof } : null },
-    memberAccount: { findUnique: async (query: { where: { id: string } }) => state.accounts.find(row => row.id === query.where.id) ?? null,
+    // No fixture account holds credit; the wallet columns read as a new account's.
+    memberAccount: { findUnique: async (query: { where: { id: string } }) => { const row = state.accounts.find(item => item.id === query.where.id);
+      return row ? { creditUgx: 0, autoRenew: false, autoRenewPlan: null, ...row } : null; },
+      aggregate: async () => ({ _sum: { creditUgx: null } }),
       findMany: async (query: AccountQuery = {}) => {
         const where = query.where;
         if (where?.passwordResetRequestedAt) return state.accounts.filter(row => row.passwordResetRequestedAt && !row.blockedAt && !row.erasedAt && row.phone);
@@ -232,6 +235,7 @@ function createClient(emptySubscribers: boolean) {
       const rows = auditRows(state.audits, query);
       return query.select ? rows.map(row => Object.fromEntries(Object.entries(query.select!).filter(([, included]) => included).map(([key]) => [key, row[key as keyof FixtureAudit]]))) : rows;
     }, count: async (query?: AuditQuery) => auditRows(state.audits, query).length }, rateLimitBucket: { findMany: async () => [] },
+    walletEntry: { findMany: async () => [] },
     accessCode: { findMany: async (query?: OwnedQuery) => ownedRows(state.codes, query).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
       aggregate: async () => ({ _sum: { amountReceivedUgx: 3000 } }), count: async () => state.codes.length },
     subscriptionSettings: { findUnique: async () => ({ paymentNumbersChangedAt: at }) },

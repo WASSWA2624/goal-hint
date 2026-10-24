@@ -60,10 +60,13 @@ def subscriber_directory(origin):
     for label in ["Grant access", "Change number", "Reset password", "Block account", "Sign out devices", "Delete account"]:
         match(label, toolbar)
     tabs = match(r'<div\b[^>]*role="tablist"[^>]*>([\s\S]*?)</div>', selected).group(1)
-    assert len(re.findall(r'role="tab"', tabs)) == 4
+    assert len(re.findall(r'role="tab"', tabs)) == 5
+    for label in ["Overview", "Access", "Payments", "Credit", "Devices"]:
+        match(label, tabs)
     assert len(re.findall(r'aria-selected="true"', tabs)) == 1
     panels = re.findall(r'<[^>]+\brole="tabpanel"[^>]*>', selected)
-    assert len(panels) == 4 and sum(bool(re.search(r'\bhidden(?:=""|\s|>)', panel)) for panel in panels) == 3
+    assert len(panels) == 5 and sum(bool(re.search(r'\bhidden(?:=""|\s|>)', panel)) for panel in panels) == 4
+    match(r'<dt>Credit</dt><dd data-subscriber-credit="true">UGX 0</dd>', selected)
     for target in re.findall(r'aria-controls="([^"]+)"', tabs):
         assert any(f'id="{target}"' in panel for panel in panels), target
     match(r'data-subscriber-tab="overview"', selected)
@@ -147,13 +150,19 @@ def subscriber_mutations(origin):
         assert account(erased)["status"] == "erased" and account(erased)["phone"] is None and account(erased)["ownerNote"] is None
         assert len([row for row in erased["codes"] if row["accountId"] == account_id]) == len(codes_before)
         action({"action": "delete", "confirmed": False}, 400)
-        action({"action": "delete", "confirmed": True})
+        # A number change keeps both accounts for accounting: they can be erased, never deleted.
+        refused = action({"action": "delete", "confirmed": True}, 409)
+        assert "can't be deleted" in refused["message"]
+        assert account(snapshot())["status"] == "erased"
+        fresh_id = fixture_json(origin, "/api/admin/subscribers", {"search": "256700000999"})[1]["accounts"][0]["id"]
+        fresh_endpoint = "/api/admin/subscribers/" + fresh_id
+        action({"action": "delete", "confirmed": True}, path=fresh_endpoint)
         deleted = snapshot()
         for table in ["accounts", "codes", "payments", "audits"]:
-            assert not any(row.get("accountId", row.get("id")) == account_id for row in deleted[table]), table
+            assert not any(row.get("accountId", row.get("id")) == fresh_id for row in deleted[table]), table
         other_id = "00000000-0000-4000-8000-000000000102"
         assert account(deleted, other_id) == account(baseline, other_id) and deleted["plans"] == baseline["plans"]
-        action({"action": "note", "value": "Missing account"}, 409)
+        action({"action": "note", "value": "Missing account"}, 409, fresh_endpoint)
     finally:
         fixture_json(origin, state_path, {})
 
@@ -413,7 +422,7 @@ def main():
         build_fixture(directory,env,timeout=300)
     with Server(directory,env,ready="/api/fixture/health") as server:
         subscriber_directory(server.origin)
-        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or P-/C-reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Add subscriber","Change number","Reset password","Save note","Delete account"]),("/admin/password-resets",["Password requests","generate a temporary password","expire after 15 minutes","Call member","View account"]),("/admin/audit",["Audit"])]:
+        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Add subscriber","Change number","Reset password","Save note","Delete account"]),("/admin/password-resets",["Password requests","generate a temporary password","expire after 15 minutes","Call member","View account"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
             assert response.status==200,(path,response.status)
             for label in labels:assert label in html,(path,label)

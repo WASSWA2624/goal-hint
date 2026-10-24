@@ -23,11 +23,15 @@ export async function paidDatabase({ seedPlans = false } = {}) {
     await root.query(await readFile(new URL("../../prisma/migrations/20261023090000_member_message_verification/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261023130000_single_member_login/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261024200000_payment_screenshot_amount/migration.sql", import.meta.url), "utf8"));
+    // Applied whole: its trigger bodies contain semicolons.
+    await root.query(await readFile(new URL("../../prisma/migrations/20261024210000_account_credit/migration.sql", import.meta.url), "utf8"));
     const password = randomBytes(24).toString("hex");
     await root.query(`CREATE USER 'paid_application'@'127.0.0.1' IDENTIFIED BY '${password}'`);
     const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "OwnerAuditEvent", "RateLimitBucket", "SavedSlip"]);
-    for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "SavedSlip"])
-      await root.query(`GRANT SELECT, INSERT, UPDATE${deletable.has(table) ? ", DELETE" : ""} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);
+    // The credit ledger is append-only: SELECT and INSERT only; permanent deletion removes its rows by cascade.
+    const appendOnly = new Set(["WalletEntry", "AccountMove"]);
+    for (const table of ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode", "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "SavedSlip", "WalletEntry", "AccountMove"])
+      await root.query(`GRANT SELECT, INSERT${appendOnly.has(table) ? "" : ", UPDATE"}${deletable.has(table) ? ", DELETE" : ""} ON ${instance.databaseName}.${table} TO 'paid_application'@'127.0.0.1'`);
     const url = `mysql://paid_application:${password}@127.0.0.1:${instance.port}/${instance.databaseName}`;
     database = createDatabase(parseRuntimePolicy(costTestEnvironment(url, instance.url)));
     const secret = randomBytes(32);

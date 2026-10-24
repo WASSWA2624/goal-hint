@@ -178,6 +178,11 @@ all **9 checks** on MySQL 8.4.11 with no skips, asserting 90 tables. The two
 restores took 28,295 ms and 32,200 ms, and both matched complete-row hashes,
 schema, foreign keys and all 42 triggers.
 
+Account credit (`20261024210000_account_credit`) adds the `WalletEntry` ledger with three `BEGIN … END` triggers
+(`WalletEntry_no_update`, `WalletEntry_no_delete`, `WalletEntry_links`) and the `AccountMove` history with two
+(`AccountMove_no_update`, `AccountMove_no_delete`), so a backup of a database at that migration carries five more triggers. Restore keeps them with their definer; the backup test derives its table list from the
+schema, so it needs no count change.
+
 ## PITR and hosted infrastructure qualification
 
 The owned drill explicitly uses ROW binlogs, `sync_binlog=1`,

@@ -9,7 +9,7 @@ import { InformationNotice } from "./information-notice";
 import { ContentsNav } from "./information-styles";
 
 const sections = ["service", "access", "estimates", "updates", "outcomes", "use", "sources", "privacy", "release"] as const;
-const paragraphs = { service: ["body", "markets"], access: ["body", "trial", "review", "personal", "refunds", "suspension"], estimates: ["body", "sources", "responsibility"], updates: ["body", "limits"],
+const paragraphs = { service: ["body", "markets"], access: ["body", "trial", "review", "credit", "personal", "refunds", "suspension"], estimates: ["body", "sources", "responsibility"], updates: ["body", "limits"],
   outcomes: ["body", "process"], use: ["body"], sources: ["body", "permissions"], privacy: ["body"], release: ["body"] } as const;
 const links: Partial<Record<typeof sections[number], readonly { href: string; key: ContentTextKey }[]>> = {
   estimates: [{ href: "/en/help#predictions", key: "terms.link.predictions" }],

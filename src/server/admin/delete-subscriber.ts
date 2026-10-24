@@ -15,12 +15,14 @@ type Client = Prisma.TransactionClient;
 async function deletionScope(tx: Client, id: string) {
   const account = await tx.memberAccount.findUnique({ where: { id }, select: { phone: true } });
   if (!account) return null;
-  const [codes, payments, sessions, verifications, slips] = await Promise.all([
+  const [codes, payments, sessions, verifications, slips, wallet] = await Promise.all([
     tx.accessCode.findMany({ where: { accountId: id }, select: { id: true, reference: true } }),
     tx.paymentSubmission.findMany({ where: { accountId: id }, select: { id: true, reference: true, submittedSessionHash: true } }),
     tx.memberSession.findMany({ where: { accountId: id }, select: { tokenHash: true } }),
     tx.memberVerification.findMany({ where: { accountId: id }, select: { id: true, phone: true } }),
     tx.savedSlip.findMany({ where: { accountId: id }, select: { id: true } }),
+    // Ledger rows go with the account by cascade (no trigger fires); their ids are scrubbed from audit details like the rest.
+    tx.walletEntry.findMany({ where: { accountId: id }, select: { id: true } }),
   ]);
   const phones = unique([account.phone, ...verifications.map(row => row.phone)]);
   const phoneAccounts = phones.length ? await tx.memberAccount.findMany({
@@ -36,7 +38,7 @@ async function deletionScope(tx: Client, id: string) {
   const actors = [id, `member-admin:${id}`];
   const identifiers = unique([id, ...actors, ...codes.flatMap(row => [row.id, `C-${row.reference}`]),
     ...payments.flatMap(row => [row.id, formatPaymentReference(row.reference), `P-${row.reference}`]), ...sessionHashes,
-    ...verifications.map(row => row.id), ...unbound.map(row => row.id), ...slips.map(row => row.id)]);
+    ...verifications.map(row => row.id), ...unbound.map(row => row.id), ...slips.map(row => row.id), ...wallet.map(row => row.id)]);
   return { id, actors, exclusivePhones, phoneAccountIds: phoneAccounts.map(row => row.id),
     sessionHashes, identifiers, codeIds: codes.map(row => row.id), paymentIds: payments.map(row => row.id) };
 }
@@ -115,6 +117,13 @@ export async function deleteSubscriber(database: DatabaseRuntime, id: string, co
         if (!scope) return rollback(unavailable());
         const related = await relatedRows(tx, scope);
         if (related.accountIds.some(accountId => !discovered.accountIds.includes(accountId))) return rollback({ status: "retry" });
+        // Number changes are history that other accounts' credit is traced by, so such an account is erased, never deleted.
+        if (await tx.accountMove.count({ where: { OR: [{ fromAccountId: id }, { toAccountId: id }] } })) {
+          const erased = !!(await tx.memberAccount.findUnique({ where: { id }, select: { erasedAt: true } }))?.erasedAt;
+          return rollback({ status: "refused", message: erased
+            ? "This account's access or credit moved between numbers, so its records stay for accounting and it can't be deleted."
+            : "This account's access or credit moved between numbers, so it can't be deleted. Erase its personal data instead." });
+        }
 
         await tx.savedSlip.deleteMany({ where: { accountId: id } }); // Fixture links cascade; the fixtures remain shared.
         await tx.memberSession.deleteMany({ where: { accountId: id } });

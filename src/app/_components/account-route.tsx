@@ -7,6 +7,7 @@ import { AccountAuthForm, type AccountAuthView } from "@/components/members/acco
 import { AccountSettings, ResetPasswordForm } from "@/components/members/account-security";
 import { AccountVerificationForm } from "@/components/members/account-verification";
 import { AccountCard, AccountCardBody, AccountCardHeading, AccountSection } from "@/components/members/account-styles";
+import { CreditSection } from "@/components/members/credit-controls";
 import { ApprovalRefresh, PaymentStatusCard, TrialStatusCard } from "@/components/members/payment-status";
 import { TrialRequest } from "@/components/members/subscribe-controls";
 import { SubscriptionSummaryCard } from "@/components/members/subscription-summary-card";
@@ -17,11 +18,20 @@ import { memberReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
 import { codeStatus, formatPeriodEnd } from "@/domain/subscription-period";
 import { createMessages } from "@/i18n/messages";
+import type { SubscriptionPlanView } from "@/domain/subscription-plans";
+import { getAnalyticsServices } from "@/server/analytics/analytics-http";
 import { getMemberServices, type MemberServicesSource } from "@/server/members/member-http";
+import { createPlansService } from "@/server/members/plans";
 import { memberCookieName, type MemberIdentity } from "@/server/members/member-sessions";
 import { PublicShell } from "./public-shell";
 
-export function createAccountRoute({ services = getMemberServices }: { services?: MemberServicesSource } = {}) {
+async function readPlans() {
+  const { database } = await getAnalyticsServices();
+  return database ? (await createPlansService(database).list()).filter((plan) => plan.active) : [];
+}
+export function createAccountRoute({ services = getMemberServices, plans = readPlans }: {
+  services?: MemberServicesSource; plans?: () => Promise<readonly SubscriptionPlanView[]>;
+} = {}) {
   return async function AccountRoute({ locale, searchParams }: {
     locale: string; searchParams: Promise<Record<string, string | string[] | undefined>>;
   }) {
@@ -57,8 +67,12 @@ export function createAccountRoute({ services = getMemberServices }: { services?
     const last = view?.codes.filter((code) => codeStatus(code, now) === "expired").at(-1);
     const status = paymentView?.status ?? null;
     const activeUntil = subscription?.activeUntil ?? null;
-    const waiting = subscription?.paymentPending ?? (!!status && ["pending", "superseded"].includes(status.status));
+    const waiting = (subscription?.paymentPending ?? (!!status && ["pending", "superseded"].includes(status.status)))
+      || ["pending", "superseded"].includes(paymentView?.otherStatus?.status ?? "");
     const salesOpen = !!settings && mode !== "off";
+    // Plans are read only for an account with credit or auto-renewal to manage.
+    const credit = paymentView?.credit ?? null;
+    const offers = credit && salesOpen && (credit.balanceUgx !== 0 || credit.autoRenew || credit.history.length) ? await plans().catch(() => []) : [];
     // A granted trial unlocks the account's devices; a dismissed one stops waiting.
     const trialPending = !!paymentView?.trialPending && !activeUntil;
     return <PublicShell locale={locale} showAccount><Stack $gap="md">
@@ -73,9 +87,13 @@ export function createAccountRoute({ services = getMemberServices }: { services?
           {parameters.status === "phone-changed" && <p role="status">{messages.text("account.phoneChanged")}</p>}
           {parameters.status === "password-changed" && <p role="status">{messages.text("account.passwordChanged")}</p>}
           <ApprovalRefresh waiting={waiting || trialPending} refreshAt={activeUntil} />
-          <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={salesOpen} returnTo={returnTo} paymentNeedsAttention={status?.status === "rejected" || status?.status === "reversed"} />
+          <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={salesOpen} returnTo={returnTo} paymentNeedsAttention={[status, paymentView?.otherStatus].some((report) => report?.status === "rejected" || report?.status === "reversed")} />
           {trialPending && <TrialStatusCard locale={locale} settings={contact} phone={member.phone} heading="h2" />}
           <PaymentStatusCard locale={locale} status={status} settings={contact} phone={member.phone} heading="h2" />
+          {paymentView?.otherStatus && <PaymentStatusCard locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} heading="h2" />}
+          {credit && (credit.balanceUgx !== 0 || credit.autoRenew || credit.history.length > 0) && <AccountSection open data-account-credit>
+            <summary>{messages.text("credit.title")}<ChevronDownIcon /></summary><div>
+              <CreditSection locale={locale} credit={credit} plans={offers} salesOpen={salesOpen} acceptedTerms={!!paymentView?.acceptedTerms} /></div></AccountSection>}
           <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} />
           {(view || salesOpen && paymentView?.trialEligible) && <AccountSection>
             <summary>{messages.text("account.accessSettings")}<ChevronDownIcon /></summary><div>

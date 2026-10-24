@@ -17,7 +17,9 @@ export function SubscriptionSummaryCard({ locale, subscription, canSubscribe, re
   const destination = memberNextPath("subscribe", returnTo);
   return <MemberPanel data-subscription-summary={activeUntil ? "active" : "inactive"}><Stack $gap="sm">
     <h2>{messages.text(activeUntil ? "account.activeSubscription" : "account.noActiveSubscription")}</h2>
-    {activeUntil && <p>{messages.text("account.subscriptionExpires")}{" "}<time dateTime={activeUntil}>{formatSubscriptionExpiry(new Date(activeUntil))}</time></p>}
+    {activeUntil && <p>{messages.text("account.subscriptionExpires")}{" "}<time dateTime={activeUntil}>{formatSubscriptionExpiry(new Date(activeUntil))}</time>
+      {subscription.renewsFromCredit && ` · ${messages.text("account.renewsFromCredit")}`}</p>}
+    {subscription.creditUgx !== 0 && <p data-subscription-credit>{messages.text("account.creditBalance", { amount: messages.number(subscription.creditUgx) })}</p>}
     {canSubscribe && <Inline><ButtonLink href={`${destination}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
       {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.renew" : "account.subscribe")}
     </ButtonLink></Inline>}

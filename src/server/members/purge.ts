@@ -41,7 +41,7 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
         const admins = memberAdminPhones();
         const where: Prisma.MemberAccountWhereInput = { passwordHash: null, temporaryPasswordHash: null, passwordResetRequestedAt: null,
           ...(admins.length ? { phone: { notIn: [...admins] } } : {}),
-          lastSignInAt: { lte: new Date(+at - 30 * DAY) }, submissions: { none: {} }, codes: { none: {} } };
+          lastSignInAt: { lte: new Date(+at - 30 * DAY) }, submissions: { none: {} }, codes: { none: {} }, walletEntries: { none: {} }, creditUgx: 0 };
         const rows = await tx.memberAccount.findMany({ where, select: { id: true }, orderBy: { id: "asc" }, take: BATCH });
         for (const row of rows) await lockMemberAccount(tx, row.id);
         return (await tx.memberAccount.deleteMany({ where: { ...where, id: { in: rows.map(r => r.id) } } })).count;

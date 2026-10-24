@@ -31,9 +31,11 @@ export function createPaymentHandler(services: MemberServicesSource = getMemberS
       let data;
       try { data = await new Response(raw, { headers: { "Content-Type": request.headers.get("content-type")! } }).formData(); }
       catch { return invalid(); }
-      // Every payment field and the screenshot are required exactly once.
-      const expected: readonly string[] = [...paymentFields, "image"];
-      if ([...data.keys()].some((key) => !expected.includes(key)) || expected.some((key) => data.getAll(key).length !== 1)) return invalid();
+      // Every payment field and the screenshot are required exactly once; purpose and topUpAmount may be absent (a page
+      // loaded before top-ups existed sends neither, which is a plan report), but never repeated.
+      const expected: readonly string[] = [...paymentFields, "image"], optional: readonly string[] = ["purpose", "topUpAmount"];
+      if ([...data.keys()].some((key) => !expected.includes(key))
+        || expected.some((key) => data.getAll(key).length > 1 || data.getAll(key).length === 0 && !optional.includes(key))) return invalid();
       const image = data.get("image"), fields = parsePaymentFields(Object.fromEntries(paymentFields.flatMap((key) => data.has(key) ? [[key, data.get(key)] as const] : [])));
       if (!fields) return invalid();
       if (!(image instanceof File) || image.size > paymentRules.imageBytes) return invalidImage();

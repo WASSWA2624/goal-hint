@@ -31,6 +31,11 @@ export function createSubscriberHandlers() {
           if (body.confirmed !== true || typeof body.newPhone !== "string" || !["old-number", "payment-details"].includes(String(body.verifiedBy))) return invalidAction();
           return codeAnswer(await createAccessCodes({ database: services.database, config: services.config }).changeNumber(id, { newPhone: body.newPhone, verifiedBy: body.verifiedBy as "old-number" | "payment-details" }, owner.username));
         }
+        // A credit correction names its amount (negative takes credit away) and a reason the member's ledger keeps.
+        if (body.action === "credit-adjust") {
+          if (body.confirmed !== true || typeof body.amount !== "number" || typeof body.note !== "string") return invalidAction();
+          return codeAnswer(await createAccessCodes({ database: services.database, config: services.config }).adjustCredit(id, body.amount, body.note, owner.username));
+        }
         if (body.action === "temporary-password") return body.confirmed === true ? passwordAnswer(await service.temporaryPassword({ id }, owner.username)) : invalidAction();
         if (typeof body.action !== "string" || ["erase", "delete"].includes(body.action) && body.confirmed !== true) return invalidAction();
         return codeAnswer(await service.action(id, body.action, body.value, owner.username));

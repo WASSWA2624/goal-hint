@@ -10,6 +10,8 @@ export function OverviewReport({ value: v, payments }: { value: OwnerOverview; p
     ["Pending payments", v.pending], ["Active paid subscribers", v.active],
     ["Revenue · EAT week", formatUgx(v.weekRevenue)], ["Revenue · EAT month", formatUgx(v.monthRevenue)],
     ["Trials · this week", v.trials], ["Upload alerts · this week", v.busy],
+    // Credit members hold is owed in plans, not cash: it is already in revenue from the payments that added it.
+    ["Credit held by members", formatUgx(v.creditHeld)], ...(v.creditOwed > 0 ? [["Credit owed after reversals", formatUgx(v.creditOwed)] as const] : []),
   ] as const;
   return <>
     <Ledger aria-label="Admin overview">{metrics.map(([label, value]) => <Metric key={label}><dt>{label}</dt><dd>{value}</dd></Metric>)}</Ledger>

@@ -129,6 +129,19 @@ def main():
         assert 'data-subscription-summary="active"' in account and "Active subscription" in account and "Renew" in account
         assert re.search(r'<time\b[^>]*datetime="[^"]+"[^>]*>[^<]*\b\d{4}\b[^<]*\d{2}:\d{2} EAT</time>', account, re.I), "The active account must show its full expiry date and time."
         assert 'data-payment-status="approved"' not in account, "The account must not repeat its active subscription summary as an approval card."
+        # Account credit: pay for a plan from credit, add credit (a top-up report), and the account's balance, auto-renewal and history.
+        credit = visible_html(request(server.origin, "/en/subscribe?state=credit").text)
+        for label in ["data-credit-purchase", "Credit: UGX 12,000", "Pay UGX 1,000 from credit", "Add credit instead"]:
+            assert label in credit, label
+        topup = visible_html(request(server.origin, "/en/subscribe?state=credit&add=credit").text)
+        for label in ["Amount to add (UGX)", "UGX 1,000 to 500,000", "Pay for a plan instead", "Pay to"]:
+            assert label in topup, label
+        assert "data-credit-purchase" not in topup and "Choose plan" not in topup
+        account_credit = visible_html(request(server.origin, "/en/account?state=credit").text)
+        for label in ["data-account-credit", "Credit: UGX 12,000", "Auto-renew from credit", "Turn on", "Top-up", "PCRED", "Add credit"]:
+            assert label in account_credit, label
+        assert "Add credit instead" not in visible_html(request(server.origin, "/en/subscribe?state=signed-out").text), "Signed-out visitors see plans only."
+        assert "data-account-credit" not in account, "An account without credit shows no credit section."
         for agent, allowed in [("Android Chrome", True), ("iPhone Safari", False), ("Android; wv) Chrome", False), ("Android FBAN", False), ("Android Instagram", False)]:
             html = visible_html(request(server.origin, "/en/subscribe", headers={"User-Agent": agent}).text)
             assert ("Open MoMo menu" in html) == allowed

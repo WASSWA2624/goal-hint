@@ -462,3 +462,18 @@ prompt 052:
 ## Paid access (066)
 
 Nine paid-access tables store private phone/payment/image data. Verify the MariaDB overlay and restricted grants above; reapply erasure suppression after any restore. Admin-confirmed permanent account deletion removes submissions, codes and related audits as well as the account, sessions, verifications, screenshots and saved slips. Apply the additional DELETE grants in `deploy/manual-account-grants.sql` before deploying this action. See [subscriptions.md](subscriptions.md).
+
+### Account credit (24 October 2026)
+
+Migration `20261024210000_account_credit` adds the `WalletEntry` ledger, the `AccountMove` number-change history and the credit columns described in
+[subscriptions](subscriptions.md#account-credit). Its CHECKs bound every amount and balance by kind and actor, and a
+`BEFORE INSERT` trigger requires each entry to link exactly the payment or access period its kind names (a CHECK cannot
+name the cascading key columns, MySQL error 3823). Two more triggers refuse every UPDATE and DELETE; rows go only by the
+foreign-key cascades of permanent account deletion, which fire no triggers. `AccountMove` has the same two refusing
+triggers, and its foreign keys RESTRICT, so an account it names is never deleted. Locally `npm run db:deploy` applies it. On
+the production MariaDB import `prisma/mariadb/20261024210000_account_credit.sql` with the migration account after a
+verified backup and with writers stopped: it stops (`SQLSTATE 45000`) unless `20261024200000_payment_screenshot_amount`
+is recorded and this migration is not, applies the same DDL, recreates the triggers with the block delimiter, verifies
+both tables, the columns, keys, checks and all five triggers, then records the committed checksum once. MariaDB DDL is not
+transactional, so a failure after the guard means restoring the backup. The overlay has not been run on MariaDB 11.4
+locally; `tests/account_credit_migration_test.py` checks that it matches the migration.

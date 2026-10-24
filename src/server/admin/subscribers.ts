@@ -11,6 +11,7 @@ import { lockMemberAccount, type CodeFailure, type CodeOutcome } from "../member
 import { isMemberAdminPhone } from "../members/member-admin.ts";
 import { passwordRecoveryRules } from "../members/password-recovery.ts";
 import { decide } from "../members/settings.ts";
+import { appendWalletEntry, lockedCredit, walletHistory } from "../members/wallet.ts";
 import { createPaymentReview } from "./payment-review.ts";
 import { auditTextErrors, ownerAuditActions, writeOwnerAudit } from "./audit.ts";
 import { deleteSubscriber } from "./delete-subscriber.ts";
@@ -53,6 +54,7 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
             SELECT c.id, c.replacedById FROM AccessCode c LEFT JOIN PaymentSubmission p ON p.id = c.paymentSubmissionId
             WHERE (c.source = 'payment' AND p.status = 'approved' AND p.reversedAt IS NULL)
               OR (c.source = 'manual' AND c.amountReceivedUgx > 0)
+              OR (c.source IN ('credit', 'renewal') AND c.priceUgx > 0)
             UNION DISTINCT SELECT c.id, c.replacedById FROM AccessCode c JOIN PaidCodes p ON c.id = p.replacedById
           ) SELECT COUNT(DISTINCT c.accountId) AS total FROM PaidCodes p JOIN AccessCode c ON c.id = p.id
             JOIN MemberAccount a ON a.id = c.accountId WHERE c.revokedAt IS NULL AND c.startsAt <= ${at} AND c.endsAt > ${at}
@@ -62,7 +64,13 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
           tx.ownerAuditEvent.count({ where: { action: "uploads_busy", at: { gte: bounds.week, lte: at } } }),
           tx.subscriptionSettings.findUnique({ where: { id: 1 }, select: { paymentNumbersChangedAt: true } }),
         ]);
-        return { pending, active: Number(active[0]?.total ?? 0), weekRevenue, monthRevenue, trials, busy, paymentNumbersChangedAt: settings?.paymentNumbersChangedAt?.toISOString() ?? null };
+        // Revenue stays cash: approved payments already include top-ups and overpayments, so spending credit is never counted again.
+        const [held, owed] = await Promise.all([
+          tx.memberAccount.aggregate({ where: { erasedAt: null, creditUgx: { gt: 0 } }, _sum: { creditUgx: true } }),
+          tx.memberAccount.aggregate({ where: { erasedAt: null, creditUgx: { lt: 0 } }, _sum: { creditUgx: true } }),
+        ]);
+        return { pending, active: Number(active[0]?.total ?? 0), weekRevenue, monthRevenue, trials, busy, paymentNumbersChangedAt: settings?.paymentNumbersChangedAt?.toISOString() ?? null,
+          creditHeld: held._sum.creditUgx ?? 0, creditOwed: -(owed._sum.creditUgx ?? 0) };
       });
     },
     async search(input = ""): Promise<readonly OwnerAccount[]> {
@@ -73,17 +81,21 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
     },
     async detail(id: string): Promise<OwnerSubscriber | null> {
       return database.query(async tx => {
-        const account = await tx.memberAccount.findUnique({ where: { id }, select: { id: true, phone: true, blockedAt: true, blockedReason: true, ownerNote: true, erasedAt: true, lastSignInAt: true } });
+        const account = await tx.memberAccount.findUnique({ where: { id }, select: { id: true, phone: true, blockedAt: true, blockedReason: true, ownerNote: true, erasedAt: true, lastSignInAt: true,
+          creditUgx: true, autoRenew: true, autoRenewPlan: { select: { name: true } } } });
         if (!account) return null;
         const at = new Date(now());
-        const [codes, submissions, devices, unlocks] = await Promise.all([
+        const [codes, submissions, devices, unlocks, wallet] = await Promise.all([
           createPaymentReview(database, now).codes("", "all", id),
-          tx.paymentSubmission.findMany({ where: { accountId: id }, orderBy: { submittedAt: "desc" }, take: 100, select: { id: true, reference: true, status: true, planName: true, claimedAmountUgx: true, amountReceivedUgx: true, submittedAt: true } }),
+          tx.paymentSubmission.findMany({ where: { accountId: id }, orderBy: { submittedAt: "desc" }, take: 100, select: { id: true, reference: true, status: true, purpose: true, planName: true, claimedAmountUgx: true, amountReceivedUgx: true, submittedAt: true } }),
           tx.memberSession.findMany({ where: { accountId: id, codeEnteredAt: { not: null }, expiresAt: { gt: at } }, select: { createdAt: true, lastSeenAt: true, expiresAt: true }, orderBy: { lastSeenAt: "desc" } }),
           tx.ownerAuditEvent.count({ where: { accountId: id, action: "device_unlocked", at: { gte: new Date(+at - 30 * 86_400_000), lte: at } } }),
+          walletHistory(tx, id, 100),
         ]);
-        return { ...account, blockedAt: account.blockedAt?.toISOString() ?? null, erasedAt: account.erasedAt?.toISOString() ?? null, lastSignInAt: account.lastSignInAt.toISOString(), codes,
-          submissions: submissions.map(r => ({ ...r, reference: formatPaymentReference(r.reference), submittedAt: r.submittedAt.toISOString() })),
+        const { autoRenewPlan, ...rest } = account;
+        return { ...rest, autoRenewPlanName: autoRenewPlan?.name ?? null, wallet,
+          blockedAt: account.blockedAt?.toISOString() ?? null, erasedAt: account.erasedAt?.toISOString() ?? null, lastSignInAt: account.lastSignInAt.toISOString(), codes,
+          submissions: submissions.map(r => ({ ...r, purpose: r.purpose === "topup" ? "topup" as const : "plan" as const, reference: formatPaymentReference(r.reference), submittedAt: r.submittedAt.toISOString() })),
           devices: devices.map(r => ({ createdAt: r.createdAt.toISOString(), lastSeenAt: r.lastSeenAt.toISOString(), expiresAt: r.expiresAt.toISOString() })), unlocks };
       });
     },
@@ -98,6 +110,10 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
         switch (action) {
           case "note": await tx.memberAccount.update({ where: { id }, data: { ownerNote: (value as string).trim() || null } }); break;
           case "sign-out-all": deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count; break;
+          case "auto-renew-off":
+            if (!account.autoRenew) return rollback({ status: "invalid", message: "Auto-renewal is already off." });
+            await tx.memberAccount.update({ where: { id }, data: { autoRenew: false } });
+            break;
           case "block": case "unblock":
             await tx.memberAccount.update({ where: { id }, data: { blockedAt: action === "block" ? at : null, blockedReason: action === "block" ? (value as string).trim() : null } });
             if (action === "block") deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
@@ -110,14 +126,22 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
             if (account.phone) await tx.paymentSubmission.updateMany({ where: { payerPhone: account.phone }, data: { payerPhone: null } });
             await tx.accessCode.updateMany({ where: { accountId: id }, data: { note: null } });
             deleted = (await tx.memberSession.deleteMany({ where: { accountId: id } })).count;
+            // Credit is non-refundable and an erased account can never sign in to spend it, so a positive balance is forfeited;
+            // the ledger keeps its amounts for accounting (it holds no personal data). A debt stays recorded.
+            const credit = await lockedCredit(tx, id) ?? 0;
+            if (credit > 0) {
+              const entry = await appendWalletEntry(tx, id, { kind: "adjustment", amountUgx: -credit, actor: "admin", at, note: "Forfeited when the account was erased" });
+              await writeOwnerAudit(tx, { at, actor, action: "credit_forfeited", accountId: id, targetType: "member", targetId: id, details: { amountUgx: credit, walletEntryId: entry.id } });
+            }
             await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null,
-              passwordResetRequestedAt: null, phoneVerifiedAt: null, passwordChangedAt: null, ownerNote: null, blockedReason: null, erasedAt: at } });
+              passwordResetRequestedAt: null, phoneVerifiedAt: null, passwordChangedAt: null, ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
             break;
           }
           default: return rollback({ status: "invalid", message: "Unknown subscriber action." });
         }
-        const auditAction = { note: "member_note_changed", "sign-out-all": "member_signed_out_all", block: "member_blocked", unblock: "member_unblocked", erase: "member_erased" }[action] as "member_note_changed" | "member_signed_out_all" | "member_blocked" | "member_unblocked" | "member_erased";
+        const auditAction = { note: "member_note_changed", "sign-out-all": "member_signed_out_all", block: "member_blocked", unblock: "member_unblocked", erase: "member_erased",
+          "auto-renew-off": "auto_renew_changed" }[action] as "member_note_changed" | "member_signed_out_all" | "member_blocked" | "member_unblocked" | "member_erased" | "auto_renew_changed";
         await writeOwnerAudit(tx, { at, actor, action: auditAction, accountId: id, targetType: "member", targetId: id, details: { sessionsDeleted: deleted, ...(action === "note" ? { length: (value as string).length } : {}), ...(["block", "unblock"].includes(action) ? { reason: value } : {}) } });
         return { status: "saved" };
       });

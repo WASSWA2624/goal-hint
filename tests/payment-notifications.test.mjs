@@ -16,7 +16,7 @@ const owner = "synthetic-owner";
 function fixture() {
   const account = { id: randomUUID(), phone: "256700000111", blockedAt: null, erasedAt: null, trialRequestedAt: new Date(instant), trialDismissedAt: null };
   const plan = { id: randomUUID(), name: "Weekly", durationDays: 7, priceUgx: 5000, active: true };
-  let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [], paymentScreenshot: [],
+  let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [], paymentScreenshot: [], walletEntry: [],
     subscriptionSettings: [{ ...defaultSubscriptionSettings, id: 1, updatedAt: new Date(instant) }] };
   let committed = structuredClone(state), tail = Promise.resolve(), transactions = 0, abortCommit = null;
   const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => {

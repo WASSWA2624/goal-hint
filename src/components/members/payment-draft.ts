@@ -2,8 +2,11 @@ import { paymentDraftStorageKey } from "@/domain/member-navigation";
 import { normalizeTransactionId } from "@/domain/payment";
 import type { MobileNetwork } from "@/domain/phone";
 
-/** Keep payment details for retry; the amount always comes from the plan and screenshots stay in memory. */
-export type PaymentDraft = { planId: string; payerPhone: string; network: MobileNetwork | ""; transactionId: string; accepted: boolean };
+/**
+ * Keep payment details for retry; the amount comes from the plan, or for a top-up (purpose "topup") from topUpAmount, and
+ * screenshots stay in memory.
+ */
+export type PaymentDraft = { purpose: "plan" | "topup"; planId: string; topUpAmount: string; payerPhone: string; network: MobileNetwork | ""; transactionId: string; accepted: boolean };
 const key = (accountId: string) => `${paymentDraftStorageKey}:${accountId}`;
 export function paymentDraftSnapshot(accountId: string): string | null {
   try { return sessionStorage.getItem(key(accountId)); } catch { return null; }
@@ -15,8 +18,10 @@ export function readPaymentDraft(accountId: string, raw = paymentDraftSnapshot(a
     const draft = value as Record<string, unknown>;
     if (!["planId", "payerPhone", "transactionId"].every((field) => typeof draft[field] === "string" && (draft[field] as string).length <= 64)
       || !["", "mtn", "airtel"].includes(String(draft.network)) || typeof draft.accepted !== "boolean") return null;
-    return { planId: draft.planId as string, payerPhone: draft.payerPhone as string, transactionId: normalizeTransactionId(draft.transactionId as string),
-      network: draft.network as PaymentDraft["network"], accepted: draft.accepted };
+    // Drafts saved before top-ups existed are plan drafts.
+    const topUpAmount = typeof draft.topUpAmount === "string" && /^\d{0,6}$/u.test(draft.topUpAmount) ? draft.topUpAmount : "";
+    return { purpose: draft.purpose === "topup" ? "topup" : "plan", planId: draft.planId as string, topUpAmount, payerPhone: draft.payerPhone as string,
+      transactionId: normalizeTransactionId(draft.transactionId as string), network: draft.network as PaymentDraft["network"], accepted: draft.accepted };
   } catch { return null; }
 }
 export function savePaymentDraft(accountId: string, draft: PaymentDraft) {

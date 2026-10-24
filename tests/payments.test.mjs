@@ -19,7 +19,7 @@ test("payment fields normalize IDs and numbers, with exact limits and a strict w
   assert.equal(normalizeTransactionId(" tx-100 1 "), "TX1001");
   assert.equal(transactionKey("tx .100-1"), transactionKey("TX1001"));
   assert.deepEqual(parsePaymentFields({ planId: values.planId, payerPhone: "+256 700 000 102", network: "airtel", transactionId: "TX-1234", accepted: "true" }), {
-    planId: values.planId, network: "airtel", accepted: true, payerPhone: "256700000102", transactionId: "TX1234", screenshotAmount: null,
+    purpose: "plan", planId: values.planId, network: "airtel", accepted: true, payerPhone: "256700000102", transactionId: "TX1234", screenshotAmount: null,
   });
   // The amount read from the screenshot is a bounded whole number of shillings, or empty when none was read.
   assert.equal(parsePaymentFields(values).screenshotAmount, 5000);
@@ -27,6 +27,19 @@ test("payment fields normalize IDs and numbers, with exact limits and a strict w
   for (const screenshotAmount of ["99", "10000001", "5e3", "5,000", "-5000", "05000", "abc"]) assert.equal(parsePaymentFields({ ...values, screenshotAmount }), null, screenshotAmount);
   for (const payerPhone of [undefined, null, "", "   ", "256", "0201234567", 256700000101]) assert.equal(parsePaymentFields({ ...values, payerPhone }), null);
   for (const fields of [{ amount: "99" }, { amount: "10000001" }, { amount: "5e3" }, { transactionId: undefined }, { transactionId: null }, { transactionId: "" }, { transactionId: "   " }, { transactionId: "---." }, { transactionId: "abc" }, { transactionId: "<script>" }, { transactionId: "A".repeat(41) }, { payerPhone: "0201234567" }, { network: "other" }, { accepted: "yes" }, { sms: "secret" }]) assert.equal(parsePaymentFields({ ...values, ...fields }), null);
+});
+
+test("a top-up names its amount and no plan, and a plan report names no top-up amount", () => {
+  const topUp = { ...values, purpose: "topup", planId: "", topUpAmount: "25000" };
+  assert.deepEqual(parsePaymentFields(topUp), { purpose: "topup", topUpUgx: 25000, network: values.network, payerPhone: "256700000101",
+    transactionId: "TX.1001", screenshotAmount: 5000, accepted: values.accepted === "true" });
+  assert.equal(parsePaymentFields({ ...topUp, planId: undefined }).topUpUgx, 25000);
+  for (const topUpAmount of ["999", "500001", "1000000", "1e4", "25,000", "-5000", "05000", "", undefined]) assert.equal(parsePaymentFields({ ...topUp, topUpAmount }), null, String(topUpAmount));
+  for (const amount of ["1000", "500000"]) assert.equal(parsePaymentFields({ ...topUp, topUpAmount: amount }).topUpUgx, Number(amount));
+  assert.equal(parsePaymentFields({ ...topUp, planId: values.planId }), null, "a top-up never names a plan");
+  assert.equal(parsePaymentFields({ ...values, topUpAmount: "25000" }), null, "a plan report never names a top-up");
+  assert.equal(parsePaymentFields({ ...values, purpose: "plan", topUpAmount: "" }).planId, values.planId);
+  for (const purpose of ["credit", "", "PLAN"]) assert.equal(parsePaymentFields({ ...values, purpose }), null, purpose);
 });
 
 test("payment display references omit the separator and preserve their stored key", () => {

@@ -26,7 +26,8 @@ export async function getMemberServices(): Promise<MemberServices> {
 }
 
 export type MemberContext = Readonly<{ request: Request; services: MemberServices; member: MemberIdentity | null }>;
-type MemberRouteOptions = Readonly<{ services?: MemberServicesSource; access: "sign-in" | "member" | "unlocked" | "sign-out" }>;
+/** "account" is "member" without the closed-sales refusal, for account settings a member must be able to change at any time. */
+type MemberRouteOptions = Readonly<{ services?: MemberServicesSource; access: "sign-in" | "member" | "account" | "unlocked" | "sign-out" }>;
 
 /** One same-origin and mode guard for member writes; sign-out can always clear the browser cookie. */
 export function memberRoute(handler: (context: MemberContext) => Promise<Response>, { services = getMemberServices, access }: MemberRouteOptions) {

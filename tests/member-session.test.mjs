@@ -104,7 +104,8 @@ test("subscription changes update all headers, poll approval and expire without 
   const now = Date.parse("2026-12-31T20:59:00Z");
   t.mock.timers.enable({ apis: ["Date", "setTimeout"], now });
   let calls = 0, updates = 0;
-  let summary = { activeUntil: null, paymentPending: true, canSubscribe: true };
+  const credit = { creditUgx: 0, autoRenew: false, renewsFromCredit: false };
+  let summary = { activeUntil: null, paymentPending: true, canSubscribe: true, ...credit };
   let failure = false;
   globalThis.fetch = async () => {
     calls += 1;
@@ -141,7 +142,7 @@ test("subscription changes update all headers, poll approval and expire without 
   assert.equal(updates, 3);
 
   failure = false;
-  summary = { activeUntil: null, paymentPending: true, canSubscribe: true };
+  summary = { activeUntil: null, paymentPending: true, canSubscribe: true, ...credit };
   await refreshMemberSession();
   unsubscribe();
   const beforeUnmount = calls;

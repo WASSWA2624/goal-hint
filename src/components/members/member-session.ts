@@ -19,8 +19,11 @@ function readSubscription(value: unknown): SubscriptionSummary | null {
   if (!value || typeof value !== "object" || !("activeUntil" in value) || !("paymentPending" in value) || !("canSubscribe" in value)
     || typeof value.paymentPending !== "boolean" || typeof value.canSubscribe !== "boolean"
     || value.activeUntil !== null && (typeof value.activeUntil !== "string" || !Number.isFinite(Date.parse(value.activeUntil)))) return null;
+  // Credit fields default when absent, so an older server during a deploy never blanks the whole summary.
+  const creditUgx = "creditUgx" in value && Number.isSafeInteger(value.creditUgx) ? value.creditUgx as number : 0;
+  const autoRenew = "autoRenew" in value && value.autoRenew === true, renewsFromCredit = autoRenew && "renewsFromCredit" in value && value.renewsFromCredit === true;
   return { activeUntil: value.activeUntil && Date.parse(value.activeUntil) > Date.now() ? value.activeUntil : null,
-    paymentPending: value.paymentPending, canSubscribe: value.canSubscribe };
+    paymentPending: value.paymentPending, canSubscribe: value.canSubscribe, creditUgx, autoRenew, renewsFromCredit };
 }
 
 function publish() { for (const listener of listeners) listener(); }
@@ -60,7 +63,9 @@ export function refreshMemberSession(): Promise<void> {
       if (phone === session.phone && administrator === nextAdministrator
         && subscription?.activeUntil === nextSubscription?.activeUntil
         && subscription?.paymentPending === nextSubscription?.paymentPending
-        && subscription?.canSubscribe === nextSubscription?.canSubscribe) return;
+        && subscription?.canSubscribe === nextSubscription?.canSubscribe
+        && subscription?.creditUgx === nextSubscription?.creditUgx && subscription?.autoRenew === nextSubscription?.autoRenew
+        && subscription?.renewsFromCredit === nextSubscription?.renewsFromCredit) return;
       phone = session.phone;
       administrator = nextAdministrator;
       subscription = nextSubscription;

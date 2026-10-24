@@ -12,13 +12,15 @@ import { canOpenMoneyMenu, normalizeTransactionId, parseTransactionId, type Paym
 import { paymentEvidence, sameTransactionId, type PaymentEvidence } from "@/domain/payment-sms";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
+import { validTopUp, walletRules } from "@/domain/wallet";
 import { createMessages } from "@/i18n/messages";
 import { AccountAuthForm } from "./account-auth-form";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
 import { preparePaymentImage, uploadPayment } from "./payment-image";
 import { readScreenshotText } from "./payment-ocr";
-import { EvidenceFindings, ReadingProgress, evidenceRows, type ReadingState } from "./payment-evidence";
+import { EvidenceFindings, ReadingProgress, evidenceRows, type PaymentTarget, type ReadingState } from "./payment-evidence";
+import { CreditPurchase } from "./credit-controls";
 import { CriteriaDialog } from "@/components/ui/criteria-dialog";
 import { PaymentStatusCard, TrialStatusCard, useApprovalRefresh } from "./payment-status";
 
@@ -77,20 +79,22 @@ export function TrialRequest({ locale, days, appearance = "button" }: { locale: 
   return <div><Button size="large" variant="secondary" disabled={busy || state === "saved"} onClick={request}>{m.text("subscribe.trial", { days: String(days) })}</Button>{status}</div>;
 }
 
-export function SubscribeFlow({ locale, settings, plans, account, view, returnTo, userAgent, trialPending }: {
+/** startWithTopUp opens the form on Add credit (the account page's link); a signed-out visitor always sees plans. */
+export function SubscribeFlow({ locale, settings, plans, account, view, returnTo, userAgent, trialPending, startWithTopUp = false }: {
   locale: string; settings: SubscriptionSettings; plans: readonly SubscriptionPlanView[];
-  account: { id: string; phone: string } | null; view: PaymentView | null; returnTo: string | null; userAgent: string; trialPending: boolean;
+  account: { id: string; phone: string } | null; view: PaymentView | null; returnTo: string | null; userAgent: string; trialPending: boolean; startWithTopUp?: boolean;
 }) {
   const m = createMessages(locale), router = useRouter(), ids = useId();
   const networks = useMemo(() => (["mtn", "airtel"] as const).filter((key) => !!settings[key === "mtn" ? "mtnNumber" : "airtelNumber"]), [settings]);
-  const initial = useMemo<PaymentDraft>(() => ({ planId: plans[0]?.id ?? "", payerPhone: account?.phone ?? "256",
-    network: networks.find((network) => network === networkForPrefix(account?.phone ?? "")) ?? networks[0] ?? "", transactionId: "", accepted: false }), [account, networks, plans]);
+  const initial = useMemo<PaymentDraft>(() => ({ purpose: startWithTopUp && account ? "topup" : "plan", planId: plans[0]?.id ?? "", topUpAmount: "", payerPhone: account?.phone ?? "256",
+    network: networks.find((network) => network === networkForPrefix(account?.phone ?? "")) ?? networks[0] ?? "", transactionId: "", accepted: false }), [account, networks, plans, startWithTopUp]);
   const restored = useSyncExternalStore(subscribeNothing, clientReady, serverReady);
   const persisted = useSyncExternalStore(subscribeNothing, () => account ? paymentDraftSnapshot(account.id) : null, () => null);
   const recovered = useMemo(() => account ? readPaymentDraft(account.id, persisted) : null, [account, persisted]);
   const [edited, setEdited] = useState<PaymentDraft | null>(null);
   const draft = useMemo(() => edited ?? (recovered && plans.some((item) => item.id === recovered.planId) ? { ...recovered,
-    accepted: false, network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial), [edited, recovered, plans, networks, initial]);
+    purpose: startWithTopUp && account || recovered.purpose === "topup" && recovered.topUpAmount ? "topup" as const : "plan" as const,
+    accepted: false, network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial), [edited, recovered, plans, networks, initial, startWithTopUp, account]);
   const setDraft = (change: (old: PaymentDraft) => PaymentDraft) => setEdited((old) => change(old ?? draft));
   const [image, setImage] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [busy, setBusy] = useState(false), [percentage, setPercentage] = useState<number | null>(null);
   const [error, setError] = useState(""), [copied, setCopied] = useState<MobileNetwork | "">("");
@@ -103,21 +107,31 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   // Each screenshot read has a number, so a slow read never fills the form after its image was replaced or removed.
   // idSource says where the current ID came from: a new screenshot replaces any ID, and clears one an earlier screenshot gave.
   const reading = useRef(0), stopReading = useRef<AbortController | null>(null), submitButton = useRef<HTMLButtonElement>(null);
-  const currentId = useRef(draft.transactionId), currentPlan = useRef(draft.planId), idSource = useRef<"typed" | "message" | "screenshot" | null>(null);
-  useEffect(() => { currentId.current = draft.transactionId; currentPlan.current = draft.planId; }, [draft.transactionId, draft.planId]);
+  const currentId = useRef(draft.transactionId), currentTarget = useRef<PaymentTarget | null>(null), idSource = useRef<"typed" | "message" | "screenshot" | null>(null);
+  useEffect(() => { currentId.current = draft.transactionId; }, [draft.transactionId]);
   // Until the refresh after an upload lands, the new report stands in for the server's previous latest report.
   const [sent, setSent] = useState<{ status: PaymentStatus; before: string | null } | null>(null);
-  const status = sent && (view?.status?.reference ?? null) === sent.before ? sent.status : view?.status ?? null;
+  const latest = sent && (view?.status?.reference ?? null) === sent.before ? sent.status : view?.status ?? null;
+  // The newest report and the other purpose's report it hides are sorted into the plan report, whose status may stand alone,
+  // and the top-up, which only ever shows a card beside the form.
+  // Until the refresh lands, the report just sent stands in for the newest, and the one it displaced may be the other purpose's.
+  const displaced = sent && latest === sent.status && view?.status && waitingStatuses.includes(view.status.status) ? view.status : null;
+  const other = [view?.otherStatus, displaced].find((report) => report && report.reference !== latest?.reference && report.purpose !== latest?.purpose) ?? null;
+  const status = latest?.purpose === "topup" ? other : latest, topUpStatus = latest?.purpose === "topup" ? latest : other;
   const waiting = !!status && waitingStatuses.includes(status.status);
   const reportKey = `${account?.id ?? ""}:${status?.reference ?? ""}:${status?.status ?? ""}`;
-  const [reportForm, setReportForm] = useState({ reportKey, open: false });
-  // Only an explicit choice for this report opens a new form; a different decision resets it.
-  if (reportForm.reportKey !== reportKey) { setReportForm({ reportKey, open: false }); setConfirming(false); }
   const reversed = status?.status === "reversed", rejected = status?.status === "rejected";
-  const statusOnly = waiting || rejected || reversed;
+  // A top-up waiting for review (or refused) never hides plans or spending credit: its card sits beside the form, and a new
+  // top-up replaces it. Only a plan report's status stands alone, unless the member came to add credit.
+  const statusOnly = !(startWithTopUp && account) && (waiting || rejected || reversed);
+  const [reportForm, setReportForm] = useState({ reportKey, open: false, replacing: statusOnly });
+  // Only an explicit choice for this report opens a new form; a different decision resets it. A confirmation closes only when
+  // the form was replacing the report that changed, not when an unrelated top-up is approved while the member checks a plan.
+  if (reportForm.reportKey !== reportKey) { if (reportForm.replacing) setConfirming(false); setReportForm({ reportKey, open: false, replacing: statusOnly }); }
   const showForm = !statusOnly || reportForm.reportKey === reportKey && reportForm.open;
   const focusTarget = useRef<string | null>(null);
-  useApprovalRefresh(!!account && (waiting || trialPending));
+  const topUpWaiting = !!topUpStatus && waitingStatuses.includes(topUpStatus.status);
+  useApprovalRefresh(!!account && (waiting || topUpWaiting || trialPending));
   useEffect(() => { if (restored && account && showForm) savePaymentDraft(account.id, draft); }, [account, draft, restored, showForm]);
   useEffect(() => {
     if (!focusTarget.current) return;
@@ -127,16 +141,28 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   }, [showForm]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   const plan = plans.find((candidate) => candidate.id === draft.planId) ?? plans[0];
+  // A top-up pays the amount the member chose; until it is a valid amount there is nothing due and nothing to compare.
+  const topUp = !!account && draft.purpose === "topup";
+  const topUpUgx = topUp && /^\d{1,6}$/u.test(draft.topUpAmount) && validTopUp(Number(draft.topUpAmount)) ? Number(draft.topUpAmount) : null;
+  const target: PaymentTarget | null = topUp ? topUpUgx === null ? null : { priceUgx: topUpUgx, durationDays: null } : plan ?? null;
+  const due = target?.priceUgx ?? null;
+  useEffect(() => { currentTarget.current = target; });
   const menu = canOpenMoneyMenu(userAgent);
   const payNetwork = networks.find((network) => network === draft.network) ?? networks[0];
-  const shortcut = payNetwork && plan ? settings[payNetwork === "mtn" ? "mtnMenuShortcut" : "airtelMenuShortcut"]?.replaceAll("{amount}", String(plan.priceUgx)) : undefined;
+  const shortcut = payNetwork && due !== null ? settings[payNetwork === "mtn" ? "mtnMenuShortcut" : "airtelMenuShortcut"]?.replaceAll("{amount}", String(due)) : undefined;
   const update = (values: Partial<PaymentDraft>) => setDraft((old) => ({ ...old, ...values }));
+  const amountInvalid = m.text("credit.amountInvalid", { min: m.number(walletRules.topUpMinUgx), max: m.number(walletRules.topUpMaxUgx) });
   function toggleReportForm(focus = `${ids}-transaction`) {
     if (busy) return;
+    // Only a plan report opens this form, so its update is a plan report too and replaces it.
+    if (!showForm) update({ purpose: "plan" });
     setError(""); setConfirming(false); focusTarget.current = showForm ? `${ids}-form-toggle` : focus;
-    setReportForm({ reportKey, open: !showForm });
+    setReportForm({ reportKey, open: !showForm, replacing: statusOnly });
   }
-  const helpText = account && status ? m.text("subscribe.helpPaid", { price: String(status.priceUgx), plan: status.planName, phone: formatPhone(account.phone), reference: status.reference }) : undefined;
+  // Help quotes the report that needs it: a waiting one first, then one refused or reversed.
+  const helpReport = [status, topUpStatus].find((report) => report && waitingStatuses.includes(report.status))
+    ?? [status, topUpStatus].find((report) => report?.status === "rejected" || report?.status === "reversed") ?? status ?? topUpStatus;
+  const helpText = account && helpReport ? m.text("subscribe.helpPaid", { price: String(helpReport.priceUgx), plan: helpReport.planName, phone: formatPhone(account.phone), reference: helpReport.reference }) : undefined;
   const owners = { mtn: settings.mtnNumber, airtel: settings.airtelNumber };
   const networkName = (evidence: PaymentEvidence) => evidence.network && networks.includes(evidence.network) ? wallets[evidence.network].name : null;
   /** The network a message or screenshot names, as a form change; the member's chosen plan is never changed for them. */
@@ -147,9 +173,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   }
   /** Says what a paste or read found through the form's live region, judged against the plan chosen when it finished. */
   function say(evidence: PaymentEvidence, replaced: string | null = null, screenshot = false, showId = true) {
-    const chosen = plans.find((item) => item.id === currentPlan.current) ?? plans[0];
-    if (!chosen) return;
-    announceText(evidenceRows(locale, evidence, chosen, networkName(evidence), replaced, showId, screenshot).map((row) => row.text).join(". "));
+    announceText(evidenceRows(locale, evidence, currentTarget.current, networkName(evidence), replaced, showId, screenshot).map((row) => row.text).join(". "));
   }
   // Emptying first makes a repeated, identical text count as new, so it is read again.
   function announceText(text: string) {
@@ -223,10 +247,11 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   function checkedDetails() {
     const payer = validMobilePhone(draft.payerPhone), transactionId = parseTransactionId(draft.transactionId);
     if (!plan || !account) return { problem: m.text("account.unavailable") };
+    if (topUp && topUpUgx === null) return { problem: amountInvalid };
     if (!image) return { problem: m.text("subscribe.needScreenshot") };
     if (!transactionId) return { problem: m.text("subscribe.transactionRequired") };
     if (!payer) return { problem: m.text("phone.invalid") };
-    return { plan, account, payer, transactionId, image };
+    return { plan, account, payer, transactionId, image, topUpUgx: topUp ? topUpUgx : null };
   }
   // Submitting checks the details, then shows them to confirm before anything is sent.
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -241,18 +266,20 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     setConfirming(false);
     const details = checkedDetails();
     if (busy || blocker || "problem" in details) return;
-    const { plan, account, payer, transactionId, image: screenshot } = details, body = new FormData();
+    const { plan, account, payer, transactionId, image: screenshot, topUpUgx: credit } = details, body = new FormData();
     setBusy(true); setPercentage(0);
-    // The server records the plan's price as the claim; the screenshot's amount goes along only as the owner's hint.
-    for (const [key, value] of Object.entries({ planId: plan.id, network: draft.network, payerPhone: payer, transactionId,
+    // The server records the plan's price (or the top-up) as the claim; the screenshot's amount goes along only as the owner's hint.
+    for (const [key, value] of Object.entries({ purpose: credit === null ? "plan" : "topup", planId: credit === null ? plan.id : "", topUpAmount: credit === null ? "" : String(credit),
+      network: draft.network, payerPhone: payer, transactionId,
       screenshotAmount: shot?.amount ? String(shot.amount) : "", accepted: String(draft.accepted) })) body.append(key, value);
     body.append("image", screenshot, "payment.jpg");
     let failed = false;
     try {
       const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); trackEvent("payment_submitted");
       setSent({ before: view?.status?.reference ?? null, status: { reference: result.reference, status: "pending", rejectText: null, rejectReason: null,
-        planName: plan.name, priceUgx: plan.priceUgx, submittedAt: new Date().toISOString(), endsAt: null } });
-      setEdited(null); setReportForm({ reportKey, open: false }); removeScreenshot(); setMessageFound(null); setMessageAmount(null); setIdNote(""); router.refresh();
+        planName: credit === null ? plan.name : m.text("credit.topUp"), priceUgx: credit ?? plan.priceUgx, submittedAt: new Date().toISOString(), endsAt: null,
+        purpose: credit === null ? "plan" : "topup" } });
+      setEdited(null); setReportForm({ reportKey, open: false, replacing: statusOnly }); removeScreenshot(); setMessageFound(null); setMessageAmount(null); setIdNote(""); router.refresh();
     } catch (failure) { failed = true; setError(failure instanceof Error ? failure.message : m.text("account.unavailable")); }
     finally {
       setBusy(false);
@@ -280,24 +307,31 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     {help}
   </PageFooter>;
   const paymentStatus = account && <PaymentStatusCard locale={locale} status={status} settings={settings} phone={account.phone} heading={statusOnly && !showForm ? "h2" : "h3"}
-    replace={(waiting || rejected) && plan && payNetwork ? { open: showForm, controls: `${ids}-form`, disabled: busy, toggle: () => toggleReportForm() } : undefined}
-    newPayment={reversed && !showForm && plan && payNetwork ? { controls: `${ids}-form`, start: () => toggleReportForm(`${ids}-plan`) } : undefined} />;
-  if (statusOnly && !showForm) return <>{accountPanel}<Step id="report">{paymentStatus}</Step></>;
-  if (!plan || !payNetwork) return <>{accountPanel}{paymentStatus}<p>{m.text(plan ? "account.unavailable" : "subscribe.noPlans")}</p>{footer}</>;
+    replace={statusOnly && (waiting || rejected) && plan && payNetwork ? { open: showForm, controls: `${ids}-form`, disabled: busy, toggle: () => toggleReportForm() } : undefined}
+    newPayment={statusOnly && reversed && !showForm && plan && payNetwork ? { controls: `${ids}-form`, start: () => toggleReportForm(`${ids}-plan`) } : undefined} />;
+  const topUpCard = account && topUpStatus && <PaymentStatusCard locale={locale} status={topUpStatus} settings={settings} phone={account.phone} heading={statusOnly && !showForm ? "h2" : "h3"} />;
+  if (statusOnly && !showForm) return <>{accountPanel}<Step id="report">{paymentStatus}{topUpCard}</Step></>;
+  if (!plan || !payNetwork) return <>{accountPanel}{paymentStatus}{topUpCard}<p>{m.text(plan ? "account.unavailable" : "subscribe.noPlans")}</p>{footer}</>;
   const wallet = wallets[payNetwork], number = settings[payNetwork === "mtn" ? "mtnNumber" : "airtelNumber"]!;
   // Submitting opens only when every required detail is present and valid; the first gap is said under the button.
   // The screenshot is required and must show a readable transaction ID and amount; the ID entered must be the one it shows.
   const claimedId = parseTransactionId(draft.transactionId), shotId = shot?.transactionId ?? null;
   const paidAmounts = [messageAmount, shot?.amount ?? null].filter((amount): amount is number => amount !== null);
-  const shortAmount = paidAmounts.length && Math.min(...paidAmounts) < plan.priceUgx ? Math.min(...paidAmounts) : null;
-  // A short amount that is exactly another plan's price offers that plan; the chosen plan never changes by itself.
-  const paidPlan = shortAmount === null ? undefined : plans.find((item) => item.priceUgx === shortAmount);
-  const blocker: Readonly<{ text: string; warning: boolean; switchTo?: SubscriptionPlanView }> | null = !validMobilePhone(draft.payerPhone) ? { text: m.text("subscribe.needPayer"), warning: false }
+  const shortAmount = paidAmounts.length && due !== null && Math.min(...paidAmounts) < due ? Math.min(...paidAmounts) : null;
+  // A short amount that is exactly another plan's price offers that plan, or for a top-up offers adding what was paid;
+  // the chosen plan or amount never changes by itself.
+  const paidPlan = shortAmount === null || topUp ? undefined : plans.find((item) => item.priceUgx === shortAmount);
+  const paidTopUp = topUp && validTopUp(shortAmount) ? shortAmount : null;
+  const blocker: Readonly<{ text: string; warning: boolean; switchTo?: SubscriptionPlanView; useAmount?: number }> | null
+    = topUp && topUpUgx === null ? { text: amountInvalid, warning: false }
+    : !validMobilePhone(draft.payerPhone) ? { text: m.text("subscribe.needPayer"), warning: false }
     : !image ? { text: m.text("subscribe.needScreenshot"), warning: false }
     : shotState ? { text: m.text("subscribe.waitReading"), warning: false }
     : !shotFound?.unreadable && (!shotId || shot?.amount === null || shot?.amount === undefined) ? { text: m.text("subscribe.unclearScreenshot"), warning: true }
     : !claimedId ? { text: m.text(shotFound?.unreadable && !draft.transactionId ? "subscribe.enterTransaction" : "subscribe.transactionRequired"), warning: true }
     : shotId && !sameTransactionId(claimedId, shotId) ? { text: m.text("subscribe.idMismatch", { id: shotId }), warning: true }
+    : shortAmount !== null && topUp ? { text: m.text("credit.amountShort", { amount: m.number(shortAmount), price: m.number(due ?? 0) }), warning: true,
+      ...(paidTopUp === null ? {} : { useAmount: paidTopUp }) }
     : shortAmount !== null ? { text: m.text("subscribe.amountShort", { amount: m.number(shortAmount), price: m.number(plan.priceUgx),
       plan: m.plural("paywall.days", plan.durationDays) }), warning: true, ...(paidPlan ? { switchTo: paidPlan } : {}) }
     : !view?.acceptedTerms && !draft.accepted ? { text: m.text("subscribe.needAssent"), warning: false } : null;
@@ -310,20 +344,28 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     <Sheet data-subscribe-layout="compact-stacked">
       {showForm && <>
       <Step id="plans" aria-labelledby={`${ids}-plan`}>
-        <StepHeading><StepTitle id={`${ids}-plan`} tabIndex={-1}>{m.text("subscribe.pickPlan")}</StepTitle></StepHeading>
-        <Plans aria-labelledby={`${ids}-plan`} $columns={Math.min(plans.length, 3)}>{plans.map((item) => <Plan key={item.id}>
-          <input type="radio" name="plan" value={item.id} checked={draft.planId === item.id} onChange={() => update({ planId: item.id })} />
-          <PlanName>{m.plural("paywall.days", item.durationDays)}</PlanName><PlanPrice><small>UGX</small> <span>{m.number(item.priceUgx)}</span></PlanPrice>
-        </Plan>)}</Plans>
+        <StepHeading><StepTitle id={`${ids}-plan`} tabIndex={-1}>{m.text(topUp ? "credit.addTitle" : "subscribe.pickPlan")}</StepTitle></StepHeading>
+        {topUp ? <TextInput id={`${ids}-topup`} label={m.text("credit.amount")} inputMode="numeric" autoComplete="off" required disabled={busy} value={draft.topUpAmount}
+            hint={m.text("credit.amountHint", { min: m.number(walletRules.topUpMinUgx), max: m.number(walletRules.topUpMaxUgx) })} data-topup-amount
+            onChange={(event) => update({ topUpAmount: event.currentTarget.value.replace(/\D/gu, "").slice(0, 6) })} />
+          : <Plans aria-labelledby={`${ids}-plan`} $columns={Math.min(plans.length, 3)}>{plans.map((item) => <Plan key={item.id}>
+            <input type="radio" name="plan" value={item.id} checked={draft.planId === item.id} onChange={() => update({ planId: item.id })} />
+            <PlanName>{m.plural("paywall.days", item.durationDays)}</PlanName><PlanPrice><small>UGX</small> <span>{m.number(item.priceUgx)}</span></PlanPrice>
+          </Plan>)}</Plans>}
+        {account && view?.credit && (topUp ? view.credit.balanceUgx !== 0 && <Note>{m.text("credit.balance", { amount: m.number(view.credit.balanceUgx) })}</Note>
+          : <CreditPurchase locale={locale} credit={view.credit} plan={plan} acceptedTerms={!!view.acceptedTerms} accepted={draft.accepted} disabled={busy}
+            onAccept={(accepted) => update({ accepted })} />)}
+        {account && !waiting && <RowButton type="button" variant="quiet" disabled={busy} onClick={() => update({ purpose: topUp ? "plan" : "topup" })} data-credit-mode={topUp ? "topup" : "plan"}>
+          {m.text(topUp ? "credit.planInstead" : "credit.addInstead")}</RowButton>}
       </Step>
-      <Step aria-label={m.text("subscribe.payAmount", { amount: m.number(plan.priceUgx) })}>
+      <Step aria-label={due === null ? m.text("credit.payTo") : m.text("subscribe.payAmount", { amount: m.number(due) })}>
         <PaymentTransfer>
           {networks.length > 1 ? <WalletChoices><VisuallyHidden as="legend">{m.text("subscribe.network")}</VisuallyHidden>{networks.map((network) => <WalletChoice key={network}>
             <input type="radio" name={`${ids}-wallet`} value={network} checked={payNetwork === network} onChange={() => { update({ network }); setCopied(""); }} />
             <span><MobileMoneyLogo network={network} /><span>{wallets[network].name}</span><CheckIcon /></span>
           </WalletChoice>)}</WalletChoices> : <Note>{wallet.name}</Note>}
           <Wallet>
-            <WalletNumber><VisuallyHidden>{wallet.name} </VisuallyHidden><WalletMeta>{m.text("subscribe.payTo", { amount: m.number(plan.priceUgx) })}</WalletMeta> <span>{localUgandaPhone(number)}</span></WalletNumber>
+            <WalletNumber><VisuallyHidden>{wallet.name} </VisuallyHidden><WalletMeta>{due === null ? m.text("credit.payTo") : m.text("subscribe.payTo", { amount: m.number(due) })}</WalletMeta> <span>{localUgandaPhone(number)}</span></WalletNumber>
             <WalletMeta>{m.text("subscribe.payeeNames")} {name}</WalletMeta>
             <CopyButton variant="secondary" data-analytics-ignore onClick={async () => {
               update({ network: payNetwork });
@@ -342,7 +384,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       </>}
       <Step id="report" aria-label={m.text("subscribe.confirmPayment")}>
         {!account ? <Locked><LockIcon /><span>{m.text("subscribe.signInFirst")}</span></Locked> : <>
-          {!statusOnly && paymentStatus}
+          {!statusOnly && paymentStatus}{topUpCard}
           {showForm && <ReportForm id={`${ids}-form`} onSubmit={submit} data-analytics-ignore>
             <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} required hint={false} disabled={busy}
               onValueChange={(value) => update({ payerPhone: value })} />
@@ -350,7 +392,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
             <TextInput id={`${ids}-transaction`} label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId}
               required disabled={busy} minLength={4} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false} data-transaction-input
               error={idNote || undefined}
-              hint={messageFound && <EvidenceFindings locale={locale} evidence={messageFound} plan={plan} networkName={networkName(messageFound)} />}
+              hint={messageFound && <EvidenceFindings locale={locale} evidence={messageFound} target={target} networkName={networkName(messageFound)} />}
               onPaste={(event) => { event.preventDefault(); pasteMessage(event.clipboardData.getData("text")); }}
               onChange={(event) => {
                 const raw = event.currentTarget.value, typed = normalizeTransactionId(raw);
@@ -372,7 +414,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
               <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
               {shotState ? <ReadingProgress locale={locale} state={shotState} />
                 : shotFound?.unreadable ? <Note data-screenshot-note>{m.text("subscribe.screenshotUnreadable")}</Note>
-                  : shotFound && <div data-screenshot-note><EvidenceFindings locale={locale} evidence={shotFound.evidence} plan={plan} replaced={shotFound.replaced}
+                  : shotFound && <div data-screenshot-note><EvidenceFindings locale={locale} evidence={shotFound.evidence} target={target} replaced={shotFound.replaced}
                     showId={shotFound.idCurrent} networkName={networkName(shotFound.evidence)} needAmount /></div>}
               {image && <><Preview src={preview} alt={m.text("subscribe.preview")} />
                 <RowButton type="button" variant="quiet" disabled={busy} onClick={removeScreenshot}>{m.text("subscribe.removeScreenshot")}</RowButton></>}
@@ -384,13 +426,16 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
             {blocker && <SubmitNote id={`${ids}-blocker`} $warning={blocker.warning} data-submit-blocker>{blocker.text}
               {blocker.switchTo && <> <PlanSwitch type="button" variant="quiet" data-plan-switch
                 onClick={() => { update({ planId: blocker.switchTo!.id }); setTimeout(() => submitButton.current?.focus(), 0); }}>
-                {m.text("subscribe.switchPlan", { plan: m.plural("paywall.days", blocker.switchTo.durationDays) })}</PlanSwitch></>}</SubmitNote>}
+                {m.text("subscribe.switchPlan", { plan: m.plural("paywall.days", blocker.switchTo.durationDays) })}</PlanSwitch></>}
+              {blocker.useAmount !== undefined && <> <PlanSwitch type="button" variant="quiet" data-topup-switch
+                onClick={() => { update({ topUpAmount: String(blocker.useAmount) }); setTimeout(() => submitButton.current?.focus(), 0); }}>
+                {m.text("credit.useAmount", { amount: m.number(blocker.useAmount) })}</PlanSwitch></>}</SubmitNote>}
             {percentage !== null && <div role="status"><progress max={100} value={percentage} aria-label={m.text("subscribe.uploadProgress")} /><span> {percentage}%</span></div>}
           </ReportForm>}
           {canConfirm && showForm && <CriteriaDialog id={`${ids}-confirm`} title={m.text("subscribe.confirmTitle")} open={confirming} onCancel={() => setConfirming(false)} onApply={() => void send()}
             applyLabel={m.text("subscribe.confirmSend")} cancelLabel={m.text("subscribe.editDetails")} closeLabel={m.text("subscribe.editDetails")}>
             <ConfirmDetails data-payment-confirmation>
-              <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{m.plural("paywall.days", plan.durationDays)} · UGX {m.number(plan.priceUgx)}</dd></div>
+              <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{topUp ? m.text("credit.topUp") : m.plural("paywall.days", plan.durationDays)} · UGX {m.number(due ?? plan.priceUgx)}</dd></div>
               <div><dt>{m.text("subscribe.confirmPaidTo")}</dt><dd>{wallet.name} {localUgandaPhone(number)}{name ? ` · ${name}` : ""}</dd></div>
               <div><dt>{m.text("subscribe.confirmPaidFrom")}</dt><dd>{formatPhone(validMobilePhone(draft.payerPhone) ?? draft.payerPhone)}</dd></div>
               <div><dt>{m.text("subscribe.transactionId")}</dt><dd>{claimedId}</dd></div>

@@ -1547,7 +1547,10 @@ model AnalyticsSetting {
 // tokens and codes are stored only as hashes. Instants are UTC. The switch in SubscriptionSettings stays off by default.
 // A phone-number account with a salted password hash: no name, email, photo, profile or user agent. The number is unique and not
 // hashed, because the owner matches payers by number; erasure sets it NULL with erasedAt and keeps the row for its payment
-// and code records. Every account change locks this row first.
+// and code records. Every account change locks this row first. creditUgx caches the newest WalletEntry.balanceAfter and is
+// written only with that entry under the account lock; it goes below zero only through a reversal or a transferred debt.
+// autoRenew buys autoRenewPlan from credit when a period ends and the balance covers it, under the terms version the member
+// accepted when turning it on (autoRenewTermsVersion), which each renewed period records. Number changes are AccountMove rows.
 model MemberAccount {
   id               String              @id @db.Char(36)
   phone            String?             @unique @db.VarChar(15)
@@ -1565,12 +1568,22 @@ model MemberAccount {
   trialRequestedAt DateTime?           @db.DateTime(3)
   trialDismissedAt DateTime?           @db.DateTime(3)
   erasedAt         DateTime?           @db.DateTime(3)
+  creditUgx        Int                 @default(0)
+  autoRenew        Boolean             @default(false)
+  autoRenewPlanId  String?             @db.Char(36)
+  autoRenewTermsVersion String?        @db.VarChar(16)
   sessions         MemberSession[]
   submissions      PaymentSubmission[]
   codes            AccessCode[]
   verifications    MemberVerification[]
+  walletEntries    WalletEntry[]
+  movesFrom        AccountMove[]       @relation("MovesFrom")
+  movesTo          AccountMove[]       @relation("MovesTo")
+  autoRenewPlan    SubscriptionPlan?   @relation("AutoRenewPlan", fields: [autoRenewPlanId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([passwordResetRequestedAt])
+  @@index([autoRenew])
+  @@index([autoRenewPlanId])
 }
 
 // Member sign-ins: only a SHA-256 of each random session token is stored, with no user agent or address. A signed-in
@@ -1633,21 +1646,24 @@ model SubscriptionPlan {
   updatedAt    DateTime            @db.DateTime(3)
   submissions  PaymentSubmission[]
   codes        AccessCode[]
+  autoRenewers MemberAccount[]     @relation("AutoRenewPlan")
 }
 
 // A subscriber's payment report (`report`), or a mobile-money payment the owner recorded with a manual code (`owner`: no
 // image, session or terms). Claims are what the subscriber says; the approved columns hold the owner's final values. Plan
 // name, days and price are snapshots. payerPhone and rejectText are personal data that erasure clears; amounts and
 // transaction IDs stay for accounting. approvedTxnKey (`network:txnKey`) is set only at approval and kept after reversal,
-// so one payment is approved at most once; the unique key allows any number of NULLs.
+// so one payment is approved at most once; the unique key allows any number of NULLs. purpose `topup` is a credit top-up:
+// no plan or days, planName "Account credit", and priceUgx = claimedAmountUgx = the amount the member chose to add.
 model PaymentSubmission {
   id                   String             @id @db.Char(36)
   reference            String             @unique @db.Char(4)
   source               String             @db.VarChar(8)
   accountId            String             @db.Char(36)
-  planId               String             @db.Char(36)
+  purpose              String             @default("plan") @db.VarChar(8)
+  planId               String?            @db.Char(36)
   planName             String             @db.VarChar(40)
-  durationDays         Int                @db.UnsignedSmallInt
+  durationDays         Int?               @db.UnsignedSmallInt
   priceUgx             Int                @db.UnsignedInt
   payerPhone           String?            @db.VarChar(15)
   claimedNetwork       String             @db.VarChar(8)
@@ -1675,10 +1691,12 @@ model PaymentSubmission {
   reversedAt           DateTime?          @db.DateTime(3)
   reverseReason        String?            @db.VarChar(16)
   account              MemberAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  plan                 SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  plan                 SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   screenshot           PaymentScreenshot?
   code                 AccessCode?
+  walletEntries        WalletEntry[]
 
+  @@unique([id, accountId])
   @@index([claimedTxnKey])
   @@index([status, submittedAt])
   @@index([accountId, submittedAt])
@@ -1732,11 +1750,57 @@ model AccessCode {
   replaces            AccessCode[]       @relation("AccessCodeReplacement")
   plan                SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sessions            MemberSession[]
+  walletEntry         WalletEntry?
 
   @@unique([id, accountId])
   @@index([accountId, endsAt])
   @@index([replacedById])
   @@index([planId])
+}
+
+// Account credit (plan-only, non-refundable): an append-only ledger with one row per change, kept on its own account by
+// composite keys; the database refuses updates and deletes, and permanent deletion removes rows by foreign-key cascade.
+// No personal data: actor is a role (admin, member or system) and note a short reason without long numbers. entryNumber
+// counts 1, 2, … per account, so a stale balance read fails on the unique key instead of losing an update. requestKey
+// makes a purchase or renewal idempotent.
+model WalletEntry {
+  id                  String             @id @db.Char(36)
+  accountId           String             @db.Char(36)
+  entryNumber         Int                @db.UnsignedInt
+  kind                String             @db.VarChar(12)
+  amountUgx           Int
+  balanceAfter        Int
+  paymentSubmissionId String?            @db.Char(36)
+  accessCodeId        String?            @db.Char(36)
+  requestKey          String?            @unique @db.VarChar(80)
+  actor               String             @db.VarChar(8)
+  note                String?            @db.VarChar(200)
+  createdAt           DateTime           @db.DateTime(3)
+  account             MemberAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+  paymentSubmission   PaymentSubmission? @relation(fields: [paymentSubmissionId, accountId], references: [id, accountId], onDelete: Cascade, onUpdate: Restrict, map: "WalletEntry_paymentSubmission_fkey")
+  accessCode          AccessCode?        @relation(fields: [accessCodeId, accountId], references: [id, accountId], onDelete: Cascade, onUpdate: Restrict, map: "WalletEntry_accessCode_fkey")
+
+  @@unique([accountId, entryNumber])
+  @@unique([paymentSubmissionId, accountId, kind])
+  @@unique([accessCodeId, accountId])
+  @@index([accountId, createdAt])
+}
+
+// A number change: the person moved from one account to another, which carried the whole balance and access. Append-only
+// (the database refuses updates and deletes, and an account with moves cannot be deleted, only erased). sequence orders moves
+// exactly: two moves touching one account serialize on its lock. fromEntryNumber is the old account's newest ledger entry when
+// it moved, so credit at or before it moved. A reversal walks these rows to find who holds a payment's credit now.
+model AccountMove {
+  sequence        BigInt        @id @default(autoincrement())
+  fromAccountId   String        @db.Char(36)
+  toAccountId     String        @db.Char(36)
+  fromEntryNumber Int           @db.UnsignedInt
+  movedAt         DateTime      @db.DateTime(3)
+  fromAccount     MemberAccount @relation("MovesFrom", fields: [fromAccountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  toAccount       MemberAccount @relation("MovesTo", fields: [toAccountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([fromAccountId, sequence])
+  @@index([toAccountId])
 }
 
 // The owner's paid-access settings: a single row, id = 1, and a missing row means these defaults (paywallMode off). The

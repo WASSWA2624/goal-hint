@@ -49,6 +49,7 @@ function fixture({ reports = [], codes = [], accountChange = {}, sessionChange =
     },
     rateLimitBucket: { async findUniqueOrThrow({ where }) { return { key: where.key, count: 0, bytes: 0 }; }, async update() {} },
     ownerAuditEvent: { async create() {} },
+    walletEntry: { async findMany() { return []; } },
   };
   const database = { query: run => run(tx), transaction: run => run(tx) };
   const service = createPayments({ database, config: { key: (purpose, value) => `${purpose}:${value}` }, now: () => instant, environment: null });

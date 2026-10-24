@@ -1,5 +1,6 @@
 import "server-only";
 
+import { autoRenewFor } from "../members/auto-renew.ts";
 import { membersPurgeFor } from "../members/purge.ts";
 import { cookies } from "next/headers.js";
 import { connection } from "next/server.js";
@@ -59,7 +60,7 @@ export async function adminPageGate(searchParams: Promise<Record<string, string 
   const resolved = await services();
   const jar = await cookies();
   const owner = await verifyOwner(resolved, jar.get(memberCookieName(resolved.config.production))?.value);
-  if (owner) { if (resolved.database) membersPurgeFor(resolved.database).maybePurge(); return { owner, services: resolved }; }
+  if (owner) { if (resolved.database) { membersPurgeFor(resolved.database).maybePurge(); autoRenewFor(resolved.database).maybeSweep(); } return { owner, services: resolved }; }
   return { owner: null, services: resolved };
 }
 

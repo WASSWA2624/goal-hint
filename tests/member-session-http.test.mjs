@@ -18,7 +18,7 @@ test("navigation role and phone come from the same verified member, ignoring leg
     const response = await handler(new Request("http://localhost/api/account/session", { headers: { Cookie: `goal-hint-member=${token}${owner}` } }));
     assert.equal(response.status, 200); assert.match(response.headers.get("cache-control"), /no-store/u);
     assert.deepEqual(await response.json(), { phone: member?.phone ?? null, administrator,
-      subscription: { activeUntil: null, paymentPending: false, canSubscribe: false } });
+      subscription: { activeUntil: null, paymentPending: false, canSubscribe: false, creditUgx: 0, autoRenew: false, renewsFromCredit: false } });
   }
 });
 
@@ -26,12 +26,13 @@ const instant = Date.parse("2026-10-24T10:00:00Z"), hour = 3_600_000;
 const period = (from, to, revoked = false) => ({ startsAt: new Date(instant + from * hour), endsAt: new Date(instant + to * hour), revokedAt: revoked ? new Date(instant) : null });
 function subscriptionFixture({ periods = [], status = null, mode = "on", blocked = false, sessionChange = {}, accountChange = {} } = {}) {
   const member = { phone: "256700000101", accountId: "account", tokenHash: "session", blocked, codeEnteredAt: null };
-  const account = { blockedAt: null, erasedAt: null, codes: periods,
+  const account = { blockedAt: null, erasedAt: null, creditUgx: 0, autoRenew: false, autoRenewPlan: null, codes: periods,
     submissions: status ? [{ status, endsAt: new Date(instant + 999 * hour) }] : [], ...accountChange };
   const stored = sessionChange === null ? null : { accountId: member.accountId, authenticatedAt: new Date(instant - hour), passwordResetAt: null,
     expiresAt: new Date(instant + 500 * hour), account, ...sessionChange };
   const queries = [];
-  const database = { query: run => run({ memberSession: { async findUnique(query) { queries.push(query); return stored; } } }) };
+  const database = { query: run => run({ memberSession: { async findUnique(query) { queries.push(query); return stored; } },
+    paymentSubmission: { async count({ where }) { return status === where.status ? 1 : 0; } } }) };
   const codes = createAccessCodes({ database, now: () => instant, notifications: silentPaymentNotifications });
   const services = { config: { production: false }, settings: { settings: mode === null ? null : { paywallMode: mode } },
     sessions: { async verify() { return member; } }, codes };
@@ -45,7 +46,7 @@ test("private subscription summary uses active periods and uninterrupted renewal
     const response = await f.request();
     assert.equal(response.status, 200); assert.match(response.headers.get("cache-control"), /no-store/u);
     const body = await response.json();
-    assert.deepEqual(body.subscription, { activeUntil: new Date(instant + 3 * hour).toISOString(), paymentPending: status === "pending", canSubscribe: true });
+    assert.deepEqual(body.subscription, { activeUntil: new Date(instant + 3 * hour).toISOString(), paymentPending: status === "pending", canSubscribe: true, creditUgx: 0, autoRenew: false, renewsFromCredit: false });
     assert.equal(body.phone, f.member.phone);
     assert.equal(f.queries.length, 1, "Navigation loads a compact account projection without devices or payment proof.");
     assert.equal(f.queries[0].where.tokenHash, f.member.tokenHash);
@@ -56,7 +57,7 @@ test("private subscription summary uses active periods and uninterrupted renewal
 test("expired, revoked and future-only periods never become active from an approved payment or a long-lived session", async () => {
   for (const periods of [[], [period(-2, 0)], [period(1, 2)], [period(-2, 5, true)]]) {
     const response = await subscriptionFixture({ periods, status: "approved" }).request();
-    assert.deepEqual((await response.json()).subscription, { activeUntil: null, paymentPending: false, canSubscribe: true });
+    assert.deepEqual((await response.json()).subscription, { activeUntil: null, paymentPending: false, canSubscribe: true, creditUgx: 0, autoRenew: false, renewsFromCredit: false });
   }
 });
 
@@ -64,10 +65,10 @@ test("subscription purchase availability respects sales mode and blocked account
   for (const mode of ["on", "test", "off", null]) {
     const response = await subscriptionFixture({ mode, periods: [period(-1, 1)] }).request();
     assert.deepEqual((await response.json()).subscription, { activeUntil: new Date(instant + hour).toISOString(), paymentPending: false,
-      canSubscribe: mode === "on" || mode === "test" });
+      canSubscribe: mode === "on" || mode === "test", creditUgx: 0, autoRenew: false, renewsFromCredit: false });
   }
   const blocked = subscriptionFixture({ blocked: true, periods: [period(-1, 1)], status: "pending" });
-  assert.deepEqual((await (await blocked.request()).json()).subscription, { activeUntil: null, paymentPending: false, canSubscribe: false });
+  assert.deepEqual((await (await blocked.request()).json()).subscription, { activeUntil: null, paymentPending: false, canSubscribe: false, creditUgx: 0, autoRenew: false, renewsFromCredit: false });
   assert.equal(blocked.queries.length, 0);
 });
 
@@ -76,7 +77,7 @@ test("guests can discover open subscriptions and administrators never receive a 
     const handler = createMemberSessionHandler(async () => ({ config: { production: false }, settings: { settings: { paywallMode: "on" } },
       sessions: { async verify() { return member; } }, codes: { async subscriptionStatus() { assert.fail("No private subscription read is needed."); } } }));
     const body = await (await handler(new Request("http://localhost/api/account/session"))).json();
-    assert.deepEqual(body.subscription, { activeUntil: null, paymentPending: false, canSubscribe: !member });
+    assert.deepEqual(body.subscription, { activeUntil: null, paymentPending: false, canSubscribe: !member, creditUgx: 0, autoRenew: false, renewsFromCredit: false });
   }
 });
 
@@ -84,7 +85,7 @@ test("subscription details fail closed if the verified session was removed, rese
   for (const sessionChange of [null, { authenticatedAt: null }, { passwordResetAt: new Date(instant) }, { expiresAt: new Date(instant) }, { accountId: "another-account" }]) {
     const f = subscriptionFixture({ sessionChange, periods: [period(-1, 1)], status: "pending" });
     const body = await (await f.request()).json();
-    assert.equal(body.phone, null); assert.deepEqual(body.subscription, { activeUntil: null, paymentPending: false, canSubscribe: false });
+    assert.equal(body.phone, null); assert.deepEqual(body.subscription, { activeUntil: null, paymentPending: false, canSubscribe: false, creditUgx: 0, autoRenew: false, renewsFromCredit: false });
   }
   for (const accountChange of [{ blockedAt: new Date(instant) }, { erasedAt: new Date(instant) }]) {
     const body = await (await subscriptionFixture({ accountChange, periods: [period(-1, 1)] }).request()).json();
