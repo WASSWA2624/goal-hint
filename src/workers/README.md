@@ -92,3 +92,5 @@ the plan has spare quota above the ordinary floor. Team-code sweeps (one per UTC
 run unless `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED=false`. It loads `.env.local` then `.env.operations`
 and the owner register in `.goal-hint/owner-approvals.json`. Read the
 [live operations runbook](../../docs/live-operations.md).
+
+`npm run members:purge` and `members:renew` run bounded `members.ts` maintenance. The separate `payments:notifications` worker dispatches the sole account-update SMS outbox and never automatically resends failed or uncertain sends ([messaging runbook](../../docs/yoola-messaging.md#payment-decision-notifications)).

@@ -15,6 +15,7 @@ import { appendWalletEntry, lockedCredit, walletHistory } from "../members/walle
 import { createPaymentReview } from "./payment-review.ts";
 import { auditTextErrors, ownerAuditActions, writeOwnerAudit } from "./audit.ts";
 import { deleteSubscriber } from "./delete-subscriber.ts";
+import { countedManualWhere, countedPaymentWhere } from "./revenue.ts";
 
 export function revenueBounds(now: number) {
   const today = getReportingDate(utcInstantFromEpochMilliseconds(now));
@@ -45,8 +46,8 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
       const at = new Date(now()), bounds = revenueBounds(+at);
       return database.query(async tx => {
         async function revenue(since: Date) { const [payments, manual] = await Promise.all([
-          tx.paymentSubmission.aggregate({ where: { status: "approved", reversedAt: null, decidedAt: { gte: since, lte: at } }, _sum: { amountReceivedUgx: true } }),
-          tx.accessCode.aggregate({ where: { source: "manual", createdAt: { gte: since, lte: at } }, _sum: { amountReceivedUgx: true } }),
+          tx.paymentSubmission.aggregate({ where: countedPaymentWhere({ gte: since, lte: at }), _sum: { amountReceivedUgx: true } }),
+          tx.accessCode.aggregate({ where: countedManualWhere({ gte: since, lte: at }), _sum: { amountReceivedUgx: true } }),
         ]); return (payments._sum.amountReceivedUgx ?? 0) + (manual._sum.amountReceivedUgx ?? 0); }
         const [pending, active, weekRevenue, monthRevenue, trials, busy, settings] = await Promise.all([
           tx.paymentSubmission.count({ where: { status: "pending" } }),
@@ -136,6 +137,8 @@ export function createSubscribers(database: DatabaseRuntime, now = Date.now, adm
             await tx.memberAccount.update({ where: { id }, data: { phone: null, passwordHash: null, temporaryPasswordHash: null, temporaryPasswordExpiresAt: null,
               passwordResetRequestedAt: null, phoneVerifiedAt: null, passwordChangedAt: null, ownerNote: null, blockedReason: null, erasedAt: at, autoRenew: false } });
             await tx.memberVerification.deleteMany({ where: { accountId: id } });
+            // Outbox rows hold no number, but an erased account is never notified again and keeps no delivery history.
+            await tx.paymentNotificationOutbox.deleteMany({ where: { accountId: id } });
             break;
           }
           default: return rollback({ status: "invalid", message: "Unknown subscriber action." });

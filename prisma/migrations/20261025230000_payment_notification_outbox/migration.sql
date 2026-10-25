@@ -12,6 +12,7 @@ CREATE TABLE `PaymentNotificationOutbox` (
   PRIMARY KEY (`id`),
   UNIQUE INDEX `PaymentNotificationOutbox_targetType_targetId_decision_key` (`targetType`, `targetId`, `decision`),
   INDEX `PaymentNotificationOutbox_status_createdAt_idx` (`status`, `createdAt`),
+  INDEX `PaymentNotificationOutbox_status_finishedAt_idx` (`status`, `finishedAt`),
   INDEX `PaymentNotificationOutbox_accountId_idx` (`accountId`),
   CONSTRAINT `PaymentNotificationOutbox_accountId_fkey` FOREIGN KEY (`accountId`) REFERENCES `MemberAccount` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
   CONSTRAINT `PaymentNotificationOutbox_decision_check` CHECK (

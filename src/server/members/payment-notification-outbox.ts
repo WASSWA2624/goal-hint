@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { supportedMessageChannels } from "../../domain/member-verification.ts";
+import { paymentNoticeRules } from "../../domain/payment-notification.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { PaymentNotificationOutbox, Prisma } from "../generated/prisma/client.ts";
@@ -9,7 +10,7 @@ import { lockMemberAccount } from "./access-codes.ts";
 import { accountUpdateMessage, type PaymentNotificationEvent, type PaymentNotifications } from "./payment-notifications.ts";
 import { createYoolaMessaging, type SmsMessaging } from "./yoola-messaging.ts";
 
-export const paymentOutboxRules = Object.freeze({ maximumBatch: 100, defaultBatch: 25, interruptedAfterMs: 60_000 });
+export const paymentOutboxRules = Object.freeze({ maximumBatch: 100, defaultBatch: 25, interruptedAfterMs: paymentNoticeRules.interruptedAfterMs });
 const transactionOptions = { isolationLevel: "ReadCommitted", timeout: 15_000 } as const;
 type TerminalStatus = "sent" | "failed" | "uncertain" | "unsupported" | "unavailable" | "cancelled";
 type ClaimedIntent = Readonly<{ status: "dispatching"; row: PaymentNotificationOutbox; attemptId: string; phone: string }>
@@ -59,6 +60,8 @@ export function createPaymentOutboxWorker({ database, now = Date.now, delivery =
         if (account && !account.erasedAt) await audit(tx, row, status, at);
         return { status };
       }
+      // Missing worker credentials must leave an intent queued rather than consume its only automatic attempt.
+      if (delivery.configured?.() === false) return null;
       const attemptId = randomUUID();
       await tx.paymentNotificationOutbox.update({ where: { id }, data: { status: "dispatching", startedAt: at, attemptId } });
       return { status: "dispatching" as const, row, attemptId, phone: account!.phone! };

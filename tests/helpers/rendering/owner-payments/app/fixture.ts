@@ -32,8 +32,11 @@ type FixturePayment = { id: string; reference: string; accountId: string; payerP
   rejectReason?: string | null; rejectText?: string | null };
 type FixtureAudit = { id: bigint; at: Date; actor: string; action: string; accountId: string | null;
   targetType: string; targetId: string; details: Record<string, unknown> };
+/** An account-update SMS outbox row: delivery state only, never the number or the message text. */
+type FixtureNotice = { id: string; accountId: string; targetType: string; decision: string; targetId: string; status: string; attemptId: string | null;
+  createdAt: Date; startedAt: Date | null; finishedAt: Date | null };
 export type FixtureState = { accounts: FixtureAccount[]; codes: FixtureCode[]; devices: FixtureDevice[];
-  payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; movedAccountIds?: string[] };
+  payments: FixturePayment[]; audits: FixtureAudit[]; counter: number; paymentsExpanded?: boolean; movedAccountIds?: string[]; notices?: FixtureNotice[] };
 const fixtureGlobal = globalThis as typeof globalThis & { goalHintOwnerFixture?: FixtureState; goalHintAnalytics?: Promise<AnalyticsServices>;
   goalHintOwnerServices?: Map<boolean, AnalyticsServices> };
 
@@ -86,6 +89,12 @@ function initialState(): FixtureState {
 /** State belongs only to this isolated Next process. It never connects to business storage or a messaging provider. */
 export function fixtureState(): FixtureState { return fixtureGlobal.goalHintOwnerFixture ??= initialState(); }
 export function resetFixture() { fixtureGlobal.goalHintOwnerFixture = initialState(); }
+/** One refused account-update SMS for the pending report: the Overview shows its notice panel only with this opt-in data. */
+export function loadNoticesFixture() {
+  const state = fixtureState(), attempted = new Date("2026-10-23T09:35:00Z");
+  state.notices = [{ id: "00000000-0000-4000-8000-000000000500", accountId, targetType: "payment", decision: "rejected", targetId: paymentId, status: "failed",
+    attemptId: "00000000-0000-4000-8000-000000000501", createdAt: new Date("2026-10-23T09:00:00Z"), startedAt: attempted, finishedAt: attempted }];
+}
 /** Opt-in review data leaves the original subscriber/audit acceptance baseline unchanged. */
 export function loadPaymentsFixture() {
   const state = fixtureState();
@@ -236,6 +245,9 @@ function createClient(emptySubscribers: boolean) {
       return query.select ? rows.map(row => Object.fromEntries(Object.entries(query.select!).filter(([, included]) => included).map(([key]) => [key, row[key as keyof FixtureAudit]]))) : rows;
     }, count: async (query?: AuditQuery) => auditRows(state.audits, query).length }, rateLimitBucket: { findMany: async () => [] },
     walletEntry: { findMany: async () => [] },
+    // Overview inspection reads stored notices only; it never dispatches a message.
+    paymentNotificationOutbox: { findMany: async () => (state.notices ?? []).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
+      count: async () => state.notices?.length ?? 0 },
     accessCode: { findMany: async (query?: OwnedQuery) => ownedRows(state.codes, query).map(row => ({ ...row, account: { phone: phoneFor(row.accountId) } })),
       aggregate: async () => ({ _sum: { amountReceivedUgx: 3000 } }), count: async () => state.codes.length },
     subscriptionSettings: { findUnique: async () => ({ paymentNumbersChangedAt: at }) },
