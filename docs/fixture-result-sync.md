@@ -99,7 +99,8 @@ malformed and nonempty responses retain the original durable path. Previously
 stored pending batches, including empty ones, still recover unchanged. This
 reduces quiet-period receipt growth without deleting or compacting lifecycle,
 forecast, result, settlement or correction evidence. Clock-only result revisions
-and historical evidence retention remain separate work.
+and historical evidence retention remain separate work; the read-only
+[history compaction census](history-compaction.md) sizes them.
 
 Each fixture applies under the existing provider → fixture locking order inside
 the lease-owned transaction. `observeProjection` reuses lifecycle validation,

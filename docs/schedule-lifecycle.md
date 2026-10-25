@@ -103,6 +103,7 @@ Migration `20261009150750_schedule_lifecycle` adds InnoDB/binary-identity tables
 - `FixtureLifecycleState`: cursor, earliest actual-start proof and unresolved issue.
   The lifecycle writer needs SELECT/INSERT/UPDATE. Selection/publication readers
   need SELECT only. Rebuild/repair from retained observations, never erase evidence.
+  The [history compaction census](history-compaction.md) only counts receipts.
 - `SelectionCycleEligibility.eligibleAfter`: next-daily-run barrier. Selection
   keeps UPDATE only on `consumedRunId`. The private lifecycle writer additionally
   needs column-scoped UPDATE on `previousVersion`, `kickoffAt`, `state`, `actor`,

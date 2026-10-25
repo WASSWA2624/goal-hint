@@ -12,7 +12,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 ORIGINAL = "20261012153531_goal_market_extension"
 REPAIR = "20261019174619_append_only_trigger_blocks"
-TRIGGER = re.compile(r"CREATE (?:OR REPLACE )?TRIGGER (\w+) (BEFORE|AFTER) (INSERT|UPDATE|DELETE) ON (\w+) FOR EACH ROW\n(.*?)(?=\nCREATE |\nDROP |\n\n|\Z)", re.S)
+# The body starts after any whitespace, so a single-line `... FOR EACH ROW SIGNAL ...;` is caught as well as a
+# body on the next line. Names may be backquoted.
+TRIGGER = re.compile(r"CREATE (?:OR REPLACE )?TRIGGER `?(\w+)`? (BEFORE|AFTER) (INSERT|UPDATE|DELETE) ON `?(\w+)`? FOR EACH ROW\s+(.*?)(?=\nCREATE |\nDROP |\n\n|\Z)", re.S)
+# Every CREATE TRIGGER statement, however it is written; TRIGGER must parse each one.
+STATEMENT = re.compile(r"(?im)^[ \t]*CREATE\s+(?:OR\s+REPLACE\s+)?(?:DEFINER\s*=\s*\S+\s+)?TRIGGER\b")
 BLOCK = re.compile(r"BEGIN\n  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '([^']+)';\nEND(?:;| //)")
 
 
@@ -23,6 +27,10 @@ def committed_text(path):
 
 def triggers(sql):
     return {name: (timing, event, table, body.strip()) for name, timing, event, table, body in TRIGGER.findall(sql)}
+
+
+def migrations():
+    return sorted((ROOT / "prisma/migrations").glob("*/migration.sql"))
 
 
 class AppendOnlyTriggerMigrationTests(unittest.TestCase):
@@ -46,12 +54,20 @@ class AppendOnlyTriggerMigrationTests(unittest.TestCase):
             self.assertLess(drop, self.migration.index(f"CREATE TRIGGER {name} "), name)
         self.assertNotRegex(self.migration, r"(?im)^\s*(ALTER|DELETE|TRUNCATE|RENAME|UPDATE|INSERT|CREATE TABLE)\b")
 
+    def test_the_parser_sees_every_migration_trigger(self):
+        seen = 0
+        for path in migrations():
+            sql = committed_text(path)
+            self.assertEqual(len(TRIGGER.findall(sql)), len(STATEMENT.findall(sql)), path.parent.name)
+            seen += len(STATEMENT.findall(sql))
+        self.assertGreaterEqual(seen, 77)
+
     def test_no_later_migration_creates_a_single_statement_trigger(self):
-        for path in sorted((ROOT / "prisma/migrations").glob("*/migration.sql")):
+        for path in migrations():
             if path.parent.name == ORIGINAL:
                 continue
-            for name, (_, _, _, body) in triggers(committed_text(path)).items():
-                self.assertRegex(body, r"\ABEGIN\n[\s\S]*\nEND;\Z", f"{path.parent.name} {name}")
+            for name, _, _, _, body in TRIGGER.findall(committed_text(path)):
+                self.assertRegex(body.strip(), r"\ABEGIN\n[\s\S]*\nEND;\Z", f"{path.parent.name} {name}")
 
     def test_overlay_matches_the_migration_it_records(self):
         migration, overlay = triggers(self.migration), triggers(self.overlay)

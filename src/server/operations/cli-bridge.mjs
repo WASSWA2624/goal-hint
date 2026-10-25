@@ -72,6 +72,16 @@ async function dispatch(action, payload) {
         return { status: 'measured', ...databaseStorageReport(measurement, options.previous, options.limits) };
       } finally { await disconnectDatabase(); }
     }
+    case 'database-compaction-report': {
+      // Read-only dry-run census; there is no apply path.
+      const { historyCompactionOptionsSchema, inspectHistoryCompaction } = await import('../database/history-compaction.ts');
+      const options = historyCompactionOptionsSchema.parse(payload);
+      const { getDatabase, disconnectDatabase } = await import('../database/client.ts');
+      try {
+        if (!getRuntimePolicy().capabilities.database) return { status: 'disabled' };
+        return { status: 'measured', report: await inspectHistoryCompaction(getDatabase(), options) };
+      } finally { await disconnectDatabase(); }
+    }
     case 'football-trial': {
       const { executeTrialCommand } = await import('../football/provider-trial-command.ts');
       const result = await executeTrialCommand(payload);
@@ -129,6 +139,7 @@ try {
   const fallback = {
     'database-health': 'Database readiness: unavailable. Check private configuration and approved access.',
     'database-storage': 'Database storage measurement unavailable. Check private configuration, MySQL version and approved access.',
+    'database-compaction-report': 'History compaction report unavailable. Check private configuration, schema visibility and approved SELECT access.',
     'football-trial': 'Provider trial unavailable; private input and storage diagnostics are withheld.',
     'cache-reconcile': 'Cache maintenance unavailable; check approved database access and the 031 migration. Private diagnostics are withheld.',
     backup: 'Backup operation failed; private diagnostics are withheld.',

@@ -42,7 +42,8 @@ reviewed implementation and artifacts.
 Migration `20261025113516_daily_slip_publications` adds three InnoDB tables with
 binary identity collation. Composite foreign keys bind each leg to the same
 fixture/cycle/revision. Update/delete triggers protect every publication and its
-membership. The tables have no member/account foreign key. Grant the publisher
+membership. The six triggers have `BEGIN … END` bodies, so a mysqldump backup of
+them restores (see [backup and restore](backup-restore.md)). The tables have no member/account foreign key. Grant the publisher
 SELECT/INSERT on the new tables and SELECT on the required canonical history;
 read-only web roles need SELECT. No publication UPDATE/DELETE grant is needed.
 Shared fixture/duplicate-publication reads prevent concurrent mutation without

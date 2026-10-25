@@ -17,7 +17,8 @@ import { storedSettlementProjection, storedSettlementRevision } from "./settleme
 import { planImpliedMarketSettlements, persistImpliedMarketSettlements, readImpliedMarketSettlement } from "./implied-market-settlement.ts";
 
 type Tx = Prisma.TransactionClient;
-const sourceKinds = ["fixture-result", "cycle-closed", "cycle-voided", "schedule-lifecycle", "lifecycle-conflict", "eligibility-closed", "revision-published"];
+/** Change-event kinds that settlement must receipt. The history compaction census reads the same list. */
+export const settlementSourceKinds = ["fixture-result", "cycle-closed", "cycle-voided", "schedule-lifecycle", "lifecycle-conflict", "eligibility-closed", "revision-published"];
 const serverNow = async (tx: Tx) => historyTime((await tx.$queryRaw<{ at: Date }[]>`SELECT UTC_TIMESTAMP(3) AS at`)[0]!.at);
 
 /** Projects only immutable locks. All provider I/O belongs to result synchronization. */
@@ -67,7 +68,7 @@ export function createMarketSettlementService(options: Readonly<{ database: Data
         }
         // A late/duplicate event is acknowledged against the latest locked state,
         // never by replaying an obsolete score or reopening an old cycle.
-        const events = await tx.predictionChangeEvent.findMany({ where: { fixtureId, kind: { in: sourceKinds }, settlementReceipt: null }, select: { version: true } });
+        const events = await tx.predictionChangeEvent.findMany({ where: { fixtureId, kind: { in: settlementSourceKinds }, settlementReceipt: null }, select: { version: true } });
         if (events.length) await tx.settlementEventReceipt.createMany({ data: events.map(({ version }) => ({ fixtureId, version, at: new Date(at) })) });
         if (lease) await queue.assertOwned(tx, lease);
         return freezeEvidence({ fixtureId, changed: changes.length + extendedChanges.length, consumed: events.length });
