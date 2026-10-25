@@ -83,5 +83,5 @@ initial denominator failure was caused by that earlier aborted subtest.
 | Production build | Passed compilation, TypeScript, page-data collection and all 18 static pages, including the new owner-route compilation. |
 | Performance rendering | All 10 states passed. |
 | Slip rendering | All 12 states and native GET/qualified-joint/cutoff/manual-alternative checks passed. |
-| Owner payment rendering | Final acceptance pending. |
+| Owner payment rendering | All nine owner routes and navigation, subscriber actions, settings/modes, audit filters, queue/history decisions, private attachments and confirmation guards passed. |
 | Git whitespace and ancestry | Clean diff checks; every local/fetched branch is a `main` ancestor. |

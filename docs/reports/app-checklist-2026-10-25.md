@@ -216,3 +216,14 @@ worker. No application migration or gateway dispatch was activated here. A real
 qualified joint model, historical-odds binding, prospective calibration,
 licensing/privacy conclusions, storage baseline, pricing pilot and deployed
 worker/payment acceptance remain open.
+
+## Local integration and migration rollout: 26 October 2026
+
+All five checklist branches and the reviewed working changes are now integrated
+into `main`. The seven pending migrations were applied to the configured local
+MySQL database with a verified encrypted backup and isolated restore check.
+Migration status, exact schema verification, database health and application
+grants passed. The [integration record](checklist-integration-2026-10-26.md)
+details branch reconciliation, migration names and final acceptance. Earlier
+verification sections remain historical; hosted deployment and real forecasting,
+commercial and gateway qualification remain separate.
