@@ -70,6 +70,20 @@ export const ButtonRow = styled.div`
   gap: 8px;
   > * { flex: 1 1 auto; }
 `;
+/** A confirmation checkbox with its sentence: the whole row is the target (44 px on phones, 36 px from desktop up). */
+export const CheckField = styled.label`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-block-size: ${({ theme }) => theme.control.minHeight};
+  padding-block: 11px;
+  font-size: ${({ theme }) => theme.typography.scale.body};
+  font-weight: normal;
+  line-height: 1.5;
+  cursor: pointer;
+  input { flex: none; inline-size: 20px; block-size: 20px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; }
+  ${media.desktop} { min-block-size: 36px; padding-block: 7px; input { inline-size: 18px; block-size: 18px; margin-block-start: 1px; } }
+`;
 export const Badge = styled.span<{ $tone?: "good" | "muted" | "warning" }>`
   display: inline-block;
   padding: 2px 8px;

@@ -6,9 +6,9 @@ import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { CopyIcon, KeyIcon } from "@/components/ui/icons";
 import { media } from "@/styles/theme";
-import { ActionButton } from "./admin-form";
+import { ActionButton, CheckField } from "./admin-form";
 import type { CodeAction } from "./code-tools";
-import { MetaLine, Panel, PanelBody, PanelHead } from "./desk-styles";
+import { MetaLine, monoFont, Panel, PanelBody, PanelHead } from "./desk-styles";
 
 /** The recovery password stays in memory only, and disappears on Done or leaving the account. */
 export type Revealed = Readonly<{ password: string; accountId: string; phone: string | null; created: boolean; sessionsDeleted: number; expiresAt: string }>;
@@ -25,7 +25,7 @@ export function PasswordReset({ path, phone, action, reveal }: { path: string; p
     }
   }
   return <ResetForm method="post" action={path} onSubmit={submit}>
-    <CallCheck><input type="checkbox" name="confirmed" required disabled={action.busy} />I am on a call with the member and checked it is their number.</CallCheck>
+    <CheckField><input type="checkbox" name="confirmed" required disabled={action.busy} />I am on a call with the member and checked it is their number.</CheckField>
     <ActionButton type="submit" $variant="primary" disabled={action.busy}><KeyIcon />Set temporary password</ActionButton>
   </ResetForm>;
 }
@@ -59,20 +59,6 @@ const ResetForm = styled.form`
   > button { inline-size: 100%; }
   ${media.desktop} { gap: 8px; > button { justify-self: start; inline-size: auto; } }
 `;
-/** The call confirmation: a 44px row on phones, the box aligned with the first line of its sentence. */
-const CallCheck = styled.label`
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
-  padding-block: 11px;
-  font-size: ${({ theme }) => theme.typography.scale.body};
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
-  line-height: 1.5;
-  cursor: pointer;
-  input { flex: none; inline-size: 20px; block-size: 20px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; }
-  ${media.desktop} { min-block-size: 36px; padding-block: 7px; input { inline-size: 18px; block-size: 18px; margin-block-start: 1px; } }
-`;
 const RevealPanel = styled(Panel)`
   border-color: ${({ theme }) => theme.color.outcome.correct.border};
   h2 { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -92,7 +78,7 @@ const SecretRow = styled.div`
 const Secret = styled.span`
   min-inline-size: 0;
   color: ${({ theme }) => theme.color.text};
-  font-family: ui-monospace, Consolas, "Courier New", monospace;
+  font-family: ${monoFont};
   font-size: 1.5rem;
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
   letter-spacing: 0.14em;

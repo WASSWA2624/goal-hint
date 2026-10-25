@@ -3,12 +3,11 @@
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import styled from "styled-components";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
-import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon, LayersIcon, PencilIcon, PlusIcon } from "@/components/ui/icons";
-import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
+import { ArrowDownIcon, ArrowUpIcon, LayersIcon, PencilIcon, PlusIcon } from "@/components/ui/icons";
 import { formatPlanLength, formatUgx, planRules, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import { media } from "@/styles/theme";
 import { ActionButton, Badge, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage } from "./admin-form";
-import { DeskGrid, DeskHead, DeskTitle, Drawer, EmptyPanel, Panel, PanelHead, TextAction } from "./desk-styles";
+import { DeskGrid, DeskHead, DeskTitle, EmptyPanel, Panel, panelRadius, ResponsiveDrawer, TextAction } from "./desk-styles";
 
 type Draft = Readonly<{ name: string; durationDays: string; priceUgx: string }>;
 type Status = Readonly<{ tone: "info" | "error"; text: string; where: "add" | "list" }> | null;
@@ -31,14 +30,12 @@ const firstInvalid = (prefix: string, errors: Record<string, string>) => {
  * lives here because its active count follows every change.
  */
 export function PlansEditor({ initialPlans }: { initialPlans: readonly SubscriptionPlanView[] }) {
-  const desktop = useDesktopLayout();
   const [plans, setPlans] = useState(initialPlans);
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Readonly<{ id: string; draft: Draft; errors: Record<string, string> }> | null>(null);
-  const [addOpen, setAddOpen] = useState(initialPlans.length === 0);
   // Every button is disabled while a change is saved, which drops focus; put it back once the reply has rendered.
   const controls = useRef(new Map<string, HTMLButtonElement>());
   const refocus = useRef<(() => HTMLElement | null | undefined) | null>(null);
@@ -96,7 +93,7 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
 
   const notice = (where: "add" | "list") => status?.where === where
     && <Notice $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}</Notice>;
-  const addForm = <AddForm onSubmit={create} noValidate aria-labelledby={desktop ? "add-plan-title" : "add-plan-summary"} $drawer={!desktop}>
+  const addForm = <AddForm onSubmit={create} noValidate aria-label="Add a plan">
     <Hint as="p">Every plan unlocks every feature; plans differ only in length and price. A day is 24 hours from payment confirmation, never a calendar day.</Hint>
     <Presets role="group" aria-label="Fill from a preset">{presets.map(preset =>
       <ActionButton key={preset.name} type="button" disabled={busy} onClick={() => { setErrors({}); setDraft({ name: preset.name, durationDays: String(preset.days), priceUgx: String(preset.price) }); }}>{preset.name}</ActionButton>)}</Presets>
@@ -135,10 +132,7 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
           )}
           <Footnote>Plans are never deleted. Deactivate one to hide it from Get access.</Footnote>
         </ListPanel>
-        {desktop ? <Panel aria-labelledby="add-plan-title"><PanelHead><h2 id="add-plan-title">Add a plan</h2></PanelHead>{addForm}</Panel>
-          : <Panel><Drawer open={addOpen} onToggle={event => setAddOpen(event.currentTarget.open)}>
-            <summary id="add-plan-summary"><PlusIcon />Add a plan<ChevronDownIcon /></summary>{addForm}
-          </Drawer></Panel>}
+        <ResponsiveDrawer title="Add a plan" icon={<PlusIcon />} defaultOpen={initialPlans.length === 0}>{addForm}</ResponsiveDrawer>
       </DeskGrid>
     </>
   );
@@ -277,7 +271,7 @@ const EditForm = styled.form`
   padding: 12px;
   background: ${({ theme }) => theme.color.page};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  border-radius: 6px;
+  border-radius: ${panelRadius};
   ${media.desktop} { padding: 14px; }
   @container (min-width: 34rem) { grid-column: 1 / -1; }
 `;
@@ -308,13 +302,10 @@ const Footnote = styled.p`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   ${media.desktop} { padding: 14px 16px; }
 `;
-const AddForm = styled.form<{ $drawer: boolean }>`
+const AddForm = styled.form`
   display: grid;
   gap: 12px;
   min-inline-size: 0;
-  padding: 14px;
-  border-block-start: ${({ theme, $drawer }) => $drawer ? `${theme.border.width} solid ${theme.color.border}` : "0"};
-  ${media.desktop} { padding: 14px 16px 16px; }
 `;
 const Presets = styled.div`
   display: grid;

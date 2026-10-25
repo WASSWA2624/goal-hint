@@ -56,9 +56,12 @@ def subscriber_directory(origin):
     match(r'data-subscriber-compact="true"', selected)
     match(r'data-subscriber-detail="00000000-0000-4000-8000-000000000100"', selected)
     toolbar = match(r'<div\b[^>]*data-subscriber-actions[^>]*>([\s\S]*?)</div>', selected).group(1)
-    assert len(re.findall(r'<button\b', toolbar)) == 6
-    for label in ["Grant access", "Change number", "Reset password", "Block account", "Sign out devices", "Delete account"]:
+    assert len(re.findall(r'<button\b', toolbar)) == 5
+    for label in ["Grant access", "Change number", "Reset password", "Block account", "Sign out devices"]:
         match(label, toolbar)
+    no_match("Delete", toolbar, "Removal lives in its own danger drawer, not among the everyday actions.")
+    removal = match(r'<details\b([^>]*)>\s*<summary[^>]*>(?:(?!</summary>)[\s\S])*Delete or erase', selected)
+    no_match(r'\bopen(?:=""|\s|$)', removal.group(1))
     tabs = match(r'<div\b[^>]*role="tablist"[^>]*>([\s\S]*?)</div>', selected).group(1)
     assert len(re.findall(r'role="tab"', tabs)) == 5
     for label in ["Overview", "Access", "Payments", "Credit", "Devices"]:
@@ -374,15 +377,17 @@ def payments_rendering(origin):
                 row_text = unescape(re.sub(r'<[^>]+>', " ", row))
                 match(r'\+\d|Payer not provided', row_text, "Queue rows identify the payer or a missing payer.")
                 match(r'UGX\s+[\d,]+', row_text)
-                match(r'Transaction ID:', row_text)
-                no_match(r'PTEST|PDEMO|Expected|Weekly|Monthly|Daily|EAT|No screenshot|<time\b', row)
+                match(r'\bP(?:TEST|DEMO\d+)\b', row_text, "Queue tickets lead with the payment reference.")
+                no_match(r'Expected|EAT|No screenshot|<time\b', row)
             assert re.findall(r'data-payment-review="([^"]+)"', html) == expected[:1], "Only one review should mount."
             assert len(re.findall(r'<form\b[^>]*data-payment-approval', html)) == (1 if tab in ["pending", "superseded", "invalid"] else 0)
+            if tab == "superseded":
+                match("AIR2026102301", html, "The replaced report's review prefills its reported transaction ID.")
             if tab in ["pending", "invalid"]:
-                for value in ["7 days", "TEST1234", "AIR2026102301", "Expected payment", "UGX 5,000", "Reported amount: UGX 4,500"]:
+                for value in ["7 days", "TEST1234", "Expected payment", "UGX 5,000", "Reported amount: UGX 4,500"]:
                     match(value, html)
                 first_row = unescape(re.sub(r'<[^>]+>', " ", rows[0]))
-                assert "256 700 000 118" in first_row and "4,500" in first_row and "TEST1234" in first_row
+                assert "256 700 000 118" in first_row and "4,500" in first_row
                 assert "256 700 000 101" not in first_row, "Queue identifies the payer, not the subscriber account."
                 approve = match(r'<button\b(?=[^>]*data-payment-approve)[^>]*>', html).group(0)
                 no_match(r'\bdisabled(?:=""|\s|>)', approve)
@@ -391,7 +396,7 @@ def payments_rendering(origin):
                     match(rf'value="{value}"', control, "Reported values prefill the editable approval fields.")
                     match(r'\brequired(?:=""|\s|>)', control)
                 no_match(r'payment-wallet-confirmed|Verify in your wallet|Received in my wallet', html)
-                for label in ["Paste wallet SMS", "Change network or plan", "Reject payment"]:
+                for label in ["Paste wallet SMS", "Change network or plan", "Reject"]:
                     disclosure = match(rf'<details\b([^>]*)>\s*<summary[^>]*>(?:(?!</summary>)[\s\S])*{label}', html)
                     no_match(r'\bopen(?:=""|\s|$)', disclosure.group(1))
                 warning = "Payer has its own Goal Hint account"
@@ -422,7 +427,7 @@ def main():
         build_fixture(directory,env,timeout=300)
     with Server(directory,env,ready="/api/fixture/health") as server:
         subscriber_directory(server.origin)
-        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Add subscriber","Change number","Reset password","Save note","Delete account"]),("/admin/password-resets",["Password requests","generate a temporary password","expire after 15 minutes","Call member","View account"]),("/admin/audit",["Audit"])]:
+        for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Grant access / add subscriber","Change number","Reset password","Save note","Delete or erase"]),("/admin/password-resets",["Password requests","set a temporary password","on a call with the member","Call member","View account"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
             assert response.status==200,(path,response.status)
             for label in labels:assert label in html,(path,label)

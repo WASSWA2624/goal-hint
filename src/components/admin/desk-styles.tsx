@@ -14,6 +14,21 @@ export const panelRadius = "6px";
 /** Codes, references and one-time passwords. */
 export const monoFont = 'ui-monospace, Consolas, "Courier New", monospace';
 
+/** Hides text visually but keeps it for screen readers; for styled rules (components can use ui/visually-hidden). */
+export const visuallyHidden = css`
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  min-inline-size: 0;
+  min-block-size: 0;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+`;
+
 /** Title row: the page h1, then anything that belongs beside it (status tabs, the main action). */
 export const DeskHead = styled.div`
   display: flex;

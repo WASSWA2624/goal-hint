@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
+import Link from "@/components/navigation/navigation-link";
 import { AlertIcon, CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, ExpandIcon, InfoIcon, ShieldIcon, UserIcon } from "@/components/ui/icons";
 import { normalizeTransactionId, parseTransactionId } from "@/domain/payment";
 import { parsePaymentSms, type PaymentSms } from "@/domain/payment-sms";
@@ -9,13 +10,13 @@ import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { formatPlanLength, formatUgx, type SubscriptionPlanView } from "@/domain/subscription-plans";
 import type { OwnerPayment } from "@/domain/owner-members";
-import { ActionButton, DangerButton, FieldBlock, FieldRow, FormStack, Hint } from "./admin-form";
+import { ActionButton, CheckField, DangerButton, FieldBlock, FieldRow, FormStack, Hint } from "./admin-form";
 import { ManualCodeForm, type CodeAction } from "./code-tools";
-import { DrawerNote, FactList, ZoneLabel } from "./desk-styles";
+import { DrawerNote, FactList, TextAction, ZoneLabel } from "./desk-styles";
 import { NetworkChip, networkLabel } from "./network-chip";
-import { ApprovalForm, BigAmount, CheckList, CopyButton, CopyRow, DecisionBar, DecisionPanel, DecisionZone, ExpectedZone, 
-  NetworkValue, PaymentBadge, PaymentWarnings, ProofActions, ProofFrame, ProofImage, ProofLink, ProofToggle, ProofZone, RecoveryStack, RejectChecks,
-  RejectDrawer, RejectToggle, ReviewCard, ReviewHead, ReviewMeta, ReviewZones, ShieldMark, SubscriberLink, ZoneDrawer } from "./payment-styles";
+import { ApprovalForm, BigAmount, CheckList, CopyRow, DecisionBar, DecisionPanel, DecisionZone, ExpectedZone, NetworkValue, PaymentBadge, PaymentWarnings,
+  ProofActions, ProofFrame, ProofImage, ProofToggle, ProofZone, RecoveryStack, RejectDrawer, RejectToggle, ReviewCard, ReviewHead, ReviewMeta, ReviewZones, ShieldMark,
+  ZoneDrawer } from "./payment-styles";
 
 export type PaymentRecovery = Readonly<{ reversed: boolean; recovery: boolean; carried: boolean }>;
 const reasonLabels = { unreadable: "Unreadable receipt", "amount-mismatch": "Wrong amount", "not-received": "Payment not received", duplicate: "Duplicate payment", "wrong-number": "Wrong recipient", other: "Other" };
@@ -85,7 +86,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
       <h2 id="payment-review-title" tabIndex={-1}>{phoneLabel(p.accountPhone)}</h2>
       <PaymentBadge data-review-badge $status={reversed ? "reversed" : p.status}>{reversed ? "Reversed" : p.status === "superseded" ? "Replaced report" : p.status.charAt(0).toUpperCase() + p.status.slice(1)}</PaymentBadge>
       <ReviewMeta data-review-meta>{p.reference} · {formatPeriodEnd(new Date(p.submittedAt))}</ReviewMeta>
-      <SubscriberLink data-review-link href={`/admin/subscribers?accountId=${encodeURIComponent(p.accountId)}`} prefetch={false}><UserIcon />View subscriber</SubscriberLink>
+      <TextAction as={Link} data-review-link href={`/admin/subscribers?accountId=${encodeURIComponent(p.accountId)}`} prefetch={false}><UserIcon />View subscriber</TextAction>
     </ReviewHead>
     <ReviewZones $proof={p.hasImage}>
       {p.hasImage && <ProofZone aria-label="Proof">
@@ -93,7 +94,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
         <ProofFrame id={`${p.id}-proof`} $clipped={tall && !zoomed}><ProofImage ref={measure} src={screenshot} alt={`Payment screenshot ${p.reference}`} onLoad={event => measure(event.currentTarget)} /></ProofFrame>
         <ProofActions $hideLink={tall && !zoomed}>
           {tall && <ProofToggle type="button" aria-expanded={zoomed} aria-controls={`${p.id}-proof`} onClick={() => setZoomed(value => !value)}><ExpandIcon />{zoomed ? "Tap to shrink" : "Tap to enlarge"}</ProofToggle>}
-          <ProofLink href={screenshot} target="_blank" rel="noopener noreferrer" aria-label={`Open full screenshot ${p.reference}`} data-payment-attachment><ExpandIcon />Open full size</ProofLink>
+          <TextAction as="a" href={screenshot} target="_blank" rel="noopener noreferrer" aria-label={`Open full screenshot ${p.reference}`} data-payment-attachment><ExpandIcon />Open full size</TextAction>
         </ProofActions>
       </ProofZone>}
       <ExpectedZone aria-labelledby={`${p.id}-expected`}>
@@ -143,7 +144,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
               if (reply.ok) onResolved();
             }} aria-label={`Reject ${p.reference}`}><FormStack><FieldBlock>Reason<select id={`${rejectId}-reason`} name="reason" disabled={action.busy}>{Object.entries(reasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FieldBlock>
               <FieldBlock>Message · optional<textarea name="text" maxLength={200} disabled={action.busy} rows={2} /></FieldBlock>
-              {p.hasImage && <RejectChecks><input type="checkbox" name="deleteImage" disabled={action.busy} />Delete screenshot</RejectChecks>}
+              {p.hasImage && <CheckField><input type="checkbox" name="deleteImage" disabled={action.busy} />Delete screenshot</CheckField>}
               <DangerButton type="submit" disabled={action.busy} data-reject-inline>Reject payment</DangerButton></FormStack></form></div>
           </RejectDrawer>
           <DecisionBar $rejecting={rejecting} data-decision-bar>
@@ -156,14 +157,14 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
           <ZoneLabel>Decision</ZoneLabel>
           <FactList>
             <div><dt>{p.final ? "Confirmed transaction ID" : "Reported transaction ID"}</dt><CopyRow><span data-payment-transaction>{reportedId || "Not provided"}</span>
-              {reportedId && <CopyButton type="button" onClick={copyId}><CopyIcon />{copied ? "Copied" : "Copy ID"}</CopyButton>}</CopyRow></div>
+              {reportedId && <TextAction type="button" onClick={copyId}><CopyIcon />{copied ? "Copied" : "Copy ID"}</TextAction>}</CopyRow></div>
           </FactList>
           {p.status === "approved" && !reversed && <ZoneDrawer $tone="danger"><summary>Reverse payment<ChevronDownIcon /></summary><div><form method="post" action={`/api/admin/payments/${p.id}`} onSubmit={async event => {
             event.preventDefault(); if (action.busy) return; const reason = new FormData(event.currentTarget).get("reason"); onStart();
             const reply = await action.send(`/api/admin/payments/${p.id}`, { action: "reverse", reason }, `Reversed ${p.reference}.`);
             if (reply.ok) onRecovery({ reversed: true, carried: reply.body.carriedOtherDays === true, recovery: reason === "wrong-account" });
           }}><FormStack><FieldBlock>Reason<select name="reason" disabled={action.busy}><option value="network-reversal">Network reversal</option><option value="wrong-account">Wrong account</option></select></FieldBlock>
-            <RejectChecks><input type="checkbox" required disabled={action.busy} />End access from this payment</RejectChecks>
+            <CheckField><input type="checkbox" required disabled={action.busy} />End access from this payment</CheckField>
             <DangerButton type="submit" disabled={action.busy}>Confirm reversal</DangerButton></FormStack></form></div></ZoneDrawer>}
           {recovery?.carried && <Notice $tone="warning">Other days moved with this payment. Restore any verified remaining access manually.</Notice>}
           {recovery?.recovery && p.purpose === "topup" && <Notice $tone="warning">This was a credit top-up. Add {formatUgx(p.final?.amount ?? p.amount)} to the real payer&apos;s account

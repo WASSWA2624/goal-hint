@@ -154,7 +154,7 @@ export function PaymentsEditor({ queue, plans, tab }: { queue: PaymentQueue; pla
             onChange={event => setSearch(event.target.value)} /></SearchField>
         <QueueSummary><span data-payment-count>{payments.length} {tab === "pending" ? "waiting" : payments.length === 1 ? "report" : "reports"}</span><span>Up to 100</span><span>{tab === "pending" ? "Oldest first" : "Newest first"}</span>
           {queueChanged && <span role="status" data-payment-queue-updated>Queue updated</span>}</QueueSummary>
-        <ActionButton type="button" $variant={queueChanged ? "primary" : "secondary"} disabled={action.busy} onClick={refresh}><ResetIcon />Refresh queue</ActionButton>
+        <ActionButton type="button" {...(queueChanged ? { $variant: "primary" as const } : {})} disabled={action.busy} onClick={refresh}><ResetIcon />Refresh queue</ActionButton>
       </QueueBar>
       {payments.length ? <TicketTray $opened={opened}>{payments.map(payment => {
         const warnings = paymentWarnings(payment).length, network = payment.final?.network || payment.network;

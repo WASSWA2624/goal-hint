@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
@@ -11,9 +11,9 @@ import { publicPolicy } from "@/domain/public-policy";
 import { editableSettingFields, isProtectedSettingField, paywallModes, settingLabels, settingsRules, type EditableSettingField,
   type ModeRequirement, type PaywallMode, type ProtectedSettingField, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
 import { ActionButton, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage, Requirements, type AdminReply } from "./admin-form";
-import { DeskColumn, FactList, PanelBody, ZoneLabel } from "./desk-styles";
-import { ConfirmBox, DialField, DialRow, InlineDrawer, ManagedBadge, ManagedFact, ManagedNote, ModeTile, ModeTiles, NarrowField, NetworkGrid, NetworkTitle, PanelDrawer,
-  RequirementBox, RequirementList, SaveButtons, SaveDock, SavePanel, SectionPanel, SectionTabs, SettingsDesk, SettingsHint, TwoUp } from "./settings-styles";
+import { DeskColumn, DeskGrid, Drawer, FactList, PanelBody, ZoneLabel } from "./desk-styles";
+import { ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ManagedNote, ModeTile, ModeTiles, NarrowField, NetworkGrid, NetworkTitle,
+  RequirementBox, RequirementList, SaveButtons, SaveDock, SavePanel, SectionPanel, SectionTabs, SettingsHint, TwoUp } from "./settings-styles";
 
 type Draft = Record<EditableSettingField, string>;
 type Section = "payments" | "support" | "access" | "display";
@@ -200,10 +200,10 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     : <PhoneInput id={`setting-${key}`} label={label} value={draft[key]} disabled={busy} error={errors[key]} onValueChange={value => update(key, value)} />;
   const text = (key: EditableSettingField, label: string, maximum: number, placeholder?: string) => managed.includes(key) ? fact(key, label)
     : <FieldBlock htmlFor={`setting-${key}`}>{label}<input {...field(key)} maxLength={maximum} autoComplete="off" placeholder={placeholder} />{error(key)}</FieldBlock>;
-  const drawer = (key: string, label: string, children: ReactNode, Shell: ComponentType<{ open: boolean; onToggle: (event: { currentTarget: HTMLDetailsElement }) => void; children: ReactNode }>) =>
-    <Shell open={!!advanced[key]} onToggle={event => { const open = event.currentTarget.open; setAdvanced(shown => shown[key] === open ? shown : { ...shown, [key]: open }); }}>
+  const drawer = (key: string, label: string, children: ReactNode) =>
+    <Drawer $plain open={!!advanced[key]} onToggle={event => { const open = event.currentTarget.open; setAdvanced(shown => shown[key] === open ? shown : { ...shown, [key]: open }); }}>
       <summary>{label}<ChevronDownIcon /></summary><div>{children}</div>
-    </Shell>;
+    </Drawer>;
   const shortcut = (key: "mtnMenuShortcut" | "airtelMenuShortcut", number: "mtnNumber" | "airtelNumber") => managed.includes(key)
     ? fact(key, "Dial code", codeShown(key))
     : drawer(key, "Dial code · optional", <DialField>
@@ -212,7 +212,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
         <ActionButton type="button" disabled={busy} onClick={() => update(key, `${draft[key]}{amount}`)}>Add amount</ActionButton></DialRow>
       {error(key)}
       <Hint id={`setting-${key}-hint`}>{changed.includes(number) && !changed.includes(key) && settings[key] ? "This code will clear when the number changes." : "Use a code tested on your phone. Android only."}</Hint>
-    </DialField>, InlineDrawer);
+    </DialField>);
   const range = (key: "maxUnlockedDevices" | "trialDays", label: string, hint?: string) => <FieldBlock htmlFor={`setting-${key}`}>{label}
     <select {...field(key, !!hint)}>{Array.from({ length: settingsRules[key].max - settingsRules[key].min + 1 }, (_, index) => settingsRules[key].min + index)
       .map(value => <option key={value} value={value}>{key === "trialDays" ? value === 0 ? "Off" : `${value} ${value === 1 ? "day" : "days"}` : value}</option>)}</select>
@@ -232,7 +232,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   </>;
 
   return <form onSubmit={save} noValidate aria-busy={busy} data-analytics-ignore data-settings-editor>
-    <SettingsDesk>
+    <DeskGrid>
       <DeskColumn>
         {status && <Notice as="div" $tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.text}
           {status.list && <Requirements>{status.list.map(item => <li key={item}>{item}</li>)}</Requirements>}
@@ -275,8 +275,8 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
                   {error("screenshotRetentionDays")}<Hint id="setting-screenshotRetentionDays-hint">{settingsRules.screenshotRetentionDays.min}–{settingsRules.screenshotRetentionDays.max} days</Hint>
                 </FieldBlock>
               </TwoUp>
+              {drawer("maxUnlockedDevices", "Advanced", <NarrowField>{range("maxUnlockedDevices", "Grant device limit", "For existing grants. Accounts always have one active login.")}</NarrowField>)}
             </PanelBody>
-            {drawer("maxUnlockedDevices", "Advanced", <NarrowField>{range("maxUnlockedDevices", "Grant device limit", "For existing grants. Accounts always have one active login.")}</NarrowField>, PanelDrawer)}
           </>}
           {section === "display" && <PanelBody>
             <TwoUp><FieldBlock htmlFor="setting-copyFormat">Copied number format<select {...field("copyFormat")}>
@@ -299,7 +299,7 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
         </>}
         <SaveButtons data-save-wide>{saveButtons}</SaveButtons>
       </SavePanel>
-    </SettingsDesk>
+    </DeskGrid>
     <SaveDock><span aria-live="polite">{summary}</span>{saveButtons}</SaveDock>
   </form>;
 }

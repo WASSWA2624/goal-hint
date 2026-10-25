@@ -3,19 +3,11 @@
 import styled, { css } from "styled-components";
 import { media } from "@/styles/theme";
 import { adminControl } from "./admin-form";
-import { DeskGrid, Drawer, Panel, Segmented, StickyActions } from "./desk-styles";
+import { Panel, panelRadius, Segmented, StickyActions } from "./desk-styles";
 
 const focusRing = css`
   outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
   outline-offset: 2px;
-`;
-
-/**
- * The desk with a side panel that gives way to the main column at 1024px (18rem there, 22rem from about 1280px), so the
- * four section tabs keep one row beside the sidebar.
- */
-export const SettingsDesk = styled(DeskGrid)`
-  ${media.desktop} { grid-template-columns: minmax(0, 1fr) min(22rem, max(18rem, 36%)); }
 `;
 
 /** Section switches: four equal icon-over-label cells on phones, one row sized to its labels from desktop up. */
@@ -68,9 +60,9 @@ export const TwoUp = styled.div`
 export const NetworkGrid = styled.div`
   display: grid;
   min-inline-size: 0;
-  > section { display: grid; align-content: start; gap: 12px; min-inline-size: 0; padding: 14px 14px 4px; }
+  > section { display: grid; align-content: start; gap: 12px; min-inline-size: 0; padding: 14px; }
   > section + section { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
-  ${media.desktop} { > section { padding: 16px 16px 6px; } }
+  ${media.desktop} { > section { padding: 16px; } }
   @container (min-width: 36rem) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     > section + section {
@@ -113,22 +105,6 @@ export const NetworkTitle = styled.h3`
   /* The members' network artwork, shrunk to a chip beside the name. */
   [data-payment-logo] { inline-size: 36px; block-size: 20px; }
   > ${ManagedBadge} { margin-inline-start: auto; }
-`;
-
-/** The Access panel's Advanced drawer: the shared drawer at the panel's text size. */
-export const PanelDrawer = styled(Drawer)`
-  > summary { font-size: ${({ theme }) => theme.typography.scale.body}; }
-  ${media.desktop} { > summary { font-size: ${({ theme }) => theme.typography.scale.emphasis}; } }
-`;
-/** A drawer inside a padded block (dial code): no row padding or divider of its own. */
-export const InlineDrawer = styled(PanelDrawer)`
-  border-block-end: 0;
-  > summary { min-block-size: ${({ theme }) => theme.control.minHeight}; padding: 0; }
-  > div { padding: 2px 0 8px; }
-  ${media.desktop} {
-    > summary { min-block-size: 36px; padding-inline: 0; }
-    > div { padding-inline: 0; }
-  }
 `;
 
 export const DialField = styled.div`
@@ -198,7 +174,7 @@ export const ModeTile = styled.label<{ $unavailable: boolean }>`
     min-block-size: 68px;
     padding: 9px 10px;
     border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
-    border-radius: 6px;
+    border-radius: ${panelRadius};
     color: ${({ theme }) => theme.color.mutedText};
     background: ${({ theme }) => theme.color.surface};
     font-size: ${({ theme }) => theme.typography.scale.secondary};
@@ -234,7 +210,7 @@ export const ConfirmBox = styled.div`
   min-inline-size: 0;
   padding: 12px 14px;
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.outcome.pending.border};
-  border-radius: 6px;
+  border-radius: ${panelRadius};
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.outcome.pending.background};
   > strong {
@@ -264,7 +240,7 @@ export const RequirementBox = styled.div`
   gap: 4px;
   min-inline-size: 0;
   padding: 10px 12px 6px;
-  border-radius: 6px;
+  border-radius: ${panelRadius};
   background: ${({ theme }) => theme.color.surfaceMuted};
 `;
 export const RequirementList = styled.ul`

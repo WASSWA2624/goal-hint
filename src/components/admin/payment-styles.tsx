@@ -1,16 +1,14 @@
 "use client";
 
 import styled, { css } from "styled-components";
-import Link from "@/components/navigation/navigation-link";
 import { media } from "@/styles/theme";
 import { ActionButton, adminControl } from "./admin-form";
-import { DeskHead, DeskHeadEnd, Drawer, EmptyPanel, Segmented, StickyActions, Toolbar } from "./desk-styles";
+import { DeskHead, DeskHeadEnd, Drawer, EmptyPanel, panelRadius, Segmented, StickyActions, TextAction, Toolbar, visuallyHidden } from "./desk-styles";
 
 /**
  * Payments "review desk": the queue as a tray of report tickets above one review with three zones (proof, expected payment,
  * decision) from desktop up; on phones the queue and the review are separate views and the zones stack as panels.
  */
-const panelRadius = "6px";
 const panelLook = css`
   background: ${({ theme }) => theme.color.surface};
   border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
@@ -19,31 +17,6 @@ const panelLook = css`
 const hairline = css`${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}`;
 const focusRing = css`
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-`;
-/** Phones: 44px text actions; desktop: 36px. */
-const textAction = css`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
-  padding: 0 4px;
-  border: 0;
-  color: ${({ theme }) => theme.color.link};
-  background: none;
-  font: inherit;
-  font-weight: ${({ theme }) => theme.typography.weight.bold};
-  text-decoration: none;
-  white-space: nowrap;
-  cursor: pointer;
-  > svg { flex: none; font-size: 1rem; }
-  &:disabled { cursor: not-allowed; opacity: 0.55; }
-  ${focusRing}
-  ${media.hover} { &:hover:not(:disabled) { text-decoration: underline; } }
-  ${media.desktop} { min-block-size: 36px; }
-`;
-const visuallyHidden = css`
-  position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; overflow: hidden;
-  clip-path: inset(50%); white-space: nowrap; border: 0;
 `;
 const desktopOnly = css`${media.belowDesktop} { display: none; }`;
 const phoneOnly = css`${media.desktop} { display: none; }`;
@@ -186,7 +159,7 @@ export const SearchField = styled.div`
   > input { ${adminControl} padding-inline-start: 38px; }
   > input::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
   > label { ${visuallyHidden} }
-  ${media.desktop} { > input { min-block-size: 40px; font-size: 0.9375rem; } }
+  ${media.desktop} { > input { font-size: 0.9375rem; } }
 `;
 export const QueueSummary = styled.p`
   display: flex;
@@ -287,17 +260,13 @@ export const ReviewSection = styled.section<{ $reviewing: boolean }>`
 
 /* ---------------- Review ---------------- */
 
-/**
- * Phones: a bare stack (the zones are panels); desktop: one panel with a header row over the zones. The desk type is dense:
- * 13px facts and bold 13px field labels.
- */
+/** Phones: a bare stack (the zones are panels); desktop: one panel with a header row over the zones. Facts are dense 13px. */
 export const ReviewCard = styled.article`
   display: grid;
   gap: 12px;
   min-inline-size: 0;
-  dl > div { min-block-size: 40px; padding-block: 8px; }
-  dt, dd { font-size: ${({ theme }) => theme.typography.scale.body}; }
-  label { font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  dl > div { padding-block: 8px; }
+  dd { font-size: ${({ theme }) => theme.typography.scale.body}; }
   ${media.desktop} { gap: 0; ${panelLook} }
 `;
 export const ReviewHead = styled.header`
@@ -338,8 +307,7 @@ export const ReviewNav = styled.div`
   margin-block: -6px 6px;
   ${media.desktop} { order: 9; flex: 0 0 auto; margin: 0 0 0 auto; > [data-review-back] { display: none; } }
 `;
-export const ReviewBack = styled.button`
-  ${textAction}
+export const ReviewBack = styled(TextAction)`
   gap: 4px;
   padding-inline: 0 8px;
 `;
@@ -373,7 +341,6 @@ export const ReviewMeta = styled.span`
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 `;
-export const SubscriberLink = styled(Link)`${textAction}`;
 
 const statusTone = (status: string) => status === "pending" ? "pending" : status === "approved" ? "correct" : status === "rejected" ? "incorrect" : "void";
 export const PaymentBadge = styled.span<{ $status: string }>`
@@ -465,8 +432,7 @@ export const ProofActions = styled.div<{ $hideLink: boolean }>`
   gap: 0 16px;
   ${media.belowDesktop} { > a { ${({ $hideLink }) => $hideLink && css`display: none;`} } }
 `;
-export const ProofToggle = styled.button`${textAction} font-size: ${({ theme }) => theme.typography.scale.body}; ${phoneOnly}`;
-export const ProofLink = styled.a`${textAction}`;
+export const ProofToggle = styled(TextAction)`font-size: ${({ theme }) => theme.typography.scale.body}; ${phoneOnly}`;
 
 export const ExpectedZone = styled.section`
   ${zoneBody}
@@ -583,22 +549,10 @@ export const RejectToggle = styled(ActionButton)<{ $open: boolean }>`
     border-color: ${theme.color.outcome.incorrect.border};
   `}
 `;
-export const RejectChecks = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-block-size: ${({ theme }) => theme.control.minHeight};
-  font-size: ${({ theme }) => theme.typography.scale.body};
-  && { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-  cursor: pointer;
-  > input { inline-size: 18px; block-size: 18px; margin: 0; flex: none; accent-color: ${({ theme }) => theme.color.brand}; }
-  ${media.desktop} { min-block-size: 36px; }
-`;
 export const CopyRow = styled.dd`
   && { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 8px; }
   > span { overflow-wrap: anywhere; }
 `;
-export const CopyButton = styled.button`${textAction} font-size: ${({ theme }) => theme.typography.scale.body};`;
 export const RecoveryStack = styled.div`
   display: grid;
   gap: 12px;
