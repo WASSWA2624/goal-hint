@@ -43,9 +43,11 @@ export const operatingRules = freeze({
   calendar: calendarRules,
   forecasts: {
     ruleVersion: marketRules.ruleVersion,
-    // With AI enabled the API-Football forecast is the published baseline and AI is captured beside it, unless the owner
-    // approves an evaluation report's promotion reference for AI-first publication.
+    // The provider baseline publishes while AI remains shadow evidence. Promotion references alone grant no publication authority.
     defaultSourceOrder: "provider-first",
+    primary: "api-football",
+    shadow: "ai",
+    publishShadowForecasts: false,
     completeRevisionSnapshots: true,
     retainEligiblePreviousWhenAllMarketsUnavailable: true,
     probabilityMinimumExclusive: marketRules.probabilityMinimumExclusive,
@@ -177,7 +179,7 @@ const environmentSchema = z.object({
   GOAL_HINT_AI_MODEL: text.describe("Record the selected model/version (012)."),
   GOAL_HINT_CALIBRATION_REF: text.describe("Record the selected calibration configuration; this does not claim calibration quality (012/014)."),
   GOAL_HINT_FORECAST_SOURCE_ORDER: optional(z.enum(["provider-first", "ai-first"])).transform((value) => value ?? "provider-first")
-    .describe("AI-enabled publication order, provider-first (default) or ai-first; ai-first needs an owner-approved promotion reference."),
+    .describe("Frozen source/receipt order, provider-first by default. AI-first remains unavailable in the live runner until independently verified promotion evidence is bound."),
   GOAL_HINT_AI_PROMOTION_REF: text.describe("Owner-approved promotion reference printed by evaluation:report (forecast-evaluation:<report hash>:<model id>)."),
   GOAL_HINT_RESEARCH_PROVIDER: text.describe("Select a licensed research provider (010/011)."),
   GOAL_HINT_RESEARCH_LICENSE_REF: text.describe("Record permitted research retrieval and reuse (011)."),

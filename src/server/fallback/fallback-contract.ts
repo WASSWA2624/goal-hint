@@ -32,9 +32,11 @@ export type ProviderFallbackResult = Readonly<{
 /** Why API-Football supplied a published group. "provider-first": the reviewed source order prefers the provider
  * baseline; the AI receipt is recorded separately. AI groups never carry a fallback reason (a database check). */
 export type FallbackTrigger = "ai-failure" | "ai-timeout" | "ai-insufficient-evidence" | "ai-budget-exhausted" |
-  "ai-missing-group" | "ai-invalid-group" | "provider-first";
+  "ai-missing-group" | "ai-invalid-group" | "provider-first" | "provider-baseline";
 /** Frozen per AI refresh intent. Absent means the original AI-first resolution without contemporaneous capture. */
 export type ForecastSourceOrder = "provider-first" | "ai-first";
+/** Live services retain all AI output in shadow until independently qualified promotion is bound. */
+export type ForecastSelectionPolicy = "legacy-ai-primary" | "provider-baseline";
 export type FallbackReason = Readonly<{ reason: FallbackTrigger; detail: string }>;
 export type ForecastProvenance = Readonly<{
   kind: "ai"; pin: ModelPin; modelVersionId: string; evidenceHash: string; transportEvidenceRef: string;

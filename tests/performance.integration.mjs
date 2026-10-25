@@ -242,5 +242,5 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
       assert.equal(writes, 0); assert.equal(outbound, 0); assert.deepEqual(await counts(), before);
     });
     await savePageScenarios(t, 'PERFORMANCE_PAGE_CAPTURE', captured);
-  });
+  }, { migrationTimeoutMs: 180_000 });
 });

@@ -8,11 +8,11 @@ import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { isPredictorForecastCurrent } from "../predictor/predictor-output.ts";
 import { synchronous, provenTrue as verified } from "../shared/authority-proof.ts";
 import type { FallbackContext, FallbackReason, FallbackResolutionAuthority, FallbackResolutionResult, ForecastExplanation,
-  ForecastProvenance, ForecastSourceOrder, ProviderFallbackCandidate, ProviderFallbackResult, ResolvedForecastCandidate,
+  ForecastProvenance, ForecastSelectionPolicy, ForecastSourceOrder, ProviderFallbackCandidate, ProviderFallbackResult, ResolvedForecastCandidate,
   ResolvedForecastMarket } from "./fallback-contract.ts";
 import { parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult } from "./fallback-input.ts";
 
-const groups = ["match-result", "total-goals", "both-teams-to-score"] as const;
+const groups = Object.freeze(["match-result", "total-goals", "both-teams-to-score"] as const);
 const families = ["match-result", "double-chance", "total-goals", "both-teams-to-score"] as const;
 function sourceCandidate(availability: MarketAvailability): unknown {
   if (!availability.available) return undefined;
@@ -30,8 +30,9 @@ function aiGroups(ai: PredictorResult, now?: UtcInstant) {
   })) : {});
 }
 /** Use only after authenticating the owning AI result. No provider support is inferred. */
-export function fallbackRequestedGroups(ai: PredictorResult, now?: UtcInstant): readonly SourceGroup[] {
+export function fallbackRequestedGroups(ai: PredictorResult, now?: UtcInstant, policy: ForecastSelectionPolicy = "legacy-ai-primary"): readonly SourceGroup[] {
   const snapshot = aiGroups(parseFallbackAiResult(ai), now);
+  if (policy === "provider-baseline") return groups;
   return Object.freeze(groups.filter((family) => !snapshot.markets[family].available));
 }
 function fallbackReason(ai: PredictorResult, family: SourceGroup, now: UtcInstant): FallbackReason {
@@ -77,7 +78,9 @@ function explanations(markets: ResolvedForecastCandidate["markets"], ai: Predict
       source.sourceUrl === null || !item.references.some((reference) => reference.sourceId === source.sourceId) ? [] : [source.sourceUrl])));
   }
   if (providerUsed) {
-    const basis = explanation(order === "provider-first" ? "API-Football supplies the validated statistical forecast for the match result."
+    const baseline = available.some((value) => value.fallback?.reason === "provider-baseline");
+    const basis = explanation(baseline ? "API-Football supplies the provider benchmark; AI forecasts require comparative evaluation before publication."
+      : order === "provider-first" ? "API-Football supplies the validated statistical forecast for the match result."
       : "API-Football fallback supplies a validated statistical forecast for the available provider group.", providerUrls);
     if (reasons.length === 4) reasons[3] = basis; else reasons.push(basis);
   }
@@ -104,8 +107,9 @@ export function resolveFallbackCandidate(value: Readonly<{
   expected: FallbackContext; ai: PredictorResult; provider: ProviderFallbackResult | null; now: UtcInstant;
   /** Absent keeps the original AI-first resolution and an audit without a source order. */
   order?: ForecastSourceOrder;
-}>, authority: FallbackResolutionAuthority): FallbackResolutionResult {
+}>, authority: FallbackResolutionAuthority, policy: ForecastSelectionPolicy = "legacy-ai-primary"): FallbackResolutionResult {
   const denied = (reason: "invalid-request" | "not-authorized" | "ineligible-refresh"): FallbackResolutionResult => Object.freeze({ status: "denied", reason });
+  if (policy !== "legacy-ai-primary" && policy !== "provider-baseline" || policy === "provider-baseline" && value?.order === "ai-first") return denied("invalid-request");
   let expected: FallbackContext, ai: PredictorResult, provider: ProviderFallbackResult | null, now: UtcInstant;
   const order = value?.order;
   try {
@@ -141,7 +145,8 @@ export function resolveFallbackCandidate(value: Readonly<{
     const chosen: Partial<Record<SourceGroup, MarketAvailability>> = {};
     for (const family of groups) {
       const aiMarket = validAi.markets[family], providerMarket = supplied?.markets.markets[family];
-      if (providerFirst && providerMarket?.available) chosen[family] = providerMarket;
+      if (policy === "provider-baseline") { if (providerMarket?.available) chosen[family] = providerMarket; }
+      else if (providerFirst && providerMarket?.available) chosen[family] = providerMarket;
       else if (aiMarket.available) chosen[family] = aiMarket;
       else if (providerMarket?.available) chosen[family] = providerMarket;
     }
@@ -174,7 +179,9 @@ export function resolveFallbackCandidate(value: Readonly<{
           generatedAt: ai.output.timestamps.generatedAt, retrievedAt: ai.output.timestamps.retrievedAt, providerUpdatedAt: ai.output.timestamps.providerUpdatedAt },
         provenance: primaryProvenance, flags: ai.output.flags });
       } else if (market.source === "api-football" && supplied !== null && fallbackProvenance !== null) {
-        markets[family] = freezeEvidence({ available: true, market, fallback: providerFirst ? providerFirstReason(ai, now) : fallbackReason(ai, group, now),
+        markets[family] = freezeEvidence({ available: true, market, fallback: policy === "provider-baseline"
+          ? { reason: "provider-baseline", detail: "ai-shadow-pending-matched-evaluation" }
+          : providerFirst ? providerFirstReason(ai, now) : fallbackReason(ai, group, now),
           timestamps: supplied.timestamps, provenance: fallbackProvenance, flags: supplied.flags });
       } else throw new Error("A selected forecast group has no authenticated source.");
     }
@@ -190,7 +197,7 @@ export function resolveFallbackCandidate(value: Readonly<{
     provider = Object.freeze({ status: "denied", reason: "not-authorized", requestsDispatched: provider!.requestsDispatched,
       requestCountUnknown: provider!.requestCountUnknown });
     supplied = null;
-    // One source-specific retry of pure composition preserves independent AI.
+    // Recompose once without the revoked provider; baseline policy never promotes shadow AI.
     try { candidate = compose(); } catch { return denied("invalid-request"); }
     if (!current()) return denied("not-authorized");
   }

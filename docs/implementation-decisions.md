@@ -4272,3 +4272,14 @@ overlay; two new env keys; one new owner-approval requirement; no grants.
   performance comparison is a follow-up coordinated with the performance area,
   as is the public "API-Football fallback" source label (the match-card verifier
   asserts it).
+
+## 26 October 2026 — Integrated strict provider baseline
+
+This supersedes the earlier mixed provider-first rollout description. Sealed
+source receipts, the private comparison page and model/report-bound evaluation
+references are retained, while the live `provider-baseline` policy permits only
+validated provider groups. AI goal markets and provider outages remain shadow.
+Live readiness rejects AI-first until actual independently verified frozen
+promotion evidence is bound, and publication independently rejects AI markets.
+Environment references or owner approval strings alone do not qualify or promote
+a model. Existing mixed-source publications remain immutable/readable.

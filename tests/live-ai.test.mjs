@@ -22,6 +22,8 @@ import { predictorRawOutput } from './helpers/predictor-output-fixtures.mjs';
 import { createPolicyCostService } from '../src/server/cost-control/cost-policy.ts';
 import { costPeriod, syntheticCostAuthority } from './helpers/cost-fixtures.mjs';
 import { memoryCostStore } from './helpers/cost-memory-store.mjs';
+import { fallbackFixture } from './helpers/fallback-fixtures.mjs';
+import { resolveFallbackCandidate } from '../src/server/fallback/fallback-resolution.ts';
 
 // Synthetic config, providers, clocks and in-memory stores only. No credentials or database are read.
 const NOW = Date.parse('2026-10-13T08:00:00Z'), DAY = 86_400_000;
@@ -61,6 +63,18 @@ function databaseFixture(context, count = 5) {
 function authorities() { return createLiveAuthorities({ policy, verify: () => true, refs,
   selection: selectionPolicy(policy, refs, liveWorkload(150000, 12, 'Mega', 900)),
   resultPolicy: () => null, statusEvidenceRef: `${refs.freshness}#status`, refreshPacing: 'standard', aiModel: model }); }
+
+test('live publication keeps authentic AI in shadow even when the primary ownership proof succeeds', () => {
+  const fixture = fallbackFixture(), candidate = resolveFallbackCandidate({ expected: fixture.expected, ai: fixture.ai,
+    provider: null, now: fixture.now }, fixture.authority).candidate;
+  const live = createLiveAuthorities({ policy, verify: () => true, refs,
+    selection: selectionPolicy(policy, refs, liveWorkload(150000, 12, 'Mega', 900)),
+    resultPolicy: () => null, statusEvidenceRef: `${refs.freshness}#status`, refreshPacing: 'standard',
+    aiModel: fixture.model, verifyPrimary: () => true });
+  assert.equal(live.fallback.verifyAi(fixture.ai, fixture.expected, fixture.now), true);
+  assert.equal(live.publication.verifyCandidate({ candidate }), false,
+    'transport/evidence ownership is not measured model-promotion authority');
+});
 
 test('AI startup readiness requires exact transmission and calibration approvals; disabled AI needs no key', () => {
   const requirements = ['budget-approval', 'football-account', 'football-private-use', 'football-public-rights', 'evidence-policy',
@@ -206,6 +220,7 @@ function refreshHarness(options = {}) {
     async complete(_lease, name, result) { stages.set(`${name}:completed`, { at: current, value: result }); },
     async finish(_lease, result) { outcome = result; } };
   const fallback = createFallbackService({ clock: { now: () => current }, maxInflight: 1, verifyRequest: () => true,
+    selectionPolicy: 'legacy-ai-primary',
     authority: { authorize() {}, verifyContext: () => true, verifyAi: () => true, verifyProvider: () => true },
     fallback: { async collect() { fallbackCalls++; return { status: 'denied', reason: 'provider-unavailable', requestsDispatched: 1, requestCountUnknown: false }; } } });
   const service = createPredictionRefreshService({ type: 'prediction.daily-refresh', handlerVersion: 1, clock: { now: () => current },
@@ -299,6 +314,11 @@ test('ai-first readiness needs an evaluation promotion reference for the current
       /promotion reference for the current model/u);
   }
   const promotedPolicy = parseRuntimePolicy({ ...env, GOAL_HINT_FORECAST_SOURCE_ORDER: 'ai-first', GOAL_HINT_AI_PROMOTION_REF: reference });
+  assert.throws(() => liveReadiness(promotedPolicy, parseOwnerApprovals({ version: 1, owner: 'Synthetic owner', approvals: [
+    { requirement: 'ai-promotion', reference, approvedAt: '2026-10-13', decision: 'Synthetic reference approval without the underlying frozen report.' },
+  ] })),
+    error => error.issues.some(issue => issue.includes('independently verified frozen promotion binding')),
+    'a matching reference cannot substitute for the actual verified frozen promotion evidence');
   assert.ok(missingOwnerApprovals(promotedPolicy, (_reference, requirement) => requirement !== 'ai-promotion').includes('GOAL_HINT_AI_PROMOTION_REF (ai-promotion)'));
   assert.equal(missingOwnerApprovals(policy, (_reference, requirement) => requirement !== 'ai-promotion').length, 0);
   assert.throws(() => liveReadiness(parseRuntimePolicy({ ...env, GOAL_HINT_FORECAST_SOURCE_ORDER: 'ai-first', GOAL_HINT_AI_PROMOTION_REF: other }),

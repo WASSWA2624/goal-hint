@@ -244,7 +244,9 @@ test("AI-enabled publication defaults to provider-first; ai-first needs AI and a
   const production = parseRuntimePolicy(syntheticProduction);
   assert.equal(production.choices.forecasts.sourceOrder, "provider-first");
   assert.equal(production.rules.forecasts.defaultSourceOrder, "provider-first");
-  assert.equal(Object.hasOwn(production.rules.forecasts, "primary"), false);
+  assert.equal(production.rules.forecasts.primary, "api-football");
+  assert.equal(production.rules.forecasts.shadow, "ai");
+  assert.equal(production.rules.forecasts.publishShadowForecasts, false);
   assertOperationAllowed(production, "publication", verifySyntheticEvidence);
   policyError(() => parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_FORECAST_SOURCE_ORDER: "ai-only" }), ["GOAL_HINT_FORECAST_SOURCE_ORDER"]);
   policyError(() => parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_FORECAST_SOURCE_ORDER: "ai-first" }), ["GOAL_HINT_AI_PROMOTION_REF"]);

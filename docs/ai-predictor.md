@@ -13,6 +13,13 @@ the exact owner approval references and a counted smoke check; synthetic tests
 make no paid provider calls. Forecasts remain provisional, with no evaluated
 calibration or accuracy claim.
 
+Following the 25 October checklist, the live runner uses the validated provider
+benchmark for publication and retains AI output in shadow. Enabling the AI
+transport authorizes its existing bounded attempt; it does not promote AI into
+published markets or publish AI goal-market extensions. Original revisions stay
+unchanged. See [the benchmark and shadow runbook](provider-baseline.md) for the
+retained matching evidence and remaining prospective evaluation work.
+
 Prepared private runner choices keep AI disabled until the key is installed.
 They name OpenAI, `gpt-6.1-sol`, usage-based billing, 100,000 total job tokens and
 a 300-second configured job limit; no monthly AI cap is supplied. The owner
@@ -105,13 +112,13 @@ Every AI plan freezes a source order (`liveSourceOrder`, default
 `provider-first`). The AI attempt runs exactly as above and before the provider
 request, but under provider-first API-Football publishes the match result and
 double chance; the accepted AI forecast is sealed beside it as a receipt in the
-refresh's fallback stage. AI still publishes total goals and both teams to
-score, which have no provider counterpart, and the match result when the
-provider is unavailable. The owner's comparison page `/admin/forecasts` and the
+refresh's fallback stage. The independent live baseline policy keeps every AI
+family private, including goal markets and provider outages. The owner's comparison page `/admin/forecasts` and the
 [evaluation harness](forecast-evaluation.md#provider-baseline-and-promotion)
-compare the two on matched settled fixtures. `ai-first` needs an evaluation
-promotion reference for this exact model id plus an `ai-promotion` approval, so
-a new model identity starts again from provider-first.
+compare the two on matched settled fixtures as private diagnostics. Promotion
+references remain available for independent review, but the live runner rejects
+`ai-first` until actual verified frozen promotion evidence is bound. References
+and approval strings alone do not qualify a model or activate publication.
 
 ## Immutable model identity and pins
 

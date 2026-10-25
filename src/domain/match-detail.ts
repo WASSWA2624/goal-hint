@@ -7,7 +7,7 @@ import { liveMatchSnapshotSchema } from "./live-match.ts";
 
 /** Why API-Football supplied a published market; "provider-first" is the reviewed baseline order with AI enabled. */
 export const detailFallbackReasons = ["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted", "ai-missing-group",
-  "ai-invalid-group", "provider-first"] as const;
+  "ai-invalid-group", "provider-first", "provider-baseline"] as const;
 export const matchDetailRules = Object.freeze({ defaultLimit: 10, maximumLimit: 20, maximumSequence: 4_294_967_295 });
 const id = z.uuid(), at = publicForecastSchema.shape.publishedAt, sequence = z.number().int().positive().max(matchDetailRules.maximumSequence);
 const explanation = z.strictObject({ text: z.string().min(1).max(4096), sourceUrls: z.array(z.url().startsWith("https://")).max(100) });

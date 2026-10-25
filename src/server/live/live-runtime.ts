@@ -72,7 +72,10 @@ export function liveReadiness(policy: RuntimePolicy, approvals?: OwnerApprovals)
   const issues: string[] = [];
   if (policy.scope !== "production") issues.push("GOAL_HINT_OPERATION_SCOPE must be production for public provisional publication.");
   if (policy.capabilities.ai) {
-    try { liveSourceOrder(policy, liveAiModel(policy)); } catch (error) { issues.push((error as Error).message); }
+    try {
+      if (liveSourceOrder(policy, liveAiModel(policy)) === "ai-first")
+        issues.push("AI-first publication needs an independently verified frozen promotion binding; a configured reference alone is insufficient.");
+    } catch (error) { issues.push((error as Error).message); }
   }
   if (policy.capabilities.research) issues.push("GOAL_HINT_RESEARCH_ENABLED must stay false until a licensed research adapter exists (prompt 011).");
   if (policy.choices.competitionIds === null) issues.push("GOAL_HINT_COMPETITION_IDS is required.");
@@ -115,8 +118,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results,
       refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy,
-      ...(aiModel === null || sourceOrder === null ? {} : { aiModel, sourceOrder, verifyPrimary: (...args) => ai?.verifyAi(...args) === true,
-        verifyPrimaryCandidate: (candidate) => ai?.verifyCandidate(candidate) === true }) });
+      ...(aiModel === null || sourceOrder === null ? {} : { aiModel, sourceOrder, verifyPrimary: (...args) => ai?.verifyAi(...args) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
@@ -138,7 +140,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const providerFallback = createProviderFallbackAdapter({ adapter, catalog, policy: providerFallbackPolicy(refs),
       authority: authorities.providerFallback, maxJobs: 1000 });
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
-      verifyRequest: authorities.verifyFallbackRequest });
+      selectionPolicy: "provider-baseline", verifyRequest: authorities.verifyFallbackRequest });
     const refreshStore = createMysqlRefreshStore(database, queue);
     if (aiModel !== null) ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
       evidenceAuthority: authorities.evidence, pacing: workload.pacing, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,

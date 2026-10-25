@@ -5,7 +5,7 @@ import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } fro
 import type { EvidenceAuthority } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { ProviderFallbackAuthority, ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import type { FallbackContext, FallbackResolutionAuthority, ForecastSourceOrder, ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
+import type { FallbackContext, FallbackResolutionAuthority, ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import type { FallbackRefreshRequest } from "../fallback/fallback-service.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballEndpoint, type ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixture, RegulationScoreCandidate } from "../football/api-football-normalize.ts";
@@ -56,7 +56,6 @@ export function createLiveAuthorities(options: Readonly<{
   /** The order frozen into AI plans by the same runtime; provider-first when omitted. */
   sourceOrder?: ForecastSourceOrder;
   verifyPrimary?(result: PredictorResult, context: FallbackContext): boolean;
-  verifyPrimaryCandidate?(candidate: ResolvedForecastCandidate): boolean;
 }>) {
   const { policy, verify, refs } = options;
   const now = () => options.clock?.now() ?? utcInstantFromEpochMilliseconds(Date.now());
@@ -120,7 +119,9 @@ export function createLiveAuthorities(options: Readonly<{
         if (!market.available) return true;
         if (market.provenance.kind === "api-football") return market.provenance.policyVersion === expected.fallback.version &&
           market.provenance.policyEvidenceRef === expected.fallback.evidenceRef;
-        return options.aiModel !== undefined && options.verifyPrimaryCandidate?.(input.candidate) === true;
+        // Authentic AI output is retained for matched shadow evaluation; it has
+        // no demonstrated improvement/promotion authority in this live binding.
+        return false;
       });
     },
   });

@@ -18,10 +18,18 @@ is implemented. Its private key and counted activation check remain required.
 The original "OpenAI primary, API-Football fallback" order is reversed by
 default since 25 October 2026: with AI enabled, API-Football publishes the match
 result as the reviewed baseline and the AI forecast is captured beside it
-(`provider-first`, see [source order](#source-order-and-receipts)). AI-first
-publication returns only after an owner-approved evaluation promotion.
+(`provider-first`, see [source order](#source-order-and-receipts)). AI-first publication remains unavailable in the live runner until independently
+verified frozen promotion evidence is bound; an approved reference alone is insufficient.
 Calibration stays explicitly unevaluated/provisional. Synthetic scenarios
 cannot qualify an account, source mapping or permission.
+
+The 25 October checklist follow-up changes the live publication binding to
+`selectionPolicy: "provider-baseline"`. The existing AI transport may run within
+its approved bounds, but its output remains private shadow evidence. Live
+publication rejects AI markets until a separate matched evaluation and reviewed
+promotion mechanism exist. See [provider benchmark and shadow retention](provider-baseline.md).
+The legacy AI-first resolver remains available for historical compatibility and
+isolated existing contracts; the production live runner does not select it.
 
 ## Market support and source evidence
 
@@ -135,9 +143,12 @@ reuse rights. No default age or unknown-time acceptance is supplied.
 
 ## Candidate resolution
 
-This section describes the AI-first composition, used by plans without a source
-order and by an approved `ai-first` order. The default `provider-first` order
-with AI enabled is described under [source order and receipts](#source-order-and-receipts).
+The live service uses `selectionPolicy: "provider-baseline"`: it requests all
+provider groups within the existing allowance, publishes only validated provider
+groups and keeps unsupported groups unavailable. Provider failure cannot promote
+shadow AI. The private frozen `sourceOrder` additionally controls receipt capture.
+The following composition describes legacy library contracts, which remain readable
+without changing historical publications.
 
 Retain every valid AI source group. Attempt fallback for missing or invalid
 families, or AI failure, timeout, insufficient evidence or exhausted budget,
@@ -207,32 +218,21 @@ never sees the provider forecast. The request stays inside the job's existing
 fallback allowance (one provider request, already reserved by the live plan), so
 real API-Football usage rises to the planned figure when AI is enabled.
 
-- `provider-first` (the default with AI enabled): each source group comes from
-  the validated provider group when one is available, otherwise from the valid
-  AI group. API-Football supplies match result and derived double chance only,
-  so AI still fills total goals and both teams to score, and a denied, stale or
-  refused provider leaves the AI match result. If the provider match result and
-  both AI binary groups break a feasible-marginal constraint, the provider is
-  kept and both AI binary groups become unavailable (`cross-market-conflict`,
-  with the related groups and constraints in `issues`); nothing is filled.
-  The embedded `marketRules.sourceConflictRule` string still says
-  `preserve-valid-ai-groups-omit-conflicting-fallback`; it is fingerprinted into
-  every archived snapshot and cannot change, so this order's rule is recorded
-  here and in the candidate's `audit.sourceOrder`.
-- `ai-first`: the original composition, with both sources captured. It needs
-  an owner-approved promotion reference ([live operations](live-operations.md#forecast-source-order)).
+- `provider-first` freezes the benchmark/receipt intent. In the live binding,
+  the independent `provider-baseline` selection policy permits only provider
+  groups; every AI family remains shadow, including goal markets and provider
+  outages. The low-level legacy composition can still read the earlier mixed
+  provider/AI contract without rewriting it.
+- `ai-first` remains a parseable legacy/evaluation configuration. The live runner
+  rejects it until independently verified frozen promotion evidence is mounted;
+  a model-bound reference or owner approval string alone cannot enable it.
 
-The market `fallback` field keeps its database-enforced meaning, "why
-API-Football supplied this market"; AI markets always have `fallback: null`
-(`MarketPrediction_payload_check`). Under `provider-first` every API-Football
-market carries `{ reason: "provider-first", detail }`, where the detail is
-`ai-shadow` (a current AI candidate was recorded), `invalid-timing` or the AI
-denial reason. The archive parser requires that reason exactly when
-`audit.sourceOrder` is `provider-first`. The provider basis text then reads "API-Football
-supplies the validated statistical forecast for the match result", and a mixed
-revision's uncertainty starts with "The match result comes from API-Football; AI
-notes cover the goal markets." Reviewed goal-market extensions are refused with
-`provider-first`, because they derive from the AI joint score distribution.
+The market `fallback` field keeps its database-enforced meaning: why API-Football
+supplied a market. AI markets retain `fallback: null`. New strict selections use
+`provider-baseline`; existing `provider-first` reasons and optional
+`audit.sourceOrder` remain valid history. Provider-first audit rows accept either
+baseline reason while rejecting unrelated failure reasons. AI goal-market
+extensions are never published by the live baseline binding.
 
 The successful fallback result then carries `sources`: one receipt per source
 ([`source-receipts.ts`](../src/server/fallback/source-receipts.ts)). A receipt
@@ -247,7 +247,7 @@ the existing fallback stage row; recovery without the provider records a
 
 ## Verification and live qualification
 
-Local scenario tests must exercise AI priority, every fallback trigger,
+Local scenario tests exercise legacy AI priority and strict live baseline selection, every fallback trigger,
 partial/absent groups, incorrect fixture context, incomplete distributions,
 mixed-source conflicts, quota/time bounds, stale/future/unknown source times,
 revoked permissions and repeated same-job reuse with original timestamps.
@@ -262,9 +262,9 @@ node --conditions=react-server --test tests/fallback-service.test.mjs
 The helper composes actual AI validation/calibration, fallback resolution,
 provider normalization and the quota gateway with synthetic HTTP and account
 proofs. It checks request counts and original timestamps as well as the returned
-markets. A thrown dependency or invalid fallback receipt preserves already valid
-AI groups while recording the affected provider failure and uncertain request
-accounting. Exhausting the complete refresh deadline still prevents a late
+markets. Legacy fixtures preserve valid AI groups after a provider failure; the
+strict baseline binding instead keeps AI in shadow and records provider failure
+and uncertain request accounting. The receipt tests retain both original sources. Exhausting the complete refresh deadline still prevents a late
 candidate from being returned.
 
 These tests use synthetic responses and make no live provider requests. Before

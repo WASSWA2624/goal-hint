@@ -359,10 +359,12 @@ candidate gate on `ai` / `match-result` / `api-football` has a
 `maximumBrierDifference` below zero (AI strictly better). Otherwise it returns
 null. `npm run evaluation:report` prints `Promotion reference (owner approval
 required): …` or `Promotion reference: none`. Printing a reference promotes
-nothing: the report still records `promotionPerformed: false`, and AI-first
-publication needs the owner to approve that exact reference as `ai-promotion`
-([live operations](live-operations.md#forecast-source-order)). Because the
-reference names the model, a model change needs a new evaluation and approval.
+nothing: the report still records `promotionPerformed: false`. Independent owner
+review must inspect the actual frozen protocol/report and authenticated source
+evidence. The live runner rejects AI-first until a trusted frozen evidence binding
+is mounted; an `ai-promotion` reference alone cannot activate it
+([live operations](live-operations.md#forecast-source-order)). A model change needs
+a new evaluation and review.
 
 The private owner page `/admin/forecasts` shows the same matched comparison as a
 diagnostic, with sample counts and intervals and no gate; it is not evaluation

@@ -1,11 +1,12 @@
 """Build the real slip UI against isolated synthetic stored records and verify anonymous SSR markup."""
 from html.parser import HTMLParser
 from decimal import Decimal
+from pathlib import Path
 import re
 from urllib.parse import urlencode
 
 from lib.rendering import Server, build_fixture, create_fixture, parse_args, request, visible_html
-from lib.runtime import main_guard
+from lib.runtime import ROOT, main_guard
 
 
 class Element:
@@ -57,13 +58,14 @@ class Document(HTMLParser):
 SCENARIOS = {
     "generated": ("generated", 3), "idle": ("idle", 0), "no-qualifying": ("no-qualifying", 0),
     "no-combinations": ("no-combinations", 0), "odds-unavailable": ("odds-unavailable", 0),
+    "model-unavailable": ("model-unavailable", 0), "joint-generated": ("generated", 3),
     "data-unavailable": ("data-unavailable", 0), "rate-limited": ("rate-limited", 0),
     "limited": ("generated", 3), "long-names": ("generated", 3),
     "manual-home-win": ("generated", 1),
 }
 
 CRITERIA_GROUP_FIELDS = {
-    "limits": ["oddsMin", "oddsMax", "probMin", "probMax"],
+    "limits": ["oddsMin", "oddsMax", "probMin", "probMax", "totalProbMin", "totalProbMax"],
     "kickoff": ["dateFrom", "dateTo", "timeFrom", "timeTo"],
     "markets": [],
 }
@@ -71,6 +73,7 @@ CRITERIA_GROUP_FIELDS = {
 NUMERIC_RANGE_LIMITS = {
     "totalMin": "1.01", "totalMax": "100000", "teamsMin": "1", "teamsMax": "8",
     "oddsMin": "1.01", "oddsMax": "1000", "probMin": "0", "probMax": "100",
+    "totalProbMin": "0", "totalProbMax": "100",
 }
 
 
@@ -228,6 +231,10 @@ def verify(origin, directory):
             selections_per_slip=1 if scenario == "manual-home-win" else 2)
         if scenario == "limited":
             assert "search reached its limit" in document.text and "Fixture coverage is incomplete" in document.text, "Source and search limits remain visible"
+        if scenario == "joint-generated":
+            assert "Highest estimated combined probability first" in document.text, "Qualified custom ranking is described separately"
+            assert all("Win probability" in node.text and "Average match probability" in node.text
+                for node in document.nodes(attr="data-slip-summary")), "Every qualified custom slip exposes the combined estimate beside the mean"
     idle = inspect(origin, "/en/slips", directory, "route-idle", "idle", 0)
     verify_defaults(idle)
     explicit_defaults = [(name, NUMERIC_RANGE_LIMITS.get(name, value)) for name, value in native_inputs(idle) if name != "build"]
@@ -241,6 +248,8 @@ def verify(origin, directory):
         ("slips", "3"), ("reuse", "0"), ("reuse", "1"), ("build", "1"),
     ]
     generated = inspect(origin, "/en/slips?" + urlencode(query), directory, "route-build", "generated", 3)
+    unavailable = inspect(origin, "/en/slips?" + urlencode(query + [("totalProbMin", "60")]), directory, "route-no-joint-model", "model-unavailable", 0)
+    assert "Clear the combined probability bounds" in unavailable.text, "Unsupported joint filtering fails with a useful recovery action"
     verify_custom_numeric_bounds(generated, dict(query))
     initial_groups = criteria_groups(generated, "/en/slips?build=1")
     for group, changes in [
@@ -285,14 +294,18 @@ def verify(origin, directory):
     row = selected.nodes("tr", "data-slip-selection")[0]
     assert row.attrs["data-slip-selection"] == "synthetic-slip-7" and "Home win" in row.text and "20.0%" in row.text and "2.00" in row.text, "Manual Home win uses its own 20% probability and 2.00 price, though Away win was the published top pick"
     assert row.nodes(attr="data-pick-odds")[0].text == "(2.00)" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
-    print("Slip rendering verification passed: Balanced dialogs, blank Any bounds, retained custom numeric values, inline native fallback, 10 isolated states and native GET builds/cutoff/manual alternatives.", flush=True)
+    print("Slip rendering verification passed: Balanced dialogs, blank Any bounds, retained custom numeric values, inline native fallback, 12 isolated states and native GET builds/cutoff/manual alternatives.", flush=True)
 
 
 def main():
-    args = parse_args("slip builder")
-    directory = create_fixture("slips")
-    print(f"Building isolated slip fixture: {directory}", flush=True)
-    build_fixture(directory)
+    args = parse_args("slip builder", extra=("--fixture",))
+    if args.fixture:
+        directory = Path(args.fixture).resolve()
+        assert directory.is_relative_to(ROOT / ".tmp") and (directory / ".next/BUILD_ID").is_file()
+    else:
+        directory = create_fixture("slips")
+        print(f"Building isolated slip fixture: {directory}", flush=True)
+        build_fixture(directory)
     with Server(directory) as server:
         verify(server.origin, directory)
         print(f"Fixture artifacts: {directory}", flush=True)

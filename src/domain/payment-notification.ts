@@ -1,6 +1,7 @@
-export type PaymentNotificationStatus = "sent" | "failed" | "unsupported" | "unavailable";
+export type PaymentNotificationStatus = "queued" | "sent" | "failed" | "unsupported" | "unavailable";
 
 const notices: Readonly<Record<PaymentNotificationStatus, string>> = Object.freeze({
+  queued: "Account update SMS queued for delivery.",
   sent: "SMS accepted for delivery.",
   failed: "SMS delivery could not be confirmed. Contact the member.",
   unsupported: "SMS is not supported for this account's country. Contact the member.",

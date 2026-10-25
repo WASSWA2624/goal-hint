@@ -157,7 +157,7 @@ const resolvedProvenance = z.discriminatedUnion("kind", [
 const resolvedMarket = z.discriminatedUnion("available", [
   z.object({ available: z.literal(true), market: z.unknown(), timestamps, flags, provenance: resolvedProvenance,
     fallback: z.object({ reason: z.enum(["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted",
-      "ai-missing-group", "ai-invalid-group", "provider-first"]), detail: text }).strict().nullable() }).strict(),
+      "ai-missing-group", "ai-invalid-group", "provider-first", "provider-baseline"]), detail: text }).strict().nullable() }).strict(),
   z.object({ available: z.literal(false), reason: z.enum([...marketReasons, ...fallbackProviderReasons, "invalid-timing"]) }).strict(),
 ]);
 const publicExplanation = z.object({ text: plain, sourceUrls: z.array(link).max(10_000) }).strict();
@@ -196,10 +196,13 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
         if (context.pin === null || pin.id !== context.pin.id || provenance.modelVersionId !== pin.modelVersionId ||
           provenance.evidenceHash !== context.evidenceHash || item.fallback !== null ||
           provenance.provisional !== (provenance.evaluation.status !== "evaluated")) throw new Error();
-      } else if (item.fallback === null || provenance.source.jobId !== context.jobId ||
-        provenance.source.externalFixtureId !== context.context.externalFixtureId ||
-        // Only a provider-first refresh names its own order as the reason API-Football was used, and it always does.
-        (item.fallback.reason === "provider-first") !== (parsed.audit.sourceOrder === "provider-first")) throw new Error();
+      } else {
+        if (item.fallback === null || provenance.source.jobId !== context.jobId ||
+          provenance.source.externalFixtureId !== context.context.externalFixtureId) throw new Error();
+        // Preserve older provider-first rows while accepting the stricter live baseline reason.
+        if (item.fallback.reason === "provider-first" && parsed.audit.sourceOrder !== "provider-first" ||
+          parsed.audit.sourceOrder === "provider-first" && !["provider-first", "provider-baseline"].includes(item.fallback.reason)) throw new Error();
+      }
     }
     const result = parsed.markets["match-result"], chance = parsed.markets["double-chance"];
     if (result.available && chance.available) {

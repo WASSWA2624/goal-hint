@@ -12,7 +12,7 @@ Owner decisions through 13 October 2026, recorded in the ignored `.goal-hint/own
 | Decision | Effect |
 | --- | --- |
 | **OpenAI and API-Football (13 October 2026)** | The live AI binding is implemented. Activation requires the private key and exact owner references. With AI disabled, the existing fallback-only path needs no AI key. Research stays disabled. |
-| **Provider-first with AI enabled (25 October 2026)** | Replaces "OpenAI primary". API-Football publishes the match result and double chance as the reviewed baseline; AI fills total goals and both teams to score, and supplies the match result only when the provider has none. Both forecasts are sealed in each refresh for the private comparison (`/admin/forecasts`). AI-first publication needs an approved promotion ([below](#forecast-source-order)). Output is unchanged while AI stays disabled. |
+| **Provider baseline with optional AI shadow** | API-Football supplies validated provider groups; every AI family remains private, including provider outages. Both original forecasts are sealed for private diagnostics (`/admin/forecasts`). A source-order/reference configuration cannot bypass the independent publication guard; AI-first startup remains unavailable pending a verified frozen promotion binding. |
 | **Publish now, provisional** | Forecasts are published before shadow qualification (047) and release gates (048/049). Every API-Football forecast carries the existing *Provisional estimate* label, and no accuracy claim is made. |
 | **All available competitions** | `GOAL_HINT_COMPETITION_IDS` lists every league with a current season on the plan (`npm run live:competitions`). |
 | **Local only** | Production scope may run in development mode **only** against a loopback database. Remote or hosted targets still need `NODE_ENV=production` and verified TLS. |
@@ -62,25 +62,22 @@ the verified account plan changes. OpenAI cannot fill missing fixture schedules.
 
 `GOAL_HINT_FORECAST_SOURCE_ORDER` applies only with AI enabled and defaults to
 `provider-first`. Every AI refresh plan freezes it, so changing it affects new
-jobs only; intents saved before 25 October 2026 keep the original AI-first
-resolution without receipts. Fallback-only plans are unchanged.
+jobs only. Intents saved before source orders existed stay structurally readable
+without receipts; the independent live baseline policy still forbids publishing
+new AI markets from them. Fallback-only plans keep their existing shape.
 
-To publish AI ahead of API-Football:
+The evaluation command can print a model/report-bound promotion reference only
+for a prospective frozen final test whose gates demonstrate improvement against
+the matched provider at every protocol horizon. That reference is input to
+independent review, not publication authority. Preserve the report, protocol and
+authenticated source/result evidence; owner review and the future trusted frozen
+evidence binding remain required.
 
-1. Collect prospective provider-first samples with AI enabled, freeze the
-   evaluation protocol (owner decisions OP-16/OP-17) with a candidate gate per
-   horizon on `system: "ai"`, `family: "match-result"`, `baseline: "api-football"`
-   and a negative `maximumBrierDifference`, and run `npm run evaluation:report`
-   on the final test ([forecast evaluation](forecast-evaluation.md#provider-baseline-and-promotion)).
-2. The report prints `Promotion reference (owner approval required): forecast-evaluation:<report hash>:<model id>`
-   only when every such gate passed and the decision is eligible for independent review.
-3. Record that exact reference as an `ai-promotion` approval in `.goal-hint/owner-approvals.json`.
-4. Set `GOAL_HINT_FORECAST_SOURCE_ORDER=ai-first` and `GOAL_HINT_AI_PROMOTION_REF=<reference>`,
-   run `npm run live:status`, then restart the runner.
-
-Readiness refuses `ai-first` without AI, without the reference, without the
-owner approval, or when the reference names another model, so a model change
-withdraws the promotion. Return to provider-first by removing both settings.
+The current live runner rejects `ai-first` even when its configured reference
+matches the model and has an owner approval. No concrete promotion-evidence
+binding is mounted. The independent publication authority also rejects every AI
+market. Keep provider-first configured; changing references or environment
+settings cannot activate AI publication.
 
 ## What the runner does
 

@@ -11,7 +11,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { EvidenceAuthority, EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { buildEvidenceSnapshot } from "../evidence/evidence-snapshot.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
-import type { FallbackContext, ForecastSourceOrder, ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
+import type { FallbackContext, ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import { parseFallbackAiResult } from "../fallback/fallback-input.ts";
 import { createOpenAiBinding } from "../predictor/openai-transport.ts";
 import { createPrimaryAiAdapter } from "../predictor/predictor-adapter.ts";
@@ -65,7 +65,7 @@ export async function createLiveAiRuntime(options: {
   policy: RuntimePolicy; verify: EvidenceVerifier; refs: LiveReferences; model: ModelVersion;
   database: DatabaseRuntime; store: RefreshStore; evidenceAuthority: EvidenceAuthority; pacing: RefreshPacing;
   fallbackReserveMs: number; fetcher?: typeof fetch; clock?: Clock;
-  /** Frozen into every AI plan; provider-first unless an approved promotion selects ai-first. */
+  /** Frozen into every AI plan; live startup permits provider-first until verified promotion evidence is bound. */
   sourceOrder?: ForecastSourceOrder;
 }) {
   const { policy, model, verify, refs } = options, clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
@@ -159,13 +159,6 @@ export async function createLiveAiRuntime(options: {
           result.output.reasons.every((item) => item.text === groundedText(item, original)) &&
           result.output.uncertainty.text === groundedText(result.output.uncertainty, original, true);
       } catch { return false; }
-    },
-    verifyCandidate(candidate: ResolvedForecastCandidate) {
-      const intent = work.get(candidate.context.jobId);
-      if (!intent || !same(candidate.context.pin, intent.pin)) return false;
-      return Object.values(candidate.markets).every((entry) => !entry.available || entry.provenance.kind !== "ai" ||
-        entry.provenance.modelVersionId === model.id && same(entry.provenance.pin, intent.pin) && entry.provenance.provisional &&
-        same(entry.provenance.outputTiming, model.outputTiming) && same(entry.provenance.evaluation, model.evaluation));
     },
     release(jobId: string) { work.delete(jobId); },
   });

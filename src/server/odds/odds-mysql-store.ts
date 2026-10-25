@@ -27,6 +27,7 @@ const batchSchema = z.strictObject({
     outcome: z.enum(["apply", "unknown-fixture", "after-kickoff", "kickoff-mismatch", "not-scheduled"]) })).max(10_000),
   catalog: z.array(z.strictObject({ id: z.number().int().positive(), name: z.string().min(1).max(256) })).max(5_000),
 });
+export const storedOddsBatchSchema = batchSchema;
 const snapshotValues = z.array(z.strictObject({ label: z.string().min(1).max(64), odd: z.string().min(1).max(12) })).min(1).max(1_000);
 export const storedOddsSnapshotSchema = z.strictObject({ id: hash, fixtureId: z.uuid(), previousId: hash.nullable(), bookmakerId: z.number().int().positive(),
   bookmakerName: z.string().max(128).nullable(), betId: z.number().int().positive(), betName: z.string().max(256).nullable(), valuesHash: hash,

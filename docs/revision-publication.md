@@ -92,7 +92,10 @@ October 2026, `provider-first`: the refresh's frozen source order preferred the
 provider baseline and the AI forecast was recorded separately ([provider
 fallback](provider-fallback.md#source-order-and-receipts)). Match details show it
 as "API-Football supplied this prediction as the reviewed baseline; AI review is
-recorded separately and not shown." No schema change was needed.
+recorded separately and not shown." Strict live provider-only selections use
+`provider-baseline`; both original reasons remain readable, and an optional
+frozen source order never overrides the independent live publication guard.
+No schema change was needed for those reasons.
 
 Verified observed play, or play already in the canonical catalog, inserts an
 append-only `PredictionPublicationBarrier` for the current cycle. Subsequent

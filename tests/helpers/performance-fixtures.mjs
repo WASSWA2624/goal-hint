@@ -35,7 +35,7 @@ export function performanceRecord({ source = 'ai', score = [2, 1], state = 'clos
     }) } };
 }
 export function performanceSnapshot(records = []) {
-  return { records, models: new Map([[modelVersion().id, modelVersion()]]), settlements: [],
+  return { records, models: new Map([[modelVersion().id, modelVersion()]]), settlements: [], quotes: new Map(),
     historicalCycles: { basis: 'void-cycle-original-kickoff-in-period-excluding-applicable-cycle', void: 0, postponed: 0 },
     operations: { basis: 'refresh-jobs-for-current-cohort-fixtures-across-runs', total: 0, failed: 0, pending: 0, failedFixtures: 0, delayedRefreshes: 0, delayedFixtures: 0 } };
 }

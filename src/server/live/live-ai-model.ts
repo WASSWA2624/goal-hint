@@ -33,8 +33,8 @@ export function liveAiModel(policy: RuntimePolicy): ModelVersion {
 }
 
 const PROMOTION_REFERENCE = /^forecast-evaluation:[a-f0-9]{64}:([a-f0-9]{64})$/u;
-/** Provider-first unless the owner configured ai-first with an evaluation promotion reference for this exact model, so a
- * model change withdraws the promotion. The owner's approval of the reference is enforced at the publication boundary. */
+/** Parses the configured source order and model-bound reference; this does not authorize promotion.
+ * Live readiness additionally requires the actual independently verified frozen evidence binding, which is not mounted. */
 export function liveSourceOrder(policy: RuntimePolicy, model: ModelVersion): ForecastSourceOrder {
   const { sourceOrder, aiPromotionRef } = policy.choices.forecasts;
   if (sourceOrder !== "ai-first") return "provider-first";

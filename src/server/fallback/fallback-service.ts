@@ -4,7 +4,7 @@ import { getPublicationDeadline, utcInstantFromEpochMilliseconds, type Clock } f
 import type { ApiFootballBounds, ApiFootballFallbackWorkflow } from "../football/api-football-contract.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
-import type { FallbackContext, FallbackResolutionAuthority, FallbackResolutionResult, ForecastSourceOrder, ProviderFallbackResult } from "./fallback-contract.ts";
+import type { FallbackContext, FallbackResolutionAuthority, FallbackResolutionResult, ForecastSelectionPolicy, ForecastSourceOrder, ProviderFallbackResult } from "./fallback-contract.ts";
 import { FallbackInputError, parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult } from "./fallback-input.ts";
 import { isProviderFallbackCurrent, parseProviderFallbackRequest, type createProviderFallbackAdapter } from "./fallback-adapter.ts";
 import { isPredictorForecastCurrent } from "../predictor/predictor-output.ts";
@@ -44,16 +44,20 @@ export function parseFallbackRefreshRequest(input: unknown): FallbackRefreshRequ
   } catch { throw new RefreshFailure("invalid-request"); }
 }
 
-/** Resolves one completed AI attempt and, when needed, one bounded fallback
- * collection. It creates no public revision and never reads an old market. */
+/** Resolves one completed AI attempt and one bounded provider collection.
+ * It creates no public revision and never reads an old market. */
 export function createFallbackService(options: Readonly<{
   fallback: Pick<ReturnType<typeof createProviderFallbackAdapter>, "collect"> | null;
   authority: FallbackResolutionAuthority; clock?: Clock; maxInflight: number;
+  /** A private binding, never visitor input. Defaults to provider baseline with every AI group in shadow. */
+  selectionPolicy?: ForecastSelectionPolicy;
   /** Binds the owning refresh, AI receipt, original job deadline and quota allowance. */
   verifyRequest(request: FallbackRefreshRequest): boolean;
 }>) {
   if (!Number.isSafeInteger(options.maxInflight) || options.maxInflight < 1 || options.maxInflight > 100_000)
     throw new RefreshFailure("invalid-request");
+  const selectionPolicy = options.selectionPolicy ?? "provider-baseline";
+  if (selectionPolicy !== "legacy-ai-primary" && selectionPolicy !== "provider-baseline") throw new RefreshFailure("invalid-request");
   const now = () => utcInstantFromEpochMilliseconds(options.clock?.now() ?? Date.now());
   const inflight = new Map<string, Readonly<{ fingerprint: string; promise: Promise<FallbackRefreshResult> }>>();
   const denied = (reason: FallbackRefreshReason, requestsDispatched = 0, requestCountUnknown = false): FallbackRefreshResult =>
@@ -100,8 +104,9 @@ export function createFallbackService(options: Readonly<{
     }
     try {
       check();
+      if (selectionPolicy === "provider-baseline" && request.order === "ai-first") return denied("not-authorized");
       // A frozen order captures the provider beside a complete AI candidate; the job's reviewed fallback allowance covers it.
-      const groups = request.order === undefined ? fallbackRequestedGroups(request.ai, now())
+      const groups = request.order === undefined ? fallbackRequestedGroups(request.ai, now(), selectionPolicy)
         : ["match-result", "total-goals", "both-teams-to-score"] as const;
       let provider: ProviderFallbackResult | null = null;
       if (groups.length > 0) {
@@ -135,7 +140,7 @@ export function createFallbackService(options: Readonly<{
         verifyContext: options.authority.verifyContext, verifyAi: options.authority.verifyAi, verifyProvider: options.authority.verifyProvider,
       });
       const order = request.order === undefined ? {} : { order: request.order };
-      let result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider, now: now(), ...order }, authority);
+      let result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider, now: now(), ...order }, authority, selectionPolicy);
       check();
       if (result.status === "denied") return denied(result.reason, requestsDispatched, requestCountUnknown);
       timeCheck();
@@ -147,7 +152,7 @@ export function createFallbackService(options: Readonly<{
       if (staleAi || staleProvider) {
         if (staleProvider) provider = Object.freeze({ status: "denied", reason: "stale", requestsDispatched, requestCountUnknown });
         // One bounded recomposition drops newly expired source groups while retaining the other source.
-        result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider, now: utcInstantFromEpochMilliseconds(lastNow), ...order }, authority);
+        result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, provider, now: utcInstantFromEpochMilliseconds(lastNow), ...order }, authority, selectionPolicy);
         check();
         if (result.status === "denied") return denied(result.reason, requestsDispatched, requestCountUnknown);
         selected = Object.values(result.candidate.markets).filter((market) => market.available);
@@ -166,14 +171,15 @@ export function createFallbackService(options: Readonly<{
     } finally { controller.abort(); if (timer !== undefined) clearTimeout(timer); }
   }
   return Object.freeze({
-    /** Recovery/timeout may discard the provider attempt while preserving independently valid AI groups. */
+    /** Recovery drops the provider attempt; baseline policy keeps AI in shadow even on timeout. */
     resolveWithoutProvider(value: unknown): FallbackRefreshResult {
       try {
         const request = parseFallbackRefreshRequest(value);
+        if (selectionPolicy === "provider-baseline" && request.order === "ai-first") return denied("not-authorized");
         if (synchronous(options.verifyRequest(request)) !== true) return denied("not-authorized");
         const provider: ProviderFallbackResult = { status: "denied", reason: "provider-unavailable", requestsDispatched: 0, requestCountUnknown: true };
         const result = resolveFallbackCandidate({ expected: request.expected, ai: request.ai, now: now(), provider,
-          ...(request.order === undefined ? {} : { order: request.order }) }, options.authority);
+          ...(request.order === undefined ? {} : { order: request.order }) }, options.authority, selectionPolicy);
         return freezeEvidence({ ...result, requestsDispatched: 0, requestCountUnknown: true,
           ...(request.order === undefined || result.status === "denied" ? {} : {
             sources: forecastSourceReceipts({ ai: request.ai, provider, audit: result.candidate.audit, order: request.order }) }) });

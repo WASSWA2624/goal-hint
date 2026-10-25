@@ -1665,10 +1665,31 @@ model MemberAccount {
   movesFrom        AccountMove[]       @relation("MovesFrom")
   movesTo          AccountMove[]       @relation("MovesTo")
   autoRenewPlan    SubscriptionPlan?   @relation("AutoRenewPlan", fields: [autoRenewPlanId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentNotifications PaymentNotificationOutbox[]
 
   @@index([passwordResetRequestedAt])
   @@index([autoRenew])
   @@index([autoRenewPlanId])
+}
+
+// Atomic account-update delivery intents. No recipient, SMS body, amount, plan, transaction reference or gateway payload.
+// A committed dispatch claim is never retried automatically: the provider has no verified idempotency contract.
+model PaymentNotificationOutbox {
+  id          String        @id @db.Char(36)
+  accountId   String        @db.Char(36)
+  targetType  String        @db.VarChar(16)
+  targetId    String        @db.Char(36)
+  decision    String        @db.VarChar(8)
+  status      String        @default("queued") @db.VarChar(12)
+  createdAt   DateTime      @db.DateTime(3)
+  startedAt   DateTime?     @db.DateTime(3)
+  finishedAt  DateTime?     @db.DateTime(3)
+  attemptId   String?       @db.Char(36)
+  account     MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([targetType, targetId, decision])
+  @@index([status, createdAt])
+  @@index([accountId])
 }
 
 // Member sign-ins: only a SHA-256 of each random session token is stored, with no user agent or address. A signed-in
