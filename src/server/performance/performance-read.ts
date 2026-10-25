@@ -95,7 +95,7 @@ async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string
     return { fixture, cycle, revision, result, projection: cycle ? projectSettlementCycle(fixture, result, fixture.lifecycleState?.issue ?? null, cycle, revision, previous) : null };
   });
   const quotes = new Map(quotePolicy ? await readPerformanceQuotes(tx, records.flatMap(({ fixture, cycle, revision }) =>
-    cycle?.state === "closed" && revision ? [{ fixtureId: fixture.id, externalId: fixture.externalId, revisionId: revision.id, openedAt: cycle.openedAt,
+    cycle?.state === "closed" && revision ? [{ fixtureId: fixture.id, cycleId: cycle.id, revisionId: revision.id, openedAt: cycle.openedAt,
       publishedAt: revision.publishedAt, cutoffAt: cycle.cutoffAt, kickoffAt: cycle.kickoffAt }] : []), quotePolicy, budget) : []);
   const delta = calendarRules.cutoffSecondsBeforeKickoff * 1000;
   const historical = includeHistorical ? await tx.$queryRaw<{ voidReason: string }[]>(Prisma.sql`SELECT c.voidReason FROM PredictionCycle c

@@ -232,3 +232,40 @@ test('anonymous success uses shared uncached safe serialization and no cookies',
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(performanceResponseSchema.safeParse(await response.json()).success, true);
 });
+
+const lostRecord = (options = {}) => performanceRecord({ score: [0, 1], ...options });
+const at = (record, publishedAt) => { if (record.revision) record.revision.publishedAt = publishedAt; return record; };
+test('every source, league and horizon return summary reconciles with its own settled denominator', () => {
+  const data = report([performanceRecord(), lostRecord(), performanceRecord({ source: 'api-football' }), lostRecord({ source: 'api-football' }),
+    performanceRecord({ state: 'void' }), performanceRecord({ state: 'open' }), performanceRecord({ score: null })], performanceProtocol());
+  for (const item of [...data.cells, ...data.leagues.records.flatMap(row => row.cells)]) {
+    assert.equal(item.returns.settled, item.metrics.denominator); assert.equal(item.returns.returnsSampleCount, 0);
+    assert.equal(item.returns.roi, null); assert.equal(item.returns.excludedQuoteCount, item.metrics.denominator);
+  }
+  assert.ok(data.cells.some(item => item.horizon !== null));
+  assert.equal(cell(data).returns.settled, 4); assert.equal(cell(data, 'match-result', 'ai').returns.settled, 2);
+});
+test('unattributed and differently filtered voids do not interrupt a source-specific pick streak', () => {
+  const records = [at(lostRecord(), 1e12), at(performanceRecord({ state: 'void', source: 'api-football' }), 1e12 + 1), at(lostRecord(), 1e12 + 2)];
+  assert.equal(cell(report(records), 'match-result', 'ai').returns.longestLosingStreak, 2);
+  assert.equal(cell(report(records)).returns.longestLosingStreak, 1);
+  const unbound = [at(lostRecord(), 1e12), performanceRecord({ state: 'void', noLock: true }), at(lostRecord(), 1e12 + 2)];
+  assert.equal(cell(report(unbound)).returns.longestLosingStreak, 2);
+  const filtered = report(records, null, 'version=no-such-version');
+  assert.equal(cell(filtered).returns.settled, 0); assert.equal(cell(filtered).returns.longestLosingStreak, 0);
+});
+test('captured quote availability never combines pick and slip denominators or pending and void prices', () => {
+  const records = [performanceRecord(), lostRecord(), lostRecord(), performanceRecord(), performanceRecord({ score: null }), performanceRecord({ state: 'void' })];
+  records.forEach((record,index) => { if(record.revision) record.revision.publishedAt += index; });
+  const snapshot = performanceSnapshot(records);
+  for (const [index,price] of [[0,'2.60'],[1,'1.50'],[4,'987.65'],[5,'987.65']]) {
+    const record = records[index], selection = record.revision.candidate.markets['match-result'].market.selection;
+    snapshot.quotes.set(`${record.revision.id}:match-result:${selection}`,price);
+  }
+  const data = aggregatePerformance(snapshot,query('market=match-result'),asOf,null), returns = cell(data).returns;
+  assert.equal(returns.settled,4); assert.equal(returns.returnsSampleCount,2); assert.equal(returns.excludedQuoteCount,2);
+  assert.equal(returns.stakeUnits,2); assert.equal(returns.returnUnits,2.6); assert.equal(returns.profitUnits,.6);
+  assert.equal(returns.roi,.3); assert.equal(returns.meanQuotedOdds,2.05); assert.equal(returns.longestLosingStreak,2);
+  assert.doesNotMatch(JSON.stringify(data), /987\.65|98765/u);
+  assert.deepEqual(data.leagues.records[0].cells[0].returns,returns);
+});

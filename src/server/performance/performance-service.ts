@@ -35,6 +35,11 @@ const blankCoverage = (): PerformanceCoverage => ({ total: 0, available: 0, unav
   pending: 0, settled: 0, sources: { ai: 0, "api-football": 0 } });
 type Record = PerformanceSnapshot["records"][number];
 const competitionIdentity = z.uuid();
+type AvailablePrediction = Extract<NonNullable<Record["revision"]>["candidate"]["markets"][MarketFamily], { available: true }>;
+function matchesFilters(query: PerformanceQuery, source: PerformanceSource, item: AvailablePrediction, version: PerformanceCell["versions"][number]) {
+  return (query.source === "combined" || query.source === item.market.source) && (source === "combined" || source === item.market.source) &&
+    (query.model === null || query.model === version.modelVersionId) && (query.version === null || query.version === version.version);
+}
 function versionFor(record: Record, family: MarketFamily, models: PerformanceSnapshot["models"]): PerformanceCell["versions"][number] | null {
   const item = record.revision?.candidate.markets[family];
   if (!item?.available) return null;
@@ -60,14 +65,16 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
     const coherent = previous && previous.inputHash === entry?.inputHash && previous.lockedSetId === cycle?.lockedSetId;
     if (cycle?.state === "void" || coherent && previous.status === "void") {
       coverage.void++;
-      if (revision) returnSamples.push({ revisionId: revision.id, publishedAt: revision.publishedAt, outcome: "void", quotedOdds: null });
+      const locked = revision?.candidate.markets[family];
+      if (revision && locked?.available && matchesFilters(query, source, locked, versionFor(record, family, snapshot.models)!)) {
+        returnSamples.push({ revisionId: revision.id, publishedAt: revision.publishedAt, outcome: "void", quotedOdds: null });
+      }
       continue;
     }
     const item = cycle?.state === "closed" ? revision?.candidate.markets[family] : null;
     if (!item?.available) { coverage.unavailable++; continue; }
     const version = versionFor(record, family, snapshot.models)!;
-    if ((query.source !== "combined" && query.source !== item.market.source) || (source !== "combined" && source !== item.market.source) ||
-      query.model !== null && query.model !== version.modelVersionId || query.version !== null && query.version !== version.version) {
+    if (!matchesFilters(query, source, item, version)) {
       coverage.filteredOut++; continue;
     }
     coverage.available++; coverage.sources[item.market.source]++;
@@ -188,7 +195,7 @@ export function createPerformanceService(options: Readonly<{ database: DatabaseR
         return aggregatePerformance(snapshot, query, asOf, current?.id === protocol?.id ? current : null);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       let response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "performance", locale: "en", now: asOf,
-        query: { projection: 5, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol, quotePolicy },
+        query: { projection: 6, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol, quotePolicy },
         parse: (value) => performanceResponseSchema.parse(value) }), read) : await read();
       // Preserve the reader's unapproved/counts-only response when permission is
       // revoked during a cache probe; never reuse previously approved metrics.

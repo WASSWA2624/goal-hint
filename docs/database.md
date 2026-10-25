@@ -281,7 +281,7 @@ overlay `prisma/mariadb/20261019142209_subscriptions.sql` instead:
    in order:
    - the same guard, which stops the import (`SQLSTATE 45000`) before anything
      is created;
-   - `CREATE TABLE IF NOT EXISTS … ENGINE=InnoDB` for each table in foreign-key
+   - `CREATE TABLE IF NOT EXISTS â€¦ ENGINE=InnoDB` for each table in foreign-key
      order, with its foreign keys and checks inline;
    - a verification that stops the import, before anything is recorded, unless
      there are nine InnoDB tables in `utf8mb4_bin`, 9 foreign keys and 11 checks;
@@ -314,10 +314,10 @@ phpMyAdmin) has not been run on MariaDB 11.4 locally.
 
 Migration `20261019174619_append_only_trigger_blocks` recreates the ten
 append-only triggers of `20261012153531_goal_market_extension` as
-`BEGIN … END` blocks, with the same names, tables, events and messages. Prisma
+`BEGIN â€¦ END` blocks, with the same names, tables, events and messages. Prisma
 runs a migration as one multi-statement script, and MySQL then stores a
 single-statement trigger body with its closing `;`. mysqldump writes such a
-trigger as `/*!50003 … 'append-only'; */;;`, which the mysql client refuses
+trigger as `/*!50003 â€¦ 'append-only'; */;;`, which the mysql client refuses
 (ERROR 1064), so no snapshot of a database migrated that way restored. A block
 body ends at `END`, like the `PublicCache_*` triggers. On MySQL the migration
 drops and recreates each trigger, so pause writers while it runs.
@@ -334,7 +334,7 @@ the migration account, through phpMyAdmin or `mariadb <database> < file`. It
 stops (`SQLSTATE 45000`) unless the goal-market migration is recorded and its
 five tables exist. `CREATE OR REPLACE TRIGGER` swaps each trigger in one
 statement, so no table is left unguarded. It then stops before recording
-unless all ten triggers exist as `BEGIN … END` blocks, records the committed
+unless all ten triggers exist as `BEGIN â€¦ END` blocks, records the committed
 checksum once, and lists the ten triggers. A rerun is a no-op. The importing
 account becomes the triggers' definer, so keep that account while they are in
 use. The overlay changes no table or row. If the check query returned rows, a
@@ -495,3 +495,18 @@ recorded with its original check present and this migration is not, applies the 
 widened check exists and names both added phases, then records the committed checksum once. No grants change. The
 overlay has not been run on MariaDB 11.4 locally; `tests/refresh_stage_phases_migration_test.py` checks that it
 matches the migration.
+
+### Prediction quotes (25 October 2026)
+
+Migration `20261025180538_prediction_quotes` adds `PredictionQuote`, the public price captured beside each available
+family of a published revision (see [provider-odds](provider-odds.md#publication-time-prediction-quotes)). Three NULL-safe
+CHECKs bind family/selection, the quoted/unavailable shape and the sealed body to the columns; two block triggers refuse
+every UPDATE and DELETE. Its only foreign key is the RESTRICT link to `PredictionSet`; there is deliberately none to
+`ProviderOddsSnapshot`. Locally `npm run db:deploy` applies it. On the production MariaDB import
+`prisma/mariadb/20261025180538_prediction_quotes.sql` with the migration account after a verified backup: it stops
+(`SQLSTATE 45000`) unless `20261025171000_provider_workload_budget` is recorded and this migration and table are absent,
+applies the same DDL, recreates the triggers with the block delimiter, verifies the table, foreign key, three checks and
+two triggers, then records the committed checksum once. The three preceding migrations have no MariaDB overlays, so
+confirm they are recorded first. Apply the `PredictionQuote` grant after the import and before enabling odds display.
+The overlay has not been run on MariaDB 11.4 locally; `tests/prediction_quote_migration_test.py` checks that it matches
+the migration.

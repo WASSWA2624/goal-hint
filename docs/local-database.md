@@ -45,6 +45,21 @@ monitoring collector both read the odds tables, even with imports off.
 
 Odds imports remain off (`GOAL_HINT_ODDS_IMPORT_ENABLED=false`).
 
+Migration `20261025180538_prediction_quotes` adds the append-only
+`PredictionQuote` table (the public price captured beside each published family
+prediction). Grant the application role SELECT and INSERT only, recorded beside
+the odds grants in `application-grants.sql`:
+
+```sql
+GRANT SELECT, INSERT ON goal_hint_db.PredictionQuote TO 'goal_hint_app'@'<existing host>';
+```
+
+The order is: `npm run db:deploy`, then the grant, then `npm run db:status`,
+`npm run db:verify` and `npm run db:health`, and only after that, with the owner's
+odds-display decision, the `providerOdds` flag. While the flag is off the
+application neither writes nor reads the table. Neither the migration nor the
+grant has been applied to the local 3307 database yet.
+
 `FootballImport` and `FootballFixtureAudit` stay insert-only: the catalog importer
 writes each receipt and audit once, with final values, so the live runner needs no
 additional grant.

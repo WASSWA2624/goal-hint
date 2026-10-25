@@ -3,7 +3,8 @@ import test from 'node:test';
 import { readPerformanceQuotes } from '../src/server/performance/performance-quotes.ts';
 import { createMysqlOddsStore } from '../src/server/odds/odds-mysql-store.ts';
 import { createOddsImportService } from '../src/server/odds/odds-service.ts';
-import { PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
+import { createRevisionPublicationService } from '../src/server/predictions/publication-service.ts';
+import { publicationPolicy, publicationAuthority, PUBLICATION_NOW } from './helpers/publication-fixtures.mjs';
 import { createSyntheticOddsAdapter, launchBetCatalog, launchBets, oddsAuthority, oddsBounds, oddsHash,
   oddsPolicy, oddsRequest, rawOddsRow } from './helpers/odds-fixtures.mjs';
 import { withPredictionPipeline } from './prediction-pipeline.mjs';
@@ -11,6 +12,8 @@ import { withPredictionPipeline } from './prediction-pipeline.mjs';
 test('historical pick quotes on owned genuine MySQL retain pre-publication prices and exclude intervening withdrawals', { timeout: 300_000 }, async (t) => {
   await withPredictionPipeline(t, async (p) => {
     const first = await p.setup(3000), second = await p.setup(3001);
+    const publisher = createRevisionPublicationService({database:p.a,queue:p.queue,policy:publicationPolicy(),authority:publicationAuthority(),
+      quotes:{verify:()=>true,freshnessMs:60000}});
     const accountId = oddsHash('synthetic-performance-quotes');
     await p.a.query((tx) => tx.apiQuotaAccount.create({ data: { id: accountId } }));
     const clock = { now: () => p.now() }, odds = createSyntheticOddsAdapter(clock), policy = oddsPolicy();
@@ -24,9 +27,9 @@ test('historical pick quotes on owned genuine MySQL retain pre-publication price
     odds.state.rows = [first, second].map((state, index) => rawOddsRow(3000 + index, state.cycle.kickoffAt, { bets: launchBets({ home: '2.35' }) }));
     assert.equal((await service.importDate(request('prices', '2026-10-09'))).status, 'complete');
     p.setTime(PUBLICATION_NOW);
-    const original = await p.publisher.publish(first.input, first.lease);
+    const original = await publisher.publish(first.input, first.lease);
     assert.equal(original.refresh.outcome, 'published');
-    const target = (state, revision) => ({ fixtureId: state.fixture.id, externalId: BigInt(state.fixture.externalId), revisionId: revision.id,
+    const target = (state, revision) => ({ fixtureId: state.fixture.id, cycleId: state.cycle.id, revisionId: revision.id,
       openedAt: state.cycle.openedAt, publishedAt: revision.publishedAt, cutoffAt: state.cycle.cutoffAt, kickoffAt: state.cycle.kickoffAt });
     const read = (targets, override = {}) => p.a.transaction((tx) => readPerformanceQuotes(tx, targets,
       { bookmakerId: 8, maximumAgeMs: 60_000, ...override }, { remainingBytes: 1_000_000 }), { isolationLevel: 'RepeatableRead' });
@@ -38,7 +41,7 @@ test('historical pick quotes on owned genuine MySQL retain pre-publication price
     odds.state.rows = [rawOddsRow(3000, first.cycle.kickoffAt, { bets: launchBets({ home: '9.99' }) })];
     assert.equal((await service.importDate(request('prices', '2026-10-09'))).status, 'complete');
     p.setTime(PUBLICATION_NOW + 200);
-    const afterWithdrawal = await p.publisher.publish(second.input, second.lease);
+    const afterWithdrawal = await publisher.publish(second.input, second.lease);
     assert.equal(afterWithdrawal.refresh.outcome, 'published');
     const quotes = await read([firstTarget, target(second, afterWithdrawal.revision)]);
     assert.equal(quotes.get(`${original.revision.id}:match-result:home-win`), '2.35');

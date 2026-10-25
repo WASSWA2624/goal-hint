@@ -1,6 +1,7 @@
 import "server-only";
 
 import { utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
+import { publicPolicy } from "../../domain/public-policy.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { assertOperationAllowed, type RuntimePolicy } from "../config/runtime-policy.ts";
 import { createMysqlPublicCacheStore } from "../cache/mysql-public-cache.ts";
@@ -133,7 +134,10 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const importer = createFootballCatalogImporter({ adapter, store: catalog, authority: authorities.catalog });
     const selectionStore = createMysqlDailySelectionStore(database, queue);
     const dailySelection = createDailySelectionService({ policy: selection, authority: authorities.selection, store: selectionStore, importer, cutoff });
-    const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication });
+    // Original public quotes follow the published-slip precedent: the code flag and owner-recorded odds display rights.
+    const publisher = createRevisionPublicationService({ database, queue, policy: publicationPolicy(refs), authority: authorities.publication,
+      quotes: { verify: () => publicPolicy.features.providerOdds && authorities.odds.verifyPublicDisplay() === true,
+        freshnessMs: odds?.freshnessMs ?? ODDS_FRESHNESS_MS } });
     const evidence = createEvidenceService({ authority: authorities.evidence, store: createMysqlEvidenceStore(database), research: null,
       // Live imports finish before analysis; collection saves only the frozen canonical sources.
       football: { async collect() { throw new Error("Live evidence collection uses stored sources only."); } } });

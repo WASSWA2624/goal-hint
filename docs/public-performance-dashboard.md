@@ -146,16 +146,37 @@ binding pending that review. Reference strings and request parameters cannot
 enable it. The grant is rechecked after reads and cache access, including uncached
 responses. Quote policies separate cache entries from counts-only entries.
 
-The read uses sealed `ProviderOddsSnapshot` and `OddsImportBatch` bodies in the
-existing repeatable-read transaction and shared payload budget. A quote must be
-observed after its original cycle opened, before forecast publication and cutoff,
-within the approved age, and under the same EAT kickoff date/bookmaker scope.
-Later/current quotes and replacement cycles cannot supply the price. The latest
-as-of receipt must be the snapshot's own receipt: any intervening receipt in that
-scope conservatively withholds an older snapshot, including withdrawals, failed
-sweeps and unchanged-content reconfirmations whose exact per-bet status is not
-retained. A same-clock chain successor excludes its predecessor. These rules may
-exclude usable prices; they never guess that an old price remained available.
+The reader uses sealed `PredictionQuote` sidecars captured in the same transaction
+as each new forecast publication. It never reconstructs availability from
+transient provider snapshots, receipts or current prices. The captured bookmaker,
+original revision/cycle/fixture, publication clock and selected family/outcome
+must agree; malformed seals or identities fail closed. The quote must be from
+the approved bookmaker, observed after the original cycle opened, before its
+forecast publication/cutoff and within the approved age. Missing or explicitly
+unavailable captures remain excluded; older revisions receive no backfill.
+
+## Capturing the original public quote
+
+Migration `20261025180538_prediction_quotes` adds one append-only table. The
+publisher's optional `quotes.verify` must prove both enabled public odds and the
+owner's display/retention rights. After appending the prediction it copies the
+fresh public price for that exact family and selection, or an explicit unavailable
+reason, before moving the current revision pointer. The final rights and
+publication eligibility checks roll back the whole transaction if revoked.
+No source call is made. One non-locking SQL statement reads odds state and public
+prices under READ COMMITTED; no odds lock order is added.
+
+A capture retains original displayed hundredths, decimal quote, bookmaker,
+source and state clocks, versioned mapping/line and snapshot provenance hash.
+The source must have consistent exact decimal/display arithmetic and a supported
+mapping. Rows are sealed and reject UPDATE/DELETE. Their provenance hash has no
+foreign key to transient odds history, so a separately reviewed compaction can
+retain these publication facts without retaining every provider payload.
+
+Apply the migration and reviewed SELECT/INSERT grant before deploying enabled
+capture. Historical public returns separately require `PerformanceQuoteBinding`;
+capture does not activate that grant or a forecasting-quality policy. Missing
+permissions or database failures must not be treated as fabricated quotes.
 
 The illustration describes the quoted cohort only. It does not establish
 bookmaker acceptance, financial advice, customer returns, forecast quality or

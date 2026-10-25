@@ -117,6 +117,39 @@ revisions are never substituted. Baseline-required gates similarly withhold
 metrics because no matched locked baseline archive is stored here. Chronological
 evaluation datasets remain the separate comparison/qualification authority.
 
+## Illustrative returns and losing streaks
+
+Every market/source/horizon cell and league cell carries the same `returns`
+summary from `summarizePickPerformance`; there is one public DTO and one pure
+exact-arithmetic path. It uses the cell's own coherently settled denominator:
+
+```
+settled = metrics.denominator = returnsSampleCount + excludedQuoteCount
+stakeUnits = returnsSampleCount
+currentLosingStreak <= longestLosingStreak <= settled
+```
+
+Each priced binary outcome stakes one illustrative unit at its immutable
+publication-time quote; void/pending outcomes never imply refunds or enter odds
+aggregates. Streaks use forecast publication time and revision identity within
+the selected kickoff-date period. Only an attributable, filter-matching void can
+interrupt a source/model-specific streak. No market or slip denominator is pooled.
+
+`roi` and `meanQuotedOdds` remain null when no usable quoted samples exist. The
+internal empty arithmetic totals do not claim zero profit: the UI explicitly
+marks returns unavailable. Missing or unavailable captures enter
+`excludedQuoteCount`. They are never replaced with current odds or reconstructed
+from provider histories.
+
+Quotes come only from sealed `PredictionQuote` rows captured in the locked
+revision's publication transaction. Identity/clock integrity failures reject the
+report. A trusted `PerformanceQuoteBinding` must independently approve historical
+display for the captured bookmaker and maximum quote age. The grant is checked
+after database and cache access; no HTTP input or reference string grants it.
+`readPublicPerformance` supplies no historical quote binding pending review, so
+production does not read quote rows or publish quoted returns. Calibration retains
+its own frozen-policy/sample gates and `publicClaimAuthorized` remains false.
+
 ## Evidence, corrections and bounds
 
 Known model/provider/calibration versions are whitelisted. Each available locked
@@ -130,9 +163,8 @@ Prompt 038 adds `matchLabel` and `pageHref` to each evidence reference. The latt
 uses the canonical English match slug and the exact locked `revision` selection
 with `#revision-history`, allowing accessible navigation from API consumers.
 Canonical slugs share the detail contract. The stored performance cache projection
-is version 2. The API uses `readPublicPerformance`, including the same
-unapproved/counts-only policy. The former report page has been replaced by
-[app Help](help-page.md), without a performance-report UI.
+is version 6 (historical quote evidence now uses immutable sidecars). The API uses `readPublicPerformance`, including the same
+unapproved/counts-only policy. The same reporting path supplies the public `/[locale]/performance` dashboard.
 
 A selected pick is settled only when its sealed latest settlement still matches
 the current result, canonical fixture and locked selection through the shared
@@ -146,8 +178,9 @@ load at most 1,000 current fixtures/locks and 1,000 historical cycles. Sealed JS
 has a shared 16 MiB preflight budget; operational queries have a 31,000-row cap;
 public responses are capped at 1 MiB. Bounds fail safely rather than publishing
 partial metrics. Existing kickoff, cycle state/cutoff, primary/foreign-key and
-daily-run sequence indexes support these reads. No migration or write grant is
-required. The batch path reuses the same sealed row parsers and settlement
+daily-run sequence indexes support these reads; captured quotes use the
+`PredictionQuote` primary key prefix and share the same sealed-JSON budget. The
+reader needs only SELECT on `PredictionQuote`, and only with a verified historical-display binding. The batch path reuses the same sealed row parsers and settlement
 projection as detail/feed/private settlement reads.
 
 `freshness.snapshotKey` fingerprints the bounded query, policy, canonical fixture

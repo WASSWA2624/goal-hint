@@ -1,72 +1,49 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readPerformanceQuotes, verifiedQuotePolicy } from '../src/server/performance/performance-quotes.ts';
-import { oddsValuesHash } from '../src/server/odds/odds-mysql-store.ts';
-import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
-import { ODDS_CONTRACT_VERSION } from '../src/server/football/api-football-contract.ts';
+import { preparePredictionQuotes } from '../src/server/predictions/prediction-quote-store.ts';
+import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 
-const target = { fixtureId: '20000000-0000-4000-8000-000000000001', externalId: 3000n,
-  revisionId: '20000000-0000-4000-8000-000000000002', openedAt: 1000, publishedAt: 5000, cutoffAt: 6000, kickoffAt: 10_000 };
-const policy = { bookmakerId: 8, maximumAgeMs: 3000 };
-function quoteRow(overrides = {}, receiptOverrides = {}) {
-  const values = [{ label: 'Home', odd: '2.35' }, { label: 'Draw', odd: '3.40' }, { label: 'Away', odd: '4.20' }];
-  const body = { fixtureId: target.fixtureId, bookmakerId: 8, bookmakerName: 'Synthetic bookmaker', betId: 1, betName: 'Match Winner',
-    valuesHash: oddsValuesHash(values), previousId: null, ...overrides };
-  const id = evidenceFingerprint(body);
-  const snapshot = { ...body, id, retrievedAt: 3000, providerUpdatedAt: null, retainUntil: 100_000, values, ...overrides };
-  const batch = { accountId: 'a'.repeat(64), kind: 'prices', scopeKey: 'date:1970-01-01:bookmaker:8', policyHash: 'b'.repeat(64),
-    status: 'complete', requestsDispatched: 1, receivedAt: 3000, requestId: 'c'.repeat(64), slot: 2000, date: '1970-01-01',
-    contractVersion: ODDS_CONTRACT_VERSION, reasons: [], missingCoverage: [],
-    pages: [{ provider: 'api-football', endpoint: 'odds', requestParameters: {}, contractVersion: ODDS_CONTRACT_VERSION,
-      retrievedAt: snapshot.retrievedAt, providerUpdatedAt: null, fromCache: false, currentPage: 1, totalPages: 1 }],
-    fixtures: [{ externalId: 3000, observationHash: 'd'.repeat(64), outcome: 'apply' }], catalog: [], ...receiptOverrides };
-  const batchId = evidenceFingerprint(batch);
-  return { id, fixtureId: target.fixtureId, betExternalId: 1, body: snapshot, validIntegrity: 1n,
-    batchId, batchBody: { id: batchId, ...batch }, validBatchIntegrity: 1n };
+const publishedAt = Date.parse('2026-10-09T10:00:00Z');
+const target = { fixtureId: '20000000-0000-4000-8000-000000000001', cycleId:'20000000-0000-4000-8000-000000000003',
+  revisionId: '20000000-0000-4000-8000-000000000002', openedAt: publishedAt-4000, publishedAt, cutoffAt: publishedAt+1000,kickoffAt:publishedAt+301000 };
+const policy = {bookmakerId:8,maximumAgeMs:3000};
+function quoteRow(overrides={}) {
+  const markets=historyCandidate().markets;
+  const [quote] = preparePredictionQuotes({...target,recordedAt:publishedAt,freshnessMs:3000,markets,
+    source:{state:{lastRetrievedAt:new Date(publishedAt-1000),withdrawnAt:null},rows:[{marketKey:'match-result',selection:markets['match-result'].market.selection,
+      basis:'bookmaker',bookmakerId:8,displayHundredths:235,priceDecimal:'2.3500',line:null,method:'proportional-v1',mappingVersion:'launch-odds-v1',
+      snapshotId:'a'.repeat(64),retrievedAt:new Date(publishedAt-2000),providerUpdatedAt:null}]}});
+  return { ...quote, body:quote,validIntegrity:1n,displayHundredths:235,quotedAt:new Date(publishedAt-2000),recordedAt:new Date(publishedAt),snapshotId:'a'.repeat(64),...overrides};
 }
-function database(rows, bytes = 2000n) {
-  const calls = [];
-  return { calls, $queryRaw: async (sql) => {
-    calls.push(sql);
-    return calls.length === 1 ? [{ bytes, total: BigInt(rows.length) }] : rows;
-  } };
+function database(rows,bytes=2000n) {
+  const calls=[];return {calls,$queryRaw:async sql=>{calls.push(sql);return calls.length===1?[{bytes,total:BigInt(rows.length)}]:rows;}};
 }
-test('historical quote binding requires a synchronous real grant and bounded bookmaker/age policy', () => {
-  assert.deepEqual(verifiedQuotePolicy({ ...policy, verifyPublicDisplay: () => true }), policy);
-  for (const binding of [null, { ...policy, verifyPublicDisplay: () => false }, { ...policy, verifyPublicDisplay: async () => true },
-    { ...policy, maximumAgeMs: 0, verifyPublicDisplay: () => true }, { ...policy, verifyPublicDisplay: () => { throw Error(); } }]) {
-    assert.equal(verifiedQuotePolicy(binding), null);
-  }
+test('historical quote binding requires synchronous approval and bounded bookmaker/age policy',()=>{
+  assert.deepEqual(verifiedQuotePolicy({...policy,verifyPublicDisplay:()=>true}),policy);
+  for(const binding of [null,{...policy,verifyPublicDisplay:()=>false},{...policy,verifyPublicDisplay:async()=>true},
+    {...policy,maximumAgeMs:0,verifyPublicDisplay:()=>true},{...policy,verifyPublicDisplay:()=>{throw Error();}}]) assert.equal(verifiedQuotePolicy(binding),null);
 });
-test('as-of quotes use bounded sealed snapshot and receipt reads with original-cycle clocks and one bookmaker', async () => {
-  const tx = database([quoteRow()]), budget = { remainingBytes: 5000 };
-  const quotes = await readPerformanceQuotes(tx, [target], policy, budget);
-  assert.equal(quotes.get(`${target.revisionId}:match-result:home-win`), '2.35');
-  assert.equal(quotes.size, 3); assert.equal(budget.remainingBytes, 3000); assert.equal(tx.calls.length, 2);
-  const query = tx.calls[0].strings.join(' ');
-  for (const expected of ['ROW_NUMBER()', 's.bookmakerExternalId=', 's.retrievedAt>=c.openedAt', 's.retrievedAt<=r.publishedAt',
-    's.retrievedAt<c.cutoffAt', 'b.receivedAt<=r.publishedAt', 'TIMESTAMPDIFF', 's.providerUpdatedAt<=r.publishedAt']) assert.ok(query.includes(expected), expected);
-  assert.doesNotMatch(query, /FixtureOddsPrice/);
+test('captured sidecars use bounded sealed reads without reconstructing transient provider history',async()=>{
+  const tx=database([quoteRow()]),budget={remainingBytes:5000};const quotes=await readPerformanceQuotes(tx,[target],policy,budget);
+  assert.equal([...quotes.values()][0],'2.35');assert.equal(quotes.size,1);assert.equal(budget.remainingBytes,3000);
+  assert.equal(tx.calls.length,2);const sql=tx.calls.map(call=>call.strings.join(' ')).join(' ');
+  assert.match(sql,/FROM PredictionQuote/u);assert.doesNotMatch(sql,/ProviderOddsSnapshot|OddsImportBatch|FixtureOddsPrice/u);
 });
-test('empty targets perform no query and oversized payloads stop before loading bodies', async () => {
-  const empty = database([]); assert.equal((await readPerformanceQuotes(empty, [], policy, { remainingBytes: 0 })).size, 0);
-  assert.equal(empty.calls.length, 0);
-  const large = database([quoteRow()], 5001n);
-  await assert.rejects(readPerformanceQuotes(large, [target], policy, { remainingBytes: 5000 }));
-  assert.equal(large.calls.length, 1);
+test('missing captures remain unpriced, unavailable captures never create a refund or reconstructed quote',async()=>{
+  const empty=database([]);assert.equal((await readPerformanceQuotes(empty,[target],policy,{remainingBytes:5000})).size,0);
+  const noTargets=database([]);assert.equal((await readPerformanceQuotes(noTargets,[],policy,{remainingBytes:0})).size,0);assert.equal(noTargets.calls.length,0);
 });
-test('bad seals, cross-fixture, future, stale, pre-cycle and wrong bookmaker quotes never score returns', async () => {
-  for (const overrides of [{ fixtureId: '20000000-0000-4000-8000-000000000003' }, { bookmakerId: 9 },
-    { retrievedAt: 5500 }, { retrievedAt: 1500 }, { retrievedAt: 500 }, { providerUpdatedAt: 5500 }]) {
-    await assert.rejects(readPerformanceQuotes(database([quoteRow(overrides)]), [target], policy, { remainingBytes: 5000 }));
-  }
-  for (const field of ['validIntegrity', 'validBatchIntegrity']) {
-    await assert.rejects(readPerformanceQuotes(database([{ ...quoteRow(), [field]: 0n }]), [target], policy, { remainingBytes: 5000 }));
-  }
-  for (const overrides of [{ receivedAt: 5500 }, { fixtures: [] }, { kind: 'bets' }, { status: 'failed' }, { pages: [] }]) {
-    await assert.rejects(readPerformanceQuotes(database([quoteRow({}, overrides)]), [target], policy, { remainingBytes: 5000 }));
-  }
+test('oversized sidecars stop before bodies load and mismatched clocks or seals fail closed',async()=>{
+  const huge=database([quoteRow()],5001n);await assert.rejects(readPerformanceQuotes(huge,[target],policy,{remainingBytes:5000}));assert.equal(huge.calls.length,1);
+  for(const row of [quoteRow({validIntegrity:0n}),quoteRow({fixtureId:'foreign'}),quoteRow({cycleId:'foreign'}),quoteRow({displayHundredths:999}),
+    quoteRow({recordedAt:new Date(publishedAt+1)})]) await assert.rejects(readPerformanceQuotes(database([row]),[target],policy,{remainingBytes:5000}));
+  await assert.rejects(readPerformanceQuotes(database([quoteRow(),quoteRow()]),[target],policy,{remainingBytes:5000}));
 });
-test('unknown or incomplete launch markets remain unavailable, never substituted', async () => {
-  assert.equal((await readPerformanceQuotes(database([quoteRow({ betName: 'Unrecognized bet' })]), [target], policy, { remainingBytes: 5000 })).size, 0);
+test('bookmaker grants, original cycle opening and age bounds independently withhold captured prices',async()=>{
+  const run=(changes={},scope=policy)=>readPerformanceQuotes(database([quoteRow()]),[{...target,...changes}],scope,{remainingBytes:5000});
+  assert.equal((await run({}, {...policy,bookmakerId:9})).size,0);
+  assert.equal((await run({}, {...policy,maximumAgeMs:1000})).size,0);
+  assert.equal((await run({openedAt:publishedAt-1000})).size,0);
+  await assert.rejects(run({publishedAt:publishedAt+1}));await assert.rejects(run({cycleId:'foreign'}));
 });

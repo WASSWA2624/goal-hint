@@ -25,6 +25,8 @@ import { appendGoalMarketExtension } from "./goal-market-store.ts";
 import { appendImpliedMarketExtension } from "./implied-market-store.ts";
 import type { StoredImpliedMarketExtension } from "./implied-market-contract.ts";
 import { appendPublishedExtendedPicks } from "./extended-market-picks.ts";
+import { appendPredictionQuotes } from "./prediction-quote-store.ts";
+import { provenTrue } from "../shared/authority-proof.ts";
 import { usesScoreDistribution } from "../predictor/predictor-prompt.ts";
 import { legacyMarketsFromScoreDistribution } from "../../domain/score-distribution-legacy.ts";
 
@@ -47,9 +49,12 @@ function authorized(authority: PublicationAuthority, policy: PublicationPolicy, 
 }
 
 /** Only acceptance entry point. Provider/evidence/model I/O completes before
- * entry; the transaction shares catalog/history synchronization with lifecycle writes. */
+ * entry; the transaction shares catalog/history synchronization with lifecycle writes.
+ * `quotes` captures the public price beside each published family (A04/T02). Omitted, nothing touches
+ * PredictionQuote; `verify` must prove both the odds display flag and the recorded display rights. */
 export function createRevisionPublicationService(options: Readonly<{
   database: DatabaseRuntime; queue: Pick<JobQueue, "assertOwned">; policy: unknown; authority: PublicationAuthority;
+  quotes?: Readonly<{ verify: () => boolean; freshnessMs: number }>;
 }>) {
   const { database, authority, queue } = options, policy = parsePublicationPolicy(options.policy);
   const history = createMysqlPredictionHistoryStore(database), evidence = createMysqlEvidenceStore(database), models = createMysqlModelVersionStore(database);
@@ -116,6 +121,7 @@ export function createRevisionPublicationService(options: Readonly<{
             reason = "status-ineligible";
           const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" } });
           if (reason === null && latest && latest.runSequence >= run.sequence) reason = "older-run";
+          let quoteCapture = false;
           let revision = null, impliedSnapshot: StoredImpliedMarketExtension | null = null,
             outcome: RefreshPublicationResult["outcome"] = "skipped";
           if (reason === null) {
@@ -173,6 +179,12 @@ export function createRevisionPublicationService(options: Readonly<{
               if (input.impliedExtension !== undefined) impliedSnapshot = await appendImpliedMarketExtension(tx, { ...input.impliedExtension,
                 revisionId: revision.id, cycleId: cycle.id, fixtureId: fixture.id, recordedAt: now });
               if (input.goalExtension !== undefined || input.impliedExtension !== undefined) await appendPublishedExtendedPicks(tx, revision.id, now);
+              // Captured with this revision only; the final re-check below rolls it back together with the revision.
+              if (options.quotes && provenTrue(options.quotes.verify)) {
+                await appendPredictionQuotes(tx, { revisionId: revision.id, cycleId: cycle.id,
+                  fixtureId: fixture.id, recordedAt: now, freshnessMs: options.quotes.freshnessMs, markets: candidate.markets });
+                quoteCapture = true;
+              }
               const recorded = (await storedCycle(tx, cycle.id))!;
               await writer.changeCycle({ ...actor, cycleId: cycle.id, expectedVersion: recorded.version,
                 eventKey: evidenceFingerprint({ kind: "revision-published", ...identity }), at: now,
@@ -199,6 +211,7 @@ export function createRevisionPublicationService(options: Readonly<{
           if (outcome === "published" || outcome === "retained-previous" || outcome === "unavailable") {
             await queue.assertOwned(tx, lease);
             const finished = await serverNow(tx); authorized(authority, policy, input, finished);
+            if (quoteCapture && (!options.quotes || !provenTrue(options.quotes.verify))) return publicationFail("eligibility-expired");
             if (impliedSnapshot && (finished - impliedSnapshot.confirmedAt > impliedSnapshot.freshnessMs ||
                 impliedSnapshot.snapshots.some((snapshot) => snapshot.retainUntil <= finished))) return publicationFail("eligibility-expired");
             if (finished < now || finished >= cycle.cutoffAt || finished - input.observation.retrievedAt > policy.maxObservationAgeMs ||
