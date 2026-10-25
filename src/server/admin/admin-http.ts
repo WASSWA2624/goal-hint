@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 
 import { autoRenewFor } from "../members/auto-renew.ts";
+import { paymentNotificationsFor } from "../members/payment-notifications.ts";
 import { membersPurgeFor } from "../members/purge.ts";
 import { cookies } from "next/headers.js";
 import { connection } from "next/server.js";
@@ -59,7 +60,14 @@ const readAdminPage = cache(async (services: OwnerServices): Promise<AdminPage> 
   const resolved = await services();
   const jar = await cookies();
   const owner = await verifyOwner(resolved, jar.get(memberCookieName(resolved.config.production))?.value);
-  if (owner) { if (resolved.database) { membersPurgeFor(resolved.database).maybePurge(); autoRenewFor(resolved.database).maybeSweep(); } return { owner, services: resolved }; }
+  if (owner) {
+    if (resolved.database) {
+      membersPurgeFor(resolved.database).maybePurge(); autoRenewFor(resolved.database).maybeSweep();
+      // Account-update SMS left by a crash, a retry or an unconfigured worker; throttled, and never awaited by the page.
+      paymentNotificationsFor(resolved.database).maybeDispatch();
+    }
+    return { owner, services: resolved };
+  }
   return { owner: null, services: resolved };
 });
 

@@ -412,6 +412,31 @@ def payments_rendering(origin):
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 
 
+def overview_notices(origin):
+    """The Overview lists SMS notices to check only when some exist; acceptance is never shown as receipt or the text sent."""
+    html = visible_html(request(origin, "/admin").text)
+    for label in ["SMS notices to check", "data-payment-notices", "Send again"]:
+        assert label not in html, label
+    fixture_json(origin, "/api/fixture/payments", {"scenario": "notices"})
+    try:
+        response = request(origin, "/admin")
+        assert response.status == 200
+        html = visible_html(response.text)
+        match(r"<dt>SMS notices to check</dt><dd>1</dd>", html)
+        panel = match(r'<section\b[^>]*data-payment-notices[^>]*>([\s\S]*?)</section>', html).group(1)
+        for label in ["SMS notices", "PTEST", "Payment decision", "Refused by the SMS gateway", "View subscriber", "Send again", "Dismiss",
+                "The member may receive this notice twice"]:
+            assert label in panel, label
+        match(r'href="/admin/subscribers\?accountId=00000000-0000-4000-8000-000000000100"', panel)
+        for leaked in ["Your account has been updated", "Sign in to view"]:
+            assert leaked not in html, leaked
+        for claim in ["proof of receipt", "delivered", "received"]:
+            assert claim not in panel, claim
+        assert html.count("data-payment-notices") == 1
+    finally:
+        fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
+
+
 def owner_navigation(origin):
     """All owner routes share regular navigation and preserve the production private gate."""
     routes = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-resets",
@@ -455,6 +480,7 @@ def main():
         build_fixture(directory,env,timeout=300)
     with Server(directory,env,ready="/api/fixture/health") as server:
         owner_navigation(server.origin)
+        overview_notices(server.origin)
         subscriber_directory(server.origin)
         for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Grant access / add subscriber","Change number","Reset password","Save note","Delete or erase"]),("/admin/password-resets",["Password requests","set a temporary password","on a call with the member","Call member","View account"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)

@@ -86,3 +86,5 @@ the plan has spare quota above the ordinary floor. Team-code sweeps (one per UTC
 run unless `GOAL_HINT_TEAM_CODES_IMPORT_ENABLED=false`. It loads `.env.local` then `.env.operations`
 and the owner register in `.goal-hint/owner-approvals.json`. Read the
 [live operations runbook](../../docs/live-operations.md).
+
+`npm run members:purge`, `members:renew` and `members:notify` run one bounded `members.ts` task each (the cPanel cron runs all three every slot); `notify` sends the account-update SMS outbox and never resends an uncertain send ([yoola-messaging](../../docs/yoola-messaging.md#the-outbox)).

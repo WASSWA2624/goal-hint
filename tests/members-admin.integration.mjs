@@ -68,6 +68,19 @@ test("subscriber management, accounting and retention on restricted MySQL",{time
   assert.equal((await purge.run()).claimed,false);clock+=HOUR;const again=await purge.run();assert.equal(again.claimed,true);assert.equal(again.images,0);assert.ok(await review.screenshot(keep.at(-1)));
   await db.query(tx=>tx.subscriptionSettings.update({where:{id:1},data:{screenshotRetentionDays:80}}));clock+=HOUR;assert.equal((await purge.run()).images,1);assert.ok(await review.screenshot(keep.at(-1)));
  });
+ await t.test("the purge keeps open SMS notices, removes closed ones after 7 or 30 days, and erasure removes an account's notices",async()=>{
+  clock=Math.max(clock,base)+2*HOUR;const at=clock,who=await member();
+  const notice=(state,days,lastError=null)=>({id:randomUUID(),accountId:who.accountId,kind:"approved",targetId:randomUUID(),state,attempts:1,availableAt:new Date(at-40*DAY),
+   expiresAt:new Date(at-39*DAY),lastError,createdAt:new Date(at-40*DAY),attemptedAt:new Date(at-40*DAY),closedAt:days===null?null:new Date(at-days*DAY)});
+  const removed=[notice("accepted",7),notice("skipped",8,"unsupported"),notice("failed",30,"rejected")],kept=[notice("accepted",6.5),notice("uncertain",29,"uncertain"),notice("failed",29,"expired"),notice("pending",null)];
+  await db.query(tx=>tx.paymentNotice.createMany({data:[...removed,...kept]}));
+  const result=await purge.run();assert.equal(result.claimed,true);assert.equal(result.notices,removed.length);
+  const left=(await db.query(tx=>tx.paymentNotice.findMany({where:{accountId:who.accountId},select:{id:true}}))).map(row=>row.id).sort();
+  assert.deepEqual(left,kept.map(row=>row.id).sort());
+  const audit=await db.query(tx=>tx.ownerAuditEvent.findFirst({where:{action:"members_purged"},orderBy:{id:"desc"}}));assert.equal(audit.details.notices,removed.length);
+  assert.equal((await members.action(who.accountId,"erase",undefined,"owner")).status,"saved");
+  assert.equal(await db.query(tx=>tx.paymentNotice.count({where:{accountId:who.accountId}})),0);
+ });
  await t.test("window-end markers allow exact hourly and daily retention without retaining raw throttle values",async()=>{
   const address="198.51.100.51";await db.transaction(tx=>takeMemberLimit(tx,config,{purpose:"synthetic-hour",value:address,maximum:10,windowMs:HOUR},new Date(base)));
   const row=await db.query(tx=>tx.rateLimitBucket.findUniqueOrThrow({where:{key:config.key("member-synthetic-hour",address)}}));assert.equal(+row.lockedUntil,Math.floor(base/HOUR)*HOUR+HOUR);assert.ok(!JSON.stringify(row).includes(address));

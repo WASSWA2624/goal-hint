@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
 import { hashPassword } from "../src/server/analytics/analytics-password.ts";
 import { createMemberAuth } from "../src/server/members/member-auth.ts";
+import { matches } from "./helpers/member-store.mjs";
 import { createPaymentNotifications } from "../src/server/members/payment-notifications.ts";
 import { createPayments } from "../src/server/members/payments.ts";
 
@@ -14,6 +15,7 @@ function fixture() {
     passwordResetAt: null, expiresAt: new Date(instant + 86_400_000) };
   const member = { accountId: account.id, tokenHash: session.tokenHash, phone: account.phone };
   const audits = [], buckets = new Map(), events = [];
+  let notices = [];
   let inTransaction = false, pending = Promise.resolve();
   const tx = {
     async $queryRaw(parts) { assert.match(parts.join(""), /MemberAccount.*FOR UPDATE/u); events.push("account-lock"); return account ? [{ id: account.id }] : []; },
@@ -26,6 +28,14 @@ function fixture() {
       return 1;
     },
     memberAccount: { async findUnique() { return account; } },
+    paymentNotice: {
+      async findUnique({ where }) { const row = notices.find(notice => notice.id === where.id); return row ? { ...row } : null; },
+      async updateMany({ where, data }) {
+        const rows = notices.filter(notice => matches(notice, where));
+        for (const row of rows) for (const [key, value] of Object.entries(data)) row[key] = value?.increment ? row[key] + value.increment : value;
+        return { count: rows.length };
+      },
+    },
     memberSession: { async findUnique() { return session; } },
     ownerAuditEvent: { async create({ data }) { assert.ok(inTransaction); audits.push(data); return data; } },
     rateLimitBucket: {
@@ -34,6 +44,7 @@ function fixture() {
     },
   };
   const database = {
+    query: run => run(tx),
     async transaction(run) {
       const previous = pending; let release; pending = new Promise(resolve => { release = resolve; }); await previous;
       inTransaction = true;
@@ -41,33 +52,43 @@ function fixture() {
     },
   };
   return { database, member, audits, buckets, events, config: { key: (purpose, value) => createHash("sha256").update(purpose).update(value).digest("hex") },
-    get account() { return account; }, get inTransaction() { return inTransaction; },
-    async removeAccount() { await database.transaction(async () => { account = null; session = null; audits.length = 0; buckets.clear(); }); },
+    get account() { return account; }, get inTransaction() { return inTransaction; }, get notices() { return notices; },
+    notice(kind) {
+      const at = new Date(instant), row = { id: randomUUID(), accountId: account.id, kind, targetId: randomUUID(), state: "pending", attempts: 0, availableAt: at,
+        expiresAt: new Date(instant + 86_400_000), leaseOwner: null, leaseUntil: null, lastError: null, createdAt: at, attemptedAt: null, closedAt: null };
+      notices.push(row); return row.id;
+    },
+    // Permanent deletion: the notices go with the account by foreign-key cascade.
+    async removeAccount() { await database.transaction(async () => { account = null; session = null; audits.length = 0; buckets.clear(); notices = []; }); },
   };
 }
 
 for (const decision of ["approved", "rejected"]) {
-  test(`a delayed ${decision} SMS cannot recreate audit data after account deletion`, async () => {
+  test(`a delayed ${decision} SMS cannot recreate audit data or its notice after account deletion`, async () => {
     const f = fixture(); let started, finish;
     const sending = new Promise(resolve => { started = resolve; }), response = new Promise(resolve => { finish = resolve; });
     const notifications = createPaymentNotifications({ database: f.database, now: () => instant,
       delivery: { async sendSms() { assert.equal(f.inTransaction, false, "provider delivery holds no account lock"); started(); await response; } } });
-    const result = notifications[decision]({ accountId: f.member.accountId, paymentId: randomUUID(), phone: f.member.phone,
-      reference: "PABCD", planName: "Weekly", expiresAt: new Date(instant + 86_400_000), reason: "not-received" });
+    const result = notifications.deliver(f.notice(decision));
     await sending; await f.removeAccount(); finish();
     assert.equal(await result, "sent", "deletion does not change the completed provider result");
     assert.deepEqual(f.audits, []);
-    assert.deepEqual(f.events, ["account-lock"]);
+    assert.deepEqual(f.notices, []);
+    assert.deepEqual(f.events, ["account-lock", "account-lock"], "the claim and the completion each take the account lock first");
   });
 }
 
-test("notification auditing skips erased accounts and remains best effort", async () => {
+test("erased accounts are skipped without a send, and a storage outage leaves the notice for a later dispatcher", async () => {
   const f = fixture(); f.account.erasedAt = new Date(instant);
-  const notification = { accountId: f.member.accountId, paymentId: randomUUID(), phone: f.member.phone, reference: "PABCD", reason: "other" };
-  const delivery = { async sendSms() {} };
-  assert.equal(await createPaymentNotifications({ database: f.database, delivery }).rejected(notification), "sent");
-  assert.deepEqual(f.audits, []);
-  assert.equal(await createPaymentNotifications({ database: { async transaction() { throw new Error("Synthetic audit outage"); } }, delivery }).rejected(notification), "sent");
+  let calls = 0;
+  const delivery = { async sendSms() { calls++; } };
+  const id = f.notice("rejected");
+  assert.equal(await createPaymentNotifications({ database: f.database, now: () => instant, delivery }).deliver(id), "unavailable");
+  assert.deepEqual([f.notices[0].state, f.notices[0].lastError], ["skipped", "unavailable"]);
+  assert.deepEqual(f.audits, []); assert.equal(calls, 0);
+  const outage = { query: f.database.query, async transaction() { throw new Error("Synthetic storage outage"); } };
+  assert.equal(await createPaymentNotifications({ database: outage, now: () => instant, delivery }).deliver(f.notice("approved")), "queued");
+  assert.equal(calls, 0);
 });
 
 test("stale authenticated uploads cannot recreate rate buckets after deletion", async () => {

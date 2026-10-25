@@ -194,3 +194,38 @@ test("generic SMS accepts queued responses", async () => {
   await messaging.sendSms({ phone, message: "Payment approved." });
   assert.equal(calls, 1);
 });
+
+test("failures say whether the message may have been sent, so only a definite refusal is ever retried", async () => {
+  const text = "Goal Hint: Your account has been updated.";
+  for (const [respond, dispatch] of [
+    [() => { throw new TypeError("Synthetic network failure"); }, "uncertain"], [() => { throw new DOMException("Synthetic timeout", "TimeoutError"); }, "uncertain"],
+    [() => new Response("", { status: 500 }), "uncertain"], [() => new Response("", { status: 502 }), "uncertain"], [() => new Response("not json"), "uncertain"],
+    [() => Response.json(null), "uncertain"], [() => Response.json({}), "uncertain"], [() => Response.json({ status: "processing" }), "uncertain"],
+    [() => new Response("", { status: 400 }), "rejected"], [() => new Response("", { status: 401 }), "rejected"], [() => new Response("", { status: 429 }), "rejected"],
+    [() => Response.json({ status: "error" }), "rejected"], [() => Response.json({ status: "failed" }), "rejected"],
+  ]) {
+    let calls = 0;
+    const { messaging } = fixture({ fetch: async () => { calls++; return respond(); } });
+    await assert.rejects(() => messaging.sendSms({ phone, message: text }), (error) => {
+      assert.ok(error instanceof YoolaMessagingError);
+      assert.equal(error.code, "delivery"); assert.equal(error.dispatch, dispatch); assert.equal(error.cause, undefined);
+      return true;
+    });
+    assert.equal(calls, 1);
+  }
+  for (const [credentials, code] of [[{}, "configuration"], [{ YOOLA_SMS_API_KEY: apiKey, YOOLA_SMS_SENDER: "Goal Hint" }, "configuration"]]) {
+    const { messaging, requests } = fixture({ env: credentials });
+    await assert.rejects(() => messaging.sendSms({ phone, message: text }), (error) => error.code === code && error.dispatch === "not-sent");
+    assert.deepEqual(requests, []);
+  }
+  await assert.rejects(() => fixture().messaging.sendSms({ phone: "257700000001", message: text }), (error) => error.code === "unsupported-country" && error.dispatch === "not-sent");
+});
+
+test("configured() mirrors the delivery configuration rule without a request", () => {
+  for (const [env, configured] of [[{ YOOLA_SMS_API_KEY: apiKey }, true], [{ YOOLA_SMS_API_KEY: ` ${apiKey} `, YOOLA_SMS_SENDER: "GoalHint" }, true], [{}, false],
+    [{ YOOLA_SMS_API_KEY: " " }, false], [{ YOOLA_SMS_API_KEY: apiKey, YOOLA_SMS_SENDER: "Goal Hint" }, false]]) {
+    const { messaging, requests } = fixture({ env });
+    assert.equal(messaging.configured(), configured, JSON.stringify(Object.keys(env)));
+    assert.deepEqual(requests, []);
+  }
+});

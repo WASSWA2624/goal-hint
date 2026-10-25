@@ -15,6 +15,12 @@ if ! /usr/bin/timeout --signal=TERM --kill-after=5s 60s \
   --env-file="$root/private/.env.production.local" src/workers/members.ts renew; then
   echo "Auto-renewal did not finish; the next slot retries it." >&2
 fi
+# Account-update SMS outbox; uncertain sends are never resent, so a retry never sends twice.
+if ! /usr/bin/timeout --signal=TERM --kill-after=5s 60s \
+  "$HOME/nodevenv/goal-hint/24/bin/node" --conditions=react-server \
+  --env-file="$root/private/.env.production.local" src/workers/members.ts notify; then
+  echo "Payment notices did not finish; the next slot retries them." >&2
+fi
 exec /usr/bin/flock -n "$root/worker.lock" /usr/bin/timeout --signal=TERM --kill-after=20s 270s \
   "$HOME/nodevenv/goal-hint/24/bin/node" --conditions=react-server \
   --env-file="$root/private/.env.production.local" src/workers/live.ts

@@ -22,3 +22,9 @@ GRANT DELETE ON `goal_hint_db`.`OwnerAuditEvent` TO 'goal_hint_app'@'application
 GRANT SELECT, INSERT ON `goal_hint_db`.`WalletEntry` TO 'goal_hint_app'@'application-host';
 -- AccountMove records number changes for reversals to follow; append-only the same way, and it blocks deleting the accounts it names.
 GRANT SELECT, INSERT ON `goal_hint_db`.`AccountMove` TO 'goal_hint_app'@'application-host';
+
+-- Account-update SMS outbox: review after deploying 20261025175119_payment_notice_outbox, and apply this grant before the
+-- code, because payment approvals, rejections, credit approvals and auto-renewals insert into it in their own transaction.
+-- No phone number or message text is stored. UPDATE records each attempt; DELETE is for the members purge (closed rows after
+-- 7 or 30 days), erasure and the owner's Dismiss. Permanent account deletion removes rows by foreign-key cascade.
+GRANT SELECT, INSERT, UPDATE, DELETE ON `goal_hint_db`.`PaymentNotice` TO 'goal_hint_app'@'application-host';

@@ -1,11 +1,12 @@
 import "server-only";
+import { paymentNoticeRules } from "../../domain/payment-notification.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import type { Prisma } from "../generated/prisma/client.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import { lockMemberAccount } from "./access-codes.ts";
 import { memberAdminPhones } from "./member-admin.ts";
 const DAY = 86_400_000, HOUR = 3_600_000, BATCH = 100;
-export type MembersPurgeResult = Readonly<{ claimed: boolean; images: number; sessions: number; buckets: number; accounts: number }>;
+export type MembersPurgeResult = Readonly<{ claimed: boolean; images: number; sessions: number; buckets: number; accounts: number; notices: number }>;
 /** The database claim is shared by the web, CLI and every worker; no member metadata is deleted. */
 export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
   async function run(): Promise<MembersPurgeResult> {
@@ -13,7 +14,7 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
     await database.query(tx => tx.$executeRaw`INSERT INTO SubscriptionSettings (id, updatedAt, updatedBy) VALUES (1, ${at}, 'system:members-purge') ON DUPLICATE KEY UPDATE id = id`);
     const claimed = await database.query(tx => tx.$executeRaw`UPDATE SubscriptionSettings SET lastMembersPurgeAt = ${at}
       WHERE id = 1 AND (lastMembersPurgeAt IS NULL OR lastMembersPurgeAt <= ${hourAgo})`);
-    const result = { claimed: claimed === 1, images: 0, sessions: 0, buckets: 0, accounts: 0 };
+    const result = { claimed: claimed === 1, images: 0, sessions: 0, buckets: 0, accounts: 0, notices: 0 };
     if (!result.claimed) return result;
     try {
       const settings = await database.query(tx => tx.subscriptionSettings.findUniqueOrThrow({ where: { id: 1 }, select: { screenshotRetentionDays: true } }));
@@ -37,6 +38,11 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
       result.buckets = await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM RateLimitBucket
         WHERE windowStartedAt <= ${new Date(+at - DAY)} AND ((lockedUntil IS NOT NULL AND lockedUntil <= ${new Date(+at - DAY)})
           OR (lockedUntil IS NULL AND windowStartedAt <= ${new Date(+at - 2 * DAY)})) LIMIT ${BATCH}`));
+      // Closed account-update SMS notices: a week once accepted or skipped, 30 days when not delivered or not confirmed. Open
+      // rows are never deleted here, so this needs no account lock and cannot deadlock with a dispatcher.
+      result.notices = await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM PaymentNotice WHERE closedAt IS NOT NULL
+        AND ((state IN ('accepted', 'skipped') AND closedAt <= ${new Date(+at - paymentNoticeRules.keepAcceptedDays * DAY)})
+          OR (state IN ('failed', 'uncertain') AND closedAt <= ${new Date(+at - paymentNoticeRules.keepUndeliveredDays * DAY)})) LIMIT ${BATCH}`));
       result.accounts = await drain(() => database.transaction(async tx => {
         const admins = memberAdminPhones();
         const where: Prisma.MemberAccountWhereInput = { passwordHash: null, temporaryPasswordHash: null, passwordResetRequestedAt: null,
@@ -46,7 +52,7 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
         for (const row of rows) await lockMemberAccount(tx, row.id);
         return (await tx.memberAccount.deleteMany({ where: { ...where, id: { in: rows.map(r => r.id) } } })).count;
       }, { isolationLevel: "ReadCommitted" }));
-      await database.query(tx => writeOwnerAudit(tx, { at, actor: "system", action: "members_purged", targetType: "settings", targetId: "1", details: { images: result.images, sessions: result.sessions, buckets: result.buckets, accounts: result.accounts } }));
+      await database.query(tx => writeOwnerAudit(tx, { at, actor: "system", action: "members_purged", targetType: "settings", targetId: "1", details: { images: result.images, sessions: result.sessions, buckets: result.buckets, accounts: result.accounts, notices: result.notices } }));
       return result;
     } catch (error) {
       await database.query(tx => tx.subscriptionSettings.updateMany({ where: { id: 1, lastMembersPurgeAt: at }, data: { lastMembersPurgeAt: null } })).catch(() => {});
@@ -54,7 +60,7 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
     }
   }
   let pending: Promise<MembersPurgeResult> | null = null, checkedAt = -Infinity;
-  return { run, maybePurge() { if (pending || now() - checkedAt < 15 * 60_000) return; checkedAt = now(); pending = run().catch(() => ({ claimed: false, images: 0, sessions: 0, buckets: 0, accounts: 0 })).finally(() => { pending = null; }); } };
+  return { run, maybePurge() { if (pending || now() - checkedAt < 15 * 60_000) return; checkedAt = now(); pending = run().catch(() => ({ claimed: false, images: 0, sessions: 0, buckets: 0, accounts: 0, notices: 0 })).finally(() => { pending = null; }); } };
 }
 const services = new WeakMap<DatabaseRuntime, ReturnType<typeof createMembersPurge>>();
 export function membersPurgeFor(database: DatabaseRuntime) { let service = services.get(database); if (!service) { service = createMembersPurge(database); services.set(database, service); } return service; }

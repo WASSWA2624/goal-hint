@@ -95,6 +95,17 @@ to their links. Existing table-scoped account/session grants cover the new
 recovery columns. The application still has no database-level DDL privileges.
 The actual private `application-grants.sql` records the new grants.
 
+The account-update SMS outbox (`20261025175119_payment_notice_outbox`) adds
+`PaymentNotice`. After `npm run db:deploy`, grant the application role SELECT,
+INSERT, UPDATE and DELETE on it, as in
+[manual-account-grants.sql](../deploy/manual-account-grants.sql), before starting
+the release: payment approvals, rejections, credit approvals and auto-renewals
+insert a row in their own transaction, so without the grant every such decision
+fails. DELETE serves the members purge, erasure and the owner's Dismiss; permanent
+deletion removes rows by cascade. The table holds no phone number or message
+text. Neither the migration nor the grant has been applied to the local target
+yet; record the grant in the private `application-grants.sql` when it is.
+
 Before deployment, an AES-256-GCM encrypted consistent InnoDB dump was saved
 under the private installation's
 `manual-account-rollout-20261021T211327Z-3df1f4c5` directory, with its key in

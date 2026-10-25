@@ -4,23 +4,27 @@ import Link from "@/components/navigation/navigation-link";
 import { media } from "@/styles/theme";
 import { formatUgx } from "@/domain/subscription-plans";
 import { formatPeriodEnd } from "@/domain/subscription-period";
-import type { OwnerOverview, OwnerPaymentSummary } from "@/domain/owner-members";
+import type { OwnerNotice, OwnerOverview, OwnerPaymentSummary } from "@/domain/owner-members";
 import { ChevronDownIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { DeskGrid, Panel, PanelHead, RowList, StatGrid } from "./desk-styles";
 import { NetworkChip } from "./network-chip";
+import { PaymentNotices } from "./payment-notices";
 
 /** Metrics on the main side, the two oldest payment reports beside them; on phones the queue sits between the two. */
-export function OverviewReport({ value: v, payments }: { value: OwnerOverview; payments: readonly OwnerPaymentSummary[] | null }) {
+export function OverviewReport({ value: v, payments, notices = null, now = 0 }: { value: OwnerOverview; payments: readonly OwnerPaymentSummary[] | null;
+  notices?: readonly OwnerNotice[] | null; now?: number }) {
+  const attention = notices?.length ?? 0;
   const metrics = [
     ["Pending payments", v.pending], ["Active paid subscribers", v.active],
     ["Revenue · EAT week", formatUgx(v.weekRevenue)], ["Revenue · EAT month", formatUgx(v.monthRevenue)],
     ["Trials · this week", v.trials], ["Upload alerts · this week", v.busy],
     // Credit members hold is owed in plans, not cash: it is already in revenue from the payments that added it.
     ["Credit held by members", formatUgx(v.creditHeld)], ...(v.creditOwed > 0 ? [["Credit owed after reversals", formatUgx(v.creditOwed)] as const] : []),
+    ...(attention ? [["SMS notices to check", attention] as const] : []),
   ] as const;
-  return <Overview>
+  return <Overview $notices={attention > 0}>
     <Metrics><StatGrid aria-label="Admin overview">{metrics.map(([label, value]) =>
-      <Tile key={label} $pending={label === "Pending payments" && v.pending > 0}><dt>{label}</dt><dd>{value}</dd></Tile>)}</StatGrid></Metrics>
+      <Tile key={label} $pending={label === "Pending payments" ? v.pending > 0 : label === "SMS notices to check"}><dt>{label}</dt><dd>{value}</dd></Tile>)}</StatGrid></Metrics>
     <Panel aria-labelledby="payment-queue-title">
       <PanelHead><h2 id="payment-queue-title">Payment queue</h2><ViewAll href="/admin/payments" prefetch={false}>View all<ChevronRightIcon /></ViewAll></PanelHead>
       {payments === null ? <QueueMessage role="status">Payment queue is unavailable. Try again later.</QueueMessage>
@@ -31,6 +35,7 @@ export function OverviewReport({ value: v, payments }: { value: OwnerOverview; p
           <Review href={`/admin/payments#${encodeURIComponent(payment.id)}`} prefetch={false} aria-label={`Review ${payment.reference}`}>Review</Review>
         </QueueRow>)}</RowList>}
     </Panel>
+    {notices && attention > 0 && <PaymentNotices notices={notices} now={now} />}
     <Footnote><div>
       <p>Payment numbers updated {v.paymentNumbersChangedAt ? formatPeriodEnd(new Date(v.paymentNumbersChangedAt)) : "—"}</p>
       <Totals><summary>How totals are calculated<ChevronDownIcon /></summary>
@@ -39,12 +44,14 @@ export function OverviewReport({ value: v, payments }: { value: OwnerOverview; p
   </Overview>;
 }
 
-// DOM order is metrics, queue, footnote (the phone order); from desktop the queue takes the side column beside both.
-const Overview = styled(DeskGrid)`
+// DOM order is metrics, queue, SMS notices (when any), footnote (the phone order); from desktop the queue takes the side
+// column beside the rest.
+const Overview = styled(DeskGrid)<{ $notices: boolean }>`
   ${media.desktop} {
     row-gap: 12px;
-    > :nth-child(2) { grid-column: 2; grid-row: 1 / span 2; }
+    > :nth-child(2) { grid-column: 2; grid-row: 1 / span ${({ $notices }) => $notices ? 3 : 2}; }
     > :nth-child(3) { grid-column: 1; grid-row: 2; }
+    > :nth-child(4) { grid-column: 1; grid-row: 3; }
   }
 `;
 const Metrics = styled.div`
