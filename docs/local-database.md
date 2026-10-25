@@ -118,8 +118,9 @@ the release: payment approvals, rejections, credit approvals and auto-renewals
 insert a row in their own transaction, so without the grant every such decision
 fails. DELETE serves the members purge, erasure and the owner's Dismiss; permanent
 deletion removes rows by cascade. The table holds no phone number or message
-text. Neither the migration nor the grant has been applied to the local target
-yet; record the grant in the private `application-grants.sql` when it is.
+text. The migration and grants were applied locally on 26 October 2026, with
+column-scoped dispatch-state UPDATE. See the
+[integration and migration record](reports/checklist-integration-2026-10-26.md).
 
 Before deployment, an AES-256-GCM encrypted consistent InnoDB dump was saved
 under the private installation's

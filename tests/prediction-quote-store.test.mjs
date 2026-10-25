@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 import { preparePredictionQuotes, predictionQuoteFromRow } from '../src/server/predictions/prediction-quote-store.ts';
+import { storedQuoteSource } from '../src/server/odds/odds-read.ts';
 import { historyCandidate } from './helpers/prediction-history-fixtures.mjs';
 
 // Synthetic public prices only; nothing here is a recorded provider price or an odds-display approval.
@@ -20,6 +21,14 @@ const families = ['match-result', 'double-chance', 'total-goals', 'both-teams-to
 const prepare = (source, input = {}) => preparePredictionQuotes({ ...identity, source, ...input });
 const only = (source, family = 'match-result') => prepare(source).find((quote) => quote.family === family);
 const reasonOf = (source, family) => only(source, family).reason;
+
+test('raw unsigned bookmaker IDs normalize before publication quote validation', async () => {
+  const row = { ...priceRow('match-result'), bookmakerId: 8n, ...freshState() };
+  const source = await storedQuoteSource({ $queryRaw: async () => [row] }, identity.fixtureId);
+  assert.equal(source.rows[0].bookmakerId, 8);
+  const quote = only(source);
+  assert.equal(quote.state, 'quoted'); assert.equal(quote.price.bookmakerId, 8);
+});
 
 test('a fresh public row for the exact family and selection is quoted at its retrieval time', () => {
   const quotes = prepare({ state: freshState(), rows: families.map((family) => priceRow(family)) });

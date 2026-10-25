@@ -23,13 +23,19 @@ GRANT SELECT, INSERT ON `goal_hint_db`.`WalletEntry` TO 'goal_hint_app'@'applica
 -- AccountMove records number changes for reversals to follow; append-only the same way, and it blocks deleting the accounts it names.
 GRANT SELECT, INSERT ON `goal_hint_db`.`AccountMove` TO 'goal_hint_app'@'application-host';
 
+-- Existing adopted match-facts projections (20261020000000_adopt_match_facts).
+-- Application reads and the centrally controlled collectors share this DML-only role; no DELETE or DDL.
+GRANT SELECT, INSERT, UPDATE ON `goal_hint_db`.`FixtureFacts` TO 'goal_hint_app'@'application-host';
+GRANT SELECT, INSERT, UPDATE ON `goal_hint_db`.`FootballVenue` TO 'goal_hint_app'@'application-host';
+GRANT SELECT, INSERT, UPDATE ON `goal_hint_db`.`SeasonStandings` TO 'goal_hint_app'@'application-host';
+
 -- Prediction quotes: the public price captured beside each published family prediction. Review after deploying
 -- 20261025180538_prediction_quotes and apply BEFORE enabling provider odds display: once capture is on, a missing grant
 -- fails the forecast publication. Append-only: its triggers refuse UPDATE and DELETE.
 GRANT SELECT, INSERT ON `goal_hint_db`.`PredictionQuote` TO 'goal_hint_app'@'application-host';
 -- Durable minimal payment SMS intents, after 20261025230000_payment_notification_outbox.
 -- No recipient or message body is stored. DELETE covers terminal retention, erasure and explicit owner dismissal.
-GRANT SELECT, INSERT, UPDATE, DELETE ON `goal_hint_db`.`PaymentNotificationOutbox` TO 'goal_hint_app'@'application-host';
+GRANT SELECT, INSERT, UPDATE (`status`, `startedAt`, `finishedAt`, `attemptId`), DELETE ON `goal_hint_db`.`PaymentNotificationOutbox` TO 'goal_hint_app'@'application-host';
 
 -- Owner profit and costs: review after deploying 20261025183256_owner_profit. No personal data; rows are voided or ended,
 -- never deleted, so there is no DELETE. Entries are never edited: only the three void columns may change. A recurring line

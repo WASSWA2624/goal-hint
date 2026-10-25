@@ -118,7 +118,7 @@ test('original public prediction quotes on owned genuine MySQL', { timeout: 300_
           assert.equal(quote.state, 'unavailable'); assert.equal(quote.reason, 'no-public-price'); assert.equal(quote.price, null); continue;
         }
         const price = prices.find((row) => row.marketKey === quote.family && row.selection === selection);
-        assert.equal(quote.state, 'quoted'); assert.equal(quote.price.hundredths, launchPrice[quote.family][selection]);
+        assert.equal(quote.state, 'quoted', `${quote.family}: ${quote.reason}`); assert.equal(quote.price.hundredths, launchPrice[quote.family][selection]);
         assert.equal(quote.price.hundredths, price.displayHundredths); assert.equal(quote.price.snapshotId, price.snapshotId);
         assert.equal(quote.price.retrievedAt, price.retrievedAt.getTime()); assert.equal(quote.price.basis, 'bookmaker');
       }

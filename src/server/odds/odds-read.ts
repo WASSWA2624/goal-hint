@@ -73,7 +73,8 @@ export async function storedQuoteSource(tx: Tx, fixtureId: string): Promise<Stor
   const first = rows[0];
   if (!first) return { state: null, rows: [] };
   return { state: { lastRetrievedAt: first.lastRetrievedAt, withdrawnAt: first.withdrawnAt },
-    rows: rows.flatMap((row) => row.marketKey === null ? [] : [{ marketKey: row.marketKey, selection: row.selection, basis: row.basis, bookmakerId: row.bookmakerId,
+    rows: rows.flatMap((row) => row.marketKey === null ? [] : [{ marketKey: row.marketKey, selection: row.selection, basis: row.basis,
+      bookmakerId: row.bookmakerId === null ? null : Number(row.bookmakerId),
       displayHundredths: row.displayHundredths, priceDecimal: row.priceDecimal, line: row.line, method: row.method, mappingVersion: row.mappingVersion,
       snapshotId: row.snapshotId, retrievedAt: row.retrievedAt, providerUpdatedAt: row.providerUpdatedAt }]) };
 }
