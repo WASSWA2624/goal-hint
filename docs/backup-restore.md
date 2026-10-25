@@ -183,6 +183,11 @@ Account credit (`20261024210000_account_credit`) adds the `WalletEntry` ledger w
 (`AccountMove_no_update`, `AccountMove_no_delete`), so a backup of a database at that migration carries five more triggers. Restore keeps them with their definer; the backup test derives its table list from the
 schema, so it needs no count change.
 
+Daily slip publications (`20261025113516_daily_slip_publications`) add six more `BEGIN … END` append-only triggers on
+`DailySlipPublication`, `PublishedSlip` and `PublishedSlipLeg`. The migration first wrote them as single-line
+single-statement bodies, which the trigger test's parser missed; they were rewritten as blocks before the migration was
+applied to any database, and the parser now reads single-line bodies and checks it sees every trigger statement.
+
 ## PITR and hosted infrastructure qualification
 
 The owned drill explicitly uses ROW binlogs, `sync_binlog=1`,

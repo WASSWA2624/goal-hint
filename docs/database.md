@@ -345,7 +345,9 @@ backup, and use it as the verified backup before the paid-access overlay.
 that the migration and overlay recreate exactly the original ten triggers as
 blocks, that the overlay guards first and records the migration's SHA-256 only
 after verifying, and that no other migration creates a single-statement
-trigger. The overlay's logic was run on MySQL 8.4 with `CREATE OR REPLACE`
+trigger. It parses every `CREATE TRIGGER` in every migration, whether the body
+follows on the same line or the next and whether the name is backquoted, and
+fails if any statement escapes the parser. The overlay's logic was run on MySQL 8.4 with `CREATE OR REPLACE`
 replaced by `DROP`/`CREATE` and each `BEGIN NOT ATOMIC` block run as a
 procedure, but not on MariaDB 11.4.
 

@@ -59,9 +59,27 @@ ALTER TABLE DailySlipPublication ADD CONSTRAINT DailySlipPublication_body_shape 
 ALTER TABLE PublishedSlip ADD CONSTRAINT PublishedSlip_snapshot_shape CHECK (COALESCE(
   JSON_LENGTH(JSON_EXTRACT(snapshotJson, '$.slip.selections')) BETWEEN 1 AND 8
   AND JSON_EXTRACT(snapshotJson, '$.estimatedProbability') BETWEEN 0 AND 1, FALSE) = TRUE);
-CREATE TRIGGER DailySlipPublication_no_update BEFORE UPDATE ON DailySlipPublication FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
-CREATE TRIGGER DailySlipPublication_no_delete BEFORE DELETE ON DailySlipPublication FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
-CREATE TRIGGER PublishedSlip_no_update BEFORE UPDATE ON PublishedSlip FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
-CREATE TRIGGER PublishedSlip_no_delete BEFORE DELETE ON PublishedSlip FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
-CREATE TRIGGER PublishedSlipLeg_no_update BEFORE UPDATE ON PublishedSlipLeg FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
-CREATE TRIGGER PublishedSlipLeg_no_delete BEFORE DELETE ON PublishedSlipLeg FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
+CREATE TRIGGER DailySlipPublication_no_update BEFORE UPDATE ON DailySlipPublication FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
+END;
+CREATE TRIGGER DailySlipPublication_no_delete BEFORE DELETE ON DailySlipPublication FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
+END;
+CREATE TRIGGER PublishedSlip_no_update BEFORE UPDATE ON PublishedSlip FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
+END;
+CREATE TRIGGER PublishedSlip_no_delete BEFORE DELETE ON PublishedSlip FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
+END;
+CREATE TRIGGER PublishedSlipLeg_no_update BEFORE UPDATE ON PublishedSlipLeg FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
+END;
+CREATE TRIGGER PublishedSlipLeg_no_delete BEFORE DELETE ON PublishedSlipLeg FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Published slip history is append-only';
+END;
