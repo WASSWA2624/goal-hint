@@ -19,8 +19,9 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
   t.after(() => f.close());
   const { database: db, config, root } = f;
   let clock = Date.parse("2026-10-24T09:00:00Z"), n = 700, txn = 0;
-  const now = () => clock;
-  const codes = createAccessCodes({ database: db, config, now, notifications: silentPaymentNotifications }), sessions = createMemberSessions({ database: db, config, now });
+  const now = () => clock, renewals = [];
+  const notifications = { ...silentPaymentNotifications, async renewed(renewal) { renewals.push(renewal); return "sent"; } };
+  const codes = createAccessCodes({ database: db, config, now, notifications }), sessions = createMemberSessions({ database: db, config, now });
   const payments = createPayments({ database: db, config, now, environment: null }), subscribers = createSubscribers(db, now, () => false, config);
   const daily = randomUUID(), weekly = randomUUID();
   await db.query(tx => tx.subscriptionSettings.create({ data: { id: 1, paywallMode: "test", mtnNumber: "256700000901", mtnName: "TEST", airtelNumber: "256700000902",
@@ -102,9 +103,7 @@ test("account credit on restricted real MySQL", { timeout: 240000 }, async (t) =
     assert.equal(await balance(who.accountId), 1000);
     const renewed = await db.query(tx => tx.accessCode.findFirstOrThrow({ where: { accountId: who.accountId, source: "renewal" } }));
     assert.equal(+renewed.startsAt, +end); assert.equal(renewed.priceUgx, 1000); assert.equal(renewed.amountReceivedUgx, null);
-    // The renewal's account-update SMS is written with it and left for the outbox; none is sent from the member's request.
-    const notices = await db.query(tx => tx.paymentNotice.findMany({ where: { accountId: who.accountId, kind: "renewed" } }));
-    assert.deepEqual(notices.map(notice => [notice.targetId, notice.state]), [[renewed.id, "pending"]], "the job and two visits leave one renewal notice");
+    assert.equal(renewals.length, 1); assert.equal(renewals[0].balanceUgx, 1000);
     const entry = (await ledger(who.accountId)).at(-1);
     assert.equal(entry.kind, "renewal"); assert.equal(entry.actor, "system"); assert.equal(entry.requestKey, `renewal:${who.accountId}:${+end}`);
     // The next end is a day later; the job skips a lapse older than a day, but the member's visit still renews it.

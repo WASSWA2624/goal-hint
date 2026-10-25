@@ -195,14 +195,14 @@ test("generic SMS accepts queued responses", async () => {
   assert.equal(calls, 1);
 });
 
-test("failures say whether the message may have been sent, so only a definite refusal is ever retried", async () => {
+test("every failed provider response remains uncertain without assuming safe automatic retry semantics", async () => {
   const text = "Goal Hint: Your account has been updated.";
   for (const [respond, dispatch] of [
     [() => { throw new TypeError("Synthetic network failure"); }, "uncertain"], [() => { throw new DOMException("Synthetic timeout", "TimeoutError"); }, "uncertain"],
     [() => new Response("", { status: 500 }), "uncertain"], [() => new Response("", { status: 502 }), "uncertain"], [() => new Response("not json"), "uncertain"],
     [() => Response.json(null), "uncertain"], [() => Response.json({}), "uncertain"], [() => Response.json({ status: "processing" }), "uncertain"],
-    [() => new Response("", { status: 400 }), "rejected"], [() => new Response("", { status: 401 }), "rejected"], [() => new Response("", { status: 429 }), "rejected"],
-    [() => Response.json({ status: "error" }), "rejected"], [() => Response.json({ status: "failed" }), "rejected"],
+    [() => new Response("", { status: 400 }), "uncertain"], [() => new Response("", { status: 401 }), "uncertain"], [() => new Response("", { status: 429 }), "uncertain"],
+    [() => Response.json({ status: "error" }), "uncertain"], [() => Response.json({ status: "failed" }), "uncertain"],
   ]) {
     let calls = 0;
     const { messaging } = fixture({ fetch: async () => { calls++; return respond(); } });

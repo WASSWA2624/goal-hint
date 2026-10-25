@@ -9,11 +9,10 @@ export type SmsMessage = Readonly<{ phone: string; message: string }>;
 export type SmsMessaging = Readonly<{ sendSms(message: SmsMessage): Promise<void>; configured?(): boolean }>;
 type MessagingErrorCode = "invalid-message" | "unsupported-country" | "configuration" | "delivery";
 /**
- * Whether a failed request may have sent the message: `not-sent` never reached the provider, `rejected` was answered with a
- * refusal (so it may be retried), and `uncertain` (a timeout, transport failure, server error or unreadable answer) may have
- * been accepted and billed, so it must never be resent automatically.
+ * `not-sent` failed local validation before dispatch. Provider/transport failures are `uncertain`: the gateway's HTTP or
+ * response status does not establish a verified idempotency, billing or non-delivery contract.
  */
-export type MessagingDispatch = "not-sent" | "rejected" | "uncertain";
+export type MessagingDispatch = "not-sent" | "uncertain";
 
 const errorMessages: Readonly<Record<MessagingErrorCode, string>> = Object.freeze({
   "invalid-message": "The message is invalid.",
@@ -53,7 +52,7 @@ export function createYoolaMessaging({ env = process.env, fetch: request = globa
     if (!configured) throw new YoolaMessagingError("configuration");
     const { apiKey, sender } = configured, endpoint = channel === "sms" ? "send" : "send-whatsapp";
     // No automatic retries here: an uncertain result could already have delivered and charged for this message. Each failure
-    // is classified once, without provider text, so a caller with a durable record can tell a refusal from an uncertain send.
+    // is classified once without provider text. No response failure authorizes an automatic resend.
     let response: Response;
     try {
       response = await request(`https://yoolasms.com/api/v1/${endpoint}`, {
@@ -62,14 +61,14 @@ export function createYoolaMessaging({ env = process.env, fetch: request = globa
         signal: AbortSignal.timeout(10_000), redirect: "error", cache: "no-store",
       });
     } catch { throw new YoolaMessagingError("delivery", "uncertain"); }
-    if (!response.ok) throw new YoolaMessagingError("delivery", response.status >= 500 ? "uncertain" : "rejected");
+    if (!response.ok) throw new YoolaMessagingError("delivery", "uncertain");
     let status: string | null;
     try {
       const result: unknown = await response.json();
       status = result && typeof result === "object" && "status" in result ? String(result.status) : null;
     } catch { throw new YoolaMessagingError("delivery", "uncertain"); }
     if (status === "success" || status === "queued") return;
-    throw new YoolaMessagingError("delivery", status === "error" || status === "failed" ? "rejected" : "uncertain");
+    throw new YoolaMessagingError("delivery", "uncertain");
   }
 
   async function sendSms({ phone, message }: SmsMessage): Promise<void> {

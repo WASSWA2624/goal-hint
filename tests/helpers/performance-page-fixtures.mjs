@@ -12,6 +12,11 @@ const filters = { from: "2026-10-01", to: today, market: "all", source: "combine
 const query = parsePerformanceQuery(new URLSearchParams({ from: filters.from, to: filters.to }), today);
 const records = [performanceRecord(), performanceRecord({ score: [0, 1] })];
 const report = (protocol = null) => aggregatePerformance(performanceSnapshot(records), query, at, protocol);
+const pricedSnapshot = performanceSnapshot(records);
+for (const [index, record] of records.entries()) {
+  const selection = record.revision.candidate.markets["match-result"].market.selection;
+  pricedSnapshot.quotes.set(`${record.revision.id}:match-result:${selection}`, index === 0 ? "2.35" : "9.20");
+}
 const publications = ["won", "lost", "void"].map((outcome, index) => {
   const original = slipForecastFixture({ at: at - 86_400_000 }), quote = index === 0 ? "2.35" : "9.20";
   return { id: `synthetic-publication-${index}`, savedAt: new Date(at - (3 - index) * 3_600_000).toISOString(),
@@ -36,6 +41,7 @@ const leagueReport = (leaguePage) => aggregatePerformance(performanceSnapshot(le
 export const performancePageScenarios = {
   unapproved: { locale: "en", filters, report: report(), history },
   reviewed: { locale: "en", filters, report: report(performanceProtocol()), history },
+  "priced-picks": { locale: "en", filters, report: aggregatePerformance(pricedSnapshot, query, at, null), history },
   second: { locale: "en", filters, report: report(), history: { ...history, page: 2, records: publications.slice(2) } },
   outside: { locale: "en", filters, report: report(), history: { ...history, page: 3, records: [] } },
   empty: { locale: "en", filters, report: aggregatePerformance(performanceSnapshot(), query, at, null),

@@ -424,7 +424,7 @@ def overview_notices(origin):
         html = visible_html(response.text)
         match(r"<dt>SMS notices to check</dt><dd>1</dd>", html)
         panel = match(r'<section\b[^>]*data-payment-notices[^>]*>([\s\S]*?)</section>', html).group(1)
-        for label in ["SMS notices", "PTEST", "Payment decision", "Refused by the SMS gateway", "View subscriber", "Send again", "Dismiss",
+        for label in ["SMS notices", "PTEST", "Payment decision", "Not confirmed", "View subscriber", "Send again", "Dismiss",
                 "The member may receive this notice twice"]:
             assert label in panel, label
         match(r'href="/admin/subscribers\?accountId=00000000-0000-4000-8000-000000000100"', panel)

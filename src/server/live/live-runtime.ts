@@ -113,8 +113,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results,
       refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy,
-      ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true,
-        verifyPrimaryCandidate: (candidate) => ai?.verifyCandidate(candidate) === true }) });
+      ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
@@ -136,7 +135,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const providerFallback = createProviderFallbackAdapter({ adapter, catalog, policy: providerFallbackPolicy(refs),
       authority: authorities.providerFallback, maxJobs: 1000 });
     const fallback = createFallbackService({ fallback: providerFallback, authority: authorities.fallback, maxInflight: 100,
-      verifyRequest: authorities.verifyFallbackRequest });
+      selectionPolicy: "provider-baseline", verifyRequest: authorities.verifyFallbackRequest });
     const refreshStore = createMysqlRefreshStore(database, queue);
     if (aiModel !== null) ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
       evidenceAuthority: authorities.evidence, pacing: workload.pacing, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,

@@ -43,8 +43,9 @@ export const operatingRules = freeze({
   calendar: calendarRules,
   forecasts: {
     ruleVersion: marketRules.ruleVersion,
-    primary: "ai",
-    fallback: "api-football",
+    primary: "api-football",
+    shadow: "ai",
+    publishShadowForecasts: false,
     completeRevisionSnapshots: true,
     retainEligiblePreviousWhenAllMarketsUnavailable: true,
     probabilityMinimumExclusive: marketRules.probabilityMinimumExclusive,

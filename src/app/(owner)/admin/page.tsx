@@ -4,7 +4,7 @@ import { redirectToAccountLogin } from "@/server/members/account-login-redirect"
 import { OverviewReport } from "@/components/admin/owner-reports";
 import { DeskHead, DeskTitle } from "@/components/admin/desk-styles";
 import { createSubscribers } from "@/server/admin/subscribers";
-import { paymentNotificationsFor } from "@/server/members/payment-notifications";
+import { createPaymentNoticeAdmin } from "@/server/admin/payment-notices";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
 
@@ -20,7 +20,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const [value, payments, notices] = await Promise.all([
     subscribers?.overview().catch(() => null) ?? null,
     subscribers?.pendingPayments().catch(() => null) ?? null,
-    page.services.database ? paymentNotificationsFor(page.services.database).attention().catch(() => null) : null,
+    page.services.database ? createPaymentNoticeAdmin(page.services.database).attention().catch(() => null) : null,
   ]);
   return (
     <AdminFrame database={page.services.database} {...(value ? { pendingCount: value.pending } : {})}>

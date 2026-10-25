@@ -120,7 +120,43 @@ The genuine MySQL performance acceptance also passed all nine checks against an
 owned MySQL 8.4.13 instance, including canonical competition metadata, subgroup
 counts/denominators and the original bounded read-only reporting workflow.
 
-Production calibration evidence, reviewed league cohorts, individual-pick returns,
+Production calibration evidence, reviewed league cohorts,
 matched provider/AI comparisons and actual bookmaker/customer returns remain
 separate work. The reporting page never activates a forecasting model or calls
 a football provider.
+
+## Individual-pick returns
+
+Individual market/source/horizon and league cells now carry their own descriptive
+return sample and losing streaks. They reuse the exact integer-hundredths
+arithmetic from slip reporting without pooling the two denominators. A selected
+pick earns one illustrative unit of stake only when its locked original selection
+is coherently settled won/lost and has a permitted stored pre-publication quote.
+Void/pending outcomes never imply refunds or enter quote aggregates. Streaks use
+forecast publication time/revision identity within the selected kickoff-date
+period; pending/void forecasts interrupt a streak. No history page is substituted
+for a full-period cohort. Missing quotes produce unavailable returns and an
+explicit excluded count, rather than a zero-profit claim.
+
+`PerformanceQuoteBinding` is a trusted server dependency for one documented
+bookmaker, a bounded approved maximum quote age and independently verified public
+historical-display permission. It must cover the frozen launch-market mapping and
+its catalog semantics. `readPublicPerformance` intentionally supplies no such
+binding pending that review. Reference strings and request parameters cannot
+enable it. The grant is rechecked after reads and cache access, including uncached
+responses. Quote policies separate cache entries from counts-only entries.
+
+The read uses sealed `ProviderOddsSnapshot` and `OddsImportBatch` bodies in the
+existing repeatable-read transaction and shared payload budget. A quote must be
+observed after its original cycle opened, before forecast publication and cutoff,
+within the approved age, and under the same EAT kickoff date/bookmaker scope.
+Later/current quotes and replacement cycles cannot supply the price. The latest
+as-of receipt must be the snapshot's own receipt: any intervening receipt in that
+scope conservatively withholds an older snapshot, including withdrawals, failed
+sweeps and unchanged-content reconfirmations whose exact per-bet status is not
+retained. A same-clock chain successor excludes its predecessor. These rules may
+exclude usable prices; they never guess that an old price remained available.
+
+The illustration describes the quoted cohort only. It does not establish
+bookmaker acceptance, financial advice, customer returns, forecast quality or
+future profit. Calibration retains its independent policy/sample gates.

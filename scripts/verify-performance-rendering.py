@@ -19,7 +19,7 @@ def main():
         write_json(directory / "app/scenarios.json", json.loads(result.stdout))
         build_fixture(directory, env, timeout=300)
     with Server(directory, env, ready="/en/performance") as server:
-        for state in ["unapproved", "reviewed", "second", "outside", "empty", "unavailable", "pinned", "leagues", "league-outside"]:
+        for state in ["unapproved", "reviewed", "priced-picks", "second", "outside", "empty", "unavailable", "pinned", "leagues", "league-outside"]:
             response = request(server.origin, f"/en/performance?state={state}")
             assert response.status == 200, (state, response.status)
             html = visible_html(response.text)
@@ -40,8 +40,15 @@ def main():
                 assert "Calibration by probability band" not in html
                 assert "Won" in html and "Lost" in html and "2.35" in html
                 assert html.count('data-published-slip=') == 2
+                assert "Individual-pick returns and streaks" in html and "2 settled picks lack usable permitted pre-publication quotes" in html
+                assert "Returns are unavailable without usable original quotes" in html
             elif state == "reviewed":
                 assert "Reviewed sample metrics" in html and "Calibration by probability band" in html and "Confidence interval" in html
+            elif state == "priced-picks":
+                picks = re.search(r'<section\b[^>]*aria-labelledby="individual-performance"[\s\S]*?</section>', html).group()
+                assert 'data-return-performance="pick"' in picks and "17.5%" in picks
+                assert "stored quote from its original cycle" in picks and "Current and later prices are excluded" in picks
+                assert "Quality metrics awaiting review" in picks and "Reviewed sample metrics" not in picks
             elif state == "second":
                 assert html.count('data-published-slip=') == 1 and "No settled score" in html and "Void" in html
             elif state == "outside":
@@ -58,7 +65,7 @@ def main():
             elif state == "league-outside":
                 assert "This league page is outside the selected period" in html and "View first league page" in html
             assert 'href="/en/performance' in html
-        print("PASS 9 production performance states: reviewed/unapproved metrics, full-period returns, slip/league pagination, unknown league, empty/outage states, active-quote omission and native filter reset.", flush=True)
+        print("PASS 10 production performance states: reviewed/unapproved metrics, separate pick/slip returns, missing quotes, slip/league pagination, unknown league, empty/outage states, active-quote omission and native filter reset.", flush=True)
         if args.serve:
             server.serve()
 

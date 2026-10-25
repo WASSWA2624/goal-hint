@@ -32,10 +32,10 @@ const migrationName = "20261019142209_subscriptions";
 const migrationFile = new URL(`../prisma/migrations/${migrationName}/migration.sql`, import.meta.url);
 const overlayFile = new URL(`../prisma/mariadb/${migrationName}.sql`, import.meta.url);
 const tables = ["MemberAccount", "MemberSession", "MemberVerification", "SubscriptionPlan", "PaymentSubmission", "PaymentScreenshot", "AccessCode",
-  "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "WalletEntry", "AccountMove", "PaymentNotice"];
+  "SubscriptionSettings", "RateLimitBucket", "OwnerAuditEvent", "WalletEntry", "AccountMove", "PaymentNotificationOutbox"];
 // docs/local-database.md: SELECT, INSERT and UPDATE on the paid-access tables; DELETE only where a purge or sign-out removes
-// rows (the SMS outbox included). The credit ledger and number-change history are append-only: SELECT and INSERT only.
-const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentScreenshot", "RateLimitBucket", "PaymentNotice"]);
+// rows. The credit ledger and number-change history are append-only: SELECT and INSERT only.
+const deletable = new Set(["MemberAccount", "MemberSession", "MemberVerification", "PaymentScreenshot", "RateLimitBucket", "PaymentNotificationOutbox"]);
 const appendOnly = new Set(["WalletEntry", "AccountMove"]);
 const DENIED = 1142, DUPLICATE = 1062, NO_PARENT = 1452, HAS_CHILDREN = 1451, CHECK = 3819;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -700,7 +700,7 @@ test("paid-access storage keeps its keys, checks and least-privilege grants, and
       // Apply subsequent changes to the compared tables before checking the overlay against the deployed schema.
       for (const migration of ["20261020193000_member_password_sms", "20261021090000_payment_screenshot_approval",
         "20261021120000_manual_password_recovery", "20261023090000_member_message_verification", "20261024200000_payment_screenshot_amount",
-        "20261024210000_account_credit", "20261025175119_payment_notice_outbox"])
+        "20261024210000_account_credit", "20261025230000_payment_notification_outbox"])
         await root.query(await readFile(new URL(`../prisma/migrations/${migration}/migration.sql`, import.meta.url), "utf8"));
       assert.deepEqual(await showCreate("goal_hint_overlay"), await showCreate("goal_hint_test"));
       const records = await root.query("SELECT checksum, finished_at, rolled_back_at, applied_steps_count FROM _prisma_migrations WHERE migration_name = ?", [migrationName]);

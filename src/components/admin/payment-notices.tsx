@@ -18,12 +18,12 @@ import { Panel, PanelHead, RowList, RowMeta, RowTitle, TextAction } from "./desk
 export function PaymentNotices({ notices, now }: { notices: readonly OwnerNotice[]; now: number }) {
   const action = useCodeAction();
   const send = (notice: OwnerNotice, kind: "resend" | "dismiss") => void action.send("/api/admin/notices", { action: kind, id: notice.id },
-    kind === "resend" ? "SMS notice sent again." : "SMS notice dismissed.");
+    kind === "resend" ? "SMS notice queued again." : "SMS notice dismissed.");
   return <Panel aria-labelledby="payment-notices-title" data-payment-notices>
     <PanelHead><h2 id="payment-notices-title">SMS notices</h2></PanelHead>
     <ActionNotices action={action} />
     <RowList>{notices.map(notice => {
-      const closed = ["failed", "uncertain", "skipped"].includes(notice.state);
+      const closed = ["failed", "uncertain", "unsupported", "unavailable", "cancelled"].includes(notice.state);
       return <NoticeRow key={notice.id}>
         <span>
           <RowTitle>{notice.reference ?? "Unknown reference"}<small>{paymentNoticeKindLabel(notice.kind)}</small></RowTitle>

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { PerformanceCell, PerformanceLeague, PerformanceResponse } from "@/domain/performance";
 import type { PublishedSlipHistory } from "@/domain/published-slips";
 import type { SlipPerformanceSummary } from "@/domain/slip-performance";
+import type { PickPerformanceSummary } from "@/domain/pick-performance";
 import { performancePageHref, type PerformancePageFilters } from "@/domain/performance-page";
 import { performanceHref } from "@/domain/navigation";
 import { isMarketSelection } from "@/domain/markets";
@@ -27,6 +28,26 @@ const percent = (value: number | null, m: Messages) => value === null ? "—" : 
 const metric = (value: number | null, m: Messages) => value === null ? "—" : m.number(value, { maximumFractionDigits: 3 });
 function Metrics({ values }: { values: readonly Readonly<{ label: string; value: ReactNode }>[] }) {
   return <MetricList>{values.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</MetricList>;
+}
+function ReturnMetrics({ summary, locale, kind }: { summary: PickPerformanceSummary | SlipPerformanceSummary; locale: string; kind: "pick" | "slip" }) {
+  const m = createMessages(locale), units = (value: number) => m.text("performance.units", { count: m.number(value, { maximumFractionDigits: 2 }) });
+  return <Stack $gap="sm" data-return-performance={kind}>
+    <Metrics values={[
+      { label: m.text("performance.returnCount"), value: m.number(summary.returnsSampleCount) },
+      { label: m.text("performance.stake"), value: summary.returnsSampleCount ? units(summary.stakeUnits) : "—" },
+      { label: m.text("performance.returns"), value: summary.returnsSampleCount ? units(summary.returnUnits) : "—" },
+      { label: m.text("performance.profit"), value: summary.returnsSampleCount ? units(summary.profitUnits) : "—" },
+      { label: m.text("performance.roi"), value: percent(summary.roi, m) },
+      { label: m.text("performance.meanOdds"), value: metric(summary.meanQuotedOdds, m) },
+      { label: m.text("performance.longestLosing"), value: m.number(summary.longestLosingStreak) },
+      { label: m.text("performance.currentLosing"), value: m.number(summary.currentLosingStreak) },
+    ]} />
+    <MutedText>{m.text(kind === "pick" ? "performance.pickReturnsHint" : "performance.returnsHint")}</MutedText>
+    <MutedText>{m.text(kind === "pick" ? "performance.pickStreakHint" : "performance.streakHint")}</MutedText>
+    {summary.returnsSampleCount === 0 && <MutedText>{m.text("performance.noReturnQuotes")}</MutedText>}
+    {summary.excludedQuoteCount > 0 && <MutedText>{m.text(kind === "pick" ? "performance.excludedPickQuotes" : "performance.excludedQuotes",
+      { count: m.number(summary.excludedQuoteCount) })}</MutedText>}
+  </Stack>;
 }
 function Calibration({ cell, m }: { cell: PerformanceCell; m: Messages }) {
   const rows = cell.metrics.calibration.filter((row) => row.count > 0);
@@ -68,6 +89,7 @@ function PredictionCard({ cell, locale }: { cell: PerformanceCell; locale: strin
     {values.state !== "available" && <MutedText>{m.text("performance.qualityHint")}</MutedText>}
     {values.minimumSamples !== null && <MutedText>{m.text("performance.sampleMinimum", { count: m.number(values.minimumSamples) })}</MutedText>}
     <Calibration cell={cell} m={m} />
+    <details><summary>{m.text("performance.pickReturns")}</summary><ReturnMetrics summary={cell.returns} locale={locale} kind="pick" /></details>
     {cell.evidence.links.length > 0 && <details><summary>{m.text("performance.evidence")}</summary>
       <EvidenceList>{cell.evidence.links.map((link) => <li key={link.revisionId}><TextLink href={link.pageHref} prefetch={false}>{link.matchLabel}</TextLink></li>)}</EvidenceList>
     </details>}
@@ -94,7 +116,7 @@ function LeagueCard({ league, locale }: { league: PerformanceLeague; locale: str
   </details></Surface>;
 }
 function SlipMetrics({ summary, locale }: { summary: SlipPerformanceSummary; locale: string }) {
-  const m = createMessages(locale), units = (value: number) => m.text("performance.units", { count: m.number(value, { maximumFractionDigits: 2 }) });
+  const m = createMessages(locale);
   return <Surface><Stack $gap="sm">
     <Metrics values={[
       { label: m.text("performance.slipTotal"), value: m.number(summary.total) },
@@ -106,18 +128,7 @@ function SlipMetrics({ summary, locale }: { summary: SlipPerformanceSummary; loc
       { label: m.text("performance.slipWinRate"), value: percent(summary.winRate, m) },
     ]} />
     <MutedText>{m.text("performance.slipWinRateHint")}</MutedText>
-    <Metrics values={[
-      { label: m.text("performance.returnCount"), value: m.number(summary.returnsSampleCount) },
-      { label: m.text("performance.stake"), value: units(summary.stakeUnits) },
-      { label: m.text("performance.returns"), value: units(summary.returnUnits) },
-      { label: m.text("performance.profit"), value: units(summary.profitUnits) },
-      { label: m.text("performance.roi"), value: percent(summary.roi, m) },
-      { label: m.text("performance.meanOdds"), value: metric(summary.meanQuotedOdds, m) },
-      { label: m.text("performance.longestLosing"), value: m.number(summary.longestLosingStreak) },
-      { label: m.text("performance.currentLosing"), value: m.number(summary.currentLosingStreak) },
-    ]} />
-    <MutedText>{m.text("performance.returnsHint")}</MutedText><MutedText>{m.text("performance.streakHint")}</MutedText>
-    {summary.excludedQuoteCount > 0 && <MutedText>{m.text("performance.excludedQuotes", { count: m.number(summary.excludedQuoteCount) })}</MutedText>}
+    <ReturnMetrics summary={summary} locale={locale} kind="slip" />
   </Stack></Surface>;
 }
 

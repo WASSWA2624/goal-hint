@@ -2,17 +2,14 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { defaultSubscriptionSettings } from "../../src/domain/subscription-settings.ts";
 
-const noticeStates = ["pending", "sending", "accepted", "failed", "uncertain", "skipped"];
-const noticeErrors = ["configuration", "rejected", "uncertain", "unavailable", "unsupported", "invalid", "expired"];
-/** The PaymentNotice CHECK, so a service bug fails here as it would on MySQL (errno 3819). */
+/** Basic canonical outbox shape validation for the transactional fixture. */
 function checkNotice(row) {
-  assert.ok(["approved", "rejected", "credited", "renewed"].includes(row.kind), `notice kind ${row.kind}`);
-  assert.ok(noticeStates.includes(row.state), `notice state ${row.state}`);
-  assert.equal(row.state === "sending", row.leaseUntil != null, "a lease exactly while sending");
-  assert.ok(row.state !== "sending" || row.leaseOwner != null, "a sending notice has an owner");
-  assert.equal(["pending", "sending"].includes(row.state), row.closedAt == null, "open rows have no closedAt");
-  assert.ok(row.attempts <= 8 && +row.expiresAt > +row.createdAt, "attempts and expiry bounds");
-  assert.ok(row.lastError == null || noticeErrors.includes(row.lastError), `notice lastError ${row.lastError}`);
+  assert.ok(["approved", "rejected", "credited", "renewed"].includes(row.decision));
+  assert.equal(row.targetType, row.decision === "renewed" ? "access-code" : "payment");
+  assert.ok(["queued", "dispatching", "sent", "failed", "uncertain", "unsupported", "unavailable", "cancelled"].includes(row.status));
+  assert.equal(["queued", "dispatching"].includes(row.status), row.finishedAt == null);
+  if (row.status === "queued") assert.deepEqual([row.startedAt, row.attemptId], [null, null]);
+  if (["dispatching", "sent", "failed", "uncertain"].includes(row.status)) assert.ok(row.startedAt && row.attemptId);
   for (const key of Object.keys(row)) assert.doesNotMatch(key, /phone|message|text/iu, "the outbox stores no number or text");
 }
 
@@ -64,7 +61,7 @@ export function memberStore({ instant, settings = {} }) {
     creditUgx: 0, autoRenew: false, autoRenewPlanId: null, autoRenewTermsVersion: null, passwordHash: null };
   const plan = { id: randomUUID(), name: "Weekly", durationDays: 7, priceUgx: 5000, active: true };
   let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [],
-    paymentScreenshot: [], walletEntry: [], accountMove: [], paymentNotice: [], savedSlip: [], memberVerification: [],
+    paymentScreenshot: [], walletEntry: [], accountMove: [], paymentNotificationOutbox: [], savedSlip: [], memberVerification: [],
     subscriptionSettings: [{ ...defaultSubscriptionSettings, id: 1, updatedAt: new Date(instant), ...settings }] };
   let committed = structuredClone(state), tail = Promise.resolve(), transactions = 0, abortCommit = null, inTransaction = false;
   const raw = [];
@@ -72,21 +69,21 @@ export function memberStore({ instant, settings = {} }) {
     const find = where => state[table].find(row => matches(row, where)) ?? null;
     // Reads return copies, as Prisma does: a later write must not change a row the service already read.
     const withRelations = (row, select) => row && (select?.account ? { ...row, account: { ...state.memberAccount.find(item => item.id === row.accountId) } } : { ...row });
-    const written = row => { if (table === "paymentNotice") checkNotice(row); return row; };
+    const written = row => { if (table === "paymentNotificationOutbox") checkNotice(row); return row; };
     return [table, {
       async findUnique({ where, select }) { return withRelations(find(where), select); },
       async findUniqueOrThrow({ where }) { const row = find(where); assert.ok(row, `${table} row must exist`); return { ...row }; },
       async findFirst({ where, orderBy }) { return withRelations(sorted(state[table].filter(row => matches(row, where)), orderBy)[0] ?? null); },
-      async findMany({ where = {}, orderBy, take, select } = {}) {
+      async findMany({ where = {}, orderBy, take, select, include } = {}) {
         const rows = sorted(state[table].filter(row => matches(row, where)), orderBy);
-        return (take === undefined ? rows : rows.slice(0, take)).map(row => withRelations(row, select));
+        return (take === undefined ? rows : rows.slice(0, take)).map(row => withRelations(row, include ?? select));
       },
       async count({ where = {} } = {}) { return state[table].filter(row => matches(row, where)).length; },
       async create({ data }) {
         const row = { ...data, ...(table === "accessCode" ? { extensionDays: data.extensionDays ?? 0, revokedAt: data.revokedAt ?? null } : {}) };
-        if (table === "paymentNotice") {
-          row.leaseOwner ??= null; row.leaseUntil ??= null; row.lastError ??= null; row.attemptedAt ??= null; row.closedAt ??= null;
-          assert.ok(!state.paymentNotice.some(other => other.targetId === row.targetId && other.kind === row.kind), "one notice per decision");
+        if (table === "paymentNotificationOutbox") {
+          row.startedAt ??= null; row.finishedAt ??= null; row.attemptId ??= null;
+          assert.ok(!state.paymentNotificationOutbox.some(other => other.targetType === row.targetType && other.targetId === row.targetId && other.decision === row.decision), "one notice per decision");
         }
         state[table].push(written(row)); return { ...row };
       },
@@ -111,11 +108,11 @@ export function memberStore({ instant, settings = {} }) {
     if (sql.includes("INSERT INTO MemberAccount") && !state.memberAccount.some(row => row.phone === values[1])) {
       state.memberAccount.push({ id: values[0], phone: values[1], blockedAt: null, erasedAt: null, creditUgx: 0, autoRenew: false });
     }
-    if (sql.includes("DELETE FROM PaymentNotice")) {
+    if (sql.includes("DELETE FROM PaymentNotificationOutbox")) {
       const [accepted, undelivered, limit] = values;
-      const doomed = state.paymentNotice.filter(row => row.closedAt && (["accepted", "skipped"].includes(row.state) && +row.closedAt <= +accepted
-        || ["failed", "uncertain"].includes(row.state) && +row.closedAt <= +undelivered)).slice(0, limit);
-      state.paymentNotice = state.paymentNotice.filter(row => !doomed.includes(row));
+      const doomed = state.paymentNotificationOutbox.filter(row => row.finishedAt && (["sent", "unsupported", "unavailable", "cancelled"].includes(row.status) && +row.finishedAt <= +accepted
+        || ["failed", "uncertain"].includes(row.status) && +row.finishedAt <= +undelivered)).slice(0, limit);
+      state.paymentNotificationOutbox = state.paymentNotificationOutbox.filter(row => !doomed.includes(row));
       return doomed.length;
     }
     return sql.includes("UPDATE SubscriptionSettings") || sql.includes("INSERT INTO SubscriptionSettings") ? 1 : 0;

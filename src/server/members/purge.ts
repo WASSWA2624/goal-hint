@@ -40,9 +40,9 @@ export function createMembersPurge(database: DatabaseRuntime, now = Date.now) {
           OR (lockedUntil IS NULL AND windowStartedAt <= ${new Date(+at - 2 * DAY)})) LIMIT ${BATCH}`));
       // Closed account-update SMS notices: a week once accepted or skipped, 30 days when not delivered or not confirmed. Open
       // rows are never deleted here, so this needs no account lock and cannot deadlock with a dispatcher.
-      result.notices = await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM PaymentNotice WHERE closedAt IS NOT NULL
-        AND ((state IN ('accepted', 'skipped') AND closedAt <= ${new Date(+at - paymentNoticeRules.keepAcceptedDays * DAY)})
-          OR (state IN ('failed', 'uncertain') AND closedAt <= ${new Date(+at - paymentNoticeRules.keepUndeliveredDays * DAY)})) LIMIT ${BATCH}`));
+      result.notices = await drain(() => database.query(tx => tx.$executeRaw`DELETE FROM PaymentNotificationOutbox WHERE finishedAt IS NOT NULL
+        AND ((status IN ('sent', 'unsupported', 'unavailable', 'cancelled') AND finishedAt <= ${new Date(+at - paymentNoticeRules.keepAcceptedDays * DAY)})
+          OR (status IN ('failed', 'uncertain') AND finishedAt <= ${new Date(+at - paymentNoticeRules.keepUndeliveredDays * DAY)})) LIMIT ${BATCH}`));
       result.accounts = await drain(() => database.transaction(async tx => {
         const admins = memberAdminPhones();
         const where: Prisma.MemberAccountWhereInput = { passwordHash: null, temporaryPasswordHash: null, passwordResetRequestedAt: null,

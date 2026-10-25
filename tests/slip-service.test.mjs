@@ -37,6 +37,44 @@ function service(read, overrides = {}) {
   return createSlipBuildService({ read, consume: async () => {}, providerOdds: true, clock, ...overrides });
 }
 
+test('combined filters without a verified joint model fail before cohort reads or budget charges', async () => {
+  let reads = 0, consumes = 0;
+  const read = async () => { reads++; throw new Error('No cohort read expected.'); };
+  const consume = async () => { consumes++; };
+  const model = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
+    validFrom: now - 1, validUntil: now + 1000, estimate: () => 0.5 };
+  for (const jointModel of [null, { model, verifyModel: () => false }, { model: { ...model, validUntil: now }, verifyModel: () => true },
+    { model, verifyModel: () => Promise.resolve(true) }, { model, verifyModel: () => { throw new Error('untrusted'); } }]) {
+    const result = await service(read, { consume, jointModel }).query(criteria({ totalProbMin: 50 }));
+    assert.equal(result.state, 'model-unavailable'); assert.equal(result.data, null);
+  }
+  assert.equal(reads, 0); assert.equal(consumes, 0);
+});
+
+test('custom service rechecks joint approval after the scan and after estimating without changing the mean', async () => {
+  const records = [record('fixture-1'), record('fixture-2')];
+  const model = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
+    validFrom: now - 1, validUntil: now + 1000, estimate: () => 0.5 };
+  const input = criteria({ totalProbMin: 45, totalProbMax: 55 });
+  const success = await service(async parameters => page(parameters, records), { jointModel: { model, verifyModel: () => true } }).query(input);
+  assert.equal(success.state, 'generated'); assert.equal(success.data.slips[0].averageProbability, 0.6);
+  assert.equal(success.data.jointProbabilities[success.data.slips[0].id], 0.5);
+  let approved = true;
+  const revokedWhileReading = await service(async parameters => { approved = false; return page(parameters, records); },
+    { jointModel: { model, verifyModel: () => approved } }).query(input);
+  assert.equal(revokedWhileReading.state, 'model-unavailable'); assert.equal(revokedWhileReading.data, null);
+  approved = true;
+  const revokedWhileEstimating = await service(async parameters => page(parameters, records), {
+    jointModel: { model: { ...model, estimate: () => { approved = false; return 0.5; } }, verifyModel: () => approved },
+  }).query(input);
+  assert.equal(revokedWhileEstimating.state, 'model-unavailable'); assert.equal(revokedWhileEstimating.data, null);
+  let ticks = 0;
+  const expired = await service(async parameters => page(parameters, records), {
+    clock: { now: () => ticks++ < 2 ? now : now + 1000 }, jointModel: { model, verifyModel: () => true },
+  }).query(input);
+  assert.equal(expired.state, 'model-unavailable'); assert.equal(expired.data, null);
+});
+
 test('disabled public odds policy makes no stored-price, database or rate-limit reads', async () => {
   let reads = 0, consumes = 0;
   const result = await service(async () => { reads++; throw new Error('should not read'); }, {

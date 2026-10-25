@@ -14,8 +14,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   let f; try { f=await paidDatabase(); } catch (error) { if (!(error instanceof MysqlServerUnavailableError)) throw error; t.skip(error.message); return; }
   t.after(()=>f.close()); const {database:db,config}=f;
   let clock=Date.parse("2026-10-19T09:00:00Z"), n=500;
-  // Decisions write their PaymentNotice row in their own transaction; this delivery checks both committed before it runs.
-  const notifications = { approvals: [], rejections: [], async deliver(id) { const notice=await db.query(tx=>tx.paymentNotice.findUniqueOrThrow({where:{id}}));const payment=await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:notice.targetId}}));assert.equal(payment.status,notice.kind==="rejected"?"rejected":"approved");assert.equal(notice.accountId,payment.accountId);assert.equal(notice.state,"pending");(notice.kind==="rejected"?this.rejections:this.approvals).push(notice);return "sent"; } };
+  const notifications = { approvals: [], rejections: [], async approved(payment) { assert.equal((await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:payment.paymentId}}))).status,"approved"); this.approvals.push(payment); return "sent"; }, async rejected(payment) { assert.equal((await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:payment.paymentId}}))).status,"rejected"); this.rejections.push(payment); return "sent"; } };
   const now=()=>clock, codes=createAccessCodes({database:db,config,now,notifications}), sessions=createMemberSessions({database:db,config,now}), payments=createPayments({database:db,config,now,environment:null}), review=createPaymentReview(db,now,{notifications});
   const planId=randomUUID(); await db.query(tx=>tx.subscriptionSettings.create({data:{id:1,paywallMode:"test",mtnNumber:"256700000901",mtnName:"TEST",airtelNumber:"256700000902",airtelName:"TEST AIRTEL",updatedAt:new Date(clock),updatedBy:"owner"}}));
   await db.query(tx=>tx.subscriptionPlan.create({data:{id:planId,name:"Weekly",durationDays:7,priceUgx:5000,active:true,sortOrder:0,createdAt:new Date(clock),updatedAt:new Date(clock)}}));
@@ -29,7 +28,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   await t.test("edited values persist; renewal carries entitlement with no further code entry",async()=>{
     const who=await member(), row=await report(who,"EDITOLD"); const first=await codes.approvePayment(row.id,fields("EDIT-NEW",{network:"airtel",amountReceivedUgx:6000}),"owner");assert.equal(first.status,"created");assert.equal(+first.grant.startsAt,clock);assert.equal(first.grant.devicesUnlocked,1);
     const stored=await db.query(tx=>tx.paymentSubmission.findUniqueOrThrow({where:{id:row.id}}));assert.equal(stored.transactionRef,"EDITNEW");assert.equal(stored.network,"airtel");assert.equal(stored.amountReceivedUgx,6000);
-    const unlocked={...who,codeEnteredAt:new Date(clock)};const next=await report(unlocked,"EDITRENEW");const renewed=await codes.approvePayment(next.id,fields("EDITRENEW"),"owner");assert.equal(+renewed.grant.startsAt,+first.grant.endsAt);assert.equal(renewed.notification,"sent");assert.equal(notifications.approvals.at(-1).targetId,next.id);assert.equal(notifications.approvals.at(-1).accountId,who.accountId);clock=+first.grant.endsAt+1;
+    const unlocked={...who,codeEnteredAt:new Date(clock)};const next=await report(unlocked,"EDITRENEW");const renewed=await codes.approvePayment(next.id,fields("EDITRENEW"),"owner");assert.equal(+renewed.grant.startsAt,+first.grant.endsAt);assert.equal(renewed.notification,"sent");assert.equal(+notifications.approvals.at(-1).expiresAt,+renewed.grant.endsAt);assert.equal(notifications.approvals.at(-1).phone,who.phone);clock=+first.grant.endsAt+1;
     const view=await codes.accountView(unlocked);assert.ok(view.codes.some(c=>+c.startsAt<=clock&&+c.endsAt>clock));assert.ok(!("ready" in renewed));
     const list=await review.codes();assert.equal(list.find(c=>c.id===first.grant.id).planName,"Weekly");assert.ok(!JSON.stringify(list).includes("codeHash"));
     const sends=notifications.approvals.length;assert.equal((await codes.approvePayment(row.id,fields("EDIT-NEW"),"owner")).status,"duplicate");assert.equal(notifications.approvals.length,sends);
@@ -51,7 +50,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
   });
   await t.test("review checks and reject store decisions and purge images only when requested",async()=>{
     const payer=await member(),stranger=await member(),a=await report(stranger,"CHECKTEST",{payerPhone:payer.phone}),b=await report(payer,"CHECKTEST");const queue=await review.list();const card=queue.payments.find(p=>p.id===a.id);assert.equal(card.checks.filter(c=>c.tone==="warning").length,4);
-    const result=await review.reject(a.id,"unreadable","Synthetic text",true,"owner");assert.equal(result.status,"saved");assert.equal(result.notification,"sent");assert.equal(notifications.rejections.at(-1).accountId,stranger.accountId);assert.notEqual(notifications.rejections.at(-1).accountId,payer.accountId);assert.equal(await review.screenshot(a.id),null);assert.ok(await review.screenshot(b.id));const sends=notifications.rejections.length;assert.equal((await review.reject(a.id,"other","",false,"owner")).status,"refused");assert.equal(notifications.rejections.length,sends);
+    const result=await review.reject(a.id,"unreadable","Synthetic text",true,"owner");assert.equal(result.status,"saved");assert.equal(result.notification,"sent");assert.equal(notifications.rejections.at(-1).phone,stranger.phone);assert.notEqual(notifications.rejections.at(-1).phone,payer.phone);assert.equal(await review.screenshot(a.id),null);assert.ok(await review.screenshot(b.id));const sends=notifications.rejections.length;assert.equal((await review.reject(a.id,"other","",false,"owner")).status,"refused");assert.equal(notifications.rejections.length,sends);
     const rows=await db.query(tx=>tx.ownerAuditEvent.findMany({where:{action:"payment_rejected"}}));assert.equal(rows.length,1);assert.ok(!JSON.stringify(rows[0].details).includes("Synthetic text"));
   });
   await t.test("HTTP approval grants access once without delivery credentials; management preserves audit",async()=>{
@@ -60,7 +59,7 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
     const services={database:db,config:{...config,production:true}};
     const context=body=>({services,owner:{username:"owner"},request:new Request(`http://localhost/api/admin/payments/${row.id}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)})});
     const fields={action:"approve",planId,network:"mtn",transactionId:"HTTPONLYONCE",amount:5000};
-    const handlers=createReviewHandlers({notifications:silentPaymentNotifications});const r=await handlers.POST(context(fields));assert.equal(r.status,201);const reply=await r.json();assert.equal(reply.status,"approved");assert.equal(reply.devicesUnlocked,1);assert.equal(reply.notification,"queued");assert.ok(!("delivery" in reply));assert.ok(!("code" in reply));
+    const handlers=createReviewHandlers({notifications:silentPaymentNotifications});const r=await handlers.POST(context(fields));assert.equal(r.status,201);const reply=await r.json();assert.equal(reply.status,"approved");assert.equal(reply.devicesUnlocked,1);assert.equal(reply.notification,"unavailable");assert.ok(!("delivery" in reply));assert.ok(!("code" in reply));
     const second=await handlers.POST(context(fields));assert.equal(second.status,409);
     const code=await db.query(tx=>tx.accessCode.findUniqueOrThrow({where:{paymentSubmissionId:row.id}}));
     await db.query(tx=>tx.subscriptionPlan.update({where:{id:planId},data:{name:"Changed plan",priceUgx:7000}}));
@@ -69,38 +68,4 @@ test("owner review transactions on restricted real MySQL",{timeout:180000},async
     const audit=await db.query(tx=>tx.ownerAuditEvent.findMany({where:{accountId:who.accountId}}));for(const action of ["code_created","payment_approved","code_extended","code_revoked"])assert.ok(audit.some(a=>a.action===action),action);
   });
 
-  await t.test("the outbox sends each committed notice once across concurrent dispatchers, and erasure races neither deadlock nor recreate data",async()=>{
-    const {createPaymentNotifications}=await import("../src/server/members/payment-notifications.ts");const {createSubscribers}=await import("../src/server/admin/subscribers.ts");
-    const sent=[];const slow={configured:()=>true,async sendSms(message){sent.push(message.phone);await new Promise(resolve=>setTimeout(resolve,40));}};
-    const quiet=createAccessCodes({database:db,config,now,notifications:silentPaymentNotifications});
-    const who=await member(),other=await member(),a=await report(who,"OUTBOXA"),b=await report(other,"OUTBOXB");
-    assert.equal((await quiet.approvePayment(a.id,fields("OUTBOXA"),"owner")).notification,"queued");assert.equal((await quiet.approvePayment(b.id,fields("OUTBOXB"),"owner")).notification,"queued");
-    const dispatchers=[createPaymentNotifications({database:db,now,delivery:slow}),createPaymentNotifications({database:db,now,delivery:slow})];
-    // Earlier subtests' silent decisions left their notices pending too (those from before the clock moved on have expired);
-    // every other one is sent exactly once.
-    const waiting=await db.query(tx=>tx.paymentNotice.count({where:{state:"pending"}}));
-    const results=await Promise.all(dispatchers.map(d=>d.run())),total=key=>results.reduce((sum,r)=>sum+r[key],0);
-    assert.equal(total("accepted")+total("expired"),waiting);assert.equal(sent.length,total("accepted"));
-    for(const phone of [who.phone,other.phone])assert.equal(sent.filter(value=>value===phone).length,1);
-    const rows=await db.query(tx=>tx.paymentNotice.findMany({where:{targetId:{in:[a.id,b.id]}}}));assert.deepEqual(rows.map(r=>r.state),["accepted","accepted"]);assert.ok(rows.every(r=>r.attempts===1&&r.leaseUntil===null&&r.closedAt));
-    const erased=await member(),c=await report(erased,"OUTBOXC");await quiet.approvePayment(c.id,fields("OUTBOXC"),"owner");
-    const [result,erasure]=await Promise.all([dispatchers[0].run(),createSubscribers(db,now).action(erased.accountId,"erase",null,"owner")]);
-    assert.equal(erasure.status,"saved");assert.ok(result.accepted<=1);
-    assert.equal(await db.query(tx=>tx.paymentNotice.count({where:{accountId:erased.accountId}})),0);
-    // Only an answer recorded before the erasure committed may have been audited; nothing is written after it.
-    assert.ok(await db.query(tx=>tx.ownerAuditEvent.count({where:{accountId:erased.accountId,action:"payment_sms_attempted"}}))<=result.accepted);
-  });
-  await t.test("the PaymentNotice CHECK refuses impossible rows and permanent deletion cascades them",async()=>{
-    const {deleteSubscriber}=await import("../src/server/admin/delete-subscriber.ts");const {root}=f;
-    const who=await member(),row=await report(who,"CHECKNOTICE");await codes.approvePayment(row.id,fields("CHECKNOTICE"),"owner");
-    const at=new Date(clock),later=new Date(clock+86400000),base={id:randomUUID(),accountId:who.accountId,kind:"approved",targetId:randomUUID(),state:"pending",attempts:0,availableAt:at,expiresAt:later,createdAt:at};
-    const insert=values=>root.query(`INSERT INTO PaymentNotice (${Object.keys(values).join(", ")}) VALUES (${Object.keys(values).map(()=>"?").join(", ")})`,Object.values(values));
-    for(const change of [{state:"sending"},{state:"sending",leaseUntil:later},{lastError:"provider"},{closedAt:at},{state:"accepted"},{kind:"refund"},{attempts:9},{expiresAt:at}])
-      await assert.rejects(insert({...base,id:randomUUID(),targetId:randomUUID(),...change}),error=>{assert.equal(error.errno,3819,JSON.stringify(Object.keys(change)));return true;});
-    await insert({...base});
-    await assert.rejects(insert({...base,id:randomUUID()}),error=>error.errno===1062);
-    assert.equal(await db.query(tx=>tx.paymentNotice.count({where:{accountId:who.accountId}})),2);
-    assert.equal((await deleteSubscriber(db,who.accountId,config)).status,"saved");
-    assert.equal(await db.query(tx=>tx.paymentNotice.count({where:{accountId:who.accountId}})),0);
-  });
 });

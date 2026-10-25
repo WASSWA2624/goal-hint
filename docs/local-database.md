@@ -95,8 +95,8 @@ to their links. Existing table-scoped account/session grants cover the new
 recovery columns. The application still has no database-level DDL privileges.
 The actual private `application-grants.sql` records the new grants.
 
-The account-update SMS outbox (`20261025175119_payment_notice_outbox`) adds
-`PaymentNotice`. After `npm run db:deploy`, grant the application role SELECT,
+The account-update SMS outbox (`20261025230000_payment_notification_outbox`) adds
+`PaymentNotificationOutbox`. After `npm run db:deploy`, grant the application role SELECT,
 INSERT, UPDATE and DELETE on it, as in
 [manual-account-grants.sql](../deploy/manual-account-grants.sql), before starting
 the release: payment approvals, rejections, credit approvals and auto-renewals

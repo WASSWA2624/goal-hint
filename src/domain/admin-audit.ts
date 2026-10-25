@@ -51,7 +51,7 @@ const descriptions: Readonly<Record<string, ActionDescription>> = Object.freeze(
   payment_submitted: { label: "Payment submitted", category: "payments" },
   payment_rejected: { label: "Payment rejected", category: "payments" },
   payment_sms_attempted: { label: "Payment notification attempted", category: "payments" },
-  payment_sms_resent: { label: "Payment notification resent", category: "payments" },
+  payment_sms_resent: { label: "Payment notification queued again", category: "payments" },
   payment_sms_dismissed: { label: "Payment notification dismissed", category: "payments" },
   trial_requested: { label: "Trial requested", category: "access" },
   uploads_busy: { label: "Payment upload limit reached", category: "system" },

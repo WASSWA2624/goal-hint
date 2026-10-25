@@ -1664,12 +1664,33 @@ model MemberAccount {
   walletEntries    WalletEntry[]
   movesFrom        AccountMove[]       @relation("MovesFrom")
   movesTo          AccountMove[]       @relation("MovesTo")
-  paymentNotices   PaymentNotice[]
   autoRenewPlan    SubscriptionPlan?   @relation("AutoRenewPlan", fields: [autoRenewPlanId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paymentNotifications PaymentNotificationOutbox[]
 
   @@index([passwordResetRequestedAt])
   @@index([autoRenew])
   @@index([autoRenewPlanId])
+}
+
+// Atomic account-update delivery intents. No recipient, SMS body, amount, plan, transaction reference or gateway payload.
+// A committed dispatch claim is never retried automatically: the provider has no verified idempotency contract.
+model PaymentNotificationOutbox {
+  id          String        @id @db.Char(36)
+  accountId   String        @db.Char(36)
+  targetType  String        @db.VarChar(16)
+  targetId    String        @db.Char(36)
+  decision    String        @db.VarChar(8)
+  status      String        @default("queued") @db.VarChar(12)
+  createdAt   DateTime      @db.DateTime(3)
+  startedAt   DateTime?     @db.DateTime(3)
+  finishedAt  DateTime?     @db.DateTime(3)
+  attemptId   String?       @db.Char(36)
+  account     MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([targetType, targetId, decision])
+  @@index([status, createdAt])
+  @@index([status, finishedAt])
+  @@index([accountId])
 }
 
 // Member sign-ins: only a SHA-256 of each random session token is stored, with no user agent or address. A signed-in
@@ -1887,35 +1908,6 @@ model AccountMove {
 
   @@index([fromAccountId, sequence])
   @@index([toAccountId])
-}
-
-// Account-update SMS outbox (B04): one row per committed payment approval, rejection, credit or renewal, written in that
-// decision's own transaction. kind: approved | rejected | credited | renewed (renewed targets an access period, the rest a
-// payment). state: pending | sending | accepted | failed | uncertain | skipped. No phone number or message text: the dispatcher
-// reads the registered number under the account lock and sends the one fixed notice. accepted is gateway acceptance, never
-// handset receipt; an uncertain send is never resent automatically. The members purge deletes closed rows, erasure deletes the
-// account's rows and permanent deletion cascades.
-model PaymentNotice {
-  id          String        @id @db.Char(36)
-  accountId   String        @db.Char(36)
-  kind        String        @db.VarChar(12)
-  targetId    String        @db.Char(36)
-  state       String        @db.VarChar(12)
-  attempts    Int           @default(0) @db.UnsignedTinyInt
-  availableAt DateTime      @db.DateTime(3)
-  expiresAt   DateTime      @db.DateTime(3)
-  leaseOwner  String?       @db.Char(36)
-  leaseUntil  DateTime?     @db.DateTime(3)
-  lastError   String?       @db.VarChar(16)
-  createdAt   DateTime      @db.DateTime(3)
-  attemptedAt DateTime?     @db.DateTime(3)
-  closedAt    DateTime?     @db.DateTime(3)
-  account     MemberAccount @relation(fields: [accountId], references: [id], onDelete: Cascade, onUpdate: Restrict)
-
-  @@unique([targetId, kind])
-  @@index([state, availableAt])
-  @@index([accountId])
-  @@index([closedAt])
 }
 
 // The owner's paid-access settings: a single row, id = 1, and a missing row means these defaults (paywallMode off). The

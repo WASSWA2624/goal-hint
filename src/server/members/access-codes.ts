@@ -16,7 +16,8 @@ import type { AccessCode, Prisma } from "../generated/prisma/client.ts";
 import { grantDevices, liveAccessCode, unlockedDeviceLimit } from "./device-grants.ts";
 import type { MemberIdentity } from "./member-sessions.ts";
 import { decide, lockSettings } from "./settings.ts";
-import { createPaymentNotifications, enqueuePaymentNotice, type PaymentNotifications } from "./payment-notifications.ts";
+import type { PaymentNotifications } from "./payment-notifications.ts";
+import { createQueuedPaymentNotifications } from "./payment-notification-outbox.ts";
 import { acceptedTerms } from "./member-terms.ts";
 import { appendWalletEntry, creditPath, InsufficientCredit, lastEntryNumber, lockedCredit } from "./wallet.ts";
 
@@ -82,7 +83,7 @@ async function codeTransaction<T>(database: DatabaseRuntime, run: (tx: Prisma.Tr
 }
 
 /** Access periods without codes to send (068): every new period unlocks the account's signed-in devices directly. */
-export function createAccessCodes({ database, now = Date.now, notifications = createPaymentNotifications({ database, now }) }: {
+export function createAccessCodes({ database, now = Date.now, notifications = createQueuedPaymentNotifications() }: {
   database: DatabaseRuntime; now?: () => number; notifications?: PaymentNotifications;
   /** Accepted for existing callers; nothing here is keyed since code entry (and its throttle) was removed. */
   config?: Pick<AnalyticsConfig, "key">;
@@ -153,6 +154,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       const entry = await appendWalletEntry(tx, account.id, { kind: "topup", amountUgx: fields.amountReceivedUgx, actor: "admin", at, paymentSubmissionId: submission.id });
       await audit(tx, account.id, submission.id, "payment_approved", actor, at, { purpose: "topup", amountReceivedUgx: fields.amountReceivedUgx,
         creditAddedUgx: fields.amountReceivedUgx, balanceUgx: entry.balanceAfter }, "payment");
+      await notifications.enqueue?.(tx, { accountId: account.id, targetType: "payment", targetId: submission.id, decision: "credited", at });
       return { status: "credited", accountId: account.id, credit: { addedUgx: fields.amountReceivedUgx, balanceUgx: entry.balanceAfter },
         payment: formatPaymentReference(submission.reference), paymentSubmissionId: submission.id };
     }
@@ -179,6 +181,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       paymentSubmissionId: submission.id }) : null;
     await audit(tx, account.id, submission.id, "payment_approved", actor, at, { codeId: grant.id, amountReceivedUgx: fields.amountReceivedUgx,
       ...(credit ? { creditAddedUgx: excess, balanceUgx: credit.balanceAfter } : {}) }, "payment");
+    await notifications.enqueue?.(tx, { accountId: account.id, targetType: "payment", targetId: submission.id, decision: "approved", at });
     return { status: "created", grant: { ...grant, payment: formatPaymentReference(submission.reference),
       ...(credit ? { credit: { addedUgx: excess, balanceUgx: credit.balanceAfter } } : {}) } };
   }
@@ -195,21 +198,22 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
   const grantOf = (code: AccessCode): AccessGrant => ({ id: code.id, accountId: code.accountId, reference: `C-${code.reference}`, planName: code.planName,
     startsAt: code.startsAt, endsAt: code.endsAt, source: code.source, devicesUnlocked: 0 });
 
-  /** The approval's account-update notice, written in its own transaction: a plan payment's or a top-up's, never a free grant's. */
-  async function approvalNotice(tx: Prisma.TransactionClient, outcome: CodeOutcome, at: Date): Promise<string | null> {
-    if (outcome.status === "credited") return enqueuePaymentNotice(tx, { accountId: outcome.accountId, kind: "credited", targetId: outcome.paymentSubmissionId, at });
-    if (outcome.status === "created" && outcome.grant.paymentSubmissionId) {
-      return enqueuePaymentNotice(tx, { accountId: outcome.grant.accountId, kind: "approved", targetId: outcome.grant.paymentSubmissionId, at });
+  async function notifyApproval(outcome: CodeOutcome, phone: string | null): Promise<CodeOutcome> {
+    if (outcome.status === "credited") {
+      let notification: PaymentNotificationStatus;
+      try { notification = await notifications.credited({ paymentId: outcome.paymentSubmissionId, accountId: outcome.accountId, phone,
+        reference: outcome.payment, addedUgx: outcome.credit.addedUgx, balanceUgx: outcome.credit.balanceUgx }); }
+      catch { notification = "failed"; }
+      return { ...outcome, notification };
     }
-    return null;
-  }
-
-  /** After commit only. A delivery failure leaves the committed notice for the outbox's dispatcher. */
-  async function notifyApproval(outcome: CodeOutcome, noticeId: string | null): Promise<CodeOutcome> {
-    if (!noticeId || (outcome.status !== "created" && outcome.status !== "credited")) return outcome;
+    if (outcome.status !== "created") return outcome;
+    const { grant } = outcome;
+    const { payment, paymentSubmissionId } = grant;
+    if (!payment || !paymentSubmissionId) return outcome;
     let notification: PaymentNotificationStatus;
-    try { notification = await notifications.deliver(noticeId); }
-    catch { notification = "queued"; }
+    try { notification = await notifications.approved({ paymentId: paymentSubmissionId, accountId: grant.accountId, phone,
+      reference: payment, planName: grant.planName, expiresAt: grant.endsAt, ...(grant.credit ? { creditAddedUgx: grant.credit.addedUgx } : {}) }); }
+    catch { notification = "failed"; }
     return { ...outcome, notification };
   }
 
@@ -219,9 +223,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
       const phone = normalizePhone(input.phone), note = input.note.trim();
       if (!phone || !note || note.length > 200 || !validAmount(input.amountReceivedUgx)
         || (!!input.network !== !!input.transactionRef) || input.transactionRef && !input.planId) return invalid();
-      let noticeId: string | null = null;
       const outcome = await codeTransaction<CodeOutcome>(database, async (tx, rollback) => {
-        noticeId = null;
         // A grant may create the account, which then needs a valid mobile number; an existing account keeps its number.
         if (!validMobilePhone(phone) && !await tx.memberAccount.findUnique({ where: { phone } })) return rollback(invalid(newNumberInvalid));
         const account = await accountForPhone(tx, phone, new Date(now()));
@@ -230,9 +232,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
         if (input.network && input.transactionRef && input.planId) {
           const outcome = await approval(tx, account, { network: input.network, transactionRef: input.transactionRef,
             planId: input.planId, amountReceivedUgx: input.amountReceivedUgx }, actor, at, undefined, note);
-          if (outcome.status !== "created" && outcome.status !== "credited") return rollback(outcome);
-          noticeId = await approvalNotice(tx, outcome, at);
-          return outcome;
+          return outcome.status === "created" || outcome.status === "credited" ? outcome : rollback(outcome);
         }
         const plan = input.planId ? await tx.subscriptionPlan.findUnique({ where: { id: input.planId } }) : null;
         const days = plan?.durationDays ?? input.durationDays ?? 0;
@@ -241,24 +241,22 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
           planName: plan?.name ?? "Manual", durationDays: days, priceUgx: plan?.priceUgx ?? 0, amountReceivedUgx: input.amountReceivedUgx, note }, actor, at,
           { maximum: await unlockedDeviceLimit(tx) }) };
       });
-      return notifyApproval(outcome, noticeId);
+      return notifyApproval(outcome, phone);
     },
 
     async approvePayment(id: string, fields: PaymentApproval, actor: string): Promise<CodeOutcome> {
-      let noticeId: string | null = null;
+      let phone: string | null = null;
       const outcome = await codeTransaction<CodeOutcome>(database, async (tx, rollback) => {
-        noticeId = null;
+        phone = null;
         const submission = await tx.paymentSubmission.findUnique({ where: { id } });
         if (!submission) return rollback(refused());
         const account = await lockMemberAccount(tx, submission.accountId);
         if (!account || account.blockedAt || account.erasedAt) return rollback(refused());
-        const at = new Date(now());
-        const outcome = await approval(tx, account, fields, actor, at, id);
-        if (outcome.status !== "created" && outcome.status !== "credited") return rollback(outcome);
-        noticeId = await approvalNotice(tx, outcome, at);
-        return outcome;
+        phone = account.phone;
+        const outcome = await approval(tx, account, fields, actor, new Date(now()), id);
+        return outcome.status === "created" || outcome.status === "credited" ? outcome : rollback(outcome);
       });
-      return notifyApproval(outcome, noticeId);
+      return notifyApproval(outcome, phone);
     },
 
     async revoke(id: string, reason: string, actor: string): Promise<CodeOutcome> {
@@ -463,6 +461,7 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
      * ended (the job's limit); a member's own request has none, and the new period then starts now, never backdated.
      */
     async renewDue(accountId: string, { prefer = [], maxLapseMs }: { prefer?: readonly string[]; maxLapseMs?: number } = {}): Promise<"renewed" | "skipped"> {
+      let renewed: { phone: string | null; grant: AccessGrant; balanceUgx: number } | null = null;
       // A cheap look outside the transaction (whose snapshot must start after the lock): most callers have nothing due.
       const due = await database.query(async (tx) => {
         const peek = await tx.memberAccount.findUnique({ where: { id: accountId }, select: { autoRenew: true, autoRenewPlanId: true } });
@@ -472,7 +471,8 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
           && !await tx.walletEntry.findUnique({ where: { requestKey: `renewal:${accountId}:${+end.endsAt}` }, select: { id: true } });
       });
       if (!due) return "skipped";
-      return codeTransaction<"renewed" | "skipped">(database, async (tx) => {
+      const outcome = await codeTransaction<"renewed" | "skipped">(database, async (tx) => {
+        renewed = null;
         const account = await lockMemberAccount(tx, accountId);
         if (!account || account.blockedAt || account.erasedAt || !account.phone || !account.autoRenew || !account.autoRenewPlanId) return "skipped";
         const at = new Date(now());
@@ -488,11 +488,17 @@ export function createAccessCodes({ database, now = Date.now, notifications = cr
           termsVersion: account.autoRenewTermsVersion }, "system:auto-renew", at, { maximum: await unlockedDeviceLimit(tx), prefer });
         const entry = await appendWalletEntry(tx, accountId, { kind: "renewal", amountUgx: -plan.priceUgx, actor: "system", at, accessCodeId: grant.id, requestKey });
         await audit(tx, accountId, grant.id, "credit_renewed", "system:auto-renew", at, { priceUgx: plan.priceUgx, balanceUgx: entry.balanceAfter });
-        // Its account-update SMS goes out from the outbox (the cron's notify step or an owner page load), so a member's own
-        // page never waits on the gateway; a renewal stands whether or not that SMS is delivered.
-        await enqueuePaymentNotice(tx, { accountId, kind: "renewed", targetId: grant.id, at });
+        await notifications.enqueue?.(tx, { accountId, targetType: "access-code", targetId: grant.id, decision: "renewed", at });
+        renewed = { phone: account.phone, grant, balanceUgx: entry.balanceAfter };
         return "renewed";
       });
+      const done = renewed as { phone: string | null; grant: AccessGrant; balanceUgx: number } | null;
+      if (outcome === "renewed" && done) {
+        try { await notifications.renewed({ accessCodeId: done.grant.id, accountId, phone: done.phone, planName: done.grant.planName,
+          expiresAt: done.grant.endsAt, balanceUgx: done.balanceUgx }); }
+        catch { /* A renewal stands whether or not its SMS is delivered. */ }
+      }
+      return outcome;
     },
 
     /**

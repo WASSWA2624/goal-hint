@@ -25,7 +25,7 @@ export const storedDetailSnapshotSchema = publicForecastSchema.safeExtend({
   markets: z.array(publicForecastSchema.shape.markets.element.safeExtend({
     alternatives: z.array(z.strictObject({ selection: z.string().max(32), probability: z.number().gt(0).lt(1) })).max(2),
     source: z.strictObject({ kind: z.enum(["ai", "api-football"]), provisional: z.boolean(),
-      fallbackReason: z.enum(["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted", "ai-missing-group", "ai-invalid-group"]).nullable(),
+      fallbackReason: z.enum(["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted", "ai-missing-group", "ai-invalid-group", "provider-baseline"]).nullable(),
       sourceIds: z.array(z.string().max(128)).max(500) }),
     timestamps: z.strictObject({ generatedAt: at.nullable(), retrievedAt: at, providerUpdatedAt: at.nullable() }),
   })).max(4),
