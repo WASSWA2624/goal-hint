@@ -54,7 +54,8 @@ export function createSubscribeRoute({ services = getMemberServices, plans = rea
         : settings?.paywallMode === "off" ? <>{activeUntil && <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={false} returnTo={returnTo} />}<p>{m.text("account.closed")}</p><div><ButtonLink href="/en/account" prefetch={false}>{m.text("account.title")}</ButtonLink></div></>
         : unavailable ? <p role="status">{m.text("account.unavailable")}</p>
           : member?.blocked ? <p role="status">{m.text("account.refused")}</p>
-            : <SubscribeFlow key={member?.tokenHash ?? "signed-out"} locale={locale} settings={settings!} plans={offers}
+            // The URL decides plans or Add credit: moving between them starts the flow afresh (its draft is saved per account).
+            : <SubscribeFlow key={`${member?.tokenHash ?? "signed-out"}:${parameters.add === "credit" ? "credit" : "plans"}`} locale={locale} settings={settings!} plans={offers}
               account={member ? { id: member.accountId, phone: member.phone } : null} view={view} returnTo={returnTo} userAgent={userAgent}
               trialPending={!!view?.trialPending && !activeUntil} startWithTopUp={parameters.add === "credit"} />}
     </SubscribeLayout></PublicShell>;

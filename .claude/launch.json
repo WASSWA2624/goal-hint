@@ -18,6 +18,13 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "4322", "--bind", "127.0.0.1"],
       "port": 4322
+    },
+    {
+      "name": "account-fixture",
+      "runtimeExecutable": "C:\\Users\\WASSWA WILSON\\AppData\\Roaming\\fnm\\node-versions\\v24.18.1\\installation\\node.exe",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "start", ".tmp/payments-968d36cf", "--hostname", "127.0.0.1", "--port", "4330"],
+      "env": { "GOAL_HINT_DATABASE_ENABLED": "false", "NEXT_TELEMETRY_DISABLED": "1" },
+      "port": 4330
     }
   ]
 }

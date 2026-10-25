@@ -71,6 +71,38 @@ def compact_status_rendering(origin):
         assert not re.search(r'<button\b[^>]*>\s*Change\s*</button>', html), "Account controls do not belong in the payment status."
 
 
+def add_credit_rendering(origin):
+    """Add credit is three numbered steps under the title and the member's credit, without a way to plans, the money-menu link,
+    the payment note or the terms checkbox; members who haven't accepted the terms read that Submit payment accepts them."""
+    android = {"User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36"}
+    for state, accepted in [("credit", True), ("signed-in", False)]:
+        html = visible_html(request(origin, f"/en/subscribe?state={state}&add=credit", headers=android).text)
+        text = unescape(re.sub(r'<[^>]+>', "", html))
+        assert 'data-subscribe-layout="plain-steps"' in html and 'data-subscribe-layout="compact-stacked"' not in html, state
+        steps = re.search(r'<ol\b[^>]*data-subscribe-layout="plain-steps"[^>]*>([\s\S]*?)</ol>\s*<footer', html)
+        assert steps and [unescape(re.sub(r'<[^>]+>', "", title)) for title in re.findall(r'<h3\b[^>]*>([\s\S]*?)</h3>', steps.group(1))] \
+            == ["Choose amount", "Send the money", "Confirm with the payment message"], state
+        for label in ["Add credit", "Amount to add (UGX)", "UGX 1,000 to 500,000", "Pay to", "Copy number", "Submit payment", "Safety tips", "Need help?"]:
+            assert label in text, (state, label)
+        # The money-menu link needs an amount, which a server render never has; Add credit leaves it out in code, and the plan
+        # page check below shows the same user agent does get it there.
+        for gone in ["Pay for a plan instead", "Choose plan", "Synthetic fixture: never send money.", "I'm 18 or older"]:
+            assert gone not in text, (state, gone)
+        assert "data-credit-purchase" not in html and not re.search(r'<input\b[^>]*type="checkbox"', html), state
+        assert ("Your credit" in text and "UGX 12,000" in text) == (state == "credit"), state
+        consent = "By clicking Submit payment, you confirm that you're 18 or older and accept the Terms."
+        assert (consent in text) == (not accepted), state
+        if not accepted:
+            form = steps.group(1)
+            assert form.index("data-payment-consent") < form.index(re.search(r'<button[^>]*type="submit"', form).group(0)), "The consent sits above the button it describes."
+            assert re.search(r'href="/en/terms"', html)
+    plans = visible_html(request(origin, "/en/subscribe?state=signed-in", headers=android).text)
+    assert "Add credit instead" in plans and 'data-subscribe-layout="compact-stacked"' in plans and "18 or older" in plans, "The plan page keeps its switch and checkbox."
+    assert "Open MoMo menu" in plans, "Plan payments keep the money-menu link on Android."
+    assert re.search(r'<a\b[^>]*href="/en/subscribe\?add=credit#plans"[^>]*>\s*Add credit instead\s*</a>', plans), \
+        "Add credit is reached by a link, so Back returns to the plans."
+
+
 def account_reports(origin):
     """The account page states each waiting, refused or reversed report as one sentence with its contact links."""
     for state in ["pending", "pending-active", "pending-call-only", "pending-no-contact", "rejected", "rejected-fallback", "reversed"]:
@@ -156,10 +188,7 @@ def main():
         credit = visible_html(request(server.origin, "/en/subscribe?state=credit").text)
         for label in ["data-credit-purchase", "Credit: UGX 12,000", "Pay UGX 1,000 from credit", "Add credit instead"]:
             assert label in credit, label
-        topup = visible_html(request(server.origin, "/en/subscribe?state=credit&add=credit").text)
-        for label in ["Amount to add (UGX)", "UGX 1,000 to 500,000", "Pay for a plan instead", "Pay to"]:
-            assert label in topup, label
-        assert "data-credit-purchase" not in topup and "Choose plan" not in topup
+        add_credit_rendering(server.origin)
         account_credit = visible_html(request(server.origin, "/en/account?state=credit").text)
         for label in ["data-account-credit", "Your credit is", "UGX 12,000", "Auto-renew from credit is off", "Turn on", "Top-up · PCRED", "Add credit"]:
             assert label in account_credit, label

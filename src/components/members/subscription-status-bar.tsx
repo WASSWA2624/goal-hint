@@ -10,6 +10,7 @@ import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import { media } from "@/styles/theme";
 import { getServerSubscriptionSnapshot, getSubscriptionSnapshot, subscribeMemberSession } from "./member-session";
+import { getPaymentPurpose, getServerPaymentPurpose, subscribePaymentPurpose } from "./payment-purpose";
 
 const Bar = styled.aside<{ $desktopOnly: boolean }>`
   display: ${({ $desktopOnly }) => $desktopOnly ? "none" : "block"};
@@ -56,6 +57,7 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
 }) {
   const subscription = useSyncExternalStore(subscribeMemberSession, getSubscriptionSnapshot, getServerSubscriptionSnapshot);
   const pathname = usePathname(), messages = createMessages(locale), now = useSyncExternalStore(subscribeMinute, currentMinute, serverMinute);
+  const purpose = useSyncExternalStore(subscribePaymentPurpose, getPaymentPurpose, getServerPaymentPurpose);
   // The account page opens with the same expiry and its Renew button, so the bar would only repeat it there.
   if (!subscription?.activeUntil || pathname === `/${resolveLocale(locale)}/account`) return null;
   const until = new Date(subscription.activeUntil), left = subscriptionTimeLeft(until, now);
@@ -66,7 +68,8 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
         {left && ` (${left.unit === "day" ? messages.plural("account.leftDays", left.count)
           : left.count ? messages.plural("account.leftHours", left.count) : messages.text("account.underAnHourLeft")})`}</span>
       {subscription.renewsFromCredit ? <span data-renewal-note>{messages.text("account.renewsFromCredit")}</span>
-        : subscription.canSubscribe && (subscribing ? !subscription.paymentPending && <span data-renewal-note>{messages.text("account.renewalExtends")}</span> : <Action href={subscribePath} prefetch={false}>
+        // A top-up adds credit and never extends access, so the subscribe page says nothing about extending while adding credit.
+        : subscription.canSubscribe && (subscribing ? !subscription.paymentPending && purpose !== "topup" && <span data-renewal-note>{messages.text("account.renewalExtends")}</span> : <Action href={subscribePath} prefetch={false}>
         {messages.text(subscription.paymentPending ? "account.viewPayment" : "account.renew")}
       </Action>)}
     </Row>

@@ -14,6 +14,7 @@ import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { validTopUp, walletRules } from "@/domain/wallet";
 import { createMessages } from "@/i18n/messages";
+import { resolveLocale } from "@/i18n/locales";
 import { AccountAuthForm } from "./account-auth-form";
 import { MobileMoneyLogo } from "./mobile-money-logo";
 import { clearPaymentDraft, readPaymentDraft, savePaymentDraft, paymentDraftSnapshot, type PaymentDraft } from "./payment-draft";
@@ -27,10 +28,11 @@ import { PaymentStatusCard, TrialStatusCard, useApprovalRefresh } from "./paymen
 import {
   ActionLink, Assent, ConfirmDetails, ConfirmPreview, CopyButton, Disclosure, FileBox, FileChoices, FileField,
   HelpActions, HelpTitle, Locked, MenuLink, Note, PageFooter, PasteButton, PaymentTransfer, PlanSwitch, SubmitNote,
-  Plan, PlanName, PlanPrice, Plans, Preview, ReportForm, Row, RowButton, RowNote, Sheet,
-  Step, StepHeading, StepTitle, Submit, Wallet, WalletChoice, WalletChoices,
+  Plan, PlanName, PlanPrice, Plans, Preview, RailNumber, RailStep, ReportForm, Row, RowButton, RowNote, Sheet,
+  Step, StepHeading, StepRail, StepTitle, Submit, TopUpHeader, Wallet, WalletChoice, WalletChoices,
   WalletMeta, WalletNumber,
 } from "./subscribe-styles";
+import { setPaymentPurpose } from "./payment-purpose";
 
 export { SubscribeLayout } from "./subscribe-styles";
 
@@ -93,7 +95,9 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const recovered = useMemo(() => account ? readPaymentDraft(account.id, persisted) : null, [account, persisted]);
   const [edited, setEdited] = useState<PaymentDraft | null>(null);
   const draft = useMemo(() => edited ?? (recovered && plans.some((item) => item.id === recovered.planId) ? { ...recovered,
-    purpose: startWithTopUp && account || recovered.purpose === "topup" && recovered.topUpAmount ? "topup" as const : "plan" as const,
+    // Only the Add credit link opens a top-up: that screen has no way back to plans, so a saved top-up draft never takes over
+    // the plan page (its amount is still there for the next top-up).
+    purpose: startWithTopUp && account ? "topup" as const : "plan" as const,
     accepted: false, network: networks.includes(recovered.network as MobileNetwork) ? recovered.network : initial.network } : initial), [edited, recovered, plans, networks, initial, startWithTopUp, account]);
   const setDraft = (change: (old: PaymentDraft) => PaymentDraft) => setEdited((old) => change(old ?? draft));
   const [image, setImage] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [busy, setBusy] = useState(false), [percentage, setPercentage] = useState<number | null>(null);
@@ -147,6 +151,9 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const target: PaymentTarget | null = topUp ? topUpUgx === null ? null : { priceUgx: topUpUgx, durationDays: null } : plan ?? null;
   const due = target?.priceUgx ?? null;
   useEffect(() => { currentTarget.current = target; });
+  // The shared expiry bar words itself for what is being paid; leaving the page clears it.
+  useEffect(() => { setPaymentPurpose(topUp && showForm ? "topup" : "plan"); }, [topUp, showForm]);
+  useEffect(() => () => setPaymentPurpose(null), []);
   const menu = canOpenMoneyMenu(userAgent);
   const payNetwork = networks.find((network) => network === draft.network) ?? networks[0];
   const shortcut = payNetwork && due !== null ? settings[payNetwork === "mtn" ? "mtnMenuShortcut" : "airtelMenuShortcut"]?.replaceAll("{amount}", String(due)) : undefined;
@@ -271,7 +278,8 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
     // The server records the plan's price (or the top-up) as the claim; the screenshot's amount goes along only as the owner's hint.
     for (const [key, value] of Object.entries({ purpose: credit === null ? "plan" : "topup", planId: credit === null ? plan.id : "", topUpAmount: credit === null ? "" : String(credit),
       network: draft.network, payerPhone: payer, transactionId,
-      screenshotAmount: shot?.amount ? String(shot.amount) : "", accepted: String(draft.accepted) })) body.append(key, value);
+      // A top-up's consent sentence sits above Submit payment, so sending one accepts the terms it showed.
+      screenshotAmount: shot?.amount ? String(shot.amount) : "", accepted: String(draft.accepted || credit !== null && !view?.acceptedTerms) })) body.append(key, value);
     body.append("image", screenshot, "payment.jpg");
     let failed = false;
     try {
@@ -287,24 +295,26 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       if (failed) setTimeout(() => submitButton.current?.focus(), 0);
     }
   }
+  const safety = <Disclosure><summary><ShieldIcon /><span>{m.text("subscribe.safety")}</span><ChevronDownIcon /></summary><ul>
+    <li>{m.text("subscribe.payOnly")}{[settings.mtnName, settings.airtelName].filter(Boolean).join(" · ")}</li>
+    <li>{m.text("subscribe.selfUnlock")}</li>
+    <li>{m.text("subscribe.noPin")}</li>{settings.reviewTime && <li>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</li>}<li>{m.text("subscribe.estimates")}</li>
+  </ul></Disclosure>;
   const help = <Disclosure>
     <summary><HelpIcon /><span>{m.text("navigation.help")}</span><ChevronDownIcon /></summary>
     <div>
       <PaymentHelp settings={settings} locale={locale} text={helpText} />
       {showForm && shortcut && !menu && <Note>{m.text("subscribe.dial")} <strong>{shortcut}</strong></Note>}
-      <Disclosure><summary><ShieldIcon /><span>{m.text("subscribe.safety")}</span><ChevronDownIcon /></summary><ul>
-        <li>{m.text("subscribe.payOnly")}{[settings.mtnName, settings.airtelName].filter(Boolean).join(" · ")}</li>
-        <li>{m.text("subscribe.selfUnlock")}</li>
-        <li>{m.text("subscribe.noPin")}</li>{settings.reviewTime && <li>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</li>}<li>{m.text("subscribe.estimates")}</li>
-      </ul></Disclosure>
+      {safety}
     </div>
   </Disclosure>;
   const accountPanel = account
     ? trialPending && <TrialStatusCard locale={locale} settings={settings} phone={account.phone} heading="h2" />
     : <SubscribeSignIn locale={locale} returnTo={returnTo} settings={settings} />;
+  // Adding credit shows help and the safety tips at once, without the Help toggle or the money-menu code.
   const footer = <PageFooter>
     {account && view?.trialEligible && <TrialRequest locale={locale} days={settings.trialDays} appearance="row" />}
-    {help}
+    {topUp ? <><PaymentHelp settings={settings} locale={locale} text={helpText} />{safety}</> : help}
   </PageFooter>;
   const paymentStatus = account && <PaymentStatusCard locale={locale} status={status} settings={settings} phone={account.phone} heading={statusOnly && !showForm ? "h2" : "h3"}
     replace={statusOnly && (waiting || rejected) && plan && payNetwork ? { open: showForm, controls: `${ids}-form`, disabled: busy, toggle: () => toggleReportForm() } : undefined}
@@ -334,118 +344,147 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       ...(paidTopUp === null ? {} : { useAmount: paidTopUp }) }
     : shortAmount !== null ? { text: m.text("subscribe.amountShort", { amount: m.number(shortAmount), price: m.number(plan.priceUgx),
       plan: m.plural("paywall.days", plan.durationDays) }), warning: true, ...(paidPlan ? { switchTo: paidPlan } : {}) }
-    : !view?.acceptedTerms && !draft.accepted ? { text: m.text("subscribe.needAssent"), warning: false } : null;
+    : !topUp && !view?.acceptedTerms && !draft.accepted ? { text: m.text("subscribe.needAssent"), warning: false } : null;
   const name = settings[payNetwork === "mtn" ? "mtnName" : "airtelName"];
+  const backToStatus = statusOnly && showForm && <RowButton type="button" variant="quiet" disabled={busy} onClick={() => toggleReportForm()} data-payment-back>
+    <ChevronLeftIcon />{m.text("subscribe.backToPaymentStatus")}
+  </RowButton>;
+  const transfer = <PaymentTransfer>
+    {networks.length > 1 ? <WalletChoices><VisuallyHidden as="legend">{m.text("subscribe.network")}</VisuallyHidden>{networks.map((network) => <WalletChoice key={network}>
+      <input type="radio" name={`${ids}-wallet`} value={network} checked={payNetwork === network} onChange={() => { update({ network }); setCopied(""); }} />
+      <span><MobileMoneyLogo network={network} /><span>{wallets[network].name}</span><CheckIcon /></span>
+    </WalletChoice>)}</WalletChoices> : <Note>{wallet.name}</Note>}
+    <Wallet>
+      <WalletNumber><VisuallyHidden>{wallet.name} </VisuallyHidden><WalletMeta>{due === null ? m.text("credit.payTo") : m.text("subscribe.payTo", { amount: m.number(due) })}</WalletMeta> <span>{localUgandaPhone(number)}</span></WalletNumber>
+      <WalletMeta>{m.text("subscribe.payeeNames")} {name}</WalletMeta>
+      <CopyButton variant="secondary" data-analytics-ignore onClick={async () => {
+        update({ network: payNetwork });
+        try { await navigator.clipboard.writeText(localUgandaPhone(number)); setCopied(payNetwork); }
+        catch { setError(m.text("account.copyFailed")); }
+      }}>
+        {copied === payNetwork ? <CheckIcon /> : <CopyIcon />}<span aria-hidden="true">{m.text(copied === payNetwork ? "account.copied" : "subscribe.copy")}</span>
+        <VisuallyHidden>{copied === payNetwork ? m.text("account.copied") : m.text("subscribe.copyNetwork", { network: wallet.short })}</VisuallyHidden>
+      </CopyButton>
+    </Wallet>
+  </PaymentTransfer>;
+  const otherWallets = <noscript>{networks.filter((network) => network !== payNetwork).map((network) => <p key={network}>{wallets[network].name}: {localUgandaPhone(settings[network === "mtn" ? "mtnNumber" : "airtelNumber"]!)} · {settings[network === "mtn" ? "mtnName" : "airtelName"]}</p>)}</noscript>;
+  const paymentForm = showForm && <ReportForm id={`${ids}-form`} onSubmit={submit} data-analytics-ignore $paired={topUp}>
+    <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} required hint={false} disabled={busy}
+      onValueChange={(value) => update({ payerPhone: value })} />
+    {/* No maxLength: a keyboard's clipboard suggestion inserts a whole SMS as typing, and the browser would cut it short. */}
+    <TextInput id={`${ids}-transaction`} label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId}
+      required disabled={busy} minLength={4} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false} data-transaction-input
+      error={idNote || undefined}
+      hint={messageFound && <EvidenceFindings locale={locale} evidence={messageFound} target={target} networkName={networkName(messageFound)} />}
+      onPaste={(event) => { event.preventDefault(); pasteMessage(event.clipboardData.getData("text")); }}
+      onChange={(event) => {
+        const raw = event.currentTarget.value, typed = normalizeTransactionId(raw);
+        if (raw.length > draft.transactionId.length + 1) { pasteMessage(raw); return; }
+        setIdNote(""); setMessageFound(null); setMessageAmount(null); idSource.current = "typed";
+        setShotFound((found) => found && { ...found, idCurrent: false });
+        update({ transactionId: typed.replace(/[^A-Z0-9.-]/gu, "").slice(0, 40) });
+      }}
+      trailing={canPaste && <PasteButton type="button" variant="secondary" disabled={busy} onClick={readClipboard} data-analytics-ignore
+        aria-label={m.text("subscribe.pasteTransaction")}><ClipboardIcon /><span aria-hidden="true">{m.text("subscribe.paste")}</span></PasteButton>} />
+    <FileField>
+      <legend>{m.text("subscribe.moreDetails")}</legend>
+      <FileChoices><FileBox><ImageIcon /><span id={`${ids}-shot`}>{m.text(image ? "subscribe.changeScreenshot" : "subscribe.chooseScreenshot")}</span>
+        <input type="file" accept="image/*" disabled={busy} aria-labelledby={`${ids}-shot`} aria-describedby={`${ids}-shot-hint`}
+          onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox>
+      <FileBox><ImageIcon /><span id={`${ids}-camera`}>{m.text("subscribe.takePhoto")}</span>
+        <input type="file" accept="image/*" capture="environment" disabled={busy} aria-labelledby={`${ids}-camera`} aria-describedby={`${ids}-shot-hint`}
+          onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox></FileChoices>
+      <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
+      {shotState ? <ReadingProgress locale={locale} state={shotState} />
+        : shotFound?.unreadable ? <Note data-screenshot-note>{m.text("subscribe.screenshotUnreadable")}</Note>
+          : shotFound && <div data-screenshot-note><EvidenceFindings locale={locale} evidence={shotFound.evidence} target={target} replaced={shotFound.replaced}
+            showId={shotFound.idCurrent} networkName={networkName(shotFound.evidence)} needAmount /></div>}
+      {image && <><Preview src={preview} alt={m.text("subscribe.preview")} />
+        <RowButton type="button" variant="quiet" disabled={busy} onClick={removeScreenshot}>{m.text("subscribe.removeScreenshot")}</RowButton></>}
+    </FileField>
+    {/* Adding credit takes the terms with the click on Submit payment, said right above it; a plan payment keeps its checkbox. */}
+    {!view?.acceptedTerms && (topUp ? <Note data-payment-consent>{m.text("subscribe.consent")}{" "}<Link href="/en/terms">{m.text("account.terms")}</Link>.</Note>
+      : <Assent><input type="checkbox" required disabled={busy} checked={draft.accepted} onChange={(event) => update({ accepted: event.currentTarget.checked })} /><span>{m.text("subscribe.assent")}{" "}<Link href="/en/terms">{m.text("account.terms")}</Link>.</span></Assent>)}
+    <VisuallyHidden role="status">{announcement}</VisuallyHidden>
+    <Submit ref={submitButton} type="submit" disabled={busy || !restored || !draft.network} aria-disabled={blocker ? true : undefined} aria-describedby={blocker ? `${ids}-blocker` : undefined}>
+      {m.text(busy ? "subscribe.sending" : "subscribe.report")}<ChevronRightIcon /></Submit>
+    {blocker && <SubmitNote id={`${ids}-blocker`} $warning={blocker.warning} data-submit-blocker>{blocker.text}
+      {blocker.switchTo && <> <PlanSwitch type="button" variant="quiet" data-plan-switch
+        onClick={() => { update({ planId: blocker.switchTo!.id }); setTimeout(() => submitButton.current?.focus(), 0); }}>
+        {m.text("subscribe.switchPlan", { plan: m.plural("paywall.days", blocker.switchTo.durationDays) })}</PlanSwitch></>}
+      {blocker.useAmount !== undefined && <> <PlanSwitch type="button" variant="quiet" data-topup-switch
+        onClick={() => { update({ topUpAmount: String(blocker.useAmount) }); setTimeout(() => submitButton.current?.focus(), 0); }}>
+        {m.text("credit.useAmount", { amount: m.number(blocker.useAmount) })}</PlanSwitch></>}</SubmitNote>}
+    {percentage !== null && <div role="status"><progress max={100} value={percentage} aria-label={m.text("subscribe.uploadProgress")} /><span> {percentage}%</span></div>}
+  </ReportForm>;
+  const confirmation = canConfirm && showForm && <CriteriaDialog id={`${ids}-confirm`} title={m.text("subscribe.confirmTitle")} open={confirming} onCancel={() => setConfirming(false)} onApply={() => void send()}
+    applyLabel={m.text("subscribe.confirmSend")} cancelLabel={m.text("subscribe.editDetails")} closeLabel={m.text("subscribe.editDetails")}>
+    <ConfirmDetails data-payment-confirmation>
+      <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{topUp ? m.text("credit.topUp") : m.plural("paywall.days", plan.durationDays)} · UGX {m.number(due ?? plan.priceUgx)}</dd></div>
+      <div><dt>{m.text("subscribe.confirmPaidTo")}</dt><dd>{wallet.name} {localUgandaPhone(number)}{name ? ` · ${name}` : ""}</dd></div>
+      <div><dt>{m.text("subscribe.confirmPaidFrom")}</dt><dd>{formatPhone(validMobilePhone(draft.payerPhone) ?? draft.payerPhone)}</dd></div>
+      <div><dt>{m.text("subscribe.transactionId")}</dt><dd>{claimedId}</dd></div>
+      {shot?.amount && <div><dt>{m.text("subscribe.confirmAmount")}</dt><dd>UGX {m.number(shot.amount)}</dd></div>}
+      {image && <div><dt>{m.text("subscribe.confirmScreenshot")}</dt><dd><ConfirmPreview src={preview} alt={m.text("subscribe.preview")} /></dd></div>}
+    </ConfirmDetails>
+    {/* Contact buttons wait for the "Waiting for approval" card after sending; here the member only checks the details. */}
+    <Note>{m.text("subscribe.confirmReview")}{settings.reviewTime ? ` ${m.text("subscribe.reviewTime", { time: settings.reviewTime })}` : ""} {m.text("subscribe.confirmDelay")}</Note>
+  </CriteriaDialog>;
+  const noScript = <noscript><p>{m.text("subscribe.noJavaScript")}</p></noscript>;
+  // Adding credit: the title with the member's credit, then three numbered steps. Choosing a plan from here means going back
+  // to the plan page, and the money-menu link and payment note stay with plan payments.
+  if (topUp) return <>
+    {accountPanel}
+    {backToStatus}
+    <TopUpHeader id="plans" aria-labelledby={`${ids}-plan`}>
+      <h2 id={`${ids}-plan`} tabIndex={-1}>{m.text("credit.addTitle")}</h2>
+      {view?.credit && <p data-credit-balance>{m.text("credit.yourCredit")} <strong>UGX {m.number(view.credit.balanceUgx)}</strong></p>}
+    </TopUpHeader>
+    {!statusOnly && paymentStatus}{topUpCard}
+    <StepRail data-subscribe-layout="plain-steps">
+      <RailStep><RailNumber aria-hidden="true">1</RailNumber><h3>{m.text("credit.stepAmount")}</h3><div>
+        <TextInput id={`${ids}-topup`} label={m.text("credit.amount")} inputMode="numeric" autoComplete="off" required disabled={busy} value={draft.topUpAmount}
+          hint={m.text("credit.amountHint", { min: m.number(walletRules.topUpMinUgx), max: m.number(walletRules.topUpMaxUgx) })} data-topup-amount
+          onChange={(event) => update({ topUpAmount: event.currentTarget.value.replace(/\D/gu, "").slice(0, 6) })} />
+      </div></RailStep>
+      <RailStep><RailNumber aria-hidden="true">2</RailNumber><h3>{m.text("credit.stepSend")}</h3><div>{transfer}{otherWallets}</div></RailStep>
+      <RailStep id="report"><RailNumber aria-hidden="true">3</RailNumber><h3>{m.text("credit.stepConfirm")}</h3><div>
+        {paymentForm}{confirmation}{noScript}
+        {error && <p role="alert">{error}</p>}
+      </div></RailStep>
+    </StepRail>
+    {footer}
+  </>;
   return <>
     {accountPanel}
-    {statusOnly && showForm && <RowButton type="button" variant="quiet" disabled={busy} onClick={() => toggleReportForm()} data-payment-back>
-      <ChevronLeftIcon />{m.text("subscribe.backToPaymentStatus")}
-    </RowButton>}
+    {backToStatus}
     <Sheet data-subscribe-layout="compact-stacked">
       {showForm && <>
       <Step id="plans" aria-labelledby={`${ids}-plan`}>
-        <StepHeading><StepTitle id={`${ids}-plan`} tabIndex={-1}>{m.text(topUp ? "credit.addTitle" : "subscribe.pickPlan")}</StepTitle></StepHeading>
-        {topUp ? <TextInput id={`${ids}-topup`} label={m.text("credit.amount")} inputMode="numeric" autoComplete="off" required disabled={busy} value={draft.topUpAmount}
-            hint={m.text("credit.amountHint", { min: m.number(walletRules.topUpMinUgx), max: m.number(walletRules.topUpMaxUgx) })} data-topup-amount
-            onChange={(event) => update({ topUpAmount: event.currentTarget.value.replace(/\D/gu, "").slice(0, 6) })} />
-          : <Plans aria-labelledby={`${ids}-plan`} $columns={Math.min(plans.length, 3)}>{plans.map((item) => <Plan key={item.id}>
-            <input type="radio" name="plan" value={item.id} checked={draft.planId === item.id} onChange={() => update({ planId: item.id })} />
-            <PlanName>{m.plural("paywall.days", item.durationDays)}</PlanName><PlanPrice><small>UGX</small> <span>{m.number(item.priceUgx)}</span></PlanPrice>
-          </Plan>)}</Plans>}
-        {account && view?.credit && (topUp ? view.credit.balanceUgx !== 0 && <Note>{m.text("credit.balance", { amount: m.number(view.credit.balanceUgx) })}</Note>
-          : <CreditPurchase locale={locale} credit={view.credit} plan={plan} acceptedTerms={!!view.acceptedTerms} accepted={draft.accepted} disabled={busy}
-            onAccept={(accepted) => update({ accepted })} />)}
-        {account && !waiting && <RowButton type="button" variant="quiet" disabled={busy} onClick={() => update({ purpose: topUp ? "plan" : "topup" })} data-credit-mode={topUp ? "topup" : "plan"}>
-          {m.text(topUp ? "credit.planInstead" : "credit.addInstead")}</RowButton>}
+        <StepHeading><StepTitle id={`${ids}-plan`} tabIndex={-1}>{m.text("subscribe.pickPlan")}</StepTitle></StepHeading>
+        <Plans aria-labelledby={`${ids}-plan`} $columns={Math.min(plans.length, 3)}>{plans.map((item) => <Plan key={item.id}>
+          <input type="radio" name="plan" value={item.id} checked={draft.planId === item.id} onChange={() => update({ planId: item.id })} />
+          <PlanName>{m.plural("paywall.days", item.durationDays)}</PlanName><PlanPrice><small>UGX</small> <span>{m.number(item.priceUgx)}</span></PlanPrice>
+        </Plan>)}</Plans>
+        {account && view?.credit && <CreditPurchase locale={locale} credit={view.credit} plan={plan} acceptedTerms={!!view.acceptedTerms} accepted={draft.accepted} disabled={busy}
+          onAccept={(accepted) => update({ accepted })} />}
+        {/* A link, not a switch: Add credit has no way back to plans, so Back must return here. */}
+        {account && !waiting && <MenuLink variant="quiet" href={`/${resolveLocale(locale)}/subscribe?${new URLSearchParams({ add: "credit", ...(returnTo ? { return: returnTo } : {}) })}#plans`}
+          prefetch={false} data-credit-mode="plan">{m.text("credit.addInstead")}</MenuLink>}
       </Step>
       <Step aria-label={due === null ? m.text("credit.payTo") : m.text("subscribe.payAmount", { amount: m.number(due) })}>
-        <PaymentTransfer>
-          {networks.length > 1 ? <WalletChoices><VisuallyHidden as="legend">{m.text("subscribe.network")}</VisuallyHidden>{networks.map((network) => <WalletChoice key={network}>
-            <input type="radio" name={`${ids}-wallet`} value={network} checked={payNetwork === network} onChange={() => { update({ network }); setCopied(""); }} />
-            <span><MobileMoneyLogo network={network} /><span>{wallets[network].name}</span><CheckIcon /></span>
-          </WalletChoice>)}</WalletChoices> : <Note>{wallet.name}</Note>}
-          <Wallet>
-            <WalletNumber><VisuallyHidden>{wallet.name} </VisuallyHidden><WalletMeta>{due === null ? m.text("credit.payTo") : m.text("subscribe.payTo", { amount: m.number(due) })}</WalletMeta> <span>{localUgandaPhone(number)}</span></WalletNumber>
-            <WalletMeta>{m.text("subscribe.payeeNames")} {name}</WalletMeta>
-            <CopyButton variant="secondary" data-analytics-ignore onClick={async () => {
-              update({ network: payNetwork });
-              try { await navigator.clipboard.writeText(localUgandaPhone(number)); setCopied(payNetwork); }
-              catch { setError(m.text("account.copyFailed")); }
-            }}>
-              {copied === payNetwork ? <CheckIcon /> : <CopyIcon />}<span aria-hidden="true">{m.text(copied === payNetwork ? "account.copied" : "subscribe.copy")}</span>
-              <VisuallyHidden>{copied === payNetwork ? m.text("account.copied") : m.text("subscribe.copyNetwork", { network: wallet.short })}</VisuallyHidden>
-            </CopyButton>
-          </Wallet>
-        </PaymentTransfer>
+        {transfer}
         {shortcut && menu && <MenuLink variant="quiet" data-analytics-ignore href={`tel:${shortcut.replaceAll("#", "%23")}`} onClick={() => update({ network: payNetwork })}><DialpadIcon />{m.text(wallet.menu)}</MenuLink>}
-        <noscript>{networks.filter((network) => network !== payNetwork).map((network) => <p key={network}>{wallets[network].name}: {localUgandaPhone(settings[network === "mtn" ? "mtnNumber" : "airtelNumber"]!)} · {settings[network === "mtn" ? "mtnName" : "airtelName"]}</p>)}</noscript>
+        {otherWallets}
         {settings.paymentNote && <Note>{settings.paymentNote}</Note>}
       </Step>
       </>}
       <Step id="report" aria-label={m.text("subscribe.confirmPayment")}>
         {!account ? <Locked><LockIcon /><span>{m.text("subscribe.signInFirst")}</span></Locked> : <>
           {!statusOnly && paymentStatus}{topUpCard}
-          {showForm && <ReportForm id={`${ids}-form`} onSubmit={submit} data-analytics-ignore>
-            <PhoneInput label={m.text("subscribe.payer")} value={draft.payerPhone} required hint={false} disabled={busy}
-              onValueChange={(value) => update({ payerPhone: value })} />
-            {/* No maxLength: a keyboard's clipboard suggestion inserts a whole SMS as typing, and the browser would cut it short. */}
-            <TextInput id={`${ids}-transaction`} label={m.text("subscribe.transactionId")} placeholder={m.text("subscribe.transactionHint")} value={draft.transactionId}
-              required disabled={busy} minLength={4} pattern="[A-Z0-9.\-]{4,40}" autoComplete="off" autoCapitalize="characters" spellCheck={false} data-transaction-input
-              error={idNote || undefined}
-              hint={messageFound && <EvidenceFindings locale={locale} evidence={messageFound} target={target} networkName={networkName(messageFound)} />}
-              onPaste={(event) => { event.preventDefault(); pasteMessage(event.clipboardData.getData("text")); }}
-              onChange={(event) => {
-                const raw = event.currentTarget.value, typed = normalizeTransactionId(raw);
-                if (raw.length > draft.transactionId.length + 1) { pasteMessage(raw); return; }
-                setIdNote(""); setMessageFound(null); setMessageAmount(null); idSource.current = "typed";
-                setShotFound((found) => found && { ...found, idCurrent: false });
-                update({ transactionId: typed.replace(/[^A-Z0-9.-]/gu, "").slice(0, 40) });
-              }}
-              trailing={canPaste && <PasteButton type="button" variant="secondary" disabled={busy} onClick={readClipboard} data-analytics-ignore
-                aria-label={m.text("subscribe.pasteTransaction")}><ClipboardIcon /><span aria-hidden="true">{m.text("subscribe.paste")}</span></PasteButton>} />
-            <FileField>
-              <legend>{m.text("subscribe.moreDetails")}</legend>
-              <FileChoices><FileBox><ImageIcon /><span id={`${ids}-shot`}>{m.text(image ? "subscribe.changeScreenshot" : "subscribe.chooseScreenshot")}</span>
-                <input type="file" accept="image/*" disabled={busy} aria-labelledby={`${ids}-shot`} aria-describedby={`${ids}-shot-hint`}
-                  onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox>
-              <FileBox><ImageIcon /><span id={`${ids}-camera`}>{m.text("subscribe.takePhoto")}</span>
-                <input type="file" accept="image/*" capture="environment" disabled={busy} aria-labelledby={`${ids}-camera`} aria-describedby={`${ids}-shot-hint`}
-                  onChange={(event) => { void chooseImage(event.currentTarget.files?.[0]); event.currentTarget.value = ""; }} /></FileBox></FileChoices>
-              <VisuallyHidden id={`${ids}-shot-hint`}>{m.text("subscribe.imageHint")}</VisuallyHidden>
-              {shotState ? <ReadingProgress locale={locale} state={shotState} />
-                : shotFound?.unreadable ? <Note data-screenshot-note>{m.text("subscribe.screenshotUnreadable")}</Note>
-                  : shotFound && <div data-screenshot-note><EvidenceFindings locale={locale} evidence={shotFound.evidence} target={target} replaced={shotFound.replaced}
-                    showId={shotFound.idCurrent} networkName={networkName(shotFound.evidence)} needAmount /></div>}
-              {image && <><Preview src={preview} alt={m.text("subscribe.preview")} />
-                <RowButton type="button" variant="quiet" disabled={busy} onClick={removeScreenshot}>{m.text("subscribe.removeScreenshot")}</RowButton></>}
-            </FileField>
-            {!view?.acceptedTerms && <Assent><input type="checkbox" required disabled={busy} checked={draft.accepted} onChange={(event) => update({ accepted: event.currentTarget.checked })} /><span>{m.text("subscribe.assent")}{" "}<Link href="/en/terms">{m.text("account.terms")}</Link>.</span></Assent>}
-            <VisuallyHidden role="status">{announcement}</VisuallyHidden>
-            <Submit ref={submitButton} type="submit" disabled={busy || !restored || !draft.network} aria-disabled={blocker ? true : undefined} aria-describedby={blocker ? `${ids}-blocker` : undefined}>
-              {m.text(busy ? "subscribe.sending" : "subscribe.report")}<ChevronRightIcon /></Submit>
-            {blocker && <SubmitNote id={`${ids}-blocker`} $warning={blocker.warning} data-submit-blocker>{blocker.text}
-              {blocker.switchTo && <> <PlanSwitch type="button" variant="quiet" data-plan-switch
-                onClick={() => { update({ planId: blocker.switchTo!.id }); setTimeout(() => submitButton.current?.focus(), 0); }}>
-                {m.text("subscribe.switchPlan", { plan: m.plural("paywall.days", blocker.switchTo.durationDays) })}</PlanSwitch></>}
-              {blocker.useAmount !== undefined && <> <PlanSwitch type="button" variant="quiet" data-topup-switch
-                onClick={() => { update({ topUpAmount: String(blocker.useAmount) }); setTimeout(() => submitButton.current?.focus(), 0); }}>
-                {m.text("credit.useAmount", { amount: m.number(blocker.useAmount) })}</PlanSwitch></>}</SubmitNote>}
-            {percentage !== null && <div role="status"><progress max={100} value={percentage} aria-label={m.text("subscribe.uploadProgress")} /><span> {percentage}%</span></div>}
-          </ReportForm>}
-          {canConfirm && showForm && <CriteriaDialog id={`${ids}-confirm`} title={m.text("subscribe.confirmTitle")} open={confirming} onCancel={() => setConfirming(false)} onApply={() => void send()}
-            applyLabel={m.text("subscribe.confirmSend")} cancelLabel={m.text("subscribe.editDetails")} closeLabel={m.text("subscribe.editDetails")}>
-            <ConfirmDetails data-payment-confirmation>
-              <div><dt>{m.text("subscribe.planLabel")}</dt><dd>{topUp ? m.text("credit.topUp") : m.plural("paywall.days", plan.durationDays)} · UGX {m.number(due ?? plan.priceUgx)}</dd></div>
-              <div><dt>{m.text("subscribe.confirmPaidTo")}</dt><dd>{wallet.name} {localUgandaPhone(number)}{name ? ` · ${name}` : ""}</dd></div>
-              <div><dt>{m.text("subscribe.confirmPaidFrom")}</dt><dd>{formatPhone(validMobilePhone(draft.payerPhone) ?? draft.payerPhone)}</dd></div>
-              <div><dt>{m.text("subscribe.transactionId")}</dt><dd>{claimedId}</dd></div>
-              {shot?.amount && <div><dt>{m.text("subscribe.confirmAmount")}</dt><dd>UGX {m.number(shot.amount)}</dd></div>}
-              {image && <div><dt>{m.text("subscribe.confirmScreenshot")}</dt><dd><ConfirmPreview src={preview} alt={m.text("subscribe.preview")} /></dd></div>}
-            </ConfirmDetails>
-            {/* Contact buttons wait for the "Waiting for approval" card after sending; here the member only checks the details. */}
-            <Note>{m.text("subscribe.confirmReview")}{settings.reviewTime ? ` ${m.text("subscribe.reviewTime", { time: settings.reviewTime })}` : ""} {m.text("subscribe.confirmDelay")}</Note>
-          </CriteriaDialog>}
-          <noscript><p>{m.text("subscribe.noJavaScript")}</p></noscript>
+          {paymentForm}
+          {confirmation}
+          {noScript}
         </>}
         {error && <p role="alert">{error}</p>}
       </Step>

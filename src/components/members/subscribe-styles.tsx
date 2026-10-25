@@ -2,6 +2,7 @@
 
 import styled, { css } from "styled-components";
 import { Button, ButtonLink } from "@/components/ui/controls";
+import { media } from "@/styles/theme";
 
 const focusRing = css`
   outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
@@ -38,6 +39,35 @@ export const FieldWithAction = styled.div`
   > div:first-child > [id$="-hint"], > div:first-child > [id$="-error"] { grid-column: 1 / -1; }
   > button { grid-column: 2; grid-row: 2; min-block-size: 44px; }
   ${icons}
+`;
+
+/** Add credit: the title, with the member's credit opposite it. A section, so the #plans anchor clears the sticky header. */
+export const TopUpHeader = styled.section`
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 4px 12px; min-inline-size: 0;
+  h2 { margin: 0; font-size: 22px; line-height: 28px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: -0.01em; }
+  p { margin: 0; text-align: end; ${smallText} }
+  p strong { display: block; font-size: 16px; line-height: 22px; font-weight: ${({ theme }) => theme.typography.weight.heavy};
+    color: ${({ theme }) => theme.color.text}; font-variant-numeric: tabular-nums; }
+  ${media.desktop} { h2 { font-size: 28px; line-height: 34px; } }
+`;
+/** Add credit's three numbered steps, joined by a thin rail. */
+export const StepRail = styled.ol`display: grid; min-inline-size: 0; margin: 0; padding: 0; list-style: none;`;
+export const RailStep = styled.li`
+  position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 0 12px; min-inline-size: 0; padding-block-end: 20px;
+  &::before { content: ""; position: absolute; inset-inline-start: 11.5px; inset-block: 30px 6px; inline-size: 1px;
+    background: ${({ theme }) => theme.color.controlBorder}; opacity: 0.55; }
+  &:last-child { padding-block-end: 0; }
+  &:last-child::before { display: none; }
+  > h3 { margin: 0; font-size: 15px; line-height: 24px; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  > div { grid-column: 2; display: grid; gap: 10px; min-inline-size: 0; margin-block-start: 6px; }
+  label { font-size: 12px; line-height: 18px; }
+  /* An amount of up to six digits needs no full-width field. */
+  input[data-topup-amount] { max-inline-size: 18rem; }
+`;
+export const RailNumber = styled.span`
+  display: grid; place-items: center; inline-size: 24px; block-size: 24px; border-radius: ${({ theme }) => theme.border.radius};
+  background: ${({ theme }) => theme.color.text}; color: ${({ theme }) => theme.color.surface};
+  font-size: 12px; line-height: 1; font-weight: ${({ theme }) => theme.typography.weight.heavy};
 `;
 
 /** Keep payment confirmation below the recipient details at every screen size. */
@@ -128,11 +158,17 @@ export const StatusFacts = styled.dl`
   dt { color: ${({ theme }) => theme.color.mutedText}; }
   dd { margin: 0; min-inline-size: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 `;
-export const ReportForm = styled.form`
+/** $paired puts the first two fields (Paid from, Transaction ID) side by side on desktop. */
+export const ReportForm = styled.form<{ $paired?: boolean }>`
   display: grid; gap: 10px; min-inline-size: 0;
   label { font-size: 12px; line-height: 18px; }
   input:not([type="checkbox"], [type="radio"]) { min-block-size: 44px; }
   > div { min-inline-size: 0; }
+  ${({ $paired }) => $paired && css`${media.desktop} {
+    grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px;
+    > * { grid-column: 1 / -1; }
+    > :nth-child(-n + 2) { grid-column: auto; }
+  }`}
 `;
 export const FileField = styled.fieldset`
   display: grid; gap: 4px; min-inline-size: 0; margin: 0; padding: 0; border: 0;
