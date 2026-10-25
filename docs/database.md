@@ -480,3 +480,18 @@ is recorded and this migration is not, applies the same DDL, recreates the trigg
 both tables, the columns, keys, checks and all five triggers, then records the committed checksum once. MariaDB DDL is not
 transactional, so a failure after the guard means restoring the backup. The overlay has not been run on MariaDB 11.4
 locally; `tests/account_credit_migration_test.py` checks that it matches the migration.
+
+### Refresh stage phases (25 October 2026)
+
+Migration `20261025200000_refresh_stage_phases` is a hand-written CHECK swap with no Prisma schema change (so
+`schema.snapshot.prisma` is unchanged and `db:migrate` would diff empty). One `ALTER TABLE PredictionRefreshStage` drops
+`PredictionRefreshStage_shape` and adds `PredictionRefreshStage_shape_v2`, which also admits the `preparation` and
+`evidence-empty` phases the refresh worker writes and keeps every original binding (body job, phase, kind and a
+64-hex attempt). It uses `DROP CONSTRAINT`, which MySQL 8.4 and MariaDB both accept. Without it every AI-enabled live
+refresh fails at preparation, so apply it before enabling AI. Locally `npm run db:deploy` applies it. On the production
+MariaDB import `prisma/mariadb/20261025200000_refresh_stage_phases.sql` with the migration account after a verified
+backup and with writers stopped: it stops (`SQLSTATE 45000`) unless `20261009153335_prediction_refresh_worker` is
+recorded with its original check present and this migration is not, applies the same ALTER, verifies that only the
+widened check exists and names both added phases, then records the committed checksum once. No grants change. The
+overlay has not been run on MariaDB 11.4 locally; `tests/refresh_stage_phases_migration_test.py` checks that it
+matches the migration.

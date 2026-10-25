@@ -34,10 +34,12 @@ const baseline = z.object({ version: label, lookbackMs: positive, minimumMatches
 const gate = z.object({ id: label, purpose: z.enum(["candidate", "public-claim"]), system: z.enum(evaluationSystems), family,
   horizonId: label, minimumSamples: positive.max(1_000_000), minimumCoverage: z.number().min(0).max(1),
   maximumBrier: z.number().nonnegative().max(2).nullable(), maximumLogLoss: z.number().nonnegative().finite().nullable(),
-  maximumCalibrationError: z.number().min(0).max(1).nullable(), baseline: z.enum(["league-frequency", "team-strength"]).nullable(),
+  maximumCalibrationError: z.number().min(0).max(1).nullable(), baseline: z.enum(["league-frequency", "team-strength", "api-football"]).nullable(),
   maximumBrierDifference: z.number().finite().min(-2).max(2).nullable(),
 }).strict().refine((value) => (value.baseline === null) === (value.maximumBrierDifference === null) &&
-  (value.maximumBrier !== null || value.maximumLogLoss !== null || value.maximumCalibrationError !== null || value.baseline !== null));
+  (value.maximumBrier !== null || value.maximumLogLoss !== null || value.maximumCalibrationError !== null || value.baseline !== null) &&
+  // The provider baseline is the other source in the same refresh; a source never gates against itself.
+  value.baseline !== value.system);
 const model = z.unknown().transform(parseModelVersion);
 const protocol = z.object({ version: z.literal(EVALUATION_VERSION), name: label, ruleVersion: z.literal(MARKET_RULE_VERSION),
   frozenAt: instant.nullable(), approvalRef: ref.nullable(), selectionVersion: label,

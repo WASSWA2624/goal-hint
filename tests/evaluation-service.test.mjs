@@ -233,6 +233,24 @@ test("relative baseline gates use only matched observed fixtures and fail a conf
   assert.equal(comparison(report, "ai", "league-frequency").count, 1);
 });
 
+test("an API-Football baseline gate scores AI against the provider on the same matched settled fixtures", () => {
+  const configured = (maximumBrierDifference, minimumSamples = 1) => toyGates().map((gate) => gate.system === "ai" && gate.family === "match-result"
+    ? { ...gate, baseline: "api-football", maximumBrierDifference, minimumSamples } : gate);
+  const outcome = (gates) => {
+    const report = evaluate(evaluationDataset({ mode: "prospective" }), evaluationProtocol({ gates }));
+    return { report, gate: report.gates.find((entry) => entry.id === "synthetic-candidate-ai-match-result") };
+  };
+  // Home win: AI 0.4/0.3/0.3 has Brier 0.54 and the provider 0.5/0.3/0.2 has 0.38, so AI trails by 0.16.
+  const passed = outcome(configured(0.2));
+  assert.equal(passed.gate.status, "passed"); approximate(comparison(passed.report, "ai", "api-football").brierDifference, 0.16);
+  assert.equal(comparison(passed.report, "ai", "api-football").kind, "source-comparison");
+  const failed = outcome(configured(-0.01));
+  assert.equal(failed.gate.status, "failed"); assert.ok(failed.gate.reasons.includes("matched-brier-difference-above-gate"));
+  const pending = outcome(configured(0.2, 2));
+  assert.equal(pending.gate.status, "pending"); assert.ok(pending.gate.reasons.includes("insufficient-matched-baseline-samples"));
+  for (const value of [passed, failed, pending]) assert.equal(value.report.promotionPerformed, false);
+});
+
 test("unsupported baseline binaries cannot manufacture matched samples for quality gates", () => {
   const gates = toyGates().map((gate) => gate.system === "ai" && gate.family === "total-goals"
     ? { ...gate, baseline: "team-strength", maximumBrierDifference: 0 } : gate);

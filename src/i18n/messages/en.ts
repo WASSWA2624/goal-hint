@@ -1138,6 +1138,7 @@ export const en = {
   "detail.fallback.ai-budget-exhausted": "API-Football statistical fallback was used because the AI budget was exhausted.",
   "detail.fallback.ai-missing-group": "API-Football statistical fallback supplied a probability group missing from the AI output.",
   "detail.fallback.ai-invalid-group": "API-Football statistical fallback replaced an invalid AI probability group.",
+  "detail.fallback.provider-first": "API-Football supplied this prediction as the reviewed baseline; AI review is recorded separately and not shown.",
   "detail.fallback.provider-baseline": "API-Football supplies this baseline forecast. AI forecasts require comparative evaluation before publication.",
   "history.title": "Prediction revision history",
   "history.readOnly": "Inspect stored publications and schedule cycles. Viewing history does not change the current or locked prediction, results or performance counts.",

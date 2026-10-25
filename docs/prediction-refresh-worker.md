@@ -107,6 +107,26 @@ claim. It reports finished only when every selected job is terminal; successful
 queue completion includes correctly skipped/unavailable work and is distinct
 from publication success.
 
+Stage phases are `preparation`, `evidence`, `evidence-empty`, `ai`, `fallback`
+and `observation`. The original `PredictionRefreshStage_shape` check admitted
+only four of them, so the live AI preparation stage and the recoverable
+empty-evidence stage failed on MySQL (confirmed by
+`tests/refresh-stage-phases.integration.mjs`). Migration
+`20261025200000_refresh_stage_phases` swaps it in one statement for
+`PredictionRefreshStage_shape_v2`, which adds those two phases and keeps every
+job, phase, kind and attempt binding; production MariaDB applies
+`prisma/mariadb/20261025200000_refresh_stage_phases.sql` ([database](database.md)).
+
+When the plan froze a source order, the sealed `fallback` completed stage also
+holds the refresh's two source receipts (`value.sources`): the AI and
+API-Football forecasts from the same evidence cutoff, with their own snapshots,
+clocks and versions, or explicit unavailable reasons. The stage `at` is the
+revision's `generationCompletedAt`, so both receipts share it. An interrupted
+fallback stage stores a `provider-unavailable` provider receipt; a denied stage
+stores none. No table, phase or grant was added for them; the private
+[source comparison](provider-fallback.md#source-order-and-receipts) reads only
+`$.value.sources` and checks each row's seal in SQL.
+
 The worker database role needs SELECT/INSERT, without UPDATE/DELETE, on the three
 new tables and the existing append-only usage ledger, plus the existing component
 grants. Apply the migration using the migration role. No new manifest members,

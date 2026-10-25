@@ -11,7 +11,8 @@ Owner decisions through 13 October 2026, recorded in the ignored `.goal-hint/own
 
 | Decision | Effect |
 | --- | --- |
-| **OpenAI primary, API-Football fallback (13 October 2026)** | The live AI binding is implemented. Activation requires the private key and exact owner references. With AI disabled, the existing fallback-only path needs no AI key. AI failures retain valid independent families and request API-Football for supported missing families. Research stays disabled. |
+| **OpenAI and API-Football (13 October 2026)** | The live AI binding is implemented. Activation requires the private key and exact owner references. With AI disabled, the existing fallback-only path needs no AI key. Research stays disabled. |
+| **Provider baseline with optional AI shadow** | API-Football supplies validated provider groups; every AI family remains private, including provider outages. Both original forecasts are sealed for private diagnostics (`/admin/forecasts`). A source-order/reference configuration cannot bypass the independent publication guard; AI-first startup remains unavailable pending a verified frozen promotion binding. |
 | **Publish now, provisional** | Forecasts are published before shadow qualification (047) and release gates (048/049). Every API-Football forecast carries the existing *Provisional estimate* label, and no accuracy claim is made. |
 | **All available competitions** | `GOAL_HINT_COMPETITION_IDS` lists every league with a current season on the plan (`npm run live:competitions`). |
 | **Local only** | Production scope may run in development mode **only** against a loopback database. Remote or hosted targets still need `NODE_ENV=production` and verified TLS. |
@@ -57,6 +58,27 @@ forecast dates stay explicitly unavailable. Full seven-day coverage requires a
 plan with the necessary fixture dates and history access. The runner adapts when
 the verified account plan changes. OpenAI cannot fill missing fixture schedules.
 
+### Forecast source order
+
+`GOAL_HINT_FORECAST_SOURCE_ORDER` applies only with AI enabled and defaults to
+`provider-first`. Every AI refresh plan freezes it, so changing it affects new
+jobs only. Intents saved before source orders existed stay structurally readable
+without receipts; the independent live baseline policy still forbids publishing
+new AI markets from them. Fallback-only plans keep their existing shape.
+
+The evaluation command can print a model/report-bound promotion reference only
+for a prospective frozen final test whose gates demonstrate improvement against
+the matched provider at every protocol horizon. That reference is input to
+independent review, not publication authority. Preserve the report, protocol and
+authenticated source/result evidence; owner review and the future trusted frozen
+evidence binding remain required.
+
+The current live runner rejects `ai-first` even when its configured reference
+matches the model and has an owner approval. No concrete promotion-evidence
+binding is mounted. The independent publication authority also rejects every AI
+market. Keep provider-first configured; changing references or environment
+settings cannot activate AI publication.
+
 ## What the runner does
 
 - **Schedule:** it enqueues the daily selection for the latest 21:00 UTC occurrence on start and at each
@@ -67,7 +89,8 @@ the verified account plan changes. OpenAI cannot fill missing fixture schedules.
   `refresh-capacity` exclusions. After three failed attempts, known coverage is finalized as partial.
 - **Refresh:** one job per selected fixture. When AI is enabled, up to two bounded team-history imports finish
   before the immutable analysis cutoff; the pinned OpenAI attempt uses stored verified regulation history and
-  derived form. API-Football supplies supported missing families on primary failure. A fresh
+  derived form. The API-Football prediction is then always requested (inside the job's reserved fallback
+  request) and, under the default provider-first order, publishes the match result. A fresh
   `/fixtures?id=` status read precedes atomic publication before the five-minute cutoff. Jobs wait (retryably)
   instead of spending the reserve kept for result checks.
 - **Results:** a leased poller covers the competitions with prediction cycles in the window. Settlement and

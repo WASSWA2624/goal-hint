@@ -4,7 +4,8 @@ import { marketRules } from "../src/domain/markets.ts";
 import { evidenceHash } from "./helpers/evidence-fixtures.mjs";
 import { fallbackAuthority, fallbackAiDenied, fallbackFixture, fallbackProvider } from "./helpers/fallback-fixtures.mjs";
 import { fallbackRequestedGroups, isFallbackAiCurrent, resolveFallbackCandidate } from "../src/server/fallback/fallback-resolution.ts";
-import { parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult } from "../src/server/fallback/fallback-input.ts";
+import { parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult, parseResolvedForecastCandidate } from "../src/server/fallback/fallback-input.ts";
+import { evidenceFingerprint } from "../src/server/evidence/evidence-input.ts";
 
 const noProvider = (fixture = fallbackFixture()) => resolveFallbackCandidate({ expected: fixture.expected, ai: fixture.ai, provider: null, now: fixture.now }, fixture.authority);
 const resolve = (fixture, provider, authority = fixture.authority) => resolveFallbackCandidate({ expected: fixture.expected, ai: fixture.ai,
@@ -191,4 +192,97 @@ test("a manufactured direct double chance fails structural source-group validati
     markets: { ...provider.candidate.markets.markets, "double-chance": { ...chance, market: { ...chance.market,
       probabilities: { "home-or-draw": 0.9, "away-or-draw": 0.6, "home-or-away": 0.8 }, selection: "home-or-draw", selectedProbability: 0.9 } } } } } };
   assert.throws(() => parseProviderFallbackResult(forged));
+});
+
+const ordered = (fixture, provider, order = "provider-first", authority = fixture.authority) => resolveFallbackCandidate({ expected: fixture.expected,
+  ai: fixture.ai, provider, now: fixture.now, order }, authority);
+
+test("provider-first publishes the provider result and double chance over a complete AI group, and AI fills the goal markets", () => {
+  const fixture = fallbackFixture(), result = ordered(fixture, fallbackProvider(fixture.expected));
+  assert.equal(result.status, "candidate");
+  const markets = result.candidate.markets;
+  for (const family of ["match-result", "double-chance"]) {
+    assert.equal(markets[family].market.source, "api-football");
+    assert.deepEqual(markets[family].fallback, { reason: "provider-first", detail: "ai-shadow" });
+  }
+  assert.deepEqual(markets["match-result"].market.probabilities, { "home-win": 0.5, draw: 0.3, "away-win": 0.2 });
+  for (const family of ["total-goals", "both-teams-to-score"]) { assert.equal(markets[family].market.source, "ai"); assert.equal(markets[family].fallback, null); }
+  assert.equal(result.candidate.audit.sourceOrder, "provider-first"); assert.equal(result.candidate.audit.aiReason, null);
+  assert.ok(result.candidate.reasons.some((reason) => reason.text === "API-Football supplies the validated statistical forecast for the match result."));
+  assert.ok(result.candidate.reasons.every((reason) => !reason.text.includes("fallback")));
+  assert.match(result.candidate.uncertainty.text, /^The match result comes from API-Football; AI notes cover the goal markets\./u);
+  assert.equal(parseResolvedForecastCandidate(result.candidate).audit.sourceOrder, "provider-first");
+});
+
+test("provider-first with a denied or unauthorized provider keeps the AI match result without a fallback reason", () => {
+  const fixture = fallbackFixture();
+  for (const [provider, authority, reason] of [
+    [{ status: "denied", reason: "stale", requestsDispatched: 1, requestCountUnknown: false }, fixture.authority, "stale"],
+    [fallbackProvider(fixture.expected), fallbackAuthority({ verifyProvider: () => false }), "not-authorized"],
+  ]) {
+    const result = ordered(fixture, provider, "provider-first", authority);
+    assert.equal(result.status, "candidate");
+    for (const family of ["match-result", "double-chance", "total-goals", "both-teams-to-score"]) {
+      assert.equal(result.candidate.markets[family].market.source, "ai"); assert.equal(result.candidate.markets[family].fallback, null);
+    }
+    assert.equal(result.candidate.audit.providerReason, reason); assert.equal(result.candidate.audit.sourceOrder, "provider-first");
+    assert.doesNotMatch(result.candidate.uncertainty.text, /comes from API-Football/u);
+    parseResolvedForecastCandidate(result.candidate);
+  }
+});
+
+test("provider-first records the AI state in its reason detail", () => {
+  const fixture = fallbackFixture(); fixture.ai = fallbackAiDenied("timeout"); fixture.expected = { ...fixture.expected, pin: null };
+  const denied = ordered(fixture, fallbackProvider(fixture.expected));
+  assert.deepEqual(denied.candidate.markets["match-result"].fallback, { reason: "provider-first", detail: "timeout" });
+  assert.equal(denied.candidate.markets["total-goals"].reason, "unsupported-family");
+  const fresh = fallbackFixture(), boundary = fresh.ai.output.timestamps.generatedAt + fresh.ai.output.outputTiming.maxAgeMs + 1;
+  const expired = resolveFallbackCandidate({ expected: fresh.expected, ai: fresh.ai, provider: fallbackProvider(fresh.expected), now: boundary,
+    order: "provider-first" }, fresh.authority);
+  assert.deepEqual(expired.candidate.markets["match-result"].fallback, { reason: "provider-first", detail: "invalid-timing" });
+  assert.equal(expired.candidate.markets["total-goals"].available, false);
+});
+
+test("a provider-first cross-market conflict keeps the provider and drops both AI binary groups without filling them", () => {
+  const fixture = partial({ "total-goals": total(0.1), "both-teams-to-score": btts(0.8) });
+  const provider = fallbackProvider(fixture.expected, { groups: { "match-result": { source: "api-football", period: marketRules.period,
+    probabilities: { "home-win": 0.8, draw: 0.05, "away-win": 0.15 } } } });
+  const result = ordered(fixture, provider); assert.equal(result.status, "candidate");
+  assert.equal(result.candidate.markets["match-result"].market.source, "api-football");
+  assert.equal(result.candidate.markets["double-chance"].market.source, "api-football");
+  for (const family of ["total-goals", "both-teams-to-score"]) {
+    assert.deepEqual(result.candidate.markets[family], { available: false, reason: "cross-market-conflict" });
+    assert.deepEqual(result.candidate.issues.filter((issue) => issue.family === family), [{ family, reason: "cross-market-conflict",
+      relatedGroups: ["match-result", "total-goals", "both-teams-to-score"], constraints: ["btts-under-requires-draw"] }]);
+  }
+  parseResolvedForecastCandidate(result.candidate);
+  // The original AI-first rule for the same inputs keeps AI and omits the provider.
+  assert.equal(resolve(fixture, provider).candidate.markets["match-result"].available, false);
+});
+
+test("without an order the resolution is byte-identical to the original AI-first result", () => {
+  const partialAi = partial({ "total-goals": total(), "both-teams-to-score": btts() });
+  for (const fixture of [fallbackFixture(), partialAi]) {
+    const provider = fallbackProvider(fixture.expected), legacy = resolve(fixture, provider);
+    assert.equal(evidenceFingerprint(resolveFallbackCandidate({ expected: fixture.expected, ai: fixture.ai, provider, now: fixture.now, order: undefined },
+      fixture.authority)), evidenceFingerprint(legacy));
+    assert.equal(Object.hasOwn(legacy.candidate.audit, "sourceOrder"), false);
+    const promoted = ordered(fixture, provider, "ai-first");
+    const { sourceOrder, ...audit } = promoted.candidate.audit; assert.equal(sourceOrder, "ai-first");
+    assert.equal(evidenceFingerprint({ ...promoted.candidate, audit }), evidenceFingerprint(legacy.candidate));
+  }
+  const fixture = fallbackFixture();
+  assert.equal(resolveFallbackCandidate({ expected: fixture.expected, ai: fixture.ai, provider: null, now: fixture.now, order: "provider-only" },
+    fixture.authority).reason, "invalid-request");
+});
+
+test("archived candidates bind the provider-first reason to the provider-first audit both ways", () => {
+  const fixture = fallbackFixture(), candidate = ordered(fixture, fallbackProvider(fixture.expected)).candidate;
+  const { sourceOrder: _order, ...legacyAudit } = candidate.audit; void _order;
+  assert.throws(() => parseResolvedForecastCandidate({ ...candidate, audit: legacyAudit }));
+  assert.throws(() => parseResolvedForecastCandidate({ ...candidate, audit: { ...candidate.audit, sourceOrder: "ai-first" } }));
+  const legacy = resolve(partial({ "total-goals": total() }), fallbackProvider(fixture.expected)).candidate;
+  assert.equal(parseResolvedForecastCandidate(legacy).audit.sourceOrder, undefined);
+  assert.throws(() => parseResolvedForecastCandidate({ ...legacy, audit: { ...legacy.audit, sourceOrder: "provider-first" } }));
+  assert.throws(() => parseResolvedForecastCandidate({ ...candidate, audit: { ...candidate.audit, sourceOrder: "provider-only" } }));
 });

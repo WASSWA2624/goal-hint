@@ -4969,3 +4969,22 @@ The full rendering regression found one stale absence assertion for the Picks on
 Every rendering command named by 057–066 passes: paywall (660 raw HTML/RSC/API checks across nine viewer states), card (13 examples), state (four concurrent requests with two isolated providers each), feed-page (48 scenarios), live-client, detail-page (22 detail scenarios), history-page, SEO (40 staging and 47 synthetic production HTTP/HTML checks) and slips (10 isolated states and native form/cutoff/manual alternatives). The feed/detail/history variants rebuild current factories from the genuine SQL capture; SEO uses fresh SQL projections. Logs: .tmp/067-check.log, 067-test-*.log, 067-scripts-final.log, 067-information.log and 067-launch-rendering.log. All required local checks now pass with the recorded build override; physical/host/real-message acceptance remains pending.
 
 Status: Partial. Real anonymized SMS and screenshots, owner-tested menu/copy format and physical phone/slow-upload checks, legal/refund/hosting/retention/provider rights, backup/host evidence and release/activation approval remain pending as itemized in subscriptions.md. The existing developer runtime-policy/migration drift and append-only-trigger backup-restore failure are not repaired by the build override. No deployment, production request, real payment, member purge or real-data deletion was performed. Paid access remains off.
+
+
+## Provider-first baseline and private source comparison (25 October 2026)
+
+Checklist A01/A06/A07 ([decision](implementation-decisions.md#25-october-2026--provider-first-source-order-and-ai-promotion-gate)).
+A new genuine MySQL test first reproduced the latent refresh-stage defect: `store.start(lease, 'preparation')` failed with
+`unavailable` against the deployed check. Migration `20261025200000_refresh_stage_phases` (with its MariaDB overlay and static
+test) fixes it. With AI enabled, refresh plans now freeze `provider-first`: API-Football publishes the match result, AI is
+captured beside it, and both receipts are sealed in the fallback stage. `npm run evaluation:report` prints a model-bound
+promotion reference; `ai-first` needs that reference and an `ai-promotion` approval. The owner page `/admin/forecasts`
+shows the matched comparison as a diagnostic.
+
+Validation (Node 24.18.1, isolated MySQL 8.4.11 via `MYSQL_TEST_SERVER_BINARY`): `tests/refresh-stage-phases.integration.mjs`
+3/3 (failed before the migration); the provider-first scenario of `tests/prediction-refresh.integration.mjs` 6/6, including
+publication inserts passing `MarketPrediction_payload_check`, stage reuse without a second provider call, and a root-tampered
+stage body refused by the receipt reader. Unit suites for fallback resolution/service, source receipts, source comparison,
+evaluation input/service/report/promotion/archive, runtime policy, live AI/binding, match details, detail records and admin
+routes pass; `npm run test:scripts` 53/53; typecheck and changed-file ESLint pass. Not run here: the full `npm test`, the
+build and rendering verifiers, and the overlay on MariaDB 11.4. Nothing was deployed or applied to a configured database.

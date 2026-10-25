@@ -3,6 +3,8 @@ import test from "node:test";
 import { marketRules } from "../src/domain/markets.ts";
 import { evidenceSerialize } from "../src/server/evidence/evidence-input.ts";
 import { assertProviderFallbackCandidate } from "../src/server/fallback/fallback-adapter.ts";
+import { parseForecastSourceReceipts } from "../src/server/fallback/source-receipts.ts";
+import { API_FOOTBALL_CONTRACT_VERSION } from "../src/server/football/api-football-contract.ts";
 import { evidenceHash } from "./helpers/evidence-fixtures.mjs";
 import { FALLBACK_NOW, fallbackPolicy, fallbackRawPrediction, fallbackResponse } from "./helpers/fallback-adapter-fixtures.mjs";
 import { fallbackFixture, fallbackAiDenied } from "./helpers/fallback-fixtures.mjs";
@@ -346,4 +348,51 @@ test("inflight capacity does not authorize an additional provider operation", as
   const second = await setup.service.resolve(setup.request({ requestId: evidenceHash("synthetic-over-capacity-refresh") }));
   assert.equal(second.reason, "capacity-exhausted"); release();
   assert.equal((await first).status, "candidate"); assert.equal(setup.provider.network.length, 1);
+});
+
+test("a frozen source order requests the provider beside a complete AI candidate and seals both receipts", async () => {
+  const setup = fallbackServiceSetup(), value = await setup.service.resolve(setup.request({ order: "provider-first" }));
+  assert.equal(setup.collected.length, 1); assert.deepEqual(setup.collected[0].requestedGroups, ["match-result", "total-goals", "both-teams-to-score"]);
+  assert.equal(setup.provider.network.length, 1); assert.equal(value.requestsDispatched, 1);
+  for (const family of ["match-result", "double-chance"]) {
+    assert.equal(selected(value, family).market.source, "api-football");
+    assert.deepEqual(selected(value, family).fallback, { reason: "provider-first", detail: "ai-shadow" });
+  }
+  for (const family of ["total-goals", "both-teams-to-score"]) assert.equal(selected(value, family).fallback, null);
+  const sources = parseForecastSourceReceipts(JSON.parse(evidenceSerialize(value.sources)));
+  assert.equal(sources.order, "provider-first");
+  assert.equal(sources.ai.status, "candidate"); assert.equal(sources.ai.modelVersionId, setup.ai.output.modelVersionId);
+  assert.deepEqual(sources.ai.markets, setup.ai.output.markets);
+  assert.equal(sources["api-football"].status, "candidate"); assert.equal(sources["api-football"].version, API_FOOTBALL_CONTRACT_VERSION);
+  assert.deepEqual(sources["api-football"].markets.markets["match-result"].market.probabilities, { "home-win": 0.6, draw: 0.25, "away-win": 0.15 });
+  assert.equal(sources["api-football"].markets.markets["total-goals"].reason, "unsupported-family");
+  // The original AI-first request makes no provider call and stores no receipts.
+  const legacy = fallbackServiceSetup(), original = await legacy.service.resolve(legacy.request());
+  assert.equal(legacy.collected.length, 0); assert.equal(Object.hasOwn(original, "sources"), false);
+});
+
+test("receipts record a stale or unconfigured provider as unavailable and keep AI publishable", async () => {
+  const policy = fallbackPolicy(); policy.predictionFreshness.maxRetrievalAgeMs = 100;
+  const setup = fallbackServiceSetup({ provider: { policy }, bounds: { cacheMaxAgeMs: 5000 } });
+  await setup.service.resolve(setup.request({ order: "provider-first" }));
+  setup.setNow(FALLBACK_NOW + 200);
+  const stale = await setup.service.resolve(setup.request({ order: "provider-first", requestId: evidenceHash("synthetic-stale-receipt-access") }));
+  assert.equal(selected(stale, "match-result").market.source, "ai"); assert.equal(selected(stale, "match-result").fallback, null);
+  assert.deepEqual([stale.sources["api-football"].status, stale.sources["api-football"].reason], ["unavailable", "stale"]);
+  assert.ok(Object.values(stale.sources["api-football"].markets.markets).every((market) => !market.available));
+  assert.equal(stale.sources.ai.status, "candidate");
+  const unconfigured = fallbackServiceSetup({ service: { fallback: null } });
+  const value = await unconfigured.service.resolve(unconfigured.request({ bounds: null, order: "provider-first" }));
+  assert.deepEqual([value.sources["api-football"].status, value.sources["api-football"].reason], ["unavailable", "unconfigured"]);
+  assert.equal(selected(value, "match-result").market.source, "ai");
+});
+
+test("recovery without the provider keeps the order and records a provider-unavailable receipt", () => {
+  const setup = fallbackServiceSetup(), value = setup.service.resolveWithoutProvider(setup.request({ order: "provider-first" }));
+  assert.equal(value.status, "candidate"); assert.equal(value.candidate.audit.sourceOrder, "provider-first");
+  assert.equal(selected(value, "match-result").market.source, "ai");
+  assert.deepEqual([value.sources["api-football"].status, value.sources["api-football"].reason], ["unavailable", "provider-unavailable"]);
+  assert.equal(value.sources.ai.status, "candidate"); assert.equal(setup.collected.length, 0);
+  assert.equal(Object.hasOwn(setup.service.resolveWithoutProvider(setup.request()), "sources"), false);
+  assert.equal(setup.service.resolveWithoutProvider(setup.request({ order: "provider-only" })).status, "denied");
 });

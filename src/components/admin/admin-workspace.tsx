@@ -17,7 +17,7 @@ import { watchPendingPaymentTitle } from "./pending-title";
 
 const sectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
   overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon, "password-resets": KeyIcon,
-  plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, analytics: ChartIcon,
+  plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, forecasts: ChartIcon, analytics: ChartIcon,
 };
 
 function SectionLinks({ current, passwordRequests, onNavigate }: { current: AdminSection; passwordRequests: number | null; onNavigate?: () => void }) {

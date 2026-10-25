@@ -5,7 +5,7 @@ import { assertOperationAllowed, type EvidenceVerifier, type RuntimePolicy } fro
 import type { EvidenceAuthority } from "../evidence/evidence-contract.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import type { ProviderFallbackAuthority, ProviderFallbackPolicy } from "../fallback/fallback-adapter.ts";
-import type { FallbackContext, FallbackResolutionAuthority } from "../fallback/fallback-contract.ts";
+import type { FallbackContext, FallbackResolutionAuthority, ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import type { FallbackRefreshRequest } from "../fallback/fallback-service.ts";
 import { API_FOOTBALL_CONTRACT_VERSION, type ApiFootballEndpoint, type ApiFootballResult } from "../football/api-football-contract.ts";
 import type { NormalizedFixture, RegulationScoreCandidate } from "../football/api-football-normalize.ts";
@@ -53,6 +53,8 @@ export function createLiveAuthorities(options: Readonly<{
   /** The exact odds policy configured from the same workload as the runtime, or null without a bookmaker. */
   oddsPolicy?: OddsPolicy | null;
   aiModel?: ModelVersion;
+  /** The order frozen into AI plans by the same runtime; provider-first when omitted. */
+  sourceOrder?: ForecastSourceOrder;
   verifyPrimary?(result: PredictorResult, context: FallbackContext): boolean;
 }>) {
   const { policy, verify, refs } = options;
@@ -159,8 +161,14 @@ export function createLiveAuthorities(options: Readonly<{
       try {
         const reviewed = plan.modelVersionId === null ? fallbackRefreshPlan(member, refs, options.refreshPacing) :
           options.aiModel === undefined ? null : liveAiRefreshPlan(member, refs, policy, options.aiModel,
-            plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing);
-        return reviewed !== null && same(plan, parseRefreshPlan(reviewed, member));
+            plan.evidence.cachedSources as import("../evidence/evidence-contract.ts").EvidenceSource[], options.refreshPacing,
+            options.sourceOrder ?? "provider-first");
+        if (reviewed === null) return false;
+        if (same(plan, parseRefreshPlan(reviewed, member))) return true;
+        // AI intents saved before source orders existed stay valid as legacy AI-first, without contemporaneous capture.
+        if (plan.sourceOrder !== undefined || plan.ai === null || reviewed.sourceOrder === undefined) return false;
+        const { sourceOrder: _order, ...legacy } = reviewed; void _order;
+        return same(plan, parseRefreshPlan(legacy, member));
       } catch { return false; }
     },
   });

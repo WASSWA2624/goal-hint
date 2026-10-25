@@ -4214,3 +4214,72 @@ Both forward migrations preserve the same append-only trigger behavior.
 - **Not run.** The overlay on MariaDB 11.4 (its logic ran on MySQL with the
   MariaDB-only statements translated), `db:deploy` on the developer database,
   and anything in production.
+
+## 25 October 2026 — Provider-first source order and AI promotion gate
+
+**Status:** implemented locally, not deployed. Checklist rows A01/A06/A07. One
+hand-written migration (`20261025200000_refresh_stage_phases`) with a MariaDB
+overlay; two new env keys; one new owner-approval requirement; no grants.
+
+- **Default flipped to provider-first.** With AI enabled, API-Football now
+  publishes the match result and derived double chance as the reviewed
+  baseline, and the AI forecast is recorded beside it. This reverses the
+  13 October "OpenAI primary, API-Football fallback" selection
+  ([provider fallback](provider-fallback.md#source-order-and-receipts)). AI is
+  off in production, so published output is unchanged today. Rationale: the AI
+  model is uncalibrated and provisional (014 readiness has zero observations),
+  so the statistical provider is the safer published baseline until AI is
+  shown to beat it on matched prospective samples. AI still publishes total
+  goals and BTTS (no provider counterpart) and the match result when the
+  provider has none; a strict "provider-only" shadow is a small follow-up if
+  the owner wants unpromoted AI never published.
+- **Order frozen per AI intent.** `RefreshPlan.sourceOrder` is set only on AI
+  plans (`liveSourceOrder`, `GOAL_HINT_FORECAST_SOURCE_ORDER`, default
+  `provider-first`). Fallback-only plans keep their reviewed fingerprint, and
+  plan verification still accepts AI intents saved before the change as legacy
+  AI-first. Goal-market extensions are refused under provider-first.
+- **Fallback meaning kept.** `MarketPrediction_payload_check` requires AI rows
+  to have `fallback: null` and API-Football rows a fallback object. Instead of
+  inverting that (which would fail every publication insert), provider rows
+  carry the new trigger `provider-first`; `operatingRules.forecasts` replaces
+  `primary/fallback` with `defaultSourceOrder: "provider-first"`. On a
+  provider-first cross-market conflict the provider is kept and both AI binary
+  groups are dropped; the fingerprinted `marketRules.sourceConflictRule` string
+  cannot change and is documented as describing the AI-first order.
+- **Receipts in the existing sealed stage.** Both sources' contemporaneous
+  forecasts are stored in the append-only, sealed `fallback` stage row
+  (`value.sources`) rather than a new table, so no migration, trigger, grant or
+  backup change was needed for them. With an order the provider is always
+  requested, inside the one fallback request the live plan already reserves.
+- **Promotion is an owner approval.** `ai-first` publication requires
+  `GOAL_HINT_AI_PROMOTION_REF` and a verified `ai-promotion` approval of that
+  exact reference at the publication boundary. `npm run evaluation:report`
+  prints the reference only for a prospective final test that is eligible for
+  independent review and, at every horizon, passed a candidate gate where AI's
+  match-result Brier score is strictly below API-Football's on matched settled
+  fixtures (`baseline: "api-football"`). The reference binds the report hash and
+  model id, so a model change withdraws the promotion. The harness still never
+  promotes. No comparison sample minimum env key was added; thresholds stay with
+  OP-16/OP-17.
+- **Refresh stage check (latent defect).** `PredictionRefreshStage_shape`
+  admitted only `evidence`, `ai`, `fallback` and `observation`, while the worker
+  writes `preparation` (every AI-enabled live job) and `evidence-empty`. A
+  genuine MySQL test reproduced the refused insert before the fix. The migration
+  swaps the check for a superset in one statement (precedent:
+  `20261010170000`). It must be applied before AI is enabled anywhere.
+- **Private comparison only.** The owner page `/admin/forecasts` shows matched
+  AI-against-API-Football counts and scores as a diagnostic. The public
+  performance comparison is a follow-up coordinated with the performance area,
+  as is the public "API-Football fallback" source label (the match-card verifier
+  asserts it).
+
+## 26 October 2026 — Integrated strict provider baseline
+
+This supersedes the earlier mixed provider-first rollout description. Sealed
+source receipts, the private comparison page and model/report-bound evaluation
+references are retained, while the live `provider-baseline` policy permits only
+validated provider groups. AI goal markets and provider outages remain shadow.
+Live readiness rejects AI-first until actual independently verified frozen
+promotion evidence is bound, and publication independently rejects AI markets.
+Environment references or owner approval strings alone do not qualify or promote
+a model. Existing mixed-source publications remain immutable/readable.

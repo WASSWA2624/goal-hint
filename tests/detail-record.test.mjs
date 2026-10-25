@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { detailRecordNotices } from '../src/domain/detail-presentation.ts';
 import { createMessages } from '../src/i18n/messages.ts';
+import { detailFallbackReasons } from '../src/domain/match-detail.ts';
 
 const market = (kind, provisional) => ({ source: { kind, provisional } });
 const detail = (snapshot, fixture = {}) => ({ snapshot, fixture: { partialCoverage: false, update: { prediction: 'current', result: 'current' }, ...fixture } });
@@ -35,4 +36,12 @@ test('missing locked snapshots cannot borrow a forecast, source, or provisional 
   assert.deepEqual(detailRecordNotices(detail(null)), []);
   assert.deepEqual(detailRecordNotices(detail(null, { update: { prediction: 'outside-window', result: 'untracked' } })),
     ['detail.refresh.outside-window']);
+});
+
+test('every stored fallback reason, including the provider-first baseline, has its own detail copy', () => {
+  const messages = createMessages('en');
+  for (const reason of detailFallbackReasons) assert.notEqual(messages.text(`detail.fallback.${reason}`), `detail.fallback.${reason}`);
+  const baseline = messages.text('detail.fallback.provider-first');
+  assert.match(baseline, /reviewed baseline/u); assert.match(baseline, /prediction/u);
+  assert.doesNotMatch(baseline, /\bpicks?\b|fallback/iu);
 });

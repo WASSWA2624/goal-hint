@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseRuntimePolicy } from '../src/server/config/runtime-policy.ts';
-import { liveAiAccountId, liveAiModel, liveAiRate } from '../src/server/live/live-ai-model.ts';
+import { liveAiAccountId, liveAiModel, liveAiRate, liveSourceOrder } from '../src/server/live/live-ai-model.ts';
+import { goalResultMarket } from '../src/domain/goal-market-definitions.ts';
 import { liveAiAllocation, liveAiEvidencePolicy, liveAiRefreshPlan } from '../src/server/live/live-ai-plan.ts';
 import { createLiveFootballPreparation, readLiveFootballSources, verifyLiveFootballSource } from '../src/server/live/live-ai-evidence.ts';
 import { groundLiveAiExplanations } from '../src/server/live/live-ai.ts';
@@ -15,6 +16,7 @@ import { parseRefreshPlan, refreshReference } from '../src/server/refresh/refres
 import { createPredictionRefreshService } from '../src/server/refresh/refresh-service.ts';
 import { ModelRegistryError } from '../src/server/predictor/predictor-registry.ts';
 import { createFallbackService } from '../src/server/fallback/fallback-service.ts';
+import { parseForecastSourceReceipts } from '../src/server/fallback/source-receipts.ts';
 import { evidenceContext, evidenceAuthority } from './helpers/evidence-fixtures.mjs';
 import { predictorRawOutput } from './helpers/predictor-output-fixtures.mjs';
 import { createPolicyCostService } from '../src/server/cost-control/cost-policy.ts';
@@ -273,4 +275,66 @@ test('model recovery after interrupted publication does not launch a new primary
   assert.equal(h.stages.get('ai:completed').value.reason, 'unavailable');
   options.modelError = null; options.publicationError = false;
   await h.run(); assert.equal(h.counts().aiCalls, 0); assert.equal(h.counts().fallbackCalls, 1);
+});
+
+test('AI plans freeze the provider-first order while fallback-only plans keep their reviewed shape', () => {
+  const value = member(), plan = parseRefreshPlan(liveAiRefreshPlan(value, refs, policy, model, []), value);
+  assert.equal(plan.sourceOrder, 'provider-first');
+  const fallbackOnly = fallbackRefreshPlan(value, refs);
+  assert.equal(Object.hasOwn(fallbackOnly, 'sourceOrder'), false);
+  assert.equal(authorities().refresh.verifyPlan(parseRefreshPlan(fallbackOnly, value), value), true);
+  for (const invalid of [{ ...fallbackOnly, sourceOrder: 'provider-first' }, { ...plan, sourceOrder: 'provider-only' },
+    { ...plan, goalDefinitions: [goalResultMarket()] }]) {
+    assert.throws(() => parseRefreshPlan(invalid, value), error => error.reason === 'policy-required');
+  }
+  // An approved ai-first order may carry reviewed goal definitions, as the original AI-first plans could.
+  assert.equal(parseRefreshPlan({ ...plan, sourceOrder: 'ai-first', goalDefinitions: [goalResultMarket()] }, value).sourceOrder, 'ai-first');
+});
+
+test('plan verification accepts legacy AI intents without an order and refuses any other difference', () => {
+  const value = member(), plan = parseRefreshPlan(liveAiRefreshPlan(value, refs, policy, model, []), value);
+  const { sourceOrder: _order, ...legacy } = plan; void _order;
+  assert.equal(authorities().refresh.verifyPlan(legacy, value), true);
+  assert.equal(authorities().refresh.verifyPlan({ ...legacy, ai: { ...legacy.ai, maxElapsedMs: 1 } }, value), false);
+  assert.equal(authorities().refresh.verifyPlan({ ...plan, sourceOrder: 'ai-first' }, value), false);
+  const promoted = createLiveAuthorities({ policy, verify: () => true, refs, selection: selectionPolicy(policy, refs, liveWorkload(150000, 12, 'Mega', 900)),
+    resultPolicy: () => null, statusEvidenceRef: `${refs.freshness}#status`, refreshPacing: 'standard', aiModel: model, sourceOrder: 'ai-first' });
+  const aiFirst = parseRefreshPlan(liveAiRefreshPlan(value, refs, policy, model, [], 'standard', 'ai-first'), value);
+  assert.equal(promoted.refresh.verifyPlan(aiFirst, value), true);
+  assert.equal(promoted.refresh.verifyPlan(plan, value), false);
+});
+
+test('ai-first readiness needs an evaluation promotion reference for the current model', () => {
+  const reference = `forecast-evaluation:${'c'.repeat(64)}:${model.id}`;
+  assert.equal(liveSourceOrder(policy, model), 'provider-first');
+  assert.equal(liveSourceOrder(parseRuntimePolicy({ ...env, GOAL_HINT_FORECAST_SOURCE_ORDER: 'ai-first', GOAL_HINT_AI_PROMOTION_REF: reference }), model), 'ai-first');
+  const other = `forecast-evaluation:${'c'.repeat(64)}:${'d'.repeat(64)}`;
+  for (const value of [other, 'synthetic-unbound-promotion', `${reference}:extra`]) {
+    assert.throws(() => liveSourceOrder(parseRuntimePolicy({ ...env, GOAL_HINT_FORECAST_SOURCE_ORDER: 'ai-first', GOAL_HINT_AI_PROMOTION_REF: value }), model),
+      /promotion reference for the current model/u);
+  }
+  const promotedPolicy = parseRuntimePolicy({ ...env, GOAL_HINT_FORECAST_SOURCE_ORDER: 'ai-first', GOAL_HINT_AI_PROMOTION_REF: reference });
+  assert.throws(() => liveReadiness(promotedPolicy, parseOwnerApprovals({ version: 1, owner: 'Synthetic owner', approvals: [
+    { requirement: 'ai-promotion', reference, approvedAt: '2026-10-13', decision: 'Synthetic reference approval without the underlying frozen report.' },
+  ] })),
+    error => error.issues.some(issue => issue.includes('independently verified frozen promotion binding')),
+    'a matching reference cannot substitute for the actual verified frozen promotion evidence');
+  assert.ok(missingOwnerApprovals(promotedPolicy, (_reference, requirement) => requirement !== 'ai-promotion').includes('GOAL_HINT_AI_PROMOTION_REF (ai-promotion)'));
+  assert.equal(missingOwnerApprovals(policy, (_reference, requirement) => requirement !== 'ai-promotion').length, 0);
+  assert.throws(() => liveReadiness(parseRuntimePolicy({ ...env, GOAL_HINT_FORECAST_SOURCE_ORDER: 'ai-first', GOAL_HINT_AI_PROMOTION_REF: other }),
+    parseOwnerApprovals({ version: 1, owner: 'Synthetic owner', approvals: [{ requirement: 'ai-promotion', reference: other, approvedAt: '2026-10-13',
+      decision: 'Synthetic promotion for another model.' }] })), error => error.issues.some(issue => issue.includes('current model')));
+});
+test('an AI plan sends its frozen order and the sealed fallback stage keeps both source receipts', async () => {
+  const h = refreshHarness({ ai: true, modelError: 'unavailable' }); await h.run();
+  assert.equal(h.intent.plan.sourceOrder, 'provider-first'); assert.equal(h.counts().fallbackCalls, 1);
+  const sources = parseForecastSourceReceipts(h.stages.get('fallback:completed').value.sources);
+  assert.equal(sources.order, 'provider-first');
+  assert.deepEqual([sources.ai.status, sources.ai.reason], ['unavailable', 'unavailable']);
+  assert.deepEqual([sources['api-football'].status, sources['api-football'].reason], ['unavailable', 'provider-unavailable']);
+  const interrupted = refreshHarness({ ai: true, modelError: 'unavailable' }); interrupted.stages.set('fallback:started', { at: NOW });
+  await interrupted.run(); assert.equal(interrupted.counts().fallbackCalls, 0);
+  assert.equal(parseForecastSourceReceipts(interrupted.stages.get('fallback:completed').value.sources)['api-football'].reason, 'provider-unavailable');
+  const fallbackOnly = refreshHarness(); await fallbackOnly.run();
+  assert.equal(Object.hasOwn(fallbackOnly.stages.get('fallback:completed').value, 'sources'), false);
 });

@@ -69,3 +69,26 @@ AI and provider stages, checks their original identities/cutoffs and independent
 preserved probabilities, rejects stage mutation, and verifies that provider
 failure publishes no shadow AI. All transports and source approvals in these
 tests are synthetic; no live provider or accuracy claim follows.
+
+## Integrated source diagnostics
+
+AI refresh plans now freeze `sourceOrder: "provider-first"` and retain normalized
+`value.sources` receipts in the sealed fallback stage. Both receipts preserve
+their own distributions, clocks, versions and explicit unavailable reasons. The
+owner-only `/admin/forecasts` page reads those receipts for matched descriptive
+Brier/log-loss/calibration diagnostics and recent original prediction outcomes.
+It publishes no public claim, approves no model and makes no provider request.
+Missing legacy receipts stay `not-captured`. Equal context does not establish
+equal source recency or qualify a prospective cohort.
+
+The reusable legacy resolver understands prior `provider-first` and `ai-first`
+contracts, and the evaluation command can print a model/report-bound reference
+from a genuinely frozen prospective final test. The independent live selection
+policy still publishes provider groups only. AI-first live startup is rejected
+until actual independently verified promotion evidence is bound; configuring a
+matching reference or approval string cannot bypass it.
+
+Apply `20261025200000_refresh_stage_phases` (or its reviewed MariaDB overlay)
+before AI preparation runs. It adds preparation/evidence-empty to the existing
+stage CHECK while preserving identity and attempt constraints. No source-receipt
+table, new provider allowance or public comparison endpoint is introduced.

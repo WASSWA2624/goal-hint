@@ -100,6 +100,26 @@ fallback. Authorization, identity, clock and conflicting-request failures remain
 failures. API-Football fallback can supply match result and derived double
 chance; it cannot invent total-goals or BTTS distributions when AI fails.
 
+Preparation and the empty-evidence request write the `preparation` and
+`evidence-empty` refresh stages. Before migration
+`20261025200000_refresh_stage_phases` the stage check refused both, so every
+AI-enabled live refresh failed at preparation on MySQL; apply that migration
+(and its MariaDB overlay in production) before enabling AI anywhere.
+
+### AI shadow under provider-first
+
+Every AI plan freezes a source order (`liveSourceOrder`, default
+`provider-first`). The AI attempt runs exactly as above and before the provider
+request, but under provider-first API-Football publishes the match result and
+double chance; the accepted AI forecast is sealed beside it as a receipt in the
+refresh's fallback stage. The independent live baseline policy keeps every AI
+family private, including goal markets and provider outages. The owner's comparison page `/admin/forecasts` and the
+[evaluation harness](forecast-evaluation.md#provider-baseline-and-promotion)
+compare the two on matched settled fixtures as private diagnostics. Promotion
+references remain available for independent review, but the live runner rejects
+`ai-first` until actual verified frozen promotion evidence is bound. References
+and approval strings alone do not qualify a model or activate publication.
+
 ## Immutable model identity and pins
 
 `createModelVersion(configuration)` validates the complete configuration and

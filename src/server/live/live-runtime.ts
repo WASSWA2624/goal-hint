@@ -37,7 +37,7 @@ import { loadOwnerApprovals, missingOwnerApprovals, ownerEvidenceVerifier, type 
 import { createAccountStatusReader, createQuotaRouter, type QuotaDay } from "./live-account.ts";
 import { createLiveAuthorities, LIVE_ACTOR } from "./live-authorities.ts";
 import { createLiveAiRuntime, type LiveAiRuntime } from "./live-ai.ts";
-import { liveAiModel } from "./live-ai-model.ts";
+import { liveAiModel, liveSourceOrder } from "./live-ai-model.ts";
 import { createLiveFootballPreparation, readLiveFootballSources } from "./live-ai-evidence.ts";
 import { liveAiEvidencePolicy } from "./live-ai-plan.ts";
 import { canRunLiveRefresh } from "./live-refresh-quota.ts";
@@ -72,7 +72,10 @@ export function liveReadiness(policy: RuntimePolicy, approvals?: OwnerApprovals)
   const issues: string[] = [];
   if (policy.scope !== "production") issues.push("GOAL_HINT_OPERATION_SCOPE must be production for public provisional publication.");
   if (policy.capabilities.ai) {
-    try { liveAiModel(policy); } catch (error) { issues.push((error as Error).message); }
+    try {
+      if (liveSourceOrder(policy, liveAiModel(policy)) === "ai-first")
+        issues.push("AI-first publication needs an independently verified frozen promotion binding; a configured reference alone is insufficient.");
+    } catch (error) { issues.push((error as Error).message); }
   }
   if (policy.capabilities.research) issues.push("GOAL_HINT_RESEARCH_ENABLED must stay false until a licensed research adapter exists (prompt 011).");
   if (policy.choices.competitionIds === null) issues.push("GOAL_HINT_COMPETITION_IDS is required.");
@@ -110,10 +113,12 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
     const odds = oddsPolicy(policy, refs, workload);
     const aiModel = policy.capabilities.ai ? liveAiModel(policy) : null;
+    // Computed once, with the model: a promotion reference names the model it was evaluated for.
+    const sourceOrder = aiModel === null ? null : liveSourceOrder(policy, aiModel);
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results,
       refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy,
-      ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true }) });
+      ...(aiModel === null || sourceOrder === null ? {} : { aiModel, sourceOrder, verifyPrimary: (...args) => ai?.verifyAi(...args) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
     // The adapter identity is the stable provider account; daily limiter accounts sit behind the router.
     const adapter = createApiFootballAdapter({ accountId: day.status.accountKey, credential: { read: () => policy.secrets.footballKey?.read() ?? "" },
@@ -139,6 +144,7 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     const refreshStore = createMysqlRefreshStore(database, queue);
     if (aiModel !== null) ai = await createLiveAiRuntime({ policy, verify, refs, model: aiModel, database, store: refreshStore,
       evidenceAuthority: authorities.evidence, pacing: workload.pacing, fallbackReserveMs: refreshEnvelopeFor(workload.pacing, true).fallbackReserveMs,
+      ...(sourceOrder === null ? {} : { sourceOrder }),
       ...(overrides.aiFetcher === undefined ? {} : { fetcher: overrides.aiFetcher }) });
     const refresh = createPredictionRefreshService({ type: LIVE_REFRESH_TYPE, handlerVersion: 1, store: refreshStore,
       selection: selectionStore, authority: authorities.refresh,

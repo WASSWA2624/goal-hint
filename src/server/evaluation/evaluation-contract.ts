@@ -19,7 +19,8 @@ export type BaselineConfiguration = Readonly<{
 export type QualityGate = Readonly<{
   id: string; purpose: "candidate" | "public-claim"; system: EvaluationSystem; family: MarketFamily; horizonId: string;
   minimumSamples: number; minimumCoverage: number; maximumBrier: number | null; maximumLogLoss: number | null;
-  maximumCalibrationError: number | null; baseline: "league-frequency" | "team-strength" | null;
+  /** "api-football" compares AI with the provider forecast captured in the same refresh, on matched settled fixtures. */
+  maximumCalibrationError: number | null; baseline: "league-frequency" | "team-strength" | "api-football" | null;
   maximumBrierDifference: number | null;
 }>;
 export type EvaluationProtocolConfiguration = Readonly<{

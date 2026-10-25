@@ -166,6 +166,7 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES", "GOAL_HINT_DEPLOYMENT_ENVIRONMENT",
     "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
     "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_LIVE_DETAILS_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
+    "GOAL_HINT_FORECAST_SOURCE_ORDER", "GOAL_HINT_AI_PROMOTION_REF",
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_ADMIN_USERNAME",
     "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
     // Administrator credentials are private configuration and do not grant provider capabilities.
@@ -186,7 +187,9 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, budgets, analytics, ...unresolvedChoices } = policy.choices;
+  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, budgets, analytics, forecasts, ...unresolvedChoices } = policy.choices;
+  // With AI enabled the provider baseline publishes first; no promotion reference is assumed.
+  assert.deepEqual(forecasts, { sourceOrder: "provider-first", aiPromotionRef: null });
   // Consent-gated analytics is on by default but has no credentials, secret or retention override until configured.
   assert.deepEqual(analytics, { enabled: true, adminUsername: null, retentionDays: null, geoSource: "timezone" });
   const { aiBillingMode, ...unresolvedBudgets } = budgets;
@@ -235,6 +238,30 @@ test("disabled defaults keep unresolved choices explicit in every deployment mod
   }
   assert.equal(parseRuntimePolicy({}).mode, "development");
   assert.equal(parseRuntimePolicy({ GOAL_HINT_AI_PROVIDER: "   " }).choices.ai.provider, null);
+});
+
+test("AI-enabled publication defaults to provider-first; ai-first needs AI and a verified promotion reference", () => {
+  const production = parseRuntimePolicy(syntheticProduction);
+  assert.equal(production.choices.forecasts.sourceOrder, "provider-first");
+  assert.equal(production.rules.forecasts.defaultSourceOrder, "provider-first");
+  assert.equal(production.rules.forecasts.primary, "api-football");
+  assert.equal(production.rules.forecasts.shadow, "ai");
+  assert.equal(production.rules.forecasts.publishShadowForecasts, false);
+  assertOperationAllowed(production, "publication", verifySyntheticEvidence);
+  policyError(() => parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_FORECAST_SOURCE_ORDER: "ai-only" }), ["GOAL_HINT_FORECAST_SOURCE_ORDER"]);
+  policyError(() => parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_FORECAST_SOURCE_ORDER: "ai-first" }), ["GOAL_HINT_AI_PROMOTION_REF"]);
+  const reference = `forecast-evaluation:${"a".repeat(64)}:${"b".repeat(64)}`;
+  const { GOAL_HINT_AI_ENABLED: _enabled, AI_API_KEY: _key, ...withoutAi } = syntheticProduction;
+  void _enabled; void _key;
+  policyError(() => parseRuntimePolicy({ ...withoutAi, GOAL_HINT_FORECAST_SOURCE_ORDER: "ai-first", GOAL_HINT_AI_PROMOTION_REF: reference }), ["GOAL_HINT_AI_ENABLED"]);
+  const promoted = parseRuntimePolicy({ ...syntheticProduction, GOAL_HINT_FORECAST_SOURCE_ORDER: "ai-first", GOAL_HINT_AI_PROMOTION_REF: reference });
+  assert.deepEqual(promoted.choices.forecasts, { sourceOrder: "ai-first", aiPromotionRef: reference });
+  assertOperationAllowed(promoted, "publication", verifySyntheticEvidence);
+  // The owner register must approve this exact reference as an AI promotion; other approvals do not cover it.
+  policyError(() => assertOperationAllowed(promoted, "publication", (_reference, requirement) => requirement !== "ai-promotion"), ["GOAL_HINT_AI_PROMOTION_REF"]);
+  assertOperationAllowed(production, "publication", (_reference, requirement) => requirement !== "ai-promotion");
+  // A trial never publishes, so its order needs no promotion approval.
+  parseRuntimePolicy({ ...syntheticTrial, GOAL_HINT_FORECAST_SOURCE_ORDER: "ai-first" });
 });
 
 test("approved market tolerances cannot drift through environment overrides", () => {

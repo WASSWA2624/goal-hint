@@ -43,6 +43,8 @@ export const operatingRules = freeze({
   calendar: calendarRules,
   forecasts: {
     ruleVersion: marketRules.ruleVersion,
+    // The provider baseline publishes while AI remains shadow evidence. Promotion references alone grant no publication authority.
+    defaultSourceOrder: "provider-first",
     primary: "api-football",
     shadow: "ai",
     publishShadowForecasts: false,
@@ -176,6 +178,9 @@ const environmentSchema = z.object({
   GOAL_HINT_AI_PROVIDER: text.describe("Select the primary predictor provider without inventing one (010/012)."),
   GOAL_HINT_AI_MODEL: text.describe("Record the selected model/version (012)."),
   GOAL_HINT_CALIBRATION_REF: text.describe("Record the selected calibration configuration; this does not claim calibration quality (012/014)."),
+  GOAL_HINT_FORECAST_SOURCE_ORDER: optional(z.enum(["provider-first", "ai-first"])).transform((value) => value ?? "provider-first")
+    .describe("Frozen source/receipt order, provider-first by default. AI-first remains unavailable in the live runner until independently verified promotion evidence is bound."),
+  GOAL_HINT_AI_PROMOTION_REF: text.describe("Owner-approved promotion reference printed by evaluation:report (forecast-evaluation:<report hash>:<model id>)."),
   GOAL_HINT_RESEARCH_PROVIDER: text.describe("Select a licensed research provider (010/011)."),
   GOAL_HINT_RESEARCH_LICENSE_REF: text.describe("Record permitted research retrieval and reuse (011)."),
   GOAL_HINT_EVIDENCE_POLICY_REF: text.describe("Record minimum evidence, conflicts and missing-data rules (011)."),
@@ -290,6 +295,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
         approvalRef: settings.GOAL_HINT_BUDGET_APPROVAL_REF,
       },
       ai: { provider: settings.GOAL_HINT_AI_PROVIDER, model: settings.GOAL_HINT_AI_MODEL, calibrationRef: settings.GOAL_HINT_CALIBRATION_REF },
+      forecasts: { sourceOrder: settings.GOAL_HINT_FORECAST_SOURCE_ORDER, aiPromotionRef: settings.GOAL_HINT_AI_PROMOTION_REF },
       research: { provider: settings.GOAL_HINT_RESEARCH_PROVIDER, licenseRef: settings.GOAL_HINT_RESEARCH_LICENSE_REF },
       evidencePolicyRef: settings.GOAL_HINT_EVIDENCE_POLICY_REF,
       freshnessPolicyRef: settings.GOAL_HINT_FRESHNESS_POLICY_REF,
@@ -422,7 +428,8 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
     if (operation === "ai") ai();
     if (operation === "research") research();
     if (operation === "private-shadow" || operation === "publication") {
-      // AI stays primary when enabled; a disabled AI capability runs validated provider fallback only.
+      // With AI enabled, the provider baseline publishes first and AI is captured beside it; a disabled AI capability runs
+      // validated provider forecasts only. AI-first publication needs AI and an owner-approved promotion reference.
       football();
       if (policy.capabilities.ai) { ai(); need("GOAL_HINT_CALIBRATION_REF", policy.choices.ai.calibrationRef); } else job();
       if (policy.capabilities.research) research();
@@ -442,6 +449,10 @@ function validateOperationConfiguration(policy: RuntimePolicy, operation: Operat
         need("GOAL_HINT_QUALITY_QUALIFICATION_REF", policy.choices.qualityQualificationRef);
         need("GOAL_HINT_RELEASE_APPROVAL_REF", policy.choices.releaseApprovalRef);
         need("GOAL_HINT_FOOTBALL_PUBLIC_RIGHTS_REF", policy.choices.football.publicRightsRef);
+        if (policy.choices.forecasts.sourceOrder === "ai-first") {
+          need("GOAL_HINT_AI_ENABLED", policy.capabilities.ai);
+          need("GOAL_HINT_AI_PROMOTION_REF", policy.choices.forecasts.aiPromotionRef);
+        }
       }
     }
   }
@@ -498,7 +509,7 @@ function consistencyIssues(policy: RuntimePolicy): PolicyIssue[] {
 export type EvidenceRequirement =
   | "budget-approval" | "database-access" | "football-private-use" | "football-account" | "football-public-rights"
   | "football-odds-rights" | "research-license" | "calibration-configuration" | "evidence-policy" | "freshness-policy"
-  | "shadow-protocol" | "pipeline-integrity" | "quality-qualification" | "release-approval";
+  | "shadow-protocol" | "pipeline-integrity" | "quality-qualification" | "release-approval" | "ai-promotion";
 export type EvidenceVerifier = (reference: string, requirement: EvidenceRequirement) => boolean;
 
 /** References alone never authorize work. Future consumers verify the underlying records. */
@@ -540,6 +551,8 @@ export function assertOperationAllowed(policy: RuntimePolicy, operation: Operati
       ["GOAL_HINT_QUALITY_QUALIFICATION_REF", choices.qualityQualificationRef, "quality-qualification"],
       ["GOAL_HINT_RELEASE_APPROVAL_REF", choices.releaseApprovalRef, "release-approval"],
     );
+    if (operation === "publication" && choices.forecasts.sourceOrder === "ai-first")
+      requirements.push(["GOAL_HINT_AI_PROMOTION_REF", choices.forecasts.aiPromotionRef, "ai-promotion"]);
   }
   const issues: PolicyIssue[] = [];
   for (const [field, reference, requirement] of requirements) {

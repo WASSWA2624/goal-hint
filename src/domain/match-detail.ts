@@ -5,6 +5,9 @@ import { dailyRunProgressSchema, matchFeedRecordSchema, storedMatchFeedRecordSch
 import { contentAccessSchema } from "./content-access.ts";
 import { liveMatchSnapshotSchema } from "./live-match.ts";
 
+/** Why API-Football supplied a published market; "provider-first" is the reviewed baseline order with AI enabled. */
+export const detailFallbackReasons = ["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted", "ai-missing-group",
+  "ai-invalid-group", "provider-first", "provider-baseline"] as const;
 export const matchDetailRules = Object.freeze({ defaultLimit: 10, maximumLimit: 20, maximumSequence: 4_294_967_295 });
 const id = z.uuid(), at = publicForecastSchema.shape.publishedAt, sequence = z.number().int().positive().max(matchDetailRules.maximumSequence);
 const explanation = z.strictObject({ text: z.string().min(1).max(4096), sourceUrls: z.array(z.url().startsWith("https://")).max(100) });
@@ -25,7 +28,7 @@ export const storedDetailSnapshotSchema = publicForecastSchema.safeExtend({
   markets: z.array(publicForecastSchema.shape.markets.element.safeExtend({
     alternatives: z.array(z.strictObject({ selection: z.string().max(32), probability: z.number().gt(0).lt(1) })).max(2),
     source: z.strictObject({ kind: z.enum(["ai", "api-football"]), provisional: z.boolean(),
-      fallbackReason: z.enum(["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted", "ai-missing-group", "ai-invalid-group", "provider-baseline"]).nullable(),
+      fallbackReason: z.enum(detailFallbackReasons).nullable(),
       sourceIds: z.array(z.string().max(128)).max(500) }),
     timestamps: z.strictObject({ generatedAt: at.nullable(), retrievedAt: at, providerUpdatedAt: at.nullable() }),
   })).max(4),
