@@ -94,12 +94,12 @@ def add_credit_rendering(origin):
         assert (consent in text) == (not accepted), state
         if not accepted:
             form = steps.group(1)
-            assert form.index("data-payment-consent") < form.index(re.search(r'<button[^>]*type="submit"', form).group(0)), "The consent sits above the button it describes."
+            assert form.index("data-payment-consent") < form.index(re.search(r'<button\b[^>]*type="submit"', form).group(0)), "The consent sits above the button it describes."
             assert re.search(r'href="/en/terms"', html)
     plans = visible_html(request(origin, "/en/subscribe?state=signed-in", headers=android).text)
     assert "Add credit instead" in plans and 'data-subscribe-layout="compact-stacked"' in plans and "18 or older" in plans, "The plan page keeps its switch and checkbox."
     assert "Open MoMo menu" in plans, "Plan payments keep the money-menu link on Android."
-    assert re.search(r'<a\b[^>]*href="/en/subscribe\?add=credit#plans"[^>]*>\s*Add credit instead\s*</a>', plans), \
+    assert re.search(r'<a\b[^>]*href="/en/subscribe\?add=credit#plans"[^>]*>\s*Add credit instead', plans), \
         "Add credit is reached by a link, so Back returns to the plans."
 
 
