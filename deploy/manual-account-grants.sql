@@ -22,3 +22,8 @@ GRANT DELETE ON `goal_hint_db`.`OwnerAuditEvent` TO 'goal_hint_app'@'application
 GRANT SELECT, INSERT ON `goal_hint_db`.`WalletEntry` TO 'goal_hint_app'@'application-host';
 -- AccountMove records number changes for reversals to follow; append-only the same way, and it blocks deleting the accounts it names.
 GRANT SELECT, INSERT ON `goal_hint_db`.`AccountMove` TO 'goal_hint_app'@'application-host';
+
+-- Prediction quotes: the public price captured beside each published family prediction. Review after deploying
+-- 20261025180538_prediction_quotes and apply BEFORE enabling provider odds display: once capture is on, a missing grant
+-- fails the forecast publication. Append-only: its triggers refuse UPDATE and DELETE.
+GRANT SELECT, INSERT ON `goal_hint_db`.`PredictionQuote` TO 'goal_hint_app'@'application-host';

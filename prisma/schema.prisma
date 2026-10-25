@@ -819,6 +819,7 @@ model PredictionSet {
   settlements           MarketSettlementRevision[]
   goalMarketExtension   GoalMarketExtension?
   impliedMarketExtension ImpliedMarketExtension?
+  quotes                PredictionQuote[]
   extendedMarketPublishedPicks ExtendedMarketPublishedPick[]
   extendedMarketSettlements ExtendedMarketSettlementRevision[]
 
@@ -886,6 +887,28 @@ model ImpliedMarketExtension {
 
   @@unique([revisionId, cycleId, fixtureId], map: "ImpliedMarketExtension_identity_key")
   @@index([fixtureId, cycleId])
+}
+
+// Public price beside a published family prediction, written in that revision's own publication transaction.
+// Append-only (INSERT/SELECT); a missing quote stays missing, never attached later. snapshotId is provenance only.
+model PredictionQuote {
+  revisionId        String    @db.Char(36)
+  cycleId           String    @db.Char(36)
+  fixtureId         String    @db.Char(36)
+  family            String    @db.VarChar(32)
+  selection         String    @db.VarChar(32)
+  state             String    @db.VarChar(16)
+  reason            String?   @db.VarChar(32)
+  snapshotId        String?   @db.Char(64)
+  displayHundredths Int?      @db.UnsignedInt
+  quotedAt          DateTime? @db.DateTime(3)
+  recordedAt        DateTime  @db.DateTime(3)
+  integrity         String    @db.Char(64)
+  body              Json
+  revision          PredictionSet @relation(fields: [revisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict, map: "PredictionQuote_prediction_fkey")
+
+  @@id([revisionId, family])
+  @@index([revisionId, cycleId, fixtureId])
 }
 
 // Result-time facts have their own immutable evidence stream; forecast-time averages are never settlement inputs.

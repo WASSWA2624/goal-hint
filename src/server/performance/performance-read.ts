@@ -9,11 +9,13 @@ import { cycleFromRows, revisionFromRows, type HistoryRow } from "../predictions
 import { fixtureResultFromRow } from "../results/result-read.ts";
 import { settlementRevisionFromRow, projectSettlementCycle } from "../settlement/settlement-read.ts";
 import { modelVersionFromRow } from "../predictor/predictor-mysql-store.ts";
+import { predictionQuoteFromRow, type PredictionQuote } from "../predictions/prediction-quote-store.ts";
 import type { MarketFamily } from "../../domain/markets.ts";
 import type { PerformanceQuery } from "./performance-query.ts";
 
 type Tx = Prisma.TransactionClient;
-export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, competitionIds: readonly number[]) {
+/** `quotes` reads captured publication quotes; off, no SQL touches PredictionQuote and `quotesEnabled` is false. */
+export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, competitionIds: readonly number[], { quotes = false } = {}) {
   const scope = publicFixtureCohortScope(query.range, competitionIds);
   const selected = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id FROM FootballFixture f
     JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
@@ -22,9 +24,9 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
   if (selected.length > performanceRules.maximumCohortFixtures) throw new MatchFeedError("unavailable");
   const ids = selected.map((v) => v.id);
   const budget = { remainingBytes: performanceRules.maximumStoredBytes };
-  const snapshot = await readPerformanceBatch(tx, query, ids.slice(0, performanceRules.maximumFixtures), budget, true);
+  const snapshot = await readPerformanceBatch(tx, query, ids.slice(0, performanceRules.maximumFixtures), budget, true, quotes);
   for (let offset = performanceRules.maximumFixtures; offset < ids.length; offset += performanceRules.maximumFixtures) {
-    const next = await readPerformanceBatch(tx, query, ids.slice(offset, offset + performanceRules.maximumFixtures), budget, false);
+    const next = await readPerformanceBatch(tx, query, ids.slice(offset, offset + performanceRules.maximumFixtures), budget, false, quotes);
     snapshot.records.push(...next.records);
     snapshot.settlements.push(...next.settlements);
     for (const [id, model] of next.models) snapshot.models.set(id, model);
@@ -35,7 +37,8 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
 }
 
 /** All batches share one repeatable-read transaction and one total payload budget. */
-async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string[], budget: { remainingBytes: number }, includeHistorical: boolean) {
+async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string[], budget: { remainingBytes: number }, includeHistorical: boolean,
+  quotesEnabled: boolean) {
   const fixtures = await tx.footballFixture.findMany({ where: { id: { in: ids } },
     include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } },
       season: { select: { competitionId: true, competition: { select: { name: true, country: true } } } },
@@ -60,10 +63,17 @@ async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string
     Prisma.sql`r.integrity=SHA2(CONCAT(r.id,':',r.requestHash,':',CAST(r.candidateJson AS CHAR)),256)`, locks.length) : [];
   const marketRows = locks.length ? await jsonRows(Prisma.sql`FROM MarketPrediction r WHERE r.setId IN (${Prisma.join(locks)})`, Prisma.sql`r.payloadJson`,
     Prisma.sql`r.integrity=SHA2(CAST(r.payloadJson AS CHAR),256)`, locks.length * 4) : [];
+  const quoteRows = quotesEnabled && locks.length ? await jsonRows(Prisma.sql`FROM PredictionQuote r WHERE r.revisionId IN (${Prisma.join(locks)})`,
+    Prisma.sql`r.body`, Prisma.sql`r.integrity=SHA2(CAST(r.body AS CHAR),256)`, locks.length * 4) : [];
   const markets = new Map<string, HistoryRow[]>();
   for (const m of marketRows) { const id = String(m.setId); markets.set(id, [...(markets.get(id) ?? []), m]); }
   const revisions = new Map(setRows.map((r) => [String(r.id), revisionFromRows(r, markets.get(String(r.id)) ?? [])]));
   if (revisions.size !== locks.length) throw new MatchFeedError("unavailable");
+  const quotes = new Map<string, Map<MarketFamily, PredictionQuote>>();
+  for (const row of quoteRows) {
+    const quote = predictionQuoteFromRow(row), group = quotes.get(quote.revisionId) ?? new Map<MarketFamily, PredictionQuote>();
+    group.set(quote.family, quote); quotes.set(quote.revisionId, group);
+  }
   const resultIds = fixtures.flatMap((f) => f.resultState?.resultId ? [f.resultState.resultId] : []);
   const resultRows = resultIds.length ? await jsonRows(Prisma.sql`FROM FixtureResult r WHERE r.id IN (${Prisma.join(resultIds)})`, Prisma.sql`r.body`,
     Prisma.sql`r.integrity=SHA2(CAST(r.body AS CHAR),256)`, resultIds.length) : [];
@@ -89,7 +99,8 @@ async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string
     const result = fixture.resultState?.resultId ? results.get(fixture.resultState.resultId)! : null;
     if (result && result.fixtureId !== fixture.id) throw new MatchFeedError("unavailable");
     const previous = cycle ? settlementMap.get(cycle.id) ?? new Map() : new Map();
-    return { fixture, cycle, revision, result, projection: cycle ? projectSettlementCycle(fixture, result, fixture.lifecycleState?.issue ?? null, cycle, revision, previous) : null };
+    return { fixture, cycle, revision, result, quotes: quotesEnabled ? quotes.get(revision?.id ?? "") ?? new Map<MarketFamily, PredictionQuote>() : null,
+      projection: cycle ? projectSettlementCycle(fixture, result, fixture.lifecycleState?.issue ?? null, cycle, revision, previous) : null };
   });
   const delta = calendarRules.cutoffSecondsBeforeKickoff * 1000;
   const historical = includeHistorical ? await tx.$queryRaw<{ voidReason: string }[]>(Prisma.sql`SELECT c.voidReason FROM PredictionCycle c
@@ -112,7 +123,7 @@ async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string
   const operations = { basis: "refresh-jobs-for-current-cohort-fixtures-across-runs" as const, total: jobs.length, failed: failed.length,
     pending: jobs.filter((j) => ["pending", "running"].includes(j.state)).length,
     failedFixtures: new Set(failed.map((j) => j.fixtureId)).size, delayedRefreshes: delayed.length, delayedFixtures: new Set(delayed.map((j) => j.fixtureId)).size };
-  return { records, models, settlements, historicalCycles: { basis: "void-cycle-original-kickoff-in-period-excluding-applicable-cycle" as const,
+  return { quotesEnabled, records, models, settlements, historicalCycles: { basis: "void-cycle-original-kickoff-in-period-excluding-applicable-cycle" as const,
     void: historical.length, postponed: historical.filter((c) => c.voidReason === "formal-postponement").length }, operations };
 }
 export type PerformanceSnapshot = Awaited<ReturnType<typeof readPerformanceSnapshot>>;

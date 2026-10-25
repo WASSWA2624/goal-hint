@@ -9,6 +9,7 @@ import type { MarketFamily } from "../../domain/markets.ts";
 import { summarizePredictionReturns, type PredictionReturnSample } from "../../domain/prediction-returns.ts";
 import { canonicalMatchSlug } from "../../domain/match-slug.ts";
 import { matchHref } from "../../domain/navigation.ts";
+import { publicPolicy } from "../../domain/public-policy.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { EvaluationProtocol, HorizonBand, MetricObservation } from "../evaluation/evaluation-contract.ts";
@@ -49,9 +50,19 @@ function matchesFilters(query: PerformanceQuery, source: PerformanceSource, item
   return (query.source === "combined" || query.source === item.market.source) && (source === "combined" || source === item.market.source) &&
     (query.model === null || query.model === version.modelVersionId) && (query.version === null || query.version === version.version);
 }
-/** Phase 1 records carry no captured publication quote, so every sample is "missing" and the summary is display-disabled. */
-function returnSample(record: Record, outcome: PredictionReturnSample["outcome"]): PredictionReturnSample {
-  return { id: record.revision!.id, kickoffAt: record.cycle!.kickoffAt, publishedAt: record.revision!.publishedAt, outcome, quote: "missing" };
+/** The quote captured in this locked revision's own publication transaction; a mismatched quote is an integrity failure. */
+function quoteFor(snapshot: PerformanceSnapshot, record: Record, family: MarketFamily, item: FamilyPrediction): PredictionReturnSample["quote"] {
+  if (snapshot.quotesEnabled !== true) return "missing";
+  const quote = record.quotes?.get(family);
+  if (!quote) return "missing";
+  if (quote.selection !== item.market.selection || quote.revisionId !== record.revision!.id || quote.cycleId !== record.cycle!.id ||
+    quote.fixtureId !== record.fixture.id || quote.recordedAt !== record.revision!.publishedAt) throw new MatchFeedError("unavailable");
+  return quote.state === "quoted" ? { hundredths: quote.price!.hundredths } : "unavailable";
+}
+function returnSample(snapshot: PerformanceSnapshot, record: Record, family: MarketFamily, item: FamilyPrediction,
+  outcome: PredictionReturnSample["outcome"]): PredictionReturnSample {
+  return { id: record.revision!.id, kickoffAt: record.cycle!.kickoffAt, publishedAt: record.revision!.publishedAt, outcome,
+    quote: quoteFor(snapshot, record, family, item) };
 }
 function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family: MarketFamily, source: PerformanceSource,
   horizon: HorizonBand | null, protocol: EvaluationProtocol | null): PerformanceCell {
@@ -72,7 +83,7 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
       // Only a void of this cell's own locked prediction interrupts its streak; unattributed voids stay coverage-only.
       const locked = revision?.candidate.markets[family];
       if (samples && cycle && locked?.available && matchesFilters(query, source, locked, versionFor(record, family, snapshot.models)!)) {
-        samples.push(returnSample(record, "void"));
+        samples.push(returnSample(snapshot, record, family, locked, "void"));
       }
       continue;
     }
@@ -94,10 +105,10 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
       pageHref: `${matchHref(record.fixture.id, canonicalMatchSlug(record.fixture.homeTeam.name, record.fixture.awayTeam.name))}?revision=${revision!.id}#revision-history` });
     if (coherent && result?.regulation.verified && (previous.status === "correct" || previous.status === "incorrect")) {
       coverage.settled++; if (previous.status === "correct") correct++; else incorrect++;
-      samples?.push(returnSample(record, previous.status === "correct" ? "won" : "lost"));
+      samples?.push(returnSample(snapshot, record, family, item, previous.status === "correct" ? "won" : "lost"));
       observations.push({ market: item.market, result: { status: result.status, cycleEligibility: { eligible: true },
         regulationScore: { verified: true, period: "regulation-including-stoppage-time", home: result.regulation.home!, away: result.regulation.away! } } });
-    } else { coverage.pending++; samples?.push(returnSample(record, "pending")); }
+    } else { coverage.pending++; samples?.push(returnSample(snapshot, record, family, item, "pending")); }
   }
   const metrics: PerformanceCell["metrics"] = { state: "unavailable", reasons: [], minimumSamples: null,
     denominator: coverage.settled, correct, incorrect, hitRate: null, brier: null, logLoss: null, calibrationError: null, confidenceZ: null, calibration: [] };
@@ -124,7 +135,7 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
     }
   }
   return { family, source, label: source === "combined" ? "Combined AI / API-Football fallback" : source === "ai" ? "AI" : "API-Football fallback",
-    horizon, coverage, metrics, returns: samples ? summarizePredictionReturns(samples, false) : null, versions: [...versions.values()].sort((a, b) => `${a.source}:${a.modelVersionId}:${a.version}`.localeCompare(`${b.source}:${b.modelVersionId}:${b.version}`, "en")),
+    horizon, coverage, metrics, returns: samples ? summarizePredictionReturns(samples, snapshot.quotesEnabled === true) : null, versions: [...versions.values()].sort((a, b) => `${a.source}:${a.modelVersionId}:${a.version}`.localeCompare(`${b.source}:${b.modelVersionId}:${b.version}`, "en")),
     evidence: { total: coverage.available, truncated: coverage.available > links.length, links } };
 }
 
@@ -169,16 +180,18 @@ export function aggregatePerformance(snapshot: PerformanceSnapshot, query: Perfo
       count: 0, brierDifference: null, matchBasis: "same-fixture-family-evidence-cutoff-and-horizon" })),
     historicalCycles: snapshot.historicalCycles, operations: snapshot.operations,
     freshness: { snapshotKey: evidenceFingerprint({ query, policy: protocol?.id ?? null, cells, leagues, historicalCycles: snapshot.historicalCycles, operations: snapshot.operations,
-      fixtures: snapshot.records.map((r) => ({ id: r.fixture.id, version: r.fixture.dataVersion, cycle: r.cycle, result: r.result?.id ?? null })),
+      fixtures: snapshot.records.map((r) => ({ id: r.fixture.id, version: r.fixture.dataVersion, cycle: r.cycle, result: r.result?.id ?? null,
+        quotes: r.quotes ? [...r.quotes.values()].map((quote) => evidenceFingerprint(quote)).sort() : null })),
       settlements: snapshot.settlements.map((s) => s.id).sort() }), lastSettledAt: latest(snapshot.settlements.map((s) => s.at)),
       lastCorrectedAt: latest(snapshot.settlements.map((s) => s.correctedAt)), invalidatedBy: ["fixture-or-cycle-change", "locked-revision-change",
         "result-or-settlement-correction", "refresh-job-or-receipt-change", "evaluation-policy-change"] } });
 }
 
+/** `quotes` defaults to publicPolicy.features.providerOdds: off, returns stay odds-display-disabled and no SQL reads PredictionQuote. */
 export function createPerformanceService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[];
-  clock?: Clock; policy?: PerformancePolicyBinding | null; cache?: PublicResponseCache }>) {
+  clock?: Clock; policy?: PerformancePolicyBinding | null; cache?: PublicResponseCache; quotes?: boolean }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
-  const policy = options.policy ?? null;
+  const policy = options.policy ?? null, quotes: boolean = options.quotes ?? publicPolicy.features.providerOdds;
   return Object.freeze({ async query(parameters = new URLSearchParams()): Promise<PerformanceResponse> {
     const asOf = clock.now(), query = parsePerformanceQuery(parameters, getReportingDate(asOf));
     const configured = z.array(z.number().int().positive().max(2_147_483_647)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
@@ -186,13 +199,13 @@ export function createPerformanceService(options: Readonly<{ database: DatabaseR
     const protocol = verifiedPolicy(policy, asOf);
     try {
       const read = () => options.database.transaction(async (tx) => {
-        const snapshot = await readPerformanceSnapshot(tx, query, configured.data);
+        const snapshot = await readPerformanceSnapshot(tx, query, configured.data, { quotes });
         // A revoked approval cannot survive an in-flight stored read.
         const current = verifiedPolicy(policy, asOf);
         return aggregatePerformance(snapshot, query, asOf, current?.id === protocol?.id ? current : null);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       let response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "performance", locale: "en", now: asOf,
-        query: { projection: 5, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
+        query: { projection: 5, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol, quotes },
         parse: (value) => performanceResponseSchema.parse(value) }), read) : await read();
       // Preserve the reader's unapproved/counts-only response when permission is
       // revoked during a cache probe; never reuse previously approved metrics.

@@ -141,8 +141,15 @@ cell's own locked, available, filter-matching prediction. Returns are an
 ungated illustration labelled as such; `hitRate` stays policy-gated and
 `publicClaimAuthorized` stays false. No cross-market total is published.
 
-Until original public quotes are captured, every `returns` object is
-`unavailable` with reason `odds-display-disabled`; streaks and counts are real.
+Quotes come from `PredictionQuote`, captured in each locked revision's own
+publication transaction (see
+[public-performance-dashboard.md](public-performance-dashboard.md#capturing-the-original-public-quote)).
+A captured quote whose selection, revision, cycle, fixture or recorded time does
+not match the locked revision fails the whole report closed (`503 unavailable`).
+While `publicPolicy.features.providerOdds` is off (the default), the service reads
+no quotes and every `returns` object is `unavailable` with reason
+`odds-display-disabled`; streaks and counts are real. The cache scope includes
+that flag, and `freshness.snapshotKey` includes each captured quote.
 
 ## Evidence, corrections and bounds
 
@@ -173,8 +180,10 @@ load at most 1,000 current fixtures/locks and 1,000 historical cycles. Sealed JS
 has a shared 16 MiB preflight budget; operational queries have a 31,000-row cap;
 public responses are capped at 1 MiB. Bounds fail safely rather than publishing
 partial metrics. Existing kickoff, cycle state/cutoff, primary/foreign-key and
-daily-run sequence indexes support these reads. No migration or write grant is
-required. The batch path reuses the same sealed row parsers and settlement
+daily-run sequence indexes support these reads; captured quotes use the
+`PredictionQuote` primary key prefix and share the same sealed-JSON budget. The
+reader needs only SELECT on `PredictionQuote`, and only while provider odds
+display is enabled. The batch path reuses the same sealed row parsers and settlement
 projection as detail/feed/private settlement reads.
 
 `freshness.snapshotKey` fingerprints the bounded query, policy, canonical fixture

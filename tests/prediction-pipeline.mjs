@@ -41,7 +41,8 @@ const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEv
   'PredictionRefreshIntent','PredictionRefreshStage','PredictionRefreshOutcome','DurableJobUsage',
   'FixtureResult','ResultProviderObservation','SettlementBatch','MarketSettlementRevision','SettlementEventReceipt',
   'OddsImportBatch','OddsBetObservation','ProviderOddsSnapshot',
-  'GoalMarketExtension','ImpliedMarketExtension','ImpliedMarketResultEvidence','ExtendedMarketSettlementRevision','ExtendedMarketPublishedPick'];
+  'GoalMarketExtension','ImpliedMarketExtension','ImpliedMarketResultEvidence','ExtendedMarketSettlementRevision','ExtendedMarketPublishedPick',
+  'PredictionQuote'];
 // Odds (052): the per-fixture state and public projection take column-scoped updates; no odds row is ever deleted.
 const oddsColumns = {
   FixtureOddsState: 'latestBatchId, policyHash, lastRetrievedAt, lastProviderUpdatedAt, withdrawnAt, publicVersion',

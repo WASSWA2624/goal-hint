@@ -108,7 +108,10 @@ Job gates use `oddsQuotaAllows`, which gives odds only the day's spare (their ow
 enrichment dispatches) and never the reserve. Feed and detail read prices through
 `odds-read.ts` with the effective `publicPolicy.features.providerOdds` flag, which
 stays off until OP-36 display rights are recorded. Odds never reach AI, evidence or
-fallback inputs. Read the [provider odds runbook](../../docs/provider-odds.md).
+fallback inputs. `storedQuoteSource` feeds `predictions/prediction-quote-store.ts`,
+which captures the public price beside each published family inside the
+publication transaction, only when the publisher's `quotes.verify` proves both the
+flag and the rights. Read the [provider odds runbook](../../docs/provider-odds.md).
 
 `teams/` fills `FootballTeam.code` for tight phone cards from spare quota. Use
 `createTeamCodeService` with `createMysqlTeamCodeStore` and the ordinary catalog

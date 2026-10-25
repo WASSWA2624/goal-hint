@@ -477,3 +477,18 @@ is recorded and this migration is not, applies the same DDL, recreates the trigg
 both tables, the columns, keys, checks and all five triggers, then records the committed checksum once. MariaDB DDL is not
 transactional, so a failure after the guard means restoring the backup. The overlay has not been run on MariaDB 11.4
 locally; `tests/account_credit_migration_test.py` checks that it matches the migration.
+
+### Prediction quotes (25 October 2026)
+
+Migration `20261025180538_prediction_quotes` adds `PredictionQuote`, the public price captured beside each available
+family of a published revision (see [provider-odds](provider-odds.md#publication-time-prediction-quotes)). Three NULL-safe
+CHECKs bind family/selection, the quoted/unavailable shape and the sealed body to the columns; two block triggers refuse
+every UPDATE and DELETE. Its only foreign key is the RESTRICT link to `PredictionSet`; there is deliberately none to
+`ProviderOddsSnapshot`. Locally `npm run db:deploy` applies it. On the production MariaDB import
+`prisma/mariadb/20261025180538_prediction_quotes.sql` with the migration account after a verified backup: it stops
+(`SQLSTATE 45000`) unless `20261025171000_provider_workload_budget` is recorded and this migration and table are absent,
+applies the same DDL, recreates the triggers with the block delimiter, verifies the table, foreign key, three checks and
+two triggers, then records the committed checksum once. The three preceding migrations have no MariaDB overlays, so
+confirm they are recorded first. Apply the `PredictionQuote` grant after the import and before enabling odds display.
+The overlay has not been run on MariaDB 11.4 locally; `tests/prediction_quote_migration_test.py` checks that it matches
+the migration.

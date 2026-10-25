@@ -185,6 +185,39 @@ Rules that hold either way:
   `market-implied`. They never enter forecasts, AI inputs, fallback inputs or
   `snapshot`.
 
+## Publication-time prediction quotes
+
+`PredictionQuote` (migration `20261025180538_prediction_quotes`) keeps the public
+price that stood beside each available family when a revision was published, for
+the illustrative individual-prediction returns on `/[locale]/performance`. The
+rules:
+
+- **When.** Only inside the revision's own publication transaction, after the
+  revision and its extensions and before the cycle pointer moves; the final
+  eligibility re-check rolls it back with the revision. No retrospective
+  attachment, backfill or reconstruction from snapshot history.
+- **Gate.** The live publisher passes `quotes.verify`, which requires
+  `publicPolicy.features.providerOdds` **and** a verified owner-recorded
+  `football-odds-rights` approval, evaluated in the transaction. Without the
+  option (every test harness by default) nothing touches the table.
+- **Source.** One non-locking statement (`storedQuoteSource` in
+  `src/server/odds/odds-read.ts`) reads the state and fresh public rows, so the
+  READ COMMITTED publication sees one commit and adds no lock order against odds
+  apply. The price must match the locked family and selection exactly; no other
+  family, line or selection is borrowed.
+- **Reasons.** No state or row: `no-public-price`. Withdrawn, future or older than
+  the odds freshness window (the window `expireStale` uses):
+  `price-state-expired`. A non-bookmaker basis: `unsupported-price-basis`. A
+  missing snapshot hash, out-of-range hundredths or inconsistent clocks:
+  `invalid-public-price`. Odds-data faults never fail publication.
+- **Provenance.** `snapshotId` is a provenance hash under a CHECK, not a foreign
+  key, so captured quotes never block a future reviewed snapshot purge.
+- **Immutability.** Rows are append-only (triggers refuse UPDATE and DELETE) and
+  sealed (`integrity = SHA2(body)`); later odds changes never rewrite them.
+
+Captured hundredths outlive the snapshots' `retainUntil`, like the published-slip
+archive; the owner must confirm this retention before enabling the flag.
+
 ## Retention
 
 Only normalized fields are stored, under the purpose `structured-odds-history`
@@ -228,6 +261,15 @@ GRANT SELECT, INSERT, UPDATE (latestBatchId, policyHash, lastRetrievedAt, lastPr
 GRANT SELECT, INSERT, UPDATE (basis, bookmakerExternalId, line, priceDecimal, displayHundredths, impliedProbability, overround,
   method, mappingVersion, snapshotId, basisJson, retrievedAt, providerUpdatedAt, stale)
   ON goal_hint_db.FixtureOddsPrice TO 'goal_hint_app'@'<existing host>';
+```
+
+Prediction quotes (`20261025180538_prediction_quotes`) add one append-only grant.
+Apply it after `npm run db:deploy` has created the table and **before** the odds
+display flag is turned on: once capture is enabled, a missing grant fails the
+forecast publication itself.
+
+```sql
+GRANT SELECT, INSERT ON goal_hint_db.PredictionQuote TO 'goal_hint_app'@'<existing host>';
 ```
 
 The application never receives `DELETE` or key-column `UPDATE` on odds tables.

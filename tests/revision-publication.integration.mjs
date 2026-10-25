@@ -38,7 +38,7 @@ const catalogTables = ['FootballCatalogLock','FootballTeam','FootballTeamProvide
   'FootballCompetitionProvider','FootballCompetitionAlias','FootballSeason','FootballFixture','FootballIdentityReview', ...catalogAppendOnly];
 const appendOnly = ['EvidenceSourceVersion','FixtureEvidenceSnapshot','FixtureEvidenceSnapshotSource','ModelVersion',
   'PredictionSet','MarketPrediction','PredictionSchedule','PredictionAudit','DailyRunManifest',
-  'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent'];
+  'PredictionRefreshResult','PredictionPublicationBarrier','PredictionChangeEvent','PredictionQuote'];
 
 test('atomic revision publication on isolated genuine MySQL', { timeout: 300_000 }, async (t) => {
   let instance;

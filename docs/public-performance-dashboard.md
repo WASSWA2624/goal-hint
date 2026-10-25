@@ -118,11 +118,43 @@ price aggregate. Settled predictions without a captured quote are counted as
 missing; those that had no current public price at publication are counted as
 unavailable. Both are excluded from the return sample and reported separately.
 
-Original public quotes are not yet captured beside individual predictions, so
-every cell reports `state: "unavailable"` with reason `odds-display-disabled`,
-zero quote counts and null stake/return/profit/ROI/mean odds. Outcome counts and
-losing streaks are real. An enabled cohort with no priced settled prediction
-reports `no-quoted-settled-predictions` and null money fields, never zero.
+### Capturing the original public quote
+
+The quote is captured once, in the locked revision's own publication
+transaction (`src/server/predictions/prediction-quote-store.ts`). It runs after
+the revision, its goal/implied extensions and extended picks are written and
+before the cycle's current pointer moves. The publication's final eligibility
+re-check rolls the capture back together with the revision. Retained-previous,
+unavailable and skipped outcomes capture nothing. There is no backfill and no
+reconstruction from snapshot history: revisions published before the migration,
+or while capture was off, count as missing quotes.
+
+Each available family gets exactly one `PredictionQuote` row, read in one
+non-locking statement from the fixture's odds state and the fresh public
+`FixtureOddsPrice` row for exactly that family and locked selection, with no
+fallback or borrowed family. A row is `quoted` only for a bookmaker-basis price
+whose state is not withdrawn and was reconfirmed within the odds freshness
+window before publication. Otherwise it is `unavailable` with reason
+`no-public-price`, `price-state-expired`, `unsupported-price-basis` or
+`invalid-public-price`. Missing means no row was captured; unavailable means the
+capture found no usable public price. Later odds changes never rewrite a row.
+
+Capture and display are both gated. The live publisher captures only while
+`publicPolicy.features.providerOdds` is on **and** the owner-recorded
+`football-odds-rights` approval verifies (the published-slip precedent). The
+performance reader reads quotes only while the same code flag is on. With the
+flag off, every cell reports `state: "unavailable"` with reason
+`odds-display-disabled`, zero quote counts and null stake/return/profit/ROI/mean
+odds, and no SQL reads `PredictionQuote`; outcome counts and losing streaks stay
+real. An enabled cohort with no priced settled prediction reports
+`no-quoted-settled-predictions` and null money fields, never zero. Returns are
+an ungated illustration like slip ROI; the quality-gated hit rate and
+`publicClaimAuthorized=false` are unchanged.
+
+Captured hundredths outlive the private snapshot `retainUntil` window
+(kickoff + 30 days), as the published-slip archive does; the owner must confirm
+that retention. A very small cohort's mean odds can reveal one historical public
+price.
 
 ## Verification
 
@@ -161,7 +193,13 @@ counts/denominators and the original bounded read-only reporting workflow.
 exclusion, missing/unavailable accounting, display-disabled and unpriced states,
 kickoff/publication/ID ordering and streak interruption. `tests/performance.test.mjs`
 reconciles returns with every horizon-free and league cell and checks void
-attribution and filtered-out exclusion.
+attribution, filtered-out exclusion, quote integrity and that the flag-off service
+never reads `PredictionQuote`. `tests/prediction-quote-store.test.mjs` covers
+every capture reason and sealed-row parsing. `tests/prediction-quotes.integration.mjs`
+deploys the migration on owned MySQL 8.4 and checks capture gating, rollback with
+the final re-check, immutability against later odds, the triggers and CHECKs, and
+hand-reconciled returns after cutoff, result and settlement. The rendering
+verifier's `returns` state shows available returns with missing/unavailable notes.
 
 Production calibration evidence, reviewed league cohorts, captured individual-prediction quotes,
 matched provider/AI comparisons and actual bookmaker/customer returns remain

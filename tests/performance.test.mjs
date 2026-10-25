@@ -8,7 +8,9 @@ import { createPerformanceHandler } from '../src/server/performance/performance-
 import { readPerformanceSnapshot } from '../src/server/performance/performance-read.ts';
 import { fixtureResultFromRow } from '../src/server/results/result-read.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
-import { performanceRecord, performanceSnapshot, performanceProtocol } from './helpers/performance-fixtures.mjs';
+import { performanceRecord, performanceSnapshot, performanceProtocol, withQuotes } from './helpers/performance-fixtures.mjs';
+import { publicCacheDescriptor } from '../src/server/cache/public-cache.ts';
+import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { modelVersion } from './helpers/predictor-fixtures.mjs';
 
 const today = parseReportingDate('2026-10-09'), asOf = Date.parse('2026-10-09T12:00:00Z');
@@ -286,4 +288,80 @@ test('the cell schema rejects returns that do not reconcile with the counted out
   const league = data.leagues.records[0];
   assert.equal(performanceResponseSchema.safeParse({ ...data, leagues: { ...data.leagues, records: [{ ...league,
     cells: league.cells.map((c, index) => index === 0 ? { ...c, returns: null } : c) }, ...data.leagues.records.slice(1)] } }).success, false);
+});
+
+const quotedReport = (records, parameters = '') => aggregatePerformance(performanceSnapshot(records, { quotesEnabled: true }), query(parameters), asOf, null);
+test('captured publication quotes produce exact returns that reconcile by hand', () => {
+  const records = [withQuotes(at(performanceRecord(), 1e12), { 'match-result': 260 }), withQuotes(at(lostRecord(), 1e12 + 1), { 'match-result': 150 }),
+    withQuotes(at(lostRecord(), 1e12 + 2), {}), withQuotes(at(performanceRecord(), 1e12 + 3), { 'match-result': 'unavailable' }),
+    withQuotes(at(performanceRecord({ score: null }), 1e12 + 4), { 'match-result': 98_765 }),
+    withQuotes(at(performanceRecord({ state: 'void' }), 1e12 + 5), { 'match-result': 98_765 })];
+  const data = quotedReport(records), returns = cell(data).returns;
+  assert.equal(returns.state, 'available'); assert.equal(returns.reason, null);
+  assert.equal(returns.settled, 4); assert.equal(returns.won, 2); assert.equal(returns.lost, 2);
+  assert.equal(returns.returnsSampleCount, 2); assert.equal(returns.missingQuoteCount, 1); assert.equal(returns.unavailableQuoteCount, 1);
+  assert.equal(returns.stakeUnits, 2); assert.equal(returns.returnUnits, 2.6); assert.equal(returns.profitUnits, 0.6);
+  assert.equal(returns.roi, 0.6 / 2); assert.equal(returns.meanQuotedOdds, 4.1 / 2);
+  assert.equal(returns.longestLosingStreak, 2); assert.equal(returns.currentLosingStreak, 0);
+  assert.doesNotMatch(JSON.stringify(data), /987\.65|98765/u);
+  const disabled = aggregatePerformance(performanceSnapshot(records), query(), asOf, null);
+  assert.equal(cell(disabled).returns.reason, 'odds-display-disabled');
+  assert.equal(cell(disabled).returns.longestLosingStreak, returns.longestLosingStreak);
+  const unpriced = cell(data, 'double-chance').returns;
+  assert.equal(unpriced.reason, 'no-quoted-settled-predictions'); assert.equal(unpriced.missingQuoteCount, unpriced.settled); assert.equal(unpriced.roi, null);
+  for (const league of data.leagues.records) for (const item of league.cells) assert.equal(item.returns.settled, item.metrics.denominator);
+});
+test('a quote that does not belong to the locked revision rejects the whole report', () => {
+  for (const change of [(quote) => ({ ...quote, selection: quote.selection === 'draw' ? 'away-win' : 'draw' }),
+    (quote) => ({ ...quote, cycleId: '00000000-0000-4000-8000-000000000001' }), (quote) => ({ ...quote, recordedAt: quote.recordedAt + 1 }),
+    (quote) => ({ ...quote, revisionId: '00000000-0000-4000-8000-000000000002' })]) {
+    const record = withQuotes(performanceRecord(), { 'match-result': 200 });
+    record.quotes.set('match-result', change(record.quotes.get('match-result')));
+    assert.throws(() => quotedReport([record]), MatchFeedError);
+  }
+  const disabled = withQuotes(performanceRecord(), { 'match-result': 200 }); disabled.quotes.set('match-result', { ...disabled.quotes.get('match-result'), selection: 'x' });
+  assert.equal(cell(report([disabled])).returns.reason, 'odds-display-disabled');
+});
+test('the snapshot key changes when a captured quote changes', () => {
+  const record = withQuotes(performanceRecord(), { 'match-result': 200 }), first = quotedReport([record]).freshness.snapshotKey;
+  assert.equal(quotedReport([record]).freshness.snapshotKey, first);
+  record.quotes.set('match-result', { ...record.quotes.get('match-result'), price: { ...record.quotes.get('match-result').price, snapshotId: 'f'.repeat(64) } });
+  assert.notEqual(quotedReport([record]).freshness.snapshotKey, first);
+});
+test('quotes stay unread with the odds flag off and the cache projection covers the new shape', async () => {
+  // A sealed-looking locked cycle reaches the batch's JSON reads; the empty revision read then fails closed.
+  const kickoff = Date.parse('2026-10-09T15:00:00Z'), lock = '20000000-0000-4000-8000-000000000003';
+  const cycleRow = { id: '20000000-0000-4000-8000-000000000002', fixtureId: '20000000-0000-4000-8000-000000000001', creationKey: 'a'.repeat(64),
+    creationHash: 'b'.repeat(64), ordinal: 1, version: 1, scheduleVersion: 1, kickoffAt: new Date(kickoff), cutoffAt: new Date(kickoff - 300_000),
+    openedAt: new Date(kickoff - 86_400_000), state: 'closed', currentSetId: lock, lockedSetId: lock, closedAt: new Date(kickoff - 300_000),
+    lockedAt: new Date(kickoff - 300_000), voidedAt: null, voidReason: null };
+  const run = async (options) => {
+    const statements = [];
+    const tx = {
+      $queryRaw: async (sql) => {
+        const text = sql.strings.join(' '); statements.push(text);
+        if (statements.length === 1) return [{ id: '20000000-0000-4000-8000-000000000001' }];
+        return text.includes('OCTET_LENGTH') ? [{ bytes: 0n, total: 0n }] : [];
+      },
+      footballFixture: { findMany: async ({ where }) => where.id.in.map((id) => ({ id, activeCycleId: '20000000-0000-4000-8000-000000000002', resultState: null })) },
+      predictionCycle: { findMany: async () => [cycleRow] },
+      predictionSchedule: { findMany: async () => [{ cycleId: cycleRow.id, version: 1, fixtureId: cycleRow.fixtureId, kickoffAt: cycleRow.kickoffAt, cutoffAt: cycleRow.cutoffAt }] },
+    };
+    const service = createPerformanceService({ competitionIds: [39], clock: { now: () => asOf }, ...options,
+      database: { transaction: async (operation) => operation(tx) } });
+    await assert.rejects(service.query(), (e) => e.code === 'unavailable');
+    return statements;
+  };
+  for (const options of [{}, { quotes: false }]) assert.ok((await run(options)).every((text) => !/PredictionQuote/u.test(text)));
+  assert.ok((await run({ quotes: true })).some((text) => /FROM PredictionQuote/u.test(text)));
+  const keys = [];
+  for (const quotes of [undefined, false, true]) {
+    const service = createPerformanceService({ competitionIds: [39], clock: { now: () => asOf }, database: { transaction: async () => report() },
+      ...(quotes === undefined ? {} : { quotes }), cache: { read: async (descriptor) => { keys.push(descriptor.key); return report(); } } });
+    await service.query();
+  }
+  const expected = (projection, quotes) => publicCacheDescriptor({ kind: 'performance', locale: 'en', now: asOf, query: { projection, ...query() },
+    range: query().range, scope: { competitionIds: [39], protocol: null, quotes }, parse: (value) => value }).key;
+  assert.deepEqual(keys, [expected(5, false), expected(5, false), expected(5, true)]);
+  assert.notEqual(keys[0], expected(4, false));
 });
