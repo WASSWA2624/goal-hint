@@ -87,6 +87,43 @@ period. A win, void or unresolved slip interrupts the streak. The longest and
 period-end streaks therefore do not claim a run extending outside the selected
 window or through unresolved outcomes.
 
+## Illustrative individual-prediction returns and streaks
+
+`src/domain/prediction-returns.ts` is the pure aggregation boundary for each
+horizon-free market/source cell and each league cell. It does not share code with
+the slip summary. It rejects duplicate revision IDs, unsafe clocks, unknown
+outcomes and quotes outside 1.01–1000.00, sorts a copy of its input and never
+mutates it.
+
+Samples are exactly the outcomes the cell already counts: each settled won/lost
+prediction (`returns.settled` equals the metric denominator and `returns.won`
+equals the correct count), each pending prediction and each attributable void.
+Filtered-out sources/versions and unavailable families never become samples.
+A void interrupts a cell's streak only when it belongs to that cell: the void
+cycle or audited void settlement must have a locked, available prediction for the
+family that also passes the cell's source/model/version filters. A void cycle
+without a lock stays in `coverage.void` only.
+
+Losing streaks follow scheduled kickoff, then locked publication time, then
+revision ID, within the selected period. A win, void or pending prediction
+interrupts the sequence; streaks never extend outside the period. Horizon cells
+carry `returns: null`; there is no cross-market "all predictions" return,
+because one fixture appears in several market cards.
+
+The return illustration stakes one unit on each won or lost prediction at the
+original public odds shown when that locked prediction was published. A win
+returns the quote including the unit; a loss returns zero. Void and pending
+predictions are excluded, imply no refund and never enter mean odds or any other
+price aggregate. Settled predictions without a captured quote are counted as
+missing; those that had no current public price at publication are counted as
+unavailable. Both are excluded from the return sample and reported separately.
+
+Original public quotes are not yet captured beside individual predictions, so
+every cell reports `state: "unavailable"` with reason `odds-display-disabled`,
+zero quote counts and null stake/return/profit/ROI/mean odds. Outcome counts and
+losing streaks are real. An enabled cohort with no priced settled prediction
+reports `no-quoted-settled-predictions` and null money fields, never zero.
+
 ## Verification
 
 `tests/slip-performance.test.mjs` checks exact returns, quote exclusions,
@@ -120,7 +157,13 @@ The genuine MySQL performance acceptance also passed all nine checks against an
 owned MySQL 8.4.13 instance, including canonical competition metadata, subgroup
 counts/denominators and the original bounded read-only reporting workflow.
 
-Production calibration evidence, reviewed league cohorts, individual-pick returns,
+`tests/prediction-returns.test.mjs` checks exact hundredths, void/pending price
+exclusion, missing/unavailable accounting, display-disabled and unpriced states,
+kickoff/publication/ID ordering and streak interruption. `tests/performance.test.mjs`
+reconciles returns with every horizon-free and league cell and checks void
+attribution and filtered-out exclusion.
+
+Production calibration evidence, reviewed league cohorts, captured individual-prediction quotes,
 matched provider/AI comparisons and actual bookmaker/customer returns remain
 separate work. The reporting page never activates a forecasting model or calls
 a football provider.

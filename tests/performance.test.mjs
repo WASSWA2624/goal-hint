@@ -232,3 +232,58 @@ test('anonymous success uses shared uncached safe serialization and no cookies',
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(performanceResponseSchema.safeParse(await response.json()).success, true);
 });
+
+const lostRecord = (options = {}) => performanceRecord({ score: [0, 1], ...options });
+const at = (record, kickoffAt) => { record.cycle.kickoffAt = kickoffAt; if (record.revision) record.revision.publishedAt = kickoffAt - 3_600_000; return record; };
+test('individual returns reconcile with every horizon-free and league cell and stay absent from horizon cells', () => {
+  const data = report([performanceRecord(), lostRecord(), performanceRecord({ source: 'api-football' }), lostRecord({ source: 'api-football' }),
+    performanceRecord({ state: 'void' }), performanceRecord({ state: 'open' }), performanceRecord({ score: null })], performanceProtocol());
+  for (const item of data.cells) {
+    if (item.horizon) { assert.equal(item.returns, null); continue; }
+    assert.equal(item.returns.settled, item.metrics.denominator); assert.equal(item.returns.won, item.metrics.correct);
+    assert.equal(item.returns.lost, item.metrics.incorrect);
+    assert.equal(item.returns.state, 'unavailable'); assert.equal(item.returns.reason, 'odds-display-disabled');
+    assert.equal(item.returns.roi, null); assert.equal(item.returns.returnsSampleCount, 0);
+  }
+  assert.ok(data.cells.some((item) => item.horizon !== null));
+  for (const league of data.leagues.records) for (const item of league.cells) {
+    assert.equal(item.returns.settled, item.metrics.denominator); assert.equal(item.returns.won, item.metrics.correct);
+  }
+  assert.equal(cell(data).returns.settled, 4); assert.equal(cell(data, 'match-result', 'ai').returns.settled, 2);
+});
+test('filtered-out and unavailable records never become streak samples', () => {
+  const records = [at(lostRecord(), 1e12), at(lostRecord({ source: 'api-football' }), 1e12 + 1), at(performanceRecord({ state: 'open' }), 1e12 + 2),
+    at(performanceRecord({ noLock: true }), 1e12 + 3), at(lostRecord(), 1e12 + 4)];
+  const data = report(records);
+  assert.equal(cell(data).returns.longestLosingStreak, 3); assert.equal(cell(data).returns.currentLosingStreak, 3);
+  assert.equal(cell(data, 'match-result', 'ai').returns.longestLosingStreak, 2);
+  assert.equal(cell(data, 'match-result', 'api-football').returns.longestLosingStreak, 1);
+  assert.equal(cell(data, 'match-result', 'ai').coverage.filteredOut, 1);
+  const pinned = report(records, null, 'version=no-such-version');
+  assert.equal(cell(pinned).returns.longestLosingStreak, 0); assert.equal(cell(pinned).returns.settled, 0);
+});
+test('only attributable voids and pending predictions interrupt a cell streak', () => {
+  const unattributed = [at(lostRecord(), 1e12), at(performanceRecord({ state: 'void', noLock: true }), 1e12 + 1), at(lostRecord(), 1e12 + 2)];
+  assert.equal(cell(report(unattributed)).coverage.void, 1); assert.equal(cell(report(unattributed)).returns.longestLosingStreak, 2);
+  const otherSource = [at(lostRecord(), 1e12), at(performanceRecord({ state: 'void', source: 'api-football' }), 1e12 + 1), at(lostRecord(), 1e12 + 2)];
+  assert.equal(cell(report(otherSource), 'match-result', 'ai').returns.longestLosingStreak, 2);
+  assert.equal(cell(report(otherSource)).returns.longestLosingStreak, 1);
+  const settlementVoid = at(lostRecord(), 1e12 + 1); settlementVoid.projection.markets.find((m) => m.base.family === 'match-result').previous.status = 'void';
+  const settled = report([at(lostRecord(), 1e12), settlementVoid, at(lostRecord(), 1e12 + 2)]);
+  assert.equal(cell(settled).coverage.void, 1); assert.equal(cell(settled).returns.longestLosingStreak, 1); assert.equal(cell(settled).returns.currentLosingStreak, 1);
+  const cycleVoid = report([at(lostRecord(), 1e12), at(performanceRecord({ state: 'void' }), 1e12 + 1), at(lostRecord(), 1e12 + 2)]);
+  assert.equal(cell(cycleVoid).returns.longestLosingStreak, 1);
+  const pending = report([at(lostRecord(), 1e12), at(performanceRecord({ score: null }), 1e12 + 1), at(lostRecord(), 1e12 + 2)]);
+  assert.equal(cell(pending).coverage.pending, 1); assert.equal(cell(pending).returns.longestLosingStreak, 1);
+});
+test('the cell schema rejects returns that do not reconcile with the counted outcomes', () => {
+  const data = report([performanceRecord(), lostRecord()]), item = cell(data), horizonFree = data.cells.indexOf(item);
+  const replace = (returns) => ({ ...data, cells: data.cells.map((c, index) => index === horizonFree ? { ...c, returns } : c) });
+  assert.equal(performanceResponseSchema.safeParse(data).success, true);
+  for (const returns of [null, { ...item.returns, roi: 0.1 }, { ...item.returns, settled: 3, lost: 2 }, { ...item.returns, won: 2, lost: 0 }]) {
+    assert.equal(performanceResponseSchema.safeParse(replace(returns)).success, false, JSON.stringify(returns));
+  }
+  const league = data.leagues.records[0];
+  assert.equal(performanceResponseSchema.safeParse({ ...data, leagues: { ...data.leagues, records: [{ ...league,
+    cells: league.cells.map((c, index) => index === 0 ? { ...c, returns: null } : c) }, ...data.leagues.records.slice(1)] } }).success, false);
+});

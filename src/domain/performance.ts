@@ -28,11 +28,31 @@ const metrics = z.strictObject({ state: z.enum(["available", "unavailable", "ins
 }).refine((v) => v.denominator === v.correct + v.incorrect && (v.state === "available"
   ? v.denominator > 0 && v.hitRate !== null && v.brier !== null && v.logLoss !== null && v.calibrationError !== null && v.confidenceZ !== null
   : v.hitRate === null && v.brier === null && v.logLoss === null && v.calibrationError === null && v.confidenceZ === null && v.calibration.length === 0));
+const units = z.number().finite().nullable();
+/** Illustrative flat-stake returns and losing streaks for the horizon-free cells; see prediction-returns.ts. */
+export const performanceReturnsSchema = z.strictObject({
+  basis: z.literal("one-unit-per-settled-prediction-original-public-quote-at-publication"),
+  streakBasis: z.literal("kickoff-publication-revision-in-period-void-and-pending-interrupt"),
+  state: z.enum(["available", "unavailable"]), reason: z.enum(["odds-display-disabled", "no-quoted-settled-predictions"]).nullable(),
+  settled: count, won: count, lost: count, returnsSampleCount: count, missingQuoteCount: count, unavailableQuoteCount: count,
+  stakeUnits: units, returnUnits: units, profitUnits: units, roi: units, meanQuotedOdds: units,
+  longestLosingStreak: count, currentLosingStreak: count,
+}).refine((v) => {
+  const money = [v.stakeUnits, v.returnUnits, v.profitUnits, v.roi, v.meanQuotedOdds];
+  const available = v.state === "available";
+  return v.settled === v.won + v.lost && available === (v.reason === null) && available === (v.returnsSampleCount > 0) &&
+    money.every((value) => (value !== null) === available) &&
+    (v.reason === "odds-display-disabled" ? v.returnsSampleCount === 0 && v.missingQuoteCount === 0 && v.unavailableQuoteCount === 0
+      : v.settled === v.returnsSampleCount + v.missingQuoteCount + v.unavailableQuoteCount) &&
+    v.currentLosingStreak <= v.longestLosingStreak && v.longestLosingStreak <= v.lost;
+});
+const reconciles = (v: { returns: z.infer<typeof performanceReturnsSchema> | null; metrics: { denominator: number; correct: number } }) =>
+  v.returns === null || v.returns.settled === v.metrics.denominator && v.returns.won === v.metrics.correct;
 const version = z.strictObject({ source: z.enum(["ai", "api-football"]), modelVersionId: hash.nullable(),
   provider: label, model: label.nullable(), version: label, calibrationVersion: label.nullable() });
 export const performanceCellSchema = z.strictObject({ family, source: performanceSourceSchema, label,
   horizon: z.strictObject({ id: label, minimumMs: count, maximumMs: count }).nullable(),
-  coverage: performanceCoverageSchema, metrics, versions: z.array(version).max(performanceRules.maximumFixtures),
+  coverage: performanceCoverageSchema, metrics, returns: performanceReturnsSchema.nullable(), versions: z.array(version).max(performanceRules.maximumFixtures),
   evidence: z.strictObject({ total: count, truncated: z.boolean(), links: z.array(z.strictObject({ fixtureId: z.uuid(), cycleId: z.uuid(),
     revisionId: z.uuid(), source: z.enum(["ai", "api-football"]), evidenceCutoffAt: instant, forecastAt: instant, forecastHorizonMs: count,
     href: z.string().max(160).regex(/^\/api\/matches\/[a-f0-9-]{36}\?revision=[a-f0-9-]{36}$/u),
@@ -41,10 +61,10 @@ export const performanceCellSchema = z.strictObject({ family, source: performanc
   })).max(performanceRules.maximumEvidenceLinks) }),
 }).refine((v) => v.coverage.settled === v.metrics.denominator && v.evidence.total === v.coverage.available &&
   v.evidence.links.length === Math.min(v.evidence.total, performanceRules.maximumEvidenceLinks) &&
-  v.evidence.truncated === (v.evidence.total > v.evidence.links.length));
+  v.evidence.truncated === (v.evidence.total > v.evidence.links.length) && (v.horizon === null) === (v.returns !== null) && reconciles(v));
 export const performanceLeagueCellSchema = z.strictObject({ family, source: performanceSourceSchema,
-  coverage: performanceCoverageSchema, metrics,
-}).refine((v) => v.coverage.settled === v.metrics.denominator && v.metrics.calibration.length === 0,
+  coverage: performanceCoverageSchema, metrics, returns: performanceReturnsSchema,
+}).refine((v) => v.coverage.settled === v.metrics.denominator && v.metrics.calibration.length === 0 && reconciles(v),
   "League summaries retain the same sample denominator and omit repeated calibration bins.");
 export const performanceLeagueSchema = z.strictObject({
   competition: z.strictObject({ id: z.uuid().nullable(), name: z.string().min(1).max(512).nullable(), country: z.string().min(1).max(256).nullable() }),
@@ -78,3 +98,4 @@ export type PerformanceCell = z.infer<typeof performanceCellSchema>;
 export type PerformanceCoverage = z.infer<typeof performanceCoverageSchema>;
 export type PerformanceSource = z.infer<typeof performanceSourceSchema>;
 export type PerformanceLeague = z.infer<typeof performanceLeagueSchema>;
+export type PerformanceReturns = z.infer<typeof performanceReturnsSchema>;

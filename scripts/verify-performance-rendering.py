@@ -37,6 +37,8 @@ def main():
                 assert "Published slips" in html and "Pending" in html
             if state == "unapproved":
                 assert "Quality metrics awaiting review" in html and "Reviewed sample metrics" not in html
+                assert "Illustrative returns" in html and "Original odds are not published beside individual predictions yet" in html
+                assert 'data-prediction-returns="unavailable"' in html and "Longest losing streak" in html
                 assert "Calibration by probability band" not in html
                 assert "Won" in html and "Lost" in html and "2.35" in html
                 assert html.count('data-published-slip=') == 2

@@ -117,6 +117,33 @@ revisions are never substituted. Baseline-required gates similarly withhold
 metrics because no matched locked baseline archive is stored here. Chronological
 evaluation datasets remain the separate comparison/qualification authority.
 
+## Illustrative returns and losing streaks
+
+Each horizon-free cell (`horizon: null`) and each league cell carries a `returns`
+object; horizon cells carry `returns: null`. It summarizes the cell's own counted
+outcomes in kickoff, publication-time and revision-ID order. `basis` is
+`one-unit-per-settled-prediction-original-public-quote-at-publication` and
+`streakBasis` is `kickoff-publication-revision-in-period-void-and-pending-interrupt`.
+
+```
+settled = won + lost = metrics.denominator; won = metrics.correct
+available <=> reason = null <=> returnsSampleCount > 0 <=> every money field is non-null
+odds-display-disabled => returnsSampleCount = missingQuoteCount = unavailableQuoteCount = 0
+otherwise settled = returnsSampleCount + missingQuoteCount + unavailableQuoteCount
+currentLosingStreak <= longestLosingStreak <= lost
+```
+
+Money fields are `stakeUnits`, `returnUnits`, `profitUnits`, `roi` and
+`meanQuotedOdds`. They are computed from exact hundredths over won/lost
+predictions with a captured publication quote only. Void/pending predictions
+interrupt streaks and never enter returns. An attributable void must be this
+cell's own locked, available, filter-matching prediction. Returns are an
+ungated illustration labelled as such; `hitRate` stays policy-gated and
+`publicClaimAuthorized` stays false. No cross-market total is published.
+
+Until original public quotes are captured, every `returns` object is
+`unavailable` with reason `odds-display-disabled`; streaks and counts are real.
+
 ## Evidence, corrections and bounds
 
 Known model/provider/calibration versions are whitelisted. Each available locked
@@ -130,7 +157,7 @@ Prompt 038 adds `matchLabel` and `pageHref` to each evidence reference. The latt
 uses the canonical English match slug and the exact locked `revision` selection
 with `#revision-history`, allowing accessible navigation from API consumers.
 Canonical slugs share the detail contract. The stored performance cache projection
-is version 2. The API uses `readPublicPerformance`, including the same
+is version 5 (the `returns` object changed the strict response shape). The API uses `readPublicPerformance`, including the same
 unapproved/counts-only policy. The former report page has been replaced by
 [app Help](help-page.md), without a performance-report UI.
 

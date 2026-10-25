@@ -6,6 +6,7 @@ import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
 import { performanceFamilies, performanceResponseSchema, performanceRules, type PerformanceCell, type PerformanceCoverage, type PerformanceLeague, type PerformanceResponse, type PerformanceSource } from "../../domain/performance.ts";
 import type { MarketFamily } from "../../domain/markets.ts";
+import { summarizePredictionReturns, type PredictionReturnSample } from "../../domain/prediction-returns.ts";
 import { canonicalMatchSlug } from "../../domain/match-slug.ts";
 import { matchHref } from "../../domain/navigation.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
@@ -43,10 +44,21 @@ function versionFor(record: Record, family: MarketFamily, models: PerformanceSna
   return { source: "ai", provider: model.provider, model: model.model, modelVersionId: model.id,
     version: model.providerModelVersion, calibrationVersion: model.calibration.version };
 }
+type FamilyPrediction = Extract<NonNullable<Record["revision"]>["candidate"]["markets"][MarketFamily], { available: true }>;
+function matchesFilters(query: PerformanceQuery, source: PerformanceSource, item: FamilyPrediction, version: PerformanceCell["versions"][number]) {
+  return (query.source === "combined" || query.source === item.market.source) && (source === "combined" || source === item.market.source) &&
+    (query.model === null || query.model === version.modelVersionId) && (query.version === null || query.version === version.version);
+}
+/** Phase 1 records carry no captured publication quote, so every sample is "missing" and the summary is display-disabled. */
+function returnSample(record: Record, outcome: PredictionReturnSample["outcome"]): PredictionReturnSample {
+  return { id: record.revision!.id, kickoffAt: record.cycle!.kickoffAt, publishedAt: record.revision!.publishedAt, outcome, quote: "missing" };
+}
 function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family: MarketFamily, source: PerformanceSource,
   horizon: HorizonBand | null, protocol: EvaluationProtocol | null): PerformanceCell {
   const coverage = blankCoverage(), observations: MetricObservation[] = [], links: PerformanceCell["evidence"]["links"] = [];
   const versions = new Map<string, PerformanceCell["versions"][number]>(), included: Record[] = [], observedHorizons = new Set<string>();
+  // Streak/return samples exist only for horizon-free cells, using exactly the counted outcomes below.
+  const samples: PredictionReturnSample[] | null = horizon === null ? [] : null;
   let correct = 0, incorrect = 0, outOfPolicy = false;
   for (const record of snapshot.records) {
     const { cycle, revision, result, projection } = record;
@@ -55,14 +67,19 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
     coverage.total++; included.push(record);
     const entry = projection?.markets.find((m) => m.base.family === family), previous = entry?.previous;
     const coherent = previous && previous.inputHash === entry?.inputHash && previous.lockedSetId === cycle?.lockedSetId;
-    if (cycle?.state === "void" || coherent && previous.status === "void") { coverage.void++; continue; }
+    if (cycle?.state === "void" || coherent && previous.status === "void") {
+      coverage.void++;
+      // Only a void of this cell's own locked prediction interrupts its streak; unattributed voids stay coverage-only.
+      const locked = revision?.candidate.markets[family];
+      if (samples && cycle && locked?.available && matchesFilters(query, source, locked, versionFor(record, family, snapshot.models)!)) {
+        samples.push(returnSample(record, "void"));
+      }
+      continue;
+    }
     const item = cycle?.state === "closed" ? revision?.candidate.markets[family] : null;
     if (!item?.available) { coverage.unavailable++; continue; }
     const version = versionFor(record, family, snapshot.models)!;
-    if ((query.source !== "combined" && query.source !== item.market.source) || (source !== "combined" && source !== item.market.source) ||
-      query.model !== null && query.model !== version.modelVersionId || query.version !== null && query.version !== version.version) {
-      coverage.filteredOut++; continue;
-    }
+    if (!matchesFilters(query, source, item, version)) { coverage.filteredOut++; continue; }
     coverage.available++; coverage.sources[item.market.source]++;
     versions.set(evidenceFingerprint(version), version);
     const knownHorizon = protocol?.horizons.find((h) => horizonMs! >= h.minimumMs && horizonMs! < h.maximumMs);
@@ -77,9 +94,10 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
       pageHref: `${matchHref(record.fixture.id, canonicalMatchSlug(record.fixture.homeTeam.name, record.fixture.awayTeam.name))}?revision=${revision!.id}#revision-history` });
     if (coherent && result?.regulation.verified && (previous.status === "correct" || previous.status === "incorrect")) {
       coverage.settled++; if (previous.status === "correct") correct++; else incorrect++;
+      samples?.push(returnSample(record, previous.status === "correct" ? "won" : "lost"));
       observations.push({ market: item.market, result: { status: result.status, cycleEligibility: { eligible: true },
         regulationScore: { verified: true, period: "regulation-including-stoppage-time", home: result.regulation.home!, away: result.regulation.away! } } });
-    } else coverage.pending++;
+    } else { coverage.pending++; samples?.push(returnSample(record, "pending")); }
   }
   const metrics: PerformanceCell["metrics"] = { state: "unavailable", reasons: [], minimumSamples: null,
     denominator: coverage.settled, correct, incorrect, hitRate: null, brier: null, logLoss: null, calibrationError: null, confidenceZ: null, calibration: [] };
@@ -106,7 +124,7 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
     }
   }
   return { family, source, label: source === "combined" ? "Combined AI / API-Football fallback" : source === "ai" ? "AI" : "API-Football fallback",
-    horizon, coverage, metrics, versions: [...versions.values()].sort((a, b) => `${a.source}:${a.modelVersionId}:${a.version}`.localeCompare(`${b.source}:${b.modelVersionId}:${b.version}`, "en")),
+    horizon, coverage, metrics, returns: samples ? summarizePredictionReturns(samples, false) : null, versions: [...versions.values()].sort((a, b) => `${a.source}:${a.modelVersionId}:${a.version}`.localeCompare(`${b.source}:${b.modelVersionId}:${b.version}`, "en")),
     evidence: { total: coverage.available, truncated: coverage.available > links.length, links } };
 }
 
@@ -129,7 +147,7 @@ function leagueGroups(snapshot: PerformanceSnapshot, query: PerformanceQuery, fa
       competition: group.competition, fixtureCount: group.records.length,
       cells: families.map((family) => {
         const cell = cellFor({ ...snapshot, records: group.records }, query, family, query.source, null, protocol);
-        return { family, source: query.source, coverage: cell.coverage, metrics: { ...cell.metrics, calibration: [] } };
+        return { family, source: query.source, coverage: cell.coverage, metrics: { ...cell.metrics, calibration: [] }, returns: cell.returns! };
       }),
     })) };
 }
@@ -174,7 +192,7 @@ export function createPerformanceService(options: Readonly<{ database: DatabaseR
         return aggregatePerformance(snapshot, query, asOf, current?.id === protocol?.id ? current : null);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       let response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "performance", locale: "en", now: asOf,
-        query: { projection: 4, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
+        query: { projection: 5, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
         parse: (value) => performanceResponseSchema.parse(value) }), read) : await read();
       // Preserve the reader's unapproved/counts-only response when permission is
       // revoked during a cache probe; never reuse previously approved metrics.
