@@ -81,6 +81,14 @@ reached, and `3` when a requested allocation/growth check lacks its measurement 
 Record the first baseline and run later before treating growth as measured. A
 failure never overwrites a previous baseline or prints driver diagnostics.
 
+## Result and lifecycle history census
+
+`db:storage` measures allocation; it does not say which rows are still needed.
+`npm run db:compaction-report` is a separate, read-only dry run that classifies
+result-sync batches, provider observations and lifecycle receipts as retained
+(with a reason) or as transient candidates, with serialized JSON byte totals.
+It never deletes. See [history compaction](history-compaction.md).
+
 ## Existing operations monitoring
 
 An approved `MonitoringBinding` may supply an optional `storage` source, analogous

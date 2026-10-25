@@ -190,6 +190,7 @@ column-scoped cycle grants and rollback that preserves forecast history.
 | `npm run db:status` | Inspect the committed/applied migration state on that connection. |
 | `npm run db:verify` | Check migration status, then compare the datasource with the Prisma schema using `migrate diff --exit-code`; drift fails without repair/reset. |
 | `npm run db:health` | Check connectivity and current account/session/verification columns using zero-row reads. Missing schema or SELECT grants return `schema-unavailable` and a nonzero exit. |
+| `npm run db:compaction-report` | Read-only dry-run census of transient result/lifecycle history with SELECT access; it never deletes. Exit `0` complete, `3` partial, `1` unavailable. See [history compaction](history-compaction.md). |
 | `npm run test:db` | Run the disposable real-MySQL integration harness. |
 
 Schema generation and validation must work when no URL is configured; no fake
