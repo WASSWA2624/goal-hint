@@ -9,6 +9,8 @@ import { formatPeriodEnd } from "@/domain/subscription-period";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
 import { createMessages } from "@/i18n/messages";
 import { AccountSupportLink, AdminContactLinks } from "./admin-contact";
+import { AccountBlock, AccountBlockActions, AccountBlockText, AccountContactLinks, AccountFine } from "./account-overview";
+import { richText } from "./rich-text";
 import { refreshMemberSession } from "./member-session";
 import { Action, Disclosure, Note, PaymentReviewBox, StatusBox, StatusFacts, StatusTitle } from "./subscribe-styles";
 
@@ -109,6 +111,38 @@ export function PaymentStatusCard({ locale, status, settings, phone, heading = "
       : <AccountSupportLink locale={locale} contact={settings} />}
     {nextAction}
   </PaymentReviewBox>;
+}
+
+/** The account page's sentence for a report that waits, was refused or was reversed; the subscribe page keeps the card. */
+export function PaymentNotice({ locale, status, settings, phone }: { locale: string; status: PaymentStatus | null; settings: StatusSettings; phone: string }) {
+  const m = createMessages(locale);
+  if (!status) return null;
+  const pending = status.status === "pending" || status.status === "superseded", rejected = status.status === "rejected", reversed = status.status === "reversed";
+  if (!pending && !rejected && !reversed) return null;
+  const topUp = status.purpose === "topup", reason = reasonOf(status.rejectReason);
+  const facts = { amount: <strong>UGX {m.number(status.priceUgx)}</strong>, reference: status.reference };
+  const sentence = pending ? richText(m.text(topUp ? "account.topUpWaiting" : "account.paymentWaiting"), { ...facts, plan: status.planName })
+    : rejected ? richText(m.text("account.paymentRejected"), { ...facts,
+      reason: status.rejectText ?? m.text(topUp && reason === "amount-mismatch" ? "credit.reason.amount-mismatch" : `subscribe.reason.${reason}`) })
+    : richText(m.text("account.paymentReversed"), { ...facts, lead: m.text(topUp ? "credit.reversedLead" : "subscribe.reversedLead") });
+  const contactDetails = { reference: status.reference, phone: formatPhone(phone) };
+  const supportText = pending ? m.text("subscribe.helpPaid", { ...contactDetails, price: String(status.priceUgx), plan: status.planName })
+    : m.text(reversed ? "subscribe.helpReversed" : "subscribe.helpRejected", contactDetails);
+  return <AccountBlock $attention role="status" data-payment-status={pending ? "pending" : status.status}>
+    <AccountBlockText><p>{sentence}</p>
+      {pending && settings.reviewTime && <AccountFine>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</AccountFine>}</AccountBlockText>
+    <AccountBlockActions><AccountContactLinks locale={locale} contact={settings} text={supportText} /></AccountBlockActions>
+  </AccountBlock>;
+}
+
+/** The account page's sentence for a requested free trial. */
+export function TrialNotice({ locale, settings, phone }: { locale: string; settings: StatusSettings; phone: string }) {
+  const m = createMessages(locale);
+  return <AccountBlock $attention role="status" data-trial-status="requested">
+    <AccountBlockText><p>{m.text("subscribe.trialWaiting")}</p>
+      {settings.reviewTime && <AccountFine>{m.text("subscribe.reviewTime", { time: settings.reviewTime })}</AccountFine>}</AccountBlockText>
+    <AccountBlockActions><AccountContactLinks locale={locale} contact={settings} text={m.text("subscribe.helpTrial", { phone: formatPhone(phone) })} /></AccountBlockActions>
+  </AccountBlock>;
 }
 
 /** A requested trial waits for the owner's Grant free trial, which unlocks the account's devices by itself. */

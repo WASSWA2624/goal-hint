@@ -185,10 +185,10 @@ def subscription_discovery(origin):
         assert summary.start() < html.index("Change phone"), "Subscription details must precede account settings."
         no_match(r'<details\b', summary.group(1))
         if scenario in active:
-            match(r'Expires\s*<time dateTime="[^"]+">\d{1,2} \w+ \d{4}, \d{2}:\d{2} EAT</time>', summary.group(1))
+            match(r'You have access until\s*<strong[^>]*><time dateTime="[^"]+">\d{1,2} \w+ \d{4}, \d{2}:\d{2} EAT</time></strong>\s*—\s*\d+ days? from now\.', summary.group(1))
         else:
             no_match(r'<time\b', summary.group(1))
-            match("No active subscription", summary.group(1))
+            match(r"Your access ended on" if scenario == "expired" else r"You have no active subscription\.", summary.group(1))
         if status["canSubscribe"]:
             match(r'href="/en/subscribe[^\"]*"', summary.group(1))
             match("View payment" if status["paymentPending"] else "Renew" if scenario in active else "Subscribe", summary.group(1))
@@ -200,7 +200,8 @@ def subscription_discovery(origin):
         assert response.status == 200 and response.headers.get("Cache-Control") == "no-store"
         status = json.loads(response.text)
         assert status["administrator"] is (token == "d")
-        assert status["subscription"] == {"activeUntil": None, "paymentPending": False, "canSubscribe": can_subscribe}
+        assert status["subscription"] == {"activeUntil": None, "paymentPending": False, "canSubscribe": can_subscribe,
+            "creditUgx": 0, "autoRenew": False, "renewsFromCredit": False}
 
 
 def main():
@@ -217,7 +218,7 @@ def main():
     with Server(directory, env=env, ready="/en/account") as server:
         for state, expected in [("off", "Log in"), ("signed-out", "Phone number"),
                 ("signed-in", "256 700 000 101"), ("unavailable", "Member access is unavailable."),
-                ("active", "Active subscription"), ("ended", "Your access ended on"), ("blocked", "We couldn&#x27;t complete this.")]:
+                ("active", "You have access until"), ("ended", "Your access ended on"), ("blocked", "We couldn&#x27;t complete this.")]:
             response = request(server.origin, f"/en/account?state={state}")
             assert response.status == 200
             match(expected, response.text)

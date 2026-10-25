@@ -81,12 +81,3 @@ export const AccountPhone = styled.div`
   small { display: block; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
   strong { font-weight: 500; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 `;
-export const AccountSection = styled.details`
-  border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 12px;
-  > summary { min-block-size: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
-  > summary::-webkit-details-marker { display: none; }
-  > summary > svg { margin-inline-start: auto; }
-  &[open] > summary > svg { transform: rotate(180deg); }
-  > div { display: grid; gap: 12px; padding-block: 8px 12px; }
-  h2 { font-size: 0.9375rem; }
-`;

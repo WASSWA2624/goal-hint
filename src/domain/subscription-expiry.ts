@@ -5,6 +5,7 @@ const expiryFormat = new Intl.DateTimeFormat("en-GB", {
 
 const dayFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", day: "numeric", month: "short", year: "numeric" });
 const timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const shortDayFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", day: "numeric", month: "short" });
 const hour = 3_600_000, day = 24 * hour;
 
 /** Subscription times use the service's timezone, including the year at renewal boundaries. */
@@ -15,6 +16,11 @@ export function formatSubscriptionExpiry(instant: Date): string {
 /** The day and the time apart, for "Expires on 31 Oct 2026 at 15:12 EAT". */
 export function subscriptionExpiryParts(instant: Date): Readonly<{ day: string; time: string }> {
   return { day: dayFormat.format(instant), time: `${timeFormat.format(instant)} EAT` };
+}
+
+/** The day alone, for dense history rows: "24 Oct". */
+export function formatShortDay(instant: Date): string {
+  return shortDayFormat.format(instant);
 }
 
 /** Time left, rounded down: whole days, then whole hours on the last day, then "under an hour"; null once it has passed. */

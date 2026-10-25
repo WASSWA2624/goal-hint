@@ -56,7 +56,8 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
 }) {
   const subscription = useSyncExternalStore(subscribeMemberSession, getSubscriptionSnapshot, getServerSubscriptionSnapshot);
   const pathname = usePathname(), messages = createMessages(locale), now = useSyncExternalStore(subscribeMinute, currentMinute, serverMinute);
-  if (!subscription?.activeUntil) return null;
+  // The account page opens with the same expiry and its Renew button, so the bar would only repeat it there.
+  if (!subscription?.activeUntil || pathname === `/${resolveLocale(locale)}/account`) return null;
   const until = new Date(subscription.activeUntil), left = subscriptionTimeLeft(until, now);
   const subscribePath = `/${resolveLocale(locale)}/subscribe`, subscribing = pathname === subscribePath;
   return <Bar className={className} $desktopOnly={desktopOnly} aria-label={messages.text("account.accessSettings")} data-subscription-status-bar>

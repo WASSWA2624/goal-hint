@@ -2,20 +2,22 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { MemberForm, MemberNavigationRecovery, MemberPanel, MemberSignOut } from "@/components/members/member-controls";
+import { MemberNavigationRecovery, MemberPanel, MemberSignOut } from "@/components/members/member-controls";
 import { AccountAuthForm, type AccountAuthView } from "@/components/members/account-auth-form";
+import { AccountBlock, AccountBlockActions, AccountBlockText, AccountFlash, AccountLogOut, AccountSheet } from "@/components/members/account-overview";
 import { AccountSettings, ResetPasswordForm } from "@/components/members/account-security";
 import { AccountVerificationForm } from "@/components/members/account-verification";
-import { AccountCard, AccountCardBody, AccountCardHeading, AccountSection } from "@/components/members/account-styles";
+import { AccountCard, AccountCardBody } from "@/components/members/account-styles";
 import { CreditSection } from "@/components/members/credit-controls";
-import { ApprovalRefresh, PaymentStatusCard, TrialStatusCard } from "@/components/members/payment-status";
+import { ApprovalRefresh, PaymentNotice, TrialNotice } from "@/components/members/payment-status";
+import { richText } from "@/components/members/rich-text";
 import { TrialRequest } from "@/components/members/subscribe-controls";
-import { SubscriptionSummaryCard } from "@/components/members/subscription-summary-card";
-import { Button } from "@/components/ui/controls";
+import { ButtonLink } from "@/components/ui/controls";
 import { Stack } from "@/components/ui/layout";
-import { ChevronDownIcon, SignOutIcon, UserIcon } from "@/components/ui/icons";
-import { memberReturnPath } from "@/domain/member-navigation";
+import { SignOutIcon } from "@/components/ui/icons";
+import { memberNextPath, memberReturnPath } from "@/domain/member-navigation";
 import { adminLandingPath } from "@/domain/admin-navigation";
+import { formatSubscriptionExpiry, subscriptionTimeLeft } from "@/domain/subscription-expiry";
 import { codeStatus, formatPeriodEnd } from "@/domain/subscription-period";
 import { createMessages } from "@/i18n/messages";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
@@ -72,44 +74,51 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
     const salesOpen = !!settings && mode !== "off";
     // Plans are read only for an account with credit or auto-renewal to manage.
     const credit = paymentView?.credit ?? null;
-    const offers = credit && salesOpen && (credit.balanceUgx !== 0 || credit.autoRenew || credit.history.length) ? await plans().catch(() => []) : [];
+    const hasCredit = !!credit && (credit.balanceUgx !== 0 || credit.autoRenew || credit.history.length > 0);
+    const offers = hasCredit && salesOpen ? await plans().catch(() => []) : [];
     // A granted trial unlocks the account's devices; a dismissed one stops waiting.
     const trialPending = !!paymentView?.trialPending && !activeUntil;
+    const offerTrial = salesOpen && !!paymentView?.trialEligible && !trialPending;
+    // A waiting, refused or reversed plan report sends the member back to it instead of to a second payment; a top-up has
+    // its own notice and leaves Renew in place.
+    const reports = paymentView ? [status, paymentView.otherStatus ?? null].filter((report) => report && report.purpose !== "topup") : null;
+    const viewPayment = reports ? reports.some((report) => ["pending", "superseded", "rejected", "reversed"].includes(report!.status)) : !!subscription?.paymentPending;
+    const accessEnd = activeUntil ? new Date(activeUntil) : null, left = accessEnd && subscriptionTimeLeft(accessEnd, now.getTime());
+    const until = accessEnd && <strong><time dateTime={activeUntil!}>{formatSubscriptionExpiry(accessEnd)}</time></strong>;
+    const access = !subscription ? messages.text("account.subscriptionUnavailable")
+      : left ? richText(messages.text("account.accessUntilLeft"), { until, left: left.unit === "day" ? messages.plural("account.daysFromNow", left.count)
+        : left.count ? messages.plural("account.hoursFromNow", left.count) : messages.text("account.underAnHourFromNow") })
+      : accessEnd ? richText(messages.text("account.accessUntilSentence"), { until })
+      : last ? richText(messages.text("account.accessEnded"), { end: <strong>{formatPeriodEnd(last.endsAt)}</strong> }) : messages.text("account.noAccess");
     return <PublicShell locale={locale} showAccount><Stack $gap="md">
       <MemberNavigationRecovery />
       {unavailable && <p role="status">{messages.text("account.unavailable")}</p>}
       {!member ? <>
         {parameters.status === "signed-out" && <p role="status">{messages.text("account.signedOut")}</p>}
         <AccountAuthForm key={authView} locale={locale} view={authView} returnTo={returnTo} contact={contact} />
-      </> : member.blocked ? <MemberPanel><p role="status">{messages.text("account.refused")}</p><MemberSignOut><SignOutIcon />{messages.text("account.logOut")}</MemberSignOut></MemberPanel> : <AccountCard data-account-details>
-        <AccountCardHeading><UserIcon /><h1>{messages.text("account.title")}</h1></AccountCardHeading>
-        <AccountCardBody>
-          {parameters.status === "phone-changed" && <p role="status">{messages.text("account.phoneChanged")}</p>}
-          {parameters.status === "password-changed" && <p role="status">{messages.text("account.passwordChanged")}</p>}
-          <ApprovalRefresh waiting={waiting || trialPending} refreshAt={activeUntil} />
-          <SubscriptionSummaryCard locale={locale} subscription={subscription} canSubscribe={salesOpen} returnTo={returnTo} paymentNeedsAttention={[status, paymentView?.otherStatus].some((report) => report?.status === "rejected" || report?.status === "reversed")} />
-          {trialPending && <TrialStatusCard locale={locale} settings={contact} phone={member.phone} heading="h2" />}
-          <PaymentStatusCard locale={locale} status={status} settings={contact} phone={member.phone} heading="h2" />
-          {paymentView?.otherStatus && <PaymentStatusCard locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} heading="h2" />}
-          {credit && (credit.balanceUgx !== 0 || credit.autoRenew || credit.history.length > 0) && <AccountSection open data-account-credit>
-            <summary>{messages.text("credit.title")}<ChevronDownIcon /></summary><div>
-              <CreditSection locale={locale} credit={credit} plans={offers} salesOpen={salesOpen} acceptedTerms={!!paymentView?.acceptedTerms} /></div></AccountSection>}
-          <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} />
-          {(view || salesOpen && paymentView?.trialEligible) && <AccountSection>
-            <summary>{messages.text("account.accessSettings")}<ChevronDownIcon /></summary><div>
-            {view && <>
-              {!activeUntil && last && <p>{messages.text("account.accessEnded", { end: formatPeriodEnd(last.endsAt) })}</p>}
-              {queued.map((code) => <p key={code.id}>{messages.text("account.queued", { plan: code.planName, start: formatPeriodEnd(code.startsAt), end: formatPeriodEnd(code.endsAt) })}</p>)}
-            </>}
-            {salesOpen && paymentView?.trialEligible && <TrialRequest locale={locale} days={settings!.trialDays} />}
-            {view && <><h2>{messages.text("account.devices")}</h2>
-              {view.devices.map((device, index) => <p key={index}>{messages.text("account.deviceLastUsed", { number: String(index + 1), at: formatPeriodEnd(device.lastSeenAt) })}</p>)}
-              <MemberForm method="post" action="/api/account/devices" data-analytics-ignore><Button type="submit" variant="secondary">{messages.text("account.signOutOthers")}</Button></MemberForm>
-            </>}
-          </div></AccountSection>}
-          <MemberSignOut><SignOutIcon />{messages.text("account.logOut")}</MemberSignOut>
-        </AccountCardBody>
-      </AccountCard>}
+      </> : member.blocked ? <MemberPanel><p role="status">{messages.text("account.refused")}</p><MemberSignOut><SignOutIcon />{messages.text("account.logOut")}</MemberSignOut></MemberPanel> : <AccountSheet data-account-details>
+        <h1>{messages.text("account.yourAccount")}</h1>
+        {parameters.status === "phone-changed" && <AccountFlash role="status">{messages.text("account.phoneChanged")}</AccountFlash>}
+        {parameters.status === "password-changed" && <AccountFlash role="status">{messages.text("account.passwordChanged")}</AccountFlash>}
+        <ApprovalRefresh waiting={waiting || trialPending} refreshAt={activeUntil} />
+        <AccountBlock data-subscription-summary={!subscription ? "unavailable" : activeUntil ? "active" : "inactive"}>
+          <AccountBlockText>
+            <p>{access}</p>
+            {queued.map((code) => <p key={code.id}>{messages.text("account.queued", { plan: code.planName, start: formatPeriodEnd(code.startsAt), end: formatPeriodEnd(code.endsAt) })}</p>)}
+          </AccountBlockText>
+          {(subscription && salesOpen || offerTrial) && <AccountBlockActions>
+            {subscription && salesOpen && <ButtonLink href={`${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
+              {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.renew" : "account.subscribe")}</ButtonLink>}
+            {offerTrial && <TrialRequest locale={locale} days={settings!.trialDays} />}
+          </AccountBlockActions>}
+        </AccountBlock>
+        {trialPending && <TrialNotice locale={locale} settings={contact} phone={member.phone} />}
+        <PaymentNotice locale={locale} status={status} settings={contact} phone={member.phone} />
+        {paymentView?.otherStatus && <PaymentNotice locale={locale} status={paymentView.otherStatus} settings={contact} phone={member.phone} />}
+        {credit && hasCredit && <CreditSection locale={locale} credit={credit} plans={offers} salesOpen={salesOpen} acceptedTerms={!!paymentView?.acceptedTerms} active={!!activeUntil} />}
+        <AccountSettings locale={locale} phone={member.phone} contact={contact} returnTo={returnTo} devices={view ? view.devices.map((device) => formatPeriodEnd(device.lastSeenAt)) : null} />
+        <AccountLogOut locale={locale} />
+      </AccountSheet>}
     </Stack></PublicShell>;
   };
 }

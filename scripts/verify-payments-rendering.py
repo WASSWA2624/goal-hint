@@ -71,6 +71,29 @@ def compact_status_rendering(origin):
         assert not re.search(r'<button\b[^>]*>\s*Change\s*</button>', html), "Account controls do not belong in the payment status."
 
 
+def account_reports(origin):
+    """The account page states each waiting, refused or reversed report as one sentence with its contact links."""
+    for state in ["pending", "pending-active", "pending-call-only", "pending-no-contact", "rejected", "rejected-fallback", "reversed"]:
+        html = visible_html(request(origin, f"/en/account?state={state}").text)
+        status = state.split("-")[0]
+        notice = re.search(rf'<section\b[^>]*data-payment-status="{status}"[^>]*>([\s\S]*?)</section>', html)
+        assert notice, state
+        text = unescape(re.sub(r'<[^>]+>', "", notice.group(1)))
+        assert "UGX 5,000" in text and "ref PFAKE" in text, (state, text)
+        if status == "pending": assert "for the Weekly plan is waiting for approval" in text and "Checking usually takes a synthetic review interval" in text, text
+        if status == "rejected": assert "was not approved" in text and ("We couldn't find this payment in our wallet." if state == "rejected-fallback" else "Synthetic rejection reason") in text, text
+        if status == "reversed": assert "was reversed. Access from this payment has ended." in text, text
+        links = [(unescape(href), unescape(re.sub(r'<[^>]+>', "", body)).strip()) for href, body in re.findall(r'<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)</a>', notice.group(1))]
+        labels = [label for _, label in links]
+        if state == "pending-no-contact": assert links == [("/en/contact", "Contact support")], links
+        elif state == "pending-call-only": assert links == [("tel:+256700000903", "Call admin")], links
+        else: assert labels == ["Call admin", "WhatsApp"] and links[0][0] == "tel:+256700000903" and links[1][0].startswith("https://wa.me/256700000904?text="), links
+        summary = re.search(r'<section\b[^>]*data-subscription-summary="(active|inactive)"[^>]*>([\s\S]*?)</section>', html)
+        assert summary and summary.group(1) == ("active" if state.endswith("-active") else "inactive"), state
+        assert re.search(r'href="/en/subscribe#report"[^>]*>\s*View payment\s*<', summary.group(2)), "A report sends the member back to it, not to a second payment."
+        assert html.index("data-subscription-summary") < notice.start() < html.index("Change phone"), "Access, then the report, then sign-in."
+
+
 def main():
     args = parse_args("payment steps", extra=("--fixture",))
     env = environment(GOAL_HINT_DATABASE_ENABLED="false")
@@ -126,7 +149,7 @@ def main():
                 if state == "approved": assert 'data-payment-status="approved"' not in html and "Payment approved" not in html, "An approval shows no card on the subscribe page."
         compact_status_rendering(server.origin)
         account = visible_html(request(server.origin, "/en/account?state=active").text)
-        assert 'data-subscription-summary="active"' in account and "Active subscription" in account and "Renew" in account
+        assert 'data-subscription-summary="active"' in account and "You have access until" in account and "Renew" in account
         assert re.search(r'<time\b[^>]*datetime="[^"]+"[^>]*>[^<]*\b\d{4}\b[^<]*\d{2}:\d{2} EAT</time>', account, re.I), "The active account must show its full expiry date and time."
         assert 'data-payment-status="approved"' not in account, "The account must not repeat its active subscription summary as an approval card."
         # Account credit: pay for a plan from credit, add credit (a top-up report), and the account's balance, auto-renewal and history.
@@ -138,8 +161,9 @@ def main():
             assert label in topup, label
         assert "data-credit-purchase" not in topup and "Choose plan" not in topup
         account_credit = visible_html(request(server.origin, "/en/account?state=credit").text)
-        for label in ["data-account-credit", "Credit: UGX 12,000", "Auto-renew from credit", "Turn on", "Top-up", "PCRED", "Add credit"]:
+        for label in ["data-account-credit", "Your credit is", "UGX 12,000", "Auto-renew from credit is off", "Turn on", "Top-up · PCRED", "Add credit"]:
             assert label in account_credit, label
+        account_reports(server.origin)
         assert "Add credit instead" not in visible_html(request(server.origin, "/en/subscribe?state=signed-out").text), "Signed-out visitors see plans only."
         assert "data-account-credit" not in account, "An account without credit shows no credit section."
         for agent, allowed in [("Android Chrome", True), ("iPhone Safari", False), ("Android; wv) Chrome", False), ("Android FBAN", False), ("Android Instagram", False)]:
