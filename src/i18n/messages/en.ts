@@ -1,6 +1,9 @@
+import { performanceMessages } from "./performance.ts";
+
 // Shared by every client component. Information-page prose lives in ../content-messages.ts (server-only);
 // shared page metadata stays here.
 export const en = {
+  ...performanceMessages,
   "phone.hint": "Include the country code. Ugandan numbers may start with 07; for another country, replace 256 with its country code.",
   "phone.required": "Enter your phone number.",
   "phone.invalid": "Enter a valid phone number.",

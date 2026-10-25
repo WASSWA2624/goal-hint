@@ -73,10 +73,10 @@ test('public saved slip history grades only sealed results coherent with the cur
   const row = { id: resultId, fixtureId: id, fixtureVersion: 1n, observedAt: new Date(now), status: content.status,
     regulationVerified: true, regulationHome: 2, regulationAway: 1, contentHash: evidenceFingerprint(content),
     body: evidenceSerialize(body), validIntegrity: 1 };
-  const fixture = { status: content.status, regulationHome: 2, regulationAway: 1, regulationVerifiedAt: new Date(now),
+  const fixture = { id, activeCycleId: null, status: content.status, regulationHome: 2, regulationAway: 1, regulationVerifiedAt: new Date(now),
     regulationEvidenceRef: evidenceRef, lifecycleState: null, resultState: { resultId } };
-  const tx = { savedSlip: { findMany: async () => [{ id: 'saved-id', createdAt: new Date(now), snapshotJson: slip,
-    selections: [{ fixtureId: id, fixture }] }] }, $queryRaw: async () => [row] };
+  const tx = { footballFixture: { findMany: async () => [fixture] }, $queryRaw: async query => query.sql.includes('FROM SavedSlip s')
+    ? [{ id: 'saved-id', createdAt: new Date(now), snapshotJson: slip }] : [row] };
   const service = createSavedSlips({ transaction: async (read) => read(tx) }, { key: () => 'key' });
   assert.equal((await service.completed())[0].outcome, 'won');
   fixture.regulationHome = 0;

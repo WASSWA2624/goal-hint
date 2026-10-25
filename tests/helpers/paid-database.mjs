@@ -11,7 +11,12 @@ export async function paidDatabase({ seedPlans = false } = {}) {
   const instance = await startIsolatedMysql();
   let root, database;
   try {
-    root = await mariadb.createConnection({ host: "127.0.0.1", port: instance.port, user: "root", database: instance.databaseName, timezone: "Z", multipleStatements: true });
+    root = await mariadb.createConnection({ host: "127.0.0.1", port: instance.port, user: "root", database: instance.databaseName,
+      timezone: "+00:00", sessionVariables: { time_zone: "+00:00" }, multipleStatements: true });
+    // The raw connector encodes Date parameters using local calendar fields even for a UTC session.
+    // Match the production Prisma adapter, which sends explicit UTC DATETIME strings.
+    const query = root.query.bind(root), parameter = value => value instanceof Date ? value.toISOString().slice(0, -1).replace('T', ' ') : value;
+    root.query = (sql, values) => query(sql, Array.isArray(values) ? values.map(parameter) : parameter(values));
     await root.query(await readFile(new URL("../../prisma/migrations/20261019142209_subscriptions/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261020193000_member_password_sms/migration.sql", import.meta.url), "utf8"));
     await root.query(await readFile(new URL("../../prisma/migrations/20261021090000_payment_screenshot_approval/migration.sql", import.meta.url), "utf8"));

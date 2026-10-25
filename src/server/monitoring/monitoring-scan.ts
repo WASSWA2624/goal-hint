@@ -5,12 +5,13 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import { essentialReserveFor } from "../football/quota-contract.ts";
 import { quotaAccountStateSchema, quotaPeriodStateSchema } from "../football/quota-mysql-store.ts";
 import { assessBackupHealth, type BackupMonitoringSource } from "./monitoring-backup.ts";
+import { approvedStorageHealth, type StorageMonitoringSource } from "./monitoring-storage.ts";
 import { authorizeMonitoring, monitoringPolicySchema, monitoringSnapshotSchema, monitoringReasons, operationMetrics,
   parseMonitoring, type MonitoringAuthority, type MonitoringCost, type MonitoringSnapshot } from "./monitoring-contract.ts";
 
 /** Aggregate reads only; no provider calls, lease acquisition or forecast/recovery mutations. */
 export function createMonitoringInspector(options: Readonly<{ database: DatabaseRuntime; policy: unknown;
-  authority: MonitoringAuthority; costs?: () => Promise<readonly MonitoringCost[]>; backup?: BackupMonitoringSource }>) {
+  authority: MonitoringAuthority; costs?: () => Promise<readonly MonitoringCost[]>; backup?: BackupMonitoringSource; storage?: StorageMonitoringSource }>) {
   const policy = parseMonitoring(monitoringPolicySchema, options.policy);
   return Object.freeze({ async inspect(): Promise<MonitoringSnapshot> {
     await authorizeMonitoring(options.authority, policy, "inspect");
@@ -19,6 +20,8 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
     costs = parseMonitoring(monitoringSnapshotSchema.shape.costs, costs);
     let backupEvidence: unknown;
     try { backupEvidence = await options.backup?.read(); } catch { /* Backup status remains pending. */ }
+    let storageEvidence: unknown;
+    try { storageEvidence = await options.storage?.read(); } catch { /* Storage status remains pending. */ }
     await authorizeMonitoring(options.authority, policy, "inspect");
     try {
       const snapshot = await options.database.transaction(async (tx) => {
@@ -139,6 +142,7 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
           ...jobs.map((j) => ({ jobId: j.id, runId: j.refreshRunId, fixtureId: j.refreshFixtureId, cycleId: j.refreshCycleId, modelVersionId: null,
             eatDate: runs.find((r) => r.id === j.refreshRunId)?.eatDate.toISOString().slice(0, 10) ?? null }))];
         return parseMonitoring(monitoringSnapshotSchema, { at, metrics, quota, costs, correlations,
+          ...(options.storage ? { storage: approvedStorageHealth(storageEvidence, at, policy.evidenceMaxAgeMs, (evidence) => options.storage!.verify(evidence)) } : {}),
           reasons: [...reasons.values()] });
       }, { isolationLevel: "RepeatableRead", maxWait: 1000, timeout: 15_000 });
       await authorizeMonitoring(options.authority, policy, "inspect");
@@ -146,6 +150,7 @@ export function createMonitoringInspector(options: Readonly<{ database: Database
     } catch {
       await authorizeMonitoring(options.authority, policy, "inspect");
       return parseMonitoring(monitoringSnapshotSchema, { at: Date.now(), metrics: Object.fromEntries(operationMetrics.map((key) => [key, key === "available" ? 0 : null])),
+        ...(options.storage ? { storage: null } : {}),
         quota: null, costs, reasons: [], correlations: [] });
     }
   } });

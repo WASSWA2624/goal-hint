@@ -4,6 +4,7 @@ import { z } from "zod";
 import { jobHash, jobInstant } from "../jobs/job-input.ts";
 import { costUsdPicosFromDecimal } from "../cost-control/cost-input.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
+import { storageHealthSchema } from "../database/storage-contract.ts";
 
 export class MonitoringError extends Error {
   readonly reason: "invalid-input" | "unauthorized" | "unavailable" | "policy-conflict";
@@ -46,6 +47,7 @@ export const monitoringReasons = ["completed", "timeout", "lease-expired", "elig
   "published", "retained-previous", "unavailable", "skipped", "failed", "stale-observation", "stale-source", "older-run",
   "status-ineligible", "no-valid-family", "schedule-changed", "observation-unavailable", "early-play", "cutoff", "other"] as const;
 export const monitoringSnapshotSchema = z.strictObject({ event: z.literal("operations-snapshot").default("operations-snapshot"), at: jobInstant,
+  storage: storageHealthSchema.nullable().optional(),
   metrics: z.record(z.enum(operationMetrics), count.nullable()).refine((v) => v.available === null || v.available <= 1),
   quota: z.strictObject({ remaining: count, reserved: count, launched: count, uncertain: count, essentialUsed: count,
     essentialRemaining: count, essentialReserveUsed: count, rollingSecondLaunches: count, rollingMinuteLaunches: count,

@@ -29,6 +29,21 @@ function criteria(overrides = {}) {
 }
 const fixtureIds = (slip) => slip.selections.map((selection) => selection.fixtureId).sort();
 
+test('generated slip identity retains the exact source cycle/revision/probability and quote', () => {
+  const source = record('source'), options = criteria({ teamsMin: 1, teamsMax: 1, slips: 1 });
+  const build = value => buildSlips(options, [value], asOf).slips[0];
+  const first = build(source);
+  assert.deepEqual(first.selections[0].forecast, { cycleId: source.cycleId, revisionId: source.forecast.revisionId, publishedAt: source.forecast.publishedAt });
+  assert.equal(build(structuredClone(source)).id, first.id);
+  for (const change of [
+    { ...source, cycleId: 'replacement-cycle' },
+    { ...source, forecast: { ...source.forecast, revisionId: 'revised-source' } },
+    { ...source, forecast: { ...source.forecast, publishedAt: source.forecast.publishedAt + 1 } },
+    record('source', '2.00', 0.79), record('source', '2.10', 0.8),
+  ]) assert.notEqual(build(change).id, first.id);
+  assert.equal(buildSlips(options, [{ ...source, cycleId: null }], asOf).slips.length, 0);
+});
+
 test('Any defaults and canonical native GET criteria round trip', () => {
   const defaults = defaultSlipCriteria(today);
   assert.deepEqual(defaults, { dateFrom: today, dateTo: '2026-11-12', timeFrom: '', timeTo: '',

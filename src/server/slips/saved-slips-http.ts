@@ -39,7 +39,7 @@ export function createSaveSlipHandler({ members = getMemberServices, services = 
       const { database, config } = await services();
       if (!database) return json({ error: "unavailable" }, 503);
       const saved = await createSavedSlips(database, config, now).save(member, slip);
-      return saved === "saved" ? json({ saved: true }) : json({ error: saved }, saved === "busy" ? 429 : 403);
+      return saved === "saved" ? json({ saved: true }) : json({ error: saved }, saved === "busy" ? 429 : saved === "changed" ? 409 : 403);
     } catch { return json({ error: "unavailable", message: "Saving slips is unavailable. Please try again." }, 503); }
   };
 }

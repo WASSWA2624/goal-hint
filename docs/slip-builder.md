@@ -199,6 +199,40 @@ provider requests, changes no forecasts, places no bets, requires subscriber ent
 persists no saved slips. Existing match detail links remain available in each
 table row.
 
+## Original forecast binding and saved history
+
+Each generated selection retains the original cycle, prediction-set ID and
+publication timestamp from the stored feed. Slip identities also include this
+source stamp, the exact selected probability and quoted odds. An unchanged
+source produces the same identity; replacing a forecast or quote produces a
+different identity, so the save endpoint returns `409 changed` for an obsolete
+rendered slip instead of quietly saving a new forecast under its old ID.
+
+Saving rechecks the sealed prediction set under ordered `FOR SHARE` fixture locks,
+alongside the existing account/session/entitlement checks. These shared locks block
+canonical fixture/source-pointer changes until commit while requiring only
+`SELECT` on fixtures; the saved-slip writer does not need fixture `UPDATE`,
+`DELETE` or `LOCK TABLES` privileges. The member account's mutation lock remains
+`FOR UPDATE`. This follows the [MySQL 8.4 locking-read contract](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html).
+The immutable snapshot retains
+the exact original choice, probability and quote. The cutoff can lock a later
+revision; an earlier saved revision is still assessed as originally published
+when it remains eligible under the reconstructed schedule and cutoff history.
+
+Completed history follows the saved cycle. A formally voided original cycle
+stays void while its replacement match is scheduled or live. A replacement
+cycle's live or final score never grades the original cycle. Existing final
+settlement evidence may resolve that original cycle, and a pending correction
+keeps already-public history visible as pending without reusing an older winning
+score. Current result reads retain their seal, canonical-score and lifecycle
+coherence checks. Every leg must be complete before the full slip is public.
+
+Old saved snapshots without source IDs remain explicitly unbound and use the
+legacy current-fixture completion rule; no historical cycle IDs are guessed or
+backfilled. Member saves remain member-owned and are erased with the account;
+the separate daily publication archive is independent of those saves. Original
+quoted odds are not claimed as settled bookmaker payout odds.
+
 ## Verification
 
 `npm run test:slips` runs the pure engine and stored-read service tests, including
@@ -208,6 +242,11 @@ native checkbox submission, policy gating, read drift and bounded searches.
 It also covers blank Any bounds, Automatic choosing a qualifying non-top
 outcome, manual choices using their own probabilities and quotes, multi-result
 combinations, missing outcome prices and invalid outcome-family mappings.
+`tests/slip-forecast.test.mjs` covers source binding, superseded eligible
+revisions, rescheduling, pending corrections, reference validation and mixed
+cycle/outcome batches. The genuine-MySQL saved-slip integration also exercises
+the pre-LIMIT completion query and restricted-grant persistence when its test
+server is available.
 
 `npm run test:slips:rendering` builds the isolated Next.js fixture and verifies
 real server-rendered controls, the three dialog groups and their inline

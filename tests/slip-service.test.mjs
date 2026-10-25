@@ -63,6 +63,19 @@ test('build uses one EAT stored cohort, all requested families, one budget charg
   assert.equal(consumes, 1); assert.equal(reads, 2); assert.equal(result.state, 'generated');
   assert.equal(result.examined, 2); assert.equal(result.searchLimited, false);
   assert.equal(result.data.slips[0].totalOdds, '4.00'); assert.equal(result.data.slips[0].averageProbability, 0.6);
+  assert.deepEqual(result.data.slips[0].selections[0].forecast, { cycleId: records[0].cycleId,
+    revisionId: records[0].forecast.revisionId, publishedAt: records[0].forecast.publishedAt });
+});
+
+test('an unchanged quote cannot conceal a source revision changing during the final cohort probe', async () => {
+  const records = [record('fixture-1'), record('fixture-2')];
+  let reads = 0;
+  const result = await service(async parameters => {
+    reads++;
+    const changed = reads === 1 ? records : records.map(value => ({ ...value, forecast: { ...value.forecast, revisionId: 'replacement-revision' } }));
+    return page(parameters, changed);
+  }).query(criteria());
+  assert.equal(result.state, 'data-unavailable'); assert.equal(result.data, null);
 });
 
 test('blank kickoff times are omitted from feed queries and per-selection criteria decide qualification', async () => {

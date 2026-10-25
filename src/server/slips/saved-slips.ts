@@ -10,15 +10,13 @@ import { Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount } from "../members/access-codes.ts";
 import type { MemberIdentity } from "../members/member-sessions.ts";
 import { takeMemberLimit } from "../members/rate-limit.ts";
-import type { HistoryRow } from "../predictions/history-read.ts";
-import { fixtureResultFromRow, fixtureResultMatchesCanonical } from "../results/result-read.ts";
+import { bindSlipForecasts, readSlipForecastResults } from "./slip-forecast.ts";
 
 export function createSavedSlips(database: DatabaseRuntime, config: Pick<AnalyticsConfig, "key">, now = Date.now) {
   return {
-    async save(member: MemberIdentity, input: BuiltSlip): Promise<"saved" | "forbidden" | "busy"> {
+    async save(member: MemberIdentity, input: BuiltSlip): Promise<"saved" | "forbidden" | "busy" | "changed"> {
       const snapshot = savedSlipSnapshotSchema.parse(input), at = new Date(now());
       if (snapshot.selections.some((item) => item.kickoffAt <= +at)) return "forbidden";
-      const fingerprint = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
       return database.transaction(async (tx) => {
         const account = await lockMemberAccount(tx, member.accountId);
         const session = await tx.memberSession.findUnique({ where: { tokenHash: member.tokenHash } });
@@ -28,35 +26,53 @@ export function createSavedSlips(database: DatabaseRuntime, config: Pick<Analyti
           where: { accountId: account.id, revokedAt: null, startsAt: { lte: at }, endsAt: { gt: at } }, select: { id: true },
         });
         if (!entitled) return "forbidden";
+        const bound = await bindSlipForecasts(tx, snapshot as BuiltSlip, +at);
+        if (!bound) return "changed";
+        const fingerprint = createHash("sha256").update(JSON.stringify(bound)).digest("hex");
         if (!await takeMemberLimit(tx, config, { purpose: "save-slip", value: account.id, maximum: 30, windowMs: 3_600_000 }, at)) return "busy";
         await tx.savedSlip.upsert({ where: { accountId_fingerprint: { accountId: account.id, fingerprint } }, update: {},
-          create: { id: randomUUID(), accountId: account.id, fingerprint, snapshotJson: snapshot as unknown as Prisma.InputJsonValue, createdAt: at,
-            selections: { create: snapshot.selections.map((item) => ({ fixtureId: item.fixtureId })) } } });
+          create: { id: randomUUID(), accountId: account.id, fingerprint, snapshotJson: bound as unknown as Prisma.InputJsonValue, createdAt: at,
+            selections: { create: bound.selections.map((item) => ({ fixtureId: item.fixtureId })) } } });
         return "saved";
       }, { isolationLevel: "ReadCommitted", timeout: 10_000 });
     },
     async completed(): Promise<readonly SavedSlipView[]> {
-      // The relation predicate excludes every active leg before snapshots leave storage.
+      // Filter original-cycle eligibility before the LIMIT, so newer active saves cannot hide older completed saves.
       return database.transaction(async (tx) => {
-        const rows = await tx.savedSlip.findMany({ where: { selections: { some: {}, every: { fixture: { status: { in: [...savedSlipCompletedStatuses] } } } } },
-          orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 20,
-          select: { id: true, createdAt: true, snapshotJson: true, selections: { select: { fixtureId: true, fixture: {
-            select: { status: true, regulationHome: true, regulationAway: true, regulationVerifiedAt: true, regulationEvidenceRef: true,
-              lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } },
-          } } } } });
-        const resultIds = [...new Set(rows.flatMap((row) => row.selections.flatMap((item) => item.fixture.resultState?.resultId ? [item.fixture.resultState.resultId] : [])))];
-        const resultRows = resultIds.length ? await tx.$queryRaw<HistoryRow[]>(Prisma.sql`SELECT *, integrity=SHA2(CAST(body AS CHAR),256) AS validIntegrity
-          FROM FixtureResult WHERE id IN (${Prisma.join(resultIds)})`) : [];
-        const resultsById = new Map(resultRows.map((row) => { const result = fixtureResultFromRow(row); return [result.id, result]; }));
-        return rows.flatMap((row) => {
-          const results = row.selections.map((item) => {
-            const result = resultsById.get(item.fixture.resultState?.resultId ?? "") ?? null;
-            const coherent = result?.fixtureId === item.fixtureId && fixtureResultMatchesCanonical(item.fixture, result, item.fixture.lifecycleState?.issue ?? null);
-            return { fixtureId: item.fixtureId, status: item.fixture.status,
-              regulationVerified: Boolean(coherent && result?.regulation.verified),
-              regulationHome: coherent ? result?.regulation.home ?? null : null, regulationAway: coherent ? result?.regulation.away ?? null : null };
-          });
-          const view = savedSlipView(row.id, row.createdAt.toISOString(), row.snapshotJson, results as Parameters<typeof savedSlipView>[3]);
+        const asOf = now(), terminal = Prisma.join([...savedSlipCompletedStatuses]);
+        const rows = await tx.$queryRaw<{ id: string; createdAt: Date; snapshotJson: unknown }[]>(Prisma.sql`
+          SELECT s.id, s.createdAt, s.snapshotJson FROM SavedSlip s
+          WHERE EXISTS (SELECT 1 FROM SavedSlipFixture sf WHERE sf.slipId=s.id)
+            AND NOT EXISTS (
+              SELECT 1 FROM JSON_TABLE(s.snapshotJson, '$.selections[*]' COLUMNS (
+                fixtureId CHAR(36) PATH '$.fixtureId', family VARCHAR(32) PATH '$.family',
+                cycleId CHAR(36) PATH '$.forecast.cycleId' NULL ON EMPTY,
+                publishedAt BIGINT PATH '$.forecast.publishedAt' NULL ON EMPTY
+              )) leg
+              LEFT JOIN FootballFixture f ON f.id=leg.fixtureId
+              LEFT JOIN PredictionCycle c ON c.id=leg.cycleId AND c.fixtureId=leg.fixtureId
+              WHERE f.id IS NULL OR CASE
+                WHEN leg.cycleId IS NULL THEN f.status NOT IN (${terminal})
+                WHEN c.id IS NULL OR c.state='open' THEN TRUE
+                WHEN c.state='void' THEN c.voidedAt IS NULL OR c.voidedAt>${new Date(asOf)}
+                WHEN c.state='closed' THEN c.closedAt IS NULL OR c.closedAt>${new Date(asOf)} OR
+                  (c.lockedSetId IS NOT NULL AND leg.publishedAt*1000<TIMESTAMPDIFF(MICROSECOND,'1970-01-01 00:00:00',LEAST(c.cutoffAt,c.closedAt)) AND CASE
+                    WHEN f.activeCycleId IS NULL OR f.activeCycleId=c.id THEN f.status NOT IN (${terminal})
+                    ELSE NOT EXISTS (
+                      SELECT 1 FROM MarketSettlementRevision r WHERE r.cycleId=c.id AND r.fixtureId=f.id
+                        AND r.family=leg.family AND JSON_UNQUOTE(JSON_EXTRACT(r.body,'$.status')) IN ('correct','incorrect','void')
+                        AND r.at<=${new Date(asOf)}
+                    ) END)
+                ELSE TRUE END
+            )
+          ORDER BY s.createdAt DESC, s.id DESC LIMIT 20`);
+        const parsed = rows.flatMap((row) => {
+          const value = savedSlipSnapshotSchema.safeParse(row.snapshotJson);
+          return value.success ? [{ ...row, slip: value.data as BuiltSlip }] : [];
+        });
+        const results = await readSlipForecastResults(tx, parsed.flatMap((row) => row.slip.selections), asOf);
+        return parsed.flatMap((row) => {
+          const view = savedSlipView(row.id, row.createdAt.toISOString(), row.slip, results);
           return view ? [view] : [];
         });
       }, { isolationLevel: "RepeatableRead", timeout: 10_000 });

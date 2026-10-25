@@ -11,8 +11,8 @@ import { dashboardDestination, navigationDestinations } from "../src/components/
 
 test("regular and admin headers share complete destinations, with Dashboard added for administrators", () => {
   const date = parseReportingDate("2026-10-25"), destinations = navigationDestinations(date, "en");
-  assert.deepEqual(destinations.map(item => item.key), ["best-slips", "today", "live", "results", "slips", "help", "privacy", "terms", "contact"]);
-  assert.deepEqual(destinations.map(item => item.href), ["/en", "/en/matches", "/en/matches?status=live", "/en/predictions/2026-10-24?status=finished", "/en/slips", "/en/help", "/en/privacy", "/en/terms", "/en/contact"]);
+  assert.deepEqual(destinations.map(item => item.key), ["best-slips", "today", "live", "results", "slips", "performance", "help", "privacy", "terms", "contact"]);
+  assert.deepEqual(destinations.map(item => item.href), ["/en", "/en/matches", "/en/matches?status=live", "/en/predictions/2026-10-24?status=finished", "/en/slips", "/en/performance", "/en/help", "/en/privacy", "/en/terms", "/en/contact"]);
   const ownerDestinations = [...destinations, dashboardDestination("Dashboard")];
   assert.deepEqual(ownerDestinations.slice(0, -1), destinations);
   assert.deepEqual(ownerDestinations.at(-1), { key: "dashboard", href: "/admin/payments", label: "Dashboard", tab: "Dashboard", icon: "dashboard", tone: "blue" });

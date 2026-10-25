@@ -5,6 +5,8 @@ import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/
 import { publicPolicy } from "../../domain/public-policy.ts";
 import type { ViewerAccess } from "../members/viewer-access.ts";
 import { readPublicSlipBuild } from "./public-slips.ts";
+import { getDatabase } from "../database/client.ts";
+import { createPublishedSlips } from "./published-slips.ts";
 
 export function gateBestSlips(result: BestSlipsResult, access: ViewerAccess): BestSlipsResult {
   return { ...result, slips: result.slips.map((view) => ({ rank: view.rank, ...(access.tier === "full" && view.totalOdds ? { totalOdds: view.totalOdds } : {}),
@@ -35,5 +37,13 @@ export function createBestSlipsService({ read = readPublicSlipBuild, model = nul
   };
 }
 
-// OP-15/17 model qualification and OP-36 public odds rights remain unresolved. Fail closed.
-export const readBestSlips = createBestSlipsService();
+/** Visitor reads never generate or publish a cohort. A previously published forecast survives model expiry. */
+export const readBestSlips: ReturnType<typeof createBestSlipsService> = async (access) => {
+  const day = getReportingDate(utcInstantFromEpochMilliseconds(Date.now()));
+  const empty = { day, slips: [], searchLimited: false, partialCoverage: false } as const;
+  if (!publicPolicy.features.providerOdds) return { ...empty, state: "odds-unavailable" };
+  try {
+    const published = await createPublishedSlips(getDatabase()).day(day);
+    return published ? gateBestSlips(published, access) : { ...empty, state: "model-unavailable" };
+  } catch { return { ...empty, state: "data-unavailable" }; }
+};

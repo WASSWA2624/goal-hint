@@ -6,7 +6,7 @@ import { budgetCategories, monitoringSnapshotSchema, parseMonitoring, type Monit
 export const alertRules = ["outage", "missing-runs", "partial-runs", "stalled-runs", "failed-jobs", "stalled-jobs", "source-failures",
   "cutoff-misses", "missing-locks", "stale-data", "poller-missing", "poller-delayed", "result-backlog", "final-badge-delays", "delayed-results", "recovery-failures", "quota-pressure",
   "essential-reserve", "rate-limited", "reset-pending", "credential-failure", "subscription-expired", "subscription-expiry",
-  "cost-pressure", "cost-cap", "evidence-pending", "backup-failures", "backup-stale", "restore-verification-pending"] as const;
+  "cost-pressure", "cost-cap", "evidence-pending", "backup-failures", "backup-stale", "restore-verification-pending", "storage-cap", "storage-growth"] as const;
 export type AlertRule = typeof alertRules[number];
 export type AlertCondition = Readonly<{ rule: AlertRule; scope: "application" | typeof budgetCategories[number];
   active: boolean | null; severity: "warning" | "critical"; value: number | string | null }>;
@@ -27,6 +27,13 @@ export function evaluateMonitoring(input: unknown, policy: MonitoringPolicy): re
       ["missing-locks", "cutoff-misses", "failed-jobs", "missing-runs", "backup-failures", "backup-stale"].includes(rule) ? "critical" : "warning");
   }
   const q = snapshot.quota;
+  const storage = snapshot.storage;
+  const storageFresh = storage && storage.measuredAt <= snapshot.at && snapshot.at - storage.measuredAt <= policy.evidenceMaxAgeMs;
+  add("storage-cap", "database", storageFresh && storage.limits.maximumAllocatedBytes !== null && storage.allocatedBytes !== null
+    ? storage.allocatedBytes >= storage.limits.maximumAllocatedBytes : null, storageFresh ? storage.allocatedBytes : null, "critical");
+  add("storage-growth", "database", storageFresh && storage.limits.maximumGrowthBytesPerDay !== null && storage.growthBytesPerDay !== null
+    ? storage.growthBytesPerDay >= storage.limits.maximumGrowthBytesPerDay : null,
+    storageFresh && storage.growthBytesPerDay !== null ? Math.max(0, storage.growthBytesPerDay) : null);
   for (const [rule, active, value] of [
     ["quota-pressure", q ? q.remaining <= t.quotaRemainingWarn : null, q?.remaining ?? null],
     ["essential-reserve", q ? q.essentialRemaining <= t.essentialReserveWarn : null, q?.essentialRemaining ?? null],

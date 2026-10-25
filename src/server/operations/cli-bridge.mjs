@@ -60,6 +60,18 @@ async function dispatch(action, payload) {
       try { return getRuntimePolicy().capabilities.database ? await databaseHealth(getDatabase()) : 'disabled'; }
       finally { await disconnectDatabase(); }
     }
+    case 'database-storage': {
+      const { z } = await import('zod');
+      const { measureDatabaseStorage, databaseStorageReport, storageMeasurementSchema, storageLimitsSchema } = await import('../database/storage.ts');
+      const options = z.strictObject({ sampleRows: z.number().int().min(0).max(1000),
+        previous: storageMeasurementSchema.nullable(), limits: storageLimitsSchema }).parse(payload);
+      const { getDatabase, disconnectDatabase } = await import('../database/client.ts');
+      try {
+        if (!getRuntimePolicy().capabilities.database) return { status: 'disabled' };
+        const measurement = await measureDatabaseStorage(getDatabase(), options.sampleRows);
+        return { status: 'measured', ...databaseStorageReport(measurement, options.previous, options.limits) };
+      } finally { await disconnectDatabase(); }
+    }
     case 'football-trial': {
       const { executeTrialCommand } = await import('../football/provider-trial-command.ts');
       const result = await executeTrialCommand(payload);
@@ -116,6 +128,7 @@ try {
     || error?.message === 'MIGRATION_DATABASE_URL is required; application credentials are never substituted.';
   const fallback = {
     'database-health': 'Database readiness: unavailable. Check private configuration and approved access.',
+    'database-storage': 'Database storage measurement unavailable. Check private configuration, MySQL version and approved access.',
     'football-trial': 'Provider trial unavailable; private input and storage diagnostics are withheld.',
     'cache-reconcile': 'Cache maintenance unavailable; check approved database access and the 031 migration. Private diagnostics are withheld.',
     backup: 'Backup operation failed; private diagnostics are withheld.',

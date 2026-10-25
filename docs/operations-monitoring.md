@@ -1,5 +1,12 @@
 # Private operations monitoring
 
+Optional verified storage evidence now supports `storage-cap` and `storage-growth`
+through the same bounded outbox. The private `npm run db:storage` command measures
+current engine allocation and sampled football/audit JSON sizes, and can record
+bounded local baselines. No thresholds or scheduler are enabled by default. See
+[database storage measurements](database-storage.md) for interpretation, exit codes,
+permissions and the storage-source binding contract.
+
 Prompt 045 adds optional approved backup-health evidence to this inspector:
 fixed `backup-failures`, `backup-stale`, `restore-verification-pending` metrics
 reuse the deduplicated alert outbox. The trusted binding supplies `backup.read`

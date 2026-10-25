@@ -2,18 +2,18 @@
 
 Audited **25 October 2026, Africa/Kampala**, against [the requested checklist](../../prompts/app_checklist.md), source, tests and rendered acceptance fixtures. This is an implementation audit, not a certification of deployment, forecast accuracy or commercial rights. **Implemented** means the described application behavior exists; **Partial** means some requirements or operational evidence remain; **Missing** means no implementation or measurement was found. **P1** is a correctness, privacy or release dependency, **P2** is product/measurement completion, and **P3** is a later experiment.
 
-The 51 original checkboxes are tracked below: **15 Implemented, 34 Partial, 2 Missing** after the corrections. Detailed investigations are in the [slip audit](checklist-slips-2026-10-25.md), [history/performance audit](checklist-performance-2026-10-25.md) and [payment/privacy audit](checklist-payments-2026-10-25.md). Configuration switches, synthetic test data and approval-reference strings do not establish live coverage, licenses or calibration.
+The 51 original checkboxes are tracked below: **20 Implemented, 30 Partial, 1 Missing** after the corrections. Detailed investigations are in the [slip audit](checklist-slips-2026-10-25.md), [history/performance audit](checklist-performance-2026-10-25.md) and [payment/privacy audit](checklist-payments-2026-10-25.md). Configuration switches, synthetic test data and approval-reference strings do not establish live coverage, licenses or calibration.
 
 ## Pages and visibility
 
 | ID | Checklist item | Status | Evidence | Required change | Priority |
 | --- | --- | --- | --- | --- | --- |
-| P01 | Daily Best Slips with odds, combined probability and selection count | Partial | `src/app/_components/best-slips-route.tsx`, `src/server/slips/best-slips.ts`, `src/domain/best-slips.ts`; daily EAT cohort and explicit unavailable states | Bind a qualified joint-probability model and permitted odds source, and persist each daily publication. The public binding currently supplies no qualified model. | P1 |
+| P01 | Daily Best Slips with odds, combined probability and selection count | Partial | `src/app/_components/best-slips-route.tsx`, `src/server/slips/best-slips.ts`, `src/domain/best-slips.ts`; immutable daily EAT publication and explicit unavailable states | Bind a qualified joint-probability model and permitted odds source, apply the reviewed migration, and supervise the private publisher. The public binding currently supplies no qualified model. | P1 |
 | P02 | Browse/filter all matches, markets, odds and probabilities, including low-probability picks | Partial | `/[locale]/matches`, `src/domain/feed-query.ts`, `src/server/matches/feed-service.ts`; 0–100 probability range and market/date/league/status/price filters | The feed shows the best pick in the chosen families, while detail exposes other outcomes. Complete upstream forecast/odds coverage for fixtures outside the finite refresh capacity; filters cannot create missing forecasts. | P2 |
 | P03 | Live scores and detailed statistics, retaining the pre-match forecast | Partial | Central `result-sync-service.ts`, locked prediction sets, `use-live-refresh.ts`, `insights-read.ts` | Scores/clock refresh; detail statistics come from prediction evidence. Add centrally budgeted live statistics/events ingestion, timestamped current projections and coverage-aware UI. | P1 |
-| P04 | Historical matches/slips, losses, original odds and outcomes | Partial | Dated prediction feeds, revision history, `saved-slips.ts`, `slip-history.tsx` | Public history is limited to 20 member saves and a fixture returning to scheduled/live can hide an already-visible slip. Add a paginated, account-independent daily archive bound to the original forecast cycle. | P1 |
+| P04 | Historical matches/slips, losses, original odds and outcomes | Implemented | Dated predictions/revision history plus immutable DailySlipPublication/PublishedSlip archive, original-cycle saved history and /en/performance pagination | Apply the reviewed archive migration and complete deployed acceptance (Q02). Genuine MySQL archive/history checks pass; legacy unbound personal snapshots are not fabricated. | P1 |
 | P05 | Premium availability visible without active picks, odds or probabilities | Implemented | `bestSlipViews`, `gateBestSlips`, locked cards, `tests/best-slips.test.mjs`, `verify-paywall-rendering.py` | Corrected in this audit: remove joint probability from anonymous/expired DTOs and entitlement rechecks. General match probabilities remain deliberate public previews. | P1 |
-| P06 | Full completed-slip details, including losing slips | Partial | Public `SlipHistory` includes completed member-saved selections, original quotes and outcomes | Archive every daily published slip, including unsaved slips and losses; paginate and preserve through account erasure. | P1 |
+| P06 | Full completed-slip details, including losing slips | Implemented | Published completed slips expose original picks, quotes, probabilities and loss/void/pending-correction outcomes on /en/performance | Configure the qualified publisher when its model/odds evidence is ready; active original-cycle legs remain private. | P1 |
 
 ## Slip generation and probability
 
@@ -27,7 +27,7 @@ The 51 original checkboxes are tracked below: **15 Implemented, 34 Partial, 2 Mi
 | S06 | Min/max odds, probability, selections and requested count | Partial | `SlipCriteria`, `slip-builder.tsx`, `tests/slip-builder.test.mjs`; individual/combined odds, per-pick probability, 1–8 legs, 1–10 slips | Per-selection bounds exist. Add min/max combined-probability filtering once S03 supplies a qualified estimate. | P2 |
 | S07 | Optional custom overlap; Best Slips diversified by default | Implemented | Custom `reuse` control; `bestSlipCriteria.reuse=false`; disjoint-fixture regression | Corrected Best Slips default; overlap remains opt-in for custom slips. | P1 |
 | S08 | Fewer feasible slips with a clear explanation | Implemented | Feasible-batch search; partial/no-qualifying/no-combinations/limited-search UI states | None; sparse-cohort regression verifies fewer slips without an error. | P2 |
-| S09 | Preserve published slips and original predictions | Partial | Immutable prediction revisions and server-created saved-slip snapshots | Automatically snapshot daily Best Slips, their joint model evidence and original prediction cycle/revision IDs. Recomputed daily cohorts are not publication history. | P1 |
+| S09 | Preserve published slips and original predictions | Implemented | Append-only daily publication tables, normalized original-cycle/revision membership, first-writer transaction and private worker:slips; visitor reads use stored publications | Apply migration and configure supervised binding after S03/D01 qualification. No production publication was invented or activated. | P1 |
 
 ## API-Football and data pipeline
 
@@ -41,17 +41,17 @@ The 51 original checkboxes are tracked below: **15 Implemented, 34 Partial, 2 Mi
 | D06 | Verify batching/refresh rates and budget all endpoint requests | Partial | Reviewed endpoint contracts below; quota reservations, `liveWorkload`, odds three-hour slots, maximum 20 verified fixture IDs | Existing workload accounts for score, odds and forecast calls. Add explicit live statistics/events budgets and count real coverage/response sizes; do not assume dedicated endpoints batch fixture IDs. | P1 |
 | D07 | Live goals/cards/corners/possession/available detail statistics | Partial | Score/clock projections and coverage/missingness handling exist; normalizer supports possession/corners/cards | No central live stats/event collector feeds detail. Add it with current source timestamps, missing-coverage states and final retention. | P1 |
 | D08 | Overwrite current live snapshots; retain final details/key events | Partial | Mutable canonical fixture/result-state pointers exist, but `ResultSyncBatch`, `ResultProviderObservation`, lifecycle observations and material `FixtureResult` revisions append | Define bounded retention/compaction for transient live observations, retaining final/correction evidence and key events. No indefinite-history purge should remove original forecasts or settlement audit chains. | P1 |
-| D09 | Automatically settle forecasts/slips, including void/postponed/abandoned | Partial | Result worker reconciles `market-settlement.ts` and immutable settlement revisions; saved-slip result-coherence hardening | Persist original cycle per slip leg and publish forecast void rules. Postponed/rescheduled saved slips cannot yet be reliably bound to their original cycle; bookmaker payout rules require separate evidence. | P1 |
-| D10 | Measure actual record size and monitor storage growth | Missing | Database health checks connectivity/schema; operations monitoring has no record/table-size/growth series | Measure permitted per-table allocation and representative serialized records in the actual database, retain dated totals and alert on growth. Include append-only live observations and indexes. | P1 |
+| D09 | Automatically settle forecasts/slips, including void/postponed/abandoned | Partial | Existing result/settlement worker plus original-cycle saved/archive leg resolution; old void cycles survive replacement matches and latest pending corrections do not revive stale wins | Genuine MySQL original-cycle history acceptance passes. Verify deployed lifecycle/settlement operation; legacy personal snapshots cannot acquire invented cycle references, and bookmaker payouts remain separate. | P1 |
+| D10 | Measure actual record size and monitor storage growth | Partial | npm run db:storage measures current table/index allocation and numeric JSON-size samples; private history computes growth; monitor accepts verified capacity/growth evidence | Actual configured-database measurement failed with a redacted unavailable diagnostic. Establish the first real baseline, then comparable measurements and approved operational thresholds. | P1 |
 
 ## Accuracy and refinement
 
 | ID | Checklist item | Status | Evidence | Required change | Priority |
 | --- | --- | --- | --- | --- | --- |
 | A01 | Provider-first baseline; no invented unsupported-market probabilities | Partial | Validated provider groups and double-chance derivation; unsupported groups remain unavailable | Current resolution prefers AI then provider fallback. Preserve a contemporaneous provider-first benchmark and require demonstrated improvement before promotion. Existing publications must remain immutable. | P1 |
-| A02 | Realized win rates by market, league, probability band, with counts | Partial | Performance/evaluation services provide settled counts, family/source/horizon cohorts and calibration bins | Add league breakdowns, approved real-data evaluation protocol and public UI. Public metric values currently remain unavailable without that protocol. | P1 |
+| A02 | Realized win rates by market, league, probability band, with counts | Partial | Existing performance/evaluation cohorts now have public period/source/market UI, sample counts, original evidence links and qualified calibration tables | Add league breakdowns and reviewed prospective real-data protocol; unapproved metric values stay unavailable. | P1 |
 | A03 | Assess calibration over adequate comparable samples | Partial | Fixed bins, observed/mean probabilities, Wilson intervals, Brier/log loss and sample gates | Gather prospective authenticated forecasts/results and evaluate frozen real cohorts. Tests verify arithmetic, not forecast quality. | P1 |
-| A04 | Separate pick/slip performance; returns and losing streaks | Partial | Individual correct/incorrect counts and saved-slip outcome cards | Add immutable slip cohorts, flat-stake returns/ROI and losing streaks, with explicit quote, void and date-window conventions. | P1 |
+| A04 | Separate pick/slip performance; returns and losing streaks | Partial | Separate public individual-pick cohorts and complete-period daily-slip counts, binary-only flat-stake quote illustration/ROI and rank-aware losing streaks | Add individual-pick returns and verified real publication cohorts. Void/pending quotes do not imply refunds or enter return denominators. | P1 |
 | A05 | Validate Over 0.5/1.5, Double Chance, Under 4.5 on own data | Partial | Goal-line model definitions, double-chance settlement and extended-market cohort metrics | Capture/evaluate these exact source/line cohorts prospectively. Supported math does not establish accuracy or provider probability coverage. | P2 |
 | A06 | Later AI review of injuries/news/form/lineups/external forecasts; conflicts first | Partial | Timestamped evidence, uncertainty/conflict controls and predictor prompt exist; AI already preferred when enabled | Run matched shadow review against a frozen provider baseline and measure conflict handling before promotion. External research remains separately gated. | P2 |
 | A07 | Original/refined side by side; published changes only after improvement | Partial | Immutable forecast history retains publication/provenance/model clocks; comparisons reject unmatched cohorts | Save both contemporaneous provider and AI candidates for the same fixture/family/cutoff; add matched comparison UI and promotion evidence. Later revisions alone are not a baseline. | P1 |
@@ -61,10 +61,10 @@ The 51 original checkboxes are tracked below: **15 Implemented, 34 Partial, 2 Mi
 
 | ID | Checklist item | Status | Evidence | Required change | Priority |
 | --- | --- | --- | --- | --- | --- |
-| T01 | Public dashboard of winning/losing slips, odds, dates and outcomes | Partial | Recent completed saved-slip history; `/api/performance` selected-pick counts | Add a dedicated dashboard over the permanent daily-slip publication archive, including unsaved and losing slips. | P1 |
-| T02 | Win rate, calibration, prediction/sample counts and returns by period | Partial | Performance API date windows and protocol-gated metrics | Bind a frozen real-data protocol; add public UI, returns and separate slip/league cohorts. Unavailable metrics must stay distinct from zero. | P1 |
+| T01 | Public dashboard of winning/losing slips, odds, dates and outcomes | Implemented | /[locale]/performance supplies public outcome counts, original evidence links and paginated immutable daily-slip history | Verify deployment after archive migration; do not substitute member saves for editorial publication history. | P1 |
+| T02 | Win rate, calibration, prediction/sample counts and returns by period | Partial | Public period filters, prediction/sample counts, protocol-gated calibration and full-period slip return/streak illustration | Bind reviewed real calibration and add league/individual-pick-return reporting. Empty/unreviewed rates remain unavailable. | P1 |
 | T03 | Preserve publication timestamps; audit edits/corrections | Implemented | Append-only `PredictionSet`/`PredictionAudit`, sealed results, settlement correction chains and revision-history UI | Verify deployed database privileges/triggers/backups continue protecting the chains. | P1 |
-| T04 | Never delete failed forecasts or replace pre-match with post-match information | Partial | Locked forecasts, append-only revisions and results are separate; saved-slip history depends on member-owned records | Make daily publication history independent of member erasure, preserving privacy without deleting public forecast outcomes. | P1 |
+| T04 | Never delete failed forecasts or replace pre-match with post-match information | Implemented | Locked forecasts/results remain separate; editorial publication tables have no account relation and reject UPDATE/DELETE; historical criteria and expired-model forecasts remain readable | Maintain restricted grants, backups and genuine-database acceptance. Personal member saves retain their separate disclosed erasure lifecycle. | P1 |
 
 ## Pricing, access and payments
 
@@ -72,7 +72,7 @@ The 51 original checkboxes are tracked below: **15 Implemented, 34 Partial, 2 Mi
 | --- | --- | --- | --- | --- | --- |
 | B01 | Same premium features: UGX 1,000/24h, 5,000/7d, 20,000/30d | Partial | Standard package seeds, `subscription-plans.ts`, entitlement checks and package tests; migration preserves existing owner-edited offers | Verify persisted offers before a pilot. Source defaults establish intended prices/durations, not current production pricing. | P1 |
 | B02 | Approval-time start, visible expiry, early-renewal extension | Implemented | Payment approval under account lock, subscription-period helpers and account summary | None in code; confirm actual approval/expiry through deployed acceptance. | P1 |
-| B03 | Free previews and history after expiry | Implemented | Viewer-access gates, public probabilities and completed history; expired-viewer paywall coverage | Maintain expiry rechecks and close the daily archive gap tracked separately. | P1 |
+| B03 | Free previews and history after expiry | Implemented | Viewer-access gates, public probabilities and completed history; expired-viewer paywall coverage | Maintain expiry rechecks and verify the deployed daily archive with the publication migration. | P1 |
 | B04 | Manual MTN/Airtel: transaction, optional screenshot, admin verification/decision/customer notice | Partial | Payment submission/admin queue/badge, receipt-review workflow and post-commit customer SMS | Screenshot is now optional. Admin alerts are in-app; customer SMS has no durable outbox, so a crash can miss it and gateway acceptance is not handset receipt. Verify the manual receipt process and delivery requirements. | P1 |
 | B05 | Duplicate approvals prevented; audit trail and clear payment states | Implemented | Transaction normalization/uniqueness, locked decisions, payment audits and pending/approved/rejected states | Preserve deployed constraints and verify with genuine MySQL integration. | P1 |
 | B06 | Evaluate later automation; measure fees/hosting/API/tax/net profit | Partial | Manual workflow and technical cost accounting exist | Add merchant fee/tax/operating-expense ledger and measured net profit before choosing an automated payment provider. | P2 |
@@ -92,8 +92,8 @@ The 51 original checkboxes are tracked below: **15 Implemented, 34 Partial, 2 Mi
 | ID | Checklist item | Status | Evidence | Required change | Priority |
 | --- | --- | --- | --- | --- | --- |
 | Q01 | Study BetMines/competitors: filters, scanner, results, previews | Implemented | Official public BetMines and Forebet pages reviewed below | Use the findings as product evidence; do not imply access to competitors' private data or validate their claimed accuracy. | P2 |
-| Q02 | Test mobile, access, live refresh, payment approval, settlement, historical accuracy | Partial | Focused probability/paywall/payment/saved-history tests; repository rendering and live/settlement tests | Final check results are recorded below. Genuine MySQL integration, deployed workers/gateway and real historical calibration remain separate acceptance work. | P1 |
-| Q03 | Prioritize verifiable forecasts/results over guaranteed winnings | Partial | Immutable publications, source labels, explicit unavailable states and no accuracy promises | Close daily publication history, coverage and measured-performance gaps before making stronger claims. | P1 |
+| Q02 | Test mobile, access, live refresh, payment approval, settlement, historical accuracy | Partial | Focused probability/paywall/payment/saved-history tests; repository rendering and live/settlement tests | Genuine archive/history/storage database checks now pass; see the implementation report. Deployed workers/gateway and real historical calibration remain separate acceptance work. | P1 |
+| Q03 | Prioritize verifiable forecasts/results over guaranteed winnings | Partial | Immutable publications, source labels, explicit unavailable states and no accuracy promises | Deploy the reviewed archive and close coverage and measured-performance gaps before making stronger claims. | P1 |
 
 ## Official provider checks and competitive findings
 
@@ -110,12 +110,12 @@ The [official endpoint guide](https://www.api-football.com/news/post/how-to-get-
 This audit corrects premium-slip probability redaction, default daily diversity, separate mean/joint probability presentation, floating-point tolerance at valid probability bounds, optional payment screenshots, minimal payment SMS and coherent saved-slip result grading. Existing reusable components and square styling are retained.
 
 1. Qualify the joint model and permitted odds feed; complete custom whole-slip ranking without inventing probabilities.
-2. Persist immutable daily publications and original cycle/revision references; expose every outcome with pagination.
-3. Freeze and evaluate prospective provider/AI cohorts; add the public performance dashboard and returns/streak methodology.
-4. Budget central live statistics/events; bound transient retention and measure actual database growth.
-5. Finish genuine-database/deployed payment and worker checks; resolve provider/privacy rights and run the pricing pilot.
+2. Apply the reviewed archive migration and supervise the publisher; verify the new original-cycle history and public dashboard in deployment.
+3. Freeze and evaluate prospective provider/AI cohorts; add league breakdowns and individual-pick returns to the dashboard.
+4. Budget central live statistics/events; bound transient retention and establish an actual database growth baseline.
+5. Complete deployed payment and worker acceptance, resolve provider/privacy rights, and run the pricing pilot. Genuine-database acceptance now passes locally.
 
-## Verification
+## Original audit verification
 
 | Check | Result |
 | --- | --- |
@@ -137,3 +137,30 @@ The initial broad unit run used the system Node 26 runtime under concurrent gene
 Genuine MySQL integration suites remain skipped because no genuine `mysqld` test binary is available. Existing MariaDB/services were not reused as disposable test targets. Fixture-only `/api/account/session` 404s were observed in browser consoles; the production route exists and compiled successfully. No live accuracy, handset delivery, worker supervision or commercial-rights claim follows from synthetic acceptance.
 
 No production data, deployment, real payment, external notification or provider subscription was changed by this audit. Temporary browser and fixture servers were stopped; acceptance files and screenshots are retained for review.
+
+## Implementation follow-up
+
+The highest-priority archive, original-cycle, public-dashboard and storage-tooling
+changes are recorded in [the implementation report](checklist-implementation-2026-10-25.md).
+Statuses above reflect that code follow-up. The original audit verification remains
+a historical record; qualification and genuine-database/deployment evidence are
+not inferred from synthetic tests.
+
+| Follow-up check | Result |
+| --- | --- |
+| Full unit suite, pinned Node 24.18.1, serial files | 1,822 passed, zero failures; one POSIX-permission check is inapplicable on Windows. |
+| Python suite | 49 passed. |
+| Final focused archive/forecast/returns/storage tests | 30 passed. |
+| Genuine MySQL 8.4.13 archive acceptance | Passed actual migration, concurrent publication, seals, foreign keys and append-only triggers. |
+| Genuine MySQL saved-slip acceptance | All nine passed, including original-cycle rescheduling and pending corrections. |
+| Storage unit/integration acceptance | All eight passed, no skip; SELECT-only metadata and JSON-size inspection exercised. |
+| Payment suite, including genuine MySQL | All 66 passed, including owner review, package migration and credit ledger. |
+| Final repository ESLint | Passed with zero warnings; the subsequent native-filter fix also passed targeted ESLint and all 25 dashboard tests. |
+| TypeScript and final production build | Passed; the public performance route compiled. |
+| Dashboard rendering and browser inspection | All seven fixture states passed, including the native-filter regression; 390px and 1440px inspection found no horizontal overflow. |
+| Configured application database measurement | Unavailable; no real storage/growth baseline is claimed. |
+
+The official portable MySQL dependency was checksum/signature-verified and used
+only in owned isolated loopback instances. No configured application migration,
+publication binding, provider request, real payment or external notification was
+activated by this follow-up.

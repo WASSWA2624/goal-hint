@@ -185,6 +185,7 @@ model FootballSeason {
 }
 
 model FootballFixture {
+  publishedSlipLegs     PublishedSlipLeg[]
   savedSlips            SavedSlipFixture[]
   id                    String                        @id @default(uuid()) @db.Char(36)
   resultState           FixtureResultState?
@@ -260,6 +261,46 @@ model SavedSlipFixture {
   fixture   FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@id([slipId, fixtureId])
+  @@index([fixtureId])
+}
+
+// Public editorial publications have no member/account relation. Bodies and membership are append-only.
+model DailySlipPublication {
+  id          String          @id @db.Char(64)
+  eatDate     DateTime        @unique @db.Date
+  publishedAt DateTime        @db.DateTime(3)
+  modelId     String          @db.Char(64)
+  bodyJson    Json
+  integrity   String          @db.Char(64)
+  slips       PublishedSlip[]
+
+  @@index([publishedAt])
+}
+
+model PublishedSlip {
+  id            String               @id @db.Char(64)
+  publicationId String               @db.Char(64)
+  rank          Int                  @db.UnsignedTinyInt
+  snapshotJson  Json
+  integrity     String               @db.Char(64)
+  publication   DailySlipPublication @relation(fields: [publicationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  legs          PublishedSlipLeg[]
+
+  @@unique([publicationId, rank])
+}
+
+model PublishedSlipLeg {
+  slipId     String          @db.Char(64)
+  fixtureId  String          @db.Char(36)
+  cycleId    String          @db.Char(36)
+  revisionId String          @db.Char(36)
+  slip       PublishedSlip   @relation(fields: [slipId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fixture    FootballFixture @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  revision   PredictionSet   @relation(fields: [revisionId, cycleId, fixtureId], references: [id, cycleId, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@id([slipId, fixtureId])
+  @@index([cycleId])
+  @@index([revisionId, cycleId, fixtureId])
   @@index([fixtureId])
 }
 
@@ -696,6 +737,7 @@ model PredictionSchedule {
 
 // A complete accepted snapshot; no application UPDATE/DELETE grants.
 model PredictionSet {
+  publishedSlipLegs     PublishedSlipLeg[]
   id                    String                     @id @default(uuid()) @db.Char(36)
   fixtureId             String                     @db.Char(36)
   fixtureVersion        BigInt                     @db.UnsignedBigInt

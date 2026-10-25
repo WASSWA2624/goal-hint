@@ -5,6 +5,8 @@ import type { StoredMatchFeedRecord } from "./match-feed.ts";
 import { isMarketFamily, isMarketSelection, marketSelections, type MarketFamily, type MarketSelection } from "./markets.ts";
 import { formatOddsHundredths, oddsRules, parseDecimalOdds } from "./odds.ts";
 import { publicPolicy } from "./public-policy.ts";
+import type { SlipForecastReference } from "./slip-forecast-reference.ts";
+export type { SlipForecastReference } from "./slip-forecast-reference.ts";
 
 /** Limits apply equally to native GET forms, browser validation and the bounded server search. */
 export const slipBuilderRules = Object.freeze({
@@ -34,6 +36,7 @@ export type SlipSelection = Readonly<{
   fixtureId: string; kickoffAt: number;
   homeTeam: StoredMatchFeedRecord["homeTeam"]; awayTeam: StoredMatchFeedRecord["awayTeam"]; competition: StoredMatchFeedRecord["competition"];
   family: MarketFamily; selection: MarketSelection; probability: number; odds: string; oddsBasis: "bookmaker" | "median";
+  forecast?: SlipForecastReference;
 }>;
 export type BuiltSlip = Readonly<{
   id: string; selections: readonly SlipSelection[]; totalOdds: string; oddsBasis: "bookmaker" | "median";
@@ -277,7 +280,7 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       || timeWindows && !timeWindows.some((window) => kickoff >= window.start && kickoff < window.end)) continue;
     const forecast = record.forecast;
     if (record.cycle?.state !== "open" || record.cycle.mode !== "current" || record.update.prediction !== "current"
-      || !forecast || forecast.provisional || forecast.updateDelayed || forecast.publishedAt > asOf
+      || !forecast || record.cycleId === null || forecast.provisional || forecast.updateDelayed || forecast.publishedAt > asOf
       || forecast.publishedAt >= kickoff - calendarRules.cutoffSecondsBeforeKickoff * 1000) { excludedMissingForecast++; continue; }
     let hasRequestedForecast = false, missingOdds = false;
     for (const { market, outcome } of forecast.markets) {
@@ -293,10 +296,12 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
           ? parseDecimalOdds(price.price) : null;
         if (!price || !odds) { missingOdds = true; continue; }
         if (odds.scaled < BigInt(criteria.oddsMin) * 100n || odds.scaled > BigInt(criteria.oddsMax) * 100n) continue;
-        const key = `${record.fixtureId}:${market.family}:${selection}`;
+        const reference: SlipForecastReference = { cycleId: record.cycleId, revisionId: forecast.revisionId, publishedAt: forecast.publishedAt };
+        const key = `${record.fixtureId}:${market.family}:${selection}:${probability}:${price.price}`
+          + `:${reference.cycleId}:${reference.revisionId}:${reference.publishedAt}`;
         candidates.push({ key, scaledOdds: odds.scaled, selection: { fixtureId: record.fixtureId, kickoffAt: kickoff,
           homeTeam: record.homeTeam, awayTeam: record.awayTeam, competition: record.competition, family: market.family,
-          selection, probability, odds: price.price, oddsBasis: price.basis } });
+          selection, probability, odds: price.price, oddsBasis: price.basis, forecast: reference } });
         qualifying.add(record.fixtureId);
       }
     }

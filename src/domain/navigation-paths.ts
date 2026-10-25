@@ -12,6 +12,10 @@ export function matchesHref(locale?: string): string {
   return `${homeHref(locale)}/matches`;
 }
 
+export function performanceHref(locale?: string): string {
+  return `${homeHref(locale)}/performance`;
+}
+
 export function informationHref(page: InformationPage, locale?: string): string {
   return `${homeHref(locale)}/${page}`;
 }
