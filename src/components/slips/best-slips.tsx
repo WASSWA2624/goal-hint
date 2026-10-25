@@ -35,11 +35,11 @@ export function BestSlips({ result, locale, signedIn = false }: { result: BestSl
     </Stack></CriteriaPanel> : <>
       {(!complete || result.searchLimited || result.partialCoverage) && <Note role="status">{m.text("bestSlips.partial")}</Note>}
       {result.slips.map((view) => view.slip ? <SlipTable key={view.rank} index={view.rank - 1} locale={locale}
-        slip={view.slip} estimatedProbability={view.estimatedProbability} /> : <SlipCard key={view.rank}>
+        slip={view.slip} estimatedProbability={view.slip.estimatedProbability} /> : <SlipCard key={view.rank}>
         <SlipTitle><h3>{m.text("slips.slipTitle", { number: m.number(view.rank) })}</h3>
           <SlipSummary>
             <div><dt>{m.text("slips.totalOdds")}</dt><dd><TextLink href={subscriberHref(signedIn)} prefetch={false}>{m.text("paywall.lockedOdds")}</TextLink></dd></div>
-            <div><dt>{m.text("bestSlips.probability")}</dt><dd>{m.number(view.estimatedProbability, { style: "percent", maximumFractionDigits: 1 })}</dd></div>
+            <div><dt>{m.text("bestSlips.probability")}</dt><dd><TextLink href={subscriberHref(signedIn)} prefetch={false}>{m.text("paywall.subscribersOnly")}</TextLink></dd></div>
             <div><dt>{m.text("slips.selectionCount")}</dt><dd>{m.number(view.matchCount)}</dd></div>
           </SlipSummary>
         </SlipTitle>

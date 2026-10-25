@@ -5,6 +5,7 @@ import { defaultSlipCriteria, serializeSlipCriteria } from '../src/domain/slip-b
 import { createSavedSlips } from '../src/server/slips/saved-slips.ts';
 import { createSaveSlipHandler } from '../src/server/slips/saved-slips-http.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
+import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
 
 const record = liveRecord(), id = '10000000-0000-4000-8000-000000000099';
 const slip = { id: 'server-generated-selection', selections: [{ fixtureId: id, kickoffAt: now + 3600000,
@@ -23,12 +24,28 @@ test('completed saved slips expose original odds and picks without account ident
 });
 
 test('missing or active legs never expose a public slip, even if another leg already lost', () => {
-  for (const status of ['scheduled', 'live', 'unknown', 'postponed', 'canceled', 'abandoned', 'awarded'])
+  for (const status of ['scheduled', 'live', 'unknown', 'postponed'])
     assert.equal(savedSlipView('saved-id', '', slip, [{ ...result, status }]), null);
   assert.equal(savedSlipView('saved-id', '', slip, []), null);
   const two = { ...slip, selections: [...slip.selections, { ...slip.selections[0], fixtureId: '10000000-0000-4000-8000-000000000098' }] };
   assert.equal(savedSlipView('saved-id', '', two, [{ ...result, regulationHome: 0 }]), null);
   assert.equal(savedSlipView('saved-id', '', { ...slip, selections: [...slip.selections, ...slip.selections] }, [result]), null);
+});
+
+test('canceled, abandoned and awarded forecasts are void without claiming a winning slip', () => {
+  for (const status of ['canceled', 'abandoned', 'awarded']) {
+    const view = savedSlipView('saved-id', '', slip, [{ ...result, status }]);
+    assert.equal(view.outcome, 'void');
+    assert.deepEqual(view.results, [{ fixtureId: id, home: null, away: null, outcome: 'void' }]);
+    assert.equal(view.slip.totalOdds, '2.00');
+  }
+  const other = '10000000-0000-4000-8000-000000000098';
+  const two = { ...slip, selections: [...slip.selections, { ...slip.selections[0], fixtureId: other }] };
+  const voidLeg = { ...result, fixtureId: other, status: 'canceled' };
+  assert.equal(savedSlipView('saved-id', '', two, [result, voidLeg]).outcome, 'void');
+  assert.equal(savedSlipView('saved-id', '', two, [{ ...result, regulationHome: 0 }, voidLeg]).outcome, 'lost');
+  assert.equal(savedSlipView('saved-id', '', two, [{ ...result, regulationVerified: false }, voidLeg]).outcome, 'pending');
+  assert.equal(savedSlipView('saved-id', '', two, [{ ...result, status: 'live' }, voidLeg]), null);
 });
 
 test('saved slip storage denies expired, reset-only and non-entitled sessions before persisting', async () => {
@@ -44,6 +61,32 @@ test('saved slip storage denies expired, reset-only and non-entitled sessions be
     assert.equal(await createSavedSlips(database, { key: () => 'key' }, () => now).save(member, slip), 'forbidden');
   }
   assert.equal(writes, 0);
+});
+
+test('public saved slip history grades only sealed results coherent with the current fixture', async () => {
+  const resultId = 'a'.repeat(64), evidenceRef = 'synthetic-result-proof';
+  const content = { status: 'finished-regulation', providerStatus: 'FT', elapsedMinutes: 90,
+    reportedGoals: { home: 2, away: 1 }, extraTimeScore: { home: null, away: null }, penaltyScore: { home: null, away: null },
+    regulation: { verified: true, home: 2, away: 1, evidenceRef } };
+  const body = { id: resultId, fixtureId: id, fixtureVersion: 1n, previousId: null, observationId: 'b'.repeat(64),
+    observedAt: now, providerUpdatedAt: null, regulationVerifiedAt: now, ...content };
+  const row = { id: resultId, fixtureId: id, fixtureVersion: 1n, observedAt: new Date(now), status: content.status,
+    regulationVerified: true, regulationHome: 2, regulationAway: 1, contentHash: evidenceFingerprint(content),
+    body: evidenceSerialize(body), validIntegrity: 1 };
+  const fixture = { status: content.status, regulationHome: 2, regulationAway: 1, regulationVerifiedAt: new Date(now),
+    regulationEvidenceRef: evidenceRef, lifecycleState: null, resultState: { resultId } };
+  const tx = { savedSlip: { findMany: async () => [{ id: 'saved-id', createdAt: new Date(now), snapshotJson: slip,
+    selections: [{ fixtureId: id, fixture }] }] }, $queryRaw: async () => [row] };
+  const service = createSavedSlips({ transaction: async (read) => read(tx) }, { key: () => 'key' });
+  assert.equal((await service.completed())[0].outcome, 'won');
+  fixture.regulationHome = 0;
+  assert.equal((await service.completed())[0].outcome, 'pending');
+  fixture.regulationHome = 2;
+  fixture.lifecycleState = { issue: 'conflicting-final-result' };
+  assert.equal((await service.completed())[0].outcome, 'pending');
+  fixture.lifecycleState = null;
+  row.validIntegrity = 0;
+  await assert.rejects(service.completed(), error => error.reason === 'invalid-state' || error.code === 'invalid-state');
 });
 
 test('save endpoint requires same-origin authenticated subscription and accepts only server-rebuilt selections', async () => {

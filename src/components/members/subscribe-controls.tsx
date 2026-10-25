@@ -248,14 +248,13 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       setError(failure instanceof Error ? failure.message : m.text("subscribe.chooseImage"));
     } finally { setBusy(false); }
   }
-  // What the screenshot showed, once read: its ID and amount gate submitting.
+  // Optional screenshot findings help the member check their entered details.
   const shot = shotFound && !shotFound.unreadable ? shotFound.evidence : null;
   /** The details as they would be sent, or the first problem with them. */
   function checkedDetails() {
     const payer = validMobilePhone(draft.payerPhone), transactionId = parseTransactionId(draft.transactionId);
     if (!plan || !account) return { problem: m.text("account.unavailable") };
     if (topUp && topUpUgx === null) return { problem: amountInvalid };
-    if (!image) return { problem: m.text("subscribe.needScreenshot") };
     if (!transactionId) return { problem: m.text("subscribe.transactionRequired") };
     if (!payer) return { problem: m.text("phone.invalid") };
     return { plan, account, payer, transactionId, image, topUpUgx: topUp ? topUpUgx : null };
@@ -280,7 +279,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
       network: draft.network, payerPhone: payer, transactionId,
       // A top-up's consent sentence sits above Submit payment, so sending one accepts the terms it showed.
       screenshotAmount: shot?.amount ? String(shot.amount) : "", accepted: String(draft.accepted || credit !== null && !view?.acceptedTerms) })) body.append(key, value);
-    body.append("image", screenshot, "payment.jpg");
+    if (screenshot) body.append("image", screenshot, "payment.jpg");
     let failed = false;
     try {
       const result = await uploadPayment(body, setPercentage); clearPaymentDraft(account.id); trackEvent("payment_submitted");
@@ -324,7 +323,7 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   if (!plan || !payNetwork) return <>{accountPanel}{paymentStatus}{topUpCard}<p>{m.text(plan ? "account.unavailable" : "subscribe.noPlans")}</p>{footer}</>;
   const wallet = wallets[payNetwork], number = settings[payNetwork === "mtn" ? "mtnNumber" : "airtelNumber"]!;
   // Submitting opens only when every required detail is present and valid; the first gap is said under the button.
-  // The screenshot is required and must show a readable transaction ID and amount; the ID entered must be the one it shows.
+  // When attached, the screenshot's readable ID must agree with the entered transaction ID.
   const claimedId = parseTransactionId(draft.transactionId), shotId = shot?.transactionId ?? null;
   const paidAmounts = [messageAmount, shot?.amount ?? null].filter((amount): amount is number => amount !== null);
   const shortAmount = paidAmounts.length && due !== null && Math.min(...paidAmounts) < due ? Math.min(...paidAmounts) : null;
@@ -335,9 +334,8 @@ export function SubscribeFlow({ locale, settings, plans, account, view, returnTo
   const blocker: Readonly<{ text: string; warning: boolean; switchTo?: SubscriptionPlanView; useAmount?: number }> | null
     = topUp && topUpUgx === null ? { text: amountInvalid, warning: false }
     : !validMobilePhone(draft.payerPhone) ? { text: m.text("subscribe.needPayer"), warning: false }
-    : !image ? { text: m.text("subscribe.needScreenshot"), warning: false }
     : shotState ? { text: m.text("subscribe.waitReading"), warning: false }
-    : !shotFound?.unreadable && (!shotId || shot?.amount === null || shot?.amount === undefined) ? { text: m.text("subscribe.unclearScreenshot"), warning: true }
+    : image && !shotFound?.unreadable && (!shotId || shot?.amount === null || shot?.amount === undefined) ? { text: m.text("subscribe.unclearScreenshot"), warning: true }
     : !claimedId ? { text: m.text(shotFound?.unreadable && !draft.transactionId ? "subscribe.enterTransaction" : "subscribe.transactionRequired"), warning: true }
     : shotId && !sameTransactionId(claimedId, shotId) ? { text: m.text("subscribe.idMismatch", { id: shotId }), warning: true }
     : shortAmount !== null && topUp ? { text: m.text("credit.amountShort", { amount: m.number(shortAmount), price: m.number(due ?? 0) }), warning: true,

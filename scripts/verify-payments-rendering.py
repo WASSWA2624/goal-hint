@@ -173,8 +173,8 @@ def main():
                     assert order == sorted(order), "Paid from comes first, then the transaction ID, then the proof-of-payment upload."
                     assert payer[0][0].get("value") == "700000101", "The signed-in account number prefills the payer field."
                     screenshots = [(field, depth) for field, depth in fields if field.get("type") == "file"]
-                    assert len(screenshots) == 2 and all("required" not in field and depth == 0 for field, depth in screenshots), "Screenshot and camera controls must be visible without opening details; the form, not the browser, requires one of them."
-                    assert re.search(r'<legend\b[^>]*>Upload proof of payment</legend>', html), "Visible screenshot controls need a fieldset label."
+                    assert len(screenshots) == 2 and all("required" not in field and depth == 0 for field, depth in screenshots), "Optional screenshot and camera controls must be visible without opening details."
+                    assert re.search(r'<legend\b[^>]*>Screenshot \(optional\)</legend>', html), "Visible screenshot controls need an explicit optional label."
                     assert not any(field.get("name") == "amount" or field.get("type") == "number" for field, _ in fields), "The payment amount must remain read-only."
                     assert "Submit payment" in html and "Upload screenshot" in html and "This form needs JavaScript" in html and "Both are filled in for you" in html
                     assert ("18 or older" in html) == (state not in ["active", "approved"])
@@ -210,7 +210,7 @@ def main():
         assert canonical_inputs and all('type="hidden"' in field for field in canonical_inputs)
         named_phone = [field for field in canonical_inputs if 'name="phone"' in field]
         assert len(named_phone) == 1, "The native form must submit its canonical phone field exactly once."
-        print("PASS 19 server-rendered payment states, pending contact channels and fallbacks, compact pending/rejected/reversed status with visible rejection reasons, shared account login, 5 user agents, visible required transaction ID and payer, required screenshot controls, automatic amount, assent, plan order and private headers.", flush=True)
+        print("PASS 19 server-rendered payment states, pending contact channels and fallbacks, compact pending/rejected/reversed status with visible rejection reasons, shared account login, 5 user agents, visible required transaction ID and payer, optional screenshot controls, automatic amount, assent, plan order and private headers.", flush=True)
         if args.serve: server.serve()
 
 

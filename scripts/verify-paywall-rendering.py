@@ -9,6 +9,17 @@ SENTINELS = r"SENTINEL-|(?<![\d.])7\.73(?!\d)"
 VIEWERS = ["anonymous", "number-only", "entitled", "expired", "revoked", "blocked", "evicted", "test", "off"]
 
 
+def verify_private_routes(origin):
+    routes = [("/admin", 307, "/en/account?view=login"), ("/en/account", 200, None), ("/en/subscribe", 200, None)]
+    for path, status, location in routes:
+        page = request(origin, path)
+        assert page.status == status, (path, page.status)
+        assert page.headers.get("Location") == location, (path, "login redirect")
+        assert "no-store" in page.headers.get("Cache-Control", ""), path
+        assert "noindex" in page.headers.get("X-Robots-Tag", ""), path
+    return len(routes)
+
+
 def main():
     args = parse_args("paid-access leak scan")
     directory = create_fixture("paywall")
@@ -99,25 +110,24 @@ def main():
                 assert "no-store" in response.headers.get("Cache-Control", ""), path
                 if not full:
                     assert not re.search(SENTINELS, response.text), (viewer, path, "Best Slips selections leaked")
+                    assert not re.search(r"estimatedProbability|0\.3456|34\.6%", response.text), (viewer, path, "Best Slips probability leaked")
                 if path == "/api/best-slips":
                     view = json.loads(response.text)["slips"][0]
-                    assert set(view) == {"rank", "estimatedProbability", "matchCount"} | ({"slip", "totalOdds"} if full else set())
-                    assert view["estimatedProbability"] == 0.3456
+                    assert set(view) == {"rank", "matchCount"} | ({"slip", "totalOdds", "estimatedProbability"} if full else set())
+                    assert (view.get("estimatedProbability") == 0.3456) == full
                     assert (view.get("totalOdds") == "5.00") == full
                 elif not extra:
                     assert "Best Slips" in response.text and 'href="/en/matches"' in response.text
                     assert ('data-slip-selection=' in response.text) == full
+                    if full:
+                        assert 'Win probability' in response.text and '34.6%' in response.text
+                        assert 'Average match probability' in response.text and '61.7%' in response.text
                 checks += 1
             print(f"PASS {viewer}: raw HTML, flight, APIs and access rules ({checks} checks).", flush=True)
             return checks
         with ThreadPoolExecutor(max_workers=4) as pool:
             checks = sum(pool.map(verify_viewer, VIEWERS))
-        for path in ["/admin", "/en/account", "/en/subscribe"]:
-            page = request(server.origin, path)
-            assert page.status == 200, path
-            assert "no-store" in page.headers.get("Cache-Control", ""), path
-            assert "noindex" in page.headers.get("X-Robots-Tag", ""), path
-            checks += 1
+        checks += verify_private_routes(server.origin)
         print(f"PASS {checks} raw HTML/RSC/API, history, insights, oracle, slips and private-route checks across nine viewer states.", flush=True)
         if args.serve: server.serve()
 

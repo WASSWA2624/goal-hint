@@ -2,7 +2,7 @@ import { validMobilePhone, type MobileNetwork } from "./phone.ts";
 import { validTopUp, type CreditView } from "./wallet.ts";
 
 // A plan report claims the chosen plan's price; a top-up (purpose "topup", no plan) claims the amount the member chose to add
-// (topUpAmount). A screenshot and its transaction ID are required; the amount the member's browser read from the screenshot
+// (topUpAmount). A transaction ID is required; a screenshot is optional. The amount the browser read from an attached image
 // (screenshotAmount, possibly empty) is only a hint for the owner, who verifies the ID, money and payer in their own wallet
 // before approving. Every field is sent once: planId is empty for a top-up and topUpAmount for a plan.
 export const paymentFields = ["purpose", "planId", "topUpAmount", "payerPhone", "network", "transactionId", "screenshotAmount", "accepted"] as const;

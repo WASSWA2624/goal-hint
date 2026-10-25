@@ -13,7 +13,7 @@ export type JointSlipModel = Readonly<{
   estimate: (selections: readonly SlipSelection[]) => number | null;
 }>;
 export type BestSlip = BuiltSlip & Readonly<{ estimatedProbability: number }>;
-export type BestSlipSummary = Readonly<{ rank: number; totalOdds?: string; estimatedProbability: number; matchCount: number }>;
+export type BestSlipSummary = Readonly<{ rank: number; totalOdds?: string; estimatedProbability?: number; matchCount: number }>;
 export type BestSlipView = BestSlipSummary & Readonly<{ slip?: BestSlip }>;
 export type BestSlipsResult = Readonly<{
   day: ReportingDate; state: SlipBuildState | "model-unavailable"; slips: readonly BestSlipView[];
@@ -22,7 +22,7 @@ export type BestSlipsResult = Readonly<{
 
 export function bestSlipCriteria(today: string, target: Readonly<{ minimumTotal: number; maximumTotal: number; count: number }> = bestSlipsRules): SlipCriteria {
   return { ...defaultSlipCriteria(today), dateTo: today, totalMin: target.minimumTotal, totalMax: target.maximumTotal,
-    slips: target.count, reuse: true };
+    slips: target.count, reuse: false };
 }
 
 export function qualifiedJointModel(model: JointSlipModel | null, at: number): model is JointSlipModel {
@@ -33,10 +33,12 @@ export function qualifiedJointModel(model: JointSlipModel | null, at: number): m
 /** Joint estimates must also respect the mathematical bounds of their marginal probabilities. */
 export function jointSlipProbability(model: JointSlipModel, slip: BuiltSlip): number | null {
   const value = model.estimate(slip.selections), probabilities = slip.selections.map((selection) => selection.probability);
-  if (value === null || !Number.isFinite(value) || probabilities.length === 0) return null;
+  if (value === null || !Number.isFinite(value) || value < 0 || value > 1 || probabilities.length === 0) return null;
   const lower = Math.max(0, probabilities.reduce((sum, probability) => sum + probability, 0) - probabilities.length + 1);
   const upper = Math.min(...probabilities);
-  return value >= lower && value <= upper ? value : null;
+  // Summing decimal marginals can move a valid boundary by a few floating-point ULPs.
+  const tolerance = Number.EPSILON * probabilities.length * 2;
+  return value >= lower - tolerance && value <= upper + tolerance ? Math.min(upper, Math.max(lower, value)) : null;
 }
 
 export function bestSlipBuilder(model: JointSlipModel) {
@@ -59,6 +61,6 @@ export function bestSlipBuilder(model: JointSlipModel) {
 
 /** Explicit allowlist: even internal slip IDs contain fixture/selection identifiers. */
 export function bestSlipViews(slips: readonly BestSlip[], entitled: boolean): readonly BestSlipView[] {
-  return slips.map((slip, index) => ({ rank: index + 1, ...(entitled ? { totalOdds: slip.totalOdds } : {}),
-    estimatedProbability: slip.estimatedProbability, matchCount: slip.selections.length, ...(entitled ? { slip } : {}) }));
+  return slips.map((slip, index) => ({ rank: index + 1, matchCount: slip.selections.length,
+    ...(entitled ? { totalOdds: slip.totalOdds, estimatedProbability: slip.estimatedProbability, slip } : {}) }));
 }

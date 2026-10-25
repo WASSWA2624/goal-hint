@@ -97,10 +97,16 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
     assert.equal(await count(), before);
     assert.equal((await database.query(tx => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: sent.reference.slice(1) } }))).status, "pending");
   });
-  await t.test("a report without its screenshot stores nothing, and an out-of-range screenshot amount is kept as unread", async () => {
+  await t.test("a report without its screenshot stays pending with no image metadata or invented read amount", async () => {
     const who = await member(), before = await count();
-    assert.equal((await payments.submit(who, fields(), null)).status, "invalid");
-    assert.equal(await count(), before);
+    const sent = await report(who, fields(), null);
+    assert.equal(sent.status, "saved"); assert.equal(await count(), before + 1);
+    const row = await database.query(tx => tx.paymentSubmission.findUniqueOrThrow({ where: { reference: sent.reference.slice(1) }, include: { screenshot: true } }));
+    assert.equal(row.status, "pending"); assert.equal(row.screenshot, null); assert.equal(row.imageSha256, null);
+    assert.equal(row.imageBytes, null); assert.equal(row.screenshotAmountUgx, null);
+    assert.equal(await database.query(tx => tx.accessCode.count({ where: { accountId: who.accountId } })), 0);
+  });
+  await t.test("an out-of-range screenshot amount is kept as unread", async () => {
     // A fresh member each time: one session may store only three reports.
     for (const screenshotAmount of [null, 99, 10_000_001, 1.5]) {
       const sent = await report(await member(), fields({ screenshotAmount }));
@@ -110,15 +116,16 @@ test("real MySQL payment transactions, budgets, snapshots, assent and trial limi
   });
   await t.test("every report consumes the stored-submission cap and retains an audit trail", async () => {
     const who = await member();
-    const outcomes = await Promise.all(Array.from({ length: 6 }, () => payments.submit(who, fields(), image)));
+    const outcomes = await Promise.all(Array.from({ length: 6 }, () => payments.submit(who, fields(), null)));
     assert.equal(outcomes.filter(row => row.status === "saved").length, 3);
     assert.equal(outcomes.filter(row => row.status === "busy").length, 3);
     assert.equal(await payments.begin(who, "unknown", 100), false);
     const counter = await database.query(tx => tx.rateLimitBucket.findUniqueOrThrow({ where: { key: config.key("member-upload-stored", who.tokenHash) } }));
-    assert.equal(counter.count, 3); assert.equal(counter.bytes, 3 * image.length);
+    assert.equal(counter.count, 3);
     const audits = await database.query(tx => tx.ownerAuditEvent.findMany({ where: { accountId: who.accountId, action: "payment_submitted" } }));
     assert.equal(audits.length, 3);
-    assert.equal(await database.query(tx => tx.paymentScreenshot.count({ where: { submission: { accountId: who.accountId } } })), 3);
+    const screenshots = await database.query(tx => tx.paymentScreenshot.count({ where: { submission: { accountId: who.accountId } } }));
+    assert.equal(counter.bytes, 0); assert.equal(screenshots, 0);
   });
   await t.test("stored and attempted uploads have independent daily caps, including concurrent storage", async () => {
     const who = await member();

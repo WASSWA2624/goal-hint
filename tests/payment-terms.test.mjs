@@ -53,8 +53,18 @@ function fixture({ reports = [], codes = [], accountChange = {}, sessionChange =
   };
   const database = { query: run => run(tx), transaction: run => run(tx) };
   const service = createPayments({ database, config: { key: (purpose, value) => `${purpose}:${value}` }, now: () => instant, environment: null });
-  return { member, created, service, view: () => service.view(member, settings), submit: accepted => service.submit(member, { ...fields, accepted }, jpeg()) };
+  return { member, created, service, view: () => service.view(member, settings), submit: (accepted, image = jpeg()) => service.submit(member, { ...fields, accepted }, image) };
 }
+
+test("optional screenshot reports persist pending without image or screenshot-derived metadata", async () => {
+  const f = fixture();
+  assert.equal((await f.submit(true, null)).status, "saved");
+  assert.equal(f.created.length, 1);
+  const report = f.created[0];
+  assert.equal(report.status, "pending"); assert.equal(report.claimedTxnRef, fields.transactionId);
+  assert.equal(report.claimedAmountUgx, 5000); assert.equal(report.screenshotAmountUgx, null);
+  for (const key of ["screenshot", "imageSha256", "imageBytes"]) assert.equal(key in report, false, key);
+});
 
 test("current member-report consent survives every payment status and a locked or new device", async () => {
   for (const status of ["pending", "superseded", "approved", "rejected", "reversed"]) {

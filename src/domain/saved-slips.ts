@@ -24,27 +24,32 @@ export const savedSlipSnapshotSchema = z.strictObject({
 export type SavedSlipResult = Readonly<{
   fixtureId: string; status: SettlementStatus; regulationVerified: boolean; regulationHome: number | null; regulationAway: number | null;
 }>;
+export const savedSlipCompletedStatuses: readonly SettlementStatus[] = Object.freeze([
+  "finished-regulation", "finished-extra-time", "finished-penalties", "canceled", "abandoned", "awarded",
+]);
 export type SavedSlipView = Readonly<{
-  id: string; savedAt: string; slip: BuiltSlip; outcome: "won" | "lost" | "pending";
-  results: readonly Readonly<{ fixtureId: string; home: number | null; away: number | null; outcome: "correct" | "incorrect" | "pending" }>[];
+  id: string; savedAt: string; slip: BuiltSlip; outcome: "won" | "lost" | "pending" | "void";
+  results: readonly Readonly<{ fixtureId: string; home: number | null; away: number | null; outcome: "correct" | "incorrect" | "pending" | "void" }>[];
 }>;
 
-/** Public history is revealed only after every match has finished, even if one losing leg already determines the slip. */
+/** Public history requires every leg to be played-final or terminal-void. A postponement can resume;
+ * legacy snapshots lack the recorded cycle identity required to resolve that historical leg safely. */
 export function savedSlipView(id: string, savedAt: string, snapshot: unknown, results: readonly SavedSlipResult[]): SavedSlipView | null {
   const parsed = savedSlipSnapshotSchema.safeParse(snapshot);
   if (!parsed.success) return null;
   const slip = parsed.data as BuiltSlip;
   const legs = slip.selections.map((item) => {
     const result = results.find((candidate) => candidate.fixtureId === item.fixtureId);
-    if (!result || !isPlayedFinalStatus(result.status)) return null;
-    const score = result.regulationVerified && result.regulationHome !== null && result.regulationAway !== null
+    if (!result || !savedSlipCompletedStatuses.includes(result.status)) return null;
+    const score = isPlayedFinalStatus(result.status) && result.regulationVerified && result.regulationHome !== null && result.regulationAway !== null
       ? { verified: true as const, period: "regulation-including-stoppage-time" as const, home: result.regulationHome, away: result.regulationAway } : null;
     const settled = settleMarketSelection(item.family, item.selection, { status: result.status, cycleEligibility: { eligible: true }, regulationScore: score });
     return { fixtureId: item.fixtureId, home: score?.home ?? null, away: score?.away ?? null,
-      outcome: settled.status === "correct" || settled.status === "incorrect" ? settled.status : "pending" as const };
+      outcome: settled.status === "correct" || settled.status === "incorrect" || settled.status === "void" ? settled.status : "pending" as const };
   });
   if (legs.some((leg) => leg === null)) return null;
   const finished = legs.filter((leg) => leg !== null);
   return { id, savedAt, slip, results: finished,
-    outcome: finished.some((leg) => leg.outcome === "incorrect") ? "lost" : finished.every((leg) => leg.outcome === "correct") ? "won" : "pending" };
+    outcome: finished.some((leg) => leg.outcome === "incorrect") ? "lost" : finished.some((leg) => leg.outcome === "pending") ? "pending"
+      : finished.some((leg) => leg.outcome === "void") ? "void" : "won" };
 }

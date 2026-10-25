@@ -18,35 +18,20 @@ export type PaymentNotifications = Readonly<{
   credited(payment: CreditNotification): Promise<PaymentNotificationStatus>;
   renewed(renewal: RenewalNotification): Promise<PaymentNotificationStatus>;
 }>;
-const shillings = (amount: number) => `UGX ${amount.toLocaleString("en-UG")}`;
-const cleanName = (name: string) => name.replace(/[\u0000-\u001f\u007f]/gu, " ").replace(/\s+/gu, " ").trim();
-
-const expiryFormat = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Kampala", year: "numeric", month: "short", day: "2-digit",
-  hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-const rejectionMessages = new Map([
-  ["unreadable", "The payment proof was unreadable."],
-  ["amount-mismatch", "The amount did not match the selected package."],
-  ["not-received", "The payment could not be confirmed."],
-  ["duplicate", "This transaction was already used."],
-  ["wrong-number", "The payment was sent to the wrong number."],
-]);
-
-function expiryDate(instant: Date): string {
-  const parts = Object.fromEntries(expiryFormat.formatToParts(instant).map(({ type, value }) => [type, value]));
-  return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute} EAT`;
-}
+// The gateway and lock-screen previews can expose message contents. Keep financial and subscription details in the app.
+const accountUpdateMessage = "Goal Hint: Your account has been updated. Sign in to view the details or contact admin for help.";
 
 /** Call only after the payment transaction commits. Provider acceptance is best effort and is never retried automatically. */
 export function createPaymentNotifications({ database, now = Date.now, delivery = createYoolaMessaging() }: {
   database: DatabaseRuntime; now?: () => number; delivery?: SmsMessaging;
 }): PaymentNotifications {
   async function send(payment: Readonly<{ paymentId: string; accountId: string; phone: string | null }>, decision: "approved" | "rejected" | "credited" | "renewed",
-    message: () => string, targetType: "payment" | "access-code" = "payment"): Promise<PaymentNotificationStatus> {
+    targetType: "payment" | "access-code" = "payment"): Promise<PaymentNotificationStatus> {
     let status: PaymentNotificationStatus;
     if (!payment.phone) status = "unavailable";
     else if (!supportedMessageChannels(payment.phone).includes("sms")) status = "unsupported";
     else {
-      try { await delivery.sendSms({ phone: payment.phone, message: message() }); status = "sent"; }
+      try { await delivery.sendSms({ phone: payment.phone, message: accountUpdateMessage }); status = "sent"; }
       catch { status = "failed"; }
     }
     // Neither provider nor audit failures may turn a committed approval/rejection into an apparent failed decision.
@@ -64,18 +49,16 @@ export function createPaymentNotifications({ database, now = Date.now, delivery 
   }
   return Object.freeze({
     approved(payment: PaymentApprovalNotification) {
-      return send(payment, "approved", () => `Goal Hint: Payment ${payment.reference} approved. ${cleanName(payment.planName)} subscription expires on ${expiryDate(payment.expiresAt)}.`
-        + (payment.creditAddedUgx ? ` ${shillings(payment.creditAddedUgx)} extra was added to your credit.` : "") + " Thank you.");
+      return send(payment, "approved");
     },
     credited(payment: CreditNotification) {
-      return send(payment, "credited", () => `Goal Hint: Payment ${payment.reference} approved. ${shillings(payment.addedUgx)} added to your credit; balance ${shillings(payment.balanceUgx)}. Thank you.`);
+      return send(payment, "credited");
     },
     renewed(renewal: RenewalNotification) {
-      return send({ paymentId: renewal.accessCodeId, accountId: renewal.accountId, phone: renewal.phone }, "renewed",
-        () => `Goal Hint: ${cleanName(renewal.planName)} renewed from your credit until ${expiryDate(renewal.expiresAt)}. Credit left ${shillings(renewal.balanceUgx)}.`, "access-code");
+      return send({ paymentId: renewal.accessCodeId, accountId: renewal.accountId, phone: renewal.phone }, "renewed", "access-code");
     },
     rejected(payment: PaymentRejectionNotification) {
-      return send(payment, "rejected", () => `Goal Hint: Payment ${payment.reference} rejected. ${rejectionMessages.get(payment.reason) ?? ""} Sign in for details or contact admin.`.replace(/\s+/gu, " "));
+      return send(payment, "rejected");
     },
   });
 }

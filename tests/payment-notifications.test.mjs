@@ -195,24 +195,37 @@ test("payment decision HTTP responses report notification status without changin
   assert.equal(rejection.status, 200); assert.deepEqual(await rejection.json(), { status: "saved", notification: "sent" });
 });
 
-test("approval SMS contains the payment reference and expiry date in EAT, including its year", async () => {
+test("approval SMS directs the member to sign in without disclosing payment or subscription details", async () => {
   const f = fixture(), messages = [];
   const notifications = createPaymentNotifications({ database: f.database, now: () => instant, delivery: { async sendSms(message) { messages.push(message); } } });
   const result = await notifications.approved({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", planName: "Weekly", expiresAt: new Date("2026-12-31T22:30:00Z") });
   assert.equal(result, "sent"); assert.equal(messages.length, 1); assert.equal(messages[0].phone, f.account.phone);
-  assert.match(messages[0].message, /PABCD/u); assert.match(messages[0].message, /2027/u); assert.match(messages[0].message, /(?:1 Jan|Jan 1|01 Jan)/u); assert.match(messages[0].message, /EAT/u);
+  assert.match(messages[0].message, /Sign in/u);
+  assert.doesNotMatch(messages[0].message, /PABCD|Weekly|2027|EAT|payment|approved/iu);
   assert.equal(f.state.ownerAuditEvent[0].action, "payment_sms_attempted");
   assert.ok(!JSON.stringify(f.state.ownerAuditEvent).includes(f.account.phone));
   assert.ok(!JSON.stringify(f.state.ownerAuditEvent).includes(messages[0].message));
 });
 
-test("rejection SMS maps approved reason values and never includes private administrator text", async () => {
+test("rejection SMS excludes payment references, decisions, reasons and private administrator text", async () => {
   const f = fixture(), messages = [];
   const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms(message) { messages.push(message); } } });
   await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PABCD", reason: "not-received" });
-  assert.match(messages[0].message, /PABCD/u); assert.match(messages[0].message, /reject/iu); assert.match(messages[0].message, /could not be confirmed/iu);
+  assert.match(messages[0].message, /Sign in/u); assert.doesNotMatch(messages[0].message, /PABCD|reject|not.received|could not be confirmed/iu);
   await notifications.rejected({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PEFGH", reason: "Private admin text: secret 256700000333" });
   assert.ok(!messages[1].message.includes("Private admin text")); assert.ok(!messages[1].message.includes("256700000333"));
+});
+
+test("credit and renewal SMS exclude amounts, balances, plan names and expiry times", async () => {
+  const f = fixture(), messages = [];
+  const notifications = createPaymentNotifications({ database: f.database, delivery: { async sendSms(message) { messages.push(message); } } });
+  await notifications.credited({ paymentId: randomUUID(), accountId: f.account.id, phone: f.account.phone, reference: "PCREDIT", addedUgx: 25000, balanceUgx: 32000 });
+  await notifications.renewed({ accessCodeId: randomUUID(), accountId: f.account.id, phone: f.account.phone, planName: "Private Weekly", expiresAt: new Date("2027-01-01T09:00:00Z"), balanceUgx: 17000 });
+  for (const { message } of messages) {
+    assert.match(message, /Sign in/u); assert.ok(message.length <= 160);
+    assert.doesNotMatch(message, /PCREDIT|25000|25,000|32000|17000|UGX|credit|Private Weekly|2027|EAT/iu);
+  }
+  assert.equal(f.state.ownerAuditEvent.at(-1).targetType, "access-code");
 });
 
 test("SMS delivery failures return safe statuses without leaking provider diagnostics", async () => {

@@ -18,7 +18,7 @@ The SMS request sends JSON fields `api_key`, `phone`, `message`, and optional `s
 
 After an administrator approves or rejects a payment, Goal Hint attempts one SMS to the registered account number using the same SMS endpoint and credentials. A separate payer number is never the recipient. An owner-recorded payment with a transaction ID also receives its approval notification; a free trial or manual access grant without a recorded payment does not.
 
-Approval messages identify the payment and package and include the granted subscription expiry date and time, with the year in East Africa Time (EAT). This is the renewal's actual expiry when it follows existing access. Rejection messages identify the payment and use a standard rejection reason, with guidance to check the app or contact the administrator; the private freeform explanation is not sent to Yoola.
+Approval, rejection, credit and renewal messages use the same minimal account-update notice with guidance to sign in or contact the administrator. Payment references, decisions, amounts, credit balances, package names, subscription expiry and review reasons stay in authenticated account views. This limits the financial information visible to the gateway and in device notification previews.
 
 Sending starts only after the database decision commits, outside retried database work. Invalid, refused or repeated decisions do not send another message. Notification failures never undo an approval, rejection or access grant. The administrator sees `SMS accepted for delivery` after provider acceptance, or guidance to contact the member when delivery could not be confirmed, the destination is unsupported, or no registered phone is available. Provider acceptance does not prove handset receipt.
 
