@@ -171,8 +171,8 @@ test("every guarded /api/admin handler refuses missing sessions (401) and cross-
         assert.equal(response.headers.get("cache-control"), "no-store", label);
         assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow", label);
         if (route === signOutRoute && refusal.status === 401) {
-          // Sign-out needs no verifiable session: whatever cookie arrived is cleared and the owner lands on the sign-in.
-          assert.equal(response.status, 303, label); assert.equal(response.headers.get("location"), "/en/account?view=login&status=signed-out", label);
+          // Sign-out needs no verifiable session: whatever cookie arrived is cleared and the owner keeps browsing the matches.
+          assert.equal(response.status, 303, label); assert.equal(response.headers.get("location"), "/en/matches", label);
           assert.match(response.headers.get("set-cookie"), /^goal-hint-analytics=; .*Max-Age=0/, label);
           // Its only session read names the owner for the audit (058) and never extends the session.
           assert.ok(calls.verify.slice(before.verify).every((options) => options.touch === false), `${label} never extends a session`);
@@ -206,7 +206,7 @@ test("retired login routes redirect without credential checks or audits; logout 
   for (const [label, value] of [["a live legacy session", token], ["legacy storage cannot respond", unreachable]]) {
     const before = calls.logout.length;
     const out = await logout(request(signOutRoute, "POST", { ...sameOrigin, cookie: `goal-hint-analytics=${value}` }));
-    assert.equal(out.status, 303, label); assert.equal(out.headers.get("location"), "/en/account?view=login&status=signed-out", label);
+    assert.equal(out.status, 303, label); assert.equal(out.headers.get("location"), "/en/matches", label);
     for (const name of ["goal-hint-member", "goal-hint-analytics"]) assert.ok(out.headers.getSetCookie().some(value => value.startsWith(`${name}=;`) && value.includes("Max-Age=0")), name);
     assert.deepEqual(calls.logout.slice(before), [value]);
   }

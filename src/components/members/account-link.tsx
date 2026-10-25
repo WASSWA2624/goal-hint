@@ -15,14 +15,14 @@ import { media } from "@/styles/theme";
 import { MemberSignOut } from "./member-controls";
 import { getPendingPaymentsSnapshot, getServerPendingPaymentsSnapshot, subscribePendingPayments } from "@/components/admin/pending-payments";
 import { getAdminSessionSnapshot, getMemberSessionSnapshot, getServerAdminSessionSnapshot, getServerMemberSessionSnapshot,
-  getServerSubscriptionSnapshot, getSubscriptionSnapshot, refreshMemberSession, subscribeMemberSession } from "./member-session";
+  refreshMemberSession, subscribeMemberSession } from "./member-session";
 
 const Actions = styled.div`
   display: flex;
   flex: none;
   align-items: center;
-  gap: 4px;
-  ${media.desktop} { gap: 6px; }
+  gap: 10px;
+  ${media.desktop} { gap: 12px; }
 `;
 const AuthLink = styled(Link)<{ $primary?: boolean }>`
   ${compactHeaderControl}
@@ -41,6 +41,7 @@ const Disclosure = styled.details`
     padding: 4px;
     color: ${({ theme }) => theme.header.text};
     background: ${({ theme }) => theme.header.controlFill};
+    border-color: transparent;
     list-style: none;
     > svg { font-size: 1.125rem; }
     ${media.desktop} { inline-size: 2.25rem; }
@@ -145,25 +146,19 @@ function AdminPaymentsLink() {
   </AuthLink>;
 }
 
-/** All headers share a visible purchase action and the same private account state. */
+/** All headers share the same private account state; the access bar beneath them carries Subscribe and Extend. */
 export function AccountLinks({ locale = "en", administratorName }: { locale?: string; showAccount?: boolean; administratorName?: string }) {
   const pathname = usePathname();
   const phone = useSyncExternalStore(subscribeMemberSession, getMemberSessionSnapshot, getServerMemberSessionSnapshot);
   const administrator = useSyncExternalStore(subscribeMemberSession, getAdminSessionSnapshot, getServerAdminSessionSnapshot);
-  const subscription = useSyncExternalStore(subscribeMemberSession, getSubscriptionSnapshot, getServerSubscriptionSnapshot);
   useEffect(() => { void refreshMemberSession(); }, [pathname]);
   const messages = createMessages(locale);
   const base = `/${resolveLocale(locale)}/account`;
-  const purchase = !administratorName && !administrator && subscription?.canSubscribe && !subscription.activeUntil;
-  const subscribeLink = <AuthLink href={`/${resolveLocale(locale)}/subscribe`} prefetch={false} $primary
-    aria-label={messages.text(subscription?.paymentPending ? "account.pending" : "account.subscribe")}>
-    {messages.text(subscription?.paymentPending ? "account.pending" : "account.subscribe")}
-  </AuthLink>;
   return <Actions data-account-actions>
     {(administratorName || administrator) && <AdminPaymentsLink />}
-    {phone || administratorName ? <>{purchase && subscribeLink}<ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(administratorName ? { administratorName } : {})} /></> : <>
+    {phone || administratorName ? <><ThemeToggle locale={locale} /><AccountMenu key={pathname} locale={locale} phone={phone} {...(administratorName ? { administratorName } : {})} /></> : <>
       <AuthLink href={`${base}?view=login`} prefetch={false}><SignInIcon />{messages.text("account.login")}</AuthLink>
-      {purchase ? subscribeLink : <AuthLink href={`${base}?view=register`} prefetch={false} $primary><UserPlusIcon />{messages.text("account.register")}</AuthLink>}
+      <AuthLink href={`${base}?view=register`} prefetch={false} $primary><UserPlusIcon />{messages.text("account.register")}</AuthLink>
       <ThemeToggle locale={locale} />
     </>}
   </Actions>;

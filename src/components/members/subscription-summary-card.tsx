@@ -21,7 +21,7 @@ export function SubscriptionSummaryCard({ locale, subscription, canSubscribe, re
       {subscription.renewsFromCredit && ` · ${messages.text("account.renewsFromCredit")}`}</p>}
     {subscription.creditUgx !== 0 && <p data-subscription-credit>{messages.text("account.creditBalance", { amount: messages.number(subscription.creditUgx) })}</p>}
     {canSubscribe && <Inline><ButtonLink href={`${destination}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
-      {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.renew" : "account.subscribe")}
+      {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.extend" : "account.subscribe")}
     </ButtonLink></Inline>}
   </Stack></MemberPanel>;
 }

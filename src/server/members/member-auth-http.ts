@@ -94,14 +94,19 @@ export function createMemberSessionHandler(source: MemberServicesSource = getMem
       const salesOpen = !!services.settings?.settings && services.settings.settings.paywallMode !== "off";
       const subscription: SubscriptionSummary = { activeUntil: null, paymentPending: false,
         canSubscribe: salesOpen && !member?.blocked && !administrator, ...noCredit };
-      if (!member || member.blocked || administrator) return json({ phone: member?.phone ?? null, administrator, subscription });
+      // Only a visitor or member without access who can subscribe reads the cheapest plan, for the access bar's offer.
+      const withOffer = async (summary: SubscriptionSummary): Promise<SubscriptionSummary> => {
+        const offer = !summary.activeUntil && summary.canSubscribe && services.offer ? await services.offer().catch(() => null) : null;
+        return offer ? { ...summary, offer } : summary;
+      };
+      if (!member || member.blocked || administrator) return json({ phone: member?.phone ?? null, administrator, subscription: await withOffer(subscription) });
       if (!services.codes) return json({ phone: null, error: "unavailable" }, 503);
       // A chain that ended (or ends within the lead) renews from credit on this request when auto-renewal is on.
       try { await services.codes.renewDue(member.accountId, { prefer: [member.tokenHash] }); } catch { /* The summary below still answers. */ }
       const status = await services.codes.subscriptionStatus(member);
       // The verified session may have been removed or blocked while its subscription was being read.
       if (!status) return json({ phone: null, administrator: false, subscription: { activeUntil: null, paymentPending: false, canSubscribe: false, ...noCredit } });
-      return json({ phone: member.phone, administrator, subscription: { ...subscription, ...status } });
+      return json({ phone: member.phone, administrator, subscription: await withOffer({ ...subscription, ...status }) });
     } catch { return json({ phone: null, error: "unavailable" }, 503); }
   };
 }

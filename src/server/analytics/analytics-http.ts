@@ -13,7 +13,7 @@ import { createAdminAuth, type Admin, type AdminAuth } from "./analytics-auth.ts
 import { createAnalyticsCollector, createCollectLimiter, type AnalyticsCollector } from "./analytics-collector.ts";
 import { createAnalyticsReporter, type AnalyticsReporter } from "./analytics-report.ts";
 import { createAnalyticsRetention, isRetentionDays, type AnalyticsRetention } from "./analytics-retention.ts";
-import { memberLoginPath } from "../../domain/member-navigation.ts";
+import { memberLoginPath, signedOutPath } from "../../domain/member-navigation.ts";
 import { clientAddress, cookie, empty, isSameOrigin, json, privateHeaders, readCookie, readLimitedBody, redirect } from "../http/private-http.ts";
 import { verifyMemberAdminSession } from "../members/member-admin-access.ts";
 import { createMemberSessions, memberCookieName } from "../members/member-sessions.ts";
@@ -152,7 +152,7 @@ export function createLogoutHandler(services: () => Promise<AnalyticsServices> =
     if (memberToken && resolved.database) {
       try { await createMemberSessions({ database: resolved.database, config }).signOut(memberToken); } catch { /* Clear the cookie during an outage too. */ }
     }
-    return redirect(`${memberLoginPath}&status=signed-out`, [cookie(config, config.cookies.session, "", 0),
+    return redirect(signedOutPath, [cookie(config, config.cookies.session, "", 0),
       cookie(config, memberName, "", 0, "Lax")]);
   };
 }

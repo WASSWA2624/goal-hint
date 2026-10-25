@@ -369,7 +369,7 @@ test("legacy analytics sign-in redirects without authentication; sign-out clears
     const prefix = production ? "__Host-" : "";
     const logout = await createLogoutHandler(resolve)(request("/api/analytics/logout", { method: "POST",
       headers: { ...sameSite, cookie: `${prefix}goal-hint-analytics=${"t".repeat(43)}; ${prefix}goal-hint-member=${"t".repeat(43)}` } }));
-    assert.equal(logout.status, 303); assert.equal(logout.headers.get("location"), "/en/account?view=login&status=signed-out");
+    assert.equal(logout.status, 303); assert.equal(logout.headers.get("location"), "/en/matches");
     const cookies = logout.headers.getSetCookie();
     for (const name of ["goal-hint-member", "goal-hint-analytics"]) {
       const value = cookies.find(value => value.startsWith(`${prefix}${name}=;`));

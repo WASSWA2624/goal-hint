@@ -13,7 +13,7 @@ export const contactMessages = {
   "contact.report.minimise": "Include only relevant public football details. Leave out personal or sensitive information.",
   "contact.corrections.title": "How result corrections work",
   "contact.corrections.help": "Understand prediction results and corrections",
-  "contact.corrections.body": "Verified result corrections are audited against the same locked forecast. They can change its outcome, but do not replace the pick with a more favorable revision. An outcome can remain pending while a corrected result awaits verified settlement. A public report does not itself change a stored result or forecast.",
+  "contact.corrections.body": "Verified result corrections are audited against the same locked forecast. They can change its outcome, but do not replace the prediction with a more favorable revision. An outcome can remain pending while a corrected result awaits verified settlement. A public report does not itself change a stored result or forecast.",
   "contact.policies.title": "Related information",
   "contact.policies.navigation": "Related policies",
   "contact.link": "Contact availability and correction guidance",

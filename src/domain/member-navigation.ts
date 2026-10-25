@@ -1,5 +1,8 @@
 /** One phone-and-password sign-in page for every account role. */
 export const memberLoginPath = "/en/account?view=login";
+/** Owner decision (2026-10-25): signing out, as a member or the owner, keeps you browsing the matches with the same
+ * free-tier limits as a visitor, never on the sign-in form. */
+export const signedOutPath = "/en/matches";
 
 /** Only an English feed or a canonical match path can be a member return destination. No queries, fragments or escapes. */
 export function memberReturnPath(value: unknown): string | null {

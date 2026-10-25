@@ -40,7 +40,8 @@ const Toggle = styled.button`
   inline-size: 2rem;
   padding: 4px;
   color: ${({ theme }) => theme.header.text};
-  background: transparent;
+  background: ${({ theme }) => theme.header.controlFill};
+  border-color: transparent;
   > svg { font-size: 1rem; }
   ${media.desktop} { inline-size: 2.25rem; }
   ${media.hover} { &:hover { background: ${({ theme }) => theme.header.controlHover}; } }

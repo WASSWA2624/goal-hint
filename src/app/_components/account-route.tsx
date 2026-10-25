@@ -108,7 +108,7 @@ export function createAccountRoute({ services = getMemberServices, plans = readP
           </AccountBlockText>
           {(subscription && salesOpen || offerTrial) && <AccountBlockActions>
             {subscription && salesOpen && <ButtonLink href={`${memberNextPath("subscribe", returnTo)}#${viewPayment ? "report" : "plans"}`} prefetch={false}>
-              {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.renew" : "account.subscribe")}</ButtonLink>}
+              {messages.text(viewPayment ? "account.viewPayment" : activeUntil ? "account.extend" : "account.subscribe")}</ButtonLink>}
             {offerTrial && <TrialRequest locale={locale} days={settings!.trialDays} />}
           </AccountBlockActions>}
         </AccountBlock>

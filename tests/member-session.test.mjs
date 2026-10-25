@@ -150,3 +150,30 @@ test("subscription changes update all headers, poll approval and expire without 
   await Promise.resolve();
   assert.equal(calls, beforeUnmount, "last unmount removes the shared polling timer");
 });
+
+test("the subscribe offer is kept only when well formed, and a price change updates the headers", async (t) => {
+  const previousWindow = globalThis.window, previousFetch = globalThis.fetch;
+  globalThis.window = new EventTarget();
+  const base = { activeUntil: null, paymentPending: false, canSubscribe: true, creditUgx: 0, autoRenew: false, renewsFromCredit: false };
+  let subscription = { ...base, offer: { priceUgx: 1_000, durationDays: 1 } }, updates = 0;
+  globalThis.fetch = async () => Response.json({ phone: null, administrator: false, subscription });
+  const unsubscribe = subscribeMemberSession(() => { updates += 1; });
+  t.after(() => {
+    unsubscribe();
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    globalThis.fetch = previousFetch;
+  });
+  await refreshMemberSession();
+  assert.deepEqual(getSubscriptionSnapshot(), subscription);
+  const seen = updates;
+  subscription = { ...base, offer: { priceUgx: 2_000, durationDays: 1 } };
+  await refreshMemberSession();
+  assert.equal(updates, seen + 1, "a new price reaches every header");
+  assert.deepEqual(getSubscriptionSnapshot().offer, subscription.offer);
+  for (const offer of [null, { priceUgx: "1000", durationDays: 1 }, { priceUgx: 1_000 }, { priceUgx: 0, durationDays: 1 }, { priceUgx: 1.5, durationDays: 1 }]) {
+    subscription = { ...base, offer };
+    await refreshMemberSession();
+    assert.deepEqual(getSubscriptionSnapshot(), base, `a malformed offer is dropped: ${JSON.stringify(offer)}`);
+  }
+});

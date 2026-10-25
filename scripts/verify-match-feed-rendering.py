@@ -116,7 +116,7 @@ def verify_feed(origin, directory, scenarios):
         assert all('aria-label="Apply filters"' in button for button in submit_buttons)
         no_match('role="slider"|With predictions|Any time|Specific time', visible)
         # 062 supplies this control in both layouts; these fixtures have full access.
-        picks_filters = re.findall(r'<label\b[^>]*>(<input\b[^>]*type="checkbox"[^>]*>)Picks only</label>', visible)
+        picks_filters = re.findall(r'<label\b[^>]*>(<input\b[^>]*type="checkbox"[^>]*>)Predictions only</label>', visible)
         assert len(picks_filters) == 2 and all('disabled' not in field for field in picks_filters)
         articles = re.findall(r'(<article\b[^>]*data-fixture-id="([^"]+)"[^>]*>)([\s\S]*?)</article>', visible)
         data = scenario["result"].get("data")

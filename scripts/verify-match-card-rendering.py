@@ -80,9 +80,9 @@ def verify(origin, directory):
     for card in ["card-unavailable", "card-missing-family"]:
         match(r'data-result-badge="unavailable"[^>]*>[\s\S]*?<span data-pick-value[^>]*>—</span></span>', by_id[card])
         no_match(r'data-pick-value[^>]*>(?:0%|Pending)</span>', by_id[card])
-        match(r'data-pick-value[^>]*>No pick</span>', by_id[card])
+        match(r'data-pick-value[^>]*>No prediction</span>', by_id[card])
         match(r'data-pick-state="none"', by_id[card])
-        match(r'<b data-mobile-only=""[^>]*>No pick</b>', by_id[card])
+        match(r'<b data-mobile-only=""[^>]*>No prediction</b>', by_id[card])
     for card, state in [("card-correct", "settled"), ("card-incorrect", "settled"), ("card-void", "settled"), ("card-pending", "open")]:
         match(f'data-pick-state="{state}"', by_id[card])
     match(r'data-pick-selection=""[^>]*>Home win</span>', by_id["card-correct"])

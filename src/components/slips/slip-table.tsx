@@ -13,7 +13,8 @@ import { isSafeRemoteImageUrl } from "@/domain/remote-image";
 import type { BuiltSlip, SlipSelection } from "@/domain/slip-builder";
 import type { SavedSlipView } from "@/domain/saved-slips";
 import { createMessages, type Messages } from "@/i18n/messages";
-import { SlipCard, SlipMarket, SlipPick, SlipSummary, SlipTitle, Table } from "./slip-styles";
+import { MarketGlyph } from "@/components/match/market-glyph";
+import { SlipCard, SlipMarket, SlipPanel, SlipPick, SlipSummary, SlipTitle, Table } from "./slip-styles";
 
 function percent(value: number, messages: Messages): string {
   if (value < 1 && Math.round(value * 1000) === 1000) return messages.text("probability.compact.more-than-ninety-nine");
@@ -84,19 +85,25 @@ export function SlipTable({ slip, index, locale, estimatedProbability, results }
             {result && <span data-slip-result>{result.outcome === "void" ? messages.text("slips.resultVoid") : result.home === null || result.away === null ? messages.text("slips.resultPending") : `${result.home} – ${result.away}`} · {messages.text(`slips.leg.${result.outcome}`)}</span>}
           </td>
           <td data-column="selection">
-            <SlipMarket $family={selection.family} data-market>
-              <span aria-hidden="true">{family}</span>
-              <VisuallyHidden>{family}</VisuallyHidden>
-            </SlipMarket>
-            <SlipPick $family={selection.family} data-slip-pick>
-              <span aria-hidden="true" data-pick-selection>{pick}</span>
-              <VisuallyHidden>{pick}. {messages.text("slips.odds")}: </VisuallyHidden>
-              <PredictionOdds odds={selection.odds} />
-            </SlipPick>
-            <span data-mobile="probability">
-              <VisuallyHidden>{messages.text("slips.probability")}: </VisuallyHidden>
-              <SlipProbability selection={selection} label={probability} />
-            </span>
+            <SlipPanel $family={selection.family} data-pick-panel>
+              <span data-mobile="glyph"><MarketGlyph kind={selection.family} /></span>
+              <span data-pick-text>
+                <SlipMarket $family={selection.family} data-market>
+                  <span aria-hidden="true">{family}</span>
+                  <VisuallyHidden>{family}</VisuallyHidden>
+                </SlipMarket>
+                <SlipPick $family={selection.family} data-slip-pick>
+                  <span aria-hidden="true" data-pick-selection>{pick}</span>
+                  <VisuallyHidden>{pick}. {messages.text("slips.odds")}: </VisuallyHidden>
+                  <PredictionOdds odds={selection.odds} />
+                </SlipPick>
+              </span>
+              <span data-mobile="numbers">
+                <span aria-hidden="true"><strong>@&#8239;{selection.odds}</strong><small>{messages.text("details.odds")}</small></span>
+                <span><VisuallyHidden>{messages.text("slips.probability")}: </VisuallyHidden><strong>{probability}</strong>
+                  <small aria-hidden="true">{messages.text("match.likely")}</small></span>
+              </span>
+            </SlipPanel>
           </td>
           <td data-column="kickoff"><time dateTime={toUtcIsoString(at)}>{kickoff}</time></td>
           <td data-column="probability"><SlipProbability selection={selection} label={probability} /></td>

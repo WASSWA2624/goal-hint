@@ -181,7 +181,7 @@ def main():
                 if state == "approved": assert 'data-payment-status="approved"' not in html and "Payment approved" not in html, "An approval shows no card on the subscribe page."
         compact_status_rendering(server.origin)
         account = visible_html(request(server.origin, "/en/account?state=active").text)
-        assert 'data-subscription-summary="active"' in account and "You have access until" in account and "Renew" in account
+        assert 'data-subscription-summary="active"' in account and "You have access until" in account and "Extend" in account
         assert re.search(r'<time\b[^>]*datetime="[^"]+"[^>]*>[^<]*\b\d{4}\b[^<]*\d{2}:\d{2} EAT</time>', account, re.I), "The active account must show its full expiry date and time."
         assert 'data-payment-status="approved"' not in account, "The account must not repeat its active subscription summary as an approval card."
         # Account credit: pay for a plan from credit, add credit (a top-up report), and the account's balance, auto-renewal and history.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { consumeMemberLoginFlash, memberLoginFlashKey, saveMemberLoginFlash } from "../src/components/members/member-login-flash.ts";
+import { consumeMemberLoginFlash, memberLoginFlashKey, saveMemberLoginFlash, saveMemberSignOutFlash } from "../src/components/members/member-login-flash.ts";
 
 function memoryStorage() {
   const values = new Map();
@@ -20,6 +20,15 @@ test("login notices carry only the confirmed event and are consumed once after r
     assert.equal(consumeMemberLoginFlash(storage), event);
     assert.equal(consumeMemberLoginFlash(storage), null, "reloads and later navigation cannot repeat the confirmation");
   }
+});
+
+test("sign-out confirms itself once on the matches page it lands on", () => {
+  const storage = memoryStorage();
+  assert.equal(saveMemberSignOutFlash(storage), true);
+  assert.deepEqual([...storage.values], [[memberLoginFlashKey, "signed-out"]]);
+  assert.equal(consumeMemberLoginFlash(storage), "signed-out");
+  assert.equal(consumeMemberLoginFlash(storage), null);
+  assert.equal(saveMemberSignOutFlash({ setItem() { throw new Error("blocked"); } }), false);
 });
 
 test("invalid flash data is discarded instead of displayed as a logout confirmation", () => {

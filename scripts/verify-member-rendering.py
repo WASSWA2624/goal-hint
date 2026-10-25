@@ -114,7 +114,7 @@ def verify_synthetic_api(origin):
     except HTTPError as error:
         response = error
     with response:
-        assert response.status == 303 and response.headers["Location"] == "/en/account?view=login&status=signed-out"
+        assert response.status == 303 and response.headers["Location"] == "/en/matches", "Sign-out keeps the visitor browsing matches"
         assert "Max-Age=0" in response.headers["Set-Cookie"]
     match(r'<h1[^>]*>Log in</h1>', request(origin, "/en/account?view=login&status=signed-out").text)
 
@@ -191,7 +191,7 @@ def subscription_discovery(origin):
             match(r"Your access ended on" if scenario == "expired" else r"You have no active subscription\.", summary.group(1))
         if status["canSubscribe"]:
             match(r'href="/en/subscribe[^\"]*"', summary.group(1))
-            match("View payment" if status["paymentPending"] else "Renew" if scenario in active else "Subscribe", summary.group(1))
+            match("View payment" if status["paymentPending"] else "Extend" if scenario in active else "Subscribe", summary.group(1))
         else:
             no_match(r'href="/en/subscribe', summary.group(1))
     for token, scenario, can_subscribe in [(None, "free", True), (None, "off", False), ("d", "active", False), ("b", "free", False)]:

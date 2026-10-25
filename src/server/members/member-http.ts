@@ -3,15 +3,19 @@ import "server-only";
 import { createPayments, type Payments } from "./payments.ts";
 import { getAnalyticsServices, type AnalyticsServices } from "../analytics/analytics-http.ts";
 import { getAnalyticsConfig, type AnalyticsConfig } from "../analytics/analytics-config.ts";
-import { memberLoginPath } from "../../domain/member-navigation.ts";
+import { signedOutPath } from "../../domain/member-navigation.ts";
 import { cookie, isSameOrigin, json, privateHeaders, readCookie, redirect } from "../http/private-http.ts";
 import { createMemberSessions, memberCookieName, type MemberIdentity, type MemberSessions } from "./member-sessions.ts";
 import { settingsServiceFor, type SettingsState } from "./settings.ts";
 import { createAccessCodes, type AccessCodes } from "./access-codes.ts";
 import { createMemberAuth, type MemberAuth } from "./member-auth.ts";
+import { createPlansService } from "./plans.ts";
+import type { DatabaseRuntime } from "../database/client.ts";
+import { cheapestActivePlan, type SubscriptionOffer } from "../../domain/subscription-offer.ts";
 
 export const memberRefusal = "We couldn't complete this. Please contact us.";
-export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null }>;
+export type MemberServices = Readonly<{ config: AnalyticsConfig; settings: SettingsState; sessions: MemberSessions | null; payments?: Payments | null; codes?: AccessCodes | null; auth?: MemberAuth | null;
+  offer?: (() => Promise<SubscriptionOffer | null>) | null }>;
 export type MemberServicesSource = () => Promise<MemberServices>;
 
 export async function getMemberServices(): Promise<MemberServices> {
@@ -22,7 +26,19 @@ export async function getMemberServices(): Promise<MemberServices> {
     sessions: database && keyed ? createMemberSessions({ database, config }) : null,
     payments: database && keyed ? createPayments({ database, config }) : null,
     codes: database && keyed ? createAccessCodes({ database, config }) : null,
-    auth: database && keyed ? createMemberAuth({ database, config }) : null };
+    auth: database && keyed ? createMemberAuth({ database, config }) : null,
+    offer: database ? () => readOffer(database) : null };
+}
+
+/** Every page view checks the session, so the cheapest plan is read at most once a minute; a failed read is retried next time. */
+let cachedOffer: Readonly<{ until: number; offer: Promise<SubscriptionOffer | null> }> | null = null;
+function readOffer(database: DatabaseRuntime): Promise<SubscriptionOffer | null> {
+  const now = Date.now();
+  if (cachedOffer && cachedOffer.until > now) return cachedOffer.offer;
+  const offer = createPlansService(database).list().then(cheapestActivePlan);
+  cachedOffer = { until: now + 60_000, offer };
+  offer.catch(() => { if (cachedOffer?.offer === offer) cachedOffer = null; });
+  return offer;
 }
 
 export type MemberContext = Readonly<{ request: Request; services: MemberServices; member: MemberIdentity | null }>;
@@ -66,7 +82,7 @@ export function createMemberSignOutHandler(services: MemberServicesSource = getM
     if (legacyToken !== undefined) {
       try { await (await legacySource()).auth?.logout(legacyToken); } catch { /* Cookie clearing survives a legacy storage outage. */ }
     }
-    const next = `${memberLoginPath}&status=signed-out`, cleared = [cookie(config, name, "", 0, "Lax"), cookie(config, config.cookies.session, "", 0)];
+    const next = signedOutPath, cleared = [cookie(config, name, "", 0, "Lax"), cookie(config, config.cookies.session, "", 0)];
     const response = wantsJson(request) ? json({ next, phone: null }) : redirect(next);
     for (const value of cleared) response.headers.append("Set-Cookie", value);
     response.headers.set("Clear-Site-Data", '"cache"');

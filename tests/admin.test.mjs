@@ -120,7 +120,7 @@ test("owner sign-out deletes the session, clears the cookie, returns to the shar
   assert.equal((await logout(request(ownerRoutes.logout, { method: "POST", headers: { "sec-fetch-site": "cross-site", cookie: `goal-hint-analytics=${token}; goal-hint-member=${token}` } })))
     .status, 403);
   const response = await logout(request(ownerRoutes.logout, { method: "POST", headers: { ...sameSite, cookie: `goal-hint-analytics=${token}; goal-hint-member=${token}` } }));
-  assert.equal(response.status, 303); assert.equal(response.headers.get("location"), "/en/account?view=login&status=signed-out");
+  assert.equal(response.status, 303); assert.equal(response.headers.get("location"), "/en/matches");
   assert.match(response.headers.getSetCookie().find(value => value.startsWith("goal-hint-analytics=")), /^goal-hint-analytics=; Path=\/; HttpOnly; SameSite=Strict; Max-Age=0$/);
   assert.deepEqual(calls.logout, [token]);
   assert.deepEqual(calls.verify, [], "The legacy owner session cannot authorize a sign-out audit.");
@@ -129,7 +129,7 @@ test("owner sign-out deletes the session, clears the cookie, returns to the shar
     ["failing storage", fakeServices({ storageDown: true }), token], ["no owner sign-in", fakeServices({ auth: false }), token]]) {
     const ended = await createOwnerLogoutHandler({ services: scripted.resolve, audit: (event) => { events.push(event); } })(request(ownerRoutes.logout,
       { method: "POST", headers: { ...sameSite, ...(cookieValue === null ? {} : { cookie: `goal-hint-analytics=${cookieValue}` }) } }));
-    assert.equal(ended.headers.get("location"), "/en/account?view=login&status=signed-out", label);
+    assert.equal(ended.headers.get("location"), "/en/matches", label);
     assert.match(ended.headers.getSetCookie().find(value => value.startsWith("goal-hint-analytics=")), /^goal-hint-analytics=; .*Max-Age=0$/, `${label}: the cookie is cleared regardless`);
   }
   assert.equal(events.length, 1, "Only a verified session is audited as a sign-out.");

@@ -81,6 +81,25 @@ test("guests can discover open subscriptions and administrators never receive a 
   }
 });
 
+test("only visitors and members without access who can subscribe receive the cheapest plan, and a failed read omits it", async () => {
+  const offer = { priceUgx: 1_000, durationDays: 1 };
+  const cases = [[{}, offer], [{ periods: [period(-1, 1)] }, undefined], [{ mode: "off" }, undefined], [{ blocked: true }, undefined]];
+  for (const [options, expected] of cases) {
+    const f = subscriptionFixture(options);
+    let reads = 0;
+    f.services.offer = async () => { reads++; return offer; };
+    assert.deepEqual((await (await f.request()).json()).subscription.offer, expected);
+    assert.equal(reads, expected ? 1 : 0, "Plans are read only when the bar shows the offer.");
+  }
+  const guest = createMemberSessionHandler(async () => ({ config: { production: false }, settings: { settings: { paywallMode: "on" } },
+    sessions: { async verify() { return null; } }, offer: async () => offer }));
+  assert.deepEqual((await (await guest(new Request("http://localhost/api/account/session"))).json()).subscription.offer, offer);
+  const failed = subscriptionFixture();
+  failed.services.offer = async () => { throw new Error("plans unavailable"); };
+  const response = await failed.request();
+  assert.equal(response.status, 200); assert.equal("offer" in (await response.json()).subscription, false);
+});
+
 test("subscription details fail closed if the verified session was removed, reset, expired or reassigned", async () => {
   for (const sessionChange of [null, { authenticatedAt: null }, { passwordResetAt: new Date(instant) }, { expiresAt: new Date(instant) }, { accountId: "another-account" }]) {
     const f = subscriptionFixture({ sessionChange, periods: [period(-1, 1)], status: "pending" });

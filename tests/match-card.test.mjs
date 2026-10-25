@@ -213,11 +213,14 @@ async function styledBlock(name) {
   return { all: match[1], tile: match[1].slice(tileStart) };
 }
 
-test("the phone tile puts the result tag in the top-right corner, outside the desktop pick subgrid", async () => {
+test("the phone tile puts one fixed-width result tag beside the meta line, outside the desktop pick subgrid", async () => {
   const card = (await styledBlock("Card")).tile.split("${table}")[0];
   assert.match(card, /grid-template-areas: "meta result" "teams teams" "pick pick";/u);
   const result = await styledBlock("Result");
   assert.match(result.tile.split("${table}")[0], /grid-area: result;/u);
+  // Owner decision (2026-10-25): Upcoming, Pending, Win, Loss and Void tags all share one width on phones.
+  assert.match(result.tile.split("${table}")[0], /inline-size: 5\.25rem;/u);
+  assert.doesNotMatch(result.tile.split("${table}")[0], /min-inline-size/u);
   // Bright verdict colours apply on both layouts; Upcoming has its own pale tag.
   assert.match(result.all, /theme\.color\.verdict\[/u);
   assert.match(result.all, /&\[data-result-badge="upcoming"\] \{\s*color: \$\{\(\{ theme \}\) => theme\.color\.verdict\.upcoming\.text\}/u);
@@ -228,28 +231,48 @@ test("the phone tile puts the result tag in the top-right corner, outside the de
   assert.match(await cardSource, /<\/Pick>\s*<Result aria-hidden="true"/u);
 });
 
-test("the phone pick line drops the market caption and the probability word before the pick", async () => {
-  assert.match((await styledBlock("Pick")).tile.split("${table}")[0], /justify-content: flex-end;/u);
-  const market = (await styledBlock("MarketName")).tile.split("${table}")[0];
-  const probability = (await styledBlock("Probability")).tile;
-  assert.match(market, /flex: 0 100 auto;/u);
-  assert.match(probability, /flex: 0 100000 auto;/u);
-  assert.match(probability, /flex-wrap: wrap;/u);
-  assert.match(probability, /overflow: hidden;/u);
-  assert.match(probability, /min-inline-size: min-content;/u);
-  assert.equal(createMessages().text("match.likely"), "likely");
+test("the phone pick panel shows the market icon, market over pick, and the odds and chance in a box", async () => {
+  // Owner decision (2026-10-25): design 09 "Pick Panel" replaces the one-line pick.
+  const pick = (await styledBlock("Pick")).tile.split("${table}")[0];
+  assert.match(pick, /grid-template-areas: "glyph market numbers" "glyph pick numbers";/u);
+  assert.match(pick, /background: \$\{\(\{ \$family \}\) => light\.market\[\$family\]\.soft\};/u);
+  // A locked pick adds the subscribe line across the panel.
+  assert.match(pick, /&\[data-pick-state="subscriber"\] \{\s*grid-template-areas: "glyph market numbers" "glyph pick numbers" "hint hint hint";/u);
+  assert.match((await styledBlock("CardGlyph")).tile, /grid-area: glyph;/u);
+  assert.match((await styledBlock("MarketName")).tile, /grid-area: market;/u);
+  assert.match((await styledBlock("PickShort")).tile, /grid-area: pick;/u);
+  assert.match((await styledBlock("GatedPick")).tile, /grid-area: pick;/u);
+  assert.match((await styledBlock("PickNumbers")).tile, /grid-area: numbers;/u);
+  assert.match((await styledBlock("SubscribeHint")).tile, /grid-area: hint;/u);
+  // The market and pick shorten with an ellipsis, so the numbers box always stays whole.
+  for (const name of ["MarketName", "PickShort"]) assert.match((await styledBlock(name)).tile, /\$\{ellipsis\}/u);
+  // The numbers box replaces the desktop probability cell on phones.
+  assert.match((await styledBlock("Probability")).tile, /\$\{tile\} \{ display: none; \}/u);
+  const messages = createMessages();
+  assert.deepEqual(["match.likely", "match.chance", "details.odds", "match.subscribeToSee"].map((key) => messages.text(key)),
+    ["likely", "chance", "Odds", "Subscribe to see the prediction"]);
 });
 
-test("enlarged text moves the phone kickoff onto its own line instead of under the result tag", async () => {
+test("phone tiles keep design 09's light palette and strong frame in both themes", async () => {
+  // Owner decision (2026-10-25): white cards on a dark page too; only the desktop table follows the theme.
+  const source = await cardSource;
+  assert.match(source, /const light = lightTheme\.color;/u);
+  const card = (await styledBlock("Card")).tile.split("${table}")[0];
+  assert.match(card, /color: \$\{light\.text\};\s*background: \$\{light\.surface\};/u);
+  assert.match(card, /solid \$\{phoneCardFrame\.border\};/u);
+  // The list item draws the shadow, because its content-visibility clips anything a card paints outside it.
+  const list = await readFile(new URL("../src/components/match/match-card-list.tsx", import.meta.url), "utf8");
+  assert.match(list, /> li:has\(> article:only-child\) \{ border-radius: \$\{phoneCardFrame\.radius\}; box-shadow: \$\{phoneCardFrame\.shadow\}; \}/u);
+  assert.doesNotMatch(card, /box-shadow/u);
+});
+
+test("enlarged text wraps the phone kickoff under the league instead of under the result tag", async () => {
   const source = await cardSource;
   assert.match((await styledBlock("Card")).tile, /container: match-card \/ inline-size;/u);
   assert.match(source, /const narrowTile = "@container match-card \(max-width: 18rem\)";/u);
-  // The league stays beside the tag; the kickoff takes a full-width second row and the teams and pick move down one.
-  assert.match((await styledBlock("Meta")).tile, /\$\{narrowTile\} \{ display: contents; \}/u);
-  assert.match((await styledBlock("League")).tile, /\$\{narrowTile\} \{ grid-area: meta;/u);
-  assert.match((await styledBlock("When")).tile, /\$\{narrowTile\} \{ grid-column: 1 \/ -1; grid-row: 2;/u);
-  assert.match((await styledBlock("Teams")).tile, /\$\{narrowTile\} \{ grid-row: 3; \}/u);
-  assert.match((await styledBlock("Pick")).tile, /\$\{narrowTile\} \{ grid-row: 4; \}/u);
+  // A long league shortens first; on a narrow tile the kickoff wraps under it and the dot between them is dropped.
+  assert.match((await styledBlock("Meta")).tile, /\$\{narrowTile\} \{ flex-wrap: wrap; \}/u);
+  assert.match((await styledBlock("MetaDot")).tile, /\$\{narrowTile\} \{ display: none; \}/u);
 });
 
 test("long team names stay on one line with full-name tooltip and accessible labels", async () => {

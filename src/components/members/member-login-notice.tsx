@@ -33,7 +33,7 @@ const LoginNotice = styled(Notice)`
   button { flex: none; min-block-size: 44px; margin: 0; }
 `;
 
-/** Global placement also confirms phone-admin logins and logins returning to a match. */
+/** Global placement also confirms phone-admin logins, logins returning to a match and sign-outs landing on the matches. */
 export function MemberLoginNotice() {
   const pathname = usePathname();
   const current = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
@@ -44,7 +44,7 @@ export function MemberLoginNotice() {
   }, [pathname]);
   if (!current) return null;
   return <LoginNotice as="div" role="status" aria-live="polite" aria-atomic="true" data-login-notice>
-    <span>{messages.text(current === "other-device-signed-out" ? "account.otherDeviceSignedOut" : "account.loginSuccessful")}</span>
+    <span>{messages.text(current === "other-device-signed-out" ? "account.otherDeviceSignedOut" : current === "signed-out" ? "account.signedOutBrowsing" : "account.loginSuccessful")}</span>
     <Button type="button" variant="secondary" onClick={() => update(null)}>{messages.text("account.dismissNotice")}</Button>
   </LoginNotice>;
 }

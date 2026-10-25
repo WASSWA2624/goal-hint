@@ -5,7 +5,8 @@ import styled from "styled-components";
 import { teamInitials } from "@/domain/match-card";
 import { deferImage } from "@/components/ui/deferred-image";
 import { providerImageSource } from "@/components/ui/provider-image";
-/** Containers may set --gh-logo-size; 32px remains the reserved default. --gh-logo-ring outlines the initials only.
+/** Containers may set --gh-logo-size; 32px remains the reserved default. --gh-logo-ring outlines the initials only, and
+ * --gh-logo-fill and --gh-logo-ink colour their disc (the phone tiles keep it light in both themes).
  * `data-team-logo` lets a container's grid place the box. */
 const LogoBox = styled.span<{ $loaded: boolean }>`
   display: grid;
@@ -15,8 +16,8 @@ const LogoBox = styled.span<{ $loaded: boolean }>`
   inline-size: var(--gh-logo-size, 32px);
   block-size: var(--gh-logo-size, 32px);
   border-radius: var(--gh-logo-radius, 0);
-  color: ${({ theme }) => theme.color.mutedText};
-  background: ${({ theme, $loaded }) => $loaded ? "transparent" : theme.color.surfaceMuted};
+  color: var(--gh-logo-ink, ${({ theme }) => theme.color.mutedText});
+  background: ${({ theme, $loaded }) => $loaded ? "transparent" : `var(--gh-logo-fill, ${theme.color.surfaceMuted})`};
   box-shadow: ${({ $loaded }) => $loaded ? "none" : "var(--gh-logo-ring, none)"};
   font-size: var(--gh-logo-font, ${({ theme }) => theme.typography.size.small});
   font-weight: ${({ theme }) => theme.typography.weight.bold};

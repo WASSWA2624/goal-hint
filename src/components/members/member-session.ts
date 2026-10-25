@@ -1,3 +1,4 @@
+import type { SubscriptionOffer } from "@/domain/subscription-offer";
 import type { SubscriptionSummary } from "@/domain/subscription-summary";
 
 /** Client-only account state. Public page HTML and browser storage never contain it. */
@@ -22,8 +23,16 @@ function readSubscription(value: unknown): SubscriptionSummary | null {
   // Credit fields default when absent, so an older server during a deploy never blanks the whole summary.
   const creditUgx = "creditUgx" in value && Number.isSafeInteger(value.creditUgx) ? value.creditUgx as number : 0;
   const autoRenew = "autoRenew" in value && value.autoRenew === true, renewsFromCredit = autoRenew && "renewsFromCredit" in value && value.renewsFromCredit === true;
+  const offer = "offer" in value ? readOffer(value.offer) : null;
   return { activeUntil: value.activeUntil && Date.parse(value.activeUntil) > Date.now() ? value.activeUntil : null,
-    paymentPending: value.paymentPending, canSubscribe: value.canSubscribe, creditUgx, autoRenew, renewsFromCredit };
+    paymentPending: value.paymentPending, canSubscribe: value.canSubscribe, creditUgx, autoRenew, renewsFromCredit, ...(offer ? { offer } : {}) };
+}
+
+function readOffer(value: unknown): SubscriptionOffer | null {
+  if (!value || typeof value !== "object" || !("priceUgx" in value) || !("durationDays" in value)) return null;
+  const { priceUgx, durationDays } = value;
+  return Number.isSafeInteger(priceUgx) && Number.isSafeInteger(durationDays) && (priceUgx as number) > 0 && (durationDays as number) > 0
+    ? { priceUgx: priceUgx as number, durationDays: durationDays as number } : null;
 }
 
 function publish() { for (const listener of listeners) listener(); }
@@ -65,7 +74,9 @@ export function refreshMemberSession(): Promise<void> {
         && subscription?.paymentPending === nextSubscription?.paymentPending
         && subscription?.canSubscribe === nextSubscription?.canSubscribe
         && subscription?.creditUgx === nextSubscription?.creditUgx && subscription?.autoRenew === nextSubscription?.autoRenew
-        && subscription?.renewsFromCredit === nextSubscription?.renewsFromCredit) return;
+        && subscription?.renewsFromCredit === nextSubscription?.renewsFromCredit
+        && subscription?.offer?.priceUgx === nextSubscription?.offer?.priceUgx
+        && subscription?.offer?.durationDays === nextSubscription?.offer?.durationDays) return;
       phone = session.phone;
       administrator = nextAdministrator;
       subscription = nextSubscription;

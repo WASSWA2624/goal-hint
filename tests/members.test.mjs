@@ -69,7 +69,7 @@ test("member sign-out clears the Lax cookie and cache even with mode off or fail
   fixture.services.sessions.signOut = async () => { throw new Error("down"); };
   const response = await createMemberSignOutHandler(fixture.resolve)(memberRequest({}));
   assert.equal(response.status, 200);
-  assert.equal((await response.json()).next, "/en/account?view=login&status=signed-out");
+  assert.equal((await response.json()).next, "/en/matches");
   assert.equal(response.headers.get("clear-site-data"), '"cache"');
   assert.match(response.headers.getSetCookie().find(value => value.startsWith("goal-hint-member=")), /^goal-hint-member=; .*SameSite=Lax; Max-Age=0$/);
 });
@@ -85,7 +85,7 @@ test("shared logout clears both identities during storage and service outages, w
     const crossSite = await handler(memberRequest({}, { headers: { "sec-fetch-site": "cross-site" } }));
     assert.equal(crossSite.status, 403); assert.deepEqual(calls, []);
     const response = await handler(memberRequest({}, { json, headers: { cookie: `${prefix}goal-hint-member=member-token; ${prefix}goal-hint-analytics=legacy-token` } }));
-    const next = "/en/account?view=login&status=signed-out";
+    const next = "/en/matches";
     assert.equal(response.status, json ? 200 : 303);
     if (json) assert.equal((await response.json()).next, next); else assert.equal(response.headers.get("location"), next);
     assert.equal(response.headers.get("clear-site-data"), '"cache"');

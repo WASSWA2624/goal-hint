@@ -383,6 +383,16 @@ export const darkTheme: GoalHintTheme = {
 };
 
 /**
+ * The phone card frame shared by match cards and slip cards (owner request, 2026-10-25: strong card chrome). The cards
+ * keep design 09's light palette in both themes, so one frame serves both: a firm border and a lifted shadow.
+ */
+export const phoneCardFrame = {
+  border: "#A9BBD1",
+  radius: "6px",
+  shadow: "0 1px 2px rgb(7 23 71 / 12%), 0 6px 14px -4px rgb(7 23 71 / 18%)",
+} as const;
+
+/**
  * Static media queries for styled rules. Plain strings keep a rule static, so styled-components
  * does not re-flatten it per render the way a `${({ theme }) => …}` breakpoint lookup does.
  */

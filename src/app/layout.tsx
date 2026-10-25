@@ -3,6 +3,7 @@ import { Suspense, type ReactNode } from "react";
 import localFont from "next/font/local";
 import { publicPolicy } from "@/domain/public-policy";
 import { AppProviders } from "@/app/_components/app-providers";
+import { ConsentBootstrapScript } from "@/app/_components/consent-bootstrap-script";
 import { createMessages } from "@/i18n/messages";
 import { canonicalUrl } from "@/domain/discovery";
 import { MetadataRecovery } from "@/components/navigation/metadata-recovery";
@@ -43,7 +44,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang={publicPolicy.defaultLocale} className={manrope.variable}>
       <head>
         <style id="analytics-consent-initial">{consentInitialStyle}</style>
-        <script id="analytics-consent-bootstrap" dangerouslySetInnerHTML={{ __html: consentBootstrapScript() }} />
+        <ConsentBootstrapScript id="analytics-consent-bootstrap" code={consentBootstrapScript()} />
       </head>
       <body>
         <Suspense fallback={null}><MetadataRecovery /></Suspense>
