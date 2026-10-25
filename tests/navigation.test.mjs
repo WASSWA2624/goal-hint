@@ -7,6 +7,18 @@ import {
 import { getLocaleRedirect, isSupportedLocale, resolveLocale } from "../src/i18n/locales.ts";
 import { createMessages } from "../src/i18n/messages.ts";
 import { fitNavigationItems } from "../src/components/navigation/navigation-fit.ts";
+import { dashboardDestination, navigationDestinations } from "../src/components/navigation/navigation-destinations.ts";
+
+test("regular and admin headers share complete destinations, with Dashboard added for administrators", () => {
+  const date = parseReportingDate("2026-10-25"), destinations = navigationDestinations(date, "en");
+  assert.deepEqual(destinations.map(item => item.key), ["best-slips", "today", "live", "results", "slips", "help", "privacy", "terms", "contact"]);
+  assert.deepEqual(destinations.map(item => item.href), ["/en", "/en/matches", "/en/matches?status=live", "/en/predictions/2026-10-24?status=finished", "/en/slips", "/en/help", "/en/privacy", "/en/terms", "/en/contact"]);
+  const ownerDestinations = [...destinations, dashboardDestination("Dashboard")];
+  assert.deepEqual(ownerDestinations.slice(0, -1), destinations);
+  assert.deepEqual(ownerDestinations.at(-1), { key: "dashboard", href: "/admin/payments", label: "Dashboard", tab: "Dashboard", icon: "dashboard", tone: "blue" });
+  const zoned = navigationDestinations(date, "en", "Africa/Kampala");
+  assert.ok(zoned.find(item => item.key === "today").href.includes("tz=Africa%2FKampala"));
+});
 
 test("desktop keeps at most five primary destinations and reserves space for More", () => {
   const dimensions = { widths: Array(10).fill(60), moreWidth: 60, gap: 8 };

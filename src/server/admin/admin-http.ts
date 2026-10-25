@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import { autoRenewFor } from "../members/auto-renew.ts";
 import { membersPurgeFor } from "../members/purge.ts";
@@ -50,18 +51,23 @@ export type AdminPage =
   | Readonly<{ owner: null; services: AnalyticsServices }>;
 
 /**
- * The page side of the guard, as in `src/app/analytics/page.tsx`: render at request time, verify the owner session from
+ * The page side of the guard: render at request time, verify the owner session from
  * its account cookie, otherwise let the page redirect to the shared login.
  */
-export async function adminPageGate(searchParams: Promise<Record<string, string | string[] | undefined>>,
-  { services = getAnalyticsServices }: { services?: OwnerServices } = {}): Promise<AdminPage> {
+const readAdminPage = cache(async (services: OwnerServices): Promise<AdminPage> => {
   await connection();
-  await searchParams;
   const resolved = await services();
   const jar = await cookies();
   const owner = await verifyOwner(resolved, jar.get(memberCookieName(resolved.config.production))?.value);
   if (owner) { if (resolved.database) { membersPurgeFor(resolved.database).maybePurge(); autoRenewFor(resolved.database).maybeSweep(); } return { owner, services: resolved }; }
   return { owner: null, services: resolved };
+});
+
+/** Layout, metadata and page share one verification within this request; every navigation is still gated. */
+export async function adminPageGate(searchParams?: Promise<Record<string, string | string[] | undefined>>,
+  { services = getAnalyticsServices }: { services?: OwnerServices } = {}): Promise<AdminPage> {
+  await searchParams;
+  return readAdminPage(services);
 }
 
 /** Owner actions send small JSON; a larger or slower body is refused before it is parsed. */

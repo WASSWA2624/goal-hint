@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "@/components/navigation/navigation-link";
 import styled from "styled-components";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
@@ -14,10 +15,13 @@ import { MetaLine, monoFont, Panel, PanelBody, PanelHead } from "./desk-styles";
 export type Revealed = Readonly<{ password: string; accountId: string; phone: string | null; created: boolean; sessionsDeleted: number; expiresAt: string }>;
 
 export function PasswordReset({ path, phone, action, reveal }: { path: string; phone?: string; action: CodeAction; reveal: (value: Revealed) => void }) {
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (action.busy) return;
     const form = event.currentTarget, confirmed = new FormData(form).get("confirmed") === "on";
     const reply = await action.send(path, { action: "temporary-password", ...(phone ? { phone } : {}), confirmed });
+    if (!mounted.current) return;
     if (reply.ok && reply.body.status === "reset" && typeof reply.body.temporaryPassword === "string" && typeof reply.body.accountId === "string") {
       form.reset();
       reveal({ password: reply.body.temporaryPassword, accountId: reply.body.accountId, phone: phone ?? null, created: reply.body.created === true,
@@ -46,7 +50,7 @@ export function TemporaryPassword({ value, done }: { value: Revealed; done: () =
         {value.expiresAt && <><span>Expires {formatPeriodEnd(new Date(value.expiresAt))}</span><span aria-hidden="true">·</span></>}
         <span>{value.sessionsDeleted} device{value.sessionsDeleted === 1 ? "" : "s"} signed out</span>
       </MetaLine>
-      {value.created && <p><a href={`/admin/subscribers?accountId=${value.accountId}`}>Open the new account</a></p>}
+      {value.created && <p><Link href={`/admin/subscribers?accountId=${value.accountId}`} prefetch={false}>Open the new account</Link></p>}
       <DoneButton type="button" onClick={done}>Done</DoneButton>
     </PanelBody>
   </RevealPanel>;

@@ -50,8 +50,8 @@ export const generateMetadata=route.generateMetadata;export default route.Page;
 ''')
     for page in ("privacy", "terms"):
         write(f"en/{page}/page.tsx", f'export {{default,generateMetadata}} from "@/app/[locale]/{page}/page";\n')
-    write("admin/page.tsx", 'export {default,metadata} from "@/app/admin/page";\n')
-    write("admin/layout.tsx", 'export {default,metadata} from "@/app/admin/layout";\n')
+    write("admin/page.tsx", 'export {default,metadata} from "@/app/(owner)/admin/page";\n')
+    write("admin/layout.tsx", 'export {default,metadata} from "@/app/(owner)/admin/layout";\n')
     for page in ("account", "subscribe"):
         write(f"en/{page}/page.tsx", f'export {{default,generateMetadata}} from "@/app/[locale]/{page}/page";\nexport const dynamic="force-dynamic";\n')
     config = directory / "next.config.mjs"

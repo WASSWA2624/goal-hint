@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import styled, { css } from "styled-components";
+import { usePathname } from "next/navigation";
 import Link from "@/components/navigation/navigation-link";
+import { HomeLink } from "@/components/navigation/shell-styles";
 import {
   CardIcon, ChartIcon, ChevronDownIcon, GridIcon, KeyIcon, LayersIcon, ListIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
 } from "@/components/ui/icons";
@@ -10,12 +12,8 @@ import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dis
 import { adminSections, type AdminSection } from "@/domain/admin-navigation";
 import { media } from "@/styles/theme";
 import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
-
-/** A background tab shows "(n) Payments · …" while payments wait; the page's own title stays after it, and returns at 0. */
-function pendingTitle(title: string, count: number, payments: boolean) {
-  const base = title.replace(payments ? /^(?:\(\d+\) )?Payments · /u : /^\(\d+\) Payments · /u, "");
-  return `${count > 0 ? `(${count}) ` : ""}${count > 0 || payments ? "Payments · " : ""}${base}`;
-}
+import { usePasswordRequestCount } from "./admin-page-state";
+import { watchPendingPaymentTitle } from "./pending-title";
 
 const sectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
   overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon, "password-resets": KeyIcon,
@@ -63,16 +61,19 @@ function SectionMenu({ current, passwordRequests }: { current: AdminSection; pas
  * The owner workspace: a section sidebar from desktop up, one section menu on phones, and the page column. Every page
  * keeps the live pending-payments count in its tab title.
  */
-export function AdminWorkspace({ current, children, pendingCount, passwordRequests = null }: {
-  current: AdminSection; children: ReactNode; pendingCount?: number; passwordRequests?: number | null;
+export function AdminWorkspace({ current: initialSection, children, pendingCount }: {
+  current?: AdminSection; children: ReactNode; pendingCount?: number; passwordRequests?: number | null;
 }) {
+  const pathname = usePathname();
+  const current = adminSections.find(section => section.href === pathname)?.key ?? initialSection ?? "overview";
+  const { count: passwordRequests } = usePasswordRequestCount();
   const count = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, () => pendingCount ?? null);
   useEffect(() => {
     if (pendingCount !== undefined) seedPendingPayments(pendingCount);
   }, [pendingCount]);
   useEffect(() => {
-    document.title = pendingTitle(document.title, count ?? 0, current === "payments");
-  }, [current, count]);
+    return watchPendingPaymentTitle(document, count ?? 0, current === "payments", () => window.location.pathname === pathname);
+  }, [current, count, pathname]);
   return (
     <Frame data-analytics-ignore>
       <Sidebar aria-label="Admin sections">
@@ -95,9 +96,12 @@ export const AdminHeaderContent = styled.div`
   inline-size: 100%;
   min-block-size: ${({ theme }) => theme.header.phoneHeight};
   padding-inline: 12px 8px;
+  ${media.belowDesktop} { > ${HomeLink} { flex-shrink: 1; min-inline-size: 0; } }
   ${media.desktop} { gap: 12px; min-block-size: var(--app-header-content-height, 4rem); padding-inline: 24px 20px; }
 `;
 export const AdminMark = styled.span`
+  flex: none;
+  white-space: nowrap;
   color: ${({ theme }) => theme.header.mutedText};
   font-size: ${({ theme }) => theme.typography.scale.caption};
   font-weight: ${({ theme }) => theme.typography.weight.heavy};
@@ -219,7 +223,7 @@ const MenuPopup = styled.nav`
 `;
 const Main = styled.main`
   min-inline-size: 0;
-  padding: 20px 16px 40px;
+  padding: 20px 16px calc(40px + 3.5rem + 1px + env(safe-area-inset-bottom));
   &:focus { outline: none; }
   ${media.desktop} { padding: 24px 28px 48px; }
 `;

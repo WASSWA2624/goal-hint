@@ -34,7 +34,7 @@ test("legacy login redirects refuse cross-site posts before reading their body",
 });
 
 test("private pages use the common phone/password screen without rendering a second credential form", async () => {
-  for (const file of ["src/app/admin/page.tsx", "src/app/admin/subscribers/page.tsx", "src/app/analytics/page.tsx"]) {
+  for (const file of ["src/app/(owner)/admin/page.tsx", "src/app/(owner)/admin/subscribers/page.tsx", "src/app/(owner)/analytics/page.tsx"]) {
     const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
     assert.match(source, /redirectToAccountLogin\(\)/u, file);
     assert.doesNotMatch(source, /AnalyticsLogin|Owner username|Admin sign-in/u, file);

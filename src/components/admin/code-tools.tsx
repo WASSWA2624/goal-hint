@@ -1,6 +1,7 @@
 "use client";
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "@/components/navigation/navigation-link";
 import styled, { css } from "styled-components";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatPhone } from "@/domain/phone";
@@ -15,6 +16,7 @@ import type { OwnerCode } from "@/domain/owner-members";
 import { ActionButton, adminControl, Badge, DangerButton, FieldBlock, FormStack, Hint, postAdmin, replyMessage, type AdminReply } from "./admin-form";
 import { DeskColumn, DeskGrid, Drawer, Panel, PanelBody, PanelHead, RowList, RowMeta, RowTitle, TextAction } from "./desk-styles";
 import { refreshPendingPayments } from "./pending-payments";
+import { useAdminRefresh } from "./use-admin-refresh";
 /** Keep the access decision visible alongside the separate payment notification outcome. */
 export function grantNotice(body: AdminReply["body"]): string | null {
   const credit = typeof body.creditAddedUgx === "number" && typeof body.balanceUgx === "number"
@@ -25,26 +27,47 @@ export function grantNotice(body: AdminReply["body"]): string | null {
   const grant = n ? line : `${line}. Devices already unlocked keep access; the member's next sign-in unlocks one.`;
   return [grant, credit, paymentNotificationNotice(body.notification)].filter(Boolean).join(" · ");
 }
-export function useCodeAction() {
+export function useCodeAction(onChanged?: () => Promise<void>) {
   const router = useRouter(), [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [notice, setNotice] = useState(""), [duplicateId, setDuplicateId] = useState<string | null>(null);
+  const inFlight = useRef(false), mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const { refreshing, refresh: refreshAdmin } = useAdminRefresh(message => setMessage(`The change was saved. ${message}`));
   /** `done` is the notice a plain success shows; a new access period always shows its own. */
-  async function send(path: string, body: unknown, done = "") {
+  async function send(path: string, body: unknown, done = "", refresh = true, onSaved?: () => void): Promise<AdminReply> {
+    // Disabled controls update on the next render; the ref also blocks submissions in the same event turn.
+    if (inFlight.current || refreshing) return { ok: false, status: 409, body: { message: "An action is already in progress." } };
+    inFlight.current = true;
     setBusy(true); setMessage(""); setNotice(""); setDuplicateId(null);
-    const reply = await postAdmin(path, body); setBusy(false);
-    if (reply.ok) {
-      setNotice(grantNotice(reply.body) ?? [done, paymentNotificationNotice(reply.body.notification)].filter(Boolean).join(" · "));
-      if (path.startsWith("/api/admin/payments/")) void refreshPendingPayments(true);
-      router.refresh();
-    }
-    else { setMessage(replyMessage(reply, "The action was refused.")); if (typeof reply.body.submissionId === "string") setDuplicateId(reply.body.submissionId); }
-    return reply;
+    try {
+      const reply = await postAdmin(path, body);
+      if (reply.ok) {
+        setNotice(grantNotice(reply.body) ?? [done, paymentNotificationNotice(reply.body.notification)].filter(Boolean).join(" · "));
+        // Apply local selection/URL changes before revalidation so they cannot interrupt its router action.
+        if (mounted.current) onSaved?.();
+        if (refresh) {
+          if (onChanged) {
+            try { await onChanged(); }
+            catch { setMessage("The change was saved, but the latest data could not be loaded. Refresh to update this screen."); }
+          }
+          if (path.startsWith("/api/admin/payments/")) void refreshPendingPayments(true);
+          // Invalidate server-seeded history entries while retaining the current view if revalidation fails.
+          refreshAdmin();
+        }
+      }
+      else {
+        setMessage(replyMessage(reply, "The action was refused."));
+        if (typeof reply.body.submissionId === "string") setDuplicateId(reply.body.submissionId);
+        if (reply.status === 401 || reply.status === 403 && reply.body.error === "forbidden") router.refresh();
+      }
+      return reply;
+    } finally { inFlight.current = false; setBusy(false); }
   }
-  return { busy, message, notice, duplicateId, send };
+  return { busy: busy || refreshing, message, notice, duplicateId, send };
 }
 export type CodeAction = ReturnType<typeof useCodeAction>;
 /** The last action's outcome; a duplicate transaction ID links the earlier payment. */
 export function ActionNotices({ action }: { action: CodeAction }) {
-  return <>{action.notice && <Notice role="status">{action.notice}</Notice>}{action.message && <Notice role="alert" $tone="error">{action.message}{action.duplicateId && <> <a href={`/admin/payments?tab=approved#${action.duplicateId}`}>Earlier payment</a></>}</Notice>}</>;
+  return <>{action.notice && <Notice role="status">{action.notice}</Notice>}{action.message && <Notice role="alert" $tone="error">{action.message}{action.duplicateId && <> <Link href={`/admin/payments?tab=approved#${action.duplicateId}`} prefetch={false}>Earlier payment</Link></>}</Notice>}</>;
 }
 export function PlanField({ plans, value, allowCustom = true, onValueChange, disabled }: { plans: readonly SubscriptionPlanView[]; value?: string; allowCustom?: boolean; onValueChange?: (value: string) => void; disabled?: boolean }) {
   return <FieldBlock>Plan<select name="planId" defaultValue={value ?? plans[0]?.id ?? ""} disabled={disabled} onChange={event => onValueChange?.(event.currentTarget.value)}>{allowCustom && <option value="">Custom days</option>}
@@ -181,17 +204,30 @@ const RevokeConfirmation = styled.div`
 const codeTone = (status: OwnerCode["status"]) => status === "active" ? "good" : status === "queued" ? "warning" : "muted";
 /** Search and the code list on the main side; the grant form is the side panel, a collapsed drawer above the search on phones. */
 export function CodesEditor({ initialCodes, plans }: { initialCodes: readonly OwnerCode[]; plans: readonly SubscriptionPlanView[] }) {
-  const action = useCodeAction(), desktop = useDesktopLayout(), id = useId(), [grantOpen, setGrantOpen] = useState(false);
+  const router = useRouter(), desktop = useDesktopLayout(), id = useId(), [grantOpen, setGrantOpen] = useState(false);
   const [found, setFound] = useState<readonly OwnerCode[] | null>(null), [status, setStatus] = useState("all"), [search, setSearch] = useState("");
-  const codes = (found ? found.map(c => initialCodes.find(current => current.id === c.id) ?? c) : initialCodes).filter(c => status === "all" || c.status === status);
-  async function find(nextStatus: string) { const r = await action.send("/api/admin/codes", { action: "search", search, status: nextStatus }); if (r.ok) setFound(r.body.codes as OwnerCode[]); }
+  const appliedSearch = useRef({ search: "", status: "all" });
+  const action = useCodeAction(async () => {
+    // The default list arrives with the route refresh; only a filtered list needs its own query.
+    if (!appliedSearch.current.search && appliedSearch.current.status === "all") { setFound(null); return; }
+    const reply = await postAdmin("/api/admin/codes", { action: "search", ...appliedSearch.current });
+    if (reply.status === 401 || reply.status === 403 && reply.body.error === "forbidden") router.refresh();
+    if (!reply.ok || !Array.isArray(reply.body.codes)) throw new Error("Code refresh failed");
+    setFound(reply.body.codes as OwnerCode[]);
+  });
+  const codes = (found ?? initialCodes).filter(c => status === "all" || c.status === status);
+  async function find(nextStatus: string) {
+    const query = { search, status: nextStatus };
+    const reply = await action.send("/api/admin/codes", { action: "search", ...query }, "", false);
+    if (reply.ok && Array.isArray(reply.body.codes)) { appliedSearch.current = query; setFound(reply.body.codes as OwnerCode[]); }
+  }
   const grant = <ManualCodeForm plans={plans} action={action} />;
   return <Codes data-analytics-ignore><ActionNotices action={action} />
     <DeskGrid $asideFirst>
       <Results>
         <SearchForm method="post" action="/api/admin/codes" onSubmit={event => { event.preventDefault(); void find(status); }} role="search" aria-label="Find codes">
-          <FieldBlock>Phone or reference<input value={search} onChange={e => setSearch(e.target.value)} maxLength={40} autoComplete="off" /></FieldBlock>
-          <FieldBlock>Status<select value={status} onChange={e => { const value = e.target.value; setStatus(value); void find(value); }}>{["all", "active", "queued", "expired", "revoked"].map(s => <option key={s}>{s}</option>)}</select></FieldBlock>
+          <FieldBlock>Phone or reference<input value={search} onChange={e => setSearch(e.target.value)} maxLength={40} autoComplete="off" disabled={action.busy} /></FieldBlock>
+          <FieldBlock>Status<select value={status} disabled={action.busy} onChange={e => { const value = e.target.value; setStatus(value); void find(value); }}>{["all", "active", "queued", "expired", "revoked"].map(s => <option key={s}>{s}</option>)}</select></FieldBlock>
           <ActionButton type="submit" disabled={action.busy}><SearchIcon />Search</ActionButton>
         </SearchForm>
         {codes.length > 0 && <Hint as="p">Revoke ends a period at once; devices stay unlocked only while another period is live.</Hint>}
@@ -199,7 +235,7 @@ export function CodesEditor({ initialCodes, plans }: { initialCodes: readonly Ow
           const live = code.status === "active" || code.status === "queued";
           return <CodeRow key={code.id} id={`${id}-${code.id}`} tabIndex={-1}>
             <RowTitle>{code.reference}<Badge $tone={codeTone(code.status)}>{code.status}</Badge></RowTitle>
-            <CodeLine><a href={`/admin/subscribers?accountId=${code.accountId}`}>{code.phone ? formatPhone(code.phone) : "Erased account"}</a> · {code.planName}{live && ` · ${code.daysLeft} day${code.daysLeft === 1 ? "" : "s"} left`}</CodeLine>
+            <CodeLine><Link href={`/admin/subscribers?accountId=${code.accountId}`} prefetch={false}>{code.phone ? formatPhone(code.phone) : "Erased account"}</Link> · {code.planName}{live && ` · ${code.daysLeft} day${code.daysLeft === 1 ? "" : "s"} left`}</CodeLine>
             <RowMeta>{formatPeriodEnd(new Date(code.startsAt))} – {formatPeriodEnd(new Date(code.endsAt))}</RowMeta>
             {code.status !== "revoked" && <CodeActions code={code} action={action} onRevoked={() => document.getElementById(`${id}-${code.id}`)?.focus()} />}
           </CodeRow>;

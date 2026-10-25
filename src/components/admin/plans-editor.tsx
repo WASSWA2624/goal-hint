@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
+import { useRouter } from "next/navigation";
 import styled from "styled-components";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { ArrowDownIcon, ArrowUpIcon, LayersIcon, PencilIcon, PlusIcon } from "@/components/ui/icons";
@@ -8,6 +9,7 @@ import { formatPlanLength, formatUgx, planRules, type SubscriptionPlanView } fro
 import { media } from "@/styles/theme";
 import { ActionButton, Badge, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage } from "./admin-form";
 import { DeskGrid, DeskHead, DeskTitle, EmptyPanel, Panel, panelRadius, ResponsiveDrawer, TextAction } from "./desk-styles";
+import { useAdminRefresh } from "./use-admin-refresh";
 
 type Draft = Readonly<{ name: string; durationDays: string; priceUgx: string }>;
 type Status = Readonly<{ tone: "info" | "error"; text: string; where: "add" | "list" }> | null;
@@ -30,9 +32,14 @@ const firstInvalid = (prefix: string, errors: Record<string, string>) => {
  * lives here because its active count follows every change.
  */
 export function PlansEditor({ initialPlans }: { initialPlans: readonly SubscriptionPlanView[] }) {
+  const router = useRouter(), inFlight = useRef(false);
   const [plans, setPlans] = useState(initialPlans);
   const [status, setStatus] = useState<Status>(null);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { refreshing, refresh: refreshAdmin } = useAdminRefresh(message => setStatus(current => ({
+    tone: "error", text: `The change was saved. ${message}`, where: current?.where ?? "list",
+  })));
+  const busy = saving || refreshing;
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Readonly<{ id: string; draft: Draft; errors: Record<string, string> }> | null>(null);
@@ -46,12 +53,16 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
   const control = (key: string) => (node: HTMLButtonElement | null) => { if (node) controls.current.set(key, node); else controls.current.delete(key); };
 
   async function send(body: Record<string, unknown>, done: string, where: "add" | "list"): Promise<Record<string, string> | null> {
-    setBusy(true); setStatus(null);
+    inFlight.current = true;
+    setSaving(true); setStatus(null);
     const reply = await postAdmin("/api/admin/plans", body);
-    setBusy(false);
+    inFlight.current = false;
+    setSaving(false);
+    if (reply.status === 401 || reply.status === 403 && reply.body.error === "forbidden") router.refresh();
     if (reply.ok && Array.isArray(reply.body.plans)) {
       setPlans(reply.body.plans as SubscriptionPlanView[]);
       setStatus({ tone: "info", text: done, where });
+      refreshAdmin();
       return null;
     }
     const errors = replyErrors(reply);
@@ -61,6 +72,7 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
 
   async function create(event: FormEvent) {
     event.preventDefault();
+    if (inFlight.current || busy) return;
     const refused = await send({ action: "create", plan: fieldsOf(draft) }, `Added ${draft.name.trim()}.`, "add");
     setErrors(refused ?? {});
     if (!refused) setDraft(emptyDraft);
@@ -68,7 +80,7 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
   }
   async function saveEdit(event: FormEvent) {
     event.preventDefault();
-    if (!editing) return;
+    if (inFlight.current || busy || !editing) return;
     const { id } = editing, refused = await send({ action: "edit", id, plan: fieldsOf(editing.draft) }, "Plan saved.", "list");
     setEditing(refused ? { ...editing, errors: refused } : null);
     refocus.current = () => (refused ? firstInvalid(`edit-${id}`, refused) ?? document.getElementById(`edit-${id}-save`) : controls.current.get(`${id}:edit`));
@@ -78,6 +90,7 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
     refocus.current = () => controls.current.get(`${id}:edit`);
   }
   function move(index: number, offset: -1 | 1) {
+    if (inFlight.current || busy) return;
     const ids = plans.map(({ id }) => id), id = ids[index]!;
     ids.splice(index, 1);
     ids.splice(index + offset, 0, id);
@@ -87,6 +100,7 @@ export function PlansEditor({ initialPlans }: { initialPlans: readonly Subscript
     refocus.current = () => { const button = controls.current.get(`${id}:${pressed}`); return button && !button.disabled ? button : controls.current.get(`${id}:${other}`); };
   }
   function toggle(plan: SubscriptionPlanView) {
+    if (inFlight.current || busy) return;
     void send({ action: plan.active ? "deactivate" : "activate", id: plan.id }, `${plan.name} ${plan.active ? "deactivated" : "activated"}.`, "list");
     refocus.current = () => controls.current.get(`${plan.id}:toggle`);
   }

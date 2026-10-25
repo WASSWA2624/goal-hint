@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import styled from "styled-components";
+import Link from "@/components/navigation/navigation-link";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
 import { KeyIcon, PhoneIcon, UserIcon } from "@/components/ui/icons";
 import { media } from "@/styles/theme";
 import { ActionNotices, useCodeAction } from "./code-tools";
+import { usePasswordRequestCount } from "./admin-page-state";
 import { DeskColumn, DeskGrid, EmptyPanel, MetaLine, Panel, TextAction } from "./desk-styles";
 import { PasswordReset, TemporaryPassword, type Revealed } from "./subscriber-credentials";
 
@@ -15,7 +17,9 @@ import { PasswordReset, TemporaryPassword, type Revealed } from "./subscriber-cr
  * requests take the full width while none is showing.
  */
 export function PasswordResetRequests({ requests }: { requests: readonly Readonly<{ id: string; phone: string; requestedAt: string }>[] }) {
-  const action = useCodeAction(), [revealed, setRevealed] = useState<Revealed | null>(null), [handled, setHandled] = useState<string[]>([]);
+  const { setCount } = usePasswordRequestCount();
+  const action = useCodeAction(async () => { setCount(value => value === null ? null : Math.max(0, value - 1)); });
+  const [revealed, setRevealed] = useState<Revealed | null>(null), [handled, setHandled] = useState<string[]>([]);
   const pending = requests.filter(request => !handled.includes(`${request.id}:${request.requestedAt}`));
   return <Desk data-analytics-ignore><ActionNotices action={action} />
     <Layout $asideFirst $single={!revealed}>
@@ -26,7 +30,7 @@ export function PasswordResetRequests({ requests }: { requests: readonly Readonl
             <MetaLine>Requested {formatPeriodEnd(new Date(request.requestedAt))}</MetaLine>
           </div>
           <Links>
-            <TextAction as="a" href={`/admin/subscribers?accountId=${request.id}`}><UserIcon />View account</TextAction>
+            <TextAction as={Link} href={`/admin/subscribers?accountId=${request.id}`} prefetch={false}><UserIcon />View account</TextAction>
             <TextAction as="a" href={`tel:+${request.phone}`}><PhoneIcon />Call member</TextAction>
           </Links>
           <Confirm><PasswordReset path={`/api/admin/subscribers/${request.id}`} action={action} reveal={value => {

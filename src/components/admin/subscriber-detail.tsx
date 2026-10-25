@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import Link from "@/components/navigation/navigation-link";
 import type { OwnerSubscriber } from "@/domain/owner-members";
 import type { SubscriptionPlanView } from "@/domain/subscription-plans";
 import { formatPhone } from "@/domain/phone";
@@ -119,7 +120,7 @@ export function SubscriberDetail({ account, plans, action, onDeleted, onReveal }
         {!erased && code.status !== "revoked" && <CodeActions code={code} action={action} compact />}
       </RecordRow>)}</RowList> : <TabBody><MutedText>No access periods.</MutedText></TabBody>)}
       {tab === "payments" && (account.submissions.length ? <RowList>{account.submissions.map(payment => <RecordRow key={payment.id}><div>
-        <RowTitle><a href={`/admin/payments?tab=${payment.status === "approved" || payment.status === "reversed" ? "approved" : payment.status === "rejected" ? "rejected" : "pending"}#${payment.id}`}>{payment.reference}</a>
+        <RowTitle><Link href={`/admin/payments?tab=${payment.status === "approved" || payment.status === "reversed" ? "approved" : payment.status === "rejected" ? "rejected" : "pending"}#${payment.id}`} prefetch={false}>{payment.reference}</Link>
           <Badge $tone={paymentTones[payment.status as keyof typeof paymentTones] ?? "muted"}>{payment.status}</Badge></RowTitle>
         <RowMeta>{payment.purpose === "topup" ? "Credit top-up" : payment.planName} · UGX {(payment.amountReceivedUgx ?? payment.claimedAmountUgx).toLocaleString("en-UG")} · {formatPeriodEnd(new Date(payment.submittedAt))}</RowMeta>
       </div></RecordRow>)}</RowList> : <TabBody><MutedText>No payment submissions.</MutedText></TabBody>)}

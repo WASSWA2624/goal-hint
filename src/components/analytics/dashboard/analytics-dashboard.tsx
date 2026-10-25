@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import { analyticsFilterKeys, analyticsFilterLabels, analyticsRules, comparisonModes, reportParameters, type AnalyticsFilterKey,
-  type AnalyticsReport, type AnalyticsSummary, type BreakdownKey, type BreakdownRow, type ComparisonMode, type LiveReport,
+  type AnalyticsReport, type AnalyticsSummary, type BreakdownKey, type BreakdownRow, type ComparisonMode,
   type ReportQuery } from "@/domain/analytics";
 import { analyticsPresets, bucketLabel, formatRange, presetRange, rangeDays, type AnalyticsPreset } from "@/domain/analytics-range";
 import { analyticsDatasets, formatDuration, formatPercent } from "@/domain/analytics-datasets";
@@ -10,6 +10,7 @@ import { parseReportingDate, type ReportingDate } from "@/domain/calendar";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { BarList, ColumnChart, EmptyChart, Heatmap, SplitBar, TrendChart } from "./charts";
 import { DataTable } from "./data-table";
+import { getLiveReportSnapshot, getLiveVisitorsSnapshot, getServerLiveSnapshot, subscribeLiveReport } from "./live-report";
 import { Card, CardValue, Cards, Chip, Chips, Definitions, Delta, Field, FilterBar, Grid, LiveList,
   Muted, Notice, PageTitle, Panel, PanelHeader, SegmentButton, Segmented, SeriesTable, SettingsRow, Skeleton, Tab, Tabs, ToolButton,
   WidePanel } from "./dashboard-styles";
@@ -105,7 +106,7 @@ function writeUrlState(selection: Selection, compare: ComparisonMode, filters: F
     parameters.set(`f.${key}`, filter.value);
     if (filter.label !== filter.value) parameters.set(`l.${key}`, filter.label);
   }
-  window.history.replaceState(window.history.state, "", `${window.location.pathname}?${parameters}`);
+  window.history.replaceState(null, "", `${window.location.pathname}?${parameters}`);
 }
 
 function deltaFor(card: (typeof cards)[number], current: number, previous: number | undefined, label: string) {
@@ -149,7 +150,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
   const [load, setLoad] = useState<Load>({ status: "loading", report: null, refreshing: false });
   const [attempt, setAttempt] = useState(0);
   const [metric, setMetric] = useState<TrendMetric>("visitors");
-  const [live, setLive] = useState<LiveReport | null>(null);
+  const refreshReport = useCallback(() => setAttempt(value => value + 1), []);
 
   useEffect(() => {
     const state = readUrlState(today);
@@ -168,8 +169,10 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
     (async () => {
       try {
         const response = await fetch(`/api/analytics/report?${parameters}`, { cache: "no-store", signal: controller.signal });
+        if (controller.signal.aborted) return;
         if (response.status === 401) { window.location.reload(); return; }
         const body = await response.json();
+        if (controller.signal.aborted) return;
         if (!response.ok) throw new Error(typeof body?.message === "string" ? body.message : "Analytics data is unavailable.");
         setLoad({ status: "ready", report: body as AnalyticsReport, refreshing: false });
       } catch (error) {
@@ -181,22 +184,6 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
     return () => controller.abort();
   }, [hydrated, parameters, attempt]);
 
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    let stopped = false;
-    async function poll() {
-      if (document.visibilityState === "visible") {
-        try {
-          const response = await fetch("/api/analytics/live", { cache: "no-store" });
-          if (response.ok) setLive(await response.json() as LiveReport);
-        } catch { /* Keep the last live count. */ }
-      }
-      if (!stopped) timer = setTimeout(poll, 15_000);
-    }
-    void poll();
-    return () => { stopped = true; clearTimeout(timer); };
-  }, []);
-
   const addFilter = useCallback((key: AnalyticsFilterKey, value: string, label: string) => {
     setFilters((current) => ({ ...current, [key]: { value, label } }));
     window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -205,7 +192,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
 
   const report = load.report;
   const busy = load.refreshing;
-  const compareLabel = compare === "year" ? "last year" : "previous period";
+  const compareLabel = (report?.query.compare ?? compare) === "year" ? "last year" : "previous period";
   const exportHref = (dataset: string) => `/api/analytics/export?dataset=${dataset}&${parameters}`;
   const empty = report !== null && report.summary.visits === 0 && report.summary.pageviews === 0;
 
@@ -214,7 +201,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
         <PageTitle>
           <h1>Visitor analytics</h1>
           <p>{formatRange(selection)} · East Africa Time{report ? ` · updated ${new Date(report.generatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>
-          <p aria-live="polite" title="Distinct visitors active in the last five minutes">{live ? count(live.visitors) : "–"} live</p>
+          <p aria-live="polite" title="Distinct visitors active in the last five minutes"><LiveVisitorCount /> live</p>
         </PageTitle>
         <FilterControls selection={selection} compare={compare} filters={filters} today={today} report={report}
           onSelection={setSelection} onCompare={setCompare} onAddFilter={addFilter} onRemoveFilter={removeFilter}
@@ -222,7 +209,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
         <VisuallyHidden role="status">{load.status === "loading" ? "Loading analytics." : busy ? "Updating analytics." : load.status === "ready" ? "Analytics loaded." : ""}</VisuallyHidden>
         {load.status === "error" && <Notice $tone="error" role="alert">
           {load.message ?? "Analytics data is unavailable."}
-          <ToolButton type="button" onClick={() => setAttempt((value) => value + 1)}>Retry</ToolButton>
+          <ToolButton type="button" onClick={refreshReport}>Retry</ToolButton>
         </Notice>}
         {load.status === "loading" && !report ? <LoadingState /> : report && <>
           <Cards as="dl" $busy={busy} aria-busy={busy} aria-label="Summary">
@@ -234,7 +221,7 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
                 {delta && <Delta $tone={delta.tone}>{delta.text}</Delta>}
               </Card>;
             })}
-            <Card><dt>Live now</dt><CardValue>{live ? count(live.visitors) : "–"}</CardValue><Delta $tone="neutral">Active in the last 5 minutes</Delta></Card>
+            <Card><dt>Live now</dt><CardValue><LiveVisitorCount /></CardValue><Delta $tone="neutral">Active in the last 5 minutes</Delta></Card>
           </Cards>
           {empty ? <Panel>
             <EmptyChart>
@@ -282,22 +269,32 @@ export function AnalyticsDashboard({ today }: { today: ReportingDate }) {
               </Panel>
               <Panel>
                 <PanelHeader><h2>Active now</h2><p>Pages with visitors in the last five minutes</p></PanelHeader>
-                {live && live.pages.length > 0 ? <LiveList>{live.pages.map((page) => <li key={page.path}>
-                  <span title={page.path}>{page.title ?? page.path}</span><strong>{count(page.visitors)}</strong></li>)}</LiveList>
-                  : <EmptyChart>Nobody is active right now.</EmptyChart>}
+                <LivePages />
               </Panel>
             </Grid>
             {sections.map((section) => <BreakdownSection key={section.id} section={section} report={report} busy={busy}
               exportHref={exportHref} onFilter={addFilter} />)}
           </>}
         </>}
-        <SettingsPanel />
+        <SettingsPanel onSaved={refreshReport} />
         <Panel as="details">
           <summary><strong>Metric definitions</strong></summary>
           <Definitions>{definitions.map(([term, description]) => <div key={term}><dt>{term}</dt><dd>{description}</dd></div>)}</Definitions>
         </Panel>
     </>
   );
+}
+
+function LiveVisitorCount() {
+  const visitors = useSyncExternalStore(subscribeLiveReport, getLiveVisitorsSnapshot, getServerLiveSnapshot);
+  return visitors === null ? "–" : count(visitors);
+}
+
+function LivePages() {
+  const live = useSyncExternalStore(subscribeLiveReport, getLiveReportSnapshot, getServerLiveSnapshot);
+  return live && live.pages.length > 0 ? <LiveList>{live.pages.map((page) => <li key={page.path}>
+    <span title={page.path}>{page.title ?? page.path}</span><strong>{count(page.visitors)}</strong></li>)}</LiveList>
+    : <EmptyChart>Nobody is active right now.</EmptyChart>;
 }
 
 function FilterControls({ selection, compare, filters, today, report, onSelection, onCompare, onAddFilter, onRemoveFilter, exportHref }: {
@@ -456,30 +453,49 @@ function LoadingState() {
   </div>;
 }
 
-function SettingsPanel() {
+function SettingsPanel({ onSaved }: { onSaved: () => void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [days, setDays] = useState<number | null>(null);
   const [status, setStatus] = useState<{ tone: "info" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const mutation = useRef<AbortController | null>(null);
   useEffect(() => {
-    fetch("/api/analytics/settings", { cache: "no-store" }).then(async (response) => {
+    const controller = new AbortController();
+    fetch("/api/analytics/settings", { cache: "no-store", signal: controller.signal }).then(async (response) => {
+      if (controller.signal.aborted) return;
+      if (response.status === 401) { window.location.reload(); return; }
       if (!response.ok) throw new Error();
       const body = await response.json() as Settings;
+      if (controller.signal.aborted) return;
       setSettings(body); setDays(body.retention.retentionDays);
-    }).catch(() => setStatus({ tone: "error", text: "Settings are unavailable." }));
+    }).catch(() => { if (!controller.signal.aborted) setStatus({ tone: "error", text: "Settings are unavailable." }); });
+    return () => { controller.abort(); mutation.current?.abort(); mutation.current = null; };
   }, []);
 
-  async function post(body: object) {
+  async function post(body: { action: "retention"; days: number } | { action: "purge" }) {
+    if (mutation.current) return;
+    const controller = new AbortController();
+    mutation.current = controller;
+    const submittedDays = body.action === "retention" ? body.days : settings?.retention.retentionDays;
     setSaving(true); setStatus(null);
     try {
-      const response = await fetch("/api/analytics/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch("/api/analytics/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body), signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (response.status === 401) { window.location.reload(); return; }
       const result = await response.json();
+      if (controller.signal.aborted) return;
       if (!response.ok) throw new Error(result?.message ?? "The change was not saved.");
-      setSettings(result); setDays(result.retention.retentionDays);
+      setSettings(result);
+      setDays(current => current === submittedDays ? result.retention.retentionDays : current);
       const purged = result.purged;
       setStatus({ tone: "info", text: `Saved. Removed ${count((purged?.sessions ?? 0) + (purged?.pageviews ?? 0) + (purged?.events ?? 0))} expired records.` });
-    } catch (error) { setStatus({ tone: "error", text: error instanceof Error ? error.message : "The change was not saved." }); }
-    finally { setSaving(false); }
+      onSaved();
+    } catch (error) {
+      if (!controller.signal.aborted) setStatus({ tone: "error", text: error instanceof Error ? error.message : "The change was not saved." });
+    } finally {
+      if (mutation.current === controller) { mutation.current = null; setSaving(false); }
+    }
   }
 
   const choices = settings ? [...new Set([...settings.retentionChoices, settings.retention.retentionDays])].sort((a, b) => a - b) : [];
@@ -499,7 +515,8 @@ function SettingsPanel() {
             </select>
           </Field>
           <ToolButton type="button" $variant="primary" disabled={saving || days === null || days === settings.retention.retentionDays} onClick={() => {
-            if (days !== null && days < settings.retention.retentionDays
+            if (days === null) return;
+            if (days < settings.retention.retentionDays
               && !window.confirm(`Shorten retention to ${days} days? Records older than that are deleted now and cannot be recovered.`)) return;
             void post({ action: "retention", days });
           }}>Save retention</ToolButton>

@@ -1,6 +1,7 @@
 "use client";
 
 import styled, { css } from "styled-components";
+import Link from "@/components/navigation/navigation-link";
 import { media } from "@/styles/theme";
 import { DeskColumn, DeskHead, Panel, Segmented, StatGrid, rowLayout } from "./desk-styles";
 
@@ -72,7 +73,7 @@ export const Workspace = styled.div<{ $selected: boolean }>`
     > ${AccountColumn} { grid-area: 1 / 2 / span 2 / 3; }
   }
 `;
-export const BackLink = styled.a`
+export const BackLink = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 4px;

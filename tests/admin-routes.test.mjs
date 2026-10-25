@@ -25,7 +25,7 @@ async function find(directory, name) {
   }
   return found.sort();
 }
-const pages = await find("src/app/admin", "page.tsx");
+const pages = [...await find("src/app/(owner)/admin", "page.tsx"), ...await find("src/app/(owner)/analytics", "page.tsx")];
 const memberRoutes = await find("src/app/api/account", "route.ts");
 const routes = await find("src/app/api/admin", "route.ts");
 const source = (file) => readFile(path.join(root, file), "utf8");
@@ -61,11 +61,11 @@ test("account verification and recovery use the shared auth handler without expo
 });
 
 test("the scan sees the admin shell, sign-in and sign-out, and the Plans and Settings pages and routes", () => {
-  for (const page of ["src/app/admin/page.tsx", "src/app/admin/plans/page.tsx", "src/app/admin/settings/page.tsx", "src/app/admin/payments/page.tsx", "src/app/admin/codes/page.tsx", "src/app/admin/subscribers/page.tsx", "src/app/admin/audit/page.tsx"]) assert.ok(pages.includes(page), pages.join());
+  for (const page of ["src/app/(owner)/admin/page.tsx", "src/app/(owner)/admin/plans/page.tsx", "src/app/(owner)/admin/settings/page.tsx", "src/app/(owner)/admin/payments/page.tsx", "src/app/(owner)/admin/codes/page.tsx", "src/app/(owner)/admin/subscribers/page.tsx", "src/app/(owner)/admin/audit/page.tsx"]) assert.ok(pages.includes(page), pages.join());
   for (const route of [loginRoute, signOutRoute, plansRoute, settingsRoute]) assert.ok(routes.includes(route), routes.join());
 });
 
-test("every /admin page renders through the shared page gate", async () => {
+test("every admin and analytics page renders through the shared page gate", async () => {
   for (const page of pages) {
     const text = await source(page);
     assert.match(text, /import \{[^}]*\badminPageGate\b[^}]*\} from "@\/server\/admin\/admin-http";/, page);
@@ -97,7 +97,7 @@ test("every /api/admin route except sign-in exports only handlers wrapped in the
 });
 
 test("admin pages, plans and settings use the typed runtime policy instead of reading environment variables directly", async () => {
-  const files = [...pages, ...routes, "src/app/admin/layout.tsx", "src/server/admin/owner-auth.ts", "src/server/admin/admin-http.ts",
+  const files = [...pages, ...routes, "src/app/(owner)/admin/layout.tsx", "src/server/admin/owner-auth.ts", "src/server/admin/admin-http.ts",
     "src/server/http/private-http.ts", "src/components/admin/admin-shell.tsx", "src/domain/private-paths.ts",
     "src/server/admin/audit.ts", "src/server/admin/plans-http.ts", "src/server/admin/settings-http.ts", "src/server/members/settings.ts",
     "src/server/members/plans.ts", "src/domain/subscription-settings.ts", "src/domain/subscription-plans.ts", "src/domain/phone.ts",

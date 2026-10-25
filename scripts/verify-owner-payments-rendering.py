@@ -412,6 +412,34 @@ def payments_rendering(origin):
         fixture_json(origin, "/api/fixture/payments", {"scenario": "baseline"})
 
 
+def owner_navigation(origin):
+    """All owner routes share regular navigation and preserve the production private gate."""
+    routes = ["/admin", "/admin/payments", "/admin/codes", "/admin/subscribers", "/admin/password-resets",
+        "/admin/plans", "/admin/settings", "/admin/audit", "/analytics"]
+    for path in routes:
+        response = request(origin, path)
+        assert response.status == 200, (path, response.status)
+        html = visible_html(response.text)
+        assert html.count('href="#main-content"') == 1, f"{path}: one shared shell"
+        assert len(re.findall(r"<main(?:\s|>)", html)) == 1, path
+        assert len(re.findall(r"<h1(?:\s|>)", html)) == 1, path
+        for layout in ["desktop", "mobile"]:
+            match(rf'data-responsive-navigation="{layout}"', html, path)
+        for destination in ["/en", "/en/matches", "/en/matches?status=live", "/en/slips", "/en/help",
+                "/en/privacy", "/en/terms", "/en/contact", "/admin/payments"]:
+            match(rf'href="{re.escape(destination)}"', html, f"{path}: regular destination {destination}")
+        for destination in routes:
+            match(rf'href="{re.escape(destination)}"', html, f"{path}: owner destination {destination}")
+        signed_out = request(origin, path, headers={"Cookie": ""})
+        assert signed_out.status == 307 and "/en/account" in signed_out.headers.get("Location", ""), path
+    for path in ["/api/analytics/report?from=2026-10-19&to=2026-10-25", "/api/analytics/live"]:
+        status, report = fixture_json(origin, path)
+        assert status == 200 and report["generatedAt"]
+        assert fixture_json(origin, path, headers={"Cookie": ""})[0] == 401
+    assert fixture_json(origin, "/api/analytics/settings")[1]["retention"]["retentionDays"] == 395
+    assert fixture_json(origin, "/api/analytics/settings", headers={"Cookie": ""})[0] == 401
+
+
 def main():
     args=parse_args("owner payments",extra=("--fixture",))
     env=environment(GOAL_HINT_DATABASE_ENABLED="false", GOAL_HINT_ADMIN_PHONES='["256700000991"]',
@@ -426,6 +454,7 @@ def main():
         print(f"Building owner acceptance fixture: {directory}",flush=True)
         build_fixture(directory,env,timeout=300)
     with Server(directory,env,ready="/api/fixture/health") as server:
+        owner_navigation(server.origin)
         subscriber_directory(server.origin)
         for path,labels in [("/admin/payments",["Payments"]),("/admin/codes",["Grant access manually","Extend","Revoke","Phone or reference"]),("/admin",["Active paid subscribers","Revenue · EAT week","Payment numbers updated"]),("/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100",["Search by phone","Grant access / add subscriber","Change number","Reset password","Save note","Delete or erase"]),("/admin/password-resets",["Password requests","set a temporary password","on a call with the member","Call member","View account"]),("/admin/audit",["Audit"])]:
             response=request(server.origin,path);html=visible_html(response.text)
@@ -456,7 +485,7 @@ def main():
         audit_rendering(server.origin)
         payments_rendering(server.origin)
         payments_api(server.origin)
-        print("PASS production owner pages; subscriber actions, Settings saves/modes, audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
+        print("PASS all nine owner routes and regular navigation; subscriber actions, Settings saves/modes, audit filters, payment queue/history decisions, private attachments and confirmation guards.",flush=True)
         if args.serve:
             print(f"Synthetic administrator browser entry: {server.origin}/api/fixture/session", flush=True)
             print(f"Settings browser entry: {server.origin}/api/fixture/session?page=settings&scenario=writable", flush=True)

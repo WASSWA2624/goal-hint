@@ -67,8 +67,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
     event.preventDefault();
     if (action.busy || !canApprove) return;
     onStart();
-    const reply = await action.send(`/api/admin/payments/${p.id}`, { action: "approve", network, transactionId: id, amount: Number(amount), ...(topUp ? {} : { planId }) });
-    if (reply.ok) onResolved();
+    await action.send(`/api/admin/payments/${p.id}`, { action: "approve", network, transactionId: id, amount: Number(amount), ...(topUp ? {} : { planId }) }, "", true, onResolved);
   }
   const copyId = () => { void navigator.clipboard?.writeText(reportedId).then(() => setCopied(true), () => setCopied(false)); };
   /** The phone decision bar opens the reject panel and moves focus into it; Cancel closes it and keeps focus on the bar. */
@@ -140,8 +139,7 @@ export function PaymentReview({ payment: p, plans, action, recovery, nav, onStar
             <summary><CloseIcon />Reject<ChevronDownIcon /></summary>
             <div><form id={`${rejectId}-form`} method="post" action={`/api/admin/payments/${p.id}`} onSubmit={async event => {
               event.preventDefault(); if (action.busy) return; const form = new FormData(event.currentTarget); onStart();
-              const reply = await action.send(`/api/admin/payments/${p.id}`, { action: "reject", reason: form.get("reason"), text: form.get("text"), deleteImage: form.get("deleteImage") === "on" }, `Rejected ${p.reference}.`);
-              if (reply.ok) onResolved();
+              await action.send(`/api/admin/payments/${p.id}`, { action: "reject", reason: form.get("reason"), text: form.get("text"), deleteImage: form.get("deleteImage") === "on" }, `Rejected ${p.reference}.`, true, onResolved);
             }} aria-label={`Reject ${p.reference}`}><FormStack><FieldBlock>Reason<select id={`${rejectId}-reason`} name="reason" disabled={action.busy}>{Object.entries(reasonLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></FieldBlock>
               <FieldBlock>Message · optional<textarea name="text" maxLength={200} disabled={action.busy} rows={2} /></FieldBlock>
               {p.hasImage && <CheckField><input type="checkbox" name="deleteImage" disabled={action.busy} />Delete screenshot</CheckField>}

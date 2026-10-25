@@ -17,12 +17,12 @@ def main():
     scenarios = json.loads(generated.stdout)
     write_json(directory / "app/scenarios.json", scenarios)
     # Exercise the production private-route headers alongside isolated member/owner pages.
-    for route, source in [("admin", "src/app/admin/page.tsx")]:
+    for route, source in [("admin", "src/app/(owner)/admin/page.tsx")]:
         target = directory / "app" / route / "page.tsx"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(f'export {{default, metadata}} from "@/{source.removeprefix("src/").removesuffix(".tsx")}";\n' if route == "admin"
             else 'export {default, generateMetadata} from "@/app/[locale]/account/page";\nexport const dynamic = "force-dynamic";\n', encoding="utf-8")
-    (directory / "app/admin/layout.tsx").write_text('export {default, metadata} from "@/app/admin/layout";\n', encoding="utf-8")
+    (directory / "app/admin/layout.tsx").write_text('export {default, metadata} from "@/app/(owner)/admin/layout";\n', encoding="utf-8")
     (directory / "app/layout.tsx").write_text(
         'import Root from "@/app/layout";\nexport {metadata} from "@/app/layout";\n'
         'import {FixtureControls} from "./fixture-controls";\n'

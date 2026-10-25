@@ -6,6 +6,12 @@ Open the printed `/api/fixture/session` browser entry once to establish the fixt
 
 To repeat checks against an already built fixture, add `--fixture .tmp/owner-payments-<id>`. Omit that option after application changes so the fixture is rebuilt with current sources.
 
+The fixture uses the production `(owner)` layout for all eight `/admin` pages and `/analytics`, so browser checks exercise the same persistent header, regular site navigation, admin section menu, and content region. Analytics report, live, export, and settings endpoints retain the production authentication and request validation over deterministic synthetic reports and process-local retention settings. The HTTP harness checks every owner route, both responsive navigation variants, and signed-out access.
+
+For stability checks, keep references to the banner and main DOM nodes while navigating all nine sections on desktop and mobile. They should remain connected with no document navigation. Check successful mutations followed by browser Back/Forward as well as ordinary links: saved payments, access periods, and settings must remain authoritative when revisiting a cached route. Read-only Codes and Subscriber searches should each issue one JSON request without refreshing the route. Verify that queue refresh preserves entered payment fields, failure feedback retains existing content, and temporary passwords disappear when leaving the selected account. Use only this synthetic fixture for mutation checks.
+
+Queue refresh uses a guarded Server Action plus the small pending-count endpoint. To exercise transport failure, return a synthetic 503 for the current page's POST carrying the `Next-Action` header; the existing review, draft and button focus should remain, and retry should recover without a document request. Clear only the fixture's member cookie to verify that an expired session redirects to `/en/account?view=login` and removes the private screen. The isolated fixture intentionally does not implement that login destination.
+
 - `/admin/subscribers` shows six synthetic records with Open, Blocked and Erased account states and different last sign-in dates.
 - `/admin/subscribers?accountId=00000000-0000-4000-8000-000000000100` preserves the original account detail and management actions.
 - `/admin/subscribers?accountId=00000000-0000-4000-8000-000000000103` selects the blocked account.

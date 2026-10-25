@@ -1,21 +1,17 @@
 import "server-only";
 import type { ReactNode } from "react";
-import { cache } from "react";
-import { connection } from "next/server";
 import { BrandLogo, BrandMark } from "@/components/ui/brand";
 import { AccountLinks } from "@/components/members/account-link";
 import { SubscriptionStatusBar } from "@/components/members/subscription-status-bar";
 import { MemberNavigationRecovery } from "@/components/members/member-controls";
-import type { NavigationDestination } from "@/components/navigation/responsive-navigation";
+import { navigationDestinations } from "@/components/navigation/navigation-destinations";
 import { SessionNavigation } from "@/components/navigation/session-navigation";
 import { NavigationProgress } from "@/components/navigation/navigation-progress";
 import { Container, PageMain } from "@/components/ui/layout";
-import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/calendar";
 import {
-  feedHref, getFeedEntry, homeHref, matchesHref, informationHref, informationPages, slipsHref,
+  homeHref, informationHref, informationPages,
   type NavigationLocation,
 } from "@/domain/navigation";
-import { deviceFeedEntryHref } from "@/domain/device-feed";
 import { createMessages } from "@/i18n/messages";
 import { resolveLocale } from "@/i18n/locales";
 import {
@@ -23,12 +19,8 @@ import {
   ShellFrame, SkipLink, TabBar,
 } from "@/components/navigation/shell-styles";
 
-/** One request-scoped EAT date; never freeze Today in the production build. */
-export const getShellInstant = cache(async () => {
-  await connection();
-  return utcInstantFromEpochMilliseconds(Date.now());
-});
-export const getShellDate = cache(async () => getReportingDate(await getShellInstant()));
+import { getShellDate } from "./shell-time";
+export { getShellDate, getShellInstant } from "./shell-time";
 
 export async function PublicShell({ children, locale, current, today: reportingDate, zone, app = false, compact = false, showAccount = true, wide = false, administratorName }: {
   children: ReactNode;
@@ -49,19 +41,7 @@ export async function PublicShell({ children, locale, current, today: reportingD
   const language = resolveLocale(locale);
   const messages = createMessages(language);
   const today = reportingDate ?? await getShellDate();
-  const todayHref = zone ? deviceFeedEntryHref("today", today, zone, language) : matchesHref(language);
-  const resultsHref = zone ? deviceFeedEntryHref("results", today, zone, language) : feedHref(getFeedEntry(today, "results"), language);
-  const sections = [
-    { key: "best-slips", href: homeHref(language), label: messages.text("bestSlips.title"), tab: messages.text("bestSlips.title"), icon: "slips", tone: "teal" },
-    { key: "today", href: todayHref, label: messages.text("navigation.matches"), tab: messages.text("navigation.matches"), icon: "matches", tone: "teal" },
-    { key: "live", href: zone ? deviceFeedEntryHref("live", today, zone, language) : `${matchesHref(language)}?status=live`, label: messages.text("navigation.live"), tab: messages.text("navigation.live"), icon: "live", tone: "red" },
-    { key: "results", href: resultsHref, label: messages.text("navigation.results"), tab: messages.text("navigation.results"), icon: "results", tone: "violet" },
-    { key: "slips", href: slipsHref(language), label: messages.text("navigation.slips"), tab: messages.text("navigation.slips"), icon: "slips", tone: "teal" },
-  ] as const;
-  const destinations: readonly NavigationDestination[] = [...sections, ...informationPages.map((page) => ({
-    key: page, href: informationHref(page, language), label: messages.text(`navigation.${page}`),
-    tab: messages.text(`navigation.${page}`), icon: page, tone: "blue" as const,
-  }))];
+  const destinations = navigationDestinations(today, language, zone);
 
   return (
     <ShellFrame>

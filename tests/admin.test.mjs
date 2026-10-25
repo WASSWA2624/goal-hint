@@ -323,6 +323,6 @@ test("every private exclusion point covers /admin; member pages stay crawlable b
   assert.equal(isPrivatePage("/en/account"), true); assert.equal(isPrivatePage("/en/accounts"), false);
   const tracker = await readFile(new URL("../src/components/analytics/analytics-tracker.tsx", import.meta.url), "utf8");
   assert.match(tracker, /const excluded = isOwnerPage\(pathname\);/, "The tracker excludes every owner page.");
-  const layout = await readFile(new URL("../src/app/admin/layout.tsx", import.meta.url), "utf8");
+  const layout = await readFile(new URL("../src/app/(owner)/admin/layout.tsx", import.meta.url), "utf8");
   assert.match(layout, /robots: \{ index: false, follow: false, nocache: true \}/, "Every /admin page answers noindex in its metadata.");
 });

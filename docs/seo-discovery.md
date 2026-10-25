@@ -237,7 +237,7 @@ only add Search Console errors. No rating, search action or ranking is invented.
   agents. The issue persisted with blocking bot metadata; no stable framework
   patch was available at review time.
 - `MetadataRecovery` now handles the observed race while retaining the native
-  Metadata API. After client navigation only, it checks singleton title,
+  Metadata API. After public-page client navigation only, it checks singleton title,
   description, canonical and Open Graph URL tags and observes later head
   insertions. Duplicates trigger one ordinary reload of the current destination;
   this replaces the current history entry without changing React-owned nodes.
@@ -248,7 +248,9 @@ only add Search Console errors. No rating, search action or ranking is invented.
   guard, preventing a recovery loop. No timers, storage, framework internals or
   dependencies are added. The tradeoff is one extra document request when the
   framework race actually occurs; this is an application recovery, not an upstream
-  framework fix.
+  framework fix. Private `/admin` and `/analytics` destinations are excluded so
+  recovery cannot discard administrator work. The observer also checks the live
+  browser path before reloading, covering navigation before effect cleanup.
 - Follow-up verification passed the final application production build, lint,
   TypeScript, complete unit suite, six script tests, eight recovery lifecycle
   unit tests, and **92 staging/synthetic-production HTTP checks**. The updated

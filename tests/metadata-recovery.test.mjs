@@ -112,3 +112,29 @@ test("cleanup from a previous navigation cannot disable the next navigation's ob
   assert.equal(recoveries, 1);
   stopCurrent();
 });
+
+test("private owner destinations never reload for metadata duplicates, including a previous public observer", t => {
+  const fixture = metadataHead(t);
+  let pathname = "/en", recoveries = 0;
+  const stop = watchNavigationMetadata(fixture.head, () => recoveries++, () => pathname);
+  fixture.set("title", 2);
+  for (const destination of ["/admin", "/admin/payments", "/admin/codes", "/analytics", "/analytics/report"]) {
+    pathname = destination;
+    fixture.notify();
+    assert.equal(recoveries, 0, destination);
+  }
+  pathname = "/en/matches";
+  fixture.notify();
+  assert.equal(recoveries, 1, "public SEO recovery still handles duplicated metadata");
+  stop();
+});
+
+test("owner exclusion matches path boundaries and does not exempt public lookalike routes", t => {
+  const fixture = metadataHead(t, { title: 2 });
+  for (const pathname of ["/administrator", "/analytics-guide", "/en/account"]) {
+    let recoveries = 0;
+    const stop = watchNavigationMetadata(fixture.head, () => recoveries++, () => pathname);
+    assert.equal(recoveries, 1, pathname);
+    stop();
+  }
+});

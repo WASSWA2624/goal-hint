@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { MobileMoneyLogo } from "@/components/members/mobile-money-logo";
@@ -12,6 +13,7 @@ import { editableSettingFields, isProtectedSettingField, paywallModes, settingLa
   type ModeRequirement, type PaywallMode, type ProtectedSettingField, type SettingsPageData, type SubscriptionSettings } from "@/domain/subscription-settings";
 import { ActionButton, FieldBlock, FieldError, Hint, postAdmin, replyErrors, replyMessage, Requirements, type AdminReply } from "./admin-form";
 import { DeskColumn, DeskGrid, Drawer, FactList, PanelBody, ZoneLabel } from "./desk-styles";
+import { useAdminRefresh } from "./use-admin-refresh";
 import { ConfirmBox, DialField, DialRow, ManagedBadge, ManagedFact, ManagedNote, ModeTile, ModeTiles, NarrowField, NetworkGrid, NetworkTitle,
   RequirementBox, RequirementList, SaveButtons, SaveDock, SavePanel, SectionPanel, SectionTabs, SettingsHint, TwoUp } from "./settings-styles";
 
@@ -84,6 +86,7 @@ const savedTime = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: 
 
 /** Section tabs share one draft and save action; mode changes require a separate confirmation. */
 export function SettingsEditor({ initial, username, sessionAuthorized = false }: { initial: SettingsPageData; username: string; sessionAuthorized?: boolean }) {
+  const router = useRouter(), inFlight = useRef(false);
   const [view, setView] = useState(initial);
   const [draft, setDraft] = useState<Draft>(() => draftOf(initial.settings));
   const [section, setSection] = useState<Section>("payments");
@@ -92,7 +95,9 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
   const [password, setPassword] = useState("");
   const [askPassword, setAskPassword] = useState(false);
   const [status, setStatus] = useState<Status>(null);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const { refreshing, refresh: refreshAdmin } = useAdminRefresh(message => setStatus({ tone: "warning", text: `The change was saved. ${message}` }));
+  const busy = saving || refreshing;
   const [armed, setArmed] = useState<PaywallMode | null>(null);
   const pendingFocus = useRef<string | null>(null);
   const settings = view.settings;
@@ -140,9 +145,11 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
     const notes = [message, ...(cleared.length ? [`${cleared.join(" and ")} cleared after the number changed.`] : []),
       ...(next.requirements ? [] : ["Reload to update availability."])];
     setStatus({ tone: notes.length > 1 ? "warning" : "info", text: notes.join(" ") });
+    refreshAdmin();
   }
 
   function refuse(reply: AdminReply) {
+    if (reply.status === 401 || reply.status === 403 && reply.body.error === "forbidden") router.refresh();
     const body = reply.body;
     if (body.error === "password-required") setAskPassword(true);
     if (body.error === "password-invalid") setPassword("");
@@ -159,21 +166,25 @@ export function SettingsEditor({ initial, username, sessionAuthorized = false }:
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (busy || changed.length === 0) return;
-    setArmed(null); setBusy(true); setStatus(null);
+    if (inFlight.current || busy || changed.length === 0) return;
+    inFlight.current = true;
+    setArmed(null); setSaving(true); setStatus(null);
     const reply = await postAdmin("/api/admin/settings", { action: "save", changes, ...(needsPassword ? { password } : {}) });
-    setBusy(false);
+    inFlight.current = false;
+    setSaving(false);
     if (reply.ok) accept(reply, "Settings saved.", true);
     else refuse(reply);
   }
 
   async function confirmMode() {
-    if (busy || !armed || armed === settings.paywallMode || (armed !== "off" && view.requirements[armed].length)) return;
+    if (inFlight.current || busy || !armed || armed === settings.paywallMode || (armed !== "off" && view.requirements[armed].length)) return;
+    inFlight.current = true;
     const mode = armed;
     pendingFocus.current = `setting-mode-${mode}`;
-    setArmed(null); setBusy(true); setStatus(null);
+    setArmed(null); setSaving(true); setStatus(null);
     const reply = await postAdmin("/api/admin/settings", { action: "mode", mode });
-    setBusy(false);
+    inFlight.current = false;
+    setSaving(false);
     if (reply.ok) accept(reply, `Paid access: ${modeLabels[mode]}. Applies within 30 seconds.`, false);
     else refuse(reply);
   }

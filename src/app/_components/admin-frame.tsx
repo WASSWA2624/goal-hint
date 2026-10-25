@@ -1,19 +1,25 @@
 import "server-only";
 
-import type { ComponentProps } from "react";
-import { AdminShell } from "@/components/admin/admin-shell";
+import { cache, type ReactNode } from "react";
+import { AdminPageState } from "@/components/admin/admin-page-state";
 import type { DatabaseRuntime } from "@/server/database/client";
 import { createSubscribers } from "@/server/admin/subscribers";
 
-/**
- * The admin shell with its section counts. Pages render it only after the owner gate passed; a page that already read
- * the open password requests passes their count instead of a second read.
- */
-export async function AdminFrame({ database, passwordRequests, ...props }: Omit<ComponentProps<typeof AdminShell>, "passwordRequests"> & {
+/** Request-scoped deduplication between the persistent layout and its authorized page. */
+export const readPasswordRequests = cache((database: DatabaseRuntime) => createSubscribers(database).passwordResetRequests().catch(() => null));
+
+export async function readPasswordRequestCount(database: DatabaseRuntime | null | undefined) {
+  return database ? (await readPasswordRequests(database))?.length ?? null : null;
+}
+
+/** Pages refresh badge data while their shared shell remains in the owner layout. */
+export async function AdminFrame({ database, passwordRequests, pendingCount, children }: {
   database: DatabaseRuntime | null | undefined;
+  children: ReactNode;
+  pendingCount?: number;
   passwordRequests?: number | null;
 }) {
   const requests = passwordRequests !== undefined ? passwordRequests
-    : database ? await createSubscribers(database).passwordResetRequests().then(rows => rows.length, () => null) : null;
-  return <AdminShell {...props} passwordRequests={requests} />;
+    : await readPasswordRequestCount(database);
+  return <><AdminPageState passwordRequests={requests} {...(pendingCount !== undefined ? { pendingCount } : {})} />{children}</>;
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { isOwnerPage } from "@/domain/private-paths";
 import { watchNavigationMetadata } from "./watch-navigation-metadata";
 
 /** Recover Next's initial head-hydration race without changing normal navigation. */
@@ -19,10 +20,11 @@ export function MetadataRecovery() {
     const from = previous.current ?? (initial ? initial.pathname + (initialSearch ? `?${initialSearch}` : "") : href);
     previous.current = href;
     navigated.current ||= from !== href;
-    if (!navigated.current) return;
+    // Owner screens are never indexed; recovering their metadata must not discard in-progress admin work.
+    if (!navigated.current || isOwnerPage(pathname)) return;
     // A reload replaces this history entry and starts with server-owned metadata.
     // The new document has no client navigation, so it cannot enter a reload loop.
-    return watchNavigationMetadata(document.head, () => window.location.reload());
+    return watchNavigationMetadata(document.head, () => window.location.reload(), () => window.location.pathname);
   }, [pathname, search]);
   return null;
 }

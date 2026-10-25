@@ -2,6 +2,7 @@
 
 import type { FormEvent, ReactNode } from "react";
 import styled, { css } from "styled-components";
+import Link from "@/components/navigation/navigation-link";
 import { PhoneInput } from "@/components/ui/controls";
 import { ChevronRightIcon, SearchIcon, ShieldIcon, UserIcon } from "@/components/ui/icons";
 import type { OwnerAccount } from "@/domain/owner-members";
@@ -56,7 +57,7 @@ export function SubscriberDirectory({ accounts, selectedId, search, filtering, b
         </HeadEnd>
       </PanelHead>
       {accounts.length ? <RowList data-subscriber-results>{accounts.map(account => <li key={account.id}>
-        <AccountRow href={`/admin/subscribers?${new URLSearchParams({ accountId: account.id })}`} data-subscriber-row={account.id}
+        <AccountRow href={`/admin/subscribers?${new URLSearchParams({ accountId: account.id })}`} prefetch={false} data-subscriber-row={account.id}
           aria-current={selectedId === account.id ? "page" : undefined}>
           <RowTitle>{account.phone ? `+${formatPhone(account.phone)}` : "Erased account"}
             <Badge data-subscriber-status={account.status} $tone={statusTones[account.status as keyof typeof statusTones] ?? "muted"}>{statusLabels[account.status] ?? "Unknown"}</Badge>
@@ -97,7 +98,7 @@ const Count = styled.span`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-variant-numeric: tabular-nums;
 `;
-const AccountRow = styled.a`
+const AccountRow = styled(Link)`
   ${rowAction}
   grid-template-columns: minmax(0, 1fr) 16px;
   > svg { grid-column: 2; grid-row: 1 / span 2; font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; }

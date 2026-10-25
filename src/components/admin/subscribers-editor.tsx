@@ -21,23 +21,28 @@ export { PasswordReset, TemporaryPassword, type Revealed } from "./subscriber-cr
  */
 export function SubscribersEditor({ accounts, detail: selected, plans }: { accounts: readonly OwnerAccount[]; detail: OwnerSubscriber | null; plans: readonly SubscriptionPlanView[] }) {
   const router = useRouter(), action = useCodeAction();
-  const [found, setFound] = useState<readonly OwnerAccount[] | null>(null), [search, setSearch] = useState("");
+  const [found, setFound] = useState<{ accounts: readonly OwnerAccount[]; source: readonly OwnerAccount[] } | null>(null), [search, setSearch] = useState("");
   const [filtering, setFiltering] = useState(false), [adminPhone, setAdminPhone] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Revealed | null>(null), [deletedId, setDeletedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false), addSummary = useRef<HTMLElement>(null);
+  const credentialAccount = selected && !selected.erasedAt ? selected.id : null;
+  const [previousAccount, setPreviousAccount] = useState(credentialAccount);
+  // Query-only navigation keeps this editor mounted; credentials belong only to the currently open account.
+  if (previousAccount !== credentialAccount) { setPreviousAccount(credentialAccount); setRevealed(null); }
   function closeAdding() { if (!action.busy) { setAdding(false); requestAnimationFrame(() => addSummary.current?.focus()); } }
   const detail = selected?.id === deletedId ? null : selected;
   const currentAccounts = new Map(accounts.map(account => [account.id, account]));
-  const listedAccounts = (found ?? accounts).filter(account => account.id !== deletedId).map(account => currentAccounts.get(account.id) ?? account);
+  const listedAccounts = (found?.accounts ?? accounts).filter(account => account.id !== deletedId)
+    .map(account => found?.source === accounts ? account : currentAccounts.get(account.id) ?? account);
   return <Workspace $selected={!!detail} data-subscriber-workspace data-analytics-ignore>
     <WorkspaceTitle><h1>Subscribers</h1></WorkspaceTitle>
     <SubscriberDirectory accounts={listedAccounts} selectedId={detail?.id ?? null} compact={!!detail}
       search={search} onSearchChange={setSearch} filtering={filtering} busy={action.busy} adminPhone={adminPhone}
       onSearch={async query => {
         if (action.busy) return;
-        const reply = await action.send("/api/admin/subscribers", { search: query });
+        const reply = await action.send("/api/admin/subscribers", { search: query }, "", false);
         if (reply.ok) {
-          setFound(reply.body.accounts as OwnerAccount[]); setFiltering(query.trim() !== "");
+          setFound({ accounts: reply.body.accounts as OwnerAccount[], source: accounts }); setFiltering(query.trim() !== "");
           setAdminPhone(typeof reply.body.adminPhone === "string" ? reply.body.adminPhone : null);
         }
       }}>
@@ -55,7 +60,7 @@ export function SubscribersEditor({ accounts, detail: selected, plans }: { accou
       </DrawerPanel>
     </SubscriberDirectory>
     <AccountColumn $quiet={!detail && !action.notice && !action.message}>
-      {detail && <BackLink href="/admin/subscribers"><ChevronLeftIcon />Subscribers</BackLink>}
+      {detail && <BackLink href="/admin/subscribers" prefetch={false}><ChevronLeftIcon />Subscribers</BackLink>}
       <ActionNotices action={action} />
       {revealed && detail && revealed.accountId === detail.id && !detail.erasedAt && <TemporaryPassword key={revealed.password} value={revealed} done={() => setRevealed(null)} />}
       {detail ? <SubscriberDetail key={detail.id} account={detail} plans={plans} action={action} onReveal={setRevealed}

@@ -16,6 +16,9 @@ export const GlobalStyle = createGlobalStyle`
     text-size-adjust: 100%;
   }
 
+  /* Keep owner columns and navigation aligned when moving between short and long screens. */
+  html:has([data-admin-shell]) { scrollbar-gutter: stable; }
+
   body {
     margin: 0;
     min-block-size: 100vh;
