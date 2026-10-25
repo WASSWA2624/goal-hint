@@ -81,10 +81,11 @@ type Props = Readonly<{
   error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialMarkets?: readonly MarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
   initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean; signedIn?: boolean;
+  jointEstimates?: boolean;
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false }: Props) {
+export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
   const enhanced = useSyncExternalStore(subscribeNever, clientReady, serverReady);
@@ -118,6 +119,8 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     } catch { return messages.text("slips.summary.checkDates"); }
   }
   const invalidField = error?.field;
+  const showJoint = jointEstimates || criteria.totalProbMin !== undefined || criteria.totalProbMax !== undefined
+    || initialInputs.totalProbMin !== undefined || initialInputs.totalProbMax !== undefined;
   const invalidLimits = groupFields.limits.some((field) => field === invalidField);
   const invalidKickoff = invalidField === "dateFrom" || invalidField === "dateTo" || invalidField === "timeFrom" || invalidField === "timeTo";
   const invalidMarkets = invalidField === "markets" || invalidField === "outcomes";
@@ -133,7 +136,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const dialogTitle = (group: CriteriaGroup) => group === "limits" ? messages.text("slips.dialog.limits")
     : group === "kickoff" ? messages.text("slips.dialog.kickoffTitle") : messages.text("slips.accordion.markets");
   const summaries = {
-    limits: messages.text("slips.summary.limits", { odds: range("oddsMin", "oddsMax"), probability: range("probMin", "probMax", "%"), combined: range("totalProbMin", "totalProbMax", "%") }),
+    limits: messages.text(showJoint ? "slips.summary.limitsJoint" : "slips.summary.limits", { odds: range("oddsMin", "oddsMax"), probability: range("probMin", "probMax", "%"), combined: range("totalProbMin", "totalProbMax", "%") }),
     kickoff: messages.text("slips.summary.kickoff", { dates: dateSummary(), times: range("timeFrom", "timeTo") }),
     markets: marketsSummary,
   };
@@ -274,12 +277,11 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
             {field("probMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMin") })}
             {field("probMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMax") })}
           </Fields></fieldset>
-          <fieldset><legend>{messages.text("slips.combinedProbabilityPercent")}</legend><Fields>
+          {showJoint && <fieldset data-joint-limit><legend>{messages.text("slips.combinedProbabilityPercent")}</legend><Fields>
             {field("totalProbMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMin") })}
             {field("totalProbMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMax") })}
-          </Fields></fieldset>
+          </Fields><Note>{messages.text("slips.combinedProbabilityHint")}</Note></fieldset>}
         </LimitGroups></FieldGroup>
-        <Note>{messages.text("slips.combinedProbabilityHint")}</Note>
         </CriteriaDialog>
         <CriteriaDialog id={`${prefix}-kickoff`} group="kickoff" title={dialogTitle("kickoff")} open={activeGroup === "kickoff"}
           onCancel={cancelDialog} onApply={() => applyDialog("kickoff")} applyLabel={messages.text("slips.dialog.apply")}
@@ -346,6 +348,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       {generated && data.slips.length < criteria.slips && !result.searchLimited && <Note>{messages.text("slips.fewer")}</Note>}
       {data && (data.excludedMissingOdds > 0 || data.excludedMissingForecast > 0) && <Note>{messages.text("slips.excluded", {
         odds: messages.number(data.excludedMissingOdds), forecasts: messages.number(data.excludedMissingForecast) })}</Note>}
+      {data?.excludedUnestimated !== undefined && data.excludedUnestimated > 0 && <Note>{messages.plural("slips.unestimated", data.excludedUnestimated)}</Note>}
       {result && <Note>{messages.text("slips.asOf", { time: messages.reportingInstant(utcInstantFromEpochMilliseconds(result.asOf)) })}</Note>}
       {!result && !publicPolicy.features.providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
       <VisuallyHidden role="status" aria-live="polite">{pending ? messages.text("slips.building") : ""}</VisuallyHidden>

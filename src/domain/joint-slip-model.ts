@@ -1,4 +1,4 @@
-import { buildSlips, type BuiltSlip, type SlipSelection } from "./slip-builder.ts";
+import { buildSlips, type BuiltSlip, type SlipRanking, type SlipSelection } from "./slip-builder.ts";
 
 /** Server bindings must independently verify calibration/correlation evidence; references alone are not approval. */
 export type JointSlipModel = Readonly<{
@@ -21,19 +21,31 @@ export function jointSlipProbability(model: JointSlipModel, slip: BuiltSlip): nu
   return value >= lower - tolerance && value <= upper + tolerance ? Math.min(upper, Math.max(lower, value)) : null;
 }
 
+/** Unretained combinations stay collectable; a bounded search need not retain 100,000 long slip identifiers. */
+export function jointSlipRanking(model: JointSlipModel) {
+  const estimates = new WeakMap<BuiltSlip, number | null>();
+  let unestimated = 0;
+  const probability = (slip: BuiltSlip) => {
+    if (!estimates.has(slip)) {
+      const estimate = jointSlipProbability(model, slip);
+      if (estimate === null) unestimated++;
+      estimates.set(slip, estimate);
+    }
+    return estimates.get(slip)!;
+  };
+  const ranking: SlipRanking = {
+    probability, accepts: (slip) => probability(slip) !== null,
+    compare: (left, right) => probability(right)! - probability(left)! || left.selections.length - right.selections.length
+      || Number(right.totalOdds) - Number(left.totalOdds) || left.id.localeCompare(right.id),
+  };
+  return { ranking, probability, unestimated: () => unestimated };
+}
+
 /** Shared by custom and daily slips: whole-slip probability precedes count, mean and price. No multiplication fallback. */
 export function jointSlipBuilder(model: JointSlipModel): typeof buildSlips {
   return (criteria, records, asOf) => {
     if (!qualifiedJointModel(model, asOf)) throw new RangeError("A current calibrated joint model is required.");
-    const estimates = new Map<string, number | null>();
-    const probability = (slip: BuiltSlip) => {
-      if (!estimates.has(slip.id)) estimates.set(slip.id, jointSlipProbability(model, slip));
-      return estimates.get(slip.id)!;
-    };
-    return buildSlips(criteria, records, asOf, {
-      probability, accepts: (slip) => probability(slip) !== null,
-      compare: (left, right) => probability(right)! - probability(left)! || left.selections.length - right.selections.length
-        || Number(right.totalOdds) - Number(left.totalOdds) || left.id.localeCompare(right.id),
-    });
+    const joint = jointSlipRanking(model), result = buildSlips(criteria, records, asOf, joint.ranking);
+    return { ...result, excludedUnestimated: joint.unestimated() };
   };
 }

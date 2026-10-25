@@ -51,6 +51,8 @@ export type SlipBuildResult = Readonly<{
   searchLimited: boolean;
   /** Qualified joint estimates for the returned slips only; absent when no joint model is bound. */
   jointProbabilities?: Readonly<Record<string, number>>;
+  /** Examined combinations excluded because the joint estimator supplied no valid estimate. */
+  excludedUnestimated?: number;
 }>;
 export type SlipRanking = Readonly<{
   accepts: (slip: BuiltSlip) => boolean;
@@ -378,16 +380,26 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       selected.pop(); fixtures.delete(candidate.selection.fixtureId);
     }
   }
+  function select(): BuiltSlip[] {
+    const combinations = [...retained].sort(compare);
+    if (criteria.reuse) return combinations.slice(0, criteria.slips).map((item) => item.slip);
+    const batch = compatibleBatch(combinations, criteria.slips); searchLimited ||= batch.limited;
+    return batch.slips;
+  }
   let slips: BuiltSlip[] = [];
   for (let count = criteria.teamsMin; count <= Math.min(criteria.teamsMax, qualifying.size) && !exhausted; count++) {
     enumerate(0, count, 1n);
-    const combinations = [...retained].sort(compare);
-    if (criteria.reuse) slips = combinations.slice(0, criteria.slips).map((item) => item.slip);
-    else {
-      const batch = compatibleBatch(combinations, criteria.slips); slips = batch.slips; searchLimited ||= batch.limited;
-    }
-    if (!ranking && slips.length === criteria.slips) break;
+    if (ranking) continue;
+    slips = select();
+    if (slips.length === criteria.slips) break;
   }
+  // A qualified ranking may prefer longer slips. Batch only the final retained set, not discarded shorter stages.
+  if (ranking) slips = select();
   return { slips, qualifyingMatches: qualifying.size, excludedMissingOdds, excludedMissingForecast, searchLimited,
     ...(ranking?.probability ? { jointProbabilities: Object.fromEntries(slips.map((slip) => [slip.id, ranking.probability!(slip)!])) } : {}) };
+}
+
+/** Persist original selections and quotes only; transient ranking fields never acquire an unaudited history. */
+export function modelIndependentSlip(slip: BuiltSlip): BuiltSlip {
+  return { id: slip.id, selections: slip.selections, totalOdds: slip.totalOdds, oddsBasis: slip.oddsBasis, averageProbability: slip.averageProbability };
 }

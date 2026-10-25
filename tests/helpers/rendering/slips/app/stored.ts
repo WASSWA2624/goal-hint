@@ -8,6 +8,10 @@ import type { SlipBuildPageResult } from "@/server/slips/slip-service";
 
 /** Isolated rendering data only: no database, provider, cache, approval or visitor state. */
 export const now = parseUtcInstant("2026-10-13T08:00:00Z"), today = getReportingDate(now);
+/** Synthetic transport/renderer qualification only; never used by the production binding. */
+export const syntheticJointModel = { calibrationReference: "synthetic-rendering-calibration", correlationReference: "synthetic-rendering-correlation",
+  validFrom: now - 1, validUntil: now + 1000, estimate: (selections: readonly { probability: number }[]) => selections.length === 1
+    ? selections[0]!.probability : Math.min(...selections.map((selection) => selection.probability)) - 0.05 };
 export const criteria: SlipCriteria = { ...defaultSlipCriteria(today), dateTo: addReportingDays(today, 6),
   markets: ["match-result", "double-chance", "total-goals"], totalMin: 300, totalMax: 600, oddsMin: 125, oddsMax: 260,
   probMin: 70, probMax: 100, teamsMin: 2, teamsMax: 4, slips: 3, reuse: true };
@@ -74,8 +78,7 @@ export function syntheticPricePage(parameters: FeedParameters, asOf = now) {
 export function syntheticBuild(input: SlipCriteria = criteria, longNames = false, manualHome = false, joint = false): SlipBuildPageResult {
   if (hasJointProbabilityBounds(input) && !joint) return failure("model-unavailable");
   const available = manualHome ? [syntheticRecord(6, false, true)] : longNames ? Array.from({ length: 6 }, (_, index) => syntheticRecord(index, true)) : records;
-  const builder = joint ? jointSlipBuilder({ calibrationReference: "synthetic-rendering-calibration", correlationReference: "synthetic-rendering-correlation",
-    validFrom: now - 1, validUntil: now + 1000, estimate: (selections) => Math.min(...selections.map((selection) => selection.probability)) - 0.05 }) : buildSlips;
+  const builder = joint ? jointSlipBuilder(syntheticJointModel) : buildSlips;
   const data = builder(input, available, now);
   return { state: data.slips.length ? "generated" : data.qualifyingMatches ? "no-combinations" : "no-qualifying", data,
     asOf: now, examined: available.length, partialCoverage: false, searchLimited: data.searchLimited, retryAfterSeconds: null };

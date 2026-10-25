@@ -65,7 +65,7 @@ SCENARIOS = {
 }
 
 CRITERIA_GROUP_FIELDS = {
-    "limits": ["oddsMin", "oddsMax", "probMin", "probMax", "totalProbMin", "totalProbMax"],
+    "limits": ["oddsMin", "oddsMax", "probMin", "probMax"],
     "kickoff": ["dateFrom", "dateTo", "timeFrom", "timeTo"],
     "markets": [],
 }
@@ -98,7 +98,8 @@ def criteria_groups(document, path, error_group=None):
         assert any(button.text.strip() == "Apply" and button.attrs.get("type") == "button" for button in buttons), f"{path}: {name} has a non-submitting Apply action"
         inputs = group.nodes("input")
         values[name] = tuple((node.attrs.get("name"), node.attrs.get("value", ""), "checked" in node.attrs) for node in inputs)
-        for field in CRITERIA_GROUP_FIELDS[name]:
+        optional_joint = ["totalProbMin", "totalProbMax"] if name == "limits" and any(node.attrs.get("name") == "totalProbMin" for node in inputs) else []
+        for field in CRITERIA_GROUP_FIELDS[name] + optional_joint:
             controls = [node for node in inputs if node.attrs.get("name") == field]
             assert len(controls) == 1 and "disabled" not in controls[0].attrs, f"{path}: {name} keeps enabled native {field}"
             assert len([node for node in document.nodes("input") if node.attrs.get("name") == field]) == 1, f"{path}: no duplicated {field}"
@@ -207,6 +208,9 @@ def verify_defaults(document):
     assert fields["slips"] == "3", "SSR default requests three slips"
     for name in NUMERIC_RANGE_LIMITS:
         controls = [node for node in document.nodes("input") if node.attrs.get("name") == name]
+        if name.startswith("totalProb"):
+            assert not controls, "Unqualified default form does not offer combined-estimate fields"
+            continue
         assert len(controls) == 1 and fields[name] == "", f"Default {name}: blank means any supported bound"
         assert controls[0].attrs.get("placeholder") == "Any", f"Default {name}: blank numeric range displays Any"
     assert fields["dateFrom"] == "2026-10-13" and fields["dateTo"] == "2026-11-12", "SSR defaults use the fixture's reporting date and inclusive 31-day range"
@@ -250,6 +254,12 @@ def verify(origin, directory):
     generated = inspect(origin, "/en/slips?" + urlencode(query), directory, "route-build", "generated", 3)
     unavailable = inspect(origin, "/en/slips?" + urlencode(query + [("totalProbMin", "60")]), directory, "route-no-joint-model", "model-unavailable", 0)
     assert "Clear the combined probability bounds" in unavailable.text, "Unsupported joint filtering fails with a useful recovery action"
+    joint_query = query + [("totalProbMin", "60"), ("totalProbMax", "90")]
+    qualified = inspect(origin, "/joint?" + urlencode(joint_query), directory, "route-joint-build", "generated", 3)
+    assert "Highest estimated combined probability first" in qualified.text, "Real route and stored service apply the verified synthetic binding"
+    for field in ("totalProbMin", "totalProbMax"):
+        assert any(node.attrs.get("name") == field for node in qualified.nodes("input")), "Qualified route offers combined estimate bounds"
+    assert all("Win probability" in node.text for node in qualified.nodes(attr="data-slip-summary")), "Real route retains the separate combined estimate"
     verify_custom_numeric_bounds(generated, dict(query))
     initial_groups = criteria_groups(generated, "/en/slips?build=1")
     for group, changes in [

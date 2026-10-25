@@ -159,6 +159,13 @@ calibration or correlation evidence. `createStoredSlipBuild` accepts that
 optional binding. The production reader supplies none, so no actual combined
 forecast or qualification is invented.
 
+`boundJointSlipModel` resolves the request-time binding for the stored reader and
+the page's capability check. The page offers combined bounds only with verified
+current support, or when a supplied bound needs to remain editable or be cleared.
+The service independently verifies that binding; a display capability cannot
+authorize an estimator. Explicit editorial/publisher builds retain their own
+model and do not resolve the custom reader's binding.
+
 With a verified current binding, the bounded search considers all allowed
 selection counts and ranks whole-slip probability first. Fewer selections and
 higher odds break equal-probability ties. A longer slip can outrank a shorter
@@ -168,6 +175,10 @@ Missing or mathematically impossible estimates exclude that combination. The
 result carries estimates only for returned slips, separately from its unchanged
 mean probability and original saved-snapshot contract. The shared slip table
 displays both quantities with their existing distinct labels.
+The result also counts examined combinations lacking a valid estimate. A weak
+object cache estimates each combination once without retaining discarded slip
+identifiers. Compatible batching runs only after the final qualified candidate
+set is retained; discarded shorter stages cannot impose a spurious batch limit.
 
 Constrained combined bounds without a model produce `model-unavailable` before
 stored reads or limiter consumption. Configured bindings are checked before

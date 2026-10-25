@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getReportingDate, utcInstantFromEpochMilliseconds } from "../../domain/calendar.ts";
-import { parseSlipCriteria } from "../../domain/slip-builder.ts";
+import { modelIndependentSlip, parseSlipCriteria } from "../../domain/slip-builder.ts";
 import { getAnalyticsServices } from "../analytics/analytics-http.ts";
 import { isSameOrigin, json, readCookie, readLimitedBody } from "../http/private-http.ts";
 import { getMemberServices } from "../members/member-http.ts";
@@ -38,7 +38,8 @@ export function createSaveSlipHandler({ members = getMemberServices, services = 
       if (!slip) return json({ error: "changed", message: "These selections changed. Generate your slips again." }, 409);
       const { database, config } = await services();
       if (!database) return json({ error: "unavailable" }, 503);
-      const saved = await createSavedSlips(database, config, now).save(member, slip);
+      // Member saves keep the model-independent snapshot; an estimate without its model identity is not auditable.
+      const saved = await createSavedSlips(database, config, now).save(member, modelIndependentSlip(slip));
       return saved === "saved" ? json({ saved: true }) : json({ error: saved }, saved === "busy" ? 429 : saved === "changed" ? 409 : 403);
     } catch { return json({ error: "unavailable", message: "Saving slips is unavailable. Please try again." }, 503); }
   };

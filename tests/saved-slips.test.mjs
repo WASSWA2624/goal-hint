@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { savedSlipView, savedSlipSnapshotSchema } from '../src/domain/saved-slips.ts';
-import { defaultSlipCriteria, serializeSlipCriteria } from '../src/domain/slip-builder.ts';
+import { defaultSlipCriteria, modelIndependentSlip, serializeSlipCriteria } from '../src/domain/slip-builder.ts';
 import { createSavedSlips } from '../src/server/slips/saved-slips.ts';
 import { createSaveSlipHandler } from '../src/server/slips/saved-slips-http.ts';
 import { liveRecord, now, today } from './helpers/live-refresh-fixtures.mjs';
@@ -61,6 +61,28 @@ test('saved slip storage denies expired, reset-only and non-entitled sessions be
     assert.equal(await createSavedSlips(database, { key: () => 'key' }, () => now).save(member, slip), 'forbidden');
   }
   assert.equal(writes, 0);
+});
+
+test('member saves keep the model-independent snapshot because no model identity is stored with them', async () => {
+  // The strict snapshot rejects an estimate, which is why the save path uses an explicit allowlist.
+  assert.equal(savedSlipSnapshotSchema.safeParse({ ...slip, estimatedProbability: 0.5 }).success, false);
+  const independent = modelIndependentSlip({ ...slip, estimatedProbability: 0.5, futureField: true });
+  assert.deepEqual(Object.keys(independent), ['id', 'selections', 'totalOdds', 'oddsBasis', 'averageProbability']);
+  assert.deepEqual(independent, slip); assert.deepEqual(savedSlipSnapshotSchema.parse(independent), slip);
+  let saved = null;
+  const member = { accountId: 'account-id', tokenHash: 'token-hash' };
+  const tx = { $queryRaw: async () => [{ id: member.accountId, phone: '256700000001' }],
+    memberAccount: { findUnique: async () => ({ id: member.accountId, phone: '256700000001' }) },
+    memberSession: { findUnique: async () => null }, savedSlip: { upsert: async () => { saved = true; } } };
+  const handler = createSaveSlipHandler({ now: () => now, access: async () => ({ tier: 'full', signedIn: true }),
+    members: async () => ({ config: { production: false }, sessions: { verify: async () => member } }),
+    services: async () => ({ database: { transaction: async (run) => run(tx) }, config: { key: () => 'key' } }),
+    build: async () => ({ data: { slips: [{ ...slip, estimatedProbability: 0.5 }] } }) });
+  const response = await handler(new Request('https://example.test/api/account/slips', { method: 'POST',
+    headers: { Origin: 'https://example.test', Host: 'example.test', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ criteria: serializeSlipCriteria(defaultSlipCriteria(today)).toString(), slipId: slip.id }) }));
+  // The estimated slip reaches the storage checks (here a missing session) instead of failing snapshot validation.
+  assert.equal(response.status, 403); assert.equal(saved, null);
 });
 
 test('public saved slip history grades only sealed results coherent with the current fixture', async () => {
