@@ -7,16 +7,17 @@ import { getDatabase, type DatabaseRuntime } from "../database/client.ts";
 import { createMatchFeedService } from "../matches/feed-service.ts";
 import { createMysqlPublicSearchLimiter } from "../matches/search-limit.ts";
 import { storedSlipPricePools } from "./price-read.ts";
-import { createSlipBuildService } from "./slip-service.ts";
+import { createSlipBuildService, type SlipJointModelBinding } from "./slip-service.ts";
 
 /** Server page reads use the same public stored projection and competition scope as the match feed.
  * Caches are omitted for this multi-page decision so every page uses its one pinned request clock.
  * Database initialization stays lazy while the public odds feature is disabled. */
-export function createStoredSlipBuild({ database, competitionIds, consume }: Readonly<{
+export function createStoredSlipBuild({ database, competitionIds, consume, jointModel = null }: Readonly<{
   database: () => DatabaseRuntime; competitionIds: () => readonly number[]; consume?: () => Promise<void>;
+  jointModel?: SlipJointModelBinding | null;
 }>) {
   return function readStoredSlipBuild(criteria: SlipCriteria, clock?: Clock, locale = "en", build: typeof buildSlips = buildSlips) {
-    return createSlipBuildService({ ...(clock ? { clock } : {}), build,
+    return createSlipBuildService({ ...(clock ? { clock } : {}), ...(build !== buildSlips ? { build } : {}), jointModel,
       consume: consume ?? (() => createMysqlPublicSearchLimiter(database()).consume()),
       read: async (parameters, context, requestClock) => {
         const source = database();

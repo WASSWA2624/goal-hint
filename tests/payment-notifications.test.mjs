@@ -7,6 +7,7 @@ import { createPaymentReview } from "../src/server/admin/payment-review.ts";
 import { DatabaseOperationError } from "../src/server/database/client.ts";
 import { createAccessCodes } from "../src/server/members/access-codes.ts";
 import { createPaymentNotifications } from "../src/server/members/payment-notifications.ts";
+import { createQueuedPaymentNotifications } from "../src/server/members/payment-notification-outbox.ts";
 import { YoolaMessagingError } from "../src/server/members/yoola-messaging.ts";
 
 const instant = Date.parse("2026-12-24T22:30:00Z"), day = 86_400_000;
@@ -16,7 +17,7 @@ const owner = "synthetic-owner";
 function fixture() {
   const account = { id: randomUUID(), phone: "256700000111", blockedAt: null, erasedAt: null, trialRequestedAt: new Date(instant), trialDismissedAt: null };
   const plan = { id: randomUUID(), name: "Weekly", durationDays: 7, priceUgx: 5000, active: true };
-  let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [], paymentScreenshot: [], walletEntry: [],
+  let state = { memberAccount: [account], subscriptionPlan: [plan], paymentSubmission: [], accessCode: [], ownerAuditEvent: [], memberSession: [], paymentScreenshot: [], walletEntry: [], paymentNotificationOutbox: [],
     subscriptionSettings: [{ ...defaultSubscriptionSettings, id: 1, updatedAt: new Date(instant) }] };
   let committed = structuredClone(state), tail = Promise.resolve(), transactions = 0, abortCommit = null;
   const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => {
@@ -256,4 +257,27 @@ test("an audit outage does not undo an SMS accepted by the provider", async () =
   const notifications = createPaymentNotifications({ database: { async query() { throw new Error("Synthetic audit outage"); } }, delivery: { async sendSms() { calls++; } } });
   assert.equal(await notifications.rejected({ paymentId: randomUUID(), accountId: randomUUID(), phone: "256700000111", reference: "PABCD", reason: "other" }), "sent");
   assert.equal(calls, 1);
+});
+
+test("production approval and rejection intents commit atomically without contacting a gateway", async () => {
+  const f = fixture(), approved = f.report(), rejected = f.report({ reference: "EFGH" });
+  const notifications = createQueuedPaymentNotifications();
+  const result = await f.codes({ notifications }).approvePayment(approved.id, f.fields(), owner);
+  assert.equal(result.notification, "queued");
+  assert.deepEqual(f.committed.paymentNotificationOutbox.map(row => [row.targetId, row.decision, row.status]), [[approved.id, "approved", "queued"]]);
+  assert.equal((await f.review({ notifications }).reject(rejected.id, "other", "Private text", false, owner)).notification, "queued");
+  assert.deepEqual(f.committed.paymentNotificationOutbox.map(row => row.decision), ["approved", "rejected"]);
+  const serialized = JSON.stringify(f.committed.paymentNotificationOutbox);
+  assert.ok(!serialized.includes(f.account.phone)); assert.ok(!serialized.includes("Private text"));
+  assert.ok(!serialized.includes("Weekly")); assert.ok(!serialized.includes("SYNTHETICPAID"));
+});
+
+test("a rolled back decision leaves no outbox row and concurrent decisions enqueue once", async () => {
+  const f = fixture(), row = f.report(), codes = f.codes({ notifications: createQueuedPaymentNotifications() });
+  f.abortNextCommit(new DatabaseOperationError("unavailable"));
+  await assert.rejects(codes.approvePayment(row.id, f.fields(), owner), DatabaseOperationError);
+  assert.equal(f.committed.paymentNotificationOutbox.length, 0); assert.equal(f.committed.paymentSubmission[0].status, "pending");
+  const outcomes = await Promise.all([codes.approvePayment(row.id, f.fields(), owner), codes.approvePayment(row.id, f.fields(), owner)]);
+  assert.deepEqual(outcomes.map(outcome => outcome.status).sort(), ["created", "duplicate"]);
+  assert.equal(f.committed.paymentNotificationOutbox.length, 1);
 });

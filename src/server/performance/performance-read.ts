@@ -11,9 +11,10 @@ import { settlementRevisionFromRow, projectSettlementCycle } from "../settlement
 import { modelVersionFromRow } from "../predictor/predictor-mysql-store.ts";
 import type { MarketFamily } from "../../domain/markets.ts";
 import type { PerformanceQuery } from "./performance-query.ts";
+import { readPerformanceQuotes, type PerformanceQuotePolicy } from "./performance-quotes.ts";
 
 type Tx = Prisma.TransactionClient;
-export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, competitionIds: readonly number[]) {
+export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, competitionIds: readonly number[], quotePolicy: PerformanceQuotePolicy | null = null) {
   const scope = publicFixtureCohortScope(query.range, competitionIds);
   const selected = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT f.id FROM FootballFixture f
     JOIN FootballSeason s ON s.id=f.seasonId JOIN FootballCompetition l ON l.id=s.competitionId
@@ -22,12 +23,13 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
   if (selected.length > performanceRules.maximumCohortFixtures) throw new MatchFeedError("unavailable");
   const ids = selected.map((v) => v.id);
   const budget = { remainingBytes: performanceRules.maximumStoredBytes };
-  const snapshot = await readPerformanceBatch(tx, query, ids.slice(0, performanceRules.maximumFixtures), budget, true);
+  const snapshot = await readPerformanceBatch(tx, query, ids.slice(0, performanceRules.maximumFixtures), budget, true, quotePolicy);
   for (let offset = performanceRules.maximumFixtures; offset < ids.length; offset += performanceRules.maximumFixtures) {
-    const next = await readPerformanceBatch(tx, query, ids.slice(offset, offset + performanceRules.maximumFixtures), budget, false);
+    const next = await readPerformanceBatch(tx, query, ids.slice(offset, offset + performanceRules.maximumFixtures), budget, false, quotePolicy);
     snapshot.records.push(...next.records);
     snapshot.settlements.push(...next.settlements);
     for (const [id, model] of next.models) snapshot.models.set(id, model);
+    for (const [key, price] of next.quotes) snapshot.quotes.set(key, price);
     for (const key of ["total", "failed", "pending", "failedFixtures", "delayedRefreshes", "delayedFixtures"] as const)
       snapshot.operations[key] += next.operations[key];
   }
@@ -35,7 +37,8 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
 }
 
 /** All batches share one repeatable-read transaction and one total payload budget. */
-async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string[], budget: { remainingBytes: number }, includeHistorical: boolean) {
+async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string[], budget: { remainingBytes: number }, includeHistorical: boolean,
+  quotePolicy: PerformanceQuotePolicy | null) {
   const fixtures = await tx.footballFixture.findMany({ where: { id: { in: ids } },
     include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } },
       season: { select: { competitionId: true, competition: { select: { name: true, country: true } } } },
@@ -91,6 +94,9 @@ async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string
     const previous = cycle ? settlementMap.get(cycle.id) ?? new Map() : new Map();
     return { fixture, cycle, revision, result, projection: cycle ? projectSettlementCycle(fixture, result, fixture.lifecycleState?.issue ?? null, cycle, revision, previous) : null };
   });
+  const quotes = new Map(quotePolicy ? await readPerformanceQuotes(tx, records.flatMap(({ fixture, cycle, revision }) =>
+    cycle?.state === "closed" && revision ? [{ fixtureId: fixture.id, externalId: fixture.externalId, revisionId: revision.id, openedAt: cycle.openedAt,
+      publishedAt: revision.publishedAt, cutoffAt: cycle.cutoffAt, kickoffAt: cycle.kickoffAt }] : []), quotePolicy, budget) : []);
   const delta = calendarRules.cutoffSecondsBeforeKickoff * 1000;
   const historical = includeHistorical ? await tx.$queryRaw<{ voidReason: string }[]>(Prisma.sql`SELECT c.voidReason FROM PredictionCycle c
     JOIN FootballFixture f ON f.id=c.fixtureId WHERE c.state='void'
@@ -112,7 +118,7 @@ async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string
   const operations = { basis: "refresh-jobs-for-current-cohort-fixtures-across-runs" as const, total: jobs.length, failed: failed.length,
     pending: jobs.filter((j) => ["pending", "running"].includes(j.state)).length,
     failedFixtures: new Set(failed.map((j) => j.fixtureId)).size, delayedRefreshes: delayed.length, delayedFixtures: new Set(delayed.map((j) => j.fixtureId)).size };
-  return { records, models, settlements, historicalCycles: { basis: "void-cycle-original-kickoff-in-period-excluding-applicable-cycle" as const,
+  return { records, models, settlements, quotes, historicalCycles: { basis: "void-cycle-original-kickoff-in-period-excluding-applicable-cycle" as const,
     void: historical.length, postponed: historical.filter((c) => c.voidReason === "formal-postponement").length }, operations };
 }
 export type PerformanceSnapshot = Awaited<ReturnType<typeof readPerformanceSnapshot>>;

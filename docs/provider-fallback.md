@@ -18,6 +18,14 @@ is implemented. Its private key and counted activation check remain required.
 Calibration stays explicitly unevaluated/provisional. Synthetic scenarios
 cannot qualify an account, source mapping or permission.
 
+The 25 October checklist follow-up changes the live publication binding to
+`selectionPolicy: "provider-baseline"`. The existing AI transport may run within
+its approved bounds, but its output remains private shadow evidence. Live
+publication rejects AI markets until a separate matched evaluation and reviewed
+promotion mechanism exist. See [provider benchmark and shadow retention](provider-baseline.md).
+The legacy AI-first resolver remains available for historical compatibility and
+isolated existing contracts; the production live runner does not select it.
+
 ## Market support and source evidence
 
 Official API-Sports material was reviewed on **9 October 2026 EAT**:
@@ -129,6 +137,17 @@ future times, clock regressions, expired source/retrieval ages and expired
 reuse rights. No default age or unknown-time acceptance is supplied.
 
 ## Candidate resolution
+
+The live provider-baseline policy requests all three source groups in one
+existing bounded prediction collection even when AI returned complete groups.
+It publishes only validated provider groups; missing/unsupported provider
+families remain unavailable. Provider failures, quota exhaustion, revoked rights
+or interrupted collection cannot promote shadow AI. The original quota, time,
+freshness and publication checks still apply. Provider baseline selections retain
+the `provider-baseline` reason rather than claiming AI failed.
+
+The following behavior describes the legacy AI-primary strategy retained by
+the reusable resolver and the original revision/test contracts:
 
 Retain every valid AI source group. Attempt fallback for missing or invalid
 families, or AI failure, timeout, insufficient evidence or exhausted budget,

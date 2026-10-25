@@ -18,6 +18,8 @@ import { MatchFeedError } from "../matches/feed-error.ts";
 import { parsePerformanceQuery, type PerformanceQuery } from "./performance-query.ts";
 import { readPerformanceSnapshot, type PerformanceSnapshot } from "./performance-read.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
+import { summarizePickPerformance, type PickPerformanceSample } from "../../domain/pick-performance.ts";
+import { performanceQuoteKey, verifiedQuotePolicy, type PerformanceQuoteBinding } from "./performance-quotes.ts";
 
 /** A trusted server binding, never an HTTP input or checksum-as-approval shortcut. */
 export type PerformancePolicyBinding = Readonly<{ protocol: EvaluationProtocol; verifyProtocol(protocol: EvaluationProtocol): boolean }>;
@@ -47,6 +49,7 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
   horizon: HorizonBand | null, protocol: EvaluationProtocol | null): PerformanceCell {
   const coverage = blankCoverage(), observations: MetricObservation[] = [], links: PerformanceCell["evidence"]["links"] = [];
   const versions = new Map<string, PerformanceCell["versions"][number]>(), included: Record[] = [], observedHorizons = new Set<string>();
+  const returnSamples: PickPerformanceSample[] = [];
   let correct = 0, incorrect = 0, outOfPolicy = false;
   for (const record of snapshot.records) {
     const { cycle, revision, result, projection } = record;
@@ -55,7 +58,11 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
     coverage.total++; included.push(record);
     const entry = projection?.markets.find((m) => m.base.family === family), previous = entry?.previous;
     const coherent = previous && previous.inputHash === entry?.inputHash && previous.lockedSetId === cycle?.lockedSetId;
-    if (cycle?.state === "void" || coherent && previous.status === "void") { coverage.void++; continue; }
+    if (cycle?.state === "void" || coherent && previous.status === "void") {
+      coverage.void++;
+      if (revision) returnSamples.push({ revisionId: revision.id, publishedAt: revision.publishedAt, outcome: "void", quotedOdds: null });
+      continue;
+    }
     const item = cycle?.state === "closed" ? revision?.candidate.markets[family] : null;
     if (!item?.available) { coverage.unavailable++; continue; }
     const version = versionFor(record, family, snapshot.models)!;
@@ -65,6 +72,10 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
     }
     coverage.available++; coverage.sources[item.market.source]++;
     versions.set(evidenceFingerprint(version), version);
+    const settledOutcome = coherent && result?.regulation.verified && (previous.status === "correct" || previous.status === "incorrect")
+      ? previous.status === "correct" ? "won" : "lost" : "pending";
+    returnSamples.push({ revisionId: revision!.id, publishedAt: revision!.publishedAt, outcome: settledOutcome,
+      quotedOdds: snapshot.quotes?.get(`${performanceQuoteKey(revision!.id, family)}:${item.market.selection}`) ?? null });
     const knownHorizon = protocol?.horizons.find((h) => horizonMs! >= h.minimumMs && horizonMs! < h.maximumMs);
     if (knownHorizon) observedHorizons.add(knownHorizon.id); else outOfPolicy = true;
     if (!protocol?.competitionIds.includes(record.fixture.season?.competitionId ?? "") ||
@@ -107,7 +118,7 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
   }
   return { family, source, label: source === "combined" ? "Combined AI / API-Football fallback" : source === "ai" ? "AI" : "API-Football fallback",
     horizon, coverage, metrics, versions: [...versions.values()].sort((a, b) => `${a.source}:${a.modelVersionId}:${a.version}`.localeCompare(`${b.source}:${b.modelVersionId}:${b.version}`, "en")),
-    evidence: { total: coverage.available, truncated: coverage.available > links.length, links } };
+    returns: summarizePickPerformance(returnSamples), evidence: { total: coverage.available, truncated: coverage.available > links.length, links } };
 }
 
 /** Every league is accounted for before pagination; each visible group uses the existing cohort and quality gates. */
@@ -129,7 +140,7 @@ function leagueGroups(snapshot: PerformanceSnapshot, query: PerformanceQuery, fa
       competition: group.competition, fixtureCount: group.records.length,
       cells: families.map((family) => {
         const cell = cellFor({ ...snapshot, records: group.records }, query, family, query.source, null, protocol);
-        return { family, source: query.source, coverage: cell.coverage, metrics: { ...cell.metrics, calibration: [] } };
+        return { family, source: query.source, coverage: cell.coverage, metrics: { ...cell.metrics, calibration: [] }, returns: cell.returns };
       }),
     })) };
 }
@@ -158,27 +169,32 @@ export function aggregatePerformance(snapshot: PerformanceSnapshot, query: Perfo
 }
 
 export function createPerformanceService(options: Readonly<{ database: DatabaseRuntime; competitionIds: readonly number[];
-  clock?: Clock; policy?: PerformancePolicyBinding | null; cache?: PublicResponseCache }>) {
+  clock?: Clock; policy?: PerformancePolicyBinding | null; quoteBinding?: PerformanceQuoteBinding | null; cache?: PublicResponseCache }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const policy = options.policy ?? null;
+  const quoteBinding = options.quoteBinding ?? null;
   return Object.freeze({ async query(parameters = new URLSearchParams()): Promise<PerformanceResponse> {
     const asOf = clock.now(), query = parsePerformanceQuery(parameters, getReportingDate(asOf));
     const configured = z.array(z.number().int().positive().max(2_147_483_647)).min(1).max(maximumCompetitionScope).safeParse(options.competitionIds);
     if (!configured.success || new Set(configured.data).size !== configured.data.length) throw new MatchFeedError("unavailable");
     const protocol = verifiedPolicy(policy, asOf);
+    const quotePolicy = verifiedQuotePolicy(quoteBinding);
     try {
       const read = () => options.database.transaction(async (tx) => {
-        const snapshot = await readPerformanceSnapshot(tx, query, configured.data);
+        const snapshot = await readPerformanceSnapshot(tx, query, configured.data, verifiedQuotePolicy(quoteBinding));
         // A revoked approval cannot survive an in-flight stored read.
         const current = verifiedPolicy(policy, asOf);
+        if (evidenceFingerprint(verifiedQuotePolicy(quoteBinding)) !== evidenceFingerprint(quotePolicy)) snapshot.quotes.clear();
         return aggregatePerformance(snapshot, query, asOf, current?.id === protocol?.id ? current : null);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       let response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "performance", locale: "en", now: asOf,
-        query: { projection: 4, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
+        query: { projection: 5, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol, quotePolicy },
         parse: (value) => performanceResponseSchema.parse(value) }), read) : await read();
       // Preserve the reader's unapproved/counts-only response when permission is
       // revoked during a cache probe; never reuse previously approved metrics.
-      if (options.cache && verifiedPolicy(policy, clock.now())?.id !== protocol?.id) response = await read();
+      // Quote grants also recheck after uncached transaction wrappers return.
+      if (options.cache && verifiedPolicy(policy, clock.now())?.id !== protocol?.id ||
+        evidenceFingerprint(verifiedQuotePolicy(quoteBinding)) !== evidenceFingerprint(quotePolicy)) response = await read();
       if (Buffer.byteLength(JSON.stringify(response), "utf8") > matchFeedRules.maximumResponseBytes) throw new MatchFeedError("unavailable");
       return freezeEvidence(response);
     } catch { throw new MatchFeedError("unavailable"); }

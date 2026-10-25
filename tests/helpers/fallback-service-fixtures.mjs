@@ -38,7 +38,7 @@ export function fallbackServiceSetup(options = {}) {
     ...options.authority,
   };
   const clock = { now: () => current };
-  const defaults = { fallback, authority, clock, maxInflight: 10,
+  const defaults = { fallback, authority, clock, maxInflight: 10, selectionPolicy: "legacy-ai-primary",
     verifyRequest: (request) => permissions.request && request.ai === ai && evidenceFingerprint(request.expected) === evidenceFingerprint(expected) };
   const service = createFallbackService({ ...defaults, ...options.service });
   const request = (overrides = {}) => ({ requestId: evidenceHash("synthetic-fallback-refresh-request"), expected, ai,

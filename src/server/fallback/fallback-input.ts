@@ -156,7 +156,7 @@ const resolvedProvenance = z.discriminatedUnion("kind", [
 const resolvedMarket = z.discriminatedUnion("available", [
   z.object({ available: z.literal(true), market: z.unknown(), timestamps, flags, provenance: resolvedProvenance,
     fallback: z.object({ reason: z.enum(["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted",
-      "ai-missing-group", "ai-invalid-group"]), detail: text }).strict().nullable() }).strict(),
+      "ai-missing-group", "ai-invalid-group", "provider-baseline"]), detail: text }).strict().nullable() }).strict(),
   z.object({ available: z.literal(false), reason: z.enum([...marketReasons, ...fallbackProviderReasons, "invalid-timing"]) }).strict(),
 ]);
 const publicExplanation = z.object({ text: plain, sourceUrls: z.array(link).max(10_000) }).strict();

@@ -22,3 +22,7 @@ GRANT DELETE ON `goal_hint_db`.`OwnerAuditEvent` TO 'goal_hint_app'@'application
 GRANT SELECT, INSERT ON `goal_hint_db`.`WalletEntry` TO 'goal_hint_app'@'application-host';
 -- AccountMove records number changes for reversals to follow; append-only the same way, and it blocks deleting the accounts it names.
 GRANT SELECT, INSERT ON `goal_hint_db`.`AccountMove` TO 'goal_hint_app'@'application-host';
+
+-- Durable minimal payment SMS intents, after 20261025230000_payment_notification_outbox.
+-- No recipient or message body is stored. Account deletion cascades its intents.
+GRANT SELECT, INSERT, UPDATE ON `goal_hint_db`.`PaymentNotificationOutbox` TO 'goal_hint_app'@'application-host';

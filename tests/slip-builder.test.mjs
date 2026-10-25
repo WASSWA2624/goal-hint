@@ -3,6 +3,7 @@ import test from 'node:test';
 import { matchFeedRecordSchema } from '../src/domain/match-feed.ts';
 import { marketRules, marketSelections, validateMarketSnapshot } from '../src/domain/markets.ts';
 import { buildSlips, defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules } from '../src/domain/slip-builder.ts';
+import { jointSlipBuilder } from '../src/domain/joint-slip-model.ts';
 
 const today = '2026-10-13', asOf = Date.parse('2026-10-13T07:00:00Z');
 const kickoffAt = Date.parse('2026-10-13T15:00:00Z');
@@ -28,6 +29,52 @@ function criteria(overrides = {}) {
     probMin: 0, probMax: 100, totalMin: 101, totalMax: 10_000_000, teamsMin: 1, teamsMax: 8, slips: 10, reuse: true, ...overrides };
 }
 const fixtureIds = (slip) => slip.selections.map((selection) => selection.fixtureId).sort();
+// Synthetic evidence only; no production qualification follows from these tests.
+const jointModel = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
+  validFrom: asOf - 1, validUntil: asOf + 1000, estimate: selections => selections.length === 1 ? selections[0].probability : 0.65 };
+
+test('combined-probability criteria use exact percentages, preserve blank legacy criteria and reject invalid ranges', () => {
+  assert.deepEqual(parseSlipCriteria({ totalProbMin: '', totalProbMax: '' }, today), defaultSlipCriteria(today));
+  const parsed = parseSlipCriteria({ totalProbMin: '60.125', totalProbMax: '80' }, today);
+  assert.equal(parsed.totalProbMin, 60.125); assert.equal(parsed.totalProbMax, 80);
+  assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(parsed), today), parsed);
+  for (const input of [{ totalProbMin: '-1' }, { totalProbMax: '101' }, { totalProbMin: '90', totalProbMax: '80' },
+    { totalProbMin: 'NaN' }, { totalProbMin: ['50', '60'] }]) {
+    assert.throws(() => parseSlipCriteria(input, today), SlipCriteriaError);
+  }
+  const form = serializeSlipCriteria({ ...defaultSlipCriteria(today), outcomes: marketSelections });
+  form.set('totalProbMin', ''); form.set('totalProbMax', '');
+  assert.deepEqual(parseSlipCriteria(form, today), { ...defaultSlipCriteria(today), outcomes: marketSelections });
+});
+
+test('qualified custom ranking considers longer more probable slips and filters combined estimates separately from means', () => {
+  const records = [record('single', '5.00', 0.60), record('pair-a', '2.20', 0.75), record('pair-b', '2.20', 0.75)];
+  const input = criteria({ totalMin: 450, totalMax: 550, slips: 3 });
+  const built = jointSlipBuilder(jointModel)(input, records, asOf);
+  assert.deepEqual(fixtureIds(built.slips[0]), ['pair-a', 'pair-b']);
+  assert.equal(built.jointProbabilities[built.slips[0].id], 0.65);
+  assert.equal(built.slips[0].averageProbability, 0.75);
+  const filtered = jointSlipBuilder(jointModel)({ ...input, totalProbMin: 62.5, totalProbMax: 65 }, records, asOf);
+  assert.equal(filtered.slips.length, 1); assert.equal(filtered.slips[0].selections.length, 2);
+  assert.equal(jointSlipBuilder(jointModel)({ ...input, totalProbMax: 60 }, records, asOf).slips.length, 1);
+  assert.throws(() => buildSlips({ ...input, totalProbMin: 60 }, records, asOf), /qualified joint estimator/);
+});
+
+test('custom joint ranking withholds missing or impossible estimates and never multiplies marginals', () => {
+  const records = [record('pair-a', '2.20', 0.75), record('pair-b', '2.20', 0.75)];
+  const input = criteria({ teamsMin: 2, teamsMax: 2 });
+  for (const estimate of [() => null, () => 0.9, () => 0.1, () => NaN]) {
+    assert.equal(jointSlipBuilder({ ...jointModel, estimate })(input, records, asOf).slips.length, 0);
+  }
+  assert.throws(() => jointSlipBuilder({ ...jointModel, validUntil: asOf })(input, records, asOf), /current calibrated/);
+});
+
+test('inclusive joint filters tolerate marginal-bound decimal rounding without accepting material violations', () => {
+  const records = [record('pair-a', '2.20', 0.9), record('pair-b', '2.20', 0.8)];
+  const input = criteria({ teamsMin: 2, teamsMax: 2, totalProbMin: 70, totalProbMax: 70 });
+  assert.equal(jointSlipBuilder({ ...jointModel, estimate: () => 0.7 })(input, records, asOf).slips.length, 1);
+  assert.equal(jointSlipBuilder({ ...jointModel, estimate: () => 0.7 + 1e-10 })(input, records, asOf).slips.length, 0);
+});
 
 test('generated slip identity retains the exact source cycle/revision/probability and quote', () => {
   const source = record('source'), options = criteria({ teamsMin: 1, teamsMax: 1, slips: 1 });
@@ -166,7 +213,7 @@ test('aggregate encoded bytes and entry counts are bounded before query values a
   const oversizedAscii = new URLSearchParams();
   for (const field of ['dateFrom', 'dateTo', 'timeFrom', 'timeTo', 'totalMin', 'totalMax', 'oddsMin', 'oddsMax']) oversizedAscii.append(field, '1'.repeat(256));
   assert.throws(() => parseSlipCriteria(oversizedAscii, today), (error) => error instanceof SlipCriteriaError && error.code === 'invalid-query');
-  const tooMany = Object.fromEntries(Array.from({ length: 31 }, (_, index) => [`unused-${index}`, undefined]));
+  const tooMany = Object.fromEntries(Array.from({ length: 100 }, (_, index) => [`unused-${index}`, undefined]));
   assert.throws(() => parseSlipCriteria(tooMany, today), (error) => error instanceof SlipCriteriaError && error.code === 'invalid-query');
 });
 for (const [parameters, code] of [

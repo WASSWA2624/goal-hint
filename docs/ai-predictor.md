@@ -13,6 +13,13 @@ the exact owner approval references and a counted smoke check; synthetic tests
 make no paid provider calls. Forecasts remain provisional, with no evaluated
 calibration or accuracy claim.
 
+Following the 25 October checklist, the live runner uses the validated provider
+benchmark for publication and retains AI output in shadow. Enabling the AI
+transport authorizes its existing bounded attempt; it does not promote AI into
+published markets or publish AI goal-market extensions. Original revisions stay
+unchanged. See [the benchmark and shadow runbook](provider-baseline.md) for the
+retained matching evidence and remaining prospective evaluation work.
+
 Prepared private runner choices keep AI disabled until the key is installed.
 They name OpenAI, `gpt-6.1-sol`, usage-based billing, 100,000 total job tokens and
 a 300-second configured job limit; no monthly AI cap is supplied. The owner
