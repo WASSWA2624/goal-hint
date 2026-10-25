@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useSyncExternalStore, useTransition, type ReactNode } from "react";
-import styled from "styled-components";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
+import styled, { css } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
-import { PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
+import {
+  CardIcon, ChartIcon, ChevronDownIcon, GridIcon, KeyIcon, LayersIcon, ListIcon, SlidersIcon, TicketIcon, UserIcon, type IconProps,
+} from "@/components/ui/icons";
+import { closeDetails, useOutsideDismiss } from "@/components/ui/use-outside-dismiss";
 import { adminSections, type AdminSection } from "@/domain/admin-navigation";
 import { media } from "@/styles/theme";
-import { adminControl } from "./admin-form";
 import { getPendingPaymentsSnapshot, seedPendingPayments, subscribePendingPayments } from "./pending-payments";
 
 /** A background tab shows "(n) Payments · …" while payments wait; the page's own title stays after it, and returns at 0. */
@@ -16,13 +17,55 @@ function pendingTitle(title: string, count: number, payments: boolean) {
   return `${count > 0 ? `(${count}) ` : ""}${count > 0 || payments ? "Payments · " : ""}${base}`;
 }
 
+const sectionIcons: Record<AdminSection, ComponentType<IconProps>> = {
+  overview: GridIcon, payments: CardIcon, codes: TicketIcon, subscribers: UserIcon, "password-resets": KeyIcon,
+  plans: LayersIcon, settings: SlidersIcon, audit: ListIcon, analytics: ChartIcon,
+};
+
+function SectionLinks({ current, passwordRequests, onNavigate }: { current: AdminSection; passwordRequests: number | null; onNavigate?: () => void }) {
+  return <ul>
+    {adminSections.map(({ key, href, label }) => {
+      const Icon = sectionIcons[key];
+      const count = key === "password-resets" && passwordRequests ? passwordRequests : 0;
+      return <li key={key} data-separated={key === "analytics" || undefined}>
+        <SectionLink href={href} prefetch={false} aria-current={key === current ? "page" : undefined} {...(onNavigate ? { onClick: onNavigate } : {})}>
+          <Icon />{label}
+          {count > 0 && <Count aria-label={`${count} waiting`}>{count > 99 ? "99+" : count}</Count>}
+        </SectionLink>
+      </li>;
+    })}
+  </ul>;
+}
+
+/** Phones and tablets: the current section names the menu; the list opens below it and closes on a choice, Escape or a tap outside. */
+function SectionMenu({ current, passwordRequests }: { current: AdminSection; passwordRequests: number | null }) {
+  const root = useRef<HTMLDetailsElement>(null);
+  const [open, setOpen] = useState(false);
+  const dismiss = useCallback(() => closeDetails(root.current, () => setOpen(false)), []);
+  useOutsideDismiss({ enabled: open, root, onDismiss: dismiss });
+  const label = adminSections.find(({ key }) => key === current)?.label ?? "Admin";
+  return <MenuBar ref={root} onToggle={(event) => setOpen(event.currentTarget.open)} onKeyDown={(event) => {
+    if (event.key !== "Escape" || !root.current?.open) return;
+    event.preventDefault();
+    dismiss();
+    root.current.querySelector("summary")?.focus({ preventScroll: true });
+  }}>
+    <summary aria-expanded={open}>
+      <ListIcon /><small>Section</small><strong>{label}</strong><ChevronDownIcon />
+    </summary>
+    <MenuPopup aria-label="Admin sections">
+      <SectionLinks current={current} passwordRequests={passwordRequests} onNavigate={dismiss} />
+    </MenuPopup>
+  </MenuBar>;
+}
+
 /**
- * One compact page selector serves every owner section. Site navigation and account actions belong to the shared header.
+ * The owner workspace: a section sidebar from desktop up, one section menu on phones, and the page column. Every page
+ * keeps the live pending-payments count in its tab title.
  */
-export function AdminWorkspace({ current, children, pendingCount }: {
-  current: AdminSection; children: ReactNode; pendingCount?: number;
+export function AdminWorkspace({ current, children, pendingCount, passwordRequests = null }: {
+  current: AdminSection; children: ReactNode; pendingCount?: number; passwordRequests?: number | null;
 }) {
-  const router = useRouter(), [navigating, startNavigation] = useTransition();
   const count = useSyncExternalStore(subscribePendingPayments, getPendingPaymentsSnapshot, () => pendingCount ?? null);
   useEffect(() => {
     if (pendingCount !== undefined) seedPendingPayments(pendingCount);
@@ -31,56 +74,161 @@ export function AdminWorkspace({ current, children, pendingCount }: {
     document.title = pendingTitle(document.title, count ?? 0, current === "payments");
   }, [current, count]);
   return (
-    <Workspace data-analytics-ignore>
-      <Switcher aria-label="Admin pages" aria-busy={navigating}>
-        <label htmlFor="admin-page">Admin</label>
-        <PageSelect id="admin-page" name="admin-page" value={current} disabled={navigating} onChange={(event) => {
-          const section = adminSections.find(({ key }) => key === event.target.value);
-          if (section && section.key !== current) startNavigation(() => router.push(section.href));
-        }}>
-          {adminSections.map(({ key, label }) => <option key={key} value={key}>{label}{key === "payments" && count !== null && count > 0 ? ` (${count})` : ""}</option>)}
-        </PageSelect>
-      </Switcher>
-      <noscript><Fallback aria-label="Admin pages">{adminSections.map(({ key, href, label }) =>
-        <Link key={key} href={href} aria-current={key === current ? "page" : undefined}>{label}</Link>)}</Fallback></noscript>
-      <Column $wide={current === "analytics"} $expanded={current === "subscribers" || current === "payments"}>
-        {children}
-      </Column>
-    </Workspace>
+    <Frame data-analytics-ignore>
+      <Sidebar aria-label="Admin sections">
+        <Caption>Admin</Caption>
+        <SectionLinks current={current} passwordRequests={passwordRequests} />
+      </Sidebar>
+      <SectionMenu current={current} passwordRequests={passwordRequests} />
+      <Main id="main-content" tabIndex={-1}>
+        <Column $wide={current === "analytics"}>{children}</Column>
+      </Main>
+    </Frame>
   );
 }
 
-const Workspace = styled.div`
-  min-inline-size: 0;
-`;
-const Switcher = styled.nav`
+/** Full-width brand bar content, so the wordmark lines up with the section sidebar. */
+export const AdminHeaderContent = styled.div`
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-inline: calc(-1 * ${({ theme }) => theme.layout.gutter});
-  padding: 8px ${({ theme }) => theme.layout.gutter};
+  gap: 6px;
+  inline-size: 100%;
+  min-block-size: ${({ theme }) => theme.header.phoneHeight};
+  padding-inline: 12px 8px;
+  ${media.desktop} { gap: 12px; min-block-size: var(--app-header-content-height, 4rem); padding-inline: 24px 20px; }
+`;
+export const AdminMark = styled.span`
+  color: ${({ theme }) => theme.header.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.caption};
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+`;
+
+const sidebarWidth = "14.5rem";
+const Frame = styled.div`
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  min-inline-size: 0;
+  ${media.desktop} { grid-template-columns: ${sidebarWidth} minmax(0, 1fr); align-content: stretch; }
+`;
+const Sidebar = styled.nav`
+  display: none;
+  ${media.desktop} {
+    display: block;
+    position: sticky;
+    inset-block-start: var(--app-header-height, 4rem);
+    align-self: start;
+    max-block-size: calc(100dvh - var(--app-header-height, 4rem));
+    overflow-y: auto;
+    padding: 18px 10px;
+    background: ${({ theme }) => theme.color.surface};
+    border-inline-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    min-block-size: calc(100dvh - var(--app-header-height, 4rem));
+  }
+  ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  li[data-separated] { margin-block-start: 10px; padding-block-start: 10px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+`;
+const Caption = styled.p`
+  padding: 0 10px 8px;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.caption};
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+`;
+const SectionLink = styled(Link)`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: ${({ theme }) => theme.control.minHeight};
+  padding: 0 10px;
+  border-radius: ${({ theme }) => theme.border.radius};
+  color: ${({ theme }) => theme.color.text};
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  text-decoration: none;
+  white-space: nowrap;
+  > svg { flex: none; font-size: 1.0625rem; color: ${({ theme }) => theme.color.mutedText}; }
+  &[aria-current="page"] {
+    background: ${({ theme }) => theme.color.brandSoft};
+    font-weight: ${({ theme }) => theme.typography.weight.heavy};
+    > svg { color: ${({ theme }) => theme.color.brand}; }
+  }
+  ${media.hover} { &:hover:not([aria-current="page"]) { background: ${({ theme }) => theme.color.rowHover}; } }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  ${media.desktop} { min-block-size: 40px; }
+`;
+const Count = styled.span`
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 20px;
+  block-size: 20px;
+  margin-inline-start: auto;
+  padding: 0 6px;
+  border-radius: ${({ theme }) => theme.border.radius};
+  color: ${({ theme }) => theme.color.outcome.pending.text};
+  background: ${({ theme }) => theme.color.outcome.pending.background};
+  font-size: ${({ theme }) => theme.typography.scale.caption};
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  line-height: 1;
+`;
+const MenuBar = styled.details`
+  position: relative;
+  z-index: 15;
   background: ${({ theme }) => theme.color.surface};
   border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
-  label { font-size: 0.875rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  ${media.desktop} { display: none; }
+  > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-block-size: 48px;
+    padding: 0 16px;
+    list-style: none;
+    cursor: pointer;
+    &::-webkit-details-marker { display: none; }
+    > svg { flex: none; font-size: 1.125rem; color: ${({ theme }) => theme.color.mutedText}; }
+    > svg:last-child { margin-inline-start: auto; transition: transform 0.15s ease; }
+    small {
+      color: ${({ theme }) => theme.color.mutedText};
+      font-size: ${({ theme }) => theme.typography.scale.caption};
+      font-weight: ${({ theme }) => theme.typography.weight.heavy};
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    strong { font-size: 0.9375rem; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -3px; }
+  }
+  &[open] > summary > svg:last-child { transform: rotate(180deg); }
+  @media (prefers-reduced-motion: reduce) { > summary > svg:last-child { transition: none; } }
 `;
-const PageSelect = styled.select`
-  ${adminControl}
-  inline-size: min(15rem, 72%);
+const MenuPopup = styled.nav`
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 100%;
+  max-block-size: calc(100dvh - 7rem);
+  overflow-y: auto;
+  padding: 6px 8px 10px;
+  background: ${({ theme }) => theme.color.surface};
+  border-block-end: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  box-shadow: 0 10px 24px rgb(6 23 71 / 18%);
+  ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  li[data-separated] { margin-block-start: 6px; padding-block-start: 6px; border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
 `;
-const Column = styled.div<{ $wide: boolean; $expanded: boolean }>`
+const Main = styled.main`
+  min-inline-size: 0;
+  padding: 20px 16px 40px;
+  &:focus { outline: none; }
+  ${media.desktop} { padding: 24px 28px 48px; }
+`;
+const Column = styled.div<{ $wide: boolean }>`
   display: grid;
   gap: 16px;
+  align-content: start;
   min-inline-size: 0;
-  max-inline-size: ${({ $wide, $expanded }) => $wide ? "100%" : $expanded ? "76rem" : "56rem"};
+  max-inline-size: ${({ $wide }) => $wide ? "100%" : "76rem"};
   margin-inline: auto;
-  padding-block: 20px;
-  > ${PageTitle} h1 { font-size: 1.375rem; }
-  ${media.desktop} { gap: 20px; padding-block: 24px; }
-`;
-const Fallback = styled.nav`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding-block: 12px;
+  ${({ $wide }) => !$wide && css`${media.desktop} { gap: 20px; }`}
 `;

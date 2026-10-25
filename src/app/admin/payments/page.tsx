@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { adminDisplayName } from "@/domain/admin-identity";
-import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminFrame } from "@/app/_components/admin-frame";
 import { PaymentsEditor } from "@/components/admin/payments-editor";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
-import { Notice, PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
+import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
+import { DeskHead } from "@/components/admin/desk-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { createPaymentReview } from "@/server/admin/payment-review";
 import { plansServiceFor } from "@/server/members/plans";
@@ -21,5 +22,5 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
     createPaymentReview(db).list(tab).catch(() => null),
     plansServiceFor(db).list().catch(() => []),
   ]) : [null, []] as const;
-  return <AdminShell current="payments" username={adminDisplayName(page.owner)} {...(data ? { pendingCount: data.pendingCount } : {})}><PageTitle><h1>Payments</h1></PageTitle>{data ? <PaymentsEditor queue={data} tab={tab} plans={plans} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}</AdminShell>;
+  return <AdminFrame database={page.services.database} current="payments" username={adminDisplayName(page.owner)} {...(data ? { pendingCount: data.pendingCount } : {})}>{data ? <PaymentsEditor queue={data} tab={tab} plans={plans} /> : <><DeskHead><h1>Payments</h1></DeskHead><Notice $tone="error">Member storage is unavailable.</Notice></>}</AdminFrame>;
 }

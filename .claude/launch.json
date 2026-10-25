@@ -25,6 +25,14 @@
       "runtimeArgs": ["node_modules/next/dist/bin/next", "start", ".tmp/payments-968d36cf", "--hostname", "127.0.0.1", "--port", "4330"],
       "env": { "GOAL_HINT_DATABASE_ENABLED": "false", "NEXT_TELEMETRY_DISABLED": "1" },
       "port": 4330
+    },
+    {
+      "name": "owner-fixture-dev",
+      "runtimeExecutable": "C:\\Users\\WASSWA WILSON\\AppData\\Roaming\\fnm\\node-versions\\v24.18.1\\installation\\node.exe",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", ".tmp/owner-dev", "--hostname", "127.0.0.1", "--port", "4340"],
+      "env": { "GOAL_HINT_DATABASE_ENABLED": "false", "NEXT_TELEMETRY_DISABLED": "1", "GOAL_HINT_ADMIN_PHONES": "[\"256700000991\"]",
+        "GOAL_HINT_ADMIN_PASSWORD": "Synthetic owner fixture password", "GOAL_HINT_ADMIN_PASSWORD_HASH": "" },
+      "port": 4340
     }
   ]
 }

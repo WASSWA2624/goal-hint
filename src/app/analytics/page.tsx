@@ -7,7 +7,7 @@ import { getReportingDate, utcInstantFromEpochMilliseconds } from "@/domain/cale
 import { getAnalyticsServices, verifyAdminSession } from "@/server/analytics/analytics-http";
 import { memberCookieName } from "@/server/members/member-sessions";
 import { adminDisplayName } from "@/domain/admin-identity";
-import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminFrame } from "@/app/_components/admin-frame";
 
 export const metadata: Metadata = {
   title: "Analytics · Goal Hint",
@@ -23,9 +23,9 @@ export default async function AnalyticsPage() {
   const jar = await cookies();
   const admin = await verifyAdminSession(services, jar.get(memberCookieName(services.config.production))?.value);
   if (admin) {
-    return <AdminShell current="analytics" username={adminDisplayName(admin)}>
+    return <AdminFrame database={services.database} current="analytics" username={adminDisplayName(admin)}>
       <AnalyticsDashboard today={currentReportingDate()} />
-    </AdminShell>;
+    </AdminFrame>;
   }
   redirectToAccountLogin();
 }

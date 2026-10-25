@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import styled from "styled-components";
-import { Muted, Panel, PanelHeader } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatPhone } from "@/domain/phone";
 import { formatPeriodEnd } from "@/domain/subscription-period";
-import { ActionButton, ButtonRow, FormStack, Hint } from "./admin-form";
+import { CopyIcon, KeyIcon } from "@/components/ui/icons";
+import { media } from "@/styles/theme";
+import { ActionButton } from "./admin-form";
 import type { CodeAction } from "./code-tools";
+import { MetaLine, Panel, PanelBody, PanelHead } from "./desk-styles";
 
 /** The recovery password stays in memory only, and disappears on Done or leaving the account. */
 export type Revealed = Readonly<{ password: string; accountId: string; phone: string | null; created: boolean; sessionsDeleted: number; expiresAt: string }>;
@@ -22,21 +24,85 @@ export function PasswordReset({ path, phone, action, reveal }: { path: string; p
         expiresAt: typeof reply.body.expiresAt === "string" ? reply.body.expiresAt : "", sessionsDeleted: typeof reply.body.sessionsDeleted === "number" ? reply.body.sessionsDeleted : 0 });
     }
   }
-  return <form method="post" action={path} onSubmit={submit}><FormStack>
-    <label><input type="checkbox" name="confirmed" required disabled={action.busy} /> I am on a call with the member and checked it is their number.</label>
-    <ActionButton type="submit" $variant="primary" disabled={action.busy}>Set temporary password</ActionButton>
-  </FormStack></form>;
+  return <ResetForm method="post" action={path} onSubmit={submit}>
+    <CallCheck><input type="checkbox" name="confirmed" required disabled={action.busy} />I am on a call with the member and checked it is their number.</CallCheck>
+    <ActionButton type="submit" $variant="primary" disabled={action.busy}><KeyIcon />Set temporary password</ActionButton>
+  </ResetForm>;
 }
 
+/** Shown once after a reset: the password large enough to read aloud, then Done forgets it. */
 export function TemporaryPassword({ value, done }: { value: Revealed; done: () => void }) {
-  const [copied, setCopied] = useState(false), secret = useRef<HTMLParagraphElement>(null);
+  const [copied, setCopied] = useState(false), secret = useRef<HTMLSpanElement>(null);
   useEffect(() => { secret.current?.focus(); }, []);
-  return <Panel aria-label="Temporary password" data-subscriber-temporary-password><PanelHeader><h2>Temporary password{value.phone ? ` · +${formatPhone(value.phone)}` : ""}</h2></PanelHeader>
-    <Secret ref={secret} tabIndex={-1} translate="no">{value.password}</Secret><ButtonRow><ActionButton type="button" onClick={() => { void navigator.clipboard?.writeText(value.password).then(() => setCopied(true), () => {}); }}>{copied ? "Copied" : "Copy"}</ActionButton><ActionButton type="button" onClick={done}>Done</ActionButton></ButtonRow>
-    <Hint>Read it to the member on the phone. It works once and requires them to choose a new password before signing in.</Hint>
-    {value.expiresAt && <p>Expires {formatPeriodEnd(new Date(value.expiresAt))} (15 minutes).</p>}
-    <Muted>{value.sessionsDeleted} device{value.sessionsDeleted === 1 ? "" : "s"} signed out. It is shown only now; set a new one if it is lost.</Muted>
-    {value.created && <p><a href={`/admin/subscribers?accountId=${value.accountId}`}>Open the new account</a></p>}
-  </Panel>;
+  return <RevealPanel aria-label="Temporary password" data-subscriber-temporary-password>
+    <PanelHead><h2>Temporary password{value.phone ? ` · +${formatPhone(value.phone)}` : ""}</h2></PanelHead>
+    <PanelBody>
+      <SecretRow>
+        <Secret ref={secret} tabIndex={-1} translate="no">{value.password}</Secret>
+        <ActionButton type="button" onClick={() => { void navigator.clipboard?.writeText(value.password).then(() => setCopied(true), () => {}); }}><CopyIcon />{copied ? "Copied" : "Copy"}</ActionButton>
+      </SecretRow>
+      <Explain>Works once, then they choose a new password. Shown only now; if lost, set a new one.</Explain>
+      <MetaLine>
+        {value.expiresAt && <><span>Expires {formatPeriodEnd(new Date(value.expiresAt))}</span><span aria-hidden="true">·</span></>}
+        <span>{value.sessionsDeleted} device{value.sessionsDeleted === 1 ? "" : "s"} signed out</span>
+      </MetaLine>
+      {value.created && <p><a href={`/admin/subscribers?accountId=${value.accountId}`}>Open the new account</a></p>}
+      <DoneButton type="button" onClick={done}>Done</DoneButton>
+    </PanelBody>
+  </RevealPanel>;
 }
-const Secret = styled.p`font-size: clamp(1.3rem, 5vw, 2rem); font-weight: 800; letter-spacing: 0.08em; overflow-wrap: anywhere;`;
+
+const ResetForm = styled.form`
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+  > button { inline-size: 100%; }
+  ${media.desktop} { gap: 8px; > button { justify-self: start; inline-size: auto; } }
+`;
+/** The call confirmation: a 44px row on phones, the box aligned with the first line of its sentence. */
+const CallCheck = styled.label`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-block-size: ${({ theme }) => theme.control.minHeight};
+  padding-block: 11px;
+  font-size: ${({ theme }) => theme.typography.scale.body};
+  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  line-height: 1.5;
+  cursor: pointer;
+  input { flex: none; inline-size: 20px; block-size: 20px; margin: 0; accent-color: ${({ theme }) => theme.color.brand}; }
+  ${media.desktop} { min-block-size: 36px; padding-block: 7px; input { inline-size: 18px; block-size: 18px; margin-block-start: 1px; } }
+`;
+const RevealPanel = styled(Panel)`
+  border-color: ${({ theme }) => theme.color.outcome.correct.border};
+  h2 { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+`;
+const SecretRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 4px 14px;
+  border-radius: ${({ theme }) => theme.border.radius};
+  background: ${({ theme }) => theme.color.outcome.correct.background};
+  > button { flex: none; }
+  ${media.desktop} { padding: 6px 6px 6px 14px; }
+`;
+const Secret = styled.span`
+  min-inline-size: 0;
+  color: ${({ theme }) => theme.color.text};
+  font-family: ui-monospace, Consolas, "Courier New", monospace;
+  font-size: 1.5rem;
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  letter-spacing: 0.14em;
+  overflow-wrap: anywhere;
+  &:focus { outline: none; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+  ${media.desktop} { font-size: 1.625rem; }
+`;
+const Explain = styled.p`font-size: ${({ theme }) => theme.typography.scale.body};`;
+const DoneButton = styled(ActionButton)`
+  inline-size: 100%;
+  ${media.desktop} { justify-self: start; inline-size: auto; }
+`;

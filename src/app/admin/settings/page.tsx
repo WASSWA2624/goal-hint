@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { adminDisplayName } from "@/domain/admin-identity";
 import { headers } from "next/headers";
-import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminFrame } from "@/app/_components/admin-frame";
+import { DeskHead } from "@/components/admin/desk-styles";
 import { SettingsEditor } from "@/components/admin/settings-editor";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
-import { Notice, PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
+import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { settingsView } from "@/server/admin/settings-http";
 import { settingsServiceFor } from "@/server/members/settings";
@@ -18,10 +19,10 @@ export default async function AdminSettingsPage({ searchParams }: { searchParams
   const { database } = page.services;
   const view = database ? await settingsView(settingsServiceFor(database), await headers()).catch(() => null) : null;
   return (
-    <AdminShell current="settings" username={adminDisplayName(page.owner)}>
-      <PageTitle><h1>Settings</h1><p>Payments, support and account access</p></PageTitle>
+    <AdminFrame database={page.services.database} current="settings" username={adminDisplayName(page.owner)}>
+      <DeskHead><h1>Settings</h1></DeskHead>
       {view ? <SettingsEditor initial={view} username={page.owner.username} sessionAuthorized={!!page.owner.memberAccountId} />
         : <Notice $tone="error" role="alert">Settings are unavailable because the database cannot be read. Paid access stays as it was.</Notice>}
-    </AdminShell>
+    </AdminFrame>
   );
 }

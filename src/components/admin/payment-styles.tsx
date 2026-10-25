@@ -1,193 +1,607 @@
 "use client";
 
-import styled from "styled-components";
-import { Panel } from "@/components/analytics/dashboard/dashboard-styles";
-import { ActionButton, FieldRow, FormStack } from "./admin-form";
+import styled, { css } from "styled-components";
+import Link from "@/components/navigation/navigation-link";
+import { media } from "@/styles/theme";
+import { ActionButton, adminControl } from "./admin-form";
+import { DeskHead, DeskHeadEnd, Drawer, EmptyPanel, Segmented, StickyActions, Toolbar } from "./desk-styles";
+
+/**
+ * Payments "review desk": the queue as a tray of report tickets above one review with three zones (proof, expected payment,
+ * decision) from desktop up; on phones the queue and the review are separate views and the zones stack as panels.
+ */
+const panelRadius = "6px";
+const panelLook = css`
+  background: ${({ theme }) => theme.color.surface};
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+  border-radius: ${panelRadius};
+`;
+const hairline = css`${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}`;
+const focusRing = css`
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
+`;
+/** Phones: 44px text actions; desktop: 36px. */
+const textAction = css`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: ${({ theme }) => theme.control.minHeight};
+  padding: 0 4px;
+  border: 0;
+  color: ${({ theme }) => theme.color.link};
+  background: none;
+  font: inherit;
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  > svg { flex: none; font-size: 1rem; }
+  &:disabled { cursor: not-allowed; opacity: 0.55; }
+  ${focusRing}
+  ${media.hover} { &:hover:not(:disabled) { text-decoration: underline; } }
+  ${media.desktop} { min-block-size: 36px; }
+`;
+const visuallyHidden = css`
+  position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0;
+`;
+const desktopOnly = css`${media.belowDesktop} { display: none; }`;
+const phoneOnly = css`${media.desktop} { display: none; }`;
 
 export const PaymentLayout = styled.div`
-  display: grid; gap: 14px; min-inline-size: 0;
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+  > * { min-inline-size: 0; }
+  ${media.desktop} { gap: 16px; }
+`;
+
+/** On phones the review replaces the title row; the h1 stays for assistive technology. */
+export const PaymentHead = styled(DeskHead)<{ $reviewing: boolean }>`
+  ${media.belowDesktop} {
+    gap: 12px;
+    > nav { order: 3; flex: 1 1 100%; }
+    ${({ $reviewing }) => $reviewing && css`
+      min-block-size: 0;
+      h1 { ${visuallyHidden} }
+      > :not(h1) { display: none; }
+    `}
+  }
+`;
+export const HeadEnd = styled(DeskHeadEnd)``;
+
+/** Four equal status tabs on phones, wrapping long labels instead of scrolling. */
+export const StatusTabs = styled(Segmented)`
+  && > a[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
+  ${media.belowDesktop} {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    && > a { min-block-size: 48px; padding: 4px; font-size: 0.78125rem; line-height: 1.2; text-align: center; white-space: normal; }
+  }
 `;
 
 export const PaymentFeedback = styled.div`
   scroll-margin-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
   > p { margin: 0; }
+  > p + p { margin-block-start: 8px; }
 `;
 
-export const PaymentTabs = styled.nav`
-  display: flex; flex-wrap: wrap; gap: 4px; min-inline-size: 0;
-  a { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-block-size: 44px; padding: 8px 14px;
-    border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius}; color: ${({ theme }) => theme.color.mutedText};
-    background: ${({ theme }) => theme.color.surface}; font-size: 0.8125rem; font-weight: 500; text-decoration: none; }
-  a[aria-current="page"] { border-color: ${({ theme }) => theme.color.link}; color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
-  a[aria-disabled="true"] { cursor: not-allowed; opacity: 0.6; }
-  a:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+export const RefreshSquare = styled.button<{ $changed: boolean }>`
+  display: grid;
+  place-items: center;
+  inline-size: ${({ theme }) => theme.control.minHeight};
+  block-size: ${({ theme }) => theme.control.minHeight};
+  padding: 0;
+  border: ${hairline};
+  border-radius: ${({ theme }) => theme.border.radius};
+  color: ${({ theme }) => theme.color.link};
+  background: ${({ theme }) => theme.color.surface};
+  cursor: pointer;
+  > svg { font-size: 1.125rem; }
+  ${({ theme, $changed }) => $changed && css`color: ${theme.color.onAction}; background: ${theme.gradient.action}; border-color: transparent;`}
+  &:disabled { cursor: not-allowed; opacity: 0.55; }
+  ${focusRing}
+  ${phoneOnly}
 `;
 
-export const PaymentToolbar = styled(Panel)<{ $reviewing: boolean }>`
-  display: grid; gap: 10px; padding: 14px;
-  @media(min-width: 1000px) { grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 20px; }
-  @media(max-width: 999px) { display: ${({ $reviewing }) => $reviewing ? "none" : "grid"}; }
-  label { font-size: 0.8125rem; }
-  input:not([type="checkbox"], [type="radio"], [type="hidden"]), select { min-block-size: 44px; font-size: 16px; }
-  button { min-block-size: 44px; }
+/** Desktop: a compact button that opens the trial requests over the page. */
+export const TrialPopover = styled.details`
+  position: relative;
+  ${desktopOnly}
+  > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-block-size: 40px;
+    padding: 0 12px 0 14px;
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border-radius: ${({ theme }) => theme.border.radius};
+    color: ${({ theme }) => theme.color.link};
+    background: ${({ theme }) => theme.color.surface};
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
+    white-space: nowrap;
+    list-style: none;
+    cursor: pointer;
+    &::-webkit-details-marker { display: none; }
+    > svg { flex: none; font-size: 1rem; }
+    > svg:last-child { color: ${({ theme }) => theme.color.mutedText}; transition: transform 0.15s ease; }
+    ${focusRing}
+  }
+  &[open] > summary > svg:last-child { transform: rotate(180deg); }
+  > div {
+    position: absolute;
+    inset-inline-end: 0;
+    inset-block-start: calc(100% + 6px);
+    z-index: 6;
+    inline-size: 22rem;
+    max-inline-size: calc(100vw - 32px);
+    max-block-size: 24rem;
+    overflow-y: auto;
+    padding: 4px 16px;
+    ${panelLook}
+    border-color: ${({ theme }) => theme.color.controlBorder};
+  }
+  @media (prefers-reduced-motion: reduce) { > summary > svg:last-child { transition: none; } }
+`;
+/** Phones: the same requests as a drawer panel under the queue. */
+export const TrialDrawer = styled(Drawer)<{ $reviewing: boolean }>`
+  ${panelLook}
+  &:last-child { border-block-end: ${hairline}; }
+  > div { padding-block-start: 0; }
+  ${phoneOnly}
+  ${({ $reviewing }) => $reviewing && css`display: none;`}
+`;
+export const TrialList = styled.ul`
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  > li { display: grid; gap: 10px; padding-block: 12px; border-block-start: ${hairline}; }
+  > li:first-child { border-block-start: 0; }
+  strong { display: block; font-variant-numeric: tabular-nums; }
+  small { color: ${({ theme }) => theme.color.mutedText}; font-size: ${({ theme }) => theme.typography.scale.secondary}; }
+  > li > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 `;
 
-export const PaymentWorkspace = styled.div<{ $detailOpen: boolean }>`
-  display: grid; gap: 16px; min-inline-size: 0; align-items: start;
-  > * { min-inline-size: 0; }
-  @media(min-width: 1000px) { grid-template-columns: minmax(18rem, 23rem) minmax(0, 1fr); }
-  @media(max-width: 999px) {
-    > aside { display: ${({ $detailOpen }) => $detailOpen ? "none" : "grid"}; }
-    > section { display: ${({ $detailOpen }) => $detailOpen ? "grid" : "none"}; }
+/** Desktop: a panel with the toolbar above the ticket tray. Phones: the parts sit straight on the page. */
+export const QueuePanel = styled.section<{ $reviewing: boolean }>`
+  display: grid;
+  min-inline-size: 0;
+  ${media.desktop} { ${panelLook} }
+  ${media.belowDesktop} {
+    gap: 12px;
+    ${({ $reviewing }) => $reviewing && css`display: none;`}
+  }
+  > h2 { ${visuallyHidden} }
+`;
+export const QueueBar = styled(Toolbar)`
+  ${media.belowDesktop} { gap: 8px; padding: 0; border: 0; > :first-child { flex-basis: 100%; max-inline-size: none; } }
+  > button { margin-inline-start: auto; ${desktopOnly} }
+  ${media.desktop} { > :first-child { max-inline-size: 28rem; } }
+`;
+export const SearchField = styled.div`
+  position: relative;
+  min-inline-size: 0;
+  > svg { position: absolute; inset-inline-start: 12px; inset-block-start: 50%; transform: translateY(-50%); font-size: 1.125rem; color: ${({ theme }) => theme.color.mutedText}; pointer-events: none; }
+  > input { ${adminControl} padding-inline-start: 38px; }
+  > input::placeholder { color: ${({ theme }) => theme.color.mutedText}; opacity: 1; }
+  > label { ${visuallyHidden} }
+  ${media.desktop} { > input { min-block-size: 40px; font-size: 0.9375rem; } }
+`;
+export const QueueSummary = styled.p`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-inline-size: 0;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  > span + span::before { content: "·"; margin-inline-end: 6px; }
+  > [data-payment-queue-updated] { color: ${({ theme }) => theme.color.link}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+`;
+
+export const TicketTray = styled.ol<{ $opened: boolean }>`
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-inline-size: 0;
+  > li { display: grid; min-inline-size: 0; }
+  ${({ $opened }) => !$opened && css`${media.belowDesktop} { && [aria-current="true"] { border-color: ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface}; } }`}
+  ${media.desktop} {
+    grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr));
+    max-block-size: 17rem;
+    padding: 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 `;
-
-export const QueuePanel = styled.aside`
-  display: grid; align-content: start; gap: 0; min-inline-size: 0;
-  border: 1px solid ${({ theme }) => theme.color.border}; background: ${({ theme }) => theme.color.surface};
-`;
-
-export const QueueHeading = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 12px;
-  border-block-end: 1px solid ${({ theme }) => theme.color.border}; font-size: 0.8125rem;
-  h2, p { margin: 0; font-size: inherit; }
-`;
-
-export const QueueList = styled.div`
-  display: grid; align-content: start; min-inline-size: 0;
-  @media(min-width: 1000px) { max-block-size: calc(100dvh - 22rem); overflow: auto; overscroll-behavior: contain; }
-`;
-
-export const QueueItem = styled.button<{ $selected: boolean }>`
-  display: grid; gap: 6px; inline-size: 100%; min-inline-size: 0; min-block-size: 44px; padding: 12px;
-  border: 0; border-block-end: 1px solid ${({ theme }) => theme.color.border};
-  border-inline-start: 3px solid ${({ theme, $selected }) => $selected ? theme.color.link : "transparent"}; border-radius: 0;
-  background: ${({ theme, $selected }) => $selected ? theme.color.brandSoft : theme.color.surface};
-  color: ${({ theme }) => theme.color.text}; font: inherit; text-align: start; cursor: pointer;
-  &:last-child { border-block-end: 0; }
-  &:hover { background: ${({ theme }) => theme.color.rowHover}; }
-  &:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
-  &:disabled { cursor: not-allowed; opacity: 0.6; }
-  > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; min-inline-size: 0; }
-  > header strong { font-size: 0.875rem; font-weight: 600; overflow-wrap: anywhere; }
-  > header > :last-child:not(:first-child) { font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; overflow-wrap: anywhere; }
-`;
-
-export const QueueMeta = styled.div`
-  && { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+export const Ticket = styled.button`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  align-items: baseline;
+  gap: 2px 12px;
+  inline-size: 100%;
   min-inline-size: 0;
-  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem;
-  span { display: inline-flex; align-items: center; gap: 4px; min-inline-size: 0; }
-  svg { inline-size: 15px; block-size: 15px; flex: none; }
+  min-block-size: 64px;
+  padding: 10px 14px;
+  ${panelLook}
+  color: ${({ theme }) => theme.color.text};
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  &[aria-current="true"] { border-color: ${({ theme }) => theme.color.link}; background: ${({ theme }) => theme.color.brandSoft}; }
+  &:disabled { cursor: not-allowed; opacity: 0.6; }
+  &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 1px; }
+  ${media.hover} { &:hover:not(:disabled):not([aria-current="true"]) { border-color: ${({ theme }) => theme.color.controlBorder}; } }
 `;
+export const TicketRef = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  overflow-wrap: anywhere;
+`;
+export const TicketAmount = styled.span`
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  white-space: nowrap;
+`;
+export const TicketMeta = styled.span`
+  min-inline-size: 0;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+`;
+export const TicketTime = styled(TicketMeta)`
+  text-align: end;
+  white-space: nowrap;
+`;
+export const TicketWarn = styled.span`
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block-start: 4px;
+  color: ${({ theme }) => theme.color.outcome.pending.text};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  > svg { flex: none; font-size: 0.875rem; }
+`;
+export const QueueEmpty = styled(EmptyPanel)`
+  ${media.belowDesktop} { ${panelLook} }
+  ${media.desktop} { padding-block: 28px; }
+`;
+
+export const ReviewSection = styled.section<{ $reviewing: boolean }>`
+  display: grid;
+  min-inline-size: 0;
+  scroll-margin-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
+  ${media.belowDesktop} { ${({ $reviewing }) => !$reviewing && css`display: none;`} }
+`;
+
+/* ---------------- Review ---------------- */
+
+/**
+ * Phones: a bare stack (the zones are panels); desktop: one panel with a header row over the zones. The desk type is dense:
+ * 13px facts and bold 13px field labels.
+ */
+export const ReviewCard = styled.article`
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+  dl > div { min-block-size: 40px; padding-block: 8px; }
+  dt, dd { font-size: ${({ theme }) => theme.typography.scale.body}; }
+  label { font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  ${media.desktop} { gap: 0; ${panelLook} }
+`;
+export const ReviewHead = styled.header`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  min-inline-size: 0;
+  > h2 {
+    flex: 1 1 100%;
+    font-size: 1.25rem;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+    scroll-margin-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
+  }
+  > [data-review-meta] { order: 3; }
+  > [data-review-badge] { order: 4; }
+  > [data-review-link] { order: 5; flex: 0 0 100%; justify-content: flex-start; margin-inline-start: -4px; }
+  ${media.desktop} {
+    gap: 6px 16px;
+    min-block-size: 62px;
+    padding: 10px 12px 10px 18px;
+    border-block-end: ${hairline};
+    > h2 { flex: 0 1 auto; }
+    > [data-review-badge] { order: 1; margin-inline-start: -6px; }
+    > [data-review-meta] { order: 2; }
+    > [data-review-link] { order: 3; flex: 0 0 auto; margin-inline-start: 0; }
+  }
+`;
+export const ReviewNav = styled.div`
+  order: -1;
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-block: -6px 6px;
+  ${media.desktop} { order: 9; flex: 0 0 auto; margin: 0 0 0 auto; > [data-review-back] { display: none; } }
+`;
+export const ReviewBack = styled.button`
+  ${textAction}
+  gap: 4px;
+  padding-inline: 0 8px;
+`;
+export const Stepper = styled.div`
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: auto;
+  ${panelLook}
+  > button {
+    display: grid;
+    place-items: center;
+    inline-size: 44px;
+    block-size: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: ${panelRadius};
+    color: ${({ theme }) => theme.color.link};
+    background: none;
+    cursor: pointer;
+    > svg { font-size: 1.125rem; }
+    &:disabled { color: ${({ theme }) => theme.color.disabledText}; cursor: not-allowed; }
+    &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
+    ${media.hover} { &:hover:not(:disabled) { background: ${({ theme }) => theme.color.rowHover}; } }
+  }
+  > span { padding: 0 2px; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.heavy}; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  ${media.desktop} { > button { inline-size: 40px; block-size: 40px; } > span { padding-inline: 4px; } }
+`;
+export const ReviewMeta = styled.span`
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.body};
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+`;
+export const SubscriberLink = styled(Link)`${textAction}`;
 
 const statusTone = (status: string) => status === "pending" ? "pending" : status === "approved" ? "correct" : status === "rejected" ? "incorrect" : "void";
 export const PaymentBadge = styled.span<{ $status: string }>`
-  display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; border-radius: ${({ theme }) => theme.border.radius};
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 20px;
+  padding: 0 7px;
+  border-radius: 2px;
+  color: ${({ theme, $status }) => theme.color.outcome[statusTone($status)].text};
   background: ${({ theme, $status }) => theme.color.outcome[statusTone($status)].background};
-  color: ${({ theme, $status }) => theme.color.outcome[statusTone($status)].text}; font-size: 0.6875rem; line-height: 1.4; font-weight: 500;
+  font-size: ${({ theme }) => theme.typography.scale.caption};
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  line-height: 1;
+  white-space: nowrap;
 `;
 
-export const ReviewPanel = styled.section`
-  display: grid; gap: 12px; min-inline-size: 0;
-  scroll-margin-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
-`;
-
-export const PaymentCard = styled(Panel)`
-  display: grid; gap: 10px; padding: 12px; min-inline-size: 0;
-  h2, h3, p { margin: 0; }
-  h3 { font-size: 0.875rem; }
-  label { font-size: 0.8125rem; }
-  input:not([type="checkbox"], [type="radio"], [type="hidden"]), textarea, select { min-block-size: 44px; font-size: 16px; }
-  button { min-block-size: 44px; }
-  label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: 8px; min-block-size: 44px; cursor: pointer; }
-  input[type="checkbox"] { inline-size: 18px; block-size: 18px; margin: 0; flex: none; }
-  form, fieldset { min-inline-size: 0; }
-  > [data-payment-attachment] { display: block; min-inline-size: 0; }
-  > [data-payment-attachment]:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
-  details > summary { display: flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: 0.8125rem; cursor: pointer; overflow-wrap: anywhere; }
-  details > summary:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
-`;
-
-export const ReviewHeader = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; min-inline-size: 0;
-  h2 { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
-  h2 { scroll-margin-block-start: calc(var(--app-header-content-height, 4rem) + 16px); }
-  p { margin: 0; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
-`;
-
-export const PaymentFacts = styled.dl`
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-inline-size: 0; margin: 0;
-  > div { display: grid; align-content: start; gap: 4px; min-inline-size: 0; }
-  dt { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; }
-  dd { min-inline-size: 0; margin: 0; font-size: 0.875rem; font-weight: 500; overflow-wrap: anywhere; }
-  button { justify-self: start; }
-  @media(max-width: 359px) { grid-template-columns: minmax(0, 1fr); }
-`;
-
-export const PaymentEvidence = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-inline-size: 0;
-  > a, > span { display: inline-flex; align-items: center; min-block-size: 44px; }
-  > details { min-inline-size: 0; }
-  > details[open] { flex: 1 1 100%; }
-`;
-
-export const ApprovalFooter = styled.div`
-  display: grid; min-inline-size: 0;
-  > button { inline-size: 100%; min-block-size: 44px; }
-`;
-
-export const PaymentHighlight = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px;
-  min-inline-size: 0; background: ${({ theme }) => theme.color.brandSoft};
-  > div { display: grid; gap: 4px; min-inline-size: 0; }
-  strong { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-  span { font-size: 0.8125rem; overflow-wrap: anywhere; }
-  small { font-size: 0.75rem; overflow-wrap: anywhere; }
-`;
-
-export const PaymentVerification = styled.form`
-  border-block-start: 1px solid ${({ theme }) => theme.color.border}; padding-block-start: 10px;
-  > ${FormStack}, ${FieldRow} { gap: 8px; }
-  ${FieldRow} > * { min-inline-size: 0; align-content: start; }
-`;
-
-export const PaymentWarnings = styled.div`
-  display: grid; gap: 6px; min-inline-size: 0; padding: 10px 12px;
-  border-inline-start: 3px solid ${({ theme }) => theme.color.outcome.pending.text};
-  background: ${({ theme }) => theme.color.outcome.pending.background};
-  > p { margin: 0; color: ${({ theme }) => theme.color.outcome.pending.text}; font-size: 0.75rem; overflow-wrap: anywhere; }
-`;
-
-export const CheckDetails = styled.details`
+const zonePadding = "14px";
+const zoneBody = css`
+  display: grid;
+  align-content: start;
+  gap: 12px;
   min-inline-size: 0;
-  > summary { display: flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: 0.8125rem; cursor: pointer; }
-  > summary:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
-  ul { display: grid; gap: 6px; margin: 0; padding-inline-start: 20px; font-size: 0.75rem; }
+  padding: ${zonePadding};
 `;
-
-export const ReceiptPreview = styled.img`display: block; max-inline-size: 100%; max-block-size: 22rem; object-fit: contain;`;
-
-export const ReviewActions = styled.div`
-  display: flex; flex-wrap: wrap; gap: 8px; min-inline-size: 0;
-  > button { flex: 1; min-block-size: 44px; }
+/**
+ * Desktop: proof, expected payment and decision side by side (decision drops under the other two below 73rem, where the
+ * sidebar leaves too little width). Phones: no box of its own, so each zone is a panel in the review stack and the decision
+ * bar can stick to the bottom of the screen for the whole review.
+ */
+export const ReviewZones = styled.div<{ $proof: boolean }>`
+  min-inline-size: 0;
+  ${media.belowDesktop} { display: contents; }
+  ${media.desktop} {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    > * { min-inline-size: 0; }
+    > * + * { border-inline-start: ${hairline}; }
+    ${({ $proof }) => $proof && css`> :last-child { grid-column: 1 / -1; border-inline-start: 0; border-block-start: ${hairline}; }`}
+  }
+  @media (min-width: 73rem) {
+    ${({ $proof }) => $proof && css`
+      grid-template-columns: minmax(16rem, 1.15fr) minmax(15rem, 1fr) minmax(17rem, 20rem);
+      > :last-child { grid-column: auto; border-inline-start: ${hairline}; border-block-start: 0; }
+      > :first-child { border-end-start-radius: ${panelRadius}; }
+    `}
+  }
 `;
-
-export const PaymentEmpty = styled.div`
-  display: grid; justify-items: center; align-content: center; gap: 10px; padding: 24px; min-block-size: 180px;
-  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.875rem; text-align: center;
-  h2, p { margin: 0; }
-  > svg { inline-size: 28px; block-size: 28px; }
+export const ProofZone = styled.section`
+  ${zoneBody}
+  justify-items: center;
+  background: ${({ theme }) => theme.color.surfaceMuted};
+  > p:first-child { justify-self: start; }
+  ${media.belowDesktop} {
+    gap: 8px;
+    padding-block-end: 0;
+    border: ${hairline};
+    border-radius: ${panelRadius};
+  }
+  ${media.desktop} { padding: 16px 18px 18px; }
 `;
-
-export const ReviewBack = styled(ActionButton)`display: inline-flex; justify-self: start; @media(min-width: 1000px) { display: none; }`;
-
-export const TrialPanel = styled.details`
-  min-inline-size: 0; padding: 12px; border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
+export const ProofFrame = styled.div<{ $clipped: boolean }>`
+  inline-size: 100%;
+  max-inline-size: 300px;
+  min-inline-size: 0;
+  ${media.belowDesktop} {
+    max-inline-size: 280px;
+    ${({ $clipped }) => $clipped && css`
+      max-block-size: 184px;
+      overflow: hidden;
+      mask-image: linear-gradient(#000 72%, transparent);
+    `}
+  }
+`;
+export const ProofImage = styled.img`
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  border: ${hairline};
+  border-radius: ${panelRadius};
   background: ${({ theme }) => theme.color.surface};
-  > summary { display: flex; align-items: center; gap: 8px; min-block-size: 44px; font-size: 0.875rem; cursor: pointer; }
-  > summary:focus-visible { outline: 2px solid ${({ theme }) => theme.color.focus}; outline-offset: -2px; }
-  > div { display: grid; gap: 12px; min-inline-size: 0; }
+  ${media.desktop} { inline-size: auto; max-inline-size: 100%; max-block-size: 30rem; margin-inline: auto; object-fit: contain; }
+`;
+/** Phones show "Open full size" once the clipped screenshot is enlarged (or when nothing is clipped). */
+export const ProofActions = styled.div<{ $hideLink: boolean }>`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0 16px;
+  ${media.belowDesktop} { > a { ${({ $hideLink }) => $hideLink && css`display: none;`} } }
+`;
+export const ProofToggle = styled.button`${textAction} font-size: ${({ theme }) => theme.typography.scale.body}; ${phoneOnly}`;
+export const ProofLink = styled.a`${textAction}`;
+
+export const ExpectedZone = styled.section`
+  ${zoneBody}
+  ${media.belowDesktop} { ${panelLook} }
+  ${media.desktop} { padding: 16px 18px 18px; }
+  > dl { border-block-start: ${hairline}; }
+`;
+export const BigAmount = styled.div`
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+  > strong { font-size: 1.875rem; line-height: 1.2; font-weight: ${({ theme }) => theme.typography.weight.heavy}; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  > span { color: ${({ theme }) => theme.color.outcome.pending.text}; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  ${media.desktop} { > strong { font-size: 2rem; } }
+`;
+export const NetworkValue = styled.dd`
+  && { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+`;
+export const PaymentWarnings = styled.div`
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  padding: 10px 12px;
+  border-radius: ${({ theme }) => theme.border.radius};
+  color: ${({ theme }) => theme.color.outcome.pending.text};
+  background: ${({ theme }) => theme.color.outcome.pending.background};
+  > p { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; overflow-wrap: anywhere; }
+  > p > svg { flex: none; margin-block-start: 2px; font-size: 1rem; }
+`;
+export const CheckList = styled.ul`
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  > li { display: flex; align-items: flex-start; gap: 8px; font-size: ${({ theme }) => theme.typography.scale.body}; line-height: 1.45; overflow-wrap: anywhere; }
+  > li > svg { flex: none; margin-block-start: 1px; font-size: 1rem; color: ${({ theme }) => theme.color.mutedText}; }
+  > li[data-tone="good"] > svg { color: ${({ theme }) => theme.color.outcome.correct.text}; }
+`;
+
+/** A drawer inside a zone: hairline above, flush with the zone's text; on phones it spans the panel edge to edge. */
+export const ZoneDrawer = styled(Drawer)`
+  border-block-end: 0;
+  border-block-start: ${hairline};
+  &:last-child { border-block-end: 0; }
+  > summary { min-block-size: 44px; padding: 0 ${zonePadding}; }
+  > summary > svg:last-child { color: ${({ theme }) => theme.color.mutedText}; }
+  > div { padding: 2px ${zonePadding} 14px; }
+  ${media.belowDesktop} {
+    margin-inline: -${zonePadding};
+    &:last-child { margin-block-end: -${zonePadding}; }
+  }
+  ${media.desktop} {
+    > summary { padding-inline: 0; }
+    > div { padding-inline: 0; }
+  }
+`;
+export const ShieldMark = styled.span<{ $clear: boolean }>`
+  display: inline-flex;
+  color: ${({ theme, $clear }) => $clear ? theme.color.outcome.correct.text : theme.color.outcome.pending.text};
+  > svg { font-size: 1.125rem; }
+`;
+
+/** Desktop: the decision column; phones: no box, so its panels and the decision bar join the review stack. */
+export const DecisionZone = styled.div`
+  min-inline-size: 0;
+  ${media.belowDesktop} { display: contents; }
+  ${media.desktop} {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    padding: 16px 18px 18px;
+    > [data-decision-bar] { order: 1; }
+    > [data-reject] { order: 2; }
+  }
+`;
+const decisionPanel = css`
+  ${zoneBody}
+  ${media.belowDesktop} { ${panelLook} }
+  ${media.desktop} { padding: 0; }
+`;
+export const DecisionPanel = styled.div`${decisionPanel}`;
+export const ApprovalForm = styled.form`${decisionPanel}`;
+
+/** Phones: its own panel, shown only while open (the decision bar opens it). Desktop: a danger drawer under Approve. */
+export const RejectDrawer = styled(ZoneDrawer)`
+  ${media.belowDesktop} {
+    margin: 0;
+    ${panelLook}
+    &:last-child { margin: 0; }
+    &:not([open]) { display: none; }
+    [data-reject-inline] { display: none; }
+  }
+`;
+export const DecisionBar = styled(StickyActions)<{ $rejecting: boolean }>`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr);
+  background: ${({ theme }) => theme.color.surface};
+  > button { min-inline-size: 0; padding-inline: 10px; }
+  > [data-reject-toggle], > [data-reject-submit] { ${phoneOnly} }
+  ${({ $rejecting }) => $rejecting ? css`
+    ${media.belowDesktop} { > [data-payment-approve] { display: none; } }
+  ` : css`> [data-reject-submit] { display: none; }`}
+  ${media.desktop} {
+    grid-template-columns: minmax(0, 1fr);
+    > [data-payment-approve] { min-block-size: 46px; font-size: 0.9375rem; }
+  }
+`;
+/** Danger outline while closed ("Reject"); a plain secondary button while the reject panel is open ("Cancel"). */
+export const RejectToggle = styled(ActionButton)<{ $open: boolean }>`
+  ${({ theme, $open }) => !$open && css`
+    color: ${theme.color.outcome.incorrect.text};
+    background: ${theme.color.surface};
+    border-color: ${theme.color.outcome.incorrect.border};
+  `}
+`;
+export const RejectChecks = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-block-size: ${({ theme }) => theme.control.minHeight};
+  font-size: ${({ theme }) => theme.typography.scale.body};
+  && { font-weight: ${({ theme }) => theme.typography.weight.medium}; }
+  cursor: pointer;
+  > input { inline-size: 18px; block-size: 18px; margin: 0; flex: none; accent-color: ${({ theme }) => theme.color.brand}; }
+  ${media.desktop} { min-block-size: 36px; }
+`;
+export const CopyRow = styled.dd`
+  && { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 8px; }
+  > span { overflow-wrap: anywhere; }
+`;
+export const CopyButton = styled.button`${textAction} font-size: ${({ theme }) => theme.typography.scale.body};`;
+export const RecoveryStack = styled.div`
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+  h3 { font-size: 0.9375rem; }
 `;

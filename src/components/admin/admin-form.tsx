@@ -2,10 +2,11 @@
 
 import styled, { css } from "styled-components";
 import { ToolButton } from "@/components/analytics/dashboard/dashboard-styles";
+import { media } from "@/styles/theme";
 
 /**
- * Form parts for owner pages: one column on phones, 44 px targets, and 16 px text in fields so phones do not zoom on focus.
- * Owner copy is English only.
+ * Form parts for owner pages: one column on phones, 44 px targets (40 px from desktop up), bold 13 px labels, and 16 px text
+ * in fields so phones do not zoom on focus. Owner copy is English only.
  */
 export const FormStack = styled.div`
   display: grid;
@@ -26,6 +27,7 @@ export const adminControl = css`
   color: ${({ theme }) => theme.color.text};
   background: ${({ theme }) => theme.color.surface};
   font-size: 1rem;
+  ${media.desktop} { min-block-size: 40px; padding-block: 6px; }
   &:focus-visible { outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus}; outline-offset: 2px; }
   &[aria-invalid="true"] { border-color: ${({ theme }) => theme.color.outcome.incorrect.border}; }
   &:disabled { cursor: not-allowed; opacity: 0.6; }
@@ -34,7 +36,8 @@ export const FieldBlock = styled.label`
   display: grid;
   gap: 4px;
   min-inline-size: 0;
-  font-weight: ${({ theme }) => theme.typography.weight.medium};
+  font-size: ${({ theme }) => theme.typography.scale.body};
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
   input, select, textarea { ${adminControl} }
   textarea { min-block-size: 5.5rem; resize: vertical; }
 `;
@@ -49,9 +52,12 @@ export const FieldError = styled.span`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   font-weight: ${({ theme }) => theme.typography.weight.bold};
 `;
+/** The main action takes `$variant="primary"`; without a variant it is the secondary, link-coloured button. */
 export const ActionButton = styled(ToolButton)`
   min-block-size: ${({ theme }) => theme.control.minHeight};
   padding-inline: 14px;
+  ${({ theme, $variant }) => !$variant && css`color: ${theme.color.link};`}
+  ${media.desktop} { min-block-size: 40px; }
 `;
 export const DangerButton = styled(ActionButton)`
   color: ${({ theme }) => theme.color.outcome.incorrect.text};

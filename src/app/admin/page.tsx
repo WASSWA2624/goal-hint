@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { adminDisplayName } from "@/domain/admin-identity";
-import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminFrame } from "@/app/_components/admin-frame";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
 import { OverviewReport } from "@/components/admin/owner-reports";
+import { DeskHead, DeskTitle } from "@/components/admin/desk-styles";
 import { createSubscribers } from "@/server/admin/subscribers";
-import { Notice, PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
+import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
 
 export const metadata: Metadata = { title: "Admin · Goal Hint" };
@@ -19,9 +20,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     subscribers?.pendingPayments().catch(() => null) ?? null,
   ]);
   return (
-    <AdminShell current="overview" username={adminDisplayName(page.owner)} {...(value ? { pendingCount: value.pending } : {})}>
-      <PageTitle><h1>Overview</h1></PageTitle>
+    <AdminFrame database={page.services.database} current="overview" username={adminDisplayName(page.owner)} {...(value ? { pendingCount: value.pending } : {})}>
+      <DeskHead><DeskTitle><h1>Overview</h1></DeskTitle></DeskHead>
       {value ? <OverviewReport value={value} payments={payments} /> : <Notice $tone="error">Member storage is unavailable.</Notice>}
-    </AdminShell>
+    </AdminFrame>
   );
 }

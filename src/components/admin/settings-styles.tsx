@@ -1,185 +1,344 @@
 "use client";
 
 import styled, { css } from "styled-components";
-import { Panel } from "@/components/analytics/dashboard/dashboard-styles";
 import { media } from "@/styles/theme";
-import { ActionButton } from "./admin-form";
+import { adminControl } from "./admin-form";
+import { DeskGrid, Drawer, Panel, Segmented, StickyActions } from "./desk-styles";
 
 const focusRing = css`
-  outline: 2px solid ${({ theme }) => theme.color.focus};
-  outline-offset: -2px;
+  outline: ${({ theme }) => theme.border.focusWidth} solid ${({ theme }) => theme.color.focus};
+  outline-offset: 2px;
 `;
 
-/** One section at a time keeps the editor compact without narrowing its fields. */
-export const SettingsLayout = styled.div`
-  display: grid; gap: 16px; min-inline-size: 0; align-items: start;
-  > form { min-inline-size: 0; }
-  @media (min-width: 1000px) { grid-template-columns: 12rem minmax(0, 1fr); gap: 20px; }
+/**
+ * The desk with a side panel that gives way to the main column at 1024px (18rem there, 22rem from about 1280px), so the
+ * four section tabs keep one row beside the sidebar.
+ */
+export const SettingsDesk = styled(DeskGrid)`
+  ${media.desktop} { grid-template-columns: minmax(0, 1fr) min(22rem, max(18rem, 36%)); }
 `;
 
-export const SettingsNav = styled.nav`
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
-  min-inline-size: 0; padding: 4px; border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
-  background: ${({ theme }) => theme.color.surface};
-  @media (min-width: 1000px) {
-    position: sticky; inset-block-start: calc(var(--app-header-content-height, 4rem) + 16px);
-    grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 6px;
+/** Section switches: four equal icon-over-label cells on phones, one row sized to its labels from desktop up. */
+export const SectionTabs = styled(Segmented)`
+  > [aria-current="page"] > svg { color: ${({ theme }) => theme.color.link}; }
+  ${media.belowDesktop} {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: hidden;
+    > button {
+      flex-direction: column;
+      gap: 4px;
+      min-inline-size: 0;
+      min-block-size: 58px;
+      padding: 6px 4px;
+      font-size: ${({ theme }) => theme.typography.scale.secondary};
+      line-height: 1.2;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    > button > svg { font-size: 1.125rem; }
   }
+  ${media.desktop} { justify-self: start; }
 `;
 
-export const NavButton = styled(ActionButton)<{ $active: boolean }>`
-  display: flex; flex-direction: column; gap: 5px; min-inline-size: 0; min-block-size: 60px;
-  padding: 8px 2px; border: 0; border-block-end: 3px solid transparent; border-radius: 0;
-  color: ${({ theme, $active }) => $active ? theme.color.link : theme.color.mutedText};
-  background: ${({ theme, $active }) => $active ? theme.color.brandSoft : "transparent"};
-  font-size: 0.75rem; line-height: 1.3; font-weight: ${({ theme, $active }) => $active ? theme.typography.weight.bold : theme.typography.weight.medium};
-  border-block-end-color: ${({ theme, $active }) => $active ? theme.color.link : "transparent"};
-  svg { inline-size: 19px; block-size: 19px; flex: none; }
-  span { min-inline-size: 0; overflow-wrap: anywhere; }
+/** The one content panel under the tabs; fields size to the panel, not the window, so 1024px with the sidebar still fits. */
+export const SectionPanel = styled(Panel)`
+  container-type: inline-size;
+  &:focus { outline: none; }
   &:focus-visible { ${focusRing} }
-  @media (min-width: 1000px) {
-    flex-direction: row; justify-content: flex-start; gap: 10px; min-block-size: 44px;
-    padding: 10px 12px; border-block-end: 0; border-inline-start: 3px solid transparent;
-    border-inline-start-color: ${({ theme, $active }) => $active ? theme.color.link : "transparent"}; font-size: 0.8125rem;
+  label:not([data-mode-tile]), legend {
+    font-size: ${({ theme }) => theme.typography.scale.body};
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
   }
+  input, select, textarea { font-weight: ${({ theme }) => theme.typography.weight.body}; }
+  dd { font-size: ${({ theme }) => theme.typography.scale.emphasis}; }
 `;
 
-export const SettingsContent = styled.div`
-  display: grid; gap: 14px; min-inline-size: 0; align-content: start;
-  form, fieldset { min-inline-size: 0; }
-`;
-
-export const SettingsCard = styled(Panel)`
-  gap: 14px; margin: 0; padding: 16px;
-  h2, h3, p { margin: 0; }
-  label { font-size: 0.8125rem; line-height: 1.45; }
-  input:not([type="checkbox"], [type="radio"], [type="hidden"]), select, textarea { min-block-size: 44px; font-size: 16px; }
-  button { min-block-size: 44px; }
-  textarea { min-block-size: 88px; }
-  p, label, small { overflow-wrap: anywhere; }
-  @media (max-width: 480px) { padding: 12px; }
-  ${media.desktop} { padding: 16px; }
-`;
-
-export const SettingsCardHeader = styled.div`
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
-  min-inline-size: 0; padding-block-end: 12px; border-block-end: 1px solid ${({ theme }) => theme.color.border};
-  h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; line-height: 1.4; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
-  h2 svg, > svg { inline-size: 19px; block-size: 19px; flex: none; color: ${({ theme }) => theme.color.link}; }
-  > div { display: grid; gap: 4px; min-inline-size: 0; }
-  p { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.8125rem; line-height: 1.45; }
-`;
-
-export const SettingsGrid = styled.div`
-  display: grid; gap: 14px; min-inline-size: 0; align-items: start;
+/** Two fields side by side once the panel is wide enough; stacked on phones and beside the 1024px side panel. */
+export const TwoUp = styled.div`
+  display: grid;
+  gap: 12px;
+  align-items: start;
+  min-inline-size: 0;
   > * { min-inline-size: 0; }
-  @media (min-width: 640px) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @container (min-width: 32rem) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 `;
 
-export const NetworkCard = styled.section<{ $network?: "mtn" | "airtel" }>`
-  display: grid; gap: 12px; min-inline-size: 0; padding: 12px;
-  border: 1px solid ${({ theme }) => theme.color.border};
-  border-radius: ${({ theme }) => theme.border.radius};
-  border-block-start: 3px solid ${({ theme }) => theme.color.border};
-  background: ${({ theme }) => theme.color.surface};
-`;
-
-export const CardTitle = styled.h3`
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-inline-size: 0;
-  font-size: 0.875rem; line-height: 1.4; font-weight: ${({ theme }) => theme.typography.weight.bold};
-  svg { inline-size: 18px; block-size: 18px; flex: none; }
-`;
-
-/** Keep phone fields unobstructed; retain Save while scrolling larger screens. */
-export const SaveBar = styled.div`
-  position: static; z-index: 5;
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-inline-size: 0;
-  padding: 12px; border: 1px solid ${({ theme }) => theme.color.border}; border-radius: ${({ theme }) => theme.border.radius};
-  background: ${({ theme }) => theme.color.surface}; box-shadow: 0 -3px 12px rgb(0 0 0 / 0.04);
-  > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-inline-size: 0; }
-  button { min-block-size: 44px; white-space: nowrap; }
-  > div:last-child:not(:first-child) { margin-inline-start: auto; }
-  ${media.desktop} { position: sticky; inset-block-end: 16px; }
-`;
-
-export const SaveSummary = styled.span`
-  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.5;
-  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
-`;
-
-export const ModeOptions = styled.fieldset`
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
-  min-inline-size: 0; margin: 0; padding: 0; border: 0;
-  > legend { margin-block-end: 8px; font-size: 0.8125rem; font-weight: ${({ theme }) => theme.typography.weight.medium}; }
-`;
-
-export const ModeOption = styled.label<{ $selected: boolean; $unavailable?: boolean }>`
-  position: relative; display: grid; min-inline-size: 0; min-block-size: 82px; cursor: pointer;
-  border: 1px solid ${({ theme, $selected }) => $selected ? theme.color.link : theme.color.controlBorder};
-  border-radius: ${({ theme }) => theme.border.radius};
-  color: ${({ theme, $selected }) => $selected ? theme.color.link : theme.color.text};
-  background: ${({ theme, $selected }) => $selected ? theme.color.brandSoft : theme.color.surface};
-  box-shadow: ${({ theme, $selected }) => $selected ? `inset 0 -2px ${theme.color.link}` : "none"};
-  ${({ $unavailable }) => $unavailable && css`cursor: not-allowed; opacity: 0.6;`}
-  > input { position: absolute; inline-size: 1px; block-size: 1px; margin: 0; padding: 0; opacity: 0; }
-  > span { display: grid; align-content: start; justify-items: center; gap: 5px; min-inline-size: 0; padding: 12px 6px; text-align: center; }
-  strong { font-size: 0.875rem; line-height: 1.3; }
-  small { color: ${({ theme }) => theme.color.mutedText}; font-size: 0.6875rem; line-height: 1.4; }
-  svg { inline-size: 20px; block-size: 20px; flex: none; }
-  &:has(input:focus-visible) { ${focusRing} }
-  &:has(input:disabled) { cursor: not-allowed; }
-`;
-
-export const AdvancedDetails = styled.details`
-  min-inline-size: 0; border-block-start: 1px solid ${({ theme }) => theme.color.border};
-  > summary { display: flex; align-items: center; gap: 7px; min-block-size: 44px; padding-block: 10px; cursor: pointer;
-    color: ${({ theme }) => theme.color.link}; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.medium};
-    list-style: none; }
-  > summary::-webkit-details-marker { display: none; }
-  > summary:focus-visible { ${focusRing} }
-  > summary svg { inline-size: 15px; block-size: 15px; flex: none; }
-  > summary svg:last-child:not(:first-child) { margin-inline-start: auto; }
-  &[open] > summary svg:last-child:not(:first-child) { transform: rotate(180deg); }
-  > div { display: grid; gap: 12px; min-inline-size: 0; padding-block: 2px 8px; }
-`;
-
-export const SettingsHint = styled.p`
-  color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.5;
+/** The two payment networks: stacked with a hairline on phones, side by side with a vertical hairline when wide. */
+export const NetworkGrid = styled.div`
+  display: grid;
+  min-inline-size: 0;
+  > section { display: grid; align-content: start; gap: 12px; min-inline-size: 0; padding: 14px 14px 4px; }
+  > section + section { border-block-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border}; }
+  ${media.desktop} { > section { padding: 16px 16px 6px; } }
+  @container (min-width: 36rem) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    > section + section {
+      border-block-start: 0;
+      border-inline-start: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.border};
+    }
+  }
 `;
 
 export const ManagedBadge = styled.span`
-  display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 3px 6px;
-  border: 1px solid ${({ theme }) => theme.color.border}; color: ${({ theme }) => theme.color.mutedText};
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 2px 6px;
   border-radius: ${({ theme }) => theme.border.radius};
-  background: ${({ theme }) => theme.color.surfaceMuted}; font-size: 0.6875rem; line-height: 1.3; font-weight: ${({ theme }) => theme.typography.weight.medium};
-  svg { inline-size: 12px; block-size: 12px; flex: none; }
+  color: ${({ theme }) => theme.color.mutedText};
+  background: ${({ theme }) => theme.color.surfaceMuted};
+  font-size: ${({ theme }) => theme.typography.scale.caption};
+  font-weight: ${({ theme }) => theme.typography.weight.bold};
+  line-height: 1.3;
+  > svg { flex: none; font-size: 0.75rem; }
+`;
+export const ManagedNote = styled.p`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  > svg { flex: none; }
 `;
 
-export const SettingsFacts = styled.dl`
-  display: grid; gap: 12px; min-inline-size: 0; margin: 0;
+export const NetworkTitle = styled.h3`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  font-size: ${({ theme }) => theme.typography.scale.emphasis};
+  font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  /* The members' network artwork, shrunk to a chip beside the name. */
+  [data-payment-logo] { inline-size: 36px; block-size: 20px; }
+  > ${ManagedBadge} { margin-inline-start: auto; }
+`;
+
+/** The Access panel's Advanced drawer: the shared drawer at the panel's text size. */
+export const PanelDrawer = styled(Drawer)`
+  > summary { font-size: ${({ theme }) => theme.typography.scale.body}; }
+  ${media.desktop} { > summary { font-size: ${({ theme }) => theme.typography.scale.emphasis}; } }
+`;
+/** A drawer inside a padded block (dial code): no row padding or divider of its own. */
+export const InlineDrawer = styled(PanelDrawer)`
+  border-block-end: 0;
+  > summary { min-block-size: ${({ theme }) => theme.control.minHeight}; padding: 0; }
+  > div { padding: 2px 0 8px; }
+  ${media.desktop} {
+    > summary { min-block-size: 36px; padding-inline: 0; }
+    > div { padding-inline: 0; }
+  }
+`;
+
+export const DialField = styled.div`
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+`;
+export const DialRow = styled.div`
+  display: flex;
+  gap: 8px;
+  min-inline-size: 0;
+  input { ${adminControl} flex: 1 1 auto; min-inline-size: 0; }
+  button { flex: none; white-space: nowrap; }
+`;
+
+/** Device limit sits in a narrow column; a full-width select for five numbers reads as noise. */
+export const NarrowField = styled.div`
+  display: grid;
+  gap: 8px;
+  max-inline-size: 20rem;
+  min-inline-size: 0;
+`;
+
+export const ManagedFact = styled.dl`
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+  margin: 0;
   > div { display: grid; gap: 4px; min-inline-size: 0; }
-  dt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: ${({ theme }) => theme.color.mutedText}; font-size: 0.75rem; line-height: 1.45; }
-  dd { margin: 0; min-inline-size: 0; font-size: 0.875rem; line-height: 1.5; font-weight: ${({ theme }) => theme.typography.weight.medium};
-    overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  dt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: ${({ theme }) => theme.typography.scale.body};
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
+  }
+  dd {
+    margin: 0;
+    min-inline-size: 0;
+    font-weight: ${({ theme }) => theme.typography.weight.medium};
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+`;
+export const ModeTiles = styled.fieldset`
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  > legend { padding: 0; margin-block-end: 8px; }
+  > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-inline-size: 0; }
+  ${media.desktop} { > div { gap: 10px; } }
+`;
+/** A whole-tile radio: the native input covers the tile, so clicks, arrows and focus stay native. */
+export const ModeTile = styled.label<{ $unavailable: boolean }>`
+  position: relative;
+  display: grid;
+  min-inline-size: 0;
+  cursor: ${({ $unavailable }) => $unavailable ? "not-allowed" : "pointer"};
+  > input { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; margin: 0; opacity: 0; cursor: inherit; }
+  > span {
+    display: grid;
+    align-content: start;
+    gap: 2px;
+    min-inline-size: 0;
+    min-block-size: 68px;
+    padding: 9px 10px;
+    border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.controlBorder};
+    border-radius: 6px;
+    color: ${({ theme }) => theme.color.mutedText};
+    background: ${({ theme }) => theme.color.surface};
+    font-size: ${({ theme }) => theme.typography.scale.secondary};
+    font-weight: ${({ theme }) => theme.typography.weight.body};
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    ${({ $unavailable }) => $unavailable && css`opacity: 0.55;`}
+  }
+  strong { color: ${({ theme }) => theme.color.text}; font-size: 0.9375rem; font-weight: ${({ theme }) => theme.typography.weight.heavy}; }
+  em {
+    margin-block-start: 2px;
+    color: ${({ theme }) => theme.color.outcome.correct.text};
+    font-size: ${({ theme }) => theme.typography.scale.micro};
+    font-style: normal;
+    font-weight: ${({ theme }) => theme.typography.weight.heavy};
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  > input:checked + span {
+    border-color: ${({ theme }) => theme.color.link};
+    background: ${({ theme }) => theme.color.brandSoft};
+    box-shadow: inset 0 -2px ${({ theme }) => theme.color.brand};
+  }
+  > input:focus-visible + span { ${focusRing} }
+  ${media.hover} { &:hover > input:not(:checked, :disabled) + span { background: ${({ theme }) => theme.color.rowHover}; } }
+  ${media.desktop} { > span { padding: 10px 12px; } }
 `;
 
-export const SettingsConfirmation = styled.div`
-  display: grid; gap: 10px; min-inline-size: 0; padding: 12px;
-  border: 1px solid ${({ theme }) => theme.color.outcome.pending.border};
-  border-radius: ${({ theme }) => theme.border.radius};
-  color: ${({ theme }) => theme.color.text}; background: ${({ theme }) => theme.color.surface};
-  p { margin: 0; font-size: 0.8125rem; line-height: 1.5; }
+/** The second step of a mode switch: a warning box, buttons beside the text when the panel is wide. */
+export const ConfirmBox = styled.div`
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+  padding: 12px 14px;
+  border: ${({ theme }) => theme.border.width} solid ${({ theme }) => theme.color.outcome.pending.border};
+  border-radius: 6px;
+  color: ${({ theme }) => theme.color.text};
+  background: ${({ theme }) => theme.color.outcome.pending.background};
+  > strong {
+    color: ${({ theme }) => theme.color.outcome.pending.text};
+    font-size: ${({ theme }) => theme.typography.scale.emphasis};
+    font-weight: ${({ theme }) => theme.typography.weight.heavy};
+  }
+  > p { font-size: ${({ theme }) => theme.typography.scale.body}; line-height: 1.45; }
+  > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-block-start: 4px; }
+  > div > button { white-space: nowrap; }
+  @container (min-width: 34rem) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 16px;
+    > div { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
+  }
 `;
 
+export const SettingsHint = styled.p`
+  color: ${({ theme }) => theme.color.mutedText};
+  font-size: ${({ theme }) => theme.typography.scale.secondary};
+  line-height: 1.5;
+`;
+
+export const RequirementBox = styled.div`
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+  padding: 10px 12px 6px;
+  border-radius: 6px;
+  background: ${({ theme }) => theme.color.surfaceMuted};
+`;
 export const RequirementList = styled.ul`
-  display: grid; gap: 8px; min-inline-size: 0; margin: 0; padding: 0; list-style: none;
-  li { display: flex; align-items: center; gap: 8px; min-inline-size: 0; font-size: 0.8125rem; line-height: 1.5; }
-  svg { inline-size: 16px; block-size: 16px; flex: none; color: ${({ theme }) => theme.color.mutedText}; }
+  display: grid;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  li { display: flex; align-items: center; gap: 8px; min-inline-size: 0; min-block-size: 36px; font-size: ${({ theme }) => theme.typography.scale.body}; }
+  li > svg { flex: none; font-size: 0.9375rem; color: ${({ theme }) => theme.color.mutedText}; }
   li > span { min-inline-size: 0; overflow-wrap: anywhere; }
   li > a, li > button {
-    display: flex; flex: 1; align-items: center; justify-content: flex-start; min-inline-size: 0; min-block-size: 44px;
-    margin: 0; padding: 6px 0; border: 0; color: ${({ theme }) => theme.color.link}; background: transparent;
-    white-space: normal; text-align: start; text-decoration: underline; text-underline-offset: 3px;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: ${({ theme }) => theme.control.minHeight};
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: ${({ theme }) => theme.color.link};
+    background: transparent;
+    font: inherit;
+    font-weight: ${({ theme }) => theme.typography.weight.bold};
+    text-align: start;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    &:focus-visible { ${focusRing} }
   }
+  ${media.desktop} { li > a, li > button { min-block-size: 36px; } }
+`;
+
+/**
+ * The save panel. From desktop up it is the side panel (state, password, Undo and Save) and sticks under the header;
+ * on phones only the password part shows, in the flow, and Save lives in the bottom bar.
+ */
+export const SavePanel = styled(Panel)<{ $phoneHidden: boolean }>`
+  container-type: inline-size;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  label { font-size: ${({ theme }) => theme.typography.scale.body}; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  ${media.belowDesktop} {
+    > [data-save-wide] { display: none; }
+    ${({ $phoneHidden }) => $phoneHidden && css`display: none;`}
+  }
+  ${media.desktop} {
+    position: sticky;
+    inset-block-start: calc(var(--app-header-height, 4rem) + 16px);
+    padding: 16px;
+  }
+`;
+export const SaveButtons = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  > button { white-space: nowrap; }
+  @container (max-width: 18rem) { grid-template-columns: auto minmax(0, 1fr); }
+`;
+/** Phones: unsaved count, Undo and Save stay in reach at the bottom of the screen while the form scrolls. */
+export const SaveDock = styled(StickyActions)`
+  align-items: center;
+  margin-block-start: 12px;
+  background: ${({ theme }) => theme.color.surface};
+  > * { flex: none; }
+  > span {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    color: ${({ theme }) => theme.color.mutedText};
+    font-size: ${({ theme }) => theme.typography.scale.secondary};
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  > button { padding-inline: 12px; white-space: nowrap; }
+  ${media.desktop} { display: none; }
 `;

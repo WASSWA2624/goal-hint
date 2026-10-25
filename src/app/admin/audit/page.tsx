@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { adminDisplayName } from "@/domain/admin-identity";
-import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminFrame } from "@/app/_components/admin-frame";
 import { redirectToAccountLogin } from "@/server/members/account-login-redirect";
-import { Notice, PageTitle } from "@/components/analytics/dashboard/dashboard-styles";
+import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
+import { DeskHead, DeskTitle } from "@/components/admin/desk-styles";
 import { adminPageGate } from "@/server/admin/admin-http";
 import { createSubscribers } from "@/server/admin/subscribers";
 import { AuditReport } from "@/components/admin/audit-report";
@@ -14,9 +15,10 @@ export default async function AdminAuditPage({ searchParams }: { searchParams: P
   const params = await searchParams, db = page.services.database;
   const action = typeof params.action === "string" && ownerAuditActions.includes(params.action as typeof ownerAuditActions[number]) ? params.action : "";
   const data = db ? await createSubscribers(db).audit(action).catch(() => null) : null;
-  return <AdminShell current="audit" username={adminDisplayName(page.owner)}>
-    <PageTitle><h1>Audit log</h1><p>Activity and changes</p></PageTitle>
+  // The report owns the title row (its Export button sits beside the h1 on phones); the error state keeps the same h1.
+  return <AdminFrame database={page.services.database} current="audit" username={adminDisplayName(page.owner)}>
     {data ? <AuditReport rows={data} actions={ownerAuditActions} action={action} />
-      : <Notice $tone="error" role="alert">Activity is unavailable. Try again shortly.</Notice>}
-  </AdminShell>;
+      : <><DeskHead><DeskTitle><h1>Audit log</h1></DeskTitle></DeskHead>
+        <Notice $tone="error" role="alert">Activity is unavailable. Try again shortly.</Notice></>}
+  </AdminFrame>;
 }

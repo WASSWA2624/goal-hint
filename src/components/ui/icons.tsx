@@ -62,3 +62,16 @@ export const UserPlusIcon = (props: IconProps) => <Icon {...props}><circle cx="9
 export const DialpadIcon = (props: IconProps) => <Icon {...props}><path d="M6 5h.01M12 5h.01M18 5h.01M6 11h.01M12 11h.01M18 11h.01M6 17h.01M12 17h.01M18 17h.01" strokeWidth={3} /></Icon>;
 export const LockIcon = (props: IconProps) => <Icon {...props}><rect x="4" y="11" width="16" height="10" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Icon>;
 export const KeyIcon = (props: IconProps) => <Icon {...props}><circle cx="7.5" cy="15.5" r="5.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3" /></Icon>;
+export const CardIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="5" width="18" height="14" /><path d="M3 10h18M7 15h4" /></Icon>;
+export const TicketIcon = (props: IconProps) => <Icon {...props}><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4V7ZM14 7v10" /></Icon>;
+export const LayersIcon = (props: IconProps) => <Icon {...props}><path d="m12 3 9 5-9 5-9-5 9-5ZM3 13l9 5 9-5" /></Icon>;
+export const ListIcon = (props: IconProps) => <Icon {...props}><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" /></Icon>;
+export const ChartIcon = (props: IconProps) => <Icon {...props}><path d="M4 20V4M4 20h16M9 16v-5M14 16V8M19 16v-3" /></Icon>;
+export const ArrowUpIcon = (props: IconProps) => <Icon {...props}><path d="M12 19V5M6 11l6-6 6 6" /></Icon>;
+export const ArrowDownIcon = (props: IconProps) => <Icon {...props}><path d="M12 5v14M6 13l6 6 6-6" /></Icon>;
+export const PencilIcon = (props: IconProps) => <Icon {...props}><path d="M4 20h4L19 9l-4-4L4 16v4ZM13.5 6.5l4 4" /></Icon>;
+export const PlusIcon = (props: IconProps) => <Icon {...props}><path d="M12 5v14M5 12h14" /></Icon>;
+export const ExpandIcon = (props: IconProps) => <Icon {...props}><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" /></Icon>;
+export const DownloadIcon = (props: IconProps) => <Icon {...props}><path d="M12 4v11M7 10l5 5 5-5M4 20h16" /></Icon>;
+export const AlertIcon = (props: IconProps) => <Icon {...props}><path d="M12 3 2 20h20L12 3ZM12 10v4M12 17h.01" /></Icon>;
+export const EyeIcon = (props: IconProps) => <Icon {...props}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></Icon>;
