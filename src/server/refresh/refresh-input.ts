@@ -26,10 +26,13 @@ export function parseRefreshPlan(input: RefreshPlan, member: RefreshMember): Ref
       fallback: z.strictObject({ bounds: z.unknown(), maxElapsedMs: z.number() }),
       observation: z.strictObject({ bounds: z.unknown(), maxAgeMs: z.number() }), publicationReserveMs: z.number(),
       footballRequestLimit: z.number().int().positive().max(4_294_967_295),
-      goalDefinitions: z.array(goalMarketDefinitionSchema).max(256).optional(), impliedExtension: z.unknown().optional() });
+      goalDefinitions: z.array(goalMarketDefinitionSchema).max(256).optional(), impliedExtension: z.unknown().optional(),
+      sourceOrder: z.enum(["provider-first", "ai-first"]).optional() });
     shape.parse(input);
-    // Provider-fallback-only plans omit both the model and its AI allocation.
-    if ((input.ai === null) !== (input.modelVersionId === null)) throw new Error();
+    // Provider-fallback-only plans omit both the model and its AI allocation, and keep their reviewed shape without an order.
+    if ((input.ai === null) !== (input.modelVersionId === null) || input.sourceOrder !== undefined && input.ai === null) throw new Error();
+    // AI joint-distribution extension markets are never published beside a provider match result.
+    if (input.goalDefinitions !== undefined && input.sourceOrder === "provider-first") throw new Error();
     if (input.goalDefinitions !== undefined && (input.ai === null ||
         new Set(input.goalDefinitions.map(({ key }) => key)).size !== input.goalDefinitions.length)) throw new Error();
     const evidence = parseEvidenceCollectionRequest(input.evidence);

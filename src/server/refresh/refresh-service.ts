@@ -224,7 +224,9 @@ export function createPredictionRefreshService(options: Readonly<{
       if (ai.status === "denied") phases.ai = ai.reason;
       const request: FallbackRefreshRequest = { requestId: refreshReference(lease.jobId, "fallback"),
         expected: { context: evidence.snapshot.context, jobId: lease.jobId, pin: saved.pin, evidenceHash: evidence.snapshot.hash },
-        ai, bounds: plan.fallback.bounds, maxElapsedMs: plan.fallback.maxElapsedMs };
+        ai, bounds: plan.fallback.bounds, maxElapsedMs: plan.fallback.maxElapsedMs,
+        // A frozen order always requests the provider; the sealed fallback stage then holds both source receipts.
+        ...(plan.sourceOrder === undefined ? {} : { order: plan.sourceOrder }) };
       let fallback = await phase<FallbackRefreshResult>("fallback", plan.fallback.maxElapsedMs,
         plan.publicationReserveMs + plan.observation.bounds.timeoutMs * plan.observation.bounds.maxRequests,
         (workflow) => options.fallback.resolve(request, workflow), () => options.fallback.resolveWithoutProvider(request));

@@ -16,7 +16,7 @@ const status = z.enum(["passed", "failed", "pending"]);
 const criteria = z.object({ id: text, purpose: z.enum(["candidate", "public-claim"]), system: z.enum(evaluationSystems), family, horizonId: text,
   minimumSamples: z.number().int().positive().max(1_000_000), minimumCoverage: probability, maximumBrier: z.number().finite().min(0).max(2).nullable(),
   maximumLogLoss: z.number().finite().nonnegative().nullable(), maximumCalibrationError: probability.nullable(),
-  baseline: z.enum(["league-frequency", "team-strength"]).nullable(), maximumBrierDifference: z.number().finite().min(-2).max(2).nullable() }).strict();
+  baseline: z.enum(["league-frequency", "team-strength", "api-football"]).nullable(), maximumBrierDifference: z.number().finite().min(-2).max(2).nullable() }).strict();
 const metrics = z.object({ count, correct: count, incorrect: count, hitRate: probability.nullable(), brier: score,
   logLoss: score, calibrationError: probability.nullable(), calibration: z.array(z.object({ selection: text,
     lower: probability, upper: probability, count, meanProbability: probability.nullable(), observedFrequency: probability.nullable(),

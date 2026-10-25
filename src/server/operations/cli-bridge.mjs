@@ -80,7 +80,7 @@ async function dispatch(action, payload) {
     case 'evaluation': {
       const { runEvaluationCommand } = await import('../evaluation/evaluation-command.ts');
       const result = await runEvaluationCommand(payload.args);
-      return { kind: result.kind, markdownPath: result.markdownPath, reportPath: result.reportPath };
+      return { kind: result.kind, markdownPath: result.markdownPath, reportPath: result.reportPath, promotionReference: result.promotionReference };
     }
     case 'cache-reconcile': {
       const { getDatabase, disconnectDatabase } = await import('../database/client.ts');

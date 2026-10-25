@@ -1,7 +1,7 @@
 import "server-only";
 
 import { MARKET_RULE_VERSION, marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { settleMarketSelection, type CycleEligibility } from "../../domain/market-settlement.ts";
+import { settleMarketSelection, type CycleEligibility, type SettlementContext } from "../../domain/market-settlement.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { FootballFixture, Prisma } from "../generated/prisma/client.ts";
 import { historyFail, type StoredCycle, type StoredRevision } from "../predictions/history-contract.ts";
@@ -55,23 +55,28 @@ export function cycleEligibilityFor(cycle: Pick<StoredCycle, "state" | "voidReas
       : cycle.voidReason === "locked-cutoff-invalidated" ? "cutoff-invalidated" : "ineligible-cycle" };
 }
 
+/** The one settlement context every market of a cycle is graded against: an open lifecycle issue leaves a live cycle
+ * unknown, and only a verified regulation score that matches the canonical fixture can settle. */
+export function settlementContextFor(fixture: FootballFixture, result: StoredFixtureResult | null, issue: string | null,
+  cycle: Pick<StoredCycle, "state" | "voidReason">): SettlementContext {
+  const status = resultStatus.parse(fixture.status), resultUsable = fixtureResultMatchesCanonical(fixture, result, issue);
+  return { status: issue && cycle.state !== "void" ? "unknown" : status, cycleEligibility: cycleEligibilityFor(cycle),
+    regulationScore: resultUsable && result?.regulation.verified ? { verified: true,
+      period: "regulation-including-stoppage-time", home: result.regulation.home!, away: result.regulation.away! } : null };
+}
+
 /** Shared audit projection for individual reads and bounded reporting batches. */
 export function projectSettlementCycle(fixture: FootballFixture, result: StoredFixtureResult | null, issue: string | null,
   cycle: StoredCycle, lock: StoredRevision | null, recorded: ReadonlyMap<MarketFamily, SettlementRevision>) {
-  const fixtureId = fixture.id, status = resultStatus.parse(fixture.status);
+  const fixtureId = fixture.id, context = settlementContextFor(fixture, result, issue, cycle);
   const resultUsable = fixtureResultMatchesCanonical(fixture, result, issue);
   if (cycle.fixtureId !== fixtureId || cycle.lockedSetId !== (lock?.id ?? null) ||
     lock && (lock.cycleId !== cycle.id || lock.fixtureId !== fixtureId)) return historyFail("invalid-state");
-  const eligibility = cycleEligibilityFor(cycle);
   const markets = [];
   for (const family of families) {
     const item = lock?.candidate.markets[family];
     const market = item?.available ? item.market : null;
-    const outcome = settleMarketSelection(family, market?.selection ?? null, {
-      status: issue && cycle.state !== "void" ? "unknown" : status, cycleEligibility: eligibility,
-      regulationScore: resultUsable && result?.regulation.verified ? { verified: true,
-        period: "regulation-including-stoppage-time", home: result.regulation.home!, away: result.regulation.away! } : null,
-    });
+    const outcome = settleMarketSelection(family, market?.selection ?? null, context);
     const previous = recorded.get(family) ?? null;
     const historicalVoid = previous?.cycleState === "void" && cycle.state === "void";
     const base = { fixtureId, cycleId: cycle.id, family, ruleVersion: MARKET_RULE_VERSION, lockedSetId: cycle.lockedSetId,

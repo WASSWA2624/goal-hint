@@ -13,6 +13,9 @@ def main():
     print(f"Forecast evaluation: {result['kind']}. Promotion performed: false. Public claim authorized: false.")
     print(f"Report: {result['markdownPath']}")
     print(f"JSON: {result['reportPath']}")
+    reference = result.get("promotionReference")
+    # AI-first publication needs the owner to approve this exact reference as "ai-promotion"; printing it promotes nothing.
+    print(f"Promotion reference (owner approval required): {reference}" if reference else "Promotion reference: none")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ export const OWNER_APPROVALS_FILE = ".goal-hint/owner-approvals.json";
 // "football-odds-rights" is never required to run: it only gates public odds projection writes (052).
 const requirements = ["budget-approval", "database-access", "football-private-use", "football-account", "football-public-rights",
   "football-odds-rights", "research-license", "calibration-configuration", "evidence-policy", "freshness-policy", "shadow-protocol", "pipeline-integrity",
-  "quality-qualification", "release-approval"] as const satisfies readonly EvidenceRequirement[];
+  "quality-qualification", "release-approval", "ai-promotion"] as const satisfies readonly EvidenceRequirement[];
 const text = z.string().trim().min(1).max(512).regex(/^[^\p{Cc}]+$/u);
 const register = z.strictObject({ version: z.literal(1), owner: text, approvals: z.array(z.strictObject({
   requirement: z.enum(requirements), reference: text, approvedAt: z.iso.date(), decision: z.string().trim().min(1).max(2000),
@@ -53,6 +53,8 @@ export function missingOwnerApprovals(policy: RuntimePolicy, verify: EvidenceVer
     check("GOAL_HINT_EVIDENCE_POLICY_REF", choices.evidencePolicyRef, "evidence-policy");
     check("GOAL_HINT_FRESHNESS_POLICY_REF", choices.freshnessPolicyRef, "freshness-policy");
     check("GOAL_HINT_PIPELINE_INTEGRITY_REF", choices.pipelineIntegrityRef, "pipeline-integrity");
+    // AI-first publication is a promotion the owner approves for one evaluation report and model.
+    if (choices.forecasts.sourceOrder === "ai-first") check("GOAL_HINT_AI_PROMOTION_REF", choices.forecasts.aiPromotionRef, "ai-promotion");
   }
   if (policy.mode === "production" || choices.database.accessRef !== null)
     check("GOAL_HINT_DATABASE_ACCESS_REF", choices.database.accessRef, "database-access");

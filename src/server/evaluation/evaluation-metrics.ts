@@ -43,7 +43,8 @@ function assertMarket(family: MarketFamily, market: AcceptedMarket): void {
     if (!checked.valid) throw new Error();
   } catch { throw new EvaluationMetricsError("invalid-observation"); }
 }
-function wilson(successes: number, count: number, z: number): Readonly<{ lower: number; upper: number }> {
+/** Wilson score interval for a binomial proportion; `count` must be positive. */
+export function wilson(successes: number, count: number, z: number): Readonly<{ lower: number; upper: number }> {
   // Divide by z before squaring when z is large, preserving a finite result
   // without clipping the caller's explicit confidence parameter.
   const p = successes / count, scale = Math.max(1, z), scaledZ = z / scale, inverseScale = 1 / scale;

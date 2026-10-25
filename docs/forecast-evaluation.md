@@ -335,6 +335,41 @@ wrappers elsewhere. Technical limits cap rows/bytes; they are not sample or
 quality thresholds. Protocol and dataset files must contain the complete
 factory-produced identities and hashes.
 
+## Provider baseline and promotion
+
+A gate's `baseline` may be `api-football` as well as `league-frequency` or
+`team-strength` (a source never gates against itself). It uses the existing
+`ai` against `api-football` source comparison: only fixtures where both forecasts
+are available and the AI selection settled correct or incorrect, on the same
+matched keys, with `brierDifference` = AI minus provider. Provider-first refreshes
+supply that pair contemporaneously: both receipts are sealed in the same
+fallback stage, from the same evidence cutoff and stage clock ([provider
+fallback](provider-fallback.md#source-order-and-receipts)). Provider receipts
+have no total-goals or BTTS counterpart, so only the match result (and double
+chance, derived from it) can be compared with the provider; the binary families
+keep the league-frequency and team-strength baselines.
+
+`aiPromotionReference(report, protocol)`
+([`evaluation-promotion.ts`](../src/server/evaluation/evaluation-promotion.ts))
+returns `forecast-evaluation:<report hash>:<candidate model id>` only when the
+report is a prospective `finalTest`, its decision is
+`eligible-for-independent-review`, its provider contract is the current
+`API_FOOTBALL_CONTRACT_VERSION`, and for every protocol horizon a passed
+candidate gate on `ai` / `match-result` / `api-football` has a
+`maximumBrierDifference` below zero (AI strictly better). Otherwise it returns
+null. `npm run evaluation:report` prints `Promotion reference (owner approval
+required): …` or `Promotion reference: none`. Printing a reference promotes
+nothing: the report still records `promotionPerformed: false`, and AI-first
+publication needs the owner to approve that exact reference as `ai-promotion`
+([live operations](live-operations.md#forecast-source-order)). Because the
+reference names the model, a model change needs a new evaluation and approval.
+
+The private owner page `/admin/forecasts` shows the same matched comparison as a
+diagnostic, with sample counts and intervals and no gate; it is not evaluation
+evidence and authorizes nothing. Exporting sealed receipts into a frozen
+prospective dataset for this harness is a follow-up (the dataset still needs a
+trusted authority module that verifies stage seals).
+
 ## Local command
 
 With no data arguments, generate factual readiness artifacts only:

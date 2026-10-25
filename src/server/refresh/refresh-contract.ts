@@ -3,6 +3,7 @@ import "server-only";
 import type { EvidenceCollectionRequest } from "../evidence/evidence-service.ts";
 import type { CostJobPolicy, CostRequest } from "../cost-control/cost-contract.ts";
 import type { ApiFootballBounds } from "../football/api-football-contract.ts";
+import type { ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import type { ModelPin } from "../predictor/predictor-contract.ts";
 import type { SelectionEntry, SelectionManifest } from "../selection/selection-contract.ts";
 import type { StoredCycle } from "../predictions/history-contract.ts";
@@ -36,7 +37,12 @@ export type RefreshPlan = Readonly<{
   goalDefinitions?: readonly GoalMarketDefinition[];
   /** Frozen references selected before the job; publication rechecks current stored odds under its fixture lock. */
   impliedExtension?: ImpliedMarketExtensionInput;
+  /** Frozen per AI intent; absent on fallback-only and legacy v1 plans, which keep the original AI-first resolution
+   * without contemporaneous capture. With it, the provider is always requested and both source receipts are sealed
+   * in the fallback stage. */
+  sourceOrder?: ForecastSourceOrder;
 }>;
+export type { ForecastSourceOrder };
 export type RefreshIntent = Readonly<{ member: RefreshMember; plan: RefreshPlan; pin: ModelPin | null }>;
 export type RefreshPhase = "preparation" | "evidence" | "evidence-empty" | "ai" | "fallback" | "observation";
 export type RefreshOutcome = Readonly<{

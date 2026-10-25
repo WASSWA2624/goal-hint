@@ -1,13 +1,15 @@
 import "server-only";
 
 import { isBeforePublicationCutoff, utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/calendar.ts";
-import { validateMarketSnapshot, type AcceptedMarket, type MarketAvailability, type SourceGroup } from "../../domain/markets.ts";
+import { checkMarketConsistency, validateMarketSnapshot, type AcceptedMarket, type ConsistencyConstraint, type MarketAvailability,
+  type MarketSnapshot, type SourceGroup } from "../../domain/markets.ts";
 import { evidenceFingerprint, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { isPredictorForecastCurrent } from "../predictor/predictor-output.ts";
 import { synchronous, provenTrue as verified } from "../shared/authority-proof.ts";
 import type { FallbackContext, FallbackReason, FallbackResolutionAuthority, FallbackResolutionResult, ForecastExplanation,
-  ForecastProvenance, ProviderFallbackCandidate, ProviderFallbackResult, ResolvedForecastCandidate, ResolvedForecastMarket } from "./fallback-contract.ts";
+  ForecastProvenance, ForecastSourceOrder, ProviderFallbackCandidate, ProviderFallbackResult, ResolvedForecastCandidate,
+  ResolvedForecastMarket } from "./fallback-contract.ts";
 import { parseFallbackAiResult, parseFallbackContext, parseProviderFallbackResult } from "./fallback-input.ts";
 
 const groups = ["match-result", "total-goals", "both-teams-to-score"] as const;
@@ -42,6 +44,19 @@ function fallbackReason(ai: PredictorResult, family: SourceGroup, now: UtcInstan
   const reason = original.available ? "cross-market-conflict" : original.reason;
   return Object.freeze({ reason: reason === "missing-group" ? "ai-missing-group" : "ai-invalid-group", detail: reason });
 }
+/** Under provider-first the provider is the reviewed baseline, whatever the AI returned; the detail records the AI state. */
+function providerFirstReason(ai: PredictorResult, now: UtcInstant): FallbackReason {
+  return Object.freeze({ reason: "provider-first", detail: ai.status === "candidate" ? isFallbackAiCurrent(ai, now) ? "ai-shadow" : "invalid-timing" : ai.reason });
+}
+/** Feasible-marginal conflicts between a provider match result and both AI binary groups. Under provider-first the
+ * provider baseline is kept and both AI groups are dropped; nothing is filled. */
+function providerFirstConflict(chosen: Readonly<Partial<Record<SourceGroup, MarketAvailability>>>): readonly ConsistencyConstraint[] {
+  const result = chosen["match-result"], totals = chosen["total-goals"], btts = chosen["both-teams-to-score"];
+  if (!result?.available || !totals?.available || !btts?.available || result.market.family !== "match-result" ||
+    totals.market.family !== "total-goals" || btts.market.family !== "both-teams-to-score" || result.market.source !== "api-football" ||
+    totals.market.source !== "ai" || btts.market.source !== "ai") return [];
+  return checkMarketConsistency(result.market.probabilities, totals.market.probabilities, btts.market.probabilities);
+}
 function aiProvenance(ai: Extract<PredictorResult, { status: "candidate" }>): ForecastProvenance {
   return freezeEvidence({ kind: "ai", pin: ai.pin, modelVersionId: ai.output.modelVersionId, evidenceHash: ai.output.evidenceHash,
     transportEvidenceRef: ai.output.timestamps.evidenceRef, calibration: ai.output.calibration, evaluation: ai.output.evaluation,
@@ -50,7 +65,8 @@ function aiProvenance(ai: Extract<PredictorResult, { status: "candidate" }>): Fo
 function explanation(text: string, sourceUrls: readonly string[] = []): ForecastExplanation {
   return freezeEvidence({ text, sourceUrls: [...new Set(sourceUrls)] });
 }
-function explanations(markets: ResolvedForecastCandidate["markets"], ai: PredictorResult): Pick<ResolvedForecastCandidate, "reasons" | "uncertainty"> {
+function explanations(markets: ResolvedForecastCandidate["markets"], ai: PredictorResult,
+  order?: ForecastSourceOrder): Pick<ResolvedForecastCandidate, "reasons" | "uncertainty"> {
   const available = Object.values(markets).filter((value): value is Extract<ResolvedForecastMarket, { available: true }> => value.available);
   const aiUsed = available.some((value) => value.market.source === "ai"), providerUsed = available.some((value) => value.market.source === "api-football");
   const providerUrls = available.flatMap((value) => value.provenance.kind !== "api-football" || value.provenance.source.sourceUrl === null
@@ -61,14 +77,18 @@ function explanations(markets: ResolvedForecastCandidate["markets"], ai: Predict
       source.sourceUrl === null || !item.references.some((reference) => reference.sourceId === source.sourceId) ? [] : [source.sourceUrl])));
   }
   if (providerUsed) {
-    const basis = explanation("API-Football fallback supplies a validated statistical forecast for the available provider group.", providerUrls);
+    const basis = explanation(order === "provider-first" ? "API-Football supplies the validated statistical forecast for the match result."
+      : "API-Football fallback supplies a validated statistical forecast for the available provider group.", providerUrls);
     if (reasons.length === 4) reasons[3] = basis; else reasons.push(basis);
   }
   if (!aiUsed && markets["match-result"].available) reasons.push(explanation("Double chance is derived from the same selected home, draw and away probability group."));
   if (available.length === 0) reasons.push(explanation("No complete validated probability group is available for this refresh."),
     explanation("Publication logic must retain an eligible previous forecast or mark this fixture unavailable."));
   else if (reasons.length < 2) reasons.push(explanation("Available selections use complete regulation-time probability groups."));
-  const uncertainties: string[] = aiUsed && ai.status === "candidate" ? [ai.output.uncertainty.text] : [];
+  // AI reasons may discuss the outcome while the published match result is the provider's; say so first so it is never trimmed.
+  const uncertainties: string[] = order === "provider-first" && aiUsed && providerUsed
+    ? ["The match result comes from API-Football; AI notes cover the goal markets."] : [];
+  if (aiUsed && ai.status === "candidate") uncertainties.push(ai.output.uncertainty.text);
   if (available.length < families.length) uncertainties.push("One or more market families are unavailable.");
   if (available.some((value) => value.flags.length > 0)) uncertainties.push("Some source generation or update times are unknown.");
   if (aiUsed && ai.status === "candidate" && ai.output.evidence.coverage.limitedNews) uncertainties.push("News coverage is limited.");
@@ -82,11 +102,15 @@ function explanations(markets: ResolvedForecastCandidate["markets"], ai: Predict
  * mutates revisions, publishes, averages sources or fills missing probabilities. */
 export function resolveFallbackCandidate(value: Readonly<{
   expected: FallbackContext; ai: PredictorResult; provider: ProviderFallbackResult | null; now: UtcInstant;
+  /** Absent keeps the original AI-first resolution and an audit without a source order. */
+  order?: ForecastSourceOrder;
 }>, authority: FallbackResolutionAuthority): FallbackResolutionResult {
   const denied = (reason: "invalid-request" | "not-authorized" | "ineligible-refresh"): FallbackResolutionResult => Object.freeze({ status: "denied", reason });
   let expected: FallbackContext, ai: PredictorResult, provider: ProviderFallbackResult | null, now: UtcInstant;
+  const order = value?.order;
   try {
-    if (value === null || typeof value !== "object" || Object.keys(value).some((key) => !["expected", "ai", "provider", "now"].includes(key))) throw new Error();
+    if (value === null || typeof value !== "object" || Object.keys(value).some((key) => !["expected", "ai", "provider", "now", "order"].includes(key)) ||
+      order !== undefined && order !== "provider-first" && order !== "ai-first") throw new Error();
     expected = parseFallbackContext(value.expected); ai = parseFallbackAiResult(value.ai);
     provider = value.provider === null ? null : parseProviderFallbackResult(value.provider); now = utcInstantFromEpochMilliseconds(value.now);
     if (ai.status === "candidate" && (expected.pin === null || ai.pin.id !== expected.pin.id || ai.pin.jobId !== expected.jobId ||
@@ -112,14 +136,26 @@ export function resolveFallbackCandidate(value: Readonly<{
   }
   const validAi = aiGroups(ai, now);
   const primaryProvenance = ai.status === "candidate" ? aiProvenance(ai) : null;
+  const providerFirst = order === "provider-first";
   function compose(): ResolvedForecastCandidate {
-    const candidates: Record<string, unknown> = {};
+    const chosen: Partial<Record<SourceGroup, MarketAvailability>> = {};
     for (const family of groups) {
-      const aiMarket = validAi.markets[family];
-      if (aiMarket.available) candidates[family] = sourceCandidate(aiMarket);
-      else if (supplied !== null && supplied.markets.markets[family].available) candidates[family] = sourceCandidate(supplied.markets.markets[family]);
+      const aiMarket = validAi.markets[family], providerMarket = supplied?.markets.markets[family];
+      if (providerFirst && providerMarket?.available) chosen[family] = providerMarket;
+      else if (aiMarket.available) chosen[family] = aiMarket;
+      else if (providerMarket?.available) chosen[family] = providerMarket;
     }
-    const selected = validateMarketSnapshot(candidates), markets = {} as Record<typeof families[number], ResolvedForecastMarket>;
+    const constraints = providerFirst ? providerFirstConflict(chosen) : [];
+    if (constraints.length > 0) { delete chosen["total-goals"]; delete chosen["both-teams-to-score"]; }
+    let selected: MarketSnapshot = validateMarketSnapshot(Object.fromEntries(Object.entries(chosen).map(([family, market]) => [family, sourceCandidate(market)])));
+    if (constraints.length > 0) {
+      const binary = ["total-goals", "both-teams-to-score"] as const;
+      selected = freezeEvidence({ ...selected,
+        markets: { ...selected.markets, ...Object.fromEntries(binary.map((family) => [family, { available: false, reason: "cross-market-conflict" }])) },
+        issues: [...selected.issues.filter((issue) => !binary.some((family) => family === issue.family)),
+          ...binary.map((family) => ({ family, reason: "cross-market-conflict" as const, relatedGroups: groups, constraints }))] });
+    }
+    const markets = {} as Record<typeof families[number], ResolvedForecastMarket>;
     const fallbackProvenance: ForecastProvenance | null = supplied === null ? null : freezeEvidence({ kind: "api-football", source: supplied.provenance,
       policyVersion: supplied.policyVersion, policyEvidenceRef: supplied.policyEvidenceRef });
     for (const family of families) {
@@ -138,13 +174,14 @@ export function resolveFallbackCandidate(value: Readonly<{
           generatedAt: ai.output.timestamps.generatedAt, retrievedAt: ai.output.timestamps.retrievedAt, providerUpdatedAt: ai.output.timestamps.providerUpdatedAt },
         provenance: primaryProvenance, flags: ai.output.flags });
       } else if (market.source === "api-football" && supplied !== null && fallbackProvenance !== null) {
-        markets[family] = freezeEvidence({ available: true, market, fallback: fallbackReason(ai, group, now),
+        markets[family] = freezeEvidence({ available: true, market, fallback: providerFirst ? providerFirstReason(ai, now) : fallbackReason(ai, group, now),
           timestamps: supplied.timestamps, provenance: fallbackProvenance, flags: supplied.flags });
       } else throw new Error("A selected forecast group has no authenticated source.");
     }
-    return freezeEvidence({ context: expected, markets, issues: selected.issues, ...explanations(markets, ai),
+    return freezeEvidence({ context: expected, markets, issues: selected.issues, ...explanations(markets, ai, order),
       audit: { aiStatus: ai.status, aiReason: ai.status === "denied" ? ai.reason : isFallbackAiCurrent(ai, now) ? null : "invalid-timing",
-        providerStatus: provider?.status ?? "not-requested", providerReason: provider?.status === "denied" ? provider.reason : null } });
+        providerStatus: provider?.status ?? "not-requested", providerReason: provider?.status === "denied" ? provider.reason : null,
+        ...(order === undefined ? {} : { sourceOrder: order }) } });
   }
   let candidate: ResolvedForecastCandidate;
   try { candidate = compose(); } catch { return denied("invalid-request"); }

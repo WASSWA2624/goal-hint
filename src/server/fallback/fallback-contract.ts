@@ -29,8 +29,12 @@ export type ProviderFallbackReason = "invalid-request" | "not-authorized" | "unc
 export type ProviderFallbackResult = Readonly<{
   status: "candidate"; candidate: ProviderFallbackCandidate; requestsDispatched: number; requestCountUnknown: false;
 }> | Readonly<{ status: "denied"; reason: ProviderFallbackReason; requestsDispatched: number; requestCountUnknown: boolean }>;
+/** Why API-Football supplied a published group. "provider-first": the reviewed source order prefers the provider
+ * baseline; the AI receipt is recorded separately. AI groups never carry a fallback reason (a database check). */
 export type FallbackTrigger = "ai-failure" | "ai-timeout" | "ai-insufficient-evidence" | "ai-budget-exhausted" |
-  "ai-missing-group" | "ai-invalid-group";
+  "ai-missing-group" | "ai-invalid-group" | "provider-first";
+/** Frozen per AI refresh intent. Absent means the original AI-first resolution without contemporaneous capture. */
+export type ForecastSourceOrder = "provider-first" | "ai-first";
 export type FallbackReason = Readonly<{ reason: FallbackTrigger; detail: string }>;
 export type ForecastProvenance = Readonly<{
   kind: "ai"; pin: ModelPin; modelVersionId: string; evidenceHash: string; transportEvidenceRef: string;
@@ -49,7 +53,9 @@ export type ResolvedForecastCandidate = Readonly<{
   context: FallbackContext; markets: Readonly<Record<MarketFamily, ResolvedForecastMarket>>;
   issues: readonly MarketIssue[]; reasons: readonly ForecastExplanation[]; uncertainty: ForecastExplanation;
   audit: Readonly<{ aiStatus: PredictorResult["status"]; aiReason: string | null;
-    providerStatus: ProviderFallbackResult["status"] | "not-requested"; providerReason: ProviderFallbackReason | null }>;
+    providerStatus: ProviderFallbackResult["status"] | "not-requested"; providerReason: ProviderFallbackReason | null;
+    /** Present only when the refresh plan froze a source order. */
+    sourceOrder?: ForecastSourceOrder }>;
 }>;
 export type FallbackResolutionReason = "invalid-request" | "not-authorized" | "ineligible-refresh";
 export type FallbackResolutionResult = Readonly<{ status: "candidate"; candidate: ResolvedForecastCandidate }> |

@@ -4,6 +4,7 @@ import { utcInstantFromEpochMilliseconds, type UtcInstant } from "../../domain/c
 import type { RuntimePolicy } from "../config/runtime-policy.ts";
 import type { CostRateCard } from "../cost-control/cost-contract.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
+import type { ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import type { ModelVersion } from "../predictor/predictor-contract.ts";
 import { createModelVersion } from "../predictor/predictor-input.ts";
 
@@ -29,6 +30,16 @@ export function liveAiModel(policy: RuntimePolicy): ModelVersion {
     bounds: { maxInputBytes: 64_000, maxOutputBytes: 32_000, maxSources: 64, maxFacts: 128,
       maxReasonCharacters: 500, maxUncertaintyCharacters: 500, maxCitationsPerItem: 4, maxCitationCharacters: 512 },
   });
+}
+
+const PROMOTION_REFERENCE = /^forecast-evaluation:[a-f0-9]{64}:([a-f0-9]{64})$/u;
+/** Provider-first unless the owner configured ai-first with an evaluation promotion reference for this exact model, so a
+ * model change withdraws the promotion. The owner's approval of the reference is enforced at the publication boundary. */
+export function liveSourceOrder(policy: RuntimePolicy, model: ModelVersion): ForecastSourceOrder {
+  const { sourceOrder, aiPromotionRef } = policy.choices.forecasts;
+  if (sourceOrder !== "ai-first") return "provider-first";
+  if (aiPromotionRef?.match(PROMOTION_REFERENCE)?.[1] !== model.id) throw new Error("AI-first publication needs a promotion reference for the current model.");
+  return "ai-first";
 }
 
 /** UTC months are ledger partitions; they impose no monthly spending cap in usage-based mode. */

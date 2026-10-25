@@ -117,7 +117,7 @@ export async function refreshHarness(db, scenarios, changes = {}) {
       fallback: { bounds: catalogBounds(member.now, { priority: 'near-kickoff-fallback', cacheScope: member.jobId, deadlineAt, maxRequests: 1, timeoutMs: 1000, retry: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1 } }),
         maxElapsedMs: scenario.fallback === 'timeout' ? 20 : 5000 },
       observation: { bounds: catalogBounds(member.now, { deadlineAt, maxRequests: 1, timeoutMs: 1000, retry: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1 } }), maxAgeMs: 10000 },
-      publicationReserveMs: 2000, footballRequestLimit: 2 };
+      publicationReserveMs: 2000, footballRequestLimit: 2, ...(scenario.sourceOrder === undefined ? {} : { sourceOrder: scenario.sourceOrder }) };
   }
   const serviceOptions = { type: 'prediction.daily-refresh', handlerVersion: 1, store, selection, clock, configure,
     authority: { authorize() {}, verifyPlan: () => true }, models: registry, evidence, predictor, fallback, observation, lifecycle,

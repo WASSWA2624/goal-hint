@@ -11,7 +11,8 @@ Owner decisions through 13 October 2026, recorded in the ignored `.goal-hint/own
 
 | Decision | Effect |
 | --- | --- |
-| **OpenAI primary, API-Football fallback (13 October 2026)** | The live AI binding is implemented. Activation requires the private key and exact owner references. With AI disabled, the existing fallback-only path needs no AI key. AI failures retain valid independent families and request API-Football for supported missing families. Research stays disabled. |
+| **OpenAI and API-Football (13 October 2026)** | The live AI binding is implemented. Activation requires the private key and exact owner references. With AI disabled, the existing fallback-only path needs no AI key. Research stays disabled. |
+| **Provider-first with AI enabled (25 October 2026)** | Replaces "OpenAI primary". API-Football publishes the match result and double chance as the reviewed baseline; AI fills total goals and both teams to score, and supplies the match result only when the provider has none. Both forecasts are sealed in each refresh for the private comparison (`/admin/forecasts`). AI-first publication needs an approved promotion ([below](#forecast-source-order)). Output is unchanged while AI stays disabled. |
 | **Publish now, provisional** | Forecasts are published before shadow qualification (047) and release gates (048/049). Every API-Football forecast carries the existing *Provisional estimate* label, and no accuracy claim is made. |
 | **All available competitions** | `GOAL_HINT_COMPETITION_IDS` lists every league with a current season on the plan (`npm run live:competitions`). |
 | **Local only** | Production scope may run in development mode **only** against a loopback database. Remote or hosted targets still need `NODE_ENV=production` and verified TLS. |
@@ -57,6 +58,30 @@ forecast dates stay explicitly unavailable. Full seven-day coverage requires a
 plan with the necessary fixture dates and history access. The runner adapts when
 the verified account plan changes. OpenAI cannot fill missing fixture schedules.
 
+### Forecast source order
+
+`GOAL_HINT_FORECAST_SOURCE_ORDER` applies only with AI enabled and defaults to
+`provider-first`. Every AI refresh plan freezes it, so changing it affects new
+jobs only; intents saved before 25 October 2026 keep the original AI-first
+resolution without receipts. Fallback-only plans are unchanged.
+
+To publish AI ahead of API-Football:
+
+1. Collect prospective provider-first samples with AI enabled, freeze the
+   evaluation protocol (owner decisions OP-16/OP-17) with a candidate gate per
+   horizon on `system: "ai"`, `family: "match-result"`, `baseline: "api-football"`
+   and a negative `maximumBrierDifference`, and run `npm run evaluation:report`
+   on the final test ([forecast evaluation](forecast-evaluation.md#provider-baseline-and-promotion)).
+2. The report prints `Promotion reference (owner approval required): forecast-evaluation:<report hash>:<model id>`
+   only when every such gate passed and the decision is eligible for independent review.
+3. Record that exact reference as an `ai-promotion` approval in `.goal-hint/owner-approvals.json`.
+4. Set `GOAL_HINT_FORECAST_SOURCE_ORDER=ai-first` and `GOAL_HINT_AI_PROMOTION_REF=<reference>`,
+   run `npm run live:status`, then restart the runner.
+
+Readiness refuses `ai-first` without AI, without the reference, without the
+owner approval, or when the reference names another model, so a model change
+withdraws the promotion. Return to provider-first by removing both settings.
+
 ## What the runner does
 
 - **Schedule:** it enqueues the daily selection for the latest 21:00 UTC occurrence on start and at each
@@ -67,7 +92,8 @@ the verified account plan changes. OpenAI cannot fill missing fixture schedules.
   `refresh-capacity` exclusions. After three failed attempts, known coverage is finalized as partial.
 - **Refresh:** one job per selected fixture. When AI is enabled, up to two bounded team-history imports finish
   before the immutable analysis cutoff; the pinned OpenAI attempt uses stored verified regulation history and
-  derived form. API-Football supplies supported missing families on primary failure. A fresh
+  derived form. The API-Football prediction is then always requested (inside the job's reserved fallback
+  request) and, under the default provider-first order, publishes the match result. A fresh
   `/fixtures?id=` status read precedes atomic publication before the five-minute cutoff. Jobs wait (retryably)
   instead of spending the reserve kept for result checks.
 - **Results:** a leased poller covers the competitions with prediction cycles in the window. Settlement and

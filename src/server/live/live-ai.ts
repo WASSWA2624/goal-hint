@@ -11,7 +11,7 @@ import type { DatabaseRuntime } from "../database/client.ts";
 import type { EvidenceAuthority, EvidenceSnapshot } from "../evidence/evidence-contract.ts";
 import { buildEvidenceSnapshot } from "../evidence/evidence-snapshot.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
-import type { FallbackContext, ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
+import type { FallbackContext, ForecastSourceOrder, ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 import { parseFallbackAiResult } from "../fallback/fallback-input.ts";
 import { createOpenAiBinding } from "../predictor/openai-transport.ts";
 import { createPrimaryAiAdapter } from "../predictor/predictor-adapter.ts";
@@ -65,6 +65,8 @@ export async function createLiveAiRuntime(options: {
   policy: RuntimePolicy; verify: EvidenceVerifier; refs: LiveReferences; model: ModelVersion;
   database: DatabaseRuntime; store: RefreshStore; evidenceAuthority: EvidenceAuthority; pacing: RefreshPacing;
   fallbackReserveMs: number; fetcher?: typeof fetch; clock?: Clock;
+  /** Frozen into every AI plan; provider-first unless an approved promotion selects ai-first. */
+  sourceOrder?: ForecastSourceOrder;
 }) {
   const { policy, model, verify, refs } = options, clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const authorize = () => assertOperationAllowed(policy, "ai", verify);
@@ -139,7 +141,7 @@ export async function createLiveAiRuntime(options: {
   }
   return Object.freeze({ model, models, costs,
     configure(member: RefreshMember, sources: readonly import("../evidence/evidence-contract.ts").EvidenceSource[]) {
-      return liveAiRefreshPlan(member, refs, policy, model, sources, options.pacing);
+      return liveAiRefreshPlan(member, refs, policy, model, sources, options.pacing, options.sourceOrder ?? "provider-first");
     },
     predictor: { async predict(...args: Parameters<typeof predictor.predict>) { await initialize(); return predictor.predict(...args); } },
     verifyAi(result: PredictorResult, expected: FallbackContext) {

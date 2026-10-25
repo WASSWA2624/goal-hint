@@ -7,6 +7,8 @@ import { createJobWorker } from '../src/server/jobs/job-worker.ts';
 import { createJobRegistry } from '../src/server/jobs/job-registry.ts';
 import { evidenceHash } from './helpers/evidence-fixtures.mjs';
 import { evidenceFingerprint } from '../src/server/evidence/evidence-input.ts';
+import { parseForecastSourceReceipts } from '../src/server/fallback/source-receipts.ts';
+import { readSourceReceipts } from '../src/server/comparison/source-receipts-read.ts';
 
 test('one manifest-owned prediction refresh through real MySQL services', { timeout: 300000 }, async (t) => {
   await withPredictionPipeline(t, async (db) => {
@@ -251,6 +253,78 @@ test('retention, overlapping runs, freshness and paid-dispatch death recovery', 
       const oldProgress = await h.service.reconcileRun(h.selected.selected.runId);
       const newProgress = await h.service.reconcileRun(newer.selected.runId);
       assert.equal(oldProgress.finished, true); assert.equal(newProgress.finished, true);
+    });
+  });
+});
+
+test('provider-first plans publish the provider baseline beside AI and seal both source receipts', { timeout: 300000 }, async (t) => {
+  await withPredictionPipeline(t, async (db) => {
+    const scenarios = [{ sourceOrder: 'provider-first' }, {}, { sourceOrder: 'provider-first', ai: 'invalid' }, { sourceOrder: 'provider-first' }];
+    const h = await refreshHarness(db, scenarios);
+    async function execute(index, worker = h.worker) {
+      h.source.clock.value = db.now(); assert.equal(await worker.runOnce(), true);
+      const outcome = await h.outcome(index);
+      if (!outcome) t.diagnostic(JSON.stringify({ index, job: await h.job(index), events: h.events.slice(-4) }));
+      assert.ok(outcome); return outcome;
+    }
+    await t.test('the provider is requested beside a complete AI candidate and its rows pass the publication checks', async () => {
+      const outcome = await execute(0); assert.equal(outcome.outcome, 'published');
+      assert.equal(h.calls.ai.length, 1); assert.equal(h.calls.fallback.length, 1);
+      assert.deepEqual(h.calls.fallback[0].requestedGroups, ['match-result', 'total-goals', 'both-teams-to-score']);
+      const prompt = JSON.stringify(h.calls.ai[0].prompt);
+      assert.equal(prompt.includes('away-win":0.5'), false, 'the AI input never sees the provider forecast');
+      const markets = (await db.publisher.displayForFixture(outcome.fixtureId)).revision.candidate.markets;
+      for (const family of ['match-result', 'double-chance']) {
+        assert.equal(markets[family].market.source, 'api-football'); assert.deepEqual(markets[family].fallback, { reason: 'provider-first', detail: 'ai-shadow' });
+      }
+      for (const family of ['total-goals', 'both-teams-to-score']) { assert.equal(markets[family].market.source, 'ai'); assert.equal(markets[family].fallback, null); }
+      const stage = await h.store.stage(outcome.jobId, 'fallback', 'completed'), sources = parseForecastSourceReceipts(stage.value.sources);
+      assert.equal(sources.order, 'provider-first'); assert.equal(sources.ai.status, 'candidate'); assert.equal(sources['api-football'].status, 'candidate');
+      assert.equal(sources.ai.markets.markets['match-result'].market.source, 'ai');
+      assert.deepEqual(sources['api-football'].markets.markets['match-result'].market.probabilities,
+        markets['match-result'].market.probabilities);
+      const row = await db.a.query((tx) => tx.$queryRawUnsafe(`SELECT integrity = SHA2(CAST(body AS CHAR), 256) AS sealed
+        FROM PredictionRefreshStage WHERE jobId = ? AND phase = 'fallback' AND kind = 'completed'`, outcome.jobId));
+      assert.ok([true, 1, 1n].includes(row[0].sealed));
+    });
+    await t.test('a plan without an order keeps the original AI-first path: no provider call and no receipts', async () => {
+      const before = h.calls.fallback.length, outcome = await execute(1);
+      assert.equal(outcome.outcome, 'published'); assert.equal(h.calls.fallback.length, before);
+      assert.equal(Object.hasOwn((await h.store.stage(outcome.jobId, 'fallback', 'completed')).value, 'sources'), false);
+      assert.equal((await db.publisher.displayForFixture(outcome.fixtureId)).revision.candidate.audit.sourceOrder, undefined);
+    });
+    await t.test('invalid AI output still publishes the provider match result and records an unavailable AI receipt', async () => {
+      const outcome = await execute(2); assert.equal(outcome.outcome, 'published');
+      const markets = (await db.publisher.displayForFixture(outcome.fixtureId)).revision.candidate.markets;
+      assert.deepEqual(markets['match-result'].fallback, { reason: 'provider-first', detail: 'invalid-output' });
+      assert.equal(markets['total-goals'].available, false);
+      const sources = parseForecastSourceReceipts((await h.store.stage(outcome.jobId, 'fallback', 'completed')).value.sources);
+      assert.deepEqual([sources.ai.status, sources.ai.reason], ['unavailable', 'invalid-output']);
+    });
+    await t.test('a replay after an interrupted publication reuses the sealed stages without a second provider call', async () => {
+      let interrupted = true;
+      const service = createPredictionRefreshService({ ...h.serviceOptions, publisher: { async publish(input, lease) {
+        if (interrupted) { interrupted = false; throw new Error('synthetic interrupted publication'); }
+        return db.publisher.publish(input, lease);
+      } } });
+      const worker = createJobWorker({ queue: db.queue, registry: createJobRegistry([service.definition]), ownerId: evidenceHash('provider-first-replay-worker') });
+      h.source.clock.value = db.now(); await worker.runOnce();
+      const jobId = await h.jobIdAt(3), calls = h.calls.fallback.length, aiCalls = h.calls.ai.length;
+      assert.ok(await h.store.stage(jobId, 'fallback', 'completed')); assert.equal(await service.outcome(jobId), null);
+      db.setTime(db.now() + 101); h.source.clock.value = db.now(); await worker.runOnce();
+      const outcome = await service.outcome(jobId);
+      assert.equal(outcome.outcome, 'published'); assert.equal(outcome.phases.fallback, 'reused'); assert.equal(outcome.phases.ai, 'reused');
+      assert.equal(h.calls.fallback.length, calls); assert.equal(h.calls.ai.length, aiCalls);
+    });
+    await t.test('the private comparison reads only sealed receipts and refuses a tampered stage body', async () => {
+      const [first, legacy] = await Promise.all([0, 1].map(async (index) => (await db.publisher.displayForFixture((await h.outcome(index)).fixtureId)).revision));
+      const read = () => db.a.transaction((tx) => readSourceReceipts(tx, [first, legacy]), { isolationLevel: 'RepeatableRead' });
+      const receipts = await read();
+      assert.equal(receipts.get(first.jobId).order, 'provider-first'); assert.equal(receipts.has(legacy.jobId), false, 'legacy revisions have no receipts');
+      await db.instance.executeAdmin(`UPDATE PredictionRefreshStage SET body = JSON_SET(body, '$.value.sources.ai.version', 'tampered')
+        WHERE jobId = '${first.jobId}' AND phase = 'fallback' AND kind = 'completed'`);
+      const refused = await db.a.transaction((tx) => readSourceReceipts(tx, [first]).then(() => null, (error) => error), { isolationLevel: 'RepeatableRead' });
+      assert.equal(refused?.code, 'unavailable', 'an integrity mismatch is unavailable, never a partial comparison');
     });
   });
 });

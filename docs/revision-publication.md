@@ -85,6 +85,15 @@ unique key still guarantees at most one set per run/fixture/cycle. A newer valid
 fallback replaces older AI without comparing their percentages. Exactly four
 market rows describe each replacement, including unavailable families.
 
+`MarketPrediction_payload_check` requires `fallback` to be null on AI rows and an
+object on API-Football rows, so `fallback` always means why API-Football
+supplied the market. Its `reason` is one of the AI-failure triggers or, from 25
+October 2026, `provider-first`: the refresh's frozen source order preferred the
+provider baseline and the AI forecast was recorded separately ([provider
+fallback](provider-fallback.md#source-order-and-receipts)). Match details show it
+as "API-Football supplied this prediction as the reviewed baseline; AI review is
+recorded separately and not shown." No schema change was needed.
+
 Verified observed play, or play already in the canonical catalog, inserts an
 append-only `PredictionPublicationBarrier` for the current cycle. Subsequent
 scheduled responses cannot reopen eligibility. `storedPublicationBarrier` and

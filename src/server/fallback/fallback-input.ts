@@ -25,6 +25,7 @@ export const fallbackAiReasons = ["not-authorized", "invalid-response", "unavail
   "timeout", "uncertain-usage", "unverified-usage", "conflicting-reconciliation", "invalid-output", "wrong-identity", "invalid-evidence",
   "insufficient-evidence", "invalid-timing", "invalid-citation", "unverified-explanation", "conflicting-pin", "conflicting-invocation",
   "capacity-exhausted", "invalid-candidate", "unverified-calibration", "unverified-evaluation"] as const;
+export const forecastSourceOrders = ["provider-first", "ai-first"] as const;
 const marketReasons = ["missing-group", "unsupported-family", "derived-only", "invalid-candidate", "invalid-source", "unsupported-period",
   "unsupported-line", "incomplete-group", "invalid-probability", "invalid-sum", "invalid-derived-probability", "cross-market-conflict"] as const;
 const groups = ["match-result", "total-goals", "both-teams-to-score"] as const;
@@ -156,7 +157,7 @@ const resolvedProvenance = z.discriminatedUnion("kind", [
 const resolvedMarket = z.discriminatedUnion("available", [
   z.object({ available: z.literal(true), market: z.unknown(), timestamps, flags, provenance: resolvedProvenance,
     fallback: z.object({ reason: z.enum(["ai-failure", "ai-timeout", "ai-insufficient-evidence", "ai-budget-exhausted",
-      "ai-missing-group", "ai-invalid-group"]), detail: text }).strict().nullable() }).strict(),
+      "ai-missing-group", "ai-invalid-group", "provider-first"]), detail: text }).strict().nullable() }).strict(),
   z.object({ available: z.literal(false), reason: z.enum([...marketReasons, ...fallbackProviderReasons, "invalid-timing"]) }).strict(),
 ]);
 const publicExplanation = z.object({ text: plain, sourceUrls: z.array(link).max(10_000) }).strict();
@@ -165,7 +166,8 @@ const resolvedCandidate = z.object({ context: z.unknown(), markets: z.object({
   "both-teams-to-score": resolvedMarket }).strict(), issues: marketSnapshot.shape.issues,
   reasons: z.array(publicExplanation).min(2).max(4), uncertainty: publicExplanation,
   audit: z.object({ aiStatus: z.enum(["candidate", "denied"]), aiReason: text.nullable(),
-    providerStatus: z.enum(["candidate", "denied", "not-requested"]), providerReason: z.enum(fallbackProviderReasons).nullable() }).strict(),
+    providerStatus: z.enum(["candidate", "denied", "not-requested"]), providerReason: z.enum(fallbackProviderReasons).nullable(),
+    sourceOrder: z.enum(forecastSourceOrders).optional() }).strict(),
 }).strict();
 
 /** Archive validation, not provider/ownership authorization or publication eligibility. */
@@ -195,7 +197,9 @@ export function parseResolvedForecastCandidate(value: unknown): ResolvedForecast
           provenance.evidenceHash !== context.evidenceHash || item.fallback !== null ||
           provenance.provisional !== (provenance.evaluation.status !== "evaluated")) throw new Error();
       } else if (item.fallback === null || provenance.source.jobId !== context.jobId ||
-        provenance.source.externalFixtureId !== context.context.externalFixtureId) throw new Error();
+        provenance.source.externalFixtureId !== context.context.externalFixtureId ||
+        // Only a provider-first refresh names its own order as the reason API-Football was used, and it always does.
+        (item.fallback.reason === "provider-first") !== (parsed.audit.sourceOrder === "provider-first")) throw new Error();
     }
     const result = parsed.markets["match-result"], chance = parsed.markets["double-chance"];
     if (result.available && chance.available) {

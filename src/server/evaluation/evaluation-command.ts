@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import type { EvaluationAuthority } from "./evaluation-contract.ts";
 import { archiveEvaluationReadiness, archiveEvaluationReport, MAX_EVALUATION_BYTES, parseEvaluationJson, readEvaluationFile } from "./evaluation-archive.ts";
 import { parseEvaluationDataset, parseEvaluationProtocol } from "./evaluation-input.ts";
+import { aiPromotionReference } from "./evaluation-promotion.ts";
 import { createEvaluationHarness } from "./evaluation-service.ts";
 
 export class EvaluationCommandError extends Error {
@@ -38,7 +39,7 @@ export async function runEvaluationCommand(argv: readonly string[]) {
   const directory = flags["--directory"] ?? ".tmp/forecast-evaluation", inputs = [flags["--protocol"], flags["--dataset"], flags["--authority"]];
   if (inputs.every((entry) => entry === undefined)) {
     if (flags["--split"] !== undefined) throw new EvaluationCommandError("invalid-arguments");
-    return { kind: "readiness" as const, ...await archiveEvaluationReadiness({ directory }) };
+    return { kind: "readiness" as const, promotionReference: null, ...await archiveEvaluationReadiness({ directory }) };
   }
   if (inputs.some((entry) => entry === undefined) || flags["--split"] !== undefined && !["validation", "calibration", "finalTest"].includes(flags["--split"]))
     throw new EvaluationCommandError("invalid-arguments");
@@ -51,6 +52,8 @@ export async function runEvaluationCommand(argv: readonly string[]) {
   try {
     const report = createEvaluationHarness({ authority, maxRows: 100_000, maxBytes: MAX_EVALUATION_BYTES }).evaluate({ protocol, dataset,
       split: (flags["--split"] ?? "finalTest") as "validation" | "calibration" | "finalTest" });
-    return { kind: "evaluation" as const, report, ...await archiveEvaluationReport({ directory, protocol, dataset, report }) };
+    // A reference is printed for the owner to approve or ignore; the harness itself never promotes.
+    return { kind: "evaluation" as const, report, promotionReference: aiPromotionReference(report, protocol),
+      ...await archiveEvaluationReport({ directory, protocol, dataset, report }) };
   } catch { throw new EvaluationCommandError("evaluation-unavailable"); }
 }

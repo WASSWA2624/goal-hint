@@ -65,9 +65,14 @@ test("overlapping horizons, invalid bands and unbound gate criteria cannot enter
     { ...base, gates: [{ ...base.gates[0], horizonId: "unknown" }] },
     { ...base, gates: [{ ...base.gates[0], maximumBrier: null, maximumLogLoss: null, maximumCalibrationError: null }] },
     { ...base, gates: [{ ...base.gates[0], baseline: "league-frequency", maximumBrierDifference: null }] },
+    { ...base, gates: [{ ...base.gates[0], system: "api-football", baseline: "api-football", maximumBrierDifference: 0 }] },
+    { ...base, gates: [{ ...base.gates[0], baseline: "provider", maximumBrierDifference: 0 }] },
     { ...base, baselines: { ...base.baselines, minimumMatches: 0 } }, { ...base, competitionIds: [base.competitionIds[0], base.competitionIds[0]] }]) {
     error(() => createEvaluationProtocol(changed), "invalid-protocol");
   }
+  // The matched provider forecast from the same refresh is an AI candidate baseline.
+  const provider = createEvaluationProtocol({ ...base, gates: [{ ...base.gates[0], system: "ai", baseline: "api-football", maximumBrierDifference: -0.01 }] });
+  assert.equal(provider.gates[0].baseline, "api-football"); assert.deepEqual(parseEvaluationProtocol(provider), provider);
 });
 
 test("dataset reruns reproduce hashes and preserve immutable original forecasts and results", () => {

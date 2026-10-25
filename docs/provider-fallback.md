@@ -12,9 +12,14 @@ zero dispatched requests; every fallback coverage, pre-match, freshness and
 rights requirement is untested. OP-07, OP-08 and OP-11 in the
 [decision register](implementation-decisions.md) still require source-specific
 freshness, unknown-time handling, permitted retention/reuse and job allowances.
-The owner has selected OpenAI primary (`gpt-6.1-sol`) with usage-based billing
-and API-Football fallback; the concrete [live AI binding](ai-predictor.md#live-openai-binding)
+The owner selected OpenAI (`gpt-6.1-sol`) with usage-based billing and
+API-Football; the concrete [live AI binding](ai-predictor.md#live-openai-binding)
 is implemented. Its private key and counted activation check remain required.
+The original "OpenAI primary, API-Football fallback" order is reversed by
+default since 25 October 2026: with AI enabled, API-Football publishes the match
+result as the reviewed baseline and the AI forecast is captured beside it
+(`provider-first`, see [source order](#source-order-and-receipts)). AI-first
+publication returns only after an owner-approved evaluation promotion.
 Calibration stays explicitly unevaluated/provisional. Synthetic scenarios
 cannot qualify an account, source mapping or permission.
 
@@ -130,6 +135,10 @@ reuse rights. No default age or unknown-time acceptance is supplied.
 
 ## Candidate resolution
 
+This section describes the AI-first composition, used by plans without a source
+order and by an approved `ai-first` order. The default `provider-first` order
+with AI enabled is described under [source order and receipts](#source-order-and-receipts).
+
 Retain every valid AI source group. Attempt fallback for missing or invalid
 families, or AI failure, timeout, insufficient evidence or exhausted budget,
 while current eligibility, permissions, time and quota permit it. Missing news
@@ -184,6 +193,57 @@ Expose a real official source link only when the approved policy permits that
 attribution. No fixture-specific public URL is invented, and credentialed API
 URLs, raw provider advice, prompts, internal reasoning and worker logs are not
 public explanation content.
+
+## Source order and receipts
+
+An AI refresh plan freezes `sourceOrder` with its AI allocation
+(`RefreshPlan.sourceOrder`). Fallback-only plans and AI intents saved before 25
+October 2026 have no order and keep the original AI-first resolution above,
+without contemporaneous capture; their reviewed plan fingerprints are unchanged.
+
+With an order, the fallback phase always requests every provider group, even
+beside a complete AI candidate. The AI phase still runs first, so the AI input
+never sees the provider forecast. The request stays inside the job's existing
+fallback allowance (one provider request, already reserved by the live plan), so
+real API-Football usage rises to the planned figure when AI is enabled.
+
+- `provider-first` (the default with AI enabled): each source group comes from
+  the validated provider group when one is available, otherwise from the valid
+  AI group. API-Football supplies match result and derived double chance only,
+  so AI still fills total goals and both teams to score, and a denied, stale or
+  refused provider leaves the AI match result. If the provider match result and
+  both AI binary groups break a feasible-marginal constraint, the provider is
+  kept and both AI binary groups become unavailable (`cross-market-conflict`,
+  with the related groups and constraints in `issues`); nothing is filled.
+  The embedded `marketRules.sourceConflictRule` string still says
+  `preserve-valid-ai-groups-omit-conflicting-fallback`; it is fingerprinted into
+  every archived snapshot and cannot change, so this order's rule is recorded
+  here and in the candidate's `audit.sourceOrder`.
+- `ai-first`: the original composition, with both sources captured. It needs
+  an owner-approved promotion reference ([live operations](live-operations.md#forecast-source-order)).
+
+The market `fallback` field keeps its database-enforced meaning, "why
+API-Football supplied this market"; AI markets always have `fallback: null`
+(`MarketPrediction_payload_check`). Under `provider-first` every API-Football
+market carries `{ reason: "provider-first", detail }`, where the detail is
+`ai-shadow` (a current AI candidate was recorded), `invalid-timing` or the AI
+denial reason. The archive parser requires that reason exactly when
+`audit.sourceOrder` is `provider-first`. The provider basis text then reads "API-Football
+supplies the validated statistical forecast for the match result", and a mixed
+revision's uncertainty starts with "The match result comes from API-Football; AI
+notes cover the goal markets." Reviewed goal-market extensions are refused with
+`provider-first`, because they derive from the AI joint score distribution.
+
+The successful fallback result then carries `sources`: one receipt per source
+([`source-receipts.ts`](../src/server/fallback/source-receipts.ts)). A receipt
+is `candidate` only when the final resolution audit accepted that source, after
+identity, authority and staleness downgrades. It keeps the source's own
+validated snapshot (provider totals and BTTS stay `unsupported-family`), its
+clocks, contract or output version, the AI model version and the AI evidence's
+conflicting and limited-news flags. An unavailable receipt names its reason and
+has every family explicitly unavailable. The refresh worker seals this value in
+the existing fallback stage row; recovery without the provider records a
+`provider-unavailable` receipt, and a denied fallback stage stores none.
 
 ## Verification and live qualification
 

@@ -7,6 +7,7 @@ import type { CostJobPolicy, CostRequest } from "../cost-control/cost-contract.t
 import { priceCost } from "../cost-control/cost-pricing.ts";
 import type { EvidencePolicy, EvidenceSource } from "../evidence/evidence-contract.ts";
 import { freezeEvidence } from "../evidence/evidence-input.ts";
+import type { ForecastSourceOrder } from "../fallback/fallback-contract.ts";
 import type { ModelVersion } from "../predictor/predictor-contract.ts";
 import type { RefreshMember, RefreshPlan } from "../refresh/refresh-contract.ts";
 import { refreshReference } from "../refresh/refresh-input.ts";
@@ -38,9 +39,10 @@ export function liveAiAllocation(policy: RuntimePolicy, model: ModelVersion, at:
     research: null, fallbackReserveMs, evidenceRef });
 }
 
-/** Frozen plan uses stored sources already available by the member's captured analysis cutoff. */
+/** Frozen plan uses stored sources already available by the member's captured analysis cutoff. The source order is
+ * frozen with the AI allocation; a plan without usable AI time stays the fallback-only plan, without an order. */
 export function liveAiRefreshPlan(member: RefreshMember, refs: LiveReferences, policy: RuntimePolicy, model: ModelVersion,
-  sources: readonly EvidenceSource[], pacing: RefreshPacing = "standard"): RefreshPlan {
+  sources: readonly EvidenceSource[], pacing: RefreshPacing = "standard", sourceOrder: ForecastSourceOrder = "provider-first"): RefreshPlan {
   const base = fallbackRefreshPlan(member, refs, pacing), reserve = member.entry.envelope.fallbackReserveMs;
   const allocation = liveAiAllocation(policy, model, member.now, reserve).ai!;
   const timeLimitMs = Math.min(member.entry.envelope.timeoutMs, allocation.primaryTimeLimitMs + reserve);
@@ -59,5 +61,5 @@ export function liveAiRefreshPlan(member: RefreshMember, refs: LiveReferences, p
     timeoutMs: maximumMs, priority: { kind: "fixture", kickoffAt: member.context.kickoffAt }, evidenceRef: refs.refresh };
   return freezeEvidence({ ...base, modelVersionId: model.id,
     evidence: { ...base.evidence, policy: liveAiEvidencePolicy(refs), cachedSources: sources, maxElapsedMs: evidenceMs },
-    ai: { job, request, maxElapsedMs: maximumMs } });
+    ai: { job, request, maxElapsedMs: maximumMs }, sourceOrder });
 }
