@@ -27,6 +27,9 @@ current validity window; mathematical marginal bounds are also checked. No mean,
 product-of-marginals or invented estimate is used as a fallback. With unresolved
 model qualification and public odds rights (OP-15/17/36), the production binding
 shows unavailable. Synthetic tests exercise generation and transport separately.
+Custom builds reuse the same ranking contract (`jointSlipRanking` in
+`src/domain/joint-slips.ts`) when a qualified request-time model is bound; none
+is bound today, so custom ranking stays average-based (`docs/slip-builder.md`).
 
 The page and `/api/best-slips` recheck entitlement after generation. Responses
 are private/no-store. Public DTOs omit even the internal slip ID, because it

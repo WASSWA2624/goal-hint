@@ -15,7 +15,8 @@ desktop and mobile. Detailed criteria open in native modal dialogs instead of
 expanding the form. Inputs and dialogs use the shared `theme.border.radius` token.
 
 The buttons show counts for their current settings. Match limits counts custom
-odds and probability ranges, up to two. Match Date & Time counts a custom date
+odds and probability ranges, up to two, or up to three when slip win probability
+is offered. Match Date & Time counts a custom date
 range and a custom daily time window, also up to two. Markets shows the number
 of selected market families, starting at four. A range counts once even when
 both its minimum and maximum are changed. Limits and date/time hide their count
@@ -50,6 +51,7 @@ browser-safe `src/domain/slip-builder.ts` contract:
 | Total odds | Inclusive minimum and maximum, 1.01–100,000.00 | Blank (Any supported odds) |
 | Individual selection odds | Inclusive minimum and maximum, 1.01–1,000.00 | Blank (Any supported odds) |
 | Selection probability | Inclusive unrounded percentage bounds, 0–100 | Blank (Any supported probability) |
+| Slip win probability | Inclusive 0–100% whole-slip bounds; only with a current qualified joint estimate; shown only when one is bound or a request supplies a bound | Blank (Any) |
 | Selection count | Minimum and maximum of 1–8 matches per slip | Blank (Any supported count) |
 | Number of slips | 1–10 | 3 |
 | Reuse matches | Allow a fixture in multiple separate slips | Off |
@@ -96,9 +98,13 @@ Over 2.5 and Under 2.5, matching the published source distribution; additional
 lines are not inferred.
 
 Submission parsing streams entries and bounds work before joining repeated
-values: at most 30 form entries, 2 KiB of form-encoded data and 256 characters per
+values: at most 32 form entries, 2 KiB of form-encoded data and 256 characters per
 value. This accommodates all ten manual outcome checkboxes, all four market
-checkboxes and the hidden reuse pair while bounding each family's outcome count.
+checkboxes, the hidden reuse pair and the two slip win probability fields while
+bounding each family's outcome count. Canonical serialization omits default
+(Any) slip win probability bounds, like Automatic outcomes, so existing criteria
+URLs, save requests and sealed Best Slips publication criteria are unchanged; a
+non-default bound serializes both `jointMin` and `jointMax`.
 
 ## Qualifying selections and calculations
 
@@ -140,15 +146,34 @@ probabilities. Forecasts of 80% and 90% therefore display an average of 85%.
 This describes the selections' forecast strength, not the chance that the entire
 slip wins. If those events were independent their joint probability would be
 72%; independence is not established by this feature, and no combined winning
-probability is calculated or claimed.
+probability is ever derived from the marginals, neither as a mean nor as a
+product. When a current qualified joint model is bound, its estimate is shown
+separately as Win probability beside the average.
 
 ## Ranking and separate slips
 
-Qualifying combinations rank by fewer selections first, then higher arithmetic
-average probability, then higher exact total odds. Canonical fixture, market and
-selection identifiers break ties deterministically. Rows within a slip follow
-kickoff and canonical identifier order. Identical combinations never appear as
-separate slips.
+Custom generation has two modes.
+
+Without a current qualified joint model (production today), qualifying
+combinations rank by fewer selections first, then higher arithmetic average
+probability, then higher exact total odds. Selection counts are searched from the
+minimum upwards and the search stops at the first count that fills the request.
+The results note says this order is not a whole-slip chance of winning.
+
+With a current qualified joint model, custom generation reuses the Best Slips
+contract through `jointSlipRanking` in `src/domain/joint-slips.ts`: the same
+qualification, marginal-bound check and comparator. Slips rank by higher
+estimated whole-slip probability; fewer selections only break equal estimates,
+then the higher displayed (rounded) total odds and the slip identifier.
+Every selection count from the minimum to the maximum is searched. Combinations
+the model cannot estimate are excluded and counted in a visible note; they are
+never ranked by a mean or product. Slip win probability bounds apply only to that
+estimate. Without a current model, a request with a non-default bound returns
+`estimate-unavailable` before any database, cache or limiter access.
+
+Canonical fixture, market and selection identifiers break ties deterministically.
+Rows within a slip follow kickoff and canonical identifier order. Identical
+combinations never appear as separate slips.
 
 With reuse enabled, the engine returns the highest-ranked available combinations
 up to the requested count. With reuse disabled, fixtures must also be distinct
@@ -157,6 +182,32 @@ fulfil the requested number and then compares the ordered slip ranks. It can
 skip the individually highest-ranked slip if that slip would prevent a larger
 valid separate batch; a greedy pick-and-remove algorithm does not ensure that
 behavior. If fewer slips can be produced, only qualifying slips are returned.
+
+## Whole-slip ranking and bounded-search optimality
+
+When `searchLimited` is false, a joint-ranked result is exactly optimal under the
+declared ranking over every qualifying combination: with reuse, the top requested
+number of combinations; without reuse, the maximum-size fixture-disjoint batch
+whose ordered ranks are lexicographically best. The depth-first batch search
+returns the first such tuple in rank order. Optimal means optimal relative to the
+model's estimates, not to true outcome frequencies. The batch objective is
+lexicographic rank, never a sum or product of slip probabilities.
+
+When `searchLimited` is true, no global claim is made, because:
+
+- the 60-candidate truncation orders by individual probability, while a joint
+  estimate is bounded above only by the smallest marginal;
+- one shared 100,000-node enumeration budget runs in ascending selection count,
+  so wide criteria can under-explore longer slips and partly reintroduce a
+  fewer-selections bias;
+- the heap retains at most 2,000 combinations;
+- the compatible-batch search has a 100,000-node budget;
+- the stored read covers at most 500 fixtures.
+
+The estimator is called once per enumerated combination; estimates are memoized
+by combination object. Equal estimates and counts are ordered by the displayed
+rounded total, not the exact product used by the average ranking, to keep the
+Best Slips ordering unchanged.
 
 ## Stored reads, bounded work and result states
 
@@ -174,14 +225,17 @@ finishes are excluded before generation.
 The pure engine retains at most 60 qualifying selection candidates, ordered by
 probability, odds and canonical identifiers. Combination enumeration has a
 100,000-node budget; a bounded heap retains at most 2,000 combinations; compatible
-batch selection has a 100,000-node budget per selection-count stage. The maximum
+batch selection has a 100,000-node budget per selection-count stage. Joint-ranked
+builds run one batch stage, over the final retained set, so a discarded
+intermediate stage cannot set `searchLimited`. The maximum
 slip length and count also bound the returned output. Reaching a database,
 candidate, enumeration, retention or batch bound sets `searchLimited`. Limited
 results are ranked among the explored candidates and do not claim global
 optimality or that all possible qualifying slips were found.
 
 The page distinguishes generated slips, no qualifying selections, no valid
-combinations, odds unavailable, data unavailable and rate limiting. It reports
+combinations, odds unavailable, whole-slip estimate unavailable, data unavailable
+and rate limiting. It reports
 limited searches and partial coverage. Missing-price or missing-forecast counts
 refer to fixtures excluded entirely for that reason; a fixture that qualifies
 through another requested family does not inflate those excluded counts.
@@ -192,6 +246,16 @@ policy, generation returns `odds-unavailable` before database, cache or limiter
 access. Adding the page does not enable private odds, change provider policy or
 fabricate demonstration slips in production. Isolated tests can supply approved
 synthetic stored projections to exercise generation.
+
+The web process binds no joint model: `boundJointSlipModel` in
+`src/server/slips/joint-model.ts` returns null until a model is qualified on
+retained outcomes (S03/P01). Custom ranking therefore stays average-based in
+production, the slip win probability fields stay hidden, and URL-supplied bounds
+return `estimate-unavailable`. A reviewed binding must reuse the publication
+worker's model and verifier; a reference string or an always-true verifier is not
+evidence. Best Slips and the worker pass their own build, so the service never
+consults the request-time model for them. A model that expires during the
+bounded read makes the build unavailable, matching the Best Slips rollover rule.
 
 Generation is a read-only server operation. It consumes the existing aggregate
 public search limiter once per build when odds are enabled. It performs no
@@ -229,7 +293,12 @@ coherence checks. Every leg must be complete before the full slip is public.
 
 Old saved snapshots without source IDs remain explicitly unbound and use the
 legacy current-fixture completion rule; no historical cycle IDs are guessed or
-backfilled. Member saves remain member-owned and are erased with the account;
+backfilled. Saves persist the model-independent snapshot (`modelIndependentSlip`);
+a whole-slip estimate is not stored, because no model identity is stored with a
+member save. Saving rebuilds with the request-time model, so a model change
+between rendering and saving returns `409 changed` when the rebuilt slips no
+longer include the rendered one.
+Member saves remain member-owned and are erased with the account;
 the separate daily publication archive is independent of those saves. Original
 quoted odds are not claimed as settled bookmaker payout odds.
 
@@ -242,6 +311,12 @@ native checkbox submission, policy gating, read drift and bounded searches.
 It also covers blank Any bounds, Automatic choosing a qualifying non-top
 outcome, manual choices using their own probabilities and quotes, multi-result
 combinations, missing outcome prices and invalid outcome-family mappings.
+`tests/joint-slips.test.mjs` uses synthetic joint models only: it covers the
+unchanged no-model path, a longer slip outranking a shorter one, inclusive
+whole-slip bounds, excluded and counted unestimable combinations, exhaustive
+reuse and separate-batch oracles, budget disclosure, memoized estimates and the
+single final batch stage. `tests/best-slips.test.mjs`, also in `test:slips`,
+checks that Best Slips keeps the shared comparator.
 `tests/slip-forecast.test.mjs` covers source binding, superseded eligible
 revisions, rescheduling, pending corrections, reference validation and mixed
 cycle/outcome batches. The genuine-MySQL saved-slip integration also exercises
@@ -253,4 +328,9 @@ real server-rendered controls, the three dialog groups and their inline
 no-JavaScript fallback, blank Any defaults, retained custom numeric bounds, and
 unique form-associated inputs. It also checks result states, native GET builds, invalid criteria,
 navigation overflow, summaries inside slip titles and one row per selection.
+Whole-slip fields are checked separately: absent without a bound model, present
+and blank with one, and kept with their value when a request supplies a bound.
+The `/cutoff` route checks that the real service returns `estimate-unavailable`
+without a model; `/joint` runs the real route and service with a synthetic model
+and checks the bound and its validation error.
 Its `--serve` option keeps the fixture available for browser inspection.

@@ -4,7 +4,8 @@ import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMillisecon
 import { feedQueryRules, type FeedParameters } from "../../domain/feed-query.ts";
 import { storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { buildSlips, slipBuilderRules, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
+import { customSlipBuilder, qualifiedJointModel, type JointSlipModel } from "../../domain/joint-slips.ts";
+import { hasJointBounds, slipBuilderRules, type buildSlips, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
 import { slipPricePageSchema, type SlipPricePage } from "../../domain/slip-price-page.ts";
 import type { SlipBuildPageResult } from "../../domain/slip-page.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
@@ -22,6 +23,8 @@ export function createSlipBuildService(options: Readonly<{
   /** Effective public odds policy. Tests alone override it to exercise priced stored projections. */
   providerOdds?: boolean;
   build?: typeof buildSlips;
+  /** Request-time joint estimator for default custom builds; ignored when an explicit build is supplied. */
+  jointModel?: () => JointSlipModel | null;
 }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   return Object.freeze({ async query(criteria: SlipCriteria, locale = "en"): Promise<SlipBuildPageResult> {
@@ -30,6 +33,13 @@ export function createSlipBuildService(options: Readonly<{
       searchLimited: false, partialCoverage: false, retryAfterSeconds: null };
     // Check before any database, cache or limiter access: private prices cannot bypass the public policy.
     if (!(options.providerOdds ?? publicPolicy.features.providerOdds)) return { ...base, state: "odds-unavailable" };
+    // Best Slips and the publication worker pass their own build and are never coupled to the request-time model.
+    let joint: JointSlipModel | null = null;
+    if (!options.build) {
+      try { const model = options.jointModel?.() ?? null; joint = qualifiedJointModel(model, asOf) ? model : null; } catch { joint = null; }
+    }
+    // A whole-slip bound is never approximated by a mean or a product of marginals.
+    if (!options.build && !joint && hasJointBounds(criteria)) return { ...base, state: "estimate-unavailable" };
     try {
       await options.consume();
       const today = getReportingDate(asOf), range = validateReportingDateRange(criteria.dateFrom, criteria.dateTo, slipBuilderRules.maximumDays);
@@ -83,10 +93,12 @@ export function createSlipBuildService(options: Readonly<{
       }
       const completedAt = clock.now();
       if (completedAt < asOf || getReportingDate(completedAt) !== today) throw new MatchFeedError("unavailable");
+      // Like Best Slips, a model expiring during the bounded read withholds its estimates.
+      if (joint && !qualifiedJointModel(joint, completedAt)) throw new MatchFeedError("unavailable");
       // The scan can take time. Retain the original observation cutoff, but exclude matches that
       // have entered the publication/kickoff cutoff by completion, even if their first page was valid.
       const current = records.filter((record) => record.kickoffAt === null || completedAt < getPublicationDeadline(record.kickoffAt));
-      const data = (options.build ?? buildSlips)(criteria, current, asOf);
+      const data = (options.build ?? customSlipBuilder(joint))(criteria, current, asOf);
       return { ...base, state: data.slips.length > 0 ? "generated" : data.qualifyingMatches === 0 ? "no-qualifying" : "no-combinations",
         data, asOf: completedAt, examined: records.length, searchLimited: searchLimited || data.searchLimited, partialCoverage };
     } catch (error) {

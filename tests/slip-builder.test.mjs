@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { matchFeedRecordSchema } from '../src/domain/match-feed.ts';
 import { marketRules, marketSelections, validateMarketSnapshot } from '../src/domain/markets.ts';
-import { buildSlips, defaultSlipCriteria, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules } from '../src/domain/slip-builder.ts';
+import { buildSlips, defaultSlipCriteria, hasJointBounds, parseSlipCriteria, serializeSlipCriteria, SlipCriteriaError, slipBuilderRules } from '../src/domain/slip-builder.ts';
 
 const today = '2026-10-13', asOf = Date.parse('2026-10-13T07:00:00Z');
 const kickoffAt = Date.parse('2026-10-13T15:00:00Z');
@@ -48,9 +48,14 @@ test('Any defaults and canonical native GET criteria round trip', () => {
   const defaults = defaultSlipCriteria(today);
   assert.deepEqual(defaults, { dateFrom: today, dateTo: '2026-11-12', timeFrom: '', timeTo: '',
     markets: ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score'], totalMin: 101, totalMax: 10_000_000, oddsMin: 101, oddsMax: 100_000,
-    probMin: 0, probMax: 100, teamsMin: 1, teamsMax: 8, slips: 3, reuse: false });
+    probMin: 0, probMax: 100, jointMin: 0, jointMax: 100, teamsMin: 1, teamsMax: 8, slips: 3, reuse: false });
   assert.deepEqual(parseSlipCriteria({}, today), defaults);
   assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(defaults), today), defaults);
+  // Default whole-slip bounds are omitted, so existing canonical URLs and sealed criteria strings are unchanged.
+  assert.equal(serializeSlipCriteria(defaults).has('jointMin'), false); assert.equal(serializeSlipCriteria(defaults).has('jointMax'), false);
+  assert.equal(serializeSlipCriteria(defaults).toString(), 'dateFrom=2026-10-13&dateTo=2026-11-12&timeFrom=&timeTo='
+    + '&markets=match-result%2Cdouble-chance%2Ctotal-goals%2Cboth-teams-to-score&totalMin=1.01&totalMax=100000.00&oddsMin=1.01'
+    + '&oddsMax=1000.00&probMin=0&probMax=100&teamsMin=1&teamsMax=8&slips=3&reuse=0');
   const repeated = parseSlipCriteria(new URLSearchParams('build=1&markets=total-goals&markets=match-result&reuse=0&reuse=1'), today);
   assert.deepEqual(repeated.markets, ['match-result', 'total-goals']); assert.equal(repeated.reuse, true);
   assert.equal(parseSlipCriteria({ markets: ['total-goals', 'match-result'], reuse: ['0', '1'] }, today).reuse, true);
@@ -58,6 +63,34 @@ test('Any defaults and canonical native GET criteria round trip', () => {
   assert.equal(serializeSlipCriteria(repeated).getAll('reuse').length, 1);
   const smallProbability = criteria({ probMin: 0.0000001 });
   assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(smallProbability), today), smallProbability);
+});
+
+test('non-default whole-slip bounds serialize as a canonical pair and round trip', () => {
+  const lower = criteria({ jointMin: 50 }), serialized = serializeSlipCriteria(lower);
+  assert.equal(serialized.get('jointMin'), '50'); assert.equal(serialized.get('jointMax'), '100');
+  assert.match(serialized.toString(), /&probMax=100&jointMin=50&jointMax=100&teamsMin=/);
+  assert.deepEqual(parseSlipCriteria(serialized, today), lower);
+  const tiny = criteria({ jointMin: 0.0000001 });
+  assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(tiny), today), tiny);
+  const upper = criteria({ jointMax: 99.999 });
+  assert.equal(serializeSlipCriteria(upper).get('jointMin'), '0'); assert.deepEqual(parseSlipCriteria(serializeSlipCriteria(upper), today), upper);
+  assert.equal(hasJointBounds(criteria()), false); assert.equal(hasJointBounds({ jointMin: 0, jointMax: 100 }), false);
+  assert.equal(hasJointBounds({ jointMin: 0.001, jointMax: 100 }), true); assert.equal(hasJointBounds({ jointMin: 0, jointMax: 99.999 }), true);
+  assert.deepEqual(parseSlipCriteria({ jointMin: '', jointMax: '' }, today), defaultSlipCriteria(today));
+  for (const invalid of [{ jointMin: NaN }, { jointMin: 60, jointMax: 50 }, { jointMax: 100.5 }]) {
+    assert.throws(() => serializeSlipCriteria(criteria(invalid)));
+  }
+});
+
+test('whole-slip bounds without a joint ranking are refused rather than approximated', () => {
+  const records = [record('a', '2.00', 0.8), record('b', '2.00', 0.9)];
+  for (const bounds of [{ jointMin: 1 }, { jointMax: 99 }]) {
+    assert.throws(() => buildSlips(criteria({ teamsMin: 2, teamsMax: 2, ...bounds }), records, asOf),
+      (error) => error instanceof RangeError && /current calibrated joint ranking/.test(error.message));
+  }
+  const average = buildSlips(criteria({ teamsMin: 2, teamsMax: 2 }), records, asOf);
+  assert.equal(average.slips.length, 1); assert.equal('joint' in average, false);
+  assert.ok(average.slips.every((slip) => !('estimatedProbability' in slip)));
 });
 
 test('omitting reuse builds separate slips while an explicit opt-in still allows shared matches', () => {
@@ -110,6 +143,9 @@ test('all ten manual outcome checkboxes fit the bounded full native GET contract
   }
   form.append('reuse', '0'); form.append('reuse', '1'); form.append('build', '1');
   assert.equal([...form].length, 30); assert.deepEqual(parseSlipCriteria(form, today), expected);
+  // A form offering whole-slip limits submits both blank Any fields as well.
+  form.append('jointMin', ''); form.append('jointMax', '');
+  assert.equal([...form].length, 32); assert.deepEqual(parseSlipCriteria(form, today), expected);
 });
 
 for (const input of [
@@ -166,7 +202,7 @@ test('aggregate encoded bytes and entry counts are bounded before query values a
   const oversizedAscii = new URLSearchParams();
   for (const field of ['dateFrom', 'dateTo', 'timeFrom', 'timeTo', 'totalMin', 'totalMax', 'oddsMin', 'oddsMax']) oversizedAscii.append(field, '1'.repeat(256));
   assert.throws(() => parseSlipCriteria(oversizedAscii, today), (error) => error instanceof SlipCriteriaError && error.code === 'invalid-query');
-  const tooMany = Object.fromEntries(Array.from({ length: 31 }, (_, index) => [`unused-${index}`, undefined]));
+  const tooMany = Object.fromEntries(Array.from({ length: 33 }, (_, index) => [`unused-${index}`, undefined]));
   assert.throws(() => parseSlipCriteria(tooMany, today), (error) => error instanceof SlipCriteriaError && error.code === 'invalid-query');
 });
 for (const [parameters, code] of [
@@ -179,7 +215,9 @@ for (const [parameters, code] of [
   [{ oddsMax: '1000.01' }, 'invalid-odds-range'], [{ oddsMin: '1000.01' }, 'invalid-odds-range'],
   [{ totalMin: '100000.01' }, 'invalid-odds-range'], [{ oddsMin: '1e2' }, 'invalid-odds-range'],
   [{ totalMin: '3.001' }, 'invalid-odds-range'], [{ probMin: '100.01' }, 'invalid-probability-range'],
-  [{ probMin: '80', probMax: '69.99' }, 'invalid-probability-range'], [{ teamsMin: '5', teamsMax: '4' }, 'invalid-selection-range'],
+  [{ probMin: '80', probMax: '69.99' }, 'invalid-probability-range'], [{ jointMin: '100.01' }, 'invalid-joint-probability-range'],
+  [{ jointMin: '60', jointMax: '50' }, 'invalid-joint-probability-range'], [{ jointMax: 'abc' }, 'invalid-joint-probability-range'],
+  [{ jointMin: '-1' }, 'invalid-joint-probability-range'], [{ teamsMin: '5', teamsMax: '4' }, 'invalid-selection-range'],
   [{ teamsMax: '9' }, 'invalid-selection-range'], [{ slips: '11' }, 'invalid-slip-count'],
   [{ slips: '0' }, 'invalid-slip-count'], [{ reuse: 'yes' }, 'invalid-query'],
   [{ build: '0' }, 'invalid-query'], [{ locale: 'en' }, 'invalid-query'],

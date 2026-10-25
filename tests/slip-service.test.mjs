@@ -3,7 +3,7 @@ import test from 'node:test';
 import { resolveFeedDates, parseFeedQuery } from '../src/domain/feed-query.ts';
 import { storedMatchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
-import { defaultSlipCriteria } from '../src/domain/slip-builder.ts';
+import { buildSlips, defaultSlipCriteria } from '../src/domain/slip-builder.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { readPublicSlipBuild } from '../src/server/slips/public-slips.ts';
 import { createSlipBuildService, slipReadRules } from '../src/server/slips/slip-service.ts';
@@ -45,6 +45,53 @@ test('disabled public odds policy makes no stored-price, database or rate-limit 
   assert.equal(result.state, 'odds-unavailable'); assert.equal(result.data, null);
   assert.equal(reads, 0); assert.equal(consumes, 0);
   assert.equal((await readPublicSlipBuild(criteria(), clock)).state, 'odds-unavailable');
+  // The odds policy is checked before the whole-slip estimate requirement.
+  assert.equal((await readPublicSlipBuild(criteria({ jointMin: 50 }), clock)).state, 'odds-unavailable');
+});
+
+// Synthetic test evidence only: this model is never bound to the production service.
+const jointModel = { calibrationReference: 'synthetic-test-calibration', correlationReference: 'synthetic-test-joint-outcomes',
+  validFrom: now - 1000, validUntil: now + 60_000, estimate: selections => Math.min(...selections.map(item => item.probability)) - 0.05 * (selections.length - 1) };
+
+test('whole-slip bounds without a current qualified model are unavailable before any read or limiter charge', async () => {
+  for (const model of [null, { ...jointModel, validUntil: now }, undefined]) {
+    let reads = 0, consumes = 0;
+    const result = await service(async () => { reads++; throw new Error('should not read'); }, {
+      consume: async () => { consumes++; }, ...(model === undefined ? {} : { jointModel: () => model }) }).query(criteria({ jointMin: 50 }));
+    assert.equal(result.state, 'estimate-unavailable'); assert.equal(result.data, null);
+    assert.equal(reads, 0); assert.equal(consumes, 0);
+  }
+});
+
+test('a current qualified model ranks and bounds custom builds with a separate whole-slip estimate', async () => {
+  const records = [record('fixture-1'), record('fixture-2')], read = async parameters => page(parameters, records);
+  const result = await service(read, { jointModel: () => jointModel }).query(criteria({ jointMin: 50 }));
+  assert.equal(result.state, 'generated'); assert.deepEqual(result.data.joint, { unestimated: 0 });
+  assert.ok(result.data.slips.length > 0 && result.data.slips.every(slip => Math.abs(slip.estimatedProbability - 0.55) < 1e-12));
+  assert.equal(result.data.slips[0].averageProbability, 0.6);
+  assert.equal((await service(read, { jointModel: () => jointModel }).query(criteria({ jointMin: 60 }))).state, 'no-combinations');
+});
+
+test('a model expiring during the bounded read withholds the build', async () => {
+  const run = (validUntil) => {
+    let ticks = 0;
+    return service(async parameters => page(parameters, [record('fixture-1'), record('fixture-2')]), {
+      clock: { now: () => ticks++ === 0 ? now : now + 2000 }, jointModel: () => ({ ...jointModel, validUntil }) }).query(criteria());
+  };
+  const expired = await run(now + 1000);
+  assert.equal(expired.state, 'data-unavailable'); assert.equal(expired.data, null);
+  assert.equal((await run(now + 60_000)).state, 'generated');
+});
+
+test('an unavailable estimator leaves unbounded builds on the average ranking; explicit builds never consult it', async () => {
+  const records = [record('fixture-1'), record('fixture-2')], read = async parameters => page(parameters, records);
+  const average = await service(read, { jointModel: () => { throw new Error('estimator unavailable'); } }).query(criteria());
+  assert.equal(average.state, 'generated'); assert.equal('joint' in average.data, false);
+  assert.ok(average.data.slips.every(slip => !('estimatedProbability' in slip)));
+  let resolutions = 0, builds = 0;
+  const build = (...args) => { builds++; return buildSlips(...args); };
+  const explicit = await service(read, { build, jointModel: () => { resolutions++; return jointModel; } }).query(criteria());
+  assert.equal(explicit.state, 'generated'); assert.equal(builds, 1); assert.equal(resolutions, 0); assert.equal('joint' in explicit.data, false);
 });
 
 test('build uses one EAT stored cohort, all requested families, one budget charge and a final uncached probe', async () => {

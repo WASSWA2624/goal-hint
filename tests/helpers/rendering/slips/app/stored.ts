@@ -2,11 +2,17 @@ import { addReportingDays, getReportingDate, parseUtcInstant } from "@/domain/ca
 import { parseFeedQuery, resolveFeedDates, type FeedParameters } from "@/domain/feed-query";
 import { storedMatchFeedRecordSchema, storedMatchFeedResponseSchema } from "@/domain/match-feed";
 import { marketRules, validateMarketSnapshot, type MarketFamily } from "@/domain/markets";
-import { buildSlips, defaultSlipCriteria, type SlipCriteria, type SlipMatchRecord } from "@/domain/slip-builder";
+import { customSlipBuilder, qualifiedJointModel, type JointSlipModel } from "@/domain/joint-slips";
+import { defaultSlipCriteria, hasJointBounds, type SlipCriteria, type SlipMatchRecord } from "@/domain/slip-builder";
 import type { SlipBuildPageResult } from "@/server/slips/slip-service";
 
 /** Isolated rendering data only: no database, provider, cache, approval or visitor state. */
 export const now = parseUtcInstant("2026-10-13T08:00:00Z"), today = getReportingDate(now);
+/** Synthetic rendering evidence only; never a production or qualified model. Its estimate stays inside the marginal
+ * bounds while the non-minimum marginals average at most 0.95, which holds for these probMin-70 records. */
+export const syntheticJointModel: JointSlipModel = { calibrationReference: "synthetic-rendering-calibration",
+  correlationReference: "synthetic-rendering-joint-outcomes", validFrom: now - 1000, validUntil: now + 60_000,
+  estimate: (selections) => Math.min(...selections.map((item) => item.probability)) - 0.05 * (selections.length - 1) };
 export const criteria: SlipCriteria = { ...defaultSlipCriteria(today), dateTo: addReportingDays(today, 6),
   markets: ["match-result", "double-chance", "total-goals"], totalMin: 300, totalMax: 600, oddsMin: 125, oddsMax: 260,
   probMin: 70, probMax: 100, teamsMin: 2, teamsMax: 4, slips: 3, reuse: true };
@@ -70,19 +76,22 @@ export function syntheticPricePage(parameters: FeedParameters, asOf = now) {
   const feed = syntheticFeed(parameters, asOf), byId = new Map(records.map((record) => [record.fixtureId, record]));
   return { feed, selectionPrices: Object.fromEntries(feed.records.map((record) => [record.fixtureId, byId.get(record.fixtureId)!.selectionPrices!])) };
 }
-export function syntheticBuild(input: SlipCriteria = criteria, longNames = false, manualHome = false): SlipBuildPageResult {
+function failure(state: SlipBuildPageResult["state"]): SlipBuildPageResult {
+  return { state, data: null, asOf: now, examined: 0, partialCoverage: false, searchLimited: false,
+    retryAfterSeconds: state === "rate-limited" ? 11 : null };
+}
+/** Mirrors the stored service: whole-slip bounds need the qualified model, and none means the unchanged average build. */
+export function syntheticBuild(input: SlipCriteria = criteria, longNames = false, manualHome = false, model: JointSlipModel | null = null): SlipBuildPageResult {
+  if (hasJointBounds(input) && !qualifiedJointModel(model, now)) return failure("estimate-unavailable");
   const available = manualHome ? [syntheticRecord(6, false, true)] : longNames ? Array.from({ length: 6 }, (_, index) => syntheticRecord(index, true)) : records;
-  const data = buildSlips(input, available, now);
+  const data = customSlipBuilder(model)(input, available, now);
   return { state: data.slips.length ? "generated" : data.qualifyingMatches ? "no-combinations" : "no-qualifying", data,
     asOf: now, examined: available.length, partialCoverage: false, searchLimited: data.searchLimited, retryAfterSeconds: null };
 }
 const manualCriteria: SlipCriteria = { ...criteria, markets: ["match-result"], outcomes: { "match-result": ["home-win"] },
   totalMin: 101, totalMax: 10000000, oddsMin: 101, oddsMax: 100000, probMin: 0, teamsMin: 1, teamsMax: 1, slips: 1 };
-function failure(state: SlipBuildPageResult["state"]): SlipBuildPageResult {
-  return { state, data: null, asOf: now, examined: 0, partialCoverage: false, searchLimited: false,
-    retryAfterSeconds: state === "rate-limited" ? 11 : null };
-}
-export const cases: Readonly<Record<string, { criteria: SlipCriteria; result: SlipBuildPageResult | null }>> = {
+const jointCriteria: SlipCriteria = { ...criteria, teamsMin: 2, teamsMax: 2 };
+export const cases: Readonly<Record<string, { criteria: SlipCriteria; result: SlipBuildPageResult | null; jointEstimates?: boolean }>> = {
   generated: { criteria, result: syntheticBuild() },
   idle: { criteria, result: null },
   "no-qualifying": { criteria: { ...criteria, probMin: 95 }, result: syntheticBuild({ ...criteria, probMin: 95 }) },
@@ -94,4 +103,6 @@ export const cases: Readonly<Record<string, { criteria: SlipCriteria; result: Sl
   limited: { criteria, result: { ...syntheticBuild(), searchLimited: true, partialCoverage: true } },
   "long-names": { criteria, result: syntheticBuild(criteria, true) },
   "manual-home-win": { criteria: manualCriteria, result: syntheticBuild(manualCriteria, false, true) },
+  "joint-ranked": { criteria: jointCriteria, jointEstimates: true, result: syntheticBuild(jointCriteria, false, false, syntheticJointModel) },
+  "estimate-unavailable": { criteria: { ...criteria, jointMin: 50 }, result: failure("estimate-unavailable") },
 };

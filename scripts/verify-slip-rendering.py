@@ -60,7 +60,13 @@ SCENARIOS = {
     "data-unavailable": ("data-unavailable", 0), "rate-limited": ("rate-limited", 0),
     "limited": ("generated", 3), "long-names": ("generated", 3),
     "manual-home-win": ("generated", 1),
+    "joint-ranked": ("generated", 3), "estimate-unavailable": ("estimate-unavailable", 0),
 }
+
+# Whole-slip limits are offered only with a bound joint model or a request-supplied value, so they are checked
+# separately from the fields every page must render.
+JOINT_FIELDS = ["jointMin", "jointMax"]
+JOINT_SCENARIOS = {"joint-ranked", "estimate-unavailable"}
 
 CRITERIA_GROUP_FIELDS = {
     "limits": ["oddsMin", "oddsMax", "probMin", "probMax"],
@@ -120,7 +126,25 @@ def criteria_groups(document, path, error_group=None):
     return values
 
 
-def inspect(origin, path, directory, name, expected_state, expected_slips, selections_per_slip=2, error_group=None):
+def joint_limits(document, path, offered):
+    limits = next(group for group in document.nodes("dialog", "data-slip-criteria-group") if group.attrs["data-slip-criteria-group"] == "limits")
+    controls = [node for node in document.nodes("input") if node.attrs.get("name") in JOINT_FIELDS]
+    if not offered:
+        assert not controls, f"{path}: no whole-slip limits without a bound joint model or requested bound"
+        assert len(limits.nodes("fieldset")) == 2, f"{path}: the limits dialog keeps its two fieldsets"
+        return {}
+    assert [node.attrs.get("name") for node in controls] == JOINT_FIELDS, f"{path}: one jointMin and one jointMax"
+    assert all(node in limits.nodes() and "disabled" not in node.attrs for node in controls), f"{path}: enabled whole-slip limits inside Match limits"
+    assert all(node.attrs.get("placeholder") == "Any" for node in controls), f"{path}: blank whole-slip limits display Any"
+    assert len(limits.nodes("fieldset")) == 3 and limits.nodes(attr="data-joint-limit"), f"{path}: separate whole-slip fieldset"
+    return {node.attrs["name"]: node.attrs.get("value", "") for node in controls}
+
+
+def summaries(document):
+    return [node.text for node in document.nodes(attr="data-slip-summary")]
+
+
+def inspect(origin, path, directory, name, expected_state, expected_slips, selections_per_slip=2, error_group=None, joint=False):
     response = request(origin, path)
     assert response.status == 200, f"{path}: status {response.status}"
     assert response.headers.get("set-cookie") is None, f"{path}: no visitor cookie"
@@ -129,6 +153,7 @@ def inspect(origin, path, directory, name, expected_state, expected_slips, selec
     assert len(document.nodes("h1")) == 1, f"{path}: one page heading"
     assert len(document.nodes("main")) == 1, f"{path}: one main landmark"
     criteria_groups(document, path, error_group)
+    joint_limits(document, path, joint)
     inputs = document.nodes("input")
     for kind in ["date", "time"]:
         assert len([node for node in inputs if node.attrs.get("type") == kind]) == 2, f"{path}: two {kind} fields"
@@ -225,9 +250,19 @@ def verify_custom_numeric_bounds(document, expected):
 def verify(origin, directory):
     for scenario, (state, count) in SCENARIOS.items():
         document = inspect(origin, f"/cases/{scenario}", directory, scenario, state, count,
-            selections_per_slip=1 if scenario == "manual-home-win" else 2)
+            selections_per_slip=1 if scenario == "manual-home-win" else 2, joint=scenario in JOINT_SCENARIOS)
         if scenario == "limited":
             assert "search reached its limit" in document.text and "Fixture coverage is incomplete" in document.text, "Source and search limits remain visible"
+        if scenario == "generated":
+            assert "not a whole-slip chance of winning" in document.text, "The average ranking is not presented as a chance of winning"
+            assert all("Win probability" not in summary for summary in summaries(document)), "No whole-slip estimate without a joint model"
+        if scenario == "joint-ranked":
+            assert all("Win probability" in summary and "Avg. match prob." in summary for summary in summaries(document)), "Joint estimates sit beside the mean"
+            assert "Highest estimated slip win probability first" in document.text, "Joint ranking is explained"
+            assert all(value == "" for value in joint_limits(document, scenario, True).values()), "Default whole-slip limits stay blank"
+        if scenario == "estimate-unavailable":
+            assert "Slip win probability unavailable" in document.text, "Unavailable whole-slip estimates have an explicit state"
+            assert joint_limits(document, scenario, True)["jointMin"] == "50", "The unsupported bound stays visible to clear"
     idle = inspect(origin, "/en/slips", directory, "route-idle", "idle", 0)
     verify_defaults(idle)
     explicit_defaults = [(name, NUMERIC_RANGE_LIMITS.get(name, value)) for name, value in native_inputs(idle) if name != "build"]
@@ -263,6 +298,18 @@ def verify(origin, directory):
     assert "Choose Automatic or valid results" in invalid_pick.text, "Invalid manual results open the same market group"
     cutoff = inspect(origin, "/cutoff?" + urlencode(query), directory, "route-cutoff", "generated", 3)
     assert all(row.attrs["data-slip-selection"] != "synthetic-slip-1" for row in cutoff.nodes("tr", "data-slip-selection")), "The route passes the fresh completion clock through to its stored build service"
+    bounded = query[:-1] + [("jointMin", "50"), ("build", "1")]
+    unavailable = inspect(origin, "/cutoff?" + urlencode(bounded), directory, "route-estimate-unavailable", "estimate-unavailable", 0, joint=True)
+    assert joint_limits(unavailable, "/cutoff?jointMin=50", True)["jointMin"] == "50", "The real service refuses a whole-slip bound without a model and keeps it editable"
+    joint_query = query[:-1] + [("jointMin", "70"), ("build", "1")]
+    ranked = inspect(origin, "/joint?" + urlencode(joint_query), directory, "route-joint", "generated", 3, joint=True)
+    estimates = [Decimal(match.group(1)) for summary in summaries(ranked) for match in [re.search(r"Win probability\s*(\d+(?:\.\d+)?)%", summary)] if match]
+    assert len(estimates) == 3 and all(value >= 70 for value in estimates), f"Route, service and model apply the inclusive whole-slip bound: {estimates}"
+    assert "Highest estimated slip win probability first" in ranked.text, "The real route explains joint ranking"
+    reversed_joint = query[:-1] + [("jointMin", "60"), ("jointMax", "50"), ("build", "1")]
+    invalid_joint = inspect(origin, "/joint?" + urlencode(reversed_joint), directory, "route-invalid-joint", "idle", 0, error_group="limits", joint=True)
+    assert any(node.attrs.get("name") == "jointMin" and node.attrs.get("aria-invalid") == "true" for node in invalid_joint.nodes("input")), "Reversed whole-slip bounds flag jointMin"
+    assert "Enter slip win probabilities from 0% to 100%" in invalid_joint.text, "Reversed whole-slip bounds have a specific error"
     invalid = [(name, "2026-10-12" if name == "dateTo" else value) for name, value in query]
     document = inspect(origin, "/en/slips?" + urlencode(invalid), directory, "route-invalid", "idle", 0, error_group="kickoff")
     assert "Choose a valid kickoff date range" in document.text, "Invalid criteria have a specific explanatory error"
@@ -285,7 +332,7 @@ def verify(origin, directory):
     row = selected.nodes("tr", "data-slip-selection")[0]
     assert row.attrs["data-slip-selection"] == "synthetic-slip-7" and "Home win" in row.text and "20.0%" in row.text and "2.00" in row.text, "Manual Home win uses its own 20% probability and 2.00 price, though Away win was the published top pick"
     assert row.nodes(attr="data-pick-odds")[0].text == "(2.00)" and "1.30" not in row.text, "Inline odds retain the manual selection's 2.00 price rather than the top pick's 1.30"
-    print("Slip rendering verification passed: Balanced dialogs, blank Any bounds, retained custom numeric values, inline native fallback, 10 isolated states and native GET builds/cutoff/manual alternatives.", flush=True)
+    print(f"Slip rendering verification passed: Balanced dialogs, blank Any bounds, retained custom numeric values, inline native fallback, {len(SCENARIOS)} isolated states, native GET builds/cutoff/manual alternatives and whole-slip ranking/bounds.", flush=True)
 
 
 def main():
