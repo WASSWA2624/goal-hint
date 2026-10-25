@@ -41,6 +41,19 @@ or provider credentials are needed for the foundation. Install from
 `package-lock.json` with `npm ci`; use `npm install` only for intentional,
 reviewed dependency updates and commit the resulting lockfile.
 
+To run the production build locally with the configured MySQL database, stop the
+development server, then run:
+
+```sh
+npm run build
+npm run start
+```
+
+The ignored `.env.production.local` supplies the local TLS and database approval
+settings. See [local production startup](docs/local-production.md) for the profile,
+certificate renewal and port conflicts. To keep another server on port 3000,
+use `npm start -- --port 3001`.
+
 All developer and operator entry points in `scripts/` use Python. They share
 native filesystem, process, HTTP, rendering and backup helpers in `scripts/lib/`.
 A private pipe adapter reuses the existing TypeScript application services and
