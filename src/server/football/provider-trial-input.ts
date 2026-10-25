@@ -24,7 +24,7 @@ const operation = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("teams"), query: z.union([z.object({ teamId: positive }).strict(), pair]) }).strict(),
   z.object({ kind: z.literal("competitions"), query: z.object({ competitionId: positive.optional(), season: season.optional() }).strict() }).strict(),
   z.object({ kind: z.literal("player-statistics"), query: pair }).strict(),
-  ...(["statistics", "lineups", "injuries", "predictions"] as const).map((kind) => z.object({ kind: z.literal(kind), fixtureId: positive }).strict()),
+  ...(["statistics", "events", "lineups", "injuries", "predictions"] as const).map((kind) => z.object({ kind: z.literal(kind), fixtureId: positive }).strict()),
   z.object({ kind: z.literal("odds"), query: z.union([z.object({ date, bookmakerId: positive }).strict(),
     z.object({ fixtureId: positive, bookmakerId: positive }).strict()]) }).strict(),
   z.object({ kind: z.literal("odds-bets") }).strict(),

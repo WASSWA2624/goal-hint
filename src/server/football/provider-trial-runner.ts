@@ -31,6 +31,7 @@ async function execute(adapter: TrialRuntime["adapter"], task: TrialTask, bounds
     case "competitions": return adapter.evidence.competitions(operation.query, bounds);
     case "player-statistics": return adapter.evidence.playerStatistics(operation.query, bounds);
     case "statistics": return adapter.evidence.statistics(operation.fixtureId, bounds);
+    case "events": return adapter.evidence.events(operation.fixtureId, bounds);
     case "lineups": case "injuries": return adapter.evidence.availability(operation.fixtureId, operation.kind, bounds);
     case "predictions": return adapter.fallback.predictions(operation.fixtureId, bounds);
     case "odds": return adapter.odds.prices(operation.query, bounds);

@@ -52,6 +52,12 @@ import { createOddsImportService } from "../odds/odds-service.ts";
 import { createTeamCodeJobDefinitions } from "../teams/team-code-jobs.ts";
 import { createMysqlTeamCodeStore } from "../teams/team-code-mysql-store.ts";
 import { createTeamCodeService } from "../teams/team-code-service.ts";
+import { Prisma } from "../generated/prisma/client.ts";
+import type { LiveMatchPolicy } from "../live-match/live-match-contract.ts";
+import { createLiveMatchService } from "../live-match/live-match-service.ts";
+import { createMysqlLiveMatchStore } from "../live-match/live-match-mysql-store.ts";
+import { createLiveQuotaAdmission } from "./live-detail-quota.ts";
+import { liveMatchPolicy, type LiveWorkload } from "./live-plan.ts";
 
 const DAY_MS = 86_400_000;
 export class LiveConfigurationError extends Error {
@@ -90,17 +96,23 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
   try {
     if (await database.readiness() !== "ready") throw new LiveConfigurationError(["The application database is unavailable."]);
     const queue = createMysqlJobQueue(database);
-    const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher }) });
+    let activeWorkload: LiveWorkload | null = null;
+    let stableAccountKey: string | null = null;
+    const quota = createQuotaRouter({ store: createMysqlQuotaStore(database), readStatus: createAccountStatusReader({ policy, verifyEvidence: verify, ...fetcher }),
+      admit: createLiveQuotaAdmission(() => activeWorkload, () => stableAccountKey) });
     const day: QuotaDay = await quota.refresh();
-    const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit, policy.capabilities.ai);
+    stableAccountKey = day.status.accountKey;
+    const workload = liveWorkload(day.status.dailyLimit, day.status.secondLimit, day.status.plan, day.status.minuteLimit, policy.capabilities.ai, policy.choices.liveDetails.enabled);
+    activeWorkload = workload;
     const selection = selectionPolicy(policy, refs, workload), statusEvidenceRef = `${refs.freshness}#status`;
     let results: ResultSyncPolicy | null = null;
+    let liveDetailsPolicy: LiveMatchPolicy | null = null;
     // Odds use the same workload inputs as their authority, so a policy can never verify against a different plan.
     const odds = oddsPolicy(policy, refs, workload);
     const aiModel = policy.capabilities.ai ? liveAiModel(policy) : null;
     let ai: LiveAiRuntime | null = null;
     const authorities = createLiveAuthorities({ policy, verify, refs, selection, statusEvidenceRef, resultPolicy: () => results,
-      refreshPacing: workload.pacing, oddsPolicy: odds,
+      refreshPacing: workload.pacing, oddsPolicy: odds, liveMatchPolicy: () => liveDetailsPolicy,
       ...(aiModel === null ? {} : { aiModel, verifyPrimary: (...args) => ai?.verifyAi(...args) === true,
         verifyPrimaryCandidate: (candidate) => ai?.verifyCandidate(candidate) === true }) });
     const gateway = createPolicyQuotaGateway({ limiter: quota.limiter, policy, verifyEvidence: verify });
@@ -191,7 +203,8 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
       if (counters === null) return null;
       const { accountId, periodId } = counters.day;
       const [row] = await database.query((tx) => tx.$queryRaw<{ spent: bigint | number }[]>`SELECT COUNT(*) AS spent FROM ApiQuotaAttempt
-        WHERE accountId = ${accountId} AND periodId = ${periodId} AND priority = ${quotaPriorities.enrichment.rank} AND dispatchedAt IS NOT NULL`);
+        WHERE accountId = ${accountId} AND periodId = ${periodId} AND priority = ${quotaPriorities.enrichment.rank}
+          AND JSON_UNQUOTE(JSON_EXTRACT(payloadJson, '$.priority')) = 'enrichment' AND dispatchedAt IS NOT NULL`);
       return Object.freeze({ remaining: counters.remaining, used: counters.used, oddsUsed: Number(row?.spent ?? 0) });
     }
     const enrichmentAllowance = Object.freeze({ floor: workload.odds.floor, spare: workload.odds.spare, reserve: workload.odds.reserve });
@@ -211,14 +224,15 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
     // One enrichment worker runs both, so their quota gates are checked one job at a time; odds jobs claim first.
     const enrichmentRegistry = createJobRegistry([...oddsDefinitions, ...teamCodeDefinitions]);
 
-    /** Result coverage follows the competitions this runner predicts in the current window. */
+    /** Follow configured stored fixtures even when a fixture received no prediction. */
     async function resultCoverage(): Promise<ResultSyncPolicy["coverage"]> {
       const now = Date.now();
       const rows = await database.query((tx) => tx.$queryRaw<{ competitionId: bigint; season: number }[]>`
-        SELECT DISTINCT cp.externalId AS competitionId, s.year AS season FROM PredictionCycle c
-        JOIN FootballFixture f ON f.id = c.fixtureId JOIN FootballSeason s ON s.id = f.seasonId
+        SELECT DISTINCT cp.externalId AS competitionId, s.year AS season FROM FootballFixture f
+        JOIN FootballSeason s ON s.id = f.seasonId
         JOIN FootballCompetitionProvider cp ON cp.competitionId = s.competitionId AND cp.provider = 'api-football'
-        WHERE c.kickoffAt >= ${new Date(now - 3 * DAY_MS)} AND c.kickoffAt < ${new Date(now + 8 * DAY_MS)}
+        WHERE cp.externalId IN (${Prisma.join(policy.choices.competitionIds!)}) AND (f.status = 'live' OR
+          (f.kickoff >= ${new Date(now - 3 * DAY_MS)} AND f.kickoff < ${new Date(now + 8 * DAY_MS)}))
         ORDER BY competitionId, season LIMIT ${maximumCompetitionScope}`);
       return rows.map((row) => ({ competitionId: Number(row.competitionId), season: row.season }));
     }
@@ -237,7 +251,21 @@ export async function createLiveRuntime(policy: RuntimePolicy, overrides: LiveRu
         store: createMysqlResultSyncStore({ database, accountId: current.accountId, lifecycle }) }) });
       return poller;
     }
-    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, resultPoller, day,
+    let detailPoller: Readonly<{ policy: LiveMatchPolicy; service: ReturnType<typeof createLiveMatchService> }> | null = null;
+    /** Detail collection covers configured stored fixtures, including those without predictions. */
+    async function liveMatchPoller() {
+      if (!workload.liveDetails.eligible || quota.current() === null) return null;
+      const coverage = await resultCoverage();
+      if (coverage.length === 0) { liveDetailsPolicy = null; detailPoller = null; return null; }
+      const next = liveMatchPolicy(refs, workload, coverage);
+      if (detailPoller && evidenceFingerprint(detailPoller.policy) === evidenceFingerprint(next)) return detailPoller;
+      liveDetailsPolicy = next;
+      detailPoller = Object.freeze({ policy: next, service: createLiveMatchService({ accountKey: day.status.accountKey,
+        policy: next, authority: authorities.liveMatch, adapter: adapter.evidence,
+        store: createMysqlLiveMatchStore({ database, accountKey: day.status.accountKey }) }) });
+      return detailPoller;
+    }
+    return Object.freeze({ policy, database, queue, quota, workload, registry, settlement, cache, catalog: importer, resultPoller, liveMatchPoller, day,
       odds: Object.freeze({ enabled: oddsEnabled, registry: oddsRegistry, horizonDays: workload.odds.dates,
         // Write-time staleness needs no provider call, so it runs even while imports are off.
         expire: (limit: number) => oddsService.expire(odds?.freshnessMs ?? ODDS_FRESHNESS_MS, limit) }),

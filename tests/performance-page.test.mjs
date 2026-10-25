@@ -41,3 +41,13 @@ test("native visible filters can switch a model-pinned AI view to the provider w
   const original = new URL(performancePageHref(filters, 2), "https://example.test");
   assert.equal(original.searchParams.get("model"), filters.model); assert.equal(original.searchParams.get("version"), filters.version);
 });
+
+test("league and publication pagination preserve the same period, source, market and advanced pins independently", () => {
+  const pinned = { ...filters, leaguePage: 2 }, href = performancePageHref(pinned, 3), url = new URL(href, "https://example.test");
+  assert.equal(url.searchParams.get("leaguePage"), "2"); assert.equal(url.searchParams.get("page"), "3");
+  const parsed = parsePerformancePageQuery(Object.fromEntries(url.searchParams), today);
+  assert.equal(parsed.page, 3); assert.equal(parsed.query.leaguePage, 2);
+  assert.equal(parsed.query.source, "ai"); assert.equal(parsed.query.model, filters.model);
+  assert.equal(parsePerformancePageQuery({ from: filters.from, to: filters.to, source: "ai" }, today).query.leaguePage, 1);
+  for (const leaguePage of [0, 1.5, 10000, NaN]) assert.throws(() => performancePageHref({ ...filters, leaguePage }), RangeError);
+});

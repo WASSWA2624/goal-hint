@@ -3,6 +3,7 @@ import { marketFamilySchema, publicForecastSchema, publicVoidReasonSchema, publi
 import { isPlayedFinalStatus } from "./market-settlement.ts";
 import { dailyRunProgressSchema, matchFeedRecordSchema, storedMatchFeedRecordSchema } from "./match-feed.ts";
 import { contentAccessSchema } from "./content-access.ts";
+import { liveMatchSnapshotSchema } from "./live-match.ts";
 
 export const matchDetailRules = Object.freeze({ defaultLimit: 10, maximumLimit: 20, maximumSequence: 4_294_967_295 });
 const id = z.uuid(), at = publicForecastSchema.shape.publishedAt, sequence = z.number().int().positive().max(matchDetailRules.maximumSequence);
@@ -66,6 +67,8 @@ export type DetailOddsGroup = z.infer<typeof detailOddsGroupSchema>;
 const storedDetailBaseSchema = z.strictObject({ fixture: storedMatchFeedRecordSchema, asOf: at, run: dailyRunProgressSchema.default(null),
   /** Mutable odds envelope, read outside the immutable revision cache; empty without recorded display rights. */
   odds: z.array(detailOddsGroupSchema).max(4).default([]),
+  /** Mutable match observations are independent of the immutable pre-match forecast. Undefined disables the feature. */
+  liveMatch: liveMatchSnapshotSchema.nullable().optional(),
   route: z.strictObject({ fixtureId: id, slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u).max(160), path: z.string().max(512) }),
   currentRevisionId: id.nullable(), selection: z.enum(["applicable", "revision", "cycle"]), selectedCycle: detailCycleSchema.nullable(), snapshot: storedDetailSnapshotSchema.nullable(),
   history: z.strictObject({ limit: z.number().int().min(1).max(matchDetailRules.maximumLimit),
@@ -92,6 +95,12 @@ function refineDetail(v: z.infer<typeof wireDetailBaseSchema>, ctx: z.Refinement
     v.selection === "applicable" && v.snapshot?.revisionId !== (v.currentRevisionId ?? undefined) ||
     v.snapshot && (v.snapshot.historical !== (v.snapshot.revisionId !== v.currentRevisionId) || v.snapshot.cycleId !== v.selectedCycle?.id)) ctx.addIssue({ code: "custom", message: "Incoherent detail response." });
   if (v.odds && new Set(v.odds.map((group) => group.family)).size !== v.odds.length) ctx.addIssue({ code: "custom", message: "One odds group per family." });
+  if (v.liveMatch) {
+    const cycleId = v.selection === "applicable" ? v.fixture.cycleId : v.selectedCycle?.id ?? null;
+    const kickoffAt = v.selection === "applicable" ? v.fixture.kickoffAt : v.selectedCycle?.kickoffAt ?? null;
+    if (v.liveMatch.fixtureId !== v.fixture.fixtureId || v.liveMatch.cycleId !== cycleId || v.liveMatch.kickoffAt !== kickoffAt || v.liveMatch.collectedAt > v.asOf)
+      ctx.addIssue({ code: "custom", message: "Match observations must belong to the displayed occurrence." });
+  }
 }
 export const storedMatchDetailResponseSchema = storedDetailBaseSchema.superRefine((v, ctx) => refineDetail({ ...v, access: { tier: "full", signedIn: false } }, ctx));
 export const matchDetailResponseSchema = wireDetailBaseSchema.superRefine(refineDetail).superRefine((v, ctx) => {

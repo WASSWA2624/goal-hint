@@ -48,7 +48,7 @@ function runtime({ run = () => result(), source = "synthetic", authorize = () =>
       accountStatus: (...args) => perform("account-status", args), fixtures: (...args) => perform("fixtures", args),
       liveFixtures: (...args) => perform("live", args), unresolvedFixtures: (...args) => perform("fixture-ids", args),
       teams: (...args) => perform("teams", args), competitions: (...args) => perform("competitions", args),
-      playerStatistics: (...args) => perform("player-statistics", args), statistics: (...args) => perform("statistics", args),
+      playerStatistics: (...args) => perform("player-statistics", args), statistics: (...args) => perform("statistics", args), events: (...args) => perform("events", args),
       availability: (...args) => perform(args[1], args),
     }, fallback: { predictions: (...args) => perform("predictions", args) },
     odds: { prices: (...args) => perform("odds", args), bets: (...args) => perform("odds-bets", args),
@@ -56,6 +56,16 @@ function runtime({ run = () => result(), source = "synthetic", authorize = () =>
   };
 }
 const clock = () => ({ now: () => NOW });
+test("a fixture-specific events trial reserves allowance and dispatches through the counted adapter", async () => {
+  const trialPlan = plan([task("timeline", { kind: "events", fixtureId: 101 }, 1)]);
+  const session = memorySession(trialPlan), transport = runtime();
+  assert.deepEqual(await runProviderTrial(session, transport, { clock: clock() }), { reason: "completed" });
+  assert.equal(transport.calls.length, 1); assert.equal(transport.calls[0].kind, "events");
+  assert.equal(transport.calls[0].arguments[0], 101); assert.equal(transport.calls[0].arguments[1].maxRequests, 1);
+  assert.equal(chargedTrialRequests(session.read()), 1);
+  assert.deepEqual(await runProviderTrial(session, transport, { clock: clock() }), { reason: "completed" });
+  assert.equal(transport.calls.length, 1);
+});
 function fixtureObservation({ source = "synthetic", status = "scheduled", kickoff = NOW + 3_600_000,
   retrievedAt = NOW, providerUpdatedAt = null, fixtureId = 1, resultStatus = "complete" } = {}) {
   return { taskId: "fixture-context", source, observedAt: NOW,

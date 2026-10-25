@@ -17,13 +17,16 @@ import { MatchFeedError } from "./feed-error.ts";
 import { detailHistoryLink, parseMatchDetailQuery } from "./detail-query.ts";
 import { publicDetailCycle, publicDetailRevision, publicDetailSnapshot } from "./detail-read.ts";
 import { publicCacheDescriptor, type PublicResponseCache } from "../cache/public-cache.ts";
+import { storedLiveMatchSnapshot } from "../live-match/live-match-read.ts";
+import { isPlayedFinalStatus } from "../../domain/market-settlement.ts";
 
 export { canonicalMatchSlug } from "../../domain/match-slug.ts";
 
 /** `providerOdds` defaults to publicPolicy.features.providerOdds; isolated tests may enable it. */
-export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache; providerOdds?: boolean }>) {
+export function createMatchDetailService(options: Readonly<{ database: DatabaseRuntime; clock?: Clock; cache?: PublicResponseCache; providerOdds?: boolean; allowLiveMatch?: boolean }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const providerOdds = options.providerOdds ?? publicPolicy.features.providerOdds;
+  const allowLiveMatch = options.allowLiveMatch ?? publicPolicy.features.liveMatchDetails;
   const evidenceStore = createMysqlEvidenceStore(options.database);
   return Object.freeze({ async query(id: string, parameters = new URLSearchParams()): Promise<StoredMatchDetailResponse> {
     const query = parseMatchDetailQuery(id, parameters), asOf = clock.now(), today = getReportingDate(asOf);
@@ -95,8 +98,19 @@ export function createMatchDetailService(options: Readonly<{ database: DatabaseR
         } catch (error) { if (error instanceof MatchFeedError) refused = error; throw error; }
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       const descriptor = publicCacheDescriptor({ kind: "detail", locale: "en", now: asOf, fixtureId: id,
-        query: { id, projection: 7, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
-      return options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
+        query: { id, projection: 8, ...query }, parse: (value) => storedMatchDetailResponseSchema.parse(value) });
+      const response = options.cache ? await options.cache.read({ ...descriptor, validUntil: () => permissionDeadline }, read) : await read();
+      if (!allowLiveMatch) return response;
+      // The live envelope bypasses the revision/detail cache; repeated visitor reads only read this bounded stored row.
+      const historical = response.selection !== "applicable";
+      if (!historical && response.fixture.status !== "live" && !isPlayedFinalStatus(response.fixture.status) && response.fixture.status !== "abandoned") return response;
+      const liveMatch = await options.database.query((tx) => storedLiveMatchSnapshot(tx, { fixtureId: id, asOf, historical,
+        cycleId: historical ? response.selectedCycle?.id ?? null : response.fixture.cycleId,
+        kickoffAt: historical ? response.selectedCycle?.kickoffAt ?? null : response.fixture.kickoffAt })).catch(() => null);
+      const projected = storedMatchDetailResponseSchema.parse({ ...response, asOf, liveMatch });
+      // A large optional observation cannot make an otherwise valid forecast response exceed its wire bound.
+      return freezeEvidence(Buffer.byteLength(JSON.stringify(projected), "utf8") <= matchFeedRules.maximumResponseBytes
+        ? projected : { ...response, asOf, liveMatch: null });
     } catch (error) {
       if (refused) throw refused;
       if (error instanceof MatchFeedError) throw error;

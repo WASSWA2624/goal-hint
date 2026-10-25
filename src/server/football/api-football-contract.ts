@@ -10,6 +10,7 @@ export const apiFootballEndpoints = Object.freeze({
   teams: Object.freeze({ path: "/teams", paginated: false }),
   competitions: Object.freeze({ path: "/leagues", paginated: false }),
   statistics: Object.freeze({ path: "/fixtures/statistics", paginated: false }),
+  events: Object.freeze({ path: "/fixtures/events", paginated: false }),
   lineups: Object.freeze({ path: "/fixtures/lineups", paginated: false }),
   injuries: Object.freeze({ path: "/injuries", paginated: false }),
   playerStatistics: Object.freeze({ path: "/players", paginated: true, pageSize: 20 }),

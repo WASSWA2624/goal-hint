@@ -32,7 +32,7 @@ async function pause(ms: number, signal: AbortSignal) { await sleep(ms, undefine
 async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () => void, log: (event: LiveEvent) => void) {
   let accountCheckedAt = Date.now(), scheduled = 0, pollerCheckedAt = 0, oddsScheduled = 0, teamCodesScheduled = 0;
   type Poller = Readonly<{ controller: AbortController; done: Promise<void>; policy: unknown }>;
-  const owned: { poller: Poller | null } = { poller: null };
+  const owned: { poller: Poller | null; details: Poller | null } = { poller: null, details: null };
   const plan = runtime.day.status.plan, dailyLimit = runtime.day.status.dailyLimit;
   try {
     while (!signal.aborted) {
@@ -103,6 +103,21 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
             }
           }
         } catch (error) { log({ event: "result-poller-failed", reason: reason(error) }); }
+        try {
+          const current = await runtime.liveMatchPoller();
+          if (current?.policy !== owned.details?.policy) {
+            if (owned.details) { owned.details.controller.abort(); await owned.details.done; }
+            owned.details = null;
+            if (current) {
+              const controller = new AbortController();
+              const done = current.service.run(AbortSignal.any([signal, controller.signal]))
+                .catch((error: unknown) => log({ event: "live-details-stopped", reason: reason(error) }));
+              owned.details = { controller, done, policy: current.policy };
+              log({ event: "live-details-poller", competitions: current.policy.coverage.length,
+                intervalMs: current.policy.intervalMs, finalIntervalMs: current.policy.finalIntervalMs });
+            }
+          }
+        } catch (error) { log({ event: "live-details-failed", reason: reason(error) }); }
       }
       try {
         let settled = 0;
@@ -115,7 +130,10 @@ async function maintain(runtime: LiveRuntime, signal: AbortSignal, rebuild: () =
       try { await runtime.cache.reconcile(100); } catch (error) { log({ event: "cache-reconcile-failed", reason: reason(error) }); }
       await pause(30_000, signal);
     }
-  } finally { if (owned.poller) { owned.poller.controller.abort(); await owned.poller.done; } }
+  } finally {
+    for (const poller of [owned.poller, owned.details]) poller?.controller.abort();
+    await Promise.all([owned.poller?.done, owned.details?.done]);
+  }
 }
 
 /** Long-lived private process: one per shared provider account. */
@@ -135,7 +153,9 @@ export async function runLive(policy: RuntimePolicy, signal: AbortSignal, log: (
       // `oddsSwitch` true with `odds` false means the owner enabled imports but this plan is not eligible; the same
       // holds for `teamCodesSwitch` and `teamCodes`, which share the odds spare.
       odds: runtime.odds.enabled, oddsSwitch: policy.choices.odds.enabled, oddsSpare: workload.odds.spare,
-      teamCodes: runtime.teamCodes.enabled, teamCodesSwitch: policy.choices.teamCodes.enabled });
+      teamCodes: runtime.teamCodes.enabled, teamCodesSwitch: policy.choices.teamCodes.enabled,
+      liveDetails: workload.liveDetails.eligible, liveDetailsSwitch: policy.choices.liveDetails.enabled,
+      liveDetailsRequests: workload.liveDetails.requests });
     const workers = Array.from({ length: workload.workers }, () => createJobWorker({ queue: runtime.queue, registry: runtime.registry,
       ownerId: randomBytes(32).toString("hex"), onEvent: (event) => {
         if (event.kind !== "claimed") log({ event: `job-${event.kind}`, jobId: event.jobId?.slice(0, 12) ?? null, reason: event.reason });

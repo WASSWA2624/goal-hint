@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getReportingDate, utcInstantFromEpochMilliseconds, type Clock } from "../../domain/calendar.ts";
 import { maximumCompetitionScope } from "../../domain/feed-query.ts";
 import { matchFeedRules } from "../../domain/match-feed.ts";
-import { performanceFamilies, performanceResponseSchema, performanceRules, type PerformanceCell, type PerformanceCoverage, type PerformanceResponse, type PerformanceSource } from "../../domain/performance.ts";
+import { performanceFamilies, performanceResponseSchema, performanceRules, type PerformanceCell, type PerformanceCoverage, type PerformanceLeague, type PerformanceResponse, type PerformanceSource } from "../../domain/performance.ts";
 import type { MarketFamily } from "../../domain/markets.ts";
 import { canonicalMatchSlug } from "../../domain/match-slug.ts";
 import { matchHref } from "../../domain/navigation.ts";
@@ -32,6 +32,7 @@ function verifiedPolicy(binding: PerformancePolicyBinding | null, asOf: number):
 const blankCoverage = (): PerformanceCoverage => ({ total: 0, available: 0, unavailable: 0, void: 0, filteredOut: 0,
   pending: 0, settled: 0, sources: { ai: 0, "api-football": 0 } });
 type Record = PerformanceSnapshot["records"][number];
+const competitionIdentity = z.uuid();
 function versionFor(record: Record, family: MarketFamily, models: PerformanceSnapshot["models"]): PerformanceCell["versions"][number] | null {
   const item = record.revision?.candidate.markets[family];
   if (!item?.available) return null;
@@ -66,7 +67,7 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
     versions.set(evidenceFingerprint(version), version);
     const knownHorizon = protocol?.horizons.find((h) => horizonMs! >= h.minimumMs && horizonMs! < h.maximumMs);
     if (knownHorizon) observedHorizons.add(knownHorizon.id); else outOfPolicy = true;
-    if (!protocol?.competitionIds.includes(record.fixture.season.competitionId) ||
+    if (!protocol?.competitionIds.includes(record.fixture.season?.competitionId ?? "") ||
       version.source === "ai" && version.modelVersionId !== protocol?.candidateModel?.id ||
       version.source === "api-football" && version.version !== protocol?.providerContractVersion) outOfPolicy = true;
     if (links.length < performanceRules.maximumEvidenceLinks) links.push({ fixtureId: record.fixture.id, cycleId: cycle!.id,
@@ -87,7 +88,7 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
   metrics.minimumSamples = gates.length ? Math.max(...gates.map((g) => g.minimumSamples)) : null;
   if (!protocol) metrics.reasons = ["unapproved-policy", ...(coverage.settled === 0 ? ["no-settled-samples"] : [])];
   else if (coverage.settled === 0) metrics.reasons = ["no-settled-samples"];
-  else if (outOfPolicy || included.some((r) => !protocol.competitionIds.includes(r.fixture.season.competitionId))) metrics.reasons = ["outside-approved-policy-scope"];
+  else if (outOfPolicy || included.some((r) => !protocol.competitionIds.includes(r.fixture.season?.competitionId ?? ""))) metrics.reasons = ["outside-approved-policy-scope"];
   else if (!horizonId) metrics.reasons = ["mixed-or-unknown-horizons-use-horizon-cells"];
   else if (!gates.length) metrics.reasons = ["missing-public-sample-and-quality-gate"];
   else if (coverage.settled < metrics.minimumSamples!) { metrics.state = "insufficient-sample"; metrics.reasons = ["insufficient-settled-samples"]; }
@@ -109,22 +110,47 @@ function cellFor(snapshot: PerformanceSnapshot, query: PerformanceQuery, family:
     evidence: { total: coverage.available, truncated: coverage.available > links.length, links } };
 }
 
+/** Every league is accounted for before pagination; each visible group uses the existing cohort and quality gates. */
+function leagueGroups(snapshot: PerformanceSnapshot, query: PerformanceQuery, families: readonly MarketFamily[], protocol: EvaluationProtocol | null): PerformanceResponse["leagues"] {
+  const groups = new Map<string | null, { competition: PerformanceLeague["competition"]; records: Record[] }>();
+  for (const record of snapshot.records) {
+    const candidate = record.fixture.season?.competitionId;
+    const id = competitionIdentity.safeParse(candidate).success ? candidate : null;
+    const existing = groups.get(id);
+    if (existing) { existing.records.push(record); continue; }
+    const competition = id === null ? null : record.fixture.season?.competition;
+    groups.set(id, { competition: { id, name: competition?.name?.trim() || null, country: competition?.country?.trim() || null }, records: [record] });
+  }
+  const ordered = [...groups.values()].sort((a, b) => a.competition.id === null ? 1 : b.competition.id === null ? -1
+    : `${a.competition.country ?? ""}:${a.competition.name ?? ""}:${a.competition.id}`.localeCompare(`${b.competition.country ?? ""}:${b.competition.name ?? ""}:${b.competition.id}`, "en"));
+  const page = query.leaguePage;
+  return { basis: "same-current-fixture-cohort-grouped-by-competition", totalGroups: ordered.length, page, pageSize: performanceRules.leaguePageSize,
+    records: ordered.slice((page - 1) * performanceRules.leaguePageSize, page * performanceRules.leaguePageSize).map((group) => ({
+      competition: group.competition, fixtureCount: group.records.length,
+      cells: families.map((family) => {
+        const cell = cellFor({ ...snapshot, records: group.records }, query, family, query.source, null, protocol);
+        return { family, source: query.source, coverage: cell.coverage, metrics: { ...cell.metrics, calibration: [] } };
+      }),
+    })) };
+}
+
 export function aggregatePerformance(snapshot: PerformanceSnapshot, query: PerformanceQuery, asOf: number,
   protocol: EvaluationProtocol | null): PerformanceResponse {
   const families = query.market === "all" ? performanceFamilies : [query.market];
   const cells = families.flatMap((family) => [null, ...(protocol?.horizons ?? [])].flatMap((horizon) =>
     (["combined", "ai", "api-football"] as const).map((source) => cellFor(snapshot, query, family, source, horizon, protocol))));
+  const leagues = leagueGroups(snapshot, query, families, protocol);
   const latest = (times: (number | null)[]) => times.reduce<number | null>((max, at) => at === null ? max : Math.max(max ?? at, at), null);
   return performanceResponseSchema.parse({ asOf, filters: { market: query.market, source: query.source, model: query.model, version: query.version },
     cohort: { from: query.range.startDate, to: query.range.endDate, startInclusive: query.range.window.startInclusive, endExclusive: query.range.window.endExclusive,
       timezone: "Africa/Kampala", basis: "current-fixture-kickoff-applicable-cycle-locked-selection", fixtureCount: snapshot.records.length,
       filterAccounting: "nonmatching-available-forecasts-are-filtered-out;unattributed-unavailable-and-void-remain",
       horizonBasis: "scheduled-kickoff-minus-locked-publication;horizon-cells-only-known-locks" },
-    policy: { id: protocol?.id ?? null, state: protocol ? "verified" : "unapproved", publicClaimAuthorized: false, provisional: true }, cells,
+    policy: { id: protocol?.id ?? null, state: protocol ? "verified" : "unapproved", publicClaimAuthorized: false, provisional: true }, cells, leagues,
     comparisons: families.map((family) => ({ family, candidate: "ai", reference: "api-football", state: "unavailable", reason: "no-matched-locked-forecasts",
       count: 0, brierDifference: null, matchBasis: "same-fixture-family-evidence-cutoff-and-horizon" })),
     historicalCycles: snapshot.historicalCycles, operations: snapshot.operations,
-    freshness: { snapshotKey: evidenceFingerprint({ query, policy: protocol?.id ?? null, cells, historicalCycles: snapshot.historicalCycles, operations: snapshot.operations,
+    freshness: { snapshotKey: evidenceFingerprint({ query, policy: protocol?.id ?? null, cells, leagues, historicalCycles: snapshot.historicalCycles, operations: snapshot.operations,
       fixtures: snapshot.records.map((r) => ({ id: r.fixture.id, version: r.fixture.dataVersion, cycle: r.cycle, result: r.result?.id ?? null })),
       settlements: snapshot.settlements.map((s) => s.id).sort() }), lastSettledAt: latest(snapshot.settlements.map((s) => s.at)),
       lastCorrectedAt: latest(snapshot.settlements.map((s) => s.correctedAt)), invalidatedBy: ["fixture-or-cycle-change", "locked-revision-change",
@@ -148,7 +174,7 @@ export function createPerformanceService(options: Readonly<{ database: DatabaseR
         return aggregatePerformance(snapshot, query, asOf, current?.id === protocol?.id ? current : null);
       }, { isolationLevel: "RepeatableRead", maxWait: 5000, timeout: 30_000 });
       let response = options.cache ? await options.cache.read(publicCacheDescriptor({ kind: "performance", locale: "en", now: asOf,
-        query: { projection: 3, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
+        query: { projection: 4, ...query }, range: query.range, scope: { competitionIds: [...configured.data].sort((a, b) => a - b), protocol },
         parse: (value) => performanceResponseSchema.parse(value) }), read) : await read();
       // Preserve the reader's unapproved/counts-only response when permission is
       // revoked during a cache probe; never reuse previously approved metrics.

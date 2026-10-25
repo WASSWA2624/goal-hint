@@ -15,7 +15,7 @@ export type TrialOperation =
   | Readonly<{ kind: "teams"; query: TeamQuery }>
   | Readonly<{ kind: "competitions"; query: CompetitionQuery }>
   | Readonly<{ kind: "player-statistics"; query: PlayerStatisticsQuery }>
-  | Readonly<{ kind: "statistics" | "lineups" | "injuries" | "predictions"; fixtureId: number }>
+  | Readonly<{ kind: "statistics" | "events" | "lineups" | "injuries" | "predictions"; fixtureId: number }>
   // Prompt 052: counted /odds qualification for one candidate bookmaker, plus both catalogs.
   | Readonly<{ kind: "odds"; query: OddsQuery }>
   | Readonly<{ kind: "odds-bets" }>

@@ -38,7 +38,8 @@ export async function readPerformanceSnapshot(tx: Tx, query: PerformanceQuery, c
 async function readPerformanceBatch(tx: Tx, query: PerformanceQuery, ids: string[], budget: { remainingBytes: number }, includeHistorical: boolean) {
   const fixtures = await tx.footballFixture.findMany({ where: { id: { in: ids } },
     include: { homeTeam: { select: { name: true } }, awayTeam: { select: { name: true } },
-      season: { select: { competitionId: true } }, lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } },
+      season: { select: { competitionId: true, competition: { select: { name: true, country: true } } } },
+      lifecycleState: { select: { issue: true } }, resultState: { select: { resultId: true } } },
     orderBy: [{ kickoff: "asc" }, { id: "asc" }] });
   if (fixtures.length !== ids.length) throw new MatchFeedError("unavailable");
   const cycleIds = fixtures.flatMap((f) => f.activeCycleId ? [f.activeCycleId] : []);

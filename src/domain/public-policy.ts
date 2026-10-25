@@ -24,5 +24,7 @@ export const publicPolicy = Object.freeze({
     /** Bookmaker prices beside picks and the `odds=` filter. Off until the owner records odds display
      * rights (OP-36); while off, `odds=` is an unknown feed key and the odds controls stay disabled. */
     providerOdds: false,
+    /** Stored match statistics/events use the existing verified football public-display rights. */
+    liveMatchDetails: true,
   }),
 } as const);

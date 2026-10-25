@@ -22,6 +22,7 @@ import { MatchBanner } from "./match-banner";
 import { MarketsCard } from "./markets-card";
 import { AnalysisDrawer } from "./analysis-drawer";
 import { Verdict } from "./verdict";
+import { LiveMatchPanel } from "../live-match-panel";
 import { InjuriesSection, LineupsSection, PlayersSection } from "./squad-sections";
 import { FormSection, H2HSection, StatsSection } from "./team-sections";
 import { DisclosureProvider } from "./section-card";
@@ -220,6 +221,8 @@ export const MatchDetails = memo(function MatchDetails({ data, preview, locale =
       <DesktopBackLink />
       <MatchBanner />
       <Verdict />
+      {data.liveMatch !== undefined && <LiveMatchPanel snapshot={data.liveMatch} asOf={data.asOf} home={home} away={away} locale={locale}
+        historical={data.selection !== "applicable"} fixtureStatus={data.fixture.status} />}
       <Grid>
         <ViewProvider value={markets}><MarketsCard /></ViewProvider>
         <AnalysisDrawer />

@@ -104,6 +104,12 @@ export type NormalizedStatistics = Readonly<{
   statistics: readonly NormalizedStatistic[];
   source: SourceTimestamps;
 }>;
+export type NormalizedEvent = Readonly<{
+  teamId: number; elapsed: number | null; extra: number | null;
+  type: "goal" | "card" | "substitution" | "var" | "unsupported";
+  detail: string | null; player: string | null; assist: string | null; comments: string | null;
+  source: SourceTimestamps;
+}>;
 export type NormalizedPlayerStatistics = Readonly<{
   player: Readonly<{
     id: number;
@@ -241,6 +247,13 @@ const statisticsSchema = z.object({
   team: teamSchema,
   statistics: z.array(z.object({ type: z.string().min(1).max(128),
     value: z.union([z.number().finite(), z.string().max(128), z.null()]) })).max(100),
+});
+const eventText = z.string().max(160).transform((value) => value.trim() || null).nullable().optional();
+const eventSchema = z.object({
+  time: z.object({ elapsed: z.number().int().min(0).max(180).nullable(), extra: z.number().int().min(0).max(120).nullable().optional() }),
+  team: z.object({ id: identity }), player: z.object({ name: eventText }).nullable().optional(),
+  assist: z.object({ name: eventText }).nullable().optional(), type: z.string().min(1).max(32),
+  detail: eventText, comments: eventText,
 });
 const aggregateCount = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional();
 const accountStatusSchema = z.object({
@@ -539,6 +552,21 @@ export function normalizeStatistics(raw: unknown, context: NormalizationContext)
   }
   if (statistics.length === 0) missing.push("fixture-statistics");
   return valid({ team: team(parsed.data.team, context, missing), statistics, source: source(context, missing) }, missing);
+}
+
+/** Dedicated v3 event timeline; it never changes the fixture score or forecast. */
+export function normalizeEvent(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedEvent> {
+  if (!contextValid(context)) return invalid();
+  const parsed = eventSchema.safeParse(raw);
+  if (!parsed.success) return invalid();
+  const input = parsed.data, missing: string[] = [];
+  const types: Readonly<Record<string, NormalizedEvent["type"]>> = { Goal: "goal", Card: "card", subst: "substitution", Var: "var", VAR: "var" };
+  const type = types[input.type] ?? "unsupported";
+  if (type === "unsupported") missing.push("unsupported-event-type");
+  if (input.time.elapsed === null) missing.push("event-elapsed-minutes");
+  return valid({ teamId: input.team.id, elapsed: input.time.elapsed, extra: input.time.extra ?? null, type,
+    detail: input.detail ?? null, player: input.player?.name ?? null, assist: input.assist?.name ?? null,
+    comments: input.comments ?? null, source: source(context, missing) }, missing);
 }
 
 export function normalizePlayerStatistics(raw: unknown, context: NormalizationContext): NormalizationResult<NormalizedPlayerStatistics> {

@@ -19,7 +19,7 @@ def main():
         write_json(directory / "app/scenarios.json", json.loads(result.stdout))
         build_fixture(directory, env, timeout=300)
     with Server(directory, env, ready="/en/performance") as server:
-        for state in ["unapproved", "reviewed", "second", "outside", "empty", "unavailable", "pinned"]:
+        for state in ["unapproved", "reviewed", "second", "outside", "empty", "unavailable", "pinned", "leagues", "league-outside"]:
             response = request(server.origin, f"/en/performance?state={state}")
             assert response.status == 200, (state, response.status)
             html = visible_html(response.text)
@@ -50,8 +50,15 @@ def main():
                 assert "No predictions in this period" in html and "No completed publications in this period" in html
             elif state == "unavailable":
                 assert "Prediction performance is temporarily unavailable" in html and "Published-slip history is temporarily unavailable" in html
+            elif state == "leagues":
+                assert "Results by league" in html and "Unknown league" in html and "League result pages" in html
+                assert html.count('data-league-performance=') == 3 and "the same source, market and review rules" in html
+                assert "leaguePage=1" not in html and "leaguePage=2" in html
+                assert "&lt;script&gt;synthetic-league-marker&lt;/script&gt;" in html, "competition names must render as escaped text"
+            elif state == "league-outside":
+                assert "This league page is outside the selected period" in html and "View first league page" in html
             assert 'href="/en/performance' in html
-        print("PASS 7 production performance states: unapproved/reviewed metrics, complete-period returns, paginated outcomes, empty/outage states, active-quote omission and native filter reset.", flush=True)
+        print("PASS 9 production performance states: reviewed/unapproved metrics, full-period returns, slip/league pagination, unknown league, empty/outage states, active-quote omission and native filter reset.", flush=True)
         if args.serve:
             server.serve()
 

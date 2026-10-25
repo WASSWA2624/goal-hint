@@ -2,7 +2,7 @@
 
 Audited **25 October 2026, Africa/Kampala**, against [the requested checklist](../../prompts/app_checklist.md), source, tests and rendered acceptance fixtures. This is an implementation audit, not a certification of deployment, forecast accuracy or commercial rights. **Implemented** means the described application behavior exists; **Partial** means some requirements or operational evidence remain; **Missing** means no implementation or measurement was found. **P1** is a correctness, privacy or release dependency, **P2** is product/measurement completion, and **P3** is a later experiment.
 
-The 51 original checkboxes are tracked below: **20 Implemented, 30 Partial, 1 Missing** after the corrections. Detailed investigations are in the [slip audit](checklist-slips-2026-10-25.md), [history/performance audit](checklist-performance-2026-10-25.md) and [payment/privacy audit](checklist-payments-2026-10-25.md). Configuration switches, synthetic test data and approval-reference strings do not establish live coverage, licenses or calibration.
+The 51 original checkboxes are tracked below: **22 Implemented, 28 Partial, 1 Missing** after the corrections. Detailed investigations are in the [slip audit](checklist-slips-2026-10-25.md), [history/performance audit](checklist-performance-2026-10-25.md), [payment/privacy audit](checklist-payments-2026-10-25.md) and [live-data follow-up](checklist-live-data-2026-10-25.md). Configuration switches, synthetic test data and approval-reference strings do not establish live coverage, licenses or calibration.
 
 ## Pages and visibility
 
@@ -10,7 +10,7 @@ The 51 original checkboxes are tracked below: **20 Implemented, 30 Partial, 1 Mi
 | --- | --- | --- | --- | --- | --- |
 | P01 | Daily Best Slips with odds, combined probability and selection count | Partial | `src/app/_components/best-slips-route.tsx`, `src/server/slips/best-slips.ts`, `src/domain/best-slips.ts`; immutable daily EAT publication and explicit unavailable states | Bind a qualified joint-probability model and permitted odds source, apply the reviewed migration, and supervise the private publisher. The public binding currently supplies no qualified model. | P1 |
 | P02 | Browse/filter all matches, markets, odds and probabilities, including low-probability picks | Partial | `/[locale]/matches`, `src/domain/feed-query.ts`, `src/server/matches/feed-service.ts`; 0–100 probability range and market/date/league/status/price filters | The feed shows the best pick in the chosen families, while detail exposes other outcomes. Complete upstream forecast/odds coverage for fixtures outside the finite refresh capacity; filters cannot create missing forecasts. | P2 |
-| P03 | Live scores and detailed statistics, retaining the pre-match forecast | Partial | Central `result-sync-service.ts`, locked prediction sets, `use-live-refresh.ts`, `insights-read.ts` | Scores/clock refresh; detail statistics come from prediction evidence. Add centrally budgeted live statistics/events ingestion, timestamped current projections and coverage-aware UI. | P1 |
+| P03 | Live scores and detailed statistics, retaining the pre-match forecast | Implemented | Central score poller plus fenced live-match statistics/events collector; separate current/final detail panel with source clocks, coverage states and existing browser refresh | Apply the reviewed live-detail/budget migrations, configure collection and verify deployed coverage. No active forecast is replaced by a match observation. | P1 |
 | P04 | Historical matches/slips, losses, original odds and outcomes | Implemented | Dated predictions/revision history plus immutable DailySlipPublication/PublishedSlip archive, original-cycle saved history and /en/performance pagination | Apply the reviewed archive migration and complete deployed acceptance (Q02). Genuine MySQL archive/history checks pass; legacy unbound personal snapshots are not fabricated. | P1 |
 | P05 | Premium availability visible without active picks, odds or probabilities | Implemented | `bestSlipViews`, `gateBestSlips`, locked cards, `tests/best-slips.test.mjs`, `verify-paywall-rendering.py` | Corrected in this audit: remove joint probability from anonymous/expired DTOs and entitlement rechecks. General match probabilities remain deliberate public previews. | P1 |
 | P06 | Full completed-slip details, including losing slips | Implemented | Published completed slips expose original picks, quotes, probabilities and loss/void/pending-correction outcomes on /en/performance | Configure the qualified publisher when its model/odds evidence is ready; active original-cycle legs remain private. | P1 |
@@ -35,12 +35,12 @@ The 51 original checkboxes are tracked below: **20 Implemented, 30 Partial, 1 Mi
 | --- | --- | --- | --- | --- | --- |
 | D01 | Verify current prices, rate limits, endpoints and redistribution rights | Partial | Official sources rechecked below; `live-account.ts`, adapter contracts and quota limiter | Prices/limits/contracts reviewed; specific commercial/public-display permissions and actual account coverage still need evidence. Do not treat a subscription as a publication license. | P1 |
 | D02 | Midnight EAT upcoming-fixture import, stable-ID upsert | Implemented | `calendar.ts` 00:00 EAT/21:00 UTC; `latestSelectionOccurrence`, durable job keys; catalog unique `(provider, externalId)` | Runtime supports eight EAT dates, with a shorter Free-plan import horizon and explicit missing coverage. Verify deployed runner supervision separately. | P1 |
-| D03 | Save available odds, statistics, market predictions and source clocks for all matches | Partial | Catalog retains all returned fixtures; odds snapshots retain returned markets; source/retrieval clocks are distinct; evidence/forecast stores exist | Predictions are capacity-limited and detailed evidence is not collected for every fixture. Extend coverage within measured quotas; add current/final match statistics and events. Preserve unsupported-market missingness. | P1 |
+| D03 | Save available odds, statistics, market predictions and source clocks for all matches | Partial | Catalog retains all returned fixtures/markets; current/final statistics/events cover configured stored fixtures, including unselected matches; source clocks and unsupported-market missingness remain distinct | Forecast and provider coverage remain capacity-limited. Measure actual endpoint coverage and extend within verified quotas; no claim that every provider match has complete statistics or a forecast. | P1 |
 | D04 | Distinguish provider forecasts from bookmaker-implied probability | Implemented | Separate `fallback`/`odds` adapter namespaces, odds provenance/de-margin method, forecast source labels | None. Bookmaker prices do not become an independent API prediction. | P1 |
 | D05 | Central live polling and stored/cache updates to users | Partial | One leased poller per account; visitor routes read stored projections; client refresh is visibility-aware and bounded | Provider polling is centralized. Delivery to browsers uses HTTP polling rather than server push; add SSE/WebSocket delivery if required and measure load. | P2 |
-| D06 | Verify batching/refresh rates and budget all endpoint requests | Partial | Reviewed endpoint contracts below; quota reservations, `liveWorkload`, odds three-hour slots, maximum 20 verified fixture IDs | Existing workload accounts for score, odds and forecast calls. Add explicit live statistics/events budgets and count real coverage/response sizes; do not assume dedicated endpoints batch fixture IDs. | P1 |
-| D07 | Live goals/cards/corners/possession/available detail statistics | Partial | Score/clock projections and coverage/missingness handling exist; normalizer supports possession/corners/cards | No central live stats/event collector feeds detail. Add it with current source timestamps, missing-coverage states and final retention. | P1 |
-| D08 | Overwrite current live snapshots; retain final details/key events | Partial | Mutable canonical fixture/result-state pointers exist, but `ResultSyncBatch`, `ResultProviderObservation`, lifecycle observations and material `FixtureResult` revisions append | Define bounded retention/compaction for transient live observations, retaining final/correction evidence and key events. No indefinite-history purge should remove original forecasts or settlement audit chains. | P1 |
+| D06 | Verify batching/refresh rates and budget all endpoint requests | Partial | Reviewed contracts, shared quota reservations and workload; each statistics/events endpoint has one bounded dispatch per fixture; atomic stable account/day detail allowance precedes optional enrichment | Count actual endpoint coverage/response sizes with the extended private event trial; indicative refresh rates and coverage flags are not guaranteed. No dedicated-endpoint batching is assumed. | P1 |
+| D07 | Live goals/cards/corners/possession/available detail statistics | Implemented | Normalized goal/card/substitution/VAR timeline and 16 available statistic types feed the separately refreshed public detail panel; missing/zero/unknown/partial/final states and independent clocks | Apply migrations and enable the opt-in collector under existing verified football rights; actual competition/season coverage requires deployment acceptance. | P1 |
+| D08 | Overwrite current live snapshots; retain final details/key events | Partial | One bounded mutable statistics/events body per occurrence retains final details/corrections; fixture cache generations avoid per-minute journals; successful empty result polls omit empty durable batches | Nonempty result/lifecycle histories still append. Design reference-aware archive/compaction before changing these chains; no age-only purge may remove forecast, settlement, correction or replay evidence. | P1 |
 | D09 | Automatically settle forecasts/slips, including void/postponed/abandoned | Partial | Existing result/settlement worker plus original-cycle saved/archive leg resolution; old void cycles survive replacement matches and latest pending corrections do not revive stale wins | Genuine MySQL original-cycle history acceptance passes. Verify deployed lifecycle/settlement operation; legacy personal snapshots cannot acquire invented cycle references, and bookmaker payouts remain separate. | P1 |
 | D10 | Measure actual record size and monitor storage growth | Partial | npm run db:storage measures current table/index allocation and numeric JSON-size samples; private history computes growth; monitor accepts verified capacity/growth evidence | Actual configured-database measurement failed with a redacted unavailable diagnostic. Establish the first real baseline, then comparable measurements and approved operational thresholds. | P1 |
 
@@ -49,7 +49,7 @@ The 51 original checkboxes are tracked below: **20 Implemented, 30 Partial, 1 Mi
 | ID | Checklist item | Status | Evidence | Required change | Priority |
 | --- | --- | --- | --- | --- | --- |
 | A01 | Provider-first baseline; no invented unsupported-market probabilities | Partial | Validated provider groups and double-chance derivation; unsupported groups remain unavailable | Current resolution prefers AI then provider fallback. Preserve a contemporaneous provider-first benchmark and require demonstrated improvement before promotion. Existing publications must remain immutable. | P1 |
-| A02 | Realized win rates by market, league, probability band, with counts | Partial | Existing performance/evaluation cohorts now have public period/source/market UI, sample counts, original evidence links and qualified calibration tables | Add league breakdowns and reviewed prospective real-data protocol; unapproved metric values stay unavailable. | P1 |
+| A02 | Realized win rates by market, league, probability band, with counts | Partial | Public period/source/market UI, sample counts, evidence links, qualified calibration tables and paginated league cohorts with independent sample/quality gates and explicit unknown attribution | Bind a reviewed prospective real-data protocol. Small/unreviewed league groups do not inherit a validated rate from a larger overall sample. | P1 |
 | A03 | Assess calibration over adequate comparable samples | Partial | Fixed bins, observed/mean probabilities, Wilson intervals, Brier/log loss and sample gates | Gather prospective authenticated forecasts/results and evaluate frozen real cohorts. Tests verify arithmetic, not forecast quality. | P1 |
 | A04 | Separate pick/slip performance; returns and losing streaks | Partial | Separate public individual-pick cohorts and complete-period daily-slip counts, binary-only flat-stake quote illustration/ROI and rank-aware losing streaks | Add individual-pick returns and verified real publication cohorts. Void/pending quotes do not imply refunds or enter return denominators. | P1 |
 | A05 | Validate Over 0.5/1.5, Double Chance, Under 4.5 on own data | Partial | Goal-line model definitions, double-chance settlement and extended-market cohort metrics | Capture/evaluate these exact source/line cohorts prospectively. Supported math does not establish accuracy or provider probability coverage. | P2 |
@@ -62,7 +62,7 @@ The 51 original checkboxes are tracked below: **20 Implemented, 30 Partial, 1 Mi
 | ID | Checklist item | Status | Evidence | Required change | Priority |
 | --- | --- | --- | --- | --- | --- |
 | T01 | Public dashboard of winning/losing slips, odds, dates and outcomes | Implemented | /[locale]/performance supplies public outcome counts, original evidence links and paginated immutable daily-slip history | Verify deployment after archive migration; do not substitute member saves for editorial publication history. | P1 |
-| T02 | Win rate, calibration, prediction/sample counts and returns by period | Partial | Public period filters, prediction/sample counts, protocol-gated calibration and full-period slip return/streak illustration | Bind reviewed real calibration and add league/individual-pick-return reporting. Empty/unreviewed rates remain unavailable. | P1 |
+| T02 | Win rate, calibration, prediction/sample counts and returns by period | Partial | Public period filters, prediction/sample counts, independent league cohorts, protocol-gated calibration and full-period slip return/streak illustration | Bind reviewed real calibration and add individual-pick returns. Empty/unreviewed rates remain unavailable. | P1 |
 | T03 | Preserve publication timestamps; audit edits/corrections | Implemented | Append-only `PredictionSet`/`PredictionAudit`, sealed results, settlement correction chains and revision-history UI | Verify deployed database privileges/triggers/backups continue protecting the chains. | P1 |
 | T04 | Never delete failed forecasts or replace pre-match with post-match information | Implemented | Locked forecasts/results remain separate; editorial publication tables have no account relation and reject UPDATE/DELETE; historical criteria and expired-model forecasts remain readable | Maintain restricted grants, backups and genuine-database acceptance. Personal member saves retain their separate disclosed erasure lifecycle. | P1 |
 
@@ -111,8 +111,8 @@ This audit corrects premium-slip probability redaction, default daily diversity,
 
 1. Qualify the joint model and permitted odds feed; complete custom whole-slip ranking without inventing probabilities.
 2. Apply the reviewed archive migration and supervise the publisher; verify the new original-cycle history and public dashboard in deployment.
-3. Freeze and evaluate prospective provider/AI cohorts; add league breakdowns and individual-pick returns to the dashboard.
-4. Budget central live statistics/events; bound transient retention and establish an actual database growth baseline.
+3. Freeze and evaluate prospective provider/AI cohorts; add individual-pick returns to the existing league-aware dashboard.
+4. Enable and verify the budgeted live-detail pipeline, design reference-aware transient-history compaction and establish an actual database growth baseline.
 5. Complete deployed payment and worker acceptance, resolve provider/privacy rights, and run the pricing pilot. Genuine-database acceptance now passes locally.
 
 ## Original audit verification
@@ -164,3 +164,28 @@ The official portable MySQL dependency was checksum/signature-verified and used
 only in owned isolated loopback instances. No configured application migration,
 publication binding, provider request, real payment or external notification was
 activated by this follow-up.
+
+## Live-data and league follow-up
+
+The next priority implementation is recorded in
+[the live-data report](checklist-live-data-2026-10-25.md). It adds centrally budgeted
+statistics/events, bounded current/final occurrence snapshots, the refreshed
+match-data panel, paginated league cohorts and omission of successful empty
+result-poll receipts. P03 and D07 now have implementations; their deployment and
+actual coverage remain Q02 acceptance work. Nonempty audit-history compaction,
+real prospective calibration and the remaining commercial/operational evidence
+are still partial.
+
+Final verification passed: 495 affected unit tests across 34 files (one
+Windows-inapplicable permission skip), 49 Python tests, seven genuine MySQL
+snapshot checks, 31 genuine quota checks and nine genuine performance checks.
+The production application build, TypeScript, repository/scoped lint, seven
+match-data rendering states and nine performance rendering states passed.
+The subsequent detail-view refinement also passed all 40 focused checks and a
+fresh TypeScript check. Browser inspection at 390px and 1440px found no page-wide
+horizontal overflow; league tables stay within their own scroll region.
+
+The two additive migrations are ready for review, but no configured application
+migration or live collector was activated. `GOAL_HINT_LIVE_DETAILS_ENABLED`
+defaults to false. See the [match-data runbook](../live-match-details.md) for
+migrations, grants, limits and the existing source-rights boundary.

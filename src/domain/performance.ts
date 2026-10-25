@@ -4,7 +4,7 @@ import { marketFamilySchema, publicForecastSchema } from "./fixture-snapshot.ts"
 import { marketSelections } from "./markets.ts";
 
 export const performanceRules = Object.freeze({ maximumDays: 31, defaultDays: 30, maximumFixtures: 1000, maximumCohortFixtures: 31_000,
-  maximumStoredBytes: 16_777_216, maximumEvidenceLinks: 20 });
+  maximumStoredBytes: 16_777_216, maximumEvidenceLinks: 20, leaguePageSize: 10, maximumLeaguePage: 9999 });
 export const performanceFamilies = Object.keys(marketSelections) as (keyof typeof marketSelections)[];
 export const performanceSourceSchema = z.enum(["combined", "ai", "api-football"]);
 const family = marketFamilySchema;
@@ -42,6 +42,14 @@ export const performanceCellSchema = z.strictObject({ family, source: performanc
 }).refine((v) => v.coverage.settled === v.metrics.denominator && v.evidence.total === v.coverage.available &&
   v.evidence.links.length === Math.min(v.evidence.total, performanceRules.maximumEvidenceLinks) &&
   v.evidence.truncated === (v.evidence.total > v.evidence.links.length));
+export const performanceLeagueCellSchema = z.strictObject({ family, source: performanceSourceSchema,
+  coverage: performanceCoverageSchema, metrics,
+}).refine((v) => v.coverage.settled === v.metrics.denominator && v.metrics.calibration.length === 0,
+  "League summaries retain the same sample denominator and omit repeated calibration bins.");
+export const performanceLeagueSchema = z.strictObject({
+  competition: z.strictObject({ id: z.uuid().nullable(), name: z.string().min(1).max(512).nullable(), country: z.string().min(1).max(256).nullable() }),
+  fixtureCount: count.max(performanceRules.maximumCohortFixtures), cells: z.array(performanceLeagueCellSchema).max(4),
+}).refine((v) => new Set(v.cells.map((cell) => cell.family)).size === v.cells.length && v.cells.every((cell) => cell.coverage.total === v.fixtureCount));
 export const performanceResponseSchema = z.strictObject({ asOf: instant,
   filters: z.strictObject({ market: z.union([z.literal("all"), family]), source: performanceSourceSchema, model: hash.nullable(), version: label.nullable() }),
   cohort: z.strictObject({ from: date, to: date, startInclusive: instant, endExclusive: instant, timezone: z.literal("Africa/Kampala"),
@@ -50,6 +58,11 @@ export const performanceResponseSchema = z.strictObject({ asOf: instant,
     horizonBasis: z.literal("scheduled-kickoff-minus-locked-publication;horizon-cells-only-known-locks") }),
   policy: z.strictObject({ id: hash.nullable(), state: z.enum(["unapproved", "verified"]), publicClaimAuthorized: z.literal(false), provisional: z.literal(true) }),
   cells: z.array(performanceCellSchema).max(396),
+  leagues: z.strictObject({ basis: z.literal("same-current-fixture-cohort-grouped-by-competition"),
+    totalGroups: count.max(performanceRules.maximumCohortFixtures), page: count.min(1).max(performanceRules.maximumLeaguePage),
+    pageSize: z.literal(performanceRules.leaguePageSize), records: z.array(performanceLeagueSchema).max(performanceRules.leaguePageSize),
+  }).refine((v) => v.records.length === Math.max(0, Math.min(v.pageSize, v.totalGroups - (v.page - 1) * v.pageSize)) &&
+    new Set(v.records.map((row) => row.competition.id)).size === v.records.length),
   comparisons: z.array(z.strictObject({ family, candidate: z.literal("ai"), reference: z.literal("api-football"),
     state: z.literal("unavailable"), reason: z.literal("no-matched-locked-forecasts"), count: z.literal(0), brierDifference: z.null(),
     matchBasis: z.literal("same-fixture-family-evidence-cutoff-and-horizon") })).max(4),
@@ -64,3 +77,4 @@ export type PerformanceResponse = z.infer<typeof performanceResponseSchema>;
 export type PerformanceCell = z.infer<typeof performanceCellSchema>;
 export type PerformanceCoverage = z.infer<typeof performanceCoverageSchema>;
 export type PerformanceSource = z.infer<typeof performanceSourceSchema>;
+export type PerformanceLeague = z.infer<typeof performanceLeagueSchema>;

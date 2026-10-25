@@ -22,6 +22,7 @@ import type { PredictorResult } from "../predictor/predictor-service.ts";
 import { liveAiEvidencePolicy, liveAiRefreshPlan } from "./live-ai-plan.ts";
 import { verifyLiveFootballSource } from "./live-ai-evidence.ts";
 import type { ResultSyncAuthority, ResultSyncPolicy } from "../results/result-sync-contract.ts";
+import type { LiveMatchAuthority, LiveMatchPolicy } from "../live-match/live-match-contract.ts";
 import type { SelectionAuthority, SelectionPolicy } from "../selection/selection-contract.ts";
 import { parseSelectionPolicy } from "../selection/selection-input.ts";
 import { cutoffPolicy, evidencePolicy, fallbackRefreshPlan, lifecyclePolicy, providerFallbackPolicy, providerStatusMappings,
@@ -46,6 +47,7 @@ function pages(result: Pick<ApiFootballResult<unknown>, "provenance">, endpoint:
 export function createLiveAuthorities(options: Readonly<{
   policy: RuntimePolicy; verify: EvidenceVerifier; refs: LiveReferences; selection: SelectionPolicy;
   resultPolicy: () => ResultSyncPolicy | null; statusEvidenceRef: string; clock?: Clock;
+  liveMatchPolicy?: () => LiveMatchPolicy | null;
   /** The same verified plan pacing used to configure refresh requests. */
   refreshPacing: RefreshPacing;
   /** The exact odds policy configured from the same workload as the runtime, or null without a bookmaker. */
@@ -168,6 +170,17 @@ export function createLiveAuthorities(options: Readonly<{
   });
   const verifyStatusResponse = (result: ApiFootballResult<NormalizedFixture>, member: RefreshMember) => pages(result, "fixtures", now()) &&
     result.data.length <= 1 && result.data.every((row) => row.id === member.context.externalFixtureId);
+  const liveMatch: LiveMatchAuthority = Object.freeze({
+    authorize() { football(); publish(); },
+    verifyPolicy(value) {
+      const configured = options.liveMatchPolicy?.();
+      return policy.choices.liveDetails.enabled && configured !== undefined && configured !== null && same(value, configured);
+    },
+    verifyResponse(response) {
+      const endpoint = response.provenance[0]?.endpoint;
+      return response.provenance.length === 1 && (endpoint === "statistics" || endpoint === "events") && pages(response, endpoint, now());
+    },
+  });
   // Odds (052): private structured retention under the private-use reference; public projection only under
   // owner-recorded odds display rights, which the runner never requires to start.
   const oddsEndpoints = { prices: "odds", bets: "oddsBets", bookmakers: "oddsBookmakers" } as const;
@@ -186,5 +199,5 @@ export function createLiveAuthorities(options: Readonly<{
     verifyPublicDisplay: () => refs.oddsRights !== null && verify(refs.oddsRights, "football-odds-rights"),
   });
   return Object.freeze({ catalog, selection, cutoff, lifecycle, publication, evidence, providerFallback, fallback, verifyFallbackRequest,
-    refresh, results, verifyStatusResponse, odds });
+    refresh, results, verifyStatusResponse, odds, liveMatch });
 }

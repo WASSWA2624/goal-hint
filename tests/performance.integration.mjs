@@ -82,6 +82,11 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
     }
     await t.test('open previews are unavailable; failed and delayed refreshes are separate measures', async () => {
       const data = await read(); assert.equal(data.cohort.fixtureCount, 30); assert.equal(cell(data).coverage.available, 0);
+      const competition = await p.a.query((tx) => tx.footballCompetition.findUniqueOrThrow({ where: { id: competitionId }, select: { name: true, country: true } }));
+      assert.equal(data.leagues.totalGroups, 1); assert.equal(data.leagues.pageSize, 10);
+      assert.deepEqual(data.leagues.records[0].competition, { id: competitionId, name: competition.name, country: competition.country });
+      assert.equal(data.leagues.records[0].fixtureCount, data.cohort.fixtureCount);
+      assert.deepEqual(data.leagues.records[0].cells.find((entry) => entry.family === 'match-result').coverage, cell(data).coverage);
       capture('open', data);
       assert.equal(cell(data).coverage.unavailable, 30); assert.equal(cell(data).metrics.hitRate, null);
       assert.equal(data.operations.failed, 1); assert.equal(data.operations.failedFixtures, 1);
@@ -117,6 +122,9 @@ test('stored performance acceptance on owned genuine MySQL', { timeout: 300_000 
       assert.equal(locked.lockedSetId, superseded.revision.id); assert.equal(locked.currentSetId, latest.id);
       for (const [id, home, away] of [[3000, 2, 1], [3001, 0, 1], [3003, 2, 0], [3010, 2, 1]]) await result(states.get(id), home, away);
       const data = performanceResponseSchema.parse(await read());
+      const league = data.leagues.records[0].cells.find((entry) => entry.family === 'match-result');
+      assert.equal(league.metrics.denominator, cell(data).metrics.denominator); assert.equal(league.metrics.hitRate, cell(data).metrics.hitRate);
+      assert.equal(league.source, data.filters.source); assert.deepEqual(league.metrics.calibration, []);
       capture('mixed', data);
       capture('default', await read('',{policy:null}));
       capture('small', await read(period, {policy:{protocol:performanceProtocol({competitionIds:[competitionId],providerContractVersion:'synthetic-provider-v1',gate:{minimumCoverage:0,minimumSamples:100}}),verifyProtocol:()=>true}}));

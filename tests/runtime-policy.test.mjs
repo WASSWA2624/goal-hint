@@ -165,7 +165,7 @@ test("the complete documented environment example parses safely without approval
     "GOAL_HINT_CUSTOMER_SUPPORT_NUMBER", "GOAL_HINT_CUSTOMER_SUPPORT_WHATSAPP_NUMBER",
     "GOAL_HINT_EXACT_SCORES_ENABLED", "GOAL_HINT_LOCALES", "GOAL_HINT_DEPLOYMENT_ENVIRONMENT",
     "GOAL_HINT_ODDS_IMPORT_ENABLED", "GOAL_HINT_ODDS_BOOKMAKER_ID", "GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF",
-    "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
+    "GOAL_HINT_TEAM_CODES_IMPORT_ENABLED", "GOAL_HINT_LIVE_DETAILS_ENABLED", "GOAL_HINT_AI_BILLING_MODE",
     "GOAL_HINT_ANALYTICS_ENABLED", "GOAL_HINT_ANALYTICS_SECRET", "GOAL_HINT_ANALYTICS_ADMIN_USERNAME",
     "GOAL_HINT_ANALYTICS_ADMIN_PASSWORD_HASH", "GOAL_HINT_ANALYTICS_RETENTION_DAYS", "GOAL_HINT_ANALYTICS_GEO_SOURCE",
     // Administrator credentials are private configuration and do not grant provider capabilities.
@@ -186,7 +186,7 @@ test("the complete documented environment example parses safely without approval
       assert.equal(value, null);
     }
   }
-  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, budgets, analytics, ...unresolvedChoices } = policy.choices;
+  const { database, probabilitySumTolerance, consistencyTolerance, odds, teamCodes, liveDetails, budgets, analytics, ...unresolvedChoices } = policy.choices;
   // Consent-gated analytics is on by default but has no credentials, secret or retention override until configured.
   assert.deepEqual(analytics, { enabled: true, adminUsername: null, retentionDays: null, geoSource: "timezone" });
   const { aiBillingMode, ...unresolvedBudgets } = budgets;
@@ -196,6 +196,7 @@ test("the complete documented environment example parses safely without approval
   assert.deepEqual(odds, { enabled: false, bookmakerId: null, rightsRef: null });
   // Team codes are on by default; the live runner's spare-quota gate still keeps them off on Free and slow plans.
   assert.deepEqual(teamCodes, { enabled: true });
+  assert.deepEqual(liveDetails, { enabled: false });
   assert.equal(probabilitySumTolerance, marketRules.probabilitySumTolerance);
   assert.equal(consistencyTolerance, marketRules.consistencyTolerance);
   assert.deepEqual(database, {

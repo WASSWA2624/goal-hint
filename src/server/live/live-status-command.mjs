@@ -22,7 +22,7 @@ try {
   policy ??= parseRuntimePolicy({ ...process.env, GOAL_HINT_OPERATION_SCOPE: 'trial', GOAL_HINT_FOOTBALL_TRIAL_REQUEST_LIMIT: '1' });
   verify ??= ownerEvidenceVerifier(loadOwnerApprovals());
   const status = await createAccountStatusReader({ policy, verifyEvidence: verify })();
-  const workload = liveWorkload(status.dailyLimit, status.secondLimit, status.plan, status.minuteLimit, policy.capabilities.ai);
+  const workload = liveWorkload(status.dailyLimit, status.secondLimit, status.plan, status.minuteLimit, policy.capabilities.ai, policy.choices.liveDetails.enabled);
   const value = { ready: gaps.length === 0, gaps,
     plan: status.plan, active: status.active, expiresAt: status.expiresAt === null ? null : new Date(status.expiresAt).toISOString(),
     dailyLimit: status.dailyLimit, usedToday: status.usedToday, minuteLimit: status.minuteLimit,
@@ -33,6 +33,10 @@ try {
         billingMode: policy.choices.budgets.aiBillingMode },
       livePollSeconds: workload.cadence.liveMs === null ? null : workload.cadence.liveMs / 1000,
       datePollMinutes: workload.cadence.dateMs / 60_000,
+      liveDetails: { enabled: policy.choices.liveDetails.enabled, eligible: workload.liveDetails.eligible,
+        requestsPerDay: workload.liveDetails.requests, intervalSeconds: workload.liveDetails.intervalMs / 1000,
+        finalIntervalMinutes: workload.liveDetails.finalIntervalMs / 60_000, finalWindowDays: workload.liveDetails.finalWindowMs / 86_400_000,
+        maxFixturesPerTick: workload.liveDetails.maxFixturesPerTick },
       // Odds (052) run only when enabled, eligible on this plan and given a documented bookmaker.
       odds: { enabled: policy.choices.odds.enabled, eligible: workload.odds.eligible, bookmakerConfigured: policy.choices.odds.bookmakerId !== null,
         imports: policy.choices.odds.enabled && workload.odds.eligible && policy.choices.odds.bookmakerId !== null,

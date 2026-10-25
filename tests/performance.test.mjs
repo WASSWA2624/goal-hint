@@ -74,6 +74,60 @@ test('filters account for nonmatching versions separately and retain unattribute
   assert.equal(cell(report(records, null, 'version=no-such-version')).coverage.available, 0);
   assert.equal(cell(report(records, null, 'source=api-football')).coverage.sources.ai, 0);
 });
+
+test('league cohorts reconcile every fixture and independently apply sample and quality gates', () => {
+  const firstId = '20000000-0000-4000-8000-000000000001', secondId = '20000000-0000-4000-8000-000000000002';
+  const records = [performanceRecord({ competitionId: firstId, competitionName: 'Alpha League' }),
+    performanceRecord({ competitionId: firstId, competitionName: 'Alpha League' }),
+    performanceRecord({ competitionId: secondId, competitionName: 'Beta League', score: [0, 1] }),
+    performanceRecord({ competitionId: secondId, competitionName: 'Beta League', score: [0, 1] })];
+  const protocol = performanceProtocol({ competitionIds: [firstId, secondId], gate: { maximumBrier: .7 } });
+  const data = report(records, protocol, 'market=match-result');
+  assert.equal(cell(data).metrics.state, 'available'); assert.equal(cell(data).metrics.denominator, 4);
+  assert.equal(data.leagues.totalGroups, 2); assert.equal(data.leagues.records.reduce((sum, league) => sum + league.fixtureCount, 0), 4);
+  const [first, second] = data.leagues.records;
+  assert.equal(first.competition.name, 'Alpha League'); assert.equal(first.competition.country, 'Uganda');
+  assert.equal(first.cells[0].metrics.denominator, 2); assert.equal(first.cells[0].metrics.hitRate, 1);
+  assert.equal(second.cells[0].metrics.state, 'quality-gate-failed'); assert.equal(second.cells[0].metrics.hitRate, null);
+  assert.equal(second.cells[0].metrics.correct, 0); assert.equal(second.cells[0].metrics.incorrect, 2);
+  assert.ok(second.cells[0].metrics.reasons.includes('brier-above-gate'));
+  assert.deepEqual(first.cells[0].metrics.calibration, []);
+  const unapproved = report(records, null, 'market=match-result');
+  assert.ok(unapproved.leagues.records.every((league) => league.cells[0].metrics.hitRate === null));
+  const small = report([records[0], records[2]], protocol, 'market=match-result');
+  assert.ok(small.leagues.records.every((league) => league.cells[0].metrics.state === 'insufficient-sample'));
+});
+
+test('league pagination preserves full-period totals, unknown attribution and source-filter denominators', () => {
+  const records = Array.from({ length: 12 }, (_, index) => performanceRecord({
+    competitionId: `30000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`, competitionName: `League ${String(index).padStart(2, '0')}`,
+  }));
+  const unknown = performanceRecord({ competitionId: null, competitionName: 'Unverified label' });
+  const missing = performanceRecord({ state: 'open', competitionId: undefined }); delete missing.fixture.season.competitionId;
+  records.push(unknown, missing);
+  const one = report(records, null, 'market=match-result'), two = report(records, null, 'market=match-result&leaguePage=2');
+  assert.equal(one.cohort.fixtureCount, 14); assert.deepEqual(one.cells, two.cells);
+  assert.equal(one.leagues.records.length, 10); assert.equal(two.leagues.records.length, 3); assert.equal(two.leagues.totalGroups, 13);
+  const group = two.leagues.records.at(-1);
+  assert.deepEqual(group.competition, { id: null, name: null, country: null }); assert.equal(group.fixtureCount, 2);
+  assert.equal(group.cells[0].coverage.unavailable, 1); assert.equal(group.cells[0].coverage.settled, 1);
+  assert.equal(group.cells[0].metrics.hitRate, null);
+  assert.deepEqual(report([...records].reverse(), null, 'market=match-result').leagues.records.map((league) => league.competition),
+    one.leagues.records.map((league) => league.competition));
+  assert.deepEqual(report(records, null, 'leaguePage=3').leagues.records, []);
+  const filtered = report([performanceRecord(), performanceRecord({ source: 'api-football' }), performanceRecord({ state: 'open' })],
+    null, 'source=api-football&market=match-result').leagues.records[0].cells[0];
+  assert.equal(filtered.source, 'api-football'); assert.equal(filtered.coverage.total, 3);
+  assert.equal(filtered.coverage.available, 1); assert.equal(filtered.coverage.filteredOut, 1); assert.equal(filtered.coverage.unavailable, 1);
+  assert.equal(filtered.metrics.denominator, 1);
+});
+
+test('league pagination rejects ambiguous or unbounded input', () => {
+  for (const value of ['0', '01', '1.5', '-1', '10000', 'NaN']) {
+    assert.throws(() => query(`leaguePage=${value}`), (error) => error.code === 'invalid-query');
+  }
+  assert.throws(() => query('leaguePage=1&leaguePage=2'), (error) => error.code === 'invalid-query');
+});
 test('quality coverage uses the full nonvoid cohort and cannot improve by filtering out other sources', () => {
   const records = [performanceRecord(), performanceRecord(), performanceRecord({ source: 'api-football' }),
     performanceRecord({ state: 'open' }), performanceRecord({ state: 'open' })];

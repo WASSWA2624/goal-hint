@@ -10,6 +10,7 @@ export const quotaPriorities = Object.freeze({
   "live-date-sync": Object.freeze({ rank: 1, essential: false }),
   "daily-inputs": Object.freeze({ rank: 2, essential: false }),
   enrichment: Object.freeze({ rank: 3, essential: false }),
+  "live-details": Object.freeze({ rank: 3, essential: false }),
 } as const);
 
 export type QuotaPriority = keyof typeof quotaPriorities;
@@ -64,6 +65,8 @@ export type QuotaPeriodState = {
   probeRequestId: string | null;
   evidenceRef: string;
   observationRevision: number;
+  /** Durable dispatch counts; absent only in periods created before this contract. */
+  priorityUsed?: Partial<Record<QuotaPriority, number>> | undefined;
 };
 export type QuotaRequest = Readonly<{
   requestId: string;
@@ -104,7 +107,7 @@ export type QuotaDenialReason =
   | "clock-regression" | "credential-failure" | "subscription-expired" | "request-expired"
   | "already-attempted" | "priority-wait" | "pacing" | "second-limit" | "minute-limit"
   | "daily-limit" | "essential-reserve" | "retry-delay" | "reset-unconfirmed"
-  | "invalid-reset-evidence" | "operation-not-authorized" | "dispatch-expired";
+  | "invalid-reset-evidence" | "operation-not-authorized" | "dispatch-expired" | "workload-budget";
 export type QuotaPermit = Readonly<{
   requestId: string;
   periodId: string;
@@ -119,6 +122,8 @@ export type QuotaDecision =
 
 /** Every operation is serialized under one durable account row lock. */
 export interface QuotaTransaction {
+  /** Shared stable workload key, independent of a provider plan's rotating account id. */
+  consumeBudget?(id: string, maximum: number, periodEndsAt: UtcInstant): Promise<boolean>;
   now(): Promise<UtcInstant>;
   account(): Promise<QuotaAccountState | null>;
   saveAccount(state: QuotaAccountState): Promise<void>;
@@ -129,9 +134,14 @@ export interface QuotaTransaction {
   saveAttempt(attempt: QuotaAttempt): Promise<void>;
   rollingAttempts(since: UtcInstant): Promise<QuotaAttempt[]>;
   periodAttempts(periodId: string, afterSequence: number): Promise<QuotaAttempt[]>;
+  /** Bounded aggregate for bootstrapping dispatch counts without loading historical payloads. */
+  priorityCounts?(periodId: string): Promise<NonNullable<QuotaPeriodState["priorityUsed"]>>;
   unresolvedBefore(periodId: string, sequence: number): Promise<number>;
   queueHead(now: UtcInstant): Promise<QuotaAttempt | null>;
 }
+
+/** Trusted workload admission runs under the same account lock as the dispatch count. */
+export type QuotaAdmission = (transaction: QuotaTransaction, period: QuotaPeriodState, attempt: Readonly<QuotaAttempt>) => Promise<boolean>;
 export interface QuotaStore {
   transaction<Result>(accountId: string, operation: (transaction: QuotaTransaction) => Promise<Result>): Promise<Result>;
 }

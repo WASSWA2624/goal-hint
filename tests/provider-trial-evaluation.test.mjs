@@ -401,6 +401,19 @@ test("ancillary coverage records incomplete lineups and empty injuries as unknow
   }
 });
 
+test("event coverage requires supported observed events for a team in the requested fixture", () => {
+  const prior = row("fixture", { kind: "fixtures", query: { fixtureId: 101 } }, [fixture()]);
+  const event = { teamId: 1, elapsed: 30, extra: null, type: "goal", detail: "Normal Goal", player: "Contract player", assist: null,
+    comments: null, source: { ...source, endpoint: "/fixtures/events" } };
+  const timeline = (data) => row("timeline", { kind: "events", fixtureId: 101 }, data);
+  const report = buildTrialReport(journal([prior, timeline([event])]), trust);
+  assert.equal(status(report, "field-coverage"), "confirmed");
+  for (const data of [[], [{ ...event, teamId: 999 }], [{ ...event, type: "unsupported" }], [{ ...event, elapsed: null }]]) {
+    const unavailable = buildTrialReport(journal([prior, timeline(data)]), trust);
+    assert.equal(status(unavailable, "field-coverage"), "failed");
+  }
+});
+
 test("wrong endpoint provenance and source time cannot qualify fixture samples", () => {
   for (const invalid of [{ ...result([]).provenance[0], endpoint: "predictions" },
     { ...result([]).provenance[0], retrievedAt: timestamp + 10_000 }]) {

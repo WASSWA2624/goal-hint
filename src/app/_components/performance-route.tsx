@@ -30,7 +30,7 @@ export function createPerformanceRoute({ read = readPublicPerformance, history =
       ]);
       return <PublicShell locale={locale} today={getReportingDate(at)} current="performance" app compact>
         <PerformanceDashboard key={parameters.toString()} locale={locale} filters={{ from: query.range.startDate, to: query.range.endDate,
-          market: query.market, source: query.source, model: query.model, version: query.version }}
+          market: query.market, source: query.source, model: query.model, version: query.version, leaguePage: query.leaguePage }}
           report={predictions.status === "fulfilled" ? predictions.value : null}
           history={publications.status === "fulfilled" ? publications.value : null} />
       </PublicShell>;

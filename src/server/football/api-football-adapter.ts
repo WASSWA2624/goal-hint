@@ -7,7 +7,7 @@ import { API_FOOTBALL_ORIGIN, API_FOOTBALL_CONTRACT_VERSION, apiFootballEndpoint
   type ApiFootballBounds, type ApiFootballEndpoint, type ApiFootballFailure,
   type ApiFootballPageProvenance, type ApiFootballResult, type ApiFootballCachePermission,
   type ApiFootballBatchEvidence, type ApiFootballFallbackWorkflow } from "./api-football-contract.ts";
-import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatistics,
+import { normalizeFixture, normalizeTeam, normalizeCompetition, normalizeStatistics, normalizeEvent,
   normalizeAvailability, normalizePlayerStatistics, normalizeFallbackPrediction,
   normalizeAccountStatus, normalizeOdds, normalizeOddsCatalogEntry,
   type NormalizationContext, type NormalizationResult, type NormalizedFixture, type NormalizedFixtureOdds } from "./api-football-normalize.ts";
@@ -522,7 +522,8 @@ export function createApiFootballAdapter(options: ApiFootballAdapterOptions) {
         if (query?.season !== undefined) params.season = String(query.season);
         return run("competitions", valid ? [params] : null, bounds, normalizeCompetition);
       },
-      statistics: (fixtureId: number, bounds: ApiFootballBounds) => run("statistics", positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeStatistics),
+      statistics: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("statistics", positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeStatistics, undefined, workflow),
+      events: (fixtureId: number, bounds: ApiFootballBounds, workflow?: ApiFootballFallbackWorkflow) => run("events", positive(fixtureId) ? [{ fixture: String(fixtureId) }] : null, bounds, normalizeEvent, undefined, workflow),
       availability: (fixtureId: number, kind: "lineups" | "injuries", bounds: ApiFootballBounds) => run(kind === "injuries" ? "injuries" : "lineups",
         positive(fixtureId) && ["lineups", "injuries"].includes(kind) ? [{ fixture: String(fixtureId) }] : null, bounds, (raw, context) => normalizeAvailability(raw, kind, context)),
       playerStatistics: (query: PlayerStatisticsQuery, bounds: ApiFootballBounds) => { const params = paired(query); return run("playerStatistics", params ? [params] : null, bounds, normalizePlayerStatistics); },

@@ -44,14 +44,16 @@ const periodSchema = z.object({
   probeRequestId: identifier.nullable(),
   evidenceRef: z.string().min(1).max(512),
   observationRevision: counter,
-}).refine((value) => value.startsAt < value.endsAt && value.ordinaryUsed <= value.used);
+  priorityUsed: z.record(z.string(), counter).refine((value) => Object.keys(value).every((key) => Object.hasOwn(quotaPriorities, key))).optional(),
+}).refine((value) => value.startsAt < value.endsAt && value.ordinaryUsed <= value.used &&
+  Object.values(value.priorityUsed ?? {}).reduce((sum, count) => sum + count, 0) <= value.used);
 // Reuse the canonical durable-state contract for read-only private monitoring.
 export { accountSchema as quotaAccountStateSchema, periodSchema as quotaPeriodStateSchema };
 const attemptSchema = z.object({
   id: identifier,
   workKey: identifier.nullable(),
   priority: z.enum([
-    "results-cutoff", "recovery", "near-kickoff-fallback", "live-date-sync", "daily-inputs", "enrichment",
+    "results-cutoff", "recovery", "near-kickoff-fallback", "live-date-sync", "daily-inputs", "enrichment", "live-details",
   ]),
   rank: counter,
   essential: z.boolean(),
@@ -138,6 +140,21 @@ function decodeAttempt(row: AttemptRow): QuotaAttempt {
 
 function quotaTransaction(transaction: Prisma.TransactionClient, accountId: string): QuotaTransaction {
   return {
+    async consumeBudget(id, maximum, periodEndsAt) {
+      checkedIdentifier(id);
+      if (!Number.isSafeInteger(maximum) || maximum < 1 || maximum > 1_000_000_000) throw new QuotaStorageError();
+      const end = sqlDate(periodEndsAt);
+      await transaction.$executeRaw`INSERT INTO ApiQuotaBudget (id, used, periodEndsAt) VALUES (${id}, 0, ${end})
+        ON DUPLICATE KEY UPDATE id=ApiQuotaBudget.id`;
+      const row = (await transaction.$queryRaw<{ used: number | bigint; periodEndsAt: Date }[]>`
+        SELECT used,periodEndsAt FROM ApiQuotaBudget WHERE id=${id} FOR UPDATE`)[0];
+      const used = row ? Number(row.used) : NaN;
+      if (!row || row.periodEndsAt.getTime() !== periodEndsAt || !Number.isSafeInteger(used) || used < 0)
+        throw new QuotaStorageError();
+      if (used >= maximum) return false;
+      await transaction.$executeRaw`UPDATE ApiQuotaBudget SET used=used+1 WHERE id=${id}`;
+      return true;
+    },
     async now() {
       const rows = await transaction.$queryRaw<{ now: Date }[]>`SELECT UTC_TIMESTAMP(3) AS now`;
       if (rows.length !== 1) throw new QuotaStorageError();
@@ -247,6 +264,23 @@ function quotaTransaction(transaction: Prisma.TransactionClient, accountId: stri
         ORDER BY sequence, id
       `;
       return rows.map(decodeAttempt);
+    },
+    async priorityCounts(periodId: string) {
+      checkedIdentifier(periodId);
+      const rows = await transaction.$queryRaw<{ name: string | null; priorityRank: number; count: bigint | number }[]>`
+        SELECT JSON_UNQUOTE(JSON_EXTRACT(payloadJson,'$.priority')) AS name, priority AS priorityRank, COUNT(*) AS count
+        FROM ApiQuotaAttempt WHERE accountId=${accountId} AND periodId=${periodId} AND dispatchedAt IS NOT NULL
+        GROUP BY JSON_UNQUOTE(JSON_EXTRACT(payloadJson,'$.priority')), priority`;
+      if (rows.length > Object.keys(quotaPriorities).length) throw new QuotaStorageError();
+      const counts: NonNullable<QuotaPeriodState["priorityUsed"]> = {};
+      for (const row of rows) {
+        if (typeof row.name !== "string" || !Object.hasOwn(quotaPriorities, row.name)) throw new QuotaStorageError();
+        const priority = row.name as keyof typeof quotaPriorities, count = Number(row.count);
+        if (Number(row.priorityRank) !== quotaPriorities[priority].rank || !Number.isSafeInteger(count) || count < 1 || counts[priority] !== undefined)
+          throw new QuotaStorageError();
+        counts[priority] = count;
+      }
+      return counts;
     },
     async unresolvedBefore(periodId: string, sequence: number) {
       checkedIdentifier(periodId);

@@ -36,6 +36,15 @@ model ApiQuotaAccount {
   oddsBatches   OddsImportBatch[]
 }
 
+// One atomic workload counter per stable provider account/day, retained across plan changes.
+model ApiQuotaBudget {
+  id           String   @id @db.Char(64)
+  used         Int      @db.UnsignedInt
+  periodEndsAt DateTime @db.DateTime(3)
+
+  @@index([periodEndsAt])
+}
+
 model ApiQuotaPeriod {
   accountId String          @db.Char(64)
   id        String          @db.Char(64)
@@ -185,6 +194,7 @@ model FootballSeason {
 }
 
 model FootballFixture {
+  liveMatchSnapshots    LiveMatchSnapshot[]
   publishedSlipLegs     PublishedSlipLeg[]
   savedSlips            SavedSlipFixture[]
   id                    String                        @id @default(uuid()) @db.Char(36)
@@ -671,6 +681,7 @@ model SelectionCycleEligibility {
 }
 
 model PredictionCycle {
+  liveMatchSnapshots    LiveMatchSnapshot[]
   id                    String                        @id @default(uuid()) @db.Char(36)
   fixtureId             String                        @db.Char(36)
   creationKey           String                        @db.Char(64)
@@ -712,6 +723,38 @@ model PredictionCycle {
   @@index([state, cutoffAt])
   @@index([currentSetId, id, fixtureId], map: "PredictionCycle_current_idx")
   @@index([lockedSetId, id, fixtureId], map: "PredictionCycle_locked_idx")
+}
+
+// A stable provider-account lease, independent of rotating provider-day quota rows.
+model LiveMatchPollerLease {
+  accountKey String   @id @db.Char(64)
+  ownerId    String?  @db.Char(64)
+  fence      BigInt   @default(0) @db.UnsignedBigInt
+  leaseUntil DateTime @db.DateTime(3)
+}
+
+// One bounded mutable current/final body per occurrence; never a row per minute.
+// Participant markers and nullable cycle/kickoff prevent rescheduling from relabelling old details.
+model LiveMatchSnapshot {
+  id           String           @id @db.Char(64)
+  fixtureId    String           @db.Char(36)
+  cycleId      String?          @db.Char(36)
+  kickoffAt    DateTime?        @db.DateTime(3)
+  homeTeamId   String           @db.Char(36)
+  awayTeamId   String           @db.Char(36)
+  receivedAt   DateTime?        @db.DateTime(3)
+  bodyJson     Json?
+  integrity    String?          @db.Char(64)
+  attemptedAt  DateTime         @db.DateTime(3)
+  nextPollAt   DateTime         @db.DateTime(3)
+  firstFinalAt DateTime?        @db.DateTime(3)
+  failures     Int              @default(0) @db.UnsignedInt
+  fixture      FootballFixture  @relation(fields: [fixtureId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cycle        PredictionCycle? @relation(fields: [cycleId, fixtureId], references: [id, fixtureId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([fixtureId, cycleId, kickoffAt], map: "LiveMatchSnapshot_occurrence_idx")
+  @@index([cycleId, fixtureId])
+  @@index([nextPollAt, attemptedAt, fixtureId])
 }
 
 // Append-only schedule observations, including corrections after closure.

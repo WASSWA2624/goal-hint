@@ -6,7 +6,7 @@ import { utcInstantFromEpochMilliseconds, type Clock, type UtcInstant } from "..
 import { assertOperationAllowed, operatingRules, type EvidenceVerifier, type RuntimePolicy } from "../config/runtime-policy.ts";
 import { evidenceFingerprint } from "../evidence/evidence-input.ts";
 import { API_FOOTBALL_ORIGIN } from "../football/api-football-contract.ts";
-import type { QuotaDecision, QuotaDenialReason, QuotaFeedback, QuotaPeriodEvidence, QuotaPermit, QuotaRequest, QuotaStore } from "../football/quota-contract.ts";
+import type { QuotaAdmission, QuotaDecision, QuotaDenialReason, QuotaFeedback, QuotaPeriodEvidence, QuotaPermit, QuotaRequest, QuotaStore } from "../football/quota-contract.ts";
 import type { GatewayQuotaLimiter } from "../football/quota-gateway.ts";
 import { createQuotaLimiter, type QuotaLimiter } from "../football/quota-limiter.ts";
 
@@ -85,7 +85,7 @@ export type QuotaDay = Readonly<{ accountId: string; periodId: string; startsAt:
  * gets its own durable limiter seeded from the provider's remaining count. Old days keep
  * their counters, in-flight permits finish on their issuing limiter, and missed days or
  * plan changes start from verified provider usage instead of an unconfirmable probe. */
-export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readStatus: () => Promise<AccountStatus>; clock?: Clock }>) {
+export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readStatus: () => Promise<AccountStatus>; clock?: Clock; admit?: QuotaAdmission }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   const observed = new Set<string>(), limiters = new Map<string, QuotaLimiter>();
   let active: Readonly<QuotaDay & { limiter: QuotaLimiter }> | null = null;
@@ -123,6 +123,7 @@ export function createQuotaRouter(options: Readonly<{ store: QuotaStore; readSta
       let limiter = limiters.get(evidence.periodId);
       if (!limiter) {
         limiter = createQuotaLimiter({ accountId: evidence.accountId, store: options.store,
+          ...(options.admit ? { admit: options.admit } : {}),
           verifyEvidence: (candidate, purpose) => purpose === "initial-period" && observed.has(evidenceFingerprint(candidate)) });
         limiters.set(evidence.periodId, limiter);
       }

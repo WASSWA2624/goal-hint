@@ -192,7 +192,7 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
   });
   const expectedEndpoint = (task: TrialTask) => ({ fixtures: "fixtures", live: "fixtures", "fixture-ids": "fixtures",
     teams: "teams", competitions: "competitions", "player-statistics": "playerStatistics", "account-status": "accountStatus",
-    statistics: "statistics", lineups: "lineups", injuries: "injuries", predictions: "predictions",
+    statistics: "statistics", events: "events", lineups: "lineups", injuries: "injuries", predictions: "predictions",
     odds: "odds", "odds-bets": "oddsBets", "odds-bookmakers": "oddsBookmakers" } as const)[task.operation.kind];
   const validProvenance = (row: Observed) => row.observation.result.provenance.length > 0 &&
     row.observation.result.provenance.every((page) => isRecord(page) && isRecord(page.quota) && isRecord(page.requestParameters) &&
@@ -414,7 +414,7 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
 
   const ancillary = observed.filter(({ task }) => task.operation.kind === "player-statistics"
     ? selectedCompetition(task.operation.query.competitionId, task.operation.query.season)
-    : ["statistics", "lineups", "injuries"].includes(task.operation.kind) && "fixtureId" in task.operation &&
+    : ["statistics", "events", "lineups", "injuries"].includes(task.operation.kind) && "fixtureId" in task.operation &&
       fixtures.some(({ fixture: item }) => "fixtureId" in task.operation && item.id === task.operation.fixtureId));
   if (ancillary.length) {
     const available = ancillary.every((row) => validProvenance(row) && row.observation.result.status === "complete" && row.observation.result.completeness.complete &&
@@ -423,6 +423,9 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
         switch (row.task.operation.kind) {
           case "statistics": return Array.isArray(data.statistics) && data.statistics.length > 0 && data.statistics.every((entry) =>
             isRecord(entry) && entry.supported === true && entry.value !== null);
+          case "events": return ["goal", "card", "substitution", "var"].includes(String(data.type)) &&
+            nonnegativeInteger(data.elapsed) && positiveInteger(data.teamId) && fixtures.some(({ fixture: item }) =>
+              "fixtureId" in row.task.operation && item.id === row.task.operation.fixtureId && [item.homeTeam.id, item.awayTeam.id].includes(Number(data.teamId)));
           case "lineups": return data.kind === "lineups" && Array.isArray(data.startingPlayers) && data.startingPlayers.length === 11 &&
             data.startingPlayers.every((entry) => isRecord(entry) && positiveInteger(entry.id) && typeof entry.position === "string");
           case "injuries": return data.kind === "injuries" && isRecord(data.reportedInjury) &&
@@ -437,7 +440,7 @@ export function buildTrialReport(journal: TrialJournal, options: TrialReportOpti
     set("field-coverage", available && core.status !== "failed" ? "confirmed" : "failed", [...fixtures, ...ancillary],
       available ? "Actual requested fixture and ancillary field availability was inspected."
         : "At least one requested ancillary response is incomplete, empty or lacks supported field values.",
-      "Empty injuries or lineups remain unknown; missing fields do not establish healthy players or complete field coverage.",
+      "Empty injuries or lineups remain unknown; an empty event timeline does not prove coverage. Missing fields do not establish healthy players or complete field coverage.",
       "Inspect unavailable fields per fixture and explicitly decide which enrichment inputs can be omitted.");
   }
 

@@ -97,10 +97,19 @@ export function createResultSyncService(options: Readonly<{
         actor: "fixture-result-sync", evidenceRef: policy.evidenceRef })];
     }) : [];
     const error = response.error?.quotaReason ?? response.error?.reason ?? (validPages ? null : "pagination-incomplete");
-    const batchValue = { accountId, policyHash, channel, date, requestedIds: ids, observations,
-      receivedAt: clock.now(), error, requestsDispatched: response.requestsDispatched };
-    const batch: ResultSyncBatch = { id: evidenceFingerprint(batchValue), ...batchValue };
-    authorize(); await store.save(lease!, batch); await store.apply(lease!, batch);
+    // A verified complete poll with no in-scope effects has nothing to recover.
+    // Cadence/attempt state and the counted quota dispatch still commit below.
+    // Partial/error polls retain their original recovery receipt, even if empty.
+    const emptyComplete = observations.length === 0 && validPages && response.provenance.length > 0 &&
+      response.status === "complete" && response.completeness.complete && response.error === null && error === null &&
+      response.completeness.invalidRows === 0 && response.completeness.missingIds.length === 0 && response.completeness.reasons.length === 0;
+    authorize();
+    if (!emptyComplete) {
+      const batchValue = { accountId, policyHash, channel, date, requestedIds: ids, observations,
+        receivedAt: clock.now(), error, requestsDispatched: response.requestsDispatched };
+      const batch: ResultSyncBatch = { id: evidenceFingerprint(batchValue), ...batchValue };
+      await store.save(lease!, batch); await store.apply(lease!, batch);
+    }
     const failures = error ? previousFailures + 1 : 0;
     const delay = error ? Math.max(cadence, failureDelay(policy, failures), response.error?.retryAfterMs ?? 0,
       response.error?.retryAt === undefined ? 0 : response.error.retryAt - clock.now()) : cadence;

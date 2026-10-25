@@ -13,6 +13,8 @@ import { createQuotaLimiter } from "../src/server/football/quota-limiter.ts";
 import { createQuotaGateway } from "../src/server/football/quota-gateway.ts";
 import { createMysqlQuotaStore } from "../src/server/football/quota-mysql-store.ts";
 import { createApiFootballAdapter } from "../src/server/football/api-football-adapter.ts";
+import { createLiveQuotaAdmission } from "../src/server/live/live-detail-quota.ts";
+import { liveWorkload } from "../src/server/live/live-plan.ts";
 import { parseTrialPlan } from "../src/server/football/provider-trial-input.ts";
 import { withTrialJournal } from "../src/server/football/provider-trial-journal.ts";
 import { chargedTrialRequests, runProviderTrial } from "../src/server/football/provider-trial-runner.ts";
@@ -50,7 +52,7 @@ function clockStore(database, clock) {
   };
 }
 
-function fixture(database, label, overrides = {}, verifyEvidence = () => true) {
+function fixture(database, label, overrides = {}, verifyEvidence = () => true, admit) {
   const clock = { now: initialNow };
   const accountId = id(`account:${label}`);
   const evidence = {
@@ -60,7 +62,7 @@ function fixture(database, label, overrides = {}, verifyEvidence = () => true) {
     evidenceRef: `synthetic-quota-fixture:${label}`, ...overrides,
   };
   const store = clockStore(database, clock);
-  const limiter = createQuotaLimiter({ accountId, store, verifyEvidence });
+  const limiter = createQuotaLimiter({ accountId, store, verifyEvidence, ...(admit ? { admit } : {}) });
   let sequence = 0;
   return {
     accountId, clock, evidence, store, limiter,
@@ -126,13 +128,15 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
         ON goal_hint_test.* TO 'quota_migration'@'127.0.0.1';
     `);
     await execFileAsync(process.execPath, ["--conditions=react-server", databaseScript, "deploy"], {
-      cwd: workspace, env, windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024,
+      // The bounded database command itself allows 120s; include policy-process startup overhead.
+      cwd: workspace, env, windowsHide: true, timeout: 180000, maxBuffer: 1024 * 1024,
     });
     await instance.assertOwnership();
     await instance.executeAdmin(`
       GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.ApiQuotaAccount TO 'quota_application'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.ApiQuotaPeriod TO 'quota_application'@'127.0.0.1';
       GRANT SELECT, INSERT, UPDATE, DELETE ON goal_hint_test.ApiQuotaAttempt TO 'quota_application'@'127.0.0.1';
+      GRANT SELECT, INSERT, UPDATE ON goal_hint_test.ApiQuotaBudget TO 'quota_application'@'127.0.0.1';
     `);
     const firstDatabase = replica();
     const secondDatabase = replica();
@@ -159,6 +163,37 @@ test("durable account-wide quota contracts on isolated genuine MySQL", { timeout
       assert.equal(unique.filter((result) => result.status === "reserved").length, 1);
       assert.ok(unique.filter((result) => result.status === "denied").every((result) => ["pacing", "priority-wait"].includes(result.reason)));
       assert.equal((await f.state()).period.used, 2);
+    });
+
+    await t.test("detail allowance persists across replicas and restarts, counts uncertain work and preserves ordinary dispatch", async () => {
+      const base = liveWorkload(7500, 5, 'Pro', 300, false, true);
+      const plan = { ...base, liveDetails: { ...base.liveDetails, requests: 2 }, odds: { ...base.odds, spare: 3 } };
+      const admit = createLiveQuotaAdmission(() => plan, () => id('same-stable-provider-account'));
+      const f = fixture(firstDatabase, 'live-detail-allowance', { providerDailyLimit: 7500, dailyRemaining: 7500 }, () => true, admit);
+      await f.initialize();
+      const second = () => createQuotaLimiter({ accountId: f.accountId, store: clockStore(secondDatabase, f.clock), verifyEvidence: () => true, admit });
+      const first = await dispatch(f.limiter, f.request('live-details'));
+      await f.limiter.complete(first, { kind: 'uncertain' });
+      f.clock.now += 1000;
+      const requests = [f.request('live-details'), f.request('live-details')], other = second();
+      const races = await Promise.all([f.limiter.reserve(requests[0]), other.reserve(requests[1])]);
+      assert.equal(races.filter(value => value.status === 'reserved').length, 1);
+      const waiting = races.findIndex(value => value.status !== 'reserved');
+      f.clock.now += 1000;
+      denied(await second().reserve(requests[waiting]), 'workload-budget');
+      const state = await f.state();
+      assert.equal(state.period.used, 2); assert.equal(state.period.priorityUsed['live-details'], 2);
+      // Simulate a day opened before durable priority counters were introduced.
+      await f.store.transaction(f.accountId, async (tx) => {
+        const legacy = await tx.period(f.evidence.periodId); delete legacy.priorityUsed; await tx.savePeriod(legacy);
+      });
+      denied(await second().reserve(f.request('live-details')), 'workload-budget');
+      assert.deepEqual((await f.state()).period.priorityUsed, { 'live-details': 2 }, 'denied admission persists the aggregate legacy bootstrap');
+      await dispatch(second(), f.request('results-cutoff'));
+      assert.equal((await f.state()).period.used, 3);
+      const upgraded = fixture(firstDatabase, 'live-detail-plan-upgrade', { providerDailyLimit: 7500, dailyRemaining: 7497 }, () => true, admit);
+      await upgraded.initialize();
+      denied(await upgraded.limiter.reserve(upgraded.request('live-details')), 'workload-budget');
     });
 
     await t.test("725 accepted dispatches remain evenly paced within every rolling second and minute", { timeout: 300000 }, async (subtest) => {

@@ -5,6 +5,7 @@ import { fixtureAdvance, mergeFixtureObservation } from "./fixture-reconciliatio
 import type { MatchDetailResponse } from "./match-detail.ts";
 import { fullDetailSnapshot } from "./detail-snapshot.ts";
 import type { MatchFeedResponse } from "./match-feed.ts";
+import type { LiveMatchSnapshot } from "./live-match.ts";
 
 export const liveRefreshRules = Object.freeze({ activeMs: 20_000, quietMs: 60_000, timeoutMs: 30_000, kickoffLeadMs: 30 * 60_000 });
 
@@ -34,8 +35,10 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
   if (next.asOf < previous.asOf || fixtureAdvance(previous.fixture, next.fixture) < 0) throw new FeedPaginationError("stale-data");
   acceptRun(previous.run, next.run, getReportingDate(next.asOf));
   if (next.access.tier !== previous.access.tier || next.access.signedIn !== previous.access.signedIn) return next;
+  const liveMatch = mergeLiveMatchObservation(previous.liveMatch, next.liveMatch);
+  const liveEnvelope = "liveMatch" in previous || "liveMatch" in next ? { liveMatch } : {};
   const oldSnapshot = fullDetailSnapshot(previous), newSnapshot = fullDetailSnapshot(next);
-  if (!!oldSnapshot !== !!newSnapshot) return next;
+  if (!!oldSnapshot !== !!newSnapshot) return liveMatch === next.liveMatch ? next : { ...next, liveMatch };
   if (oldSnapshot && newSnapshot && newSnapshot.cycleId === oldSnapshot.cycleId &&
       (BigInt(newSnapshot.runSequence) < BigInt(oldSnapshot.runSequence) || newSnapshot.fixtureRevision < oldSnapshot.fixtureRevision)) {
     throw new FeedPaginationError("stale-data");
@@ -48,9 +51,15 @@ export function mergeLiveDetail(previous: MatchDetailResponse, next: MatchDetail
       : next.snapshot;
     // Odds groups (052) are observation data outside the revision: take the newer envelope's groups.
     return { ...previous, fixture: mergeFixtureObservation(previous.fixture, next.fixture), snapshot, asOf: next.asOf, run: next.run,
-      ...(next.odds === undefined ? {} : { odds: next.odds }) };
+      ...(next.odds === undefined ? {} : { odds: next.odds }), ...liveEnvelope };
   }
-  return next;
+  return liveMatch === next.liveMatch ? next : { ...next, liveMatch };
+}
+
+/** A late detail response cannot replace a newer stored observation of the same occurrence. */
+function mergeLiveMatchObservation(previous: LiveMatchSnapshot | null | undefined, next: LiveMatchSnapshot | null | undefined) {
+  if (!previous || !next || previous.cycleId !== next.cycleId || previous.kickoffAt !== next.kickoffAt) return next;
+  return next.collectedAt < previous.collectedAt ? previous : next;
 }
 
 export type RefreshEnvironment = Readonly<{

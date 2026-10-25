@@ -91,7 +91,7 @@ operator decisions and actual evidence:
 | `evidence` | Scoped source records with `id`, `requirement`, `kind`, `source`, `recordedAt` and bounded primitive `value` fields. A record label is not verification. |
 
 Supported operations are `account-status`, `fixtures`, `live`, `fixture-ids`,
-`teams`, `competitions`, `player-statistics`, `statistics`, `lineups`, `injuries`
+`teams`, `competitions`, `player-statistics`, `statistics`, `events`, `lineups`, `injuries`
 and `predictions`, plus the prompt 052 odds operations `odds` (query
 `{ "date", "bookmakerId" }` or `{ "fixtureId", "bookmakerId" }`), `odds-bets` and
 `odds-bookmakers` described under [odds qualification](#odds-qualification-prompt-052).
@@ -99,6 +99,13 @@ Query shapes use the [adapter contract](api-football-adapter.md).
 Use supported date/range/round filters for fixtures; only documented paginated
 operations use page loops. Task IDs must precede any task that references them.
 Competition/season query pairs must belong to the selected competition list.
+
+For match timelines, add a bounded `{ "kind": "events", "fixtureId": 123 }`
+operation after observing that fixture. It uses the same counted request journal
+and `/fixtures/events?fixture=123` transport, with no assumed event batching. The
+report checks supported event types, elapsed time and participating team IDs.
+An empty timeline alone does not establish event coverage. This extension makes
+no provider calls until the existing authorized trial is explicitly run.
 
 Plan representative league, cup, low-coverage, postponed, cross-midnight,
 extra-time, shootout, pre-match, status-transition and identity cases where real

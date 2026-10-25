@@ -27,6 +27,12 @@ const statistics = summarizeSlipPerformance([...publications.map((row) => ({ id:
   totalOdds: row.slip.totalOdds, outcome: row.outcome })),
   ...[1, 2].map((id) => ({ id: `private-pending-${id}`, publishedAt: at + id, totalOdds: "999999.99", outcome: "pending" }))]);
 const history = { records: publications.slice(0, 2), page: 1, pageSize: 2, total: 3, asOf: at, statistics };
+const leagueRecords = [...Array.from({ length: 12 }, (_, index) => performanceRecord({
+  competitionId: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+  competitionName: `Synthetic League ${String(index).padStart(2, "0")}${index === 11 ? " <script>synthetic-league-marker</script>" : ""}`,
+})), performanceRecord({ competitionId: null }), performanceRecord({ competitionId: null, score: [0, 1] })];
+const leagueReport = (leaguePage) => aggregatePerformance(performanceSnapshot(leagueRecords),
+  parsePerformanceQuery(new URLSearchParams({ from: filters.from, to: filters.to, leaguePage: String(leaguePage) }), today), at, null);
 export const performancePageScenarios = {
   unapproved: { locale: "en", filters, report: report(), history },
   reviewed: { locale: "en", filters, report: report(performanceProtocol()), history },
@@ -36,4 +42,6 @@ export const performancePageScenarios = {
     history: { ...history, records: [], total: 0, statistics: summarizeSlipPerformance([]) } },
   unavailable: { locale: "en", filters, report: null, history: null },
   pinned: { locale: "en", filters: { ...filters, source: "ai", model: modelVersion().id, version: "synthetic-version" }, report: report(), history },
+  leagues: { locale: "en", filters: { ...filters, leaguePage: 2 }, report: leagueReport(2), history },
+  "league-outside": { locale: "en", filters: { ...filters, leaguePage: 3 }, report: leagueReport(3), history },
 };

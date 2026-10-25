@@ -7,7 +7,7 @@ import {
   essentialReserveFor, quotaPriorities,
   type QuotaAccountState, type QuotaAttempt, type QuotaDecision, type QuotaDenialReason,
   type QuotaEvidenceVerifier, type QuotaFeedback, type QuotaPeriodEvidence,
-  type QuotaPeriodState, type QuotaPermit, type QuotaRequest, type QuotaStore, type QuotaTransaction,
+  type QuotaPeriodState, type QuotaPermit, type QuotaRequest, type QuotaStore, type QuotaTransaction, type QuotaAdmission,
 } from "./quota-contract.ts";
 
 type Denial = Extract<QuotaDecision, { status: "denied" }>;
@@ -55,7 +55,7 @@ function newPeriod(evidence: QuotaPeriodEvidence, kind: QuotaPeriodState["kind"]
     minuteLimit: Math.min(limits.requestsPerRollingMinute, evidence.minuteLimit),
     dayLimit, used, ordinaryUsed: used, dayRemaining: Math.max(0, Math.min(evidence.dailyRemaining, dayLimit - used)),
     minuteRemaining: null, minuteFloorUntil: null, probeRequestId: null,
-    evidenceRef: evidence.evidenceRef, observationRevision: 0,
+    evidenceRef: evidence.evidenceRef, observationRevision: 0, priorityUsed: {},
   };
 }
 function permitFor(attempt: QuotaAttempt, period: QuotaPeriodState): QuotaPermit {
@@ -80,6 +80,7 @@ export function createQuotaLimiter(options: {
   accountId: string;
   store: QuotaStore;
   verifyEvidence?: QuotaEvidenceVerifier;
+  admit?: QuotaAdmission;
 }) {
   const { accountId, store, verifyEvidence } = options;
   async function transact<Result>(operation: (tx: QuotaTransaction) => Promise<Result>): Promise<Result | Denial> {
@@ -186,7 +187,12 @@ export function createQuotaLimiter(options: {
     }
     const rate = await rateDecision(tx, ctx.account, period, ctx.now);
     if (rate) return rate;
+    if (!probe && options.admit && !await options.admit(tx, period, attempt)) {
+      await expire(tx, attempt);
+      return denied("workload-budget", period.endsAt);
+    }
     period.used += 1;
+    if (period.priorityUsed) period.priorityUsed[attempt.priority] = (period.priorityUsed[attempt.priority] ?? 0) + 1;
     if (!attempt.essential) period.ordinaryUsed += 1;
     period.dayRemaining = Math.max(0, period.dayRemaining - 1);
     if (period.minuteRemaining !== null) period.minuteRemaining = Math.max(0, period.minuteRemaining - 1);

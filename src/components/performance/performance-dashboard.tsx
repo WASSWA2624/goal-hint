@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { PerformanceCell, PerformanceResponse } from "@/domain/performance";
+import type { PerformanceCell, PerformanceLeague, PerformanceResponse } from "@/domain/performance";
 import type { PublishedSlipHistory } from "@/domain/published-slips";
 import type { SlipPerformanceSummary } from "@/domain/slip-performance";
 import { performancePageHref, type PerformancePageFilters } from "@/domain/performance-page";
@@ -73,6 +73,26 @@ function PredictionCard({ cell, locale }: { cell: PerformanceCell; locale: strin
     </details>}
   </Stack></Surface>;
 }
+function LeagueCard({ league, locale }: { league: PerformanceLeague; locale: string }) {
+  const m = createMessages(locale), name = league.competition.name ?? m.text(league.competition.id === null ? "performance.unknownLeague" : "performance.unnamedLeague");
+  return <Surface data-league-performance={league.competition.id ?? "unknown"}><details>
+    <summary><strong>{name}</strong>{league.competition.country ? ` · ${league.competition.country}` : ""}
+      {` · ${m.text("performance.fixtureCount")}: ${m.number(league.fixtureCount)}`}</summary>
+    <Stack $gap="sm">
+      <MutedText>{m.text("performance.qualityHint")}</MutedText>
+      <TableFrame tabIndex={0} role="region" aria-label={`${name} — ${m.text("performance.pickHeading")}`}><PerformanceTable>
+        <thead><tr>{(["market", "won", "lost", "pending", "void", "unavailable", "filteredOut", "settled", "hitRate", "leagueQuality"] as const).map((key) =>
+          <th key={key} scope="col">{m.text(`performance.${key}`)}</th>)}</tr></thead>
+        <tbody>{league.cells.map((cell) => <tr key={cell.family}>
+          <th scope="row">{marketName(m, cell.family)}</th><td>{m.number(cell.metrics.correct)}</td><td>{m.number(cell.metrics.incorrect)}</td>
+          <td>{m.number(cell.coverage.pending)}</td><td>{m.number(cell.coverage.void)}</td><td>{m.number(cell.coverage.unavailable)}</td>
+          <td>{m.number(cell.coverage.filteredOut)}</td><td>{m.number(cell.metrics.denominator)}</td><td>{percent(cell.metrics.hitRate, m)}</td>
+          <td>{m.text(cell.metrics.state === "available" ? "performance.leagueReviewed" : "performance.leagueWithheld")}</td>
+        </tr>)}</tbody>
+      </PerformanceTable></TableFrame>
+    </Stack>
+  </details></Surface>;
+}
 function SlipMetrics({ summary, locale }: { summary: SlipPerformanceSummary; locale: string }) {
   const m = createMessages(locale), units = (value: number) => m.text("performance.units", { count: m.number(value, { maximumFractionDigits: 2 }) });
   return <Surface><Stack $gap="sm">
@@ -105,6 +125,9 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
   const m = createMessages(locale), cells = report?.cells.filter((cell) => cell.horizon === null && cell.source === filters.source) ?? [];
   const pages = history ? Math.ceil(history.total / history.pageSize) : 0, outOfRange = Boolean(history && history.page > Math.max(1, pages));
   const href = (page: number) => performancePageHref(filters, page, locale);
+  const leaguePages = report ? Math.ceil(report.leagues.totalGroups / report.leagues.pageSize) : 0;
+  const leagueOutOfRange = Boolean(report && report.leagues.page > Math.max(1, leaguePages));
+  const leagueHref = (page: number) => performancePageHref({ ...filters, leaguePage: page }, history?.page ?? 1, locale);
   return <Stack $gap="lg" data-performance-dashboard>
     <div><PageHeading>{m.text("performance.title")}</PageHeading><BodyText>{m.text("performance.description")}</BodyText></div>
     <Surface><Stack $gap="sm">
@@ -132,6 +155,14 @@ export function PerformanceDashboard({ locale, filters, report, history }: Perfo
           : <MarketGrid>{cells.map((cell) => <PredictionCard key={cell.family} cell={cell} locale={locale} />)}</MarketGrid>}
       </> : <EmptyState headingLevel={3} title={m.text("performance.dataUnavailable")} />}
     </Stack></section>
+    {report && <section aria-labelledby="league-performance"><Stack>
+      <SectionHeading id="league-performance">{m.text("performance.leagueHeading")}</SectionHeading><MutedText>{m.text("performance.leagueBasis")}</MutedText>
+      {report.leagues.records.length ? report.leagues.records.map((league) => <LeagueCard key={league.competition.id ?? "unknown"} league={league} locale={locale} />)
+        : <EmptyState headingLevel={3} title={m.text(leagueOutOfRange ? "performance.leaguePageUnavailable" : "performance.noLeagueGroups")}
+          {...(leagueOutOfRange ? { action: <ButtonLink href={leagueHref(1)}>{m.text("performance.firstLeaguePage")}</ButtonLink> } : {})} />}
+      {leaguePages > 1 && !leagueOutOfRange && <NumberedPagination page={report.leagues.page} pages={leaguePages}
+        labels={numberedPaginationLabels(m, m.text("performance.leaguePagination"))} href={leagueHref} />}
+    </Stack></section>}
     <section aria-labelledby="published-performance"><Stack>
       <SectionHeading id="published-performance">{m.text("performance.slipHeading")}</SectionHeading><MutedText>{m.text("performance.slipBasis")}</MutedText>
       {history && <MutedText>{m.text("performance.asOf", { date: m.reportingInstant(utcInstantFromEpochMilliseconds(history.asOf)) })}</MutedText>}

@@ -246,12 +246,19 @@ competitions have none. A flag displays under the same public-rights reference a
 
 ## Commands
 
+Current/final match statistics and events are implemented by a separate fenced
+poller in the same runner. They default off under
+`GOAL_HINT_LIVE_DETAILS_ENABLED`; eligible paid plans reserve their bounded share
+before optional odds/team-code work. See [match details](live-match-details.md)
+for migrations, grants, limits, coverage and final retention.
+
 | Command | Purpose |
 | --- | --- |
 | `npm run live:status` | Readiness and account/plan check (no quota). |
 | `npm run live:competitions` | Dry run of competition discovery; add `-- --write` to update `.env.local`. |
 | `npm run live` | Long-running live runner (JSON log lines). |
 | `npm run test:live` | Unit checks for account parsing, workload sizing (including the odds floor and spare), policies and approvals. |
+| `npm run test:live-details` | Collector, source/coverage, stored-reader, quota-budget and owned MySQL snapshot checks. |
 | `npm run test:odds` | Odds domain, import and job units plus the odds persistence integration (owned MySQL). |
 | `npm run test:team-codes` | Team-code validation, selection, envelope and gate units plus the team-code persistence integration (owned MySQL). |
 

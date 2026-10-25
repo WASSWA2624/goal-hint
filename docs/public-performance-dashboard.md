@@ -36,6 +36,30 @@ time, probability, selections, quotes and outcomes from the account-independent
 archive. Prediction market/source filters do not filter daily-slip statistics;
 the page states this difference next to the form.
 
+## League cohorts
+
+League reporting groups the same individual-prediction cohort by canonical
+competition identity. Public competition names and countries come from the
+existing season/competition relation; absent or invalid identities remain in an
+explicit Unknown league group rather than being dropped or guessed. Competitions
+with an identity but no supplied name retain a name-unavailable label.
+
+Each league reuses the existing market aggregation, source/model/version filters,
+sample minimums, horizon rules and quality gates on that league's own records.
+A passing overall sample does not supply a denominator or approved rate to a
+smaller league. Correct/incorrect/pending/void/unavailable/filtered-out counts stay
+visible; unreviewed, undersized or failing quality metrics remain unavailable.
+League summary responses omit repeated calibration-bin and evidence arrays;
+the full individual-prediction section retains those original details.
+
+The response exposes ten league groups per page, sorted deterministically by
+country/name/identity, with unknown attribution last. `leaguePage` is independent
+from published-slip `page`; both links preserve the selected date/source/market
+and any explicitly pinned model/version. Applying the visible form resets both
+page numbers. League pagination does not filter or recompute the period-wide
+individual-prediction or published-slip summaries. The existing 31-day cohort,
+stored-payload and one-megabyte wire bounds still apply.
+
 ## Illustrative slip returns and streaks
 
 `src/domain/slip-performance.ts` is a pure aggregation boundary shared with the
@@ -87,7 +111,16 @@ TypeScript check also passed. Genuine database publication/settlement acceptance
 the archive's separate tests; synthetic UI evidence does not establish a real
 forecasting track record.
 
-Production calibration evidence, league-level reports, individual-pick returns,
+The subsequent league implementation passed all 58 affected performance,
+page-query, navigation and slip-statistics tests. Its nine-state production
+fixture adds league pagination, unknown attribution and escaped untrusted
+competition names; final rendering evidence is recorded in the implementation
+report. No schema change or new approval binding was required.
+The genuine MySQL performance acceptance also passed all nine checks against an
+owned MySQL 8.4.13 instance, including canonical competition metadata, subgroup
+counts/denominators and the original bounded read-only reporting workflow.
+
+Production calibration evidence, reviewed league cohorts, individual-pick returns,
 matched provider/AI comparisons and actual bookmaker/customer returns remain
 separate work. The reporting page never activates a forecasting model or calls
 a football provider.

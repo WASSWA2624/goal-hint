@@ -16,7 +16,7 @@ const sampleColumns = Object.freeze({ PredictionSet: { column: "candidateJson", 
   ResultProviderObservation: { column: "body", key: "id" }, FixtureLifecycleObservation: { column: "receiptJson", key: "id" },
   FixtureEvidenceSnapshot: { column: "snapshotJson", key: "requestId" }, EvidenceSourceVersion: { column: "metadataJson", key: "id" },
   ProviderOddsSnapshot: { column: "body", key: "id" }, DailySlipPublication: { column: "bodyJson", key: "id" },
-  PublishedSlip: { column: "snapshotJson", key: "id" } });
+  PublishedSlip: { column: "snapshotJson", key: "id" }, LiveMatchSnapshot: { column: "bodyJson", key: "id" } });
 // Windows MySQL normally stores metadata table names in lowercase (lower_case_table_names=1).
 const sampleSources = new Map(Object.entries(sampleColumns).map(([name, source]) => [name.toLowerCase(), source]));
 const identifier = (value: string) => Prisma.raw(`\`${value}\``);

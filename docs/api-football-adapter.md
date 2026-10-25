@@ -86,7 +86,7 @@ paging metadata, and echo supplied selectors. Missing selector echoes fail
 coverage checks; conflicting echoes fail schema checks. Row identities,
 competition/season, team, round, fixture ID and reporting-date filters are checked
 where the payload supplies them. Provenance retains request parameters so
-fixture-bound statistics, lineups and fallback payloads remain associated with
+fixture-bound statistics, events, lineups and fallback payloads remain associated with
 their request even when the provider row omits a fixture ID. Aggregate player
 statistics must include the requested competition/season. Additional reported
 entries preserve their own team/competition/season identities rather than

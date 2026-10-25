@@ -15,14 +15,16 @@ export function performanceProtocol(overrides = {}) {
   const rest = { ...overrides }; delete rest.gate;
   return evaluationProtocol({ ...base, candidateModel: modelVersion(), horizons: base.horizons, gates, ...rest });
 }
-export function performanceRecord({ source = 'ai', score = [2, 1], state = 'closed', partial = false, noLock = false, id = randomUUID() } = {}) {
+export function performanceRecord({ source = 'ai', score = [2, 1], state = 'closed', partial = false, noLock = false, id = randomUUID(),
+  competitionId = EVALUATION_COMPETITION_ID, competitionName = 'Synthetic League', competitionCountry = 'Uganda' } = {}) {
   const candidate = historyCandidate({ source, partial }), revisionId = randomUUID(), cycleId = randomUUID();
   const result = score ? { id: 'a'.repeat(64), status: 'finished-regulation', regulation: { verified: true, home: score[0], away: score[1] } } : null;
   const cycle = { id: cycleId, state, lockedSetId: noLock || state === 'open' ? null : revisionId,
     kickoffAt: candidate.context.context.kickoffAt, voidReason: state === 'void' ? 'formal-postponement' : null };
   const revision = cycle.lockedSetId ? { id: revisionId, cycleId, fixtureId: id, modelVersionId: source === 'ai' ? modelVersion().id : null,
     evidenceCutoffAt: candidate.context.context.cutoffAt, publishedAt: candidate.context.context.analysisAt + 3000, candidate } : null;
-  return { fixture: { id, dataVersion: 1n, homeTeam: {name: 'Synthetic Home'}, awayTeam: {name: 'Synthetic Away'}, season: { competitionId: EVALUATION_COMPETITION_ID } }, cycle, revision, result,
+  return { fixture: { id, dataVersion: 1n, homeTeam: {name: 'Synthetic Home'}, awayTeam: {name: 'Synthetic Away'},
+    season: { competitionId, competition: { name: competitionName, country: competitionCountry } } }, cycle, revision, result,
     projection: { markets: performanceFamilies.map((family) => {
       const item = candidate.markets[family];
       const status = result && item.available ? settleMarketSelection(family, item.market.selection, {

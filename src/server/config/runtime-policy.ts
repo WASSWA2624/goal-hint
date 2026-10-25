@@ -165,6 +165,7 @@ const environmentSchema = z.object({
   GOAL_HINT_ODDS_IMPORT_ENABLED: enabled.describe("Use true or false; the live runner imports odds only when its plan has spare quota (052)."),
   GOAL_HINT_ODDS_BOOKMAKER_ID: count.describe("Use the positive API-Football id of the one documented odds bookmaker; required when odds imports are enabled (052)."),
   GOAL_HINT_TEAM_CODES_IMPORT_ENABLED: enabledByDefault.describe("Use true or false (default true); the live runner imports team codes only from spare quota, so they stay off on Free and slow plans."),
+  GOAL_HINT_LIVE_DETAILS_ENABLED: enabled.describe("Use true or false (default false); centrally collect fixture statistics/events within the verified plan's bounded live-detail allowance."),
   GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS: money.describe("Use an explicitly approved separate AI cap in integer US cents (010)."),
   GOAL_HINT_AI_BILLING_MODE: optional(z.enum(["capped", "usage-based"])).transform((value) => value ?? "capped")
     .describe("Capped requires the monthly AI allowance; explicitly approved usage-based billing has no monthly spending ceiling."),
@@ -279,6 +280,7 @@ function assemble(settings: z.output<typeof environmentSchema>) {
         rightsRef: settings.GOAL_HINT_FOOTBALL_ODDS_RIGHTS_REF,
       },
       teamCodes: { enabled: settings.GOAL_HINT_TEAM_CODES_IMPORT_ENABLED },
+      liveDetails: { enabled: settings.GOAL_HINT_LIVE_DETAILS_ENABLED },
       budgets: {
         aiBillingMode: settings.GOAL_HINT_AI_BILLING_MODE,
         aiMonthlyUsdCents: settings.GOAL_HINT_AI_MONTHLY_BUDGET_USD_CENTS,

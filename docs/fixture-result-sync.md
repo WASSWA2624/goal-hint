@@ -91,6 +91,16 @@ No raw payloads or secrets are stored. Only `completedAt` is mutable. Recovery
 drains pending batches before new requests; a different policy hash holds
 recovery for reviewed configuration.
 
+A trusted, complete, error-free response with no in-scope lifecycle observations
+does not create an empty `ResultSyncBatch`. There are no fixture effects to
+recover. The shared quota gateway still counts its request, and the fenced
+poller cadence or missing-fixture attempt state still advances. Partial, failed,
+malformed and nonempty responses retain the original durable path. Previously
+stored pending batches, including empty ones, still recover unchanged. This
+reduces quiet-period receipt growth without deleting or compacting lifecycle,
+forecast, result, settlement or correction evidence. Clock-only result revisions
+and historical evidence retention remain separate work.
+
 Each fixture applies under the existing provider → fixture locking order inside
 the lease-owned transaction. `observeProjection` reuses lifecycle validation,
 identity checks, schedule/start/conflict decisions and cutoff handling. Its
