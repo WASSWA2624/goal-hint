@@ -28,3 +28,11 @@ GRANT SELECT, INSERT ON `goal_hint_db`.`AccountMove` TO 'goal_hint_app'@'applica
 -- No phone number or message text is stored. UPDATE records each attempt; DELETE is for the members purge (closed rows after
 -- 7 or 30 days), erasure and the owner's Dismiss. Permanent account deletion removes rows by foreign-key cascade.
 GRANT SELECT, INSERT, UPDATE, DELETE ON `goal_hint_db`.`PaymentNotice` TO 'goal_hint_app'@'application-host';
+
+-- Owner profit and costs: review after deploying 20261025183256_owner_profit. No personal data; rows are voided or ended,
+-- never deleted, so there is no DELETE. Entries are never edited: only the three void columns may change. A recurring line
+-- may change only its label, typical amount and end month. The month row is updated table-wide because the month lock's
+-- INSERT ... ON DUPLICATE KEY UPDATE writes `month`. Apply with the migration, before deploying the code.
+GRANT SELECT, INSERT, UPDATE (label, typicalUgx, endMonth, updatedAt, updatedBy) ON `goal_hint_db`.`OwnerCostLine` TO 'goal_hint_app'@'application-host';
+GRANT SELECT, INSERT, UPDATE (voidedAt, voidedBy, voidReason) ON `goal_hint_db`.`OwnerCostEntry` TO 'goal_hint_app'@'application-host';
+GRANT SELECT, INSERT, UPDATE ON `goal_hint_db`.`OwnerProfitMonth` TO 'goal_hint_app'@'application-host';

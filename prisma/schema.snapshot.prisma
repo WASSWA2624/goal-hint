@@ -1969,6 +1969,69 @@ model OwnerAuditEvent {
   @@index([accountId, action, at])
 }
 
+// Owner profit (B06), no personal data. A cost or tax the owner expects every month (`monthly`), or once a year in
+// startMonth's calendar month (`yearly`). kind: expense | tax. A due line without a live entry reads Not entered in open
+// months only; a closed month keeps what was confirmed when it closed. typicalUgx only prefills the entry form, never an
+// amount. Never deleted: endMonth (the first day of the last month it is due) ends it.
+model OwnerCostLine {
+  id         String           @id @db.Char(36)
+  kind       String           @db.VarChar(8)
+  category   String           @db.VarChar(16)
+  label      String           @db.VarChar(80)
+  cadence    String           @db.VarChar(8)
+  startMonth DateTime         @db.Date
+  endMonth   DateTime?        @db.Date
+  typicalUgx Int?             @db.UnsignedInt
+  createdAt  DateTime         @db.DateTime(3)
+  createdBy  String           @db.VarChar(64)
+  updatedAt  DateTime         @db.DateTime(3)
+  updatedBy  String           @db.VarChar(64)
+  entries    OwnerCostEntry[]
+}
+
+// One amount the business paid for one EAT month (month = its first day), in whole UGX. kind: fee (one network's statement
+// charges; 0 means none) | expense | tax. A foreign bill keeps its currency and amount as printed, never converted. Never
+// edited or deleted: an entry is voided with a reason while its month is open. No link to payments or accounts.
+model OwnerCostEntry {
+  id              String         @id @db.Char(36)
+  month           DateTime       @db.Date
+  kind            String         @db.VarChar(8)
+  category        String         @db.VarChar(16)
+  network         String?        @db.VarChar(8)
+  label           String         @db.VarChar(80)
+  recurringLineId String?        @db.Char(36)
+  amountUgx       Int            @db.UnsignedInt
+  invoiceCurrency String?        @db.Char(3)
+  invoiceAmount   String?        @db.VarChar(20)
+  reference       String?        @db.VarChar(80)
+  note            String?        @db.VarChar(200)
+  createdAt       DateTime       @db.DateTime(3)
+  createdBy       String         @db.VarChar(64)
+  voidedAt        DateTime?      @db.DateTime(3)
+  voidedBy        String?        @db.VarChar(64)
+  voidReason      String?        @db.VarChar(200)
+  recurringLine   OwnerCostLine? @relation(fields: [recurringLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([month])
+  @@index([recurringLineId, month])
+}
+
+// An EAT month's write lock and its close. Every entry change and every close locks this row first. Closing stores the
+// confirmed totals; a later reversal or permanent deletion shows as a difference, never a rewrite. Reopening clears them,
+// and the owner audit keeps every close.
+model OwnerProfitMonth {
+  month       DateTime  @id @db.Date
+  closedAt    DateTime? @db.DateTime(3)
+  closedBy    String?   @db.VarChar(64)
+  revenueUgx  Int?      @db.UnsignedInt
+  feesUgx     Int?      @db.UnsignedInt
+  expensesUgx Int?      @db.UnsignedInt
+  taxUgx      Int?      @db.UnsignedInt
+  netUgx      Int?
+  updatedAt   DateTime  @db.DateTime(3)
+  updatedBy   String    @db.VarChar(64)
+}
+
 // Existing locally collected match facts are adopted without rewriting their rows.
 model FixtureFacts {
   fixtureId String @id @db.Char(36)
