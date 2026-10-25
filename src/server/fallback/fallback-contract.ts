@@ -30,7 +30,9 @@ export type ProviderFallbackResult = Readonly<{
   status: "candidate"; candidate: ProviderFallbackCandidate; requestsDispatched: number; requestCountUnknown: false;
 }> | Readonly<{ status: "denied"; reason: ProviderFallbackReason; requestsDispatched: number; requestCountUnknown: boolean }>;
 export type FallbackTrigger = "ai-failure" | "ai-timeout" | "ai-insufficient-evidence" | "ai-budget-exhausted" |
-  "ai-missing-group" | "ai-invalid-group";
+  "ai-missing-group" | "ai-invalid-group" | "provider-baseline";
+/** Legacy composition remains readable; live publication uses the provider benchmark until promotion is qualified. */
+export type ForecastSelectionPolicy = "legacy-ai-primary" | "provider-baseline";
 export type FallbackReason = Readonly<{ reason: FallbackTrigger; detail: string }>;
 export type ForecastProvenance = Readonly<{
   kind: "ai"; pin: ModelPin; modelVersionId: string; evidenceHash: string; transportEvidenceRef: string;

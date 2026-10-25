@@ -22,9 +22,9 @@ The 51 original checkboxes are tracked below: **22 Implemented, 28 Partial, 1 Mi
 | S01 | Rank Best Slips by combined probability | Implemented | `bestSlipBuilder` probability comparator; `tests/best-slips.test.mjs` includes a pair outranking a single | Algorithm is implemented; production availability remains P01/S03. | P1 |
 | S02 | Show average probability separately from combined probability and odds | Implemented | `src/components/slips/slip-table.tsx` | Corrected: show both when a joint estimate exists; keep mean explicitly labeled on custom slips without one. | P2 |
 | S03 | Multiply only with justified independence; account for correlation | Partial | `JointSlipModel` demands correlation/calibration evidence and current validity; marginal-bound checks and one fixture per slip | Qualify an actual joint model on retained outcomes. Metadata and mathematical bounds alone do not establish a valid model; no multiplication fallback is enabled. | P1 |
-| S04 | Optimize whole-slip probability within user-defined odds targets | Partial | Exact-odds bounded search supports targets and a joint estimator; custom builder supports odds ranges | Bind a qualified estimator to custom generation, which currently orders by count/mean, and document bounded-search optimality limits. | P1 |
-| S05 | Do not assume fewer selections always means safer | Partial | Best Slips compares joint probability before count; regression covers longer, more probable slip | Custom `compareCombinations` still prefers fewer selections. Change its ranking when a qualified whole-slip estimator is available. | P1 |
-| S06 | Min/max odds, probability, selections and requested count | Partial | `SlipCriteria`, `slip-builder.tsx`, `tests/slip-builder.test.mjs`; individual/combined odds, per-pick probability, 1–8 legs, 1–10 slips | Per-selection bounds exist. Add min/max combined-probability filtering once S03 supplies a qualified estimate. | P2 |
+| S04 | Optimize whole-slip probability within user-defined odds targets | Partial | Shared `joint-slip-model.ts` and custom/daily exact-odds bounded search support a verified joint estimator; search limits are documented | Bind a genuinely qualified estimator to production custom generation. Bounded candidate/combination/batch limits do not establish global optimality. | P1 |
+| S05 | Do not assume fewer selections always means safer | Partial | Both custom and Best Slips rank qualified whole-slip probability before count; longer-more-probable regression and expiry/revocation checks | Production model qualification remains S03. Unqualified custom generation continues to label its count/mean ordering explicitly. | P1 |
+| S06 | Min/max odds, probability, selections and requested count | Partial | Per-selection/combined odds and probability controls, 1–8 legs, 1–10 slips; optional `totalProbMin`/`totalProbMax` reject unavailable joint estimates | Controls and filtering are implemented; meaningful joint-filter availability still requires S03 qualification. No independence fallback is enabled. | P2 |
 | S07 | Optional custom overlap; Best Slips diversified by default | Implemented | Custom `reuse` control; `bestSlipCriteria.reuse=false`; disjoint-fixture regression | Corrected Best Slips default; overlap remains opt-in for custom slips. | P1 |
 | S08 | Fewer feasible slips with a clear explanation | Implemented | Feasible-batch search; partial/no-qualifying/no-combinations/limited-search UI states | None; sparse-cohort regression verifies fewer slips without an error. | P2 |
 | S09 | Preserve published slips and original predictions | Implemented | Append-only daily publication tables, normalized original-cycle/revision membership, first-writer transaction and private worker:slips; visitor reads use stored publications | Apply migration and configure supervised binding after S03/D01 qualification. No production publication was invented or activated. | P1 |
@@ -48,13 +48,13 @@ The 51 original checkboxes are tracked below: **22 Implemented, 28 Partial, 1 Mi
 
 | ID | Checklist item | Status | Evidence | Required change | Priority |
 | --- | --- | --- | --- | --- | --- |
-| A01 | Provider-first baseline; no invented unsupported-market probabilities | Partial | Validated provider groups and double-chance derivation; unsupported groups remain unavailable | Current resolution prefers AI then provider fallback. Preserve a contemporaneous provider-first benchmark and require demonstrated improvement before promotion. Existing publications must remain immutable. | P1 |
+| A01 | Provider-first baseline; no invented unsupported-market probabilities | Partial | New fallback services/live publication use the provider baseline; independent authority rejects AI publication; immutable refresh stages retain AI shadow and provider candidates | Gather prospective authenticated benchmark cohorts and measure improvement before any AI promotion. Same cutoff/context does not prove equal source recency. Existing publications remain immutable. | P1 |
 | A02 | Realized win rates by market, league, probability band, with counts | Partial | Public period/source/market UI, sample counts, evidence links, qualified calibration tables and paginated league cohorts with independent sample/quality gates and explicit unknown attribution | Bind a reviewed prospective real-data protocol. Small/unreviewed league groups do not inherit a validated rate from a larger overall sample. | P1 |
 | A03 | Assess calibration over adequate comparable samples | Partial | Fixed bins, observed/mean probabilities, Wilson intervals, Brier/log loss and sample gates | Gather prospective authenticated forecasts/results and evaluate frozen real cohorts. Tests verify arithmetic, not forecast quality. | P1 |
-| A04 | Separate pick/slip performance; returns and losing streaks | Partial | Separate public individual-pick cohorts and complete-period daily-slip counts, binary-only flat-stake quote illustration/ROI and rank-aware losing streaks | Add individual-pick returns and verified real publication cohorts. Void/pending quotes do not imply refunds or enter return denominators. | P1 |
+| A04 | Separate pick/slip performance; returns and losing streaks | Partial | Separate pick/slip one-unit illustrations, quote exclusions and period-bounded losing streaks; pick and league cells use sealed pre-publication original-cycle odds when explicitly permitted | Bind reviewed historical-odds permissions/mapping and gather verified real cohorts. Production quote binding remains absent. Void/pending quotes do not imply refunds or enter return denominators. | P1 |
 | A05 | Validate Over 0.5/1.5, Double Chance, Under 4.5 on own data | Partial | Goal-line model definitions, double-chance settlement and extended-market cohort metrics | Capture/evaluate these exact source/line cohorts prospectively. Supported math does not establish accuracy or provider probability coverage. | P2 |
-| A06 | Later AI review of injuries/news/form/lineups/external forecasts; conflicts first | Partial | Timestamped evidence, uncertainty/conflict controls and predictor prompt exist; AI already preferred when enabled | Run matched shadow review against a frozen provider baseline and measure conflict handling before promotion. External research remains separately gated. | P2 |
-| A07 | Original/refined side by side; published changes only after improvement | Partial | Immutable forecast history retains publication/provenance/model clocks; comparisons reject unmatched cohorts | Save both contemporaneous provider and AI candidates for the same fixture/family/cutoff; add matched comparison UI and promotion evidence. Later revisions alone are not a baseline. | P1 |
+| A06 | Later AI review of injuries/news/form/lineups/external forecasts; conflicts first | Partial | Timestamped evidence/conflict controls and predictor prompt exist; optional AI now stays private shadow and cannot publish its goal extensions | Evaluate matched shadow cohorts against the frozen provider baseline and measure conflict handling before promotion. External research remains separately gated. | P2 |
+| A07 | Original/refined side by side; published changes only after improvement | Partial | Immutable refresh intent/AI/provider stages retain the same fixture/cycle/cutoff context and independent source clocks; public comparisons remain unavailable | Add a matched comparison reader/UI and evaluate frozen real cohorts with source-recency review and promotion evidence. Retained stage capability alone is not a validated baseline. | P1 |
 | A08 | Avoid guaranteed-win/fixed-accuracy promises | Implemented | Public help/terms/detail/footer/Best Slips copy; `publicClaimAuthorized=false` | Keep future reporting tied to measured samples and estimates. | P1 |
 
 ## Performance and transparency
@@ -62,7 +62,7 @@ The 51 original checkboxes are tracked below: **22 Implemented, 28 Partial, 1 Mi
 | ID | Checklist item | Status | Evidence | Required change | Priority |
 | --- | --- | --- | --- | --- | --- |
 | T01 | Public dashboard of winning/losing slips, odds, dates and outcomes | Implemented | /[locale]/performance supplies public outcome counts, original evidence links and paginated immutable daily-slip history | Verify deployment after archive migration; do not substitute member saves for editorial publication history. | P1 |
-| T02 | Win rate, calibration, prediction/sample counts and returns by period | Partial | Public period filters, prediction/sample counts, independent league cohorts, protocol-gated calibration and full-period slip return/streak illustration | Bind reviewed real calibration and add individual-pick returns. Empty/unreviewed rates remain unavailable. | P1 |
+| T02 | Win rate, calibration, prediction/sample counts and returns by period | Partial | Period/source/market/horizon/league counts, protocol-gated calibration and separate full-period pick/slip return/streak illustrations | Bind reviewed real calibration and historical-odds evidence. Empty/unreviewed rates and unpriced returns remain unavailable. | P1 |
 | T03 | Preserve publication timestamps; audit edits/corrections | Implemented | Append-only `PredictionSet`/`PredictionAudit`, sealed results, settlement correction chains and revision-history UI | Verify deployed database privileges/triggers/backups continue protecting the chains. | P1 |
 | T04 | Never delete failed forecasts or replace pre-match with post-match information | Implemented | Locked forecasts/results remain separate; editorial publication tables have no account relation and reject UPDATE/DELETE; historical criteria and expired-model forecasts remain readable | Maintain restricted grants, backups and genuine-database acceptance. Personal member saves retain their separate disclosed erasure lifecycle. | P1 |
 
@@ -73,7 +73,7 @@ The 51 original checkboxes are tracked below: **22 Implemented, 28 Partial, 1 Mi
 | B01 | Same premium features: UGX 1,000/24h, 5,000/7d, 20,000/30d | Partial | Standard package seeds, `subscription-plans.ts`, entitlement checks and package tests; migration preserves existing owner-edited offers | Verify persisted offers before a pilot. Source defaults establish intended prices/durations, not current production pricing. | P1 |
 | B02 | Approval-time start, visible expiry, early-renewal extension | Implemented | Payment approval under account lock, subscription-period helpers and account summary | None in code; confirm actual approval/expiry through deployed acceptance. | P1 |
 | B03 | Free previews and history after expiry | Implemented | Viewer-access gates, public probabilities and completed history; expired-viewer paywall coverage | Maintain expiry rechecks and verify the deployed daily archive with the publication migration. | P1 |
-| B04 | Manual MTN/Airtel: transaction, optional screenshot, admin verification/decision/customer notice | Partial | Payment submission/admin queue/badge, receipt-review workflow and post-commit customer SMS | Screenshot is now optional. Admin alerts are in-app; customer SMS has no durable outbox, so a crash can miss it and gateway acceptance is not handset receipt. Verify the manual receipt process and delivery requirements. | P1 |
+| B04 | Manual MTN/Airtel: transaction, optional screenshot, admin verification/decision/customer notice | Partial | Optional screenshot, admin queue/review, atomic minimal notification outbox and bounded private worker; genuine MySQL concurrency/rollback/erasure acceptance | Apply the outbox migration/grants before deploying updated payment producers and supervise the worker. Interrupted dispatches require reconciliation; gateway acceptance is not handset receipt. Verify the deployed manual receipt/delivery process. | P1 |
 | B05 | Duplicate approvals prevented; audit trail and clear payment states | Implemented | Transaction normalization/uniqueness, locked decisions, payment audits and pending/approved/rejected states | Preserve deployed constraints and verify with genuine MySQL integration. | P1 |
 | B06 | Evaluate later automation; measure fees/hosting/API/tax/net profit | Partial | Manual workflow and technical cost accounting exist | Add merchant fee/tax/operating-expense ledger and measured net profit before choosing an automated payment provider. | P2 |
 | B07 | Pricing pilot and conversion/renewal comparison before changing prices | Missing | No frozen pricing experiment or conversion/renewal cohort report found | Run a consent-aware pilot with denominators, windows, approved spend and renewal cohorts; retain these standard prices until evidence supports a change. | P2 |
@@ -109,13 +109,17 @@ The [official endpoint guide](https://www.api-football.com/news/post/how-to-get-
 
 This audit corrects premium-slip probability redaction, default daily diversity, separate mean/joint probability presentation, floating-point tolerance at valid probability bounds, optional payment screenshots, minimal payment SMS and coherent saved-slip result grading. Existing reusable components and square styling are retained.
 
-1. Qualify the joint model and permitted odds feed; complete custom whole-slip ranking without inventing probabilities.
+1. Qualify the joint model and permitted odds feed; bind the implemented custom whole-slip ranking/probability controls without inventing probabilities.
 2. Apply the reviewed archive migration and supervise the publisher; verify the new original-cycle history and public dashboard in deployment.
-3. Freeze and evaluate prospective provider/AI cohorts; add individual-pick returns to the existing league-aware dashboard.
+3. Freeze and evaluate the retained provider/AI shadow cohorts; qualify the historical-odds binding for the implemented individual-pick return/streak dashboard.
 4. Enable and verify the budgeted live-detail pipeline, design reference-aware transient-history compaction and establish an actual database growth baseline.
-5. Complete deployed payment and worker acceptance, resolve provider/privacy rights, and run the pricing pilot. Genuine-database acceptance now passes locally.
+5. Deploy the reviewed atomic payment-notice outbox migration/grants with its worker, complete payment/worker acceptance, resolve provider/privacy rights, and run the pricing pilot. Genuine-database acceptance is tracked separately from live rollout.
 
 ## Original audit verification
+
+The subsequent [probability, benchmark, reporting and notification follow-up](checklist-follow-up-2026-10-25.md)
+records the next code changes and their separate verification. The table below
+remains the original audit's historical evidence.
 
 | Check | Result |
 | --- | --- |
@@ -189,3 +193,26 @@ The two additive migrations are ready for review, but no configured application
 migration or live collector was activated. `GOAL_HINT_LIVE_DETAILS_ENABLED`
 defaults to false. See the [match-data runbook](../live-match-details.md) for
 migrations, grants, limits and the existing source-rights boundary.
+
+## Probability, reporting and notification follow-up
+
+The [next implementation report](checklist-follow-up-2026-10-25.md) records shared
+custom/daily joint estimation and optional combined-probability bounds,
+provider-first publication with immutable AI shadow stages, separate individual
+pick returns/streaks, and an atomic minimal payment SMS outbox. The relevant
+Partial rows above now describe their remaining qualification and rollout work.
+
+Final verification passed: 1,898 unit tests (one Windows-inapplicable permission
+skip), 49 Python tests, 42 genuine MySQL checks across the focused outbox,
+payment, performance, historical-quote and shadow-stage suites, repository/final
+scoped lint, TypeScript, production build, 10 performance rendering states and
+12 slip states plus native-form checks. Browser inspection at 390px and 1440px
+found no page-wide horizontal overflow. The report preserves initial test/setup
+corrections and distinguishes synthetic acceptance from real evidence.
+
+Apply `20261025230000_payment_notification_outbox` and its restricted grants
+before deploying the updated payment producers, then supervise its private
+worker. No application migration or gateway dispatch was activated here. A real
+qualified joint model, historical-odds binding, prospective calibration,
+licensing/privacy conclusions, storage baseline, pricing pilot and deployed
+worker/payment acceptance remain open.

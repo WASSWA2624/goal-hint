@@ -2,7 +2,7 @@ import { aggregatePerformance } from "../../src/server/performance/performance-s
 import { parsePerformanceQuery } from "../../src/server/performance/performance-query.ts";
 import { parseReportingDate } from "../../src/domain/calendar.ts";
 import { summarizeSlipPerformance } from "../../src/domain/slip-performance.ts";
-import { performanceRecord, performanceSnapshot, performanceProtocol, withQuotes } from "./performance-fixtures.mjs";
+import { performanceRecord, performanceSnapshot, performanceProtocol } from "./performance-fixtures.mjs";
 import { slipForecastFixture } from "./slip-forecast-fixtures.mjs";
 import { modelVersion } from "./predictor-fixtures.mjs";
 
@@ -12,6 +12,11 @@ const filters = { from: "2026-10-01", to: today, market: "all", source: "combine
 const query = parsePerformanceQuery(new URLSearchParams({ from: filters.from, to: filters.to }), today);
 const records = [performanceRecord(), performanceRecord({ score: [0, 1] })];
 const report = (protocol = null) => aggregatePerformance(performanceSnapshot(records), query, at, protocol);
+const pricedSnapshot = performanceSnapshot(records);
+for (const [index, record] of records.entries()) {
+  const selection = record.revision.candidate.markets["match-result"].market.selection;
+  pricedSnapshot.quotes.set(`${record.revision.id}:match-result:${selection}`, index === 0 ? "2.35" : "9.20");
+}
 const publications = ["won", "lost", "void"].map((outcome, index) => {
   const original = slipForecastFixture({ at: at - 86_400_000 }), quote = index === 0 ? "2.35" : "9.20";
   return { id: `synthetic-publication-${index}`, savedAt: new Date(at - (3 - index) * 3_600_000).toISOString(),
@@ -33,16 +38,10 @@ const leagueRecords = [...Array.from({ length: 12 }, (_, index) => performanceRe
 })), performanceRecord({ competitionId: null }), performanceRecord({ competitionId: null, score: [0, 1] })];
 const leagueReport = (leaguePage) => aggregatePerformance(performanceSnapshot(leagueRecords),
   parsePerformanceQuery(new URLSearchParams({ from: filters.from, to: filters.to, leaguePage: String(leaguePage) }), today), at, null);
-// Synthetic captured publication quotes: won 2.60, lost 1.50, one missing, one unavailable; pending/void prices (987.65) never enter.
-const quoted = [[{}, 260], [{ score: [0, 1] }, 150], [{ score: [0, 1] }, null], [{}, "unavailable"], [{ score: null }, 98_765], [{ state: "void" }, 98_765]]
-  .map(([options, quote], index) => {
-    const record = performanceRecord(options);
-    record.cycle.kickoffAt += index; record.revision.publishedAt += index;
-    return withQuotes(record, quote === null ? {} : { "match-result": quote });
-  });
 export const performancePageScenarios = {
   unapproved: { locale: "en", filters, report: report(), history },
   reviewed: { locale: "en", filters, report: report(performanceProtocol()), history },
+  "priced-picks": { locale: "en", filters, report: aggregatePerformance(pricedSnapshot, query, at, null), history },
   second: { locale: "en", filters, report: report(), history: { ...history, page: 2, records: publications.slice(2) } },
   outside: { locale: "en", filters, report: report(), history: { ...history, page: 3, records: [] } },
   empty: { locale: "en", filters, report: aggregatePerformance(performanceSnapshot(), query, at, null),
@@ -51,7 +50,4 @@ export const performancePageScenarios = {
   pinned: { locale: "en", filters: { ...filters, source: "ai", model: modelVersion().id, version: "synthetic-version" }, report: report(), history },
   leagues: { locale: "en", filters: { ...filters, leaguePage: 2 }, report: leagueReport(2), history },
   "league-outside": { locale: "en", filters: { ...filters, leaguePage: 3 }, report: leagueReport(3), history },
-  returns: { locale: "en", filters: { ...filters, market: "match-result" }, history,
-    report: aggregatePerformance(performanceSnapshot(quoted, { quotesEnabled: true }), parsePerformanceQuery(new URLSearchParams({
-      from: filters.from, to: filters.to, market: "match-result" }), today), at, null) },
 };

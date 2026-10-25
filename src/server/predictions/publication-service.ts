@@ -121,6 +121,7 @@ export function createRevisionPublicationService(options: Readonly<{
             reason = "status-ineligible";
           const latest = await tx.predictionSet.findFirst({ where: { fixtureId: fixture.id }, orderBy: { fixtureRevision: "desc" } });
           if (reason === null && latest && latest.runSequence >= run.sequence) reason = "older-run";
+          let quoteCapture = false;
           let revision = null, impliedSnapshot: StoredImpliedMarketExtension | null = null,
             outcome: RefreshPublicationResult["outcome"] = "skipped";
           if (reason === null) {
@@ -179,8 +180,11 @@ export function createRevisionPublicationService(options: Readonly<{
                 revisionId: revision.id, cycleId: cycle.id, fixtureId: fixture.id, recordedAt: now });
               if (input.goalExtension !== undefined || input.impliedExtension !== undefined) await appendPublishedExtendedPicks(tx, revision.id, now);
               // Captured with this revision only; the final re-check below rolls it back together with the revision.
-              if (options.quotes && provenTrue(options.quotes.verify)) await appendPredictionQuotes(tx, { revisionId: revision.id, cycleId: cycle.id,
-                fixtureId: fixture.id, recordedAt: now, freshnessMs: options.quotes.freshnessMs, markets: candidate.markets });
+              if (options.quotes && provenTrue(options.quotes.verify)) {
+                await appendPredictionQuotes(tx, { revisionId: revision.id, cycleId: cycle.id,
+                  fixtureId: fixture.id, recordedAt: now, freshnessMs: options.quotes.freshnessMs, markets: candidate.markets });
+                quoteCapture = true;
+              }
               const recorded = (await storedCycle(tx, cycle.id))!;
               await writer.changeCycle({ ...actor, cycleId: cycle.id, expectedVersion: recorded.version,
                 eventKey: evidenceFingerprint({ kind: "revision-published", ...identity }), at: now,
@@ -207,6 +211,7 @@ export function createRevisionPublicationService(options: Readonly<{
           if (outcome === "published" || outcome === "retained-previous" || outcome === "unavailable") {
             await queue.assertOwned(tx, lease);
             const finished = await serverNow(tx); authorized(authority, policy, input, finished);
+            if (quoteCapture && (!options.quotes || !provenTrue(options.quotes.verify))) return publicationFail("eligibility-expired");
             if (impliedSnapshot && (finished - impliedSnapshot.confirmedAt > impliedSnapshot.freshnessMs ||
                 impliedSnapshot.snapshots.some((snapshot) => snapshot.retainUntil <= finished))) return publicationFail("eligibility-expired");
             if (finished < now || finished >= cycle.cutoffAt || finished - input.observation.retrievedAt > policy.maxObservationAgeMs ||

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bestSlipBuilder, bestSlipCriteria, bestSlipViews, jointSlipProbability } from '../src/domain/best-slips.ts';
+import { jointSlipRanking } from '../src/domain/joint-slip-model.ts';
 import { createBestSlipsService, gateBestSlips } from '../src/server/slips/best-slips.ts';
 import { createBestSlipsHandler } from '../src/server/slips/best-slips-http.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
@@ -54,6 +55,14 @@ test('joint probability takes priority over a shorter slip; tied estimates prefe
   assert.deepEqual(result.slips.slice(1).map(slip => slip.totalOdds), ['5.20', '5.00']);
   const tied = generate(bestSlipCriteria(today), data, { ...model, estimate: () => 0.60 });
   assert.deepEqual(tied.slips.map(slip => slip.selections.length), [1, 1, 2]);
+});
+
+test('Best Slips order is the shared joint ranking used by custom builds', () => {
+  const criteria = bestSlipCriteria(today), data = [record('single', 0.60, '5.00'), record('pair-a', 0.75), record('pair-b', 0.75), record('higher-odds', 0.60, '5.20')];
+  for (const [slips, joint] of [[generate().slips, model], [generate(criteria, data).slips, model],
+    [generate(criteria, data, { ...model, estimate: () => 0.60 }).slips, { ...model, estimate: () => 0.60 }]]) {
+    assert.deepEqual([...slips].sort(jointSlipRanking(joint).ranking.compare), slips);
+  }
 });
 
 test('absent, expired and impossible joint estimates never get replaced with arithmetic means or fabricated probabilities', () => {

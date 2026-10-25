@@ -14,6 +14,12 @@ contracts. Every executable module must include `import "server-only";`.
 Application routes enqueue through server services; they must not import or run
 worker entry points. Never import workers from browser or shared domain code.
 
+`npm run payments:notifications -- status` reads minimal payment-SMS outbox counts;
+`npm run payments:notifications -- run 25` dispatches a bounded private batch after
+its decision transaction commits. Apply the outbox migration/grants and supervise
+the worker before deployment. Interrupted claims require reconciliation rather
+than automatic resend. See [the messaging runbook](../../docs/yoola-messaging.md#payment-decision-notifications).
+
 Standalone Node runners and server-service tests need the
 `--conditions=react-server` Node option to resolve the server-only marker outside
 Next.js. TypeScript path aliases are understood by Next.js, but plain Node does

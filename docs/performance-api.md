@@ -119,37 +119,36 @@ evaluation datasets remain the separate comparison/qualification authority.
 
 ## Illustrative returns and losing streaks
 
-Each horizon-free cell (`horizon: null`) and each league cell carries a `returns`
-object; horizon cells carry `returns: null`. It summarizes the cell's own counted
-outcomes in kickoff, publication-time and revision-ID order. `basis` is
-`one-unit-per-settled-prediction-original-public-quote-at-publication` and
-`streakBasis` is `kickoff-publication-revision-in-period-void-and-pending-interrupt`.
+Every market/source/horizon cell and league cell carries the same `returns`
+summary from `summarizePickPerformance`; there is one public DTO and one pure
+exact-arithmetic path. It uses the cell's own coherently settled denominator:
 
 ```
-settled = won + lost = metrics.denominator; won = metrics.correct
-available <=> reason = null <=> returnsSampleCount > 0 <=> every money field is non-null
-odds-display-disabled => returnsSampleCount = missingQuoteCount = unavailableQuoteCount = 0
-otherwise settled = returnsSampleCount + missingQuoteCount + unavailableQuoteCount
-currentLosingStreak <= longestLosingStreak <= lost
+settled = metrics.denominator = returnsSampleCount + excludedQuoteCount
+stakeUnits = returnsSampleCount
+currentLosingStreak <= longestLosingStreak <= settled
 ```
 
-Money fields are `stakeUnits`, `returnUnits`, `profitUnits`, `roi` and
-`meanQuotedOdds`. They are computed from exact hundredths over won/lost
-predictions with a captured publication quote only. Void/pending predictions
-interrupt streaks and never enter returns. An attributable void must be this
-cell's own locked, available, filter-matching prediction. Returns are an
-ungated illustration labelled as such; `hitRate` stays policy-gated and
-`publicClaimAuthorized` stays false. No cross-market total is published.
+Each priced binary outcome stakes one illustrative unit at its immutable
+publication-time quote; void/pending outcomes never imply refunds or enter odds
+aggregates. Streaks use forecast publication time and revision identity within
+the selected kickoff-date period. Only an attributable, filter-matching void can
+interrupt a source/model-specific streak. No market or slip denominator is pooled.
 
-Quotes come from `PredictionQuote`, captured in each locked revision's own
-publication transaction (see
-[public-performance-dashboard.md](public-performance-dashboard.md#capturing-the-original-public-quote)).
-A captured quote whose selection, revision, cycle, fixture or recorded time does
-not match the locked revision fails the whole report closed (`503 unavailable`).
-While `publicPolicy.features.providerOdds` is off (the default), the service reads
-no quotes and every `returns` object is `unavailable` with reason
-`odds-display-disabled`; streaks and counts are real. The cache scope includes
-that flag, and `freshness.snapshotKey` includes each captured quote.
+`roi` and `meanQuotedOdds` remain null when no usable quoted samples exist. The
+internal empty arithmetic totals do not claim zero profit: the UI explicitly
+marks returns unavailable. Missing or unavailable captures enter
+`excludedQuoteCount`. They are never replaced with current odds or reconstructed
+from provider histories.
+
+Quotes come only from sealed `PredictionQuote` rows captured in the locked
+revision's publication transaction. Identity/clock integrity failures reject the
+report. A trusted `PerformanceQuoteBinding` must independently approve historical
+display for the captured bookmaker and maximum quote age. The grant is checked
+after database and cache access; no HTTP input or reference string grants it.
+`readPublicPerformance` supplies no historical quote binding pending review, so
+production does not read quote rows or publish quoted returns. Calibration retains
+its own frozen-policy/sample gates and `publicClaimAuthorized` remains false.
 
 ## Evidence, corrections and bounds
 
@@ -164,9 +163,8 @@ Prompt 038 adds `matchLabel` and `pageHref` to each evidence reference. The latt
 uses the canonical English match slug and the exact locked `revision` selection
 with `#revision-history`, allowing accessible navigation from API consumers.
 Canonical slugs share the detail contract. The stored performance cache projection
-is version 5 (the `returns` object changed the strict response shape). The API uses `readPublicPerformance`, including the same
-unapproved/counts-only policy. The former report page has been replaced by
-[app Help](help-page.md), without a performance-report UI.
+is version 6 (historical quote evidence now uses immutable sidecars). The API uses `readPublicPerformance`, including the same
+unapproved/counts-only policy. The same reporting path supplies the public `/[locale]/performance` dashboard.
 
 A selected pick is settled only when its sealed latest settlement still matches
 the current result, canonical fixture and locked selection through the shared
@@ -182,8 +180,7 @@ public responses are capped at 1 MiB. Bounds fail safely rather than publishing
 partial metrics. Existing kickoff, cycle state/cutoff, primary/foreign-key and
 daily-run sequence indexes support these reads; captured quotes use the
 `PredictionQuote` primary key prefix and share the same sealed-JSON budget. The
-reader needs only SELECT on `PredictionQuote`, and only while provider odds
-display is enabled. The batch path reuses the same sealed row parsers and settlement
+reader needs only SELECT on `PredictionQuote`, and only with a verified historical-display binding. The batch path reuses the same sealed row parsers and settlement
 projection as detail/feed/private settlement reads.
 
 `freshness.snapshotKey` fingerprints the bounded query, policy, canonical fixture

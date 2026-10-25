@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { PerformanceCell, PerformanceLeague, PerformanceResponse, PerformanceReturns } from "@/domain/performance";
+import type { PerformanceCell, PerformanceLeague, PerformanceResponse } from "@/domain/performance";
 import type { PublishedSlipHistory } from "@/domain/published-slips";
 import type { SlipPerformanceSummary } from "@/domain/slip-performance";
+import type { PickPerformanceSummary } from "@/domain/pick-performance";
 import { performancePageHref, type PerformancePageFilters } from "@/domain/performance-page";
 import { performanceHref } from "@/domain/navigation";
 import { isMarketSelection } from "@/domain/markets";
@@ -28,6 +29,26 @@ const metric = (value: number | null, m: Messages) => value === null ? "—" : m
 function Metrics({ values }: { values: readonly Readonly<{ label: string; value: ReactNode }>[] }) {
   return <MetricList>{values.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</MetricList>;
 }
+function ReturnMetrics({ summary, locale, kind }: { summary: PickPerformanceSummary | SlipPerformanceSummary; locale: string; kind: "pick" | "slip" }) {
+  const m = createMessages(locale), units = (value: number) => m.text("performance.units", { count: m.number(value, { maximumFractionDigits: 2 }) });
+  return <Stack $gap="sm" data-return-performance={kind}>
+    <Metrics values={[
+      { label: m.text("performance.returnCount"), value: m.number(summary.returnsSampleCount) },
+      { label: m.text("performance.stake"), value: summary.returnsSampleCount ? units(summary.stakeUnits) : "—" },
+      { label: m.text("performance.returns"), value: summary.returnsSampleCount ? units(summary.returnUnits) : "—" },
+      { label: m.text("performance.profit"), value: summary.returnsSampleCount ? units(summary.profitUnits) : "—" },
+      { label: m.text("performance.roi"), value: percent(summary.roi, m) },
+      { label: m.text("performance.meanOdds"), value: metric(summary.meanQuotedOdds, m) },
+      { label: m.text("performance.longestLosing"), value: m.number(summary.longestLosingStreak) },
+      { label: m.text("performance.currentLosing"), value: m.number(summary.currentLosingStreak) },
+    ]} />
+    <MutedText>{m.text(kind === "pick" ? "performance.pickReturnsHint" : "performance.returnsHint")}</MutedText>
+    <MutedText>{m.text(kind === "pick" ? "performance.pickStreakHint" : "performance.streakHint")}</MutedText>
+    {summary.returnsSampleCount === 0 && <MutedText>{m.text("performance.noReturnQuotes")}</MutedText>}
+    {summary.excludedQuoteCount > 0 && <MutedText>{m.text(kind === "pick" ? "performance.excludedPickQuotes" : "performance.excludedQuotes",
+      { count: m.number(summary.excludedQuoteCount) })}</MutedText>}
+  </Stack>;
+}
 function Calibration({ cell, m }: { cell: PerformanceCell; m: Messages }) {
   const rows = cell.metrics.calibration.filter((row) => row.count > 0);
   if (cell.metrics.state !== "available" || !rows.length) return null;
@@ -43,26 +64,6 @@ function Calibration({ cell, m }: { cell: PerformanceCell; m: Messages }) {
       </tr>)}</tbody>
     </PerformanceTable></TableFrame>
   </details>;
-}
-function PredictionReturns({ returns, m }: { returns: PerformanceReturns; m: Messages }) {
-  const units = (value: number | null) => value === null ? "—" : m.text("performance.units", { count: m.number(value, { maximumFractionDigits: 2 }) });
-  return <div data-prediction-returns={returns.state}><Stack $gap="sm">
-    <strong>{m.text("performance.pickReturnsHeading")}</strong>
-    <Metrics values={[
-      { label: m.text("performance.returnCount"), value: m.number(returns.returnsSampleCount) },
-      { label: m.text("performance.stake"), value: units(returns.stakeUnits) },
-      { label: m.text("performance.returns"), value: units(returns.returnUnits) },
-      { label: m.text("performance.profit"), value: units(returns.profitUnits) },
-      { label: m.text("performance.roi"), value: percent(returns.roi, m) },
-      { label: m.text("performance.meanOdds"), value: metric(returns.meanQuotedOdds, m) },
-      { label: m.text("performance.longestLosing"), value: m.number(returns.longestLosingStreak) },
-      { label: m.text("performance.currentLosing"), value: m.number(returns.currentLosingStreak) },
-    ]} />
-    <MutedText>{m.text(returns.reason === "odds-display-disabled" ? "performance.pickQuotesDisabled" : "performance.pickReturnsHint")}</MutedText>
-    <MutedText>{m.text("performance.pickStreakHint")}</MutedText>
-    {returns.missingQuoteCount > 0 && <MutedText>{m.text("performance.pickQuotesMissing", { count: m.number(returns.missingQuoteCount) })}</MutedText>}
-    {returns.unavailableQuoteCount > 0 && <MutedText>{m.text("performance.pickQuotesUnavailable", { count: m.number(returns.unavailableQuoteCount) })}</MutedText>}
-  </Stack></div>;
 }
 function PredictionCard({ cell, locale }: { cell: PerformanceCell; locale: string }) {
   const m = createMessages(locale), values = cell.metrics;
@@ -88,7 +89,7 @@ function PredictionCard({ cell, locale }: { cell: PerformanceCell; locale: strin
     {values.state !== "available" && <MutedText>{m.text("performance.qualityHint")}</MutedText>}
     {values.minimumSamples !== null && <MutedText>{m.text("performance.sampleMinimum", { count: m.number(values.minimumSamples) })}</MutedText>}
     <Calibration cell={cell} m={m} />
-    {cell.returns && <PredictionReturns returns={cell.returns} m={m} />}
+    <details><summary>{m.text("performance.pickReturns")}</summary><ReturnMetrics summary={cell.returns} locale={locale} kind="pick" /></details>
     {cell.evidence.links.length > 0 && <details><summary>{m.text("performance.evidence")}</summary>
       <EvidenceList>{cell.evidence.links.map((link) => <li key={link.revisionId}><TextLink href={link.pageHref} prefetch={false}>{link.matchLabel}</TextLink></li>)}</EvidenceList>
     </details>}
@@ -102,21 +103,20 @@ function LeagueCard({ league, locale }: { league: PerformanceLeague; locale: str
     <Stack $gap="sm">
       <MutedText>{m.text("performance.qualityHint")}</MutedText>
       <TableFrame tabIndex={0} role="region" aria-label={`${name} — ${m.text("performance.pickHeading")}`}><PerformanceTable>
-        <thead><tr>{(["market", "won", "lost", "pending", "void", "unavailable", "filteredOut", "settled", "hitRate", "leagueQuality", "returnCount", "roi", "longestLosing"] as const).map((key) =>
+        <thead><tr>{(["market", "won", "lost", "pending", "void", "unavailable", "filteredOut", "settled", "hitRate", "leagueQuality"] as const).map((key) =>
           <th key={key} scope="col">{m.text(`performance.${key}`)}</th>)}</tr></thead>
         <tbody>{league.cells.map((cell) => <tr key={cell.family}>
           <th scope="row">{marketName(m, cell.family)}</th><td>{m.number(cell.metrics.correct)}</td><td>{m.number(cell.metrics.incorrect)}</td>
           <td>{m.number(cell.coverage.pending)}</td><td>{m.number(cell.coverage.void)}</td><td>{m.number(cell.coverage.unavailable)}</td>
           <td>{m.number(cell.coverage.filteredOut)}</td><td>{m.number(cell.metrics.denominator)}</td><td>{percent(cell.metrics.hitRate, m)}</td>
           <td>{m.text(cell.metrics.state === "available" ? "performance.leagueReviewed" : "performance.leagueWithheld")}</td>
-          <td>{m.number(cell.returns.returnsSampleCount)}</td><td>{percent(cell.returns.roi, m)}</td><td>{m.number(cell.returns.longestLosingStreak)}</td>
         </tr>)}</tbody>
       </PerformanceTable></TableFrame>
     </Stack>
   </details></Surface>;
 }
 function SlipMetrics({ summary, locale }: { summary: SlipPerformanceSummary; locale: string }) {
-  const m = createMessages(locale), units = (value: number) => m.text("performance.units", { count: m.number(value, { maximumFractionDigits: 2 }) });
+  const m = createMessages(locale);
   return <Surface><Stack $gap="sm">
     <Metrics values={[
       { label: m.text("performance.slipTotal"), value: m.number(summary.total) },
@@ -128,18 +128,7 @@ function SlipMetrics({ summary, locale }: { summary: SlipPerformanceSummary; loc
       { label: m.text("performance.slipWinRate"), value: percent(summary.winRate, m) },
     ]} />
     <MutedText>{m.text("performance.slipWinRateHint")}</MutedText>
-    <Metrics values={[
-      { label: m.text("performance.returnCount"), value: m.number(summary.returnsSampleCount) },
-      { label: m.text("performance.stake"), value: units(summary.stakeUnits) },
-      { label: m.text("performance.returns"), value: units(summary.returnUnits) },
-      { label: m.text("performance.profit"), value: units(summary.profitUnits) },
-      { label: m.text("performance.roi"), value: percent(summary.roi, m) },
-      { label: m.text("performance.meanOdds"), value: metric(summary.meanQuotedOdds, m) },
-      { label: m.text("performance.longestLosing"), value: m.number(summary.longestLosingStreak) },
-      { label: m.text("performance.currentLosing"), value: m.number(summary.currentLosingStreak) },
-    ]} />
-    <MutedText>{m.text("performance.returnsHint")}</MutedText><MutedText>{m.text("performance.streakHint")}</MutedText>
-    {summary.excludedQuoteCount > 0 && <MutedText>{m.text("performance.excludedQuotes", { count: m.number(summary.excludedQuoteCount) })}</MutedText>}
+    <ReturnMetrics summary={summary} locale={locale} kind="slip" />
   </Stack></Surface>;
 }
 

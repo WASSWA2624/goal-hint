@@ -8,6 +8,11 @@ test("payment notification notices distinguish provider acceptance from handset 
   assert.doesNotMatch(notice, /delivered|received/iu);
 });
 
+test("a durable queued notice does not claim provider or handset acceptance", () => {
+  assert.equal(paymentNotificationNotice("queued"), "Account update SMS queued for delivery.");
+  assert.doesNotMatch(paymentNotificationNotice("queued"), /accepted|sent|received/iu);
+});
+
 test("failed, unsupported and unavailable payment messages tell the administrator to contact the member", () => {
   for (const status of ["failed", "unsupported", "unavailable"]) {
     assert.match(paymentNotificationNotice(status), /Contact the member\./u);

@@ -198,7 +198,7 @@ rules:
   attachment, backfill or reconstruction from snapshot history.
 - **Gate.** The live publisher passes `quotes.verify`, which requires
   `publicPolicy.features.providerOdds` **and** a verified owner-recorded
-  `football-odds-rights` approval, evaluated in the transaction. Without the
+  `football-odds-rights` approval, evaluated before capture and rechecked before commit. Without the
   option (every test harness by default) nothing touches the table.
 - **Source.** One non-locking statement (`storedQuoteSource` in
   `src/server/odds/odds-read.ts`) reads the state and fresh public rows, so the
@@ -208,12 +208,14 @@ rules:
 - **Reasons.** No state or row: `no-public-price`. Withdrawn, future or older than
   the odds freshness window (the window `expireStale` uses):
   `price-state-expired`. A non-bookmaker basis: `unsupported-price-basis`. A
-  missing snapshot hash, out-of-range hundredths or inconsistent clocks:
+  missing snapshot hash/bookmaker identity, stale row, unsupported mapping/line, inconsistent decimal/display arithmetic or clocks:
   `invalid-public-price`. Odds-data faults never fail publication.
 - **Provenance.** `snapshotId` is a provenance hash under a CHECK, not a foreign
   key, so captured quotes never block a future reviewed snapshot purge.
 - **Immutability.** Rows are append-only (triggers refuse UPDATE and DELETE) and
   sealed (`integrity = SHA2(body)`); later odds changes never rewrite them.
+
+Public historical returns separately require a verified `PerformanceQuoteBinding`; enabling capture alone does not enable those returns.
 
 Captured hundredths outlive the snapshots' `retainUntil`, like the published-slip
 archive; the owner must confirm this retention before enabling the flag.

@@ -98,6 +98,12 @@ test('original public prediction quotes on owned genuine MySQL', { timeout: 300_
       assert.equal(await setCount(state.fixture.id), 0); assert.equal(await quoteCount(state.fixture.id), 0);
     });
 
+    await t.test('revoked capture rights roll back the quote and forecast together', async () => {
+      let checks = 0; const state = states.get(3002);
+      await assert.rejects(publisher({ quotes: quotes(() => ++checks === 1) }).publish(state.input,state.lease),
+        error => error instanceof RevisionPublicationError && error.reason === 'eligibility-expired');
+      assert.equal(checks,2); assert.equal(await setCount(state.fixture.id),0); assert.equal(await quoteCount(state.fixture.id),0);
+    });
     let captured;
     await t.test('publication records one quote per available family from the exact fresh public price', async () => {
       const state = await publish(3002, publisher({ quotes: quotes() }));
@@ -173,23 +179,23 @@ test('original public prediction quotes on owned genuine MySQL', { timeout: 300_
         try { await results.save(lease, batch); await results.apply(lease, batch); } finally { await results.release(lease); }
         await settlement.settleFixture(state.fixture.id);
       }
-      const read = (enabled) => createPerformanceService({ database: p.a, competitionIds: [39], clock: { now: () => p.now() }, quotes: enabled })
+      const read = (enabled) => createPerformanceService({ database: p.a, competitionIds: [39], clock: { now: () => p.now() }, quoteBinding: enabled ? {bookmakerId:8,maximumAgeMs:policy.freshnessMs,verifyPublicDisplay:()=>true}:null })
         .query(new URLSearchParams(period)).then((value) => performanceResponseSchema.parse(value));
       const enabled = await read(true), disabled = await read(false), returns = cell(enabled).returns;
       assert.equal(cell(enabled).metrics.denominator, 4); assert.equal(returns.settled, 4);
-      assert.equal(returns.returnsSampleCount, 1); assert.equal(returns.missingQuoteCount, 2); assert.equal(returns.unavailableQuoteCount, 1);
+      assert.equal(returns.returnsSampleCount, 1); assert.equal(returns.excludedQuoteCount, 3);
       // 2-1 in regulation: the single priced prediction (3002) wins exactly when its locked selection is home-win.
       const selection = states.get(3002).revision.candidate.markets['match-result'].market.selection, won = selection === 'home-win';
       const hundredths = launchPrice['match-result'][selection];
-      assert.equal(returns.state, 'available'); assert.equal(returns.stakeUnits, 1);
+      assert.equal(returns.stakeUnits, 1);
       assert.equal(returns.returnUnits, won ? hundredths / 100 : 0); assert.equal(returns.profitUnits, (won ? hundredths - 100 : -100) / 100);
       assert.equal(returns.roi, (won ? hundredths - 100 : -100) / 100); assert.equal(returns.meanQuotedOdds, hundredths / 100);
-      assert.equal(returns.won, cell(enabled).metrics.correct);
+      assert.equal(returns.settled, cell(enabled).metrics.denominator);
       const btts = cell(enabled, 'both-teams-to-score').returns;
-      assert.equal(btts.reason, 'no-quoted-settled-predictions'); assert.equal(btts.unavailableQuoteCount, 2); assert.equal(btts.roi, null);
+      assert.equal(btts.returnsSampleCount, 0); assert.equal(btts.excludedQuoteCount, btts.settled); assert.equal(btts.roi, null);
       for (const family of ['match-result', 'double-chance', 'total-goals', 'both-teams-to-score']) {
         const off = cell(disabled, family).returns, on = cell(enabled, family).returns;
-        assert.equal(off.reason, 'odds-display-disabled'); assert.equal(off.roi, null); assert.equal(off.missingQuoteCount, 0);
+        assert.equal(off.returnsSampleCount, 0); assert.equal(off.roi, null); assert.equal(off.excludedQuoteCount, off.settled);
         assert.equal(off.longestLosingStreak, on.longestLosingStreak); assert.equal(off.currentLosingStreak, on.currentLosingStreak);
         assert.equal(off.settled, on.settled);
       }

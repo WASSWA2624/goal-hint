@@ -87,6 +87,8 @@ export const LimitGroups = styled.div`
   @media (max-width: 22.5rem) { grid-template-columns: minmax(0, 1fr); }
   > fieldset { padding: 0; margin: 0; border: 0; min-inline-size: 0; }
   > fieldset > legend { padding: 0; margin-block-end: 4px; font-size: 0.75rem; font-weight: ${({ theme }) => theme.typography.weight.bold}; }
+  > fieldset[data-joint-limit] { grid-column: 1 / -1; }
+  > fieldset[data-joint-limit] > ${Note} { margin-block-start: 4px; }
 `;
 export const TargetGroups = styled(LimitGroups)`
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: end; gap: 10px;

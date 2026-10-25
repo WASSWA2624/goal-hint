@@ -30,6 +30,7 @@ import { lifecyclePolicy, lifecycleAuthority } from './lifecycle-fixtures.mjs';
 // Every transport, credential, policy and rate is synthetic; durable queue,
 // evidence, model, cost, lifecycle and publication services run against MySQL.
 export async function refreshHarness(db, scenarios, changes = {}) {
+  const { fallbackSelectionPolicy = 'legacy-ai-primary', ...serviceChanges } = changes;
   await db.instance.executeAdmin(['CostBudgetAccount','CostBudgetPeriod','CostBudgetJob','CostBudgetAttempt'].map((table) =>
     `GRANT SELECT, INSERT, UPDATE ON goal_hint_test.${table} TO 'cutoff_app'@'127.0.0.1';`).join('\n'));
   const rows = scenarios.map((_, index) => catalogFixture(4000 + index, { kickoff: new Date(Date.parse('2026-10-12T12:00:00Z') + index * 60_000).toISOString() }));
@@ -78,6 +79,7 @@ export async function refreshHarness(db, scenarios, changes = {}) {
   const evidence = createEvidenceService({ authority, store: createMysqlEvidenceStore(db.a), clock, research,
     football: { async collect() { throw new Error('cached structured evidence must not fetch'); } } });
   const fallback = createFallbackService({ authority: fallbackAuthority(), clock, maxInflight: 100, verifyRequest: () => true,
+    selectionPolicy: fallbackSelectionPolicy,
     fallback: { async collect(input, workflow) {
       calls.fallback.push(input); workflow.check(); const scenario = scenarioFor(input.context.externalFixtureId);
       if (scenario.fallback === 'outage') throw new Error('private synthetic provider failure');
@@ -121,7 +123,7 @@ export async function refreshHarness(db, scenarios, changes = {}) {
   }
   const serviceOptions = { type: 'prediction.daily-refresh', handlerVersion: 1, store, selection, clock, configure,
     authority: { authorize() {}, verifyPlan: () => true }, models: registry, evidence, predictor, fallback, observation, lifecycle,
-    publisher: db.publisher, costs, ...changes };
+    publisher: db.publisher, costs, ...serviceChanges };
   const service = createPredictionRefreshService(serviceOptions), jobs = createJobRegistry([service.definition]);
   const worker = createJobWorker({ queue: db.queue, registry: jobs, ownerId: evidenceHash('refresh-worker'), onEvent: (event) => events.push(event) });
   const jobIdAt = async (index) => (await db.a.query((tx) => tx.runFixture.findFirst({ where: {

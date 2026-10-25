@@ -4,6 +4,7 @@ import type { PaymentNotificationStatus } from "../../domain/payment-notificatio
 import { supportedMessageChannels } from "../../domain/member-verification.ts";
 import { writeOwnerAudit } from "../admin/audit.ts";
 import type { DatabaseRuntime } from "../database/client.ts";
+import type { Prisma } from "../generated/prisma/client.ts";
 import { lockMemberAccount } from "./access-codes.ts";
 import { createYoolaMessaging, type SmsMessaging } from "./yoola-messaging.ts";
 
@@ -12,16 +13,20 @@ export type PaymentApprovalNotification = PaymentReceipt & Readonly<{ planName: 
 export type PaymentRejectionNotification = PaymentReceipt & Readonly<{ reason: string }>;
 export type CreditNotification = PaymentReceipt & Readonly<{ addedUgx: number; balanceUgx: number }>;
 export type RenewalNotification = Readonly<{ accessCodeId: string; accountId: string; phone: string | null; planName: string; expiresAt: Date; balanceUgx: number }>;
+export type PaymentNotificationEvent = Readonly<{ accountId: string; targetType: "payment" | "access-code"; targetId: string;
+  decision: "approved" | "rejected" | "credited" | "renewed"; at: Date }>;
 export type PaymentNotifications = Readonly<{
+  /** Persist inside the same account-locked transaction as the decision. Injected transports may omit this hook. */
+  enqueue?(tx: Prisma.TransactionClient, event: PaymentNotificationEvent): Promise<void>;
   approved(payment: PaymentApprovalNotification): Promise<PaymentNotificationStatus>;
   rejected(payment: PaymentRejectionNotification): Promise<PaymentNotificationStatus>;
   credited(payment: CreditNotification): Promise<PaymentNotificationStatus>;
   renewed(renewal: RenewalNotification): Promise<PaymentNotificationStatus>;
 }>;
 // The gateway and lock-screen previews can expose message contents. Keep financial and subscription details in the app.
-const accountUpdateMessage = "Goal Hint: Your account has been updated. Sign in to view the details or contact admin for help.";
+export const accountUpdateMessage = "Goal Hint: Your account has been updated. Sign in to view the details or contact admin for help.";
 
-/** Call only after the payment transaction commits. Provider acceptance is best effort and is never retried automatically. */
+/** Explicit transport adapter for injected callers. Decision services default to the atomic outbox producer. */
 export function createPaymentNotifications({ database, now = Date.now, delivery = createYoolaMessaging() }: {
   database: DatabaseRuntime; now?: () => number; delivery?: SmsMessaging;
 }): PaymentNotifications {

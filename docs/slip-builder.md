@@ -10,12 +10,12 @@ connected result-table edges remain square.
 ## Responsive criteria layout
 
 Number of slips sits beside the title. Total odds per slip and Matches per slip stay
-visible, followed by one row of Match limits, Match Date & Time and Markets buttons on both
+visible, followed by one row of Odds & probability, Match Date & Time and Markets buttons on both
 desktop and mobile. Detailed criteria open in native modal dialogs instead of
 expanding the form. Inputs and dialogs use the shared `theme.border.radius` token.
 
-The buttons show counts for their current settings. Match limits counts custom
-odds and probability ranges, up to two. Match Date & Time counts a custom date
+The buttons show counts for their current settings. Odds & probability counts custom
+individual odds, individual probability and combined probability ranges, up to three. Match Date & Time counts a custom date
 range and a custom daily time window, also up to two. Markets shows the number
 of selected market families, starting at four. A range counts once even when
 both its minimum and maximum are changed. Limits and date/time hide their count
@@ -50,6 +50,7 @@ browser-safe `src/domain/slip-builder.ts` contract:
 | Total odds | Inclusive minimum and maximum, 1.01–100,000.00 | Blank (Any supported odds) |
 | Individual selection odds | Inclusive minimum and maximum, 1.01–1,000.00 | Blank (Any supported odds) |
 | Selection probability | Inclusive unrounded percentage bounds, 0–100 | Blank (Any supported probability) |
+| Combined probability | Optional `totalProbMin` / `totalProbMax`, inclusive percentage bounds, 0–100; requires a verified joint model | Blank (no joint filter) |
 | Selection count | Minimum and maximum of 1–8 matches per slip | Blank (Any supported count) |
 | Number of slips | 1–10 | 3 |
 | Reuse matches | Allow a fixture in multiple separate slips | Off |
@@ -96,7 +97,7 @@ Over 2.5 and Under 2.5, matching the published source distribution; additional
 lines are not inferred.
 
 Submission parsing streams entries and bounds work before joining repeated
-values: at most 30 form entries, 2 KiB of form-encoded data and 256 characters per
+values: at most 32 form entries, 2 KiB of form-encoded data and 256 characters per
 value. This accommodates all ten manual outcome checkboxes, all four market
 checkboxes and the hidden reuse pair while bounding each family's outcome count.
 
@@ -138,17 +139,53 @@ Only the displayed total is rounded half-up to two decimal places.
 Average probability is the arithmetic mean of the selected, unrounded forecast
 probabilities. Forecasts of 80% and 90% therefore display an average of 85%.
 This describes the selections' forecast strength, not the chance that the entire
-slip wins. If those events were independent their joint probability would be
-72%; independence is not established by this feature, and no combined winning
-probability is calculated or claimed.
+slip wins. Independent events would have a 72% joint probability; the builder
+does not assume independence. A combined estimate is exposed only through the
+verified joint-model binding described below.
 
 ## Ranking and separate slips
 
-Qualifying combinations rank by fewer selections first, then higher arithmetic
+Without a joint-model binding, qualifying combinations rank by fewer selections first, then higher arithmetic
 average probability, then higher exact total odds. Canonical fixture, market and
 selection identifiers break ties deterministically. Rows within a slip follow
 kickoff and canonical identifier order. Identical combinations never appear as
 separate slips.
+
+`src/domain/joint-slip-model.ts` shares the same joint-model contract, validity
+check, marginal probability bounds and estimator ranking between custom and
+daily Best Slips. A server-owned `SlipJointModelBinding` supplies the model and
+an independent `verifyModel` callback; reference strings alone cannot approve
+calibration or correlation evidence. `createStoredSlipBuild` accepts that
+optional binding. The production reader supplies none, so no actual combined
+forecast or qualification is invented.
+
+`boundJointSlipModel` resolves the request-time binding for the stored reader and
+the page's capability check. The page offers combined bounds only with verified
+current support, or when a supplied bound needs to remain editable or be cleared.
+The service independently verifies that binding; a display capability cannot
+authorize an estimator. Explicit editorial/publisher builds retain their own
+model and do not resolve the custom reader's binding.
+
+With a verified current binding, the bounded search considers all allowed
+selection counts and ranks whole-slip probability first. Fewer selections and
+higher odds break equal-probability ties. A longer slip can outrank a shorter
+one. `totalProbMin` and `totalProbMax` filter the unrounded joint estimate;
+individual `probMin` / `probMax` still filter each original pick separately.
+Missing or mathematically impossible estimates exclude that combination. The
+result carries estimates only for returned slips, separately from its unchanged
+mean probability and original saved-snapshot contract. The shared slip table
+displays both quantities with their existing distinct labels.
+The result also counts examined combinations lacking a valid estimate. A weak
+object cache estimates each combination once without retaining discarded slip
+identifiers. Compatible batching runs only after the final qualified candidate
+set is retained; discarded shorter stages cannot impose a spurious batch limit.
+
+Constrained combined bounds without a model produce `model-unavailable` before
+stored reads or limiter consumption. Configured bindings are checked before
+reading, after the cohort scan and after estimation; expiry or revoked approval
+withholds all output. The page explains how to clear unsupported combined
+bounds. The legacy default criteria and saved/publication criteria strings keep
+their shape: optional joint bounds are omitted unless explicitly supplied.
 
 With reuse enabled, the engine returns the highest-ranked available combinations
 up to the requested count. With reuse disabled, fixtures must also be distinct
@@ -181,7 +218,7 @@ results are ranked among the explored candidates and do not claim global
 optimality or that all possible qualifying slips were found.
 
 The page distinguishes generated slips, no qualifying selections, no valid
-combinations, odds unavailable, data unavailable and rate limiting. It reports
+combinations, odds unavailable, combined model unavailable, data unavailable and rate limiting. It reports
 limited searches and partial coverage. Missing-price or missing-forecast counts
 refer to fixtures excluded entirely for that reason; a fixture that qualifies
 through another requested family does not inflate those excluded counts.

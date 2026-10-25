@@ -42,6 +42,9 @@ and derived double chance together; unsupported fields remain unavailable.
 Current output expiry and permissions are rechecked after callbacks. The
 [fallback runbook](../../docs/provider-fallback.md) describes candidate/retention
 results and the actual source evidence still needed for live operation.
+The live runner and new fallback services use the provider benchmark while AI
+remains shadow evidence in immutable refresh stages; live publication rejects
+unqualified AI. See the [benchmark runbook](../../docs/provider-baseline.md).
 
 `evaluation/` scores independently verified immutable as-of datasets through
 the existing market and settlement rules. Use `createEvaluationHarness` with

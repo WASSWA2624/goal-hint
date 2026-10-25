@@ -27,3 +27,6 @@ GRANT SELECT, INSERT ON `goal_hint_db`.`AccountMove` TO 'goal_hint_app'@'applica
 -- 20261025180538_prediction_quotes and apply BEFORE enabling provider odds display: once capture is on, a missing grant
 -- fails the forecast publication. Append-only: its triggers refuse UPDATE and DELETE.
 GRANT SELECT, INSERT ON `goal_hint_db`.`PredictionQuote` TO 'goal_hint_app'@'application-host';
+-- Durable minimal payment SMS intents, after 20261025230000_payment_notification_outbox.
+-- No recipient or message body is stored. Account deletion cascades its intents.
+GRANT SELECT, INSERT, UPDATE ON `goal_hint_db`.`PaymentNotificationOutbox` TO 'goal_hint_app'@'application-host';

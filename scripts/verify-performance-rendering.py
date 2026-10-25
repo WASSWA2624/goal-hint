@@ -19,7 +19,7 @@ def main():
         write_json(directory / "app/scenarios.json", json.loads(result.stdout))
         build_fixture(directory, env, timeout=300)
     with Server(directory, env, ready="/en/performance") as server:
-        for state in ["unapproved", "reviewed", "second", "outside", "empty", "unavailable", "pinned", "leagues", "league-outside", "returns"]:
+        for state in ["unapproved", "reviewed", "priced-picks", "second", "outside", "empty", "unavailable", "pinned", "leagues", "league-outside"]:
             response = request(server.origin, f"/en/performance?state={state}")
             assert response.status == 200, (state, response.status)
             html = visible_html(response.text)
@@ -30,7 +30,6 @@ def main():
             form = re.search(r'<form\b[^>]*aria-label="Filter performance"[\s\S]*?</form>', html).group()
             assert not re.search(r'<input\b[^>]*name="(?:model|version)"', form), "native Apply must not retain hidden advanced constraints"
             assert "999999.99" not in response.text and "private-pending" not in response.text, "active quotes/identities leaked"
-            assert "987.65" not in response.text, "void/pending prediction quotes must never reach a price aggregate"
             if state in ["unapproved", "reviewed", "second"]:
                 assert "Illustrative ROI" in html and "17.5%" in html
                 assert "Illustration only" in html and "no refund or adjusted payout is assumed" in html
@@ -38,13 +37,18 @@ def main():
                 assert "Published slips" in html and "Pending" in html
             if state == "unapproved":
                 assert "Quality metrics awaiting review" in html and "Reviewed sample metrics" not in html
-                assert "Illustrative returns" in html and "Original odds are not published beside individual predictions yet" in html
-                assert 'data-prediction-returns="unavailable"' in html and "Longest losing streak" in html
                 assert "Calibration by probability band" not in html
                 assert "Won" in html and "Lost" in html and "2.35" in html
                 assert html.count('data-published-slip=') == 2
+                assert "Individual-pick returns and streaks" in html and "2 settled picks lack usable permitted pre-publication quotes" in html
+                assert "Returns are unavailable without usable original quotes" in html
             elif state == "reviewed":
                 assert "Reviewed sample metrics" in html and "Calibration by probability band" in html and "Confidence interval" in html
+            elif state == "priced-picks":
+                picks = re.search(r'<section\b[^>]*aria-labelledby="individual-performance"[\s\S]*?</section>', html).group()
+                assert 'data-return-performance="pick"' in picks and "17.5%" in picks
+                assert "stored quote from its original cycle" in picks and "Current and later prices are excluded" in picks
+                assert "Quality metrics awaiting review" in picks and "Reviewed sample metrics" not in picks
             elif state == "second":
                 assert html.count('data-published-slip=') == 1 and "No settled score" in html and "Void" in html
             elif state == "outside":
@@ -60,15 +64,8 @@ def main():
                 assert "&lt;script&gt;synthetic-league-marker&lt;/script&gt;" in html, "competition names must render as escaped text"
             elif state == "league-outside":
                 assert "This league page is outside the selected period" in html and "View first league page" in html
-            elif state == "returns":
-                block = re.search(r'<div data-prediction-returns="available">[\s\S]*?</div></div>', html)
-                assert block and "Illustrative returns" in block.group(), "available individual returns render"
-                assert "30%" in html and "0.6 units" in html and "2.6 units" in html and "2.05" in html
-                assert "1 settled predictions have no odds recorded at publication" in html
-                assert "1 settled predictions had no current public odds when published" in html
-                assert "Original odds are not published beside individual predictions yet" not in html
             assert 'href="/en/performance' in html
-        print("PASS 10 production performance states: reviewed/unapproved metrics, full-period slip and individual returns, slip/league pagination, unknown league, empty/outage states, active-quote omission and native filter reset.", flush=True)
+        print("PASS 10 production performance states: reviewed/unapproved metrics, separate pick/slip returns, missing quotes, slip/league pagination, unknown league, empty/outage states, active-quote omission and native filter reset.", flush=True)
         if args.serve:
             server.serve()
 

@@ -3,7 +3,7 @@ import test from 'node:test';
 import { resolveFeedDates, parseFeedQuery } from '../src/domain/feed-query.ts';
 import { storedMatchFeedResponseSchema } from '../src/domain/match-feed.ts';
 import { marketRules, validateMarketSnapshot } from '../src/domain/markets.ts';
-import { defaultSlipCriteria } from '../src/domain/slip-builder.ts';
+import { buildSlips, defaultSlipCriteria } from '../src/domain/slip-builder.ts';
 import { MatchFeedError } from '../src/server/matches/feed-error.ts';
 import { readPublicSlipBuild } from '../src/server/slips/public-slips.ts';
 import { createSlipBuildService, slipReadRules } from '../src/server/slips/slip-service.ts';
@@ -37,6 +37,44 @@ function service(read, overrides = {}) {
   return createSlipBuildService({ read, consume: async () => {}, providerOdds: true, clock, ...overrides });
 }
 
+test('combined filters without a verified joint model fail before cohort reads or budget charges', async () => {
+  let reads = 0, consumes = 0;
+  const read = async () => { reads++; throw new Error('No cohort read expected.'); };
+  const consume = async () => { consumes++; };
+  const model = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
+    validFrom: now - 1, validUntil: now + 1000, estimate: () => 0.5 };
+  for (const jointModel of [null, { model, verifyModel: () => false }, { model: { ...model, validUntil: now }, verifyModel: () => true },
+    { model, verifyModel: () => Promise.resolve(true) }, { model, verifyModel: () => { throw new Error('untrusted'); } }]) {
+    const result = await service(read, { consume, jointModel }).query(criteria({ totalProbMin: 50 }));
+    assert.equal(result.state, 'model-unavailable'); assert.equal(result.data, null);
+  }
+  assert.equal(reads, 0); assert.equal(consumes, 0);
+});
+
+test('custom service rechecks joint approval after the scan and after estimating without changing the mean', async () => {
+  const records = [record('fixture-1'), record('fixture-2')];
+  const model = { calibrationReference: 'synthetic-calibration', correlationReference: 'synthetic-correlation',
+    validFrom: now - 1, validUntil: now + 1000, estimate: () => 0.5 };
+  const input = criteria({ totalProbMin: 45, totalProbMax: 55 });
+  const success = await service(async parameters => page(parameters, records), { jointModel: { model, verifyModel: () => true } }).query(input);
+  assert.equal(success.state, 'generated'); assert.equal(success.data.slips[0].averageProbability, 0.6);
+  assert.equal(success.data.jointProbabilities[success.data.slips[0].id], 0.5);
+  let approved = true;
+  const revokedWhileReading = await service(async parameters => { approved = false; return page(parameters, records); },
+    { jointModel: { model, verifyModel: () => approved } }).query(input);
+  assert.equal(revokedWhileReading.state, 'model-unavailable'); assert.equal(revokedWhileReading.data, null);
+  approved = true;
+  const revokedWhileEstimating = await service(async parameters => page(parameters, records), {
+    jointModel: { model: { ...model, estimate: () => { approved = false; return 0.5; } }, verifyModel: () => approved },
+  }).query(input);
+  assert.equal(revokedWhileEstimating.state, 'model-unavailable'); assert.equal(revokedWhileEstimating.data, null);
+  let ticks = 0;
+  const expired = await service(async parameters => page(parameters, records), {
+    clock: { now: () => ticks++ < 2 ? now : now + 1000 }, jointModel: { model, verifyModel: () => true },
+  }).query(input);
+  assert.equal(expired.state, 'model-unavailable'); assert.equal(expired.data, null);
+});
+
 test('disabled public odds policy makes no stored-price, database or rate-limit reads', async () => {
   let reads = 0, consumes = 0;
   const result = await service(async () => { reads++; throw new Error('should not read'); }, {
@@ -45,6 +83,52 @@ test('disabled public odds policy makes no stored-price, database or rate-limit 
   assert.equal(result.state, 'odds-unavailable'); assert.equal(result.data, null);
   assert.equal(reads, 0); assert.equal(consumes, 0);
   assert.equal((await readPublicSlipBuild(criteria(), clock)).state, 'odds-unavailable');
+  // The odds policy is checked before the whole-slip estimate requirement.
+  assert.equal((await readPublicSlipBuild(criteria({ totalProbMin: 50 }), clock)).state, 'odds-unavailable');
+});
+
+// Synthetic test evidence only: this model is never bound to the production service.
+const jointModel = { calibrationReference: 'synthetic-test-calibration', correlationReference: 'synthetic-test-joint-outcomes',
+  validFrom: now - 1000, validUntil: now + 60_000, estimate: selections => Math.min(...selections.map(item => item.probability)) - 0.05 * (selections.length - 1) };
+
+test('whole-slip bounds without a current qualified model are unavailable before any read or limiter charge', async () => {
+  for (const model of [null, { ...jointModel, validUntil: now }, undefined]) {
+    let reads = 0, consumes = 0;
+    const result = await service(async () => { reads++; throw new Error('should not read'); }, {
+      consume: async () => { consumes++; }, ...(model === undefined ? {} : { jointModel: () => model ? { model, verifyModel: () => true } : null }) }).query(criteria({ totalProbMin: 50 }));
+    assert.equal(result.state, 'model-unavailable'); assert.equal(result.data, null);
+    assert.equal(reads, 0); assert.equal(consumes, 0);
+  }
+});
+
+test('a current qualified model ranks and bounds custom builds with a separate whole-slip estimate', async () => {
+  const records = [record('fixture-1'), record('fixture-2')], read = async parameters => page(parameters, records);
+  const result = await service(read, { jointModel: () => ({ model: jointModel, verifyModel: () => true }) }).query(criteria({ totalProbMin: 50 }));
+  assert.equal(result.state, 'generated'); assert.equal(result.data.excludedUnestimated, 0);
+  assert.ok(result.data.slips.length > 0 && result.data.slips.every(slip => Math.abs(result.data.jointProbabilities[slip.id] - 0.55) < 1e-12));
+  assert.equal(result.data.slips[0].averageProbability, 0.6);
+  assert.equal((await service(read, { jointModel: () => ({ model: jointModel, verifyModel: () => true }) }).query(criteria({ totalProbMin: 60 }))).state, 'no-combinations');
+});
+
+test('a model expiring during the bounded read withholds the build', async () => {
+  const run = (validUntil) => {
+    let ticks = 0;
+    return service(async parameters => page(parameters, [record('fixture-1'), record('fixture-2')]), {
+      clock: { now: () => ticks++ === 0 ? now : now + 2000 }, jointModel: () => ({ model: { ...jointModel, validUntil }, verifyModel: () => true }) }).query(criteria());
+  };
+  const expired = await run(now + 1000);
+  assert.equal(expired.state, 'model-unavailable'); assert.equal(expired.data, null);
+  assert.equal((await run(now + 60_000)).state, 'generated');
+});
+
+test('an unavailable configured estimator fails closed; explicit builds never consult it', async () => {
+  const records = [record('fixture-1'), record('fixture-2')], read = async parameters => page(parameters, records);
+  const average = await service(read, { jointModel: () => { throw new Error('estimator unavailable'); } }).query(criteria());
+  assert.equal(average.state, 'model-unavailable'); assert.equal(average.data, null);
+  let resolutions = 0, builds = 0;
+  const build = (...args) => { builds++; return buildSlips(...args); };
+  const explicit = await service(read, { build, jointModel: () => { resolutions++; return { model: jointModel, verifyModel: () => true }; } }).query(criteria());
+  assert.equal(explicit.state, 'generated'); assert.equal(builds, 1); assert.equal(resolutions, 0); assert.equal('joint' in explicit.data, false);
 });
 
 test('build uses one EAT stored cohort, all requested families, one budget charge and a final uncached probe', async () => {

@@ -35,9 +35,9 @@ export function SlipAccessRequired({ locale, showAccount = false, signedIn = fal
 
 export type SlipCriteriaIssue = Readonly<{ code: SlipCriteriaErrorCode; field: keyof SlipCriteria | "query" }>;
 type CriteriaGroup = "limits" | "kickoff" | "markets";
-type NumericRangeField = `${"total" | "teams" | "odds" | "prob"}${"Min" | "Max"}`;
+type NumericRangeField = `${"total" | "teams" | "odds" | "prob" | "totalProb"}${"Min" | "Max"}`;
 const groupFields = {
-  limits: ["oddsMin", "oddsMax", "probMin", "probMax"],
+  limits: ["oddsMin", "oddsMax", "probMin", "probMax", "totalProbMin", "totalProbMax"],
   kickoff: ["dateFrom", "dateTo", "timeFrom", "timeTo"],
   markets: [],
 } as const;
@@ -57,7 +57,7 @@ function isNumericRange(name: typeof slipInputFields[number]): name is NumericRa
 }
 
 function rangeValue(name: NumericRangeField, value: string | undefined, defaults: SlipCriteria) {
-  const bound = defaults[name] / (name.startsWith("total") || name.startsWith("odds") ? 100 : 1);
+  const bound = (defaults[name] ?? (name.endsWith("Min") ? 0 : 100)) / (name === "totalMin" || name === "totalMax" || name.startsWith("odds") ? 100 : 1);
   return value === undefined || value === "" ? bound : Number(value);
 }
 
@@ -68,7 +68,7 @@ function criteriaDraft(criteria: SlipCriteria, inputs: SlipInputs = {}): SlipInp
     let value = inputs[name] ?? values.get(name) ?? "";
     if (!value && name !== "slips" && !isNumericRange(name)) value = values.get(name) || (name === "timeFrom" ? fullDayKickoffTime.from : name === "timeTo" ? fullDayKickoffTime.to : "");
     // Display the same number without spending phone width on trailing decimal zeroes.
-    const numericFormat = name.startsWith("prob") ? /^(0|[1-9]\d*)(?:\.\d{1,3})?$/
+    const numericFormat = name.startsWith("prob") || name.startsWith("totalProb") ? /^(0|[1-9]\d*)(?:\.\d{1,3})?$/
       : name.startsWith("odds") || name.startsWith("total") ? /^(0|[1-9]\d*)(?:\.\d{1,2})?$/ : /^[1-9]\d*$/;
     if (name !== "dateFrom" && name !== "dateTo" && name !== "timeFrom" && name !== "timeTo" && numericFormat.test(value)) {
       value = isNumericRange(name) && rangeValue(name, value, defaults) === rangeValue(name, undefined, defaults) ? "" : String(Number(value));
@@ -81,10 +81,11 @@ type Props = Readonly<{
   error?: SlipCriteriaIssue | null; initialInputs?: SlipInputs; initialMarkets?: readonly MarketFamily[];
   initialOutcomes?: SlipCriteria["outcomes"];
   initialReuse?: boolean; showAccount?: boolean; subscriberOnly?: boolean; signedIn?: boolean;
+  jointEstimates?: boolean;
 }>;
 
 /** The native GET form and enhanced navigation use the same strict criteria parser. */
-export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false }: Props) {
+export function SlipBuilder({ locale, today, criteria, result, error: initialError = null, initialInputs = {}, initialMarkets, initialOutcomes, initialReuse, showAccount = false, subscriberOnly = false, signedIn = false, jointEstimates = false }: Props) {
   const messages = createMessages(locale), router = useRouter(), prefix = useId();
   const [pending, startTransition] = useTransition(), [error, setError] = useState(initialError);
   const enhanced = useSyncExternalStore(subscribeNever, clientReady, serverReady);
@@ -118,7 +119,9 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     } catch { return messages.text("slips.summary.checkDates"); }
   }
   const invalidField = error?.field;
-  const invalidLimits = invalidField === "oddsMin" || invalidField === "oddsMax" || invalidField === "probMin" || invalidField === "probMax";
+  const showJoint = jointEstimates || criteria.totalProbMin !== undefined || criteria.totalProbMax !== undefined
+    || initialInputs.totalProbMin !== undefined || initialInputs.totalProbMax !== undefined;
+  const invalidLimits = groupFields.limits.some((field) => field === invalidField);
   const invalidKickoff = invalidField === "dateFrom" || invalidField === "dateTo" || invalidField === "timeFrom" || invalidField === "timeTo";
   const invalidMarkets = invalidField === "markets" || invalidField === "outcomes";
   const manualMarkets = selectedMarkets.filter((family) => outcomes[family]?.length).length;
@@ -133,7 +136,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
   const dialogTitle = (group: CriteriaGroup) => group === "limits" ? messages.text("slips.dialog.limits")
     : group === "kickoff" ? messages.text("slips.dialog.kickoffTitle") : messages.text("slips.accordion.markets");
   const summaries = {
-    limits: messages.text("slips.summary.limits", { odds: range("oddsMin", "oddsMax"), probability: range("probMin", "probMax", "%") }),
+    limits: messages.text(showJoint ? "slips.summary.limitsJoint" : "slips.summary.limits", { odds: range("oddsMin", "oddsMax"), probability: range("probMin", "probMax", "%"), combined: range("totalProbMin", "totalProbMax", "%") }),
     kickoff: messages.text("slips.summary.kickoff", { dates: dateSummary(), times: range("timeFrom", "timeTo") }),
     markets: marketsSummary,
   };
@@ -142,7 +145,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       ? rangeValue(name, draft[name], resetCriteria) !== rangeValue(name, undefined, resetCriteria) : draft[name] !== resetDraft[name]);
   }
   const criteriaCounts = {
-    limits: Number(changed(["oddsMin", "oddsMax"])) + Number(changed(["probMin", "probMax"])),
+    limits: Number(changed(["oddsMin", "oddsMax"])) + Number(changed(["probMin", "probMax"])) + Number(changed(["totalProbMin", "totalProbMax"])),
     kickoff: Number(changed(["dateFrom", "dateTo"])) + Number(changed(["timeFrom", "timeTo"])),
     markets: selectedMarkets.length,
   };
@@ -215,7 +218,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
     const invalid = error?.field === name || (error?.field === "dateFrom" && name === "dateTo")
       || (error?.field === "timeFrom" && name === "timeTo")
       || (error?.field === "totalMin" && name === "totalMax") || (error?.field === "oddsMin" && name === "oddsMax")
-      || (error?.field === "probMin" && name === "probMax") || (error?.field === "teamsMin" && name === "teamsMax");
+      || (error?.field === "probMin" && name === "probMax") || (error?.field === "totalProbMin" && name === "totalProbMax") || (error?.field === "teamsMin" && name === "teamsMax");
     return <TextInput name={name} id={`${prefix}-${name}`} label={label} type="number" inputMode="decimal"
       placeholder={isNumericRange(name) ? messages.text("slips.any") : undefined}
       value={draft[name] ?? ""} onChange={(event) => { const value = event.currentTarget.value.slice(0, 256); setDraft((current) => ({ ...current, [name]: value })); }} aria-invalid={invalid || undefined}
@@ -274,6 +277,10 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
             {field("probMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMin") })}
             {field("probMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.probMax") })}
           </Fields></fieldset>
+          {showJoint && <fieldset data-joint-limit><legend>{messages.text("slips.combinedProbabilityPercent")}</legend><Fields>
+            {field("totalProbMin", messages.text("slips.minimum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMin") })}
+            {field("totalProbMax", messages.text("slips.maximum"), { min: 0, max: 100, step: "0.001", "aria-label": messages.text("slips.totalProbMax") })}
+          </Fields><Note>{messages.text("slips.combinedProbabilityHint")}</Note></fieldset>}
         </LimitGroups></FieldGroup>
         </CriteriaDialog>
         <CriteriaDialog id={`${prefix}-kickoff`} group="kickoff" title={dialogTitle("kickoff")} open={activeGroup === "kickoff"}
@@ -326,9 +333,13 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
           requested: messages.plural("slips.requestedCount", criteria.slips), matches: messages.plural("slips.qualifyingMatches", data.qualifyingMatches) })}</Note>}
       </HeadingRow>
       {subscriberOnly ? <EmptyState headingLevel={3} title={messages.text("paywall.slips")} description={messages.text("paywall.slipsDescription")} action={<ButtonLink href={subscriberHref(signedIn, "/en/slips")} prefetch={false}>{messages.text(signedIn ? "subscribe.title" : "account.register")}</ButtonLink>} /> : generated ? <>
-        <Note>{messages.text("slips.ranking")}</Note>
-        {data.slips.map((slip, index) => <div key={slip.id}><SlipTable slip={slip} index={index} locale={locale} />
-          {signedIn && <SaveSlip slipId={slip.id} criteria={criteria} locale={locale} />}</div>)}
+        <Note>{messages.text(data.jointProbabilities ? "slips.jointRanking" : "slips.ranking")}</Note>
+        {data.slips.map((slip, index) => {
+          const estimatedProbability = data.jointProbabilities?.[slip.id];
+          return <div key={slip.id}><SlipTable slip={slip} index={index} locale={locale}
+            {...(estimatedProbability !== undefined ? { estimatedProbability } : {})} />
+            {signedIn && <SaveSlip slipId={slip.id} criteria={criteria} locale={locale} />}</div>;
+        })}
         <Note>{messages.text("slips.averageHint")}</Note>
       </> : <EmptyState headingLevel={3} title={messages.text(emptyState ? `slips.state.${emptyState}.title` : "slips.idleTitle")}
         description={messages.text(emptyState ? `slips.state.${emptyState}.description` : "slips.idle")} />}
@@ -337,6 +348,7 @@ export function SlipBuilder({ locale, today, criteria, result, error: initialErr
       {generated && data.slips.length < criteria.slips && !result.searchLimited && <Note>{messages.text("slips.fewer")}</Note>}
       {data && (data.excludedMissingOdds > 0 || data.excludedMissingForecast > 0) && <Note>{messages.text("slips.excluded", {
         odds: messages.number(data.excludedMissingOdds), forecasts: messages.number(data.excludedMissingForecast) })}</Note>}
+      {data?.excludedUnestimated !== undefined && data.excludedUnestimated > 0 && <Note>{messages.plural("slips.unestimated", data.excludedUnestimated)}</Note>}
       {result && <Note>{messages.text("slips.asOf", { time: messages.reportingInstant(utcInstantFromEpochMilliseconds(result.asOf)) })}</Note>}
       {!result && !publicPolicy.features.providerOdds && <Note>{messages.text("slips.oddsNotice")}</Note>}
       <VisuallyHidden role="status" aria-live="polite">{pending ? messages.text("slips.building") : ""}</VisuallyHidden>

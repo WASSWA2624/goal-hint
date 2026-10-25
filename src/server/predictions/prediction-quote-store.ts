@@ -2,7 +2,8 @@ import "server-only";
 import { z } from "zod";
 import { marketFamilySchema } from "../../domain/fixture-snapshot.ts";
 import { marketSelections, type MarketFamily } from "../../domain/markets.ts";
-import { formatOddsHundredths, oddsRules } from "../../domain/odds.ts";
+import { DE_MARGIN_METHOD, formatOddsHundredths, oddsDisplayHundredths, oddsRules, parseDecimalOdds } from "../../domain/odds.ts";
+import { ODDS_MAPPING_VERSION } from "../../domain/odds-markets.ts";
 import { evidenceFingerprint, evidenceSerialize, freezeEvidence } from "../evidence/evidence-input.ts";
 import type { ResolvedForecastCandidate } from "../fallback/fallback-contract.ts";
 import { Prisma } from "../generated/prisma/client.ts";
@@ -12,20 +13,23 @@ import { historyHash, historyId, historyInstant } from "./history-input.ts";
 import { assertHistorySeal, historyJson, historyTime, type HistoryRow } from "./history-read.ts";
 
 type Tx = Prisma.TransactionClient;
-const label = z.string().min(1).max(32).regex(/^[a-z0-9-]+-v[0-9]+$/u);
 const hash = /^[a-f0-9]{64}$/u;
 export const predictionQuoteReasons = ["no-public-price", "price-state-expired", "unsupported-price-basis", "invalid-public-price"] as const;
 const priceSchema = z.strictObject({ display: z.string().regex(/^[1-9]\d{0,3}\.\d{2}$/u),
   hundredths: z.number().int().min(oddsRules.minimumHundredths).max(oddsRules.maximumHundredths),
-  decimal: z.string().regex(/^[1-9]\d{0,5}\.\d{4}$/u), basis: z.literal("bookmaker"), method: label, mappingVersion: label,
+  decimal: z.string().regex(/^[1-9]\d{0,5}\.\d{4}$/u), basis: z.literal("bookmaker"), bookmakerId: z.number().int().positive().max(4_294_967_295),
+  method: z.literal(DE_MARGIN_METHOD), mappingVersion: z.literal(ODDS_MAPPING_VERSION),
   line: z.string().regex(/^\d{1,4}\.\d{2}$/u).nullable(), snapshotId: historyHash, retrievedAt: historyInstant,
-  providerUpdatedAt: historyInstant.nullable(), stateRetrievedAt: historyInstant });
+  providerUpdatedAt: historyInstant.nullable(), stateRetrievedAt: historyInstant }).refine((value) => {
+    const parsed = parseDecimalOdds(value.decimal);
+    return parsed !== null && oddsDisplayHundredths(parsed) === value.hundredths;
+  });
 const quoteSchema = z.strictObject({ version: z.literal(1), revisionId: historyId, cycleId: historyId, fixtureId: historyId,
   family: marketFamilySchema, selection: z.string().min(1).max(32), state: z.enum(["quoted", "unavailable"]),
   reason: z.enum(predictionQuoteReasons).nullable(), recordedAt: historyInstant, price: priceSchema.nullable(),
 }).refine((v) => (marketSelections[v.family] as readonly string[]).includes(v.selection) &&
   (v.state === "quoted") === (v.reason === null) && (v.state === "quoted") === (v.price !== null) &&
-  (v.price === null || v.price.display === formatOddsHundredths(v.price.hundredths) && v.price.retrievedAt <= v.recordedAt &&
+  (v.price === null || v.price.display === formatOddsHundredths(v.price.hundredths) && v.price.line === (v.family === "total-goals" ? "2.50" : null) && v.price.retrievedAt <= v.recordedAt &&
     v.price.stateRetrievedAt <= v.recordedAt && (v.price.providerUpdatedAt === null || v.price.providerUpdatedAt <= v.price.retrievedAt)));
 /** Sealed public price beside one published family prediction; `quoted` rows carry the price shown at publication. */
 export type PredictionQuote = Readonly<z.infer<typeof quoteSchema>>;
@@ -53,10 +57,12 @@ export function preparePredictionQuotes(input: QuoteIdentity & Readonly<{ source
     else if (state.withdrawnAt !== null || lastRetrievedAt! > identity.recordedAt || identity.recordedAt - lastRetrievedAt! > identity.freshnessMs) reason = "price-state-expired";
     else if (!row) reason = "no-public-price";
     else if (row.basis !== "bookmaker") reason = "unsupported-price-basis";
-    else if (row.snapshotId === null || !hash.test(row.snapshotId) || !Number.isInteger(hundredths) || hundredths < oddsRules.minimumHundredths ||
+    else if (row.snapshotId === null || !hash.test(row.snapshotId) || !Number.isInteger(row.bookmakerId) || row.bookmakerId! <= 0 ||
+      !Number.isInteger(hundredths) || hundredths < oddsRules.minimumHundredths ||
       hundredths > oddsRules.maximumHundredths || !Number.isSafeInteger(retrievedAt) || retrievedAt! > identity.recordedAt ||
+      identity.recordedAt - retrievedAt! > identity.freshnessMs ||
       providerUpdatedAt !== null && providerUpdatedAt > retrievedAt!) reason = "invalid-public-price";
-    const price = reason === null ? { display: formatOddsHundredths(hundredths), hundredths, decimal: row!.priceDecimal, basis: "bookmaker" as const,
+    const price = reason === null ? { display: formatOddsHundredths(hundredths), hundredths, decimal: row!.priceDecimal, basis: "bookmaker" as const, bookmakerId: row!.bookmakerId!,
       method: row!.method, mappingVersion: row!.mappingVersion, line: row!.line, snapshotId: row!.snapshotId!, retrievedAt: retrievedAt!,
       providerUpdatedAt, stateRetrievedAt: lastRetrievedAt! } : null;
     const parsed = quoteSchema.safeParse({ ...base, state: price ? "quoted" : "unavailable", reason, price });

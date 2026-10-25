@@ -170,6 +170,46 @@ test('provider-fallback-only plans publish without a model pin or AI dispatch', 
   });
 });
 
+test('provider baseline publication retains matched AI shadow output in immutable MySQL stages', { timeout: 400000 }, async (t) => {
+  await withPredictionPipeline(t, async (db) => {
+    const h = await refreshHarness(db, [{}, { fallback: 'none' }, { fallback: 'outage' }], {
+      fallbackSelectionPolicy: 'provider-baseline',
+    });
+    for (let index = 0; index < 3; index++) {
+      h.source.clock.value = db.now();
+      assert.equal(await h.worker.runOnce(), true);
+      const outcome = await h.outcome(index);
+      assert.ok(outcome);
+      const primary = (await h.store.stage(outcome.jobId, 'ai', 'completed')).value;
+      const baseline = (await h.store.stage(outcome.jobId, 'fallback', 'completed')).value;
+      assert.equal(primary.status, 'candidate');
+      assert.equal(primary.output.markets.markets['match-result'].market.source, 'ai');
+      assert.equal(evidenceFingerprint(primary.output.context), evidenceFingerprint(baseline.candidate.context.context));
+      assert.equal(primary.pin.id, baseline.candidate.context.pin.id);
+      assert.equal(primary.output.evidenceHash, baseline.candidate.context.evidenceHash);
+      const display = await db.publisher.displayForFixture(outcome.fixtureId);
+      if (index === 0) {
+        assert.equal(outcome.outcome, 'published');
+        const selected = display.revision.candidate.markets;
+        assert.equal(selected['match-result'].market.source, 'api-football');
+        assert.equal(selected['double-chance'].market.source, 'api-football');
+        assert.equal(selected['match-result'].fallback.reason, 'provider-baseline');
+        assert.equal(selected['total-goals'].available, false);
+        assert.notEqual(primary.output.markets.markets['match-result'].market.selectedProbability, selected['match-result'].market.selectedProbability);
+        assert.deepEqual(selected['match-result'].timestamps, baseline.candidate.markets['match-result'].timestamps);
+        assert.equal(display.revision.evidenceCutoffAt, primary.output.context.cutoffAt);
+      } else {
+        assert.equal(outcome.outcome, 'unavailable');
+        assert.equal(display.revision, null, 'a provider failure cannot promote the retained shadow candidate');
+      }
+      await assert.rejects(db.a.query((tx) => tx.$executeRawUnsafe(
+        'UPDATE PredictionRefreshStage SET integrity = ? WHERE jobId = ?', evidenceHash('shadow-tamper'), outcome.jobId)));
+    }
+    assert.equal(h.calls.ai.length, 3);
+    assert.equal(h.calls.fallback.length, 3);
+  }, { migrationTimeoutMs: 180000 });
+});
+
 test('retention, overlapping runs, freshness and paid-dispatch death recovery', { timeout: 300000 }, async (t) => {
   await withPredictionPipeline(t, async (db) => {
     const scenarios = [{}, {}, {}, {}, {}], h = await refreshHarness(db, scenarios);

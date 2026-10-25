@@ -87,75 +87,6 @@ period. A win, void or unresolved slip interrupts the streak. The longest and
 period-end streaks therefore do not claim a run extending outside the selected
 window or through unresolved outcomes.
 
-## Illustrative individual-prediction returns and streaks
-
-`src/domain/prediction-returns.ts` is the pure aggregation boundary for each
-horizon-free market/source cell and each league cell. It does not share code with
-the slip summary. It rejects duplicate revision IDs, unsafe clocks, unknown
-outcomes and quotes outside 1.01–1000.00, sorts a copy of its input and never
-mutates it.
-
-Samples are exactly the outcomes the cell already counts: each settled won/lost
-prediction (`returns.settled` equals the metric denominator and `returns.won`
-equals the correct count), each pending prediction and each attributable void.
-Filtered-out sources/versions and unavailable families never become samples.
-A void interrupts a cell's streak only when it belongs to that cell: the void
-cycle or audited void settlement must have a locked, available prediction for the
-family that also passes the cell's source/model/version filters. A void cycle
-without a lock stays in `coverage.void` only.
-
-Losing streaks follow scheduled kickoff, then locked publication time, then
-revision ID, within the selected period. A win, void or pending prediction
-interrupts the sequence; streaks never extend outside the period. Horizon cells
-carry `returns: null`; there is no cross-market "all predictions" return,
-because one fixture appears in several market cards.
-
-The return illustration stakes one unit on each won or lost prediction at the
-original public odds shown when that locked prediction was published. A win
-returns the quote including the unit; a loss returns zero. Void and pending
-predictions are excluded, imply no refund and never enter mean odds or any other
-price aggregate. Settled predictions without a captured quote are counted as
-missing; those that had no current public price at publication are counted as
-unavailable. Both are excluded from the return sample and reported separately.
-
-### Capturing the original public quote
-
-The quote is captured once, in the locked revision's own publication
-transaction (`src/server/predictions/prediction-quote-store.ts`). It runs after
-the revision, its goal/implied extensions and extended picks are written and
-before the cycle's current pointer moves. The publication's final eligibility
-re-check rolls the capture back together with the revision. Retained-previous,
-unavailable and skipped outcomes capture nothing. There is no backfill and no
-reconstruction from snapshot history: revisions published before the migration,
-or while capture was off, count as missing quotes.
-
-Each available family gets exactly one `PredictionQuote` row, read in one
-non-locking statement from the fixture's odds state and the fresh public
-`FixtureOddsPrice` row for exactly that family and locked selection, with no
-fallback or borrowed family. A row is `quoted` only for a bookmaker-basis price
-whose state is not withdrawn and was reconfirmed within the odds freshness
-window before publication. Otherwise it is `unavailable` with reason
-`no-public-price`, `price-state-expired`, `unsupported-price-basis` or
-`invalid-public-price`. Missing means no row was captured; unavailable means the
-capture found no usable public price. Later odds changes never rewrite a row.
-
-Capture and display are both gated. The live publisher captures only while
-`publicPolicy.features.providerOdds` is on **and** the owner-recorded
-`football-odds-rights` approval verifies (the published-slip precedent). The
-performance reader reads quotes only while the same code flag is on. With the
-flag off, every cell reports `state: "unavailable"` with reason
-`odds-display-disabled`, zero quote counts and null stake/return/profit/ROI/mean
-odds, and no SQL reads `PredictionQuote`; outcome counts and losing streaks stay
-real. An enabled cohort with no priced settled prediction reports
-`no-quoted-settled-predictions` and null money fields, never zero. Returns are
-an ungated illustration like slip ROI; the quality-gated hit rate and
-`publicClaimAuthorized=false` are unchanged.
-
-Captured hundredths outlive the private snapshot `retainUntil` window
-(kickoff + 30 days), as the published-slip archive does; the owner must confirm
-that retention. A very small cohort's mean odds can reveal one historical public
-price.
-
 ## Verification
 
 `tests/slip-performance.test.mjs` checks exact returns, quote exclusions,
@@ -189,19 +120,64 @@ The genuine MySQL performance acceptance also passed all nine checks against an
 owned MySQL 8.4.13 instance, including canonical competition metadata, subgroup
 counts/denominators and the original bounded read-only reporting workflow.
 
-`tests/prediction-returns.test.mjs` checks exact hundredths, void/pending price
-exclusion, missing/unavailable accounting, display-disabled and unpriced states,
-kickoff/publication/ID ordering and streak interruption. `tests/performance.test.mjs`
-reconciles returns with every horizon-free and league cell and checks void
-attribution, filtered-out exclusion, quote integrity and that the flag-off service
-never reads `PredictionQuote`. `tests/prediction-quote-store.test.mjs` covers
-every capture reason and sealed-row parsing. `tests/prediction-quotes.integration.mjs`
-deploys the migration on owned MySQL 8.4 and checks capture gating, rollback with
-the final re-check, immutability against later odds, the triggers and CHECKs, and
-hand-reconciled returns after cutoff, result and settlement. The rendering
-verifier's `returns` state shows available returns with missing/unavailable notes.
-
-Production calibration evidence, reviewed league cohorts, captured individual-prediction quotes,
+Production calibration evidence, reviewed league cohorts,
 matched provider/AI comparisons and actual bookmaker/customer returns remain
 separate work. The reporting page never activates a forecasting model or calls
 a football provider.
+
+## Individual-pick returns
+
+Individual market/source/horizon and league cells now carry their own descriptive
+return sample and losing streaks. They reuse the exact integer-hundredths
+arithmetic from slip reporting without pooling the two denominators. A selected
+pick earns one illustrative unit of stake only when its locked original selection
+is coherently settled won/lost and has a permitted stored pre-publication quote.
+Void/pending outcomes never imply refunds or enter quote aggregates. Streaks use
+forecast publication time/revision identity within the selected kickoff-date
+period; pending/void forecasts interrupt a streak. No history page is substituted
+for a full-period cohort. Missing quotes produce unavailable returns and an
+explicit excluded count, rather than a zero-profit claim.
+
+`PerformanceQuoteBinding` is a trusted server dependency for one documented
+bookmaker, a bounded approved maximum quote age and independently verified public
+historical-display permission. It must cover the frozen launch-market mapping and
+its catalog semantics. `readPublicPerformance` intentionally supplies no such
+binding pending that review. Reference strings and request parameters cannot
+enable it. The grant is rechecked after reads and cache access, including uncached
+responses. Quote policies separate cache entries from counts-only entries.
+
+The reader uses sealed `PredictionQuote` sidecars captured in the same transaction
+as each new forecast publication. It never reconstructs availability from
+transient provider snapshots, receipts or current prices. The captured bookmaker,
+original revision/cycle/fixture, publication clock and selected family/outcome
+must agree; malformed seals or identities fail closed. The quote must be from
+the approved bookmaker, observed after the original cycle opened, before its
+forecast publication/cutoff and within the approved age. Missing or explicitly
+unavailable captures remain excluded; older revisions receive no backfill.
+
+## Capturing the original public quote
+
+Migration `20261025180538_prediction_quotes` adds one append-only table. The
+publisher's optional `quotes.verify` must prove both enabled public odds and the
+owner's display/retention rights. After appending the prediction it copies the
+fresh public price for that exact family and selection, or an explicit unavailable
+reason, before moving the current revision pointer. The final rights and
+publication eligibility checks roll back the whole transaction if revoked.
+No source call is made. One non-locking SQL statement reads odds state and public
+prices under READ COMMITTED; no odds lock order is added.
+
+A capture retains original displayed hundredths, decimal quote, bookmaker,
+source and state clocks, versioned mapping/line and snapshot provenance hash.
+The source must have consistent exact decimal/display arithmetic and a supported
+mapping. Rows are sealed and reject UPDATE/DELETE. Their provenance hash has no
+foreign key to transient odds history, so a separately reviewed compaction can
+retain these publication facts without retaining every provider payload.
+
+Apply the migration and reviewed SELECT/INSERT grant before deploying enabled
+capture. Historical public returns separately require `PerformanceQuoteBinding`;
+capture does not activate that grant or a forecasting-quality policy. Missing
+permissions or database failures must not be treated as fabricated quotes.
+
+The illustration describes the quoted cohort only. It does not establish
+bookmaker acceptance, financial advice, customer returns, forecast quality or
+future profit. Calibration retains its independent policy/sample gates.

@@ -8,9 +8,7 @@ import { createPerformanceHandler } from '../src/server/performance/performance-
 import { readPerformanceSnapshot } from '../src/server/performance/performance-read.ts';
 import { fixtureResultFromRow } from '../src/server/results/result-read.ts';
 import { evidenceFingerprint, evidenceSerialize } from '../src/server/evidence/evidence-input.ts';
-import { performanceRecord, performanceSnapshot, performanceProtocol, withQuotes } from './helpers/performance-fixtures.mjs';
-import { publicCacheDescriptor } from '../src/server/cache/public-cache.ts';
-import { MatchFeedError } from '../src/server/matches/feed-error.ts';
+import { performanceRecord, performanceSnapshot, performanceProtocol } from './helpers/performance-fixtures.mjs';
 import { modelVersion } from './helpers/predictor-fixtures.mjs';
 
 const today = parseReportingDate('2026-10-09'), asOf = Date.parse('2026-10-09T12:00:00Z');
@@ -236,132 +234,38 @@ test('anonymous success uses shared uncached safe serialization and no cookies',
 });
 
 const lostRecord = (options = {}) => performanceRecord({ score: [0, 1], ...options });
-const at = (record, kickoffAt) => { record.cycle.kickoffAt = kickoffAt; if (record.revision) record.revision.publishedAt = kickoffAt - 3_600_000; return record; };
-test('individual returns reconcile with every horizon-free and league cell and stay absent from horizon cells', () => {
+const at = (record, publishedAt) => { if (record.revision) record.revision.publishedAt = publishedAt; return record; };
+test('every source, league and horizon return summary reconciles with its own settled denominator', () => {
   const data = report([performanceRecord(), lostRecord(), performanceRecord({ source: 'api-football' }), lostRecord({ source: 'api-football' }),
     performanceRecord({ state: 'void' }), performanceRecord({ state: 'open' }), performanceRecord({ score: null })], performanceProtocol());
-  for (const item of data.cells) {
-    if (item.horizon) { assert.equal(item.returns, null); continue; }
-    assert.equal(item.returns.settled, item.metrics.denominator); assert.equal(item.returns.won, item.metrics.correct);
-    assert.equal(item.returns.lost, item.metrics.incorrect);
-    assert.equal(item.returns.state, 'unavailable'); assert.equal(item.returns.reason, 'odds-display-disabled');
-    assert.equal(item.returns.roi, null); assert.equal(item.returns.returnsSampleCount, 0);
+  for (const item of [...data.cells, ...data.leagues.records.flatMap(row => row.cells)]) {
+    assert.equal(item.returns.settled, item.metrics.denominator); assert.equal(item.returns.returnsSampleCount, 0);
+    assert.equal(item.returns.roi, null); assert.equal(item.returns.excludedQuoteCount, item.metrics.denominator);
   }
-  assert.ok(data.cells.some((item) => item.horizon !== null));
-  for (const league of data.leagues.records) for (const item of league.cells) {
-    assert.equal(item.returns.settled, item.metrics.denominator); assert.equal(item.returns.won, item.metrics.correct);
-  }
+  assert.ok(data.cells.some(item => item.horizon !== null));
   assert.equal(cell(data).returns.settled, 4); assert.equal(cell(data, 'match-result', 'ai').returns.settled, 2);
 });
-test('filtered-out and unavailable records never become streak samples', () => {
-  const records = [at(lostRecord(), 1e12), at(lostRecord({ source: 'api-football' }), 1e12 + 1), at(performanceRecord({ state: 'open' }), 1e12 + 2),
-    at(performanceRecord({ noLock: true }), 1e12 + 3), at(lostRecord(), 1e12 + 4)];
-  const data = report(records);
-  assert.equal(cell(data).returns.longestLosingStreak, 3); assert.equal(cell(data).returns.currentLosingStreak, 3);
-  assert.equal(cell(data, 'match-result', 'ai').returns.longestLosingStreak, 2);
-  assert.equal(cell(data, 'match-result', 'api-football').returns.longestLosingStreak, 1);
-  assert.equal(cell(data, 'match-result', 'ai').coverage.filteredOut, 1);
-  const pinned = report(records, null, 'version=no-such-version');
-  assert.equal(cell(pinned).returns.longestLosingStreak, 0); assert.equal(cell(pinned).returns.settled, 0);
+test('unattributed and differently filtered voids do not interrupt a source-specific pick streak', () => {
+  const records = [at(lostRecord(), 1e12), at(performanceRecord({ state: 'void', source: 'api-football' }), 1e12 + 1), at(lostRecord(), 1e12 + 2)];
+  assert.equal(cell(report(records), 'match-result', 'ai').returns.longestLosingStreak, 2);
+  assert.equal(cell(report(records)).returns.longestLosingStreak, 1);
+  const unbound = [at(lostRecord(), 1e12), performanceRecord({ state: 'void', noLock: true }), at(lostRecord(), 1e12 + 2)];
+  assert.equal(cell(report(unbound)).returns.longestLosingStreak, 2);
+  const filtered = report(records, null, 'version=no-such-version');
+  assert.equal(cell(filtered).returns.settled, 0); assert.equal(cell(filtered).returns.longestLosingStreak, 0);
 });
-test('only attributable voids and pending predictions interrupt a cell streak', () => {
-  const unattributed = [at(lostRecord(), 1e12), at(performanceRecord({ state: 'void', noLock: true }), 1e12 + 1), at(lostRecord(), 1e12 + 2)];
-  assert.equal(cell(report(unattributed)).coverage.void, 1); assert.equal(cell(report(unattributed)).returns.longestLosingStreak, 2);
-  const otherSource = [at(lostRecord(), 1e12), at(performanceRecord({ state: 'void', source: 'api-football' }), 1e12 + 1), at(lostRecord(), 1e12 + 2)];
-  assert.equal(cell(report(otherSource), 'match-result', 'ai').returns.longestLosingStreak, 2);
-  assert.equal(cell(report(otherSource)).returns.longestLosingStreak, 1);
-  const settlementVoid = at(lostRecord(), 1e12 + 1); settlementVoid.projection.markets.find((m) => m.base.family === 'match-result').previous.status = 'void';
-  const settled = report([at(lostRecord(), 1e12), settlementVoid, at(lostRecord(), 1e12 + 2)]);
-  assert.equal(cell(settled).coverage.void, 1); assert.equal(cell(settled).returns.longestLosingStreak, 1); assert.equal(cell(settled).returns.currentLosingStreak, 1);
-  const cycleVoid = report([at(lostRecord(), 1e12), at(performanceRecord({ state: 'void' }), 1e12 + 1), at(lostRecord(), 1e12 + 2)]);
-  assert.equal(cell(cycleVoid).returns.longestLosingStreak, 1);
-  const pending = report([at(lostRecord(), 1e12), at(performanceRecord({ score: null }), 1e12 + 1), at(lostRecord(), 1e12 + 2)]);
-  assert.equal(cell(pending).coverage.pending, 1); assert.equal(cell(pending).returns.longestLosingStreak, 1);
-});
-test('the cell schema rejects returns that do not reconcile with the counted outcomes', () => {
-  const data = report([performanceRecord(), lostRecord()]), item = cell(data), horizonFree = data.cells.indexOf(item);
-  const replace = (returns) => ({ ...data, cells: data.cells.map((c, index) => index === horizonFree ? { ...c, returns } : c) });
-  assert.equal(performanceResponseSchema.safeParse(data).success, true);
-  for (const returns of [null, { ...item.returns, roi: 0.1 }, { ...item.returns, settled: 3, lost: 2 }, { ...item.returns, won: 2, lost: 0 }]) {
-    assert.equal(performanceResponseSchema.safeParse(replace(returns)).success, false, JSON.stringify(returns));
+test('captured quote availability never combines pick and slip denominators or pending and void prices', () => {
+  const records = [performanceRecord(), lostRecord(), lostRecord(), performanceRecord(), performanceRecord({ score: null }), performanceRecord({ state: 'void' })];
+  records.forEach((record,index) => { if(record.revision) record.revision.publishedAt += index; });
+  const snapshot = performanceSnapshot(records);
+  for (const [index,price] of [[0,'2.60'],[1,'1.50'],[4,'987.65'],[5,'987.65']]) {
+    const record = records[index], selection = record.revision.candidate.markets['match-result'].market.selection;
+    snapshot.quotes.set(`${record.revision.id}:match-result:${selection}`,price);
   }
-  const league = data.leagues.records[0];
-  assert.equal(performanceResponseSchema.safeParse({ ...data, leagues: { ...data.leagues, records: [{ ...league,
-    cells: league.cells.map((c, index) => index === 0 ? { ...c, returns: null } : c) }, ...data.leagues.records.slice(1)] } }).success, false);
-});
-
-const quotedReport = (records, parameters = '') => aggregatePerformance(performanceSnapshot(records, { quotesEnabled: true }), query(parameters), asOf, null);
-test('captured publication quotes produce exact returns that reconcile by hand', () => {
-  const records = [withQuotes(at(performanceRecord(), 1e12), { 'match-result': 260 }), withQuotes(at(lostRecord(), 1e12 + 1), { 'match-result': 150 }),
-    withQuotes(at(lostRecord(), 1e12 + 2), {}), withQuotes(at(performanceRecord(), 1e12 + 3), { 'match-result': 'unavailable' }),
-    withQuotes(at(performanceRecord({ score: null }), 1e12 + 4), { 'match-result': 98_765 }),
-    withQuotes(at(performanceRecord({ state: 'void' }), 1e12 + 5), { 'match-result': 98_765 })];
-  const data = quotedReport(records), returns = cell(data).returns;
-  assert.equal(returns.state, 'available'); assert.equal(returns.reason, null);
-  assert.equal(returns.settled, 4); assert.equal(returns.won, 2); assert.equal(returns.lost, 2);
-  assert.equal(returns.returnsSampleCount, 2); assert.equal(returns.missingQuoteCount, 1); assert.equal(returns.unavailableQuoteCount, 1);
-  assert.equal(returns.stakeUnits, 2); assert.equal(returns.returnUnits, 2.6); assert.equal(returns.profitUnits, 0.6);
-  assert.equal(returns.roi, 0.6 / 2); assert.equal(returns.meanQuotedOdds, 4.1 / 2);
-  assert.equal(returns.longestLosingStreak, 2); assert.equal(returns.currentLosingStreak, 0);
+  const data = aggregatePerformance(snapshot,query('market=match-result'),asOf,null), returns = cell(data).returns;
+  assert.equal(returns.settled,4); assert.equal(returns.returnsSampleCount,2); assert.equal(returns.excludedQuoteCount,2);
+  assert.equal(returns.stakeUnits,2); assert.equal(returns.returnUnits,2.6); assert.equal(returns.profitUnits,.6);
+  assert.equal(returns.roi,.3); assert.equal(returns.meanQuotedOdds,2.05); assert.equal(returns.longestLosingStreak,2);
   assert.doesNotMatch(JSON.stringify(data), /987\.65|98765/u);
-  const disabled = aggregatePerformance(performanceSnapshot(records), query(), asOf, null);
-  assert.equal(cell(disabled).returns.reason, 'odds-display-disabled');
-  assert.equal(cell(disabled).returns.longestLosingStreak, returns.longestLosingStreak);
-  const unpriced = cell(data, 'double-chance').returns;
-  assert.equal(unpriced.reason, 'no-quoted-settled-predictions'); assert.equal(unpriced.missingQuoteCount, unpriced.settled); assert.equal(unpriced.roi, null);
-  for (const league of data.leagues.records) for (const item of league.cells) assert.equal(item.returns.settled, item.metrics.denominator);
-});
-test('a quote that does not belong to the locked revision rejects the whole report', () => {
-  for (const change of [(quote) => ({ ...quote, selection: quote.selection === 'draw' ? 'away-win' : 'draw' }),
-    (quote) => ({ ...quote, cycleId: '00000000-0000-4000-8000-000000000001' }), (quote) => ({ ...quote, recordedAt: quote.recordedAt + 1 }),
-    (quote) => ({ ...quote, revisionId: '00000000-0000-4000-8000-000000000002' })]) {
-    const record = withQuotes(performanceRecord(), { 'match-result': 200 });
-    record.quotes.set('match-result', change(record.quotes.get('match-result')));
-    assert.throws(() => quotedReport([record]), MatchFeedError);
-  }
-  const disabled = withQuotes(performanceRecord(), { 'match-result': 200 }); disabled.quotes.set('match-result', { ...disabled.quotes.get('match-result'), selection: 'x' });
-  assert.equal(cell(report([disabled])).returns.reason, 'odds-display-disabled');
-});
-test('the snapshot key changes when a captured quote changes', () => {
-  const record = withQuotes(performanceRecord(), { 'match-result': 200 }), first = quotedReport([record]).freshness.snapshotKey;
-  assert.equal(quotedReport([record]).freshness.snapshotKey, first);
-  record.quotes.set('match-result', { ...record.quotes.get('match-result'), price: { ...record.quotes.get('match-result').price, snapshotId: 'f'.repeat(64) } });
-  assert.notEqual(quotedReport([record]).freshness.snapshotKey, first);
-});
-test('quotes stay unread with the odds flag off and the cache projection covers the new shape', async () => {
-  // A sealed-looking locked cycle reaches the batch's JSON reads; the empty revision read then fails closed.
-  const kickoff = Date.parse('2026-10-09T15:00:00Z'), lock = '20000000-0000-4000-8000-000000000003';
-  const cycleRow = { id: '20000000-0000-4000-8000-000000000002', fixtureId: '20000000-0000-4000-8000-000000000001', creationKey: 'a'.repeat(64),
-    creationHash: 'b'.repeat(64), ordinal: 1, version: 1, scheduleVersion: 1, kickoffAt: new Date(kickoff), cutoffAt: new Date(kickoff - 300_000),
-    openedAt: new Date(kickoff - 86_400_000), state: 'closed', currentSetId: lock, lockedSetId: lock, closedAt: new Date(kickoff - 300_000),
-    lockedAt: new Date(kickoff - 300_000), voidedAt: null, voidReason: null };
-  const run = async (options) => {
-    const statements = [];
-    const tx = {
-      $queryRaw: async (sql) => {
-        const text = sql.strings.join(' '); statements.push(text);
-        if (statements.length === 1) return [{ id: '20000000-0000-4000-8000-000000000001' }];
-        return text.includes('OCTET_LENGTH') ? [{ bytes: 0n, total: 0n }] : [];
-      },
-      footballFixture: { findMany: async ({ where }) => where.id.in.map((id) => ({ id, activeCycleId: '20000000-0000-4000-8000-000000000002', resultState: null })) },
-      predictionCycle: { findMany: async () => [cycleRow] },
-      predictionSchedule: { findMany: async () => [{ cycleId: cycleRow.id, version: 1, fixtureId: cycleRow.fixtureId, kickoffAt: cycleRow.kickoffAt, cutoffAt: cycleRow.cutoffAt }] },
-    };
-    const service = createPerformanceService({ competitionIds: [39], clock: { now: () => asOf }, ...options,
-      database: { transaction: async (operation) => operation(tx) } });
-    await assert.rejects(service.query(), (e) => e.code === 'unavailable');
-    return statements;
-  };
-  for (const options of [{}, { quotes: false }]) assert.ok((await run(options)).every((text) => !/PredictionQuote/u.test(text)));
-  assert.ok((await run({ quotes: true })).some((text) => /FROM PredictionQuote/u.test(text)));
-  const keys = [];
-  for (const quotes of [undefined, false, true]) {
-    const service = createPerformanceService({ competitionIds: [39], clock: { now: () => asOf }, database: { transaction: async () => report() },
-      ...(quotes === undefined ? {} : { quotes }), cache: { read: async (descriptor) => { keys.push(descriptor.key); return report(); } } });
-    await service.query();
-  }
-  const expected = (projection, quotes) => publicCacheDescriptor({ kind: 'performance', locale: 'en', now: asOf, query: { projection, ...query() },
-    range: query().range, scope: { competitionIds: [39], protocol: null, quotes }, parse: (value) => value }).key;
-  assert.deepEqual(keys, [expected(5, false), expected(5, false), expected(5, true)]);
-  assert.notEqual(keys[0], expected(4, false));
+  assert.deepEqual(data.leagues.records[0].cells[0].returns,returns);
 });

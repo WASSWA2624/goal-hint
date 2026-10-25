@@ -25,10 +25,12 @@ export type SlipCriteria = Readonly<{
   outcomes?: Readonly<Partial<Record<MarketFamily, readonly MarketSelection[]>>>;
   /** Inclusive decimal odds bounds, represented in hundredths. */
   totalMin: number; totalMax: number; oddsMin: number; oddsMax: number;
+  /** Optional whole-slip probability percentage bounds require a qualified joint estimator. */
+  totalProbMin?: number; totalProbMax?: number;
   probMin: number; probMax: number; teamsMin: number; teamsMax: number; slips: number; reuse: boolean;
 }>;
 export const slipInputFields = ["dateFrom", "dateTo", "timeFrom", "timeTo", "totalMin", "totalMax", "oddsMin", "oddsMax",
-  "probMin", "probMax", "teamsMin", "teamsMax", "slips"] as const;
+  "probMin", "probMax", "totalProbMin", "totalProbMax", "teamsMin", "teamsMax", "slips"] as const;
 export type SlipInputs = Partial<Record<typeof slipInputFields[number], string>>;
 /** Slip-only approved outcome prices leave the ordinary selected-pick feed contract intact. */
 export type SlipMatchRecord = StoredMatchFeedRecord & Readonly<{ selectionPrices?: readonly StoredMatchFeedRecord["prices"][number][] }>;
@@ -47,10 +49,15 @@ export type SlipBuildResult = Readonly<{
   slips: readonly BuiltSlip[]; qualifyingMatches: number; excludedMissingOdds: number; excludedMissingForecast: number;
   /** A candidate, enumeration, retained-combination or compatible-batch budget was reached. */
   searchLimited: boolean;
+  /** Qualified joint estimates for the returned slips only; absent when no joint model is bound. */
+  jointProbabilities?: Readonly<Record<string, number>>;
+  /** Examined combinations excluded because the joint estimator supplied no valid estimate. */
+  excludedUnestimated?: number;
 }>;
 export type SlipRanking = Readonly<{
   accepts: (slip: BuiltSlip) => boolean;
   compare: (left: BuiltSlip, right: BuiltSlip) => number;
+  probability?: (slip: BuiltSlip) => number | null;
 }>;
 export type SlipCriteriaErrorCode = "invalid-query" | "invalid-date-range" | "invalid-time-range" | "invalid-market" | "invalid-pick"
   | "invalid-odds-range" | "invalid-probability-range" | "invalid-selection-range" | "invalid-slip-count";
@@ -72,7 +79,7 @@ export function defaultSlipCriteria(today: string): SlipCriteria {
 }
 const outcomeKeys = new Map(publicPolicy.markets.map((family) => [`picks.${family}`, family]));
 const keys = new Set(["dateFrom", "dateTo", "timeFrom", "timeTo", "markets", "totalMin", "totalMax", "oddsMin", "oddsMax",
-  "probMin", "probMax", "teamsMin", "teamsMax", "slips", "reuse", "build", ...outcomeKeys.keys()]);
+  "probMin", "probMax", "totalProbMin", "totalProbMax", "teamsMin", "teamsMax", "slips", "reuse", "build", ...outcomeKeys.keys()]);
 const parameterLimits = Object.freeze({ maximumEntries: keys.size + publicPolicy.markets.length
   + Object.values(marketSelections).reduce((total, selections) => total + selections.length - 1, 0), maximumBytes: 2048, maximumValueLength: 256 });
 function parameters(input: FeedParameters): Map<string, string> {
@@ -171,13 +178,18 @@ export function parseSlipCriteria(input: FeedParameters, today: string): SlipCri
   const probMin = !get("probMin") ? defaults.probMin : parseProbabilityValue(get("probMin")!);
   const probMax = !get("probMax") ? defaults.probMax : parseProbabilityValue(get("probMax")!);
   if (probMin === null || probMax === null || probMin > probMax) fail("probMin", "invalid-probability-range");
+  const totalProbMin = get("totalProbMin") ? parseProbabilityValue(get("totalProbMin")!) : undefined;
+  const totalProbMax = get("totalProbMax") ? parseProbabilityValue(get("totalProbMax")!) : undefined;
+  if (totalProbMin === null || totalProbMax === null || (totalProbMin ?? 0) > (totalProbMax ?? 100)) fail("totalProbMin", "invalid-probability-range");
   const teamsMin = integer(get("teamsMin"), defaults.teamsMin, slipBuilderRules.maximumSelections, "teamsMin");
   const teamsMax = integer(get("teamsMax"), defaults.teamsMax, slipBuilderRules.maximumSelections, "teamsMax");
   if (teamsMin > teamsMax) fail("teamsMin", "invalid-selection-range");
   const slips = integer(get("slips"), defaults.slips, slipBuilderRules.maximumSlips, "slips"), reuseValue = get("reuse") ?? (defaults.reuse ? "1" : "0");
   if (reuseValue !== "0" && reuseValue !== "1") fail("reuse", "invalid-query");
   return { dateFrom, dateTo, timeFrom, timeTo, markets, ...(Object.keys(outcomes).length > 0 ? { outcomes } : {}),
-    totalMin, totalMax, oddsMin, oddsMax, probMin, probMax, teamsMin, teamsMax, slips, reuse: reuseValue === "1" };
+    totalMin, totalMax, oddsMin, oddsMax, probMin, probMax,
+    ...(totalProbMin !== undefined ? { totalProbMin } : {}), ...(totalProbMax !== undefined ? { totalProbMax } : {}),
+    teamsMin, teamsMax, slips, reuse: reuseValue === "1" };
 }
 
 /** Canonical, complete criteria so a native GET form and an interactive form share one URL. */
@@ -206,6 +218,9 @@ export function serializeSlipCriteria(criteria: SlipCriteria): URLSearchParams {
     result.set(field, formatOddsHundredths(criteria[field]));
   }
   for (const field of ["probMin", "probMax"] as const) result.set(field, formatProbabilityValue(criteria[field]));
+  for (const field of ["totalProbMin", "totalProbMax"] as const) {
+    if (criteria[field] !== undefined) result.set(field, formatProbabilityValue(criteria[field]));
+  }
   for (const field of ["teamsMin", "teamsMax", "slips"] as const) result.set(field, String(criteria[field]));
   if (typeof criteria.reuse !== "boolean") fail("reuse", "invalid-query");
   result.set("reuse", criteria.reuse ? "1" : "0");
@@ -216,6 +231,9 @@ export function serializeSlipCriteria(criteria: SlipCriteria): URLSearchParams {
 type Candidate = { selection: SlipSelection; scaledOdds: bigint; key: string };
 type Combination = { slip: BuiltSlip; product: bigint; denominator: bigint; key: string };
 const SCALE = 10_000n;
+export function hasJointProbabilityBounds(criteria: SlipCriteria): boolean {
+  return (criteria.totalProbMin ?? 0) > 0 || (criteria.totalProbMax ?? 100) < 100;
+}
 function compareText(left: string, right: string): number { return left < right ? -1 : left > right ? 1 : 0; }
 function compareCandidates(left: Candidate, right: Candidate): number {
   return right.selection.probability - left.selection.probability
@@ -265,6 +283,7 @@ function compatibleBatch(combinations: readonly Combination[], requested: number
  * No provider calls, synthetic prices, score guesses, stored slip writes or joint-probability assumptions. */
 export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRecord[], asOf: number, ranking?: SlipRanking): SlipBuildResult {
   serializeSlipCriteria(criteria); utcInstantFromEpochMilliseconds(asOf);
+  if (hasJointProbabilityBounds(criteria) && !ranking?.probability) throw new RangeError("Whole-slip probability bounds require a qualified joint estimator.");
   const range = validateReportingDateRange(criteria.dateFrom, criteria.dateTo, slipBuilderRules.maximumDays);
   const timeWindows = criteria.timeFrom === "" ? null : kickoffTimeWindows(range,
     { from: criteria.timeFrom, to: criteria.timeTo, zone: publicPolicy.reportingTimeZone });
@@ -316,6 +335,12 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
   const selected: Candidate[] = [], fixtures = new Set<string>();
   function retain(value: Combination) {
     if (ranking && !ranking.accepts(value.slip)) return;
+    if (ranking?.probability) {
+      const probability = ranking.probability(value.slip), tolerance = Number.EPSILON * value.slip.selections.length * 2;
+      if (probability === null || !Number.isFinite(probability) || probability < 0 || probability > 1
+        || probability < probabilityFraction(criteria.totalProbMin ?? 0) - tolerance
+        || probability > probabilityFraction(criteria.totalProbMax ?? 100) + tolerance) return;
+    }
     // Max-heap keeps the worst retained slip at the root, bounding both memory and insertion work.
     if (retained.length < slipBuilderRules.maximumCombinations) {
       let index = retained.push(value) - 1;
@@ -355,15 +380,26 @@ export function buildSlips(criteria: SlipCriteria, records: readonly SlipMatchRe
       selected.pop(); fixtures.delete(candidate.selection.fixtureId);
     }
   }
+  function select(): BuiltSlip[] {
+    const combinations = [...retained].sort(compare);
+    if (criteria.reuse) return combinations.slice(0, criteria.slips).map((item) => item.slip);
+    const batch = compatibleBatch(combinations, criteria.slips); searchLimited ||= batch.limited;
+    return batch.slips;
+  }
   let slips: BuiltSlip[] = [];
   for (let count = criteria.teamsMin; count <= Math.min(criteria.teamsMax, qualifying.size) && !exhausted; count++) {
     enumerate(0, count, 1n);
-    const combinations = [...retained].sort(compare);
-    if (criteria.reuse) slips = combinations.slice(0, criteria.slips).map((item) => item.slip);
-    else {
-      const batch = compatibleBatch(combinations, criteria.slips); slips = batch.slips; searchLimited ||= batch.limited;
-    }
-    if (!ranking && slips.length === criteria.slips) break;
+    if (ranking) continue;
+    slips = select();
+    if (slips.length === criteria.slips) break;
   }
-  return { slips, qualifyingMatches: qualifying.size, excludedMissingOdds, excludedMissingForecast, searchLimited };
+  // A qualified ranking may prefer longer slips. Batch only the final retained set, not discarded shorter stages.
+  if (ranking) slips = select();
+  return { slips, qualifyingMatches: qualifying.size, excludedMissingOdds, excludedMissingForecast, searchLimited,
+    ...(ranking?.probability ? { jointProbabilities: Object.fromEntries(slips.map((slip) => [slip.id, ranking.probability!(slip)!])) } : {}) };
+}
+
+/** Persist original selections and quotes only; transient ranking fields never acquire an unaudited history. */
+export function modelIndependentSlip(slip: BuiltSlip): BuiltSlip {
+  return { id: slip.id, selections: slip.selections, totalOdds: slip.totalOdds, oddsBasis: slip.oddsBasis, averageProbability: slip.averageProbability };
 }

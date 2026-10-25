@@ -12,7 +12,7 @@ const identity = { revisionId: randomUUID(), cycleId: randomUUID(), fixtureId: r
 const selection = (family) => markets[family].market.selection;
 const other = (family) => ({ 'match-result': ['home-win', 'draw', 'away-win'], 'double-chance': ['home-or-draw', 'away-or-draw', 'home-or-away'],
   'total-goals': ['over-2.5', 'under-2.5'], 'both-teams-to-score': ['yes', 'no'] })[family].find((value) => value !== selection(family));
-const priceRow = (family, overrides = {}) => ({ marketKey: family, selection: selection(family), basis: 'bookmaker', displayHundredths: 235,
+const priceRow = (family, overrides = {}) => ({ marketKey: family, selection: selection(family), basis: 'bookmaker', bookmakerId: 8, displayHundredths: 235,
   priceDecimal: '2.3500', line: family === 'total-goals' ? '2.50' : null, method: 'proportional-v1', mappingVersion: 'launch-odds-v1',
   snapshotId: 'd'.repeat(64), retrievedAt: new Date(recordedAt - 120_000), providerUpdatedAt: new Date(recordedAt - 180_000), ...overrides });
 const freshState = (overrides = {}) => ({ lastRetrievedAt: new Date(recordedAt - 60_000), withdrawnAt: null, ...overrides });
@@ -56,9 +56,9 @@ test('withdrawn, future or older-than-freshness odds state expires every price',
 test('median prices are an unsupported basis and malformed public rows are invalid, never quoted', () => {
   assert.equal(reasonOf({ state: freshState(), rows: [priceRow('match-result', { basis: 'median', snapshotId: null })] }, 'match-result'),
     'unsupported-price-basis');
-  for (const overrides of [{ snapshotId: null }, { snapshotId: 'not-a-hash' }, { displayHundredths: 100 }, { displayHundredths: 100_001 },
+  for (const overrides of [{ bookmakerId: null }, { bookmakerId: -1 }, { retrievedAt: new Date(recordedAt - freshnessMs - 1) }, { snapshotId: null }, { snapshotId: 'not-a-hash' }, { displayHundredths: 100 }, { displayHundredths: 100_001 },
     { displayHundredths: 2.5 }, { retrievedAt: new Date(recordedAt + 1) }, { providerUpdatedAt: new Date(recordedAt - 60_000) },
-    { method: 'unreviewed method' }, { priceDecimal: '2.35' }]) {
+    { method: 'unreviewed method' }, { mappingVersion: 'future-odds-v2' }, { priceDecimal: '8.0000' }, { line: '1.50' }, { priceDecimal: '2.35' }]) {
     assert.equal(reasonOf({ state: freshState(), rows: [priceRow('match-result', overrides)] }, 'match-result'), 'invalid-public-price', JSON.stringify(overrides));
   }
 });

@@ -4,10 +4,13 @@ import { getPublicationDeadline, getReportingDate, utcInstantFromEpochMillisecon
 import { feedQueryRules, type FeedParameters } from "../../domain/feed-query.ts";
 import { storedMatchFeedResponseSchema, type StoredMatchFeedResponse } from "../../domain/match-feed.ts";
 import { publicPolicy } from "../../domain/public-policy.ts";
-import { buildSlips, slipBuilderRules, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
+import { buildSlips, hasJointProbabilityBounds, slipBuilderRules, type SlipCriteria, type SlipMatchRecord } from "../../domain/slip-builder.ts";
+import { jointSlipBuilder } from "../../domain/joint-slip-model.ts";
 import { slipPricePageSchema, type SlipPricePage } from "../../domain/slip-price-page.ts";
 import type { SlipBuildPageResult } from "../../domain/slip-page.ts";
 import { MatchFeedError } from "../matches/feed-error.ts";
+import { approvedSlipJointModel, type SlipJointModelBinding } from "./joint-model.ts";
+export type { SlipJointModelBinding } from "./joint-model.ts";
 
 export const slipReadRules = Object.freeze({ pageSize: feedQueryRules.maximumPageSize, maximumRecords: 500 });
 export type { SlipBuildPageResult } from "../../domain/slip-page.ts";
@@ -22,6 +25,7 @@ export function createSlipBuildService(options: Readonly<{
   /** Effective public odds policy. Tests alone override it to exercise priced stored projections. */
   providerOdds?: boolean;
   build?: typeof buildSlips;
+  jointModel?: SlipJointModelBinding | (() => SlipJointModelBinding | null) | null;
 }>) {
   const clock = options.clock ?? { now: () => utcInstantFromEpochMilliseconds(Date.now()) };
   return Object.freeze({ async query(criteria: SlipCriteria, locale = "en"): Promise<SlipBuildPageResult> {
@@ -30,6 +34,10 @@ export function createSlipBuildService(options: Readonly<{
       searchLimited: false, partialCoverage: false, retryAfterSeconds: null };
     // Check before any database, cache or limiter access: private prices cannot bypass the public policy.
     if (!(options.providerOdds ?? publicPolicy.features.providerOdds)) return { ...base, state: "odds-unavailable" };
+    let joint: SlipJointModelBinding | null = null;
+    try { if (!options.build) joint = typeof options.jointModel === "function" ? options.jointModel() : options.jointModel ?? null; }
+    catch { return { ...base, state: "model-unavailable" }; }
+    if (joint ? !approvedSlipJointModel(joint, asOf) : hasJointProbabilityBounds(criteria)) return { ...base, state: "model-unavailable" };
     try {
       await options.consume();
       const today = getReportingDate(asOf), range = validateReportingDateRange(criteria.dateFrom, criteria.dateTo, slipBuilderRules.maximumDays);
@@ -86,9 +94,17 @@ export function createSlipBuildService(options: Readonly<{
       // The scan can take time. Retain the original observation cutoff, but exclude matches that
       // have entered the publication/kickoff cutoff by completion, even if their first page was valid.
       const current = records.filter((record) => record.kickoffAt === null || completedAt < getPublicationDeadline(record.kickoffAt));
-      const data = (options.build ?? buildSlips)(criteria, current, asOf);
+      if (joint && !approvedSlipJointModel(joint, completedAt)) return { ...base, state: "model-unavailable" };
+      const data = (joint ? jointSlipBuilder(joint.model) : options.build ?? buildSlips)(criteria, current, asOf);
+      // Estimator callbacks cannot retain approval or validity revoked during generation.
+      const returnedAt = joint ? clock.now() : completedAt;
+      if (joint && !approvedSlipJointModel(joint, returnedAt)) return { ...base, state: "model-unavailable" };
+      if (returnedAt < completedAt || getReportingDate(returnedAt) !== today
+        || data.slips.some((slip) => slip.selections.some((selection) => returnedAt >= getPublicationDeadline(utcInstantFromEpochMilliseconds(selection.kickoffAt))))) {
+        throw new MatchFeedError("unavailable");
+      }
       return { ...base, state: data.slips.length > 0 ? "generated" : data.qualifyingMatches === 0 ? "no-qualifying" : "no-combinations",
-        data, asOf: completedAt, examined: records.length, searchLimited: searchLimited || data.searchLimited, partialCoverage };
+        data, asOf: returnedAt, examined: records.length, searchLimited: searchLimited || data.searchLimited, partialCoverage };
     } catch (error) {
       return { ...base, state: error instanceof MatchFeedError && error.code === "rate-limited" ? "rate-limited" : "data-unavailable",
         retryAfterSeconds: error instanceof MatchFeedError ? error.retryAfterSeconds : null };

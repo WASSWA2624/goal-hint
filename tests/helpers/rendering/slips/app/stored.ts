@@ -2,11 +2,16 @@ import { addReportingDays, getReportingDate, parseUtcInstant } from "@/domain/ca
 import { parseFeedQuery, resolveFeedDates, type FeedParameters } from "@/domain/feed-query";
 import { storedMatchFeedRecordSchema, storedMatchFeedResponseSchema } from "@/domain/match-feed";
 import { marketRules, validateMarketSnapshot, type MarketFamily } from "@/domain/markets";
-import { buildSlips, defaultSlipCriteria, type SlipCriteria, type SlipMatchRecord } from "@/domain/slip-builder";
+import { buildSlips, defaultSlipCriteria, hasJointProbabilityBounds, type SlipCriteria, type SlipMatchRecord } from "@/domain/slip-builder";
+import { jointSlipBuilder } from "@/domain/joint-slip-model";
 import type { SlipBuildPageResult } from "@/server/slips/slip-service";
 
 /** Isolated rendering data only: no database, provider, cache, approval or visitor state. */
 export const now = parseUtcInstant("2026-10-13T08:00:00Z"), today = getReportingDate(now);
+/** Synthetic transport/renderer qualification only; never used by the production binding. */
+export const syntheticJointModel = { calibrationReference: "synthetic-rendering-calibration", correlationReference: "synthetic-rendering-correlation",
+  validFrom: now - 1, validUntil: now + 1000, estimate: (selections: readonly { probability: number }[]) => selections.length === 1
+    ? selections[0]!.probability : Math.min(...selections.map((selection) => selection.probability)) - 0.05 };
 export const criteria: SlipCriteria = { ...defaultSlipCriteria(today), dateTo: addReportingDays(today, 6),
   markets: ["match-result", "double-chance", "total-goals"], totalMin: 300, totalMax: 600, oddsMin: 125, oddsMax: 260,
   probMin: 70, probMax: 100, teamsMin: 2, teamsMax: 4, slips: 3, reuse: true };
@@ -70,9 +75,11 @@ export function syntheticPricePage(parameters: FeedParameters, asOf = now) {
   const feed = syntheticFeed(parameters, asOf), byId = new Map(records.map((record) => [record.fixtureId, record]));
   return { feed, selectionPrices: Object.fromEntries(feed.records.map((record) => [record.fixtureId, byId.get(record.fixtureId)!.selectionPrices!])) };
 }
-export function syntheticBuild(input: SlipCriteria = criteria, longNames = false, manualHome = false): SlipBuildPageResult {
+export function syntheticBuild(input: SlipCriteria = criteria, longNames = false, manualHome = false, joint = false): SlipBuildPageResult {
+  if (hasJointProbabilityBounds(input) && !joint) return failure("model-unavailable");
   const available = manualHome ? [syntheticRecord(6, false, true)] : longNames ? Array.from({ length: 6 }, (_, index) => syntheticRecord(index, true)) : records;
-  const data = buildSlips(input, available, now);
+  const builder = joint ? jointSlipBuilder(syntheticJointModel) : buildSlips;
+  const data = builder(input, available, now);
   return { state: data.slips.length ? "generated" : data.qualifyingMatches ? "no-combinations" : "no-qualifying", data,
     asOf: now, examined: available.length, partialCoverage: false, searchLimited: data.searchLimited, retryAfterSeconds: null };
 }
@@ -89,6 +96,9 @@ export const cases: Readonly<Record<string, { criteria: SlipCriteria; result: Sl
   "no-combinations": { criteria: { ...criteria, totalMin: 9000000, totalMax: 10000000 },
     result: syntheticBuild({ ...criteria, totalMin: 9000000, totalMax: 10000000 }) },
   "odds-unavailable": { criteria, result: failure("odds-unavailable") },
+  "model-unavailable": { criteria: { ...criteria, totalProbMin: 70 }, result: failure("model-unavailable") },
+  "joint-generated": { criteria: { ...criteria, totalProbMin: 60, totalProbMax: 90 },
+    result: syntheticBuild({ ...criteria, totalProbMin: 60, totalProbMax: 90 }, false, false, true) },
   "data-unavailable": { criteria, result: failure("data-unavailable") },
   "rate-limited": { criteria, result: failure("rate-limited") },
   limited: { criteria, result: { ...syntheticBuild(), searchLimited: true, partialCoverage: true } },
