@@ -1,6 +1,6 @@
 # Client state and public feed contracts
 
-Prompt [017](../../prompts/dev-plan/017-client-state.md) supplies shared contracts for
+Prompt [017](../dev-plan/017-client-state.md) supplies shared contracts for
 028 APIs, 032 feed rendering, 033 filters, 034 pagination/Back and 037 polling.
 It does not implement those features or initiate any browser provider calls.
 

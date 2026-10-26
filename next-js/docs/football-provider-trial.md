@@ -1,6 +1,6 @@
 # Football provider trial
 
-Prompt [008](../../prompts/dev-plan/008-football-provider-trial.md) provides a private,
+Prompt [008](../dev-plan/008-football-provider-trial.md) provides a private,
 bounded evidence tool for the selected direct API-Football Mega plan. Offline
 reports work without credentials or a database. Recorded real responses and
 verified account or rights records are required to qualify live suitability.
@@ -267,7 +267,7 @@ verified regulation scores; settlement uses the existing shared adjudicator.
 
 ## Odds qualification (prompt 052)
 
-Prompt [052](../../prompts/dev-plan/052-provider-odds-import.md) adds a counted odds sample
+Prompt [052](../dev-plan/052-provider-odds-import.md) adds a counted odds sample
 to the same command, journal and shared limiter. It qualifies the real `/odds`,
 `/odds/bets` and `/odds/bookmakers` envelopes before any odds schedule runs. The
 trial has **not** been run: it needs a plan that includes `/odds` and enough

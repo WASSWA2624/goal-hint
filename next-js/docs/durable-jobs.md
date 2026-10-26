@@ -1,6 +1,6 @@
 # Durable jobs
 
-Prompt [020](../../prompts/dev-plan/020-durable-jobs.md) implements a private MySQL-backed
+Prompt [020](../dev-plan/020-durable-jobs.md) implements a private MySQL-backed
 queue, typed registry, worker runner and reusable authenticated trigger adapter.
 No public route, production handler, cron schedule or paid queue is activated.
 Daily manifests, prediction orchestration, cutoff/lifecycle decisions, the

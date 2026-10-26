@@ -611,7 +611,7 @@ deployment was performed. Prompt 005 is ticked in the root tracker.
 
 ## 006 — Shared API-Football quota limiter
 
-**Date:** 8 October 2026. **Scope:** `prompts/dev-plan/006-api-quota-limiter.md`.
+**Date:** 8 October 2026. **Scope:** `next-js/dev-plan/006-api-quota-limiter.md`.
 
 ### Implementation
 
@@ -812,7 +812,7 @@ owners. Nothing activates polling or paid/provider/publication operations.
 
 Implemented the internal bounded trial command, durable private journal and
 34-requirement report format described in
-[008](../../prompts/dev-plan/008-football-provider-trial.md). The dated evidence collection
+[008](../dev-plan/008-football-provider-trial.md). The dated evidence collection
 and report generation occurred on 8 October UTC. Provider suitability remains
 incomplete; local tooling completion does not establish actual account, field,
 market, price or rights qualification.
@@ -2305,7 +2305,7 @@ inspect actual DDL state and repair forward. Visual acceptance is not required.
 
 ## Prompt 025 — Prediction refresh worker
 
-Implemented `prompts/dev-plan/025-prediction-refresh-worker.md` as an operator-bound
+Implemented `next-js/dev-plan/025-prediction-refresh-worker.md` as an operator-bound
 durable job definition, composing the existing services without another forecast
 validation/publication path. Public routes remain stored-data consumers.
 
@@ -2453,7 +2453,7 @@ DDL state and repair forward. No UI change requires visual acceptance.
 ## Prompt 027 — Market settlement
 
 **Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
-Followed [027](../../prompts/dev-plan/027-market-settlement.md) only. Applied additive
+Followed [027](../dev-plan/027-market-settlement.md) only. Applied additive
 migrations to owned throwaway MySQL 8.4.11 instances; no installed/production
 database, provider network, AI invocation or live activation was used.
 
@@ -2521,7 +2521,7 @@ evidence and durable events. No UI change requires visual acceptance.
 ## Prompt 028 — Match feed API
 
 **Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
-Followed [028](../../prompts/dev-plan/028-match-feed-api.md) only. Added GET /api/matches
+Followed [028](../dev-plan/028-match-feed-api.md) only. Added GET /api/matches
 and its reusable stored-data server service. Database acceptance deployed all
 migrations to owned throwaway MySQL 8.4.11 instances. No installed/production
 database, football/research provider, AI invocation or live worker was used.
@@ -2592,7 +2592,7 @@ acceptance.
 ## Prompt 029 — Match detail API
 
 **Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
-Followed [029](../../prompts/dev-plan/029-match-detail-api.md) only.
+Followed [029](../dev-plan/029-match-detail-api.md) only.
 Added anonymous GET /api/matches/{id}, explicit revision/cycle selection and
 bounded stable history. Genuine database acceptance used owned throwaway MySQL
 8.4.11 instances with synthetic observations, policies and forecasts. No live
@@ -2650,7 +2650,7 @@ No UI change requires visual acceptance.
 ## Prompt 030 — Performance API
 
 **Date:** 9 October 2026. **Status:** implementation and local acceptance complete.
-Followed [030](../../prompts/dev-plan/030-performance-api.md) only.
+Followed [030](../dev-plan/030-performance-api.md) only.
 Added anonymous GET /api/performance and bounded stored-data aggregation.
 Acceptance uses owned throwaway MySQL 8.4.11 databases and synthetic forecasts,
 observations, approvals and policies. No live provider/AI, production database,

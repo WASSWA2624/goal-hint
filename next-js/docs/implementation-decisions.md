@@ -138,7 +138,7 @@ external operating choices and validation remain as recorded below.
 The prompt 001 records above remain historical foundation decisions. The
 operating register below now owns the prompt 002 handoff. Sources are the
 [specification](../../app-write-up.md), especially sections 1, 5–8, 11 and 14–15,
-and the numbered [development prompts](../../prompts/dev-plan/000-index.md). The repository
+and the numbered [development prompts](../dev-plan/000-index.md). The repository
 contains no operator approvals, provider account reports, rights agreements,
 prices for AI/research, qualification reports or deployment evidence that resolve
 the pending items. The specification's advertised commercial terms describe the
@@ -3560,7 +3560,7 @@ and specification v1.9. Phase 0 records the change; it adds no application code.
 
 - **Recorded:** specification v1.9 (sections 1–3 and 12–15); the rewritten
   account-free invariant, the gated-reads invariant and the amended 028–031 gate
-  in `prompts/dev-plan/000-index.md`; prompts 057–067 and their tracker rows; edits to
+  in `next-js/dev-plan/000-index.md`; prompts 057–067 and their tracker rows; edits to
   the pending prompts 053–056; OP-37–OP-40; and the paid-access extensions of
   OP-06, OP-26, OP-27, OP-31 and OP-36.
 - **Superseded:** the Settled "Access and product scope" row and the

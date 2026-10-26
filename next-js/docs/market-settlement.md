@@ -1,6 +1,6 @@
 # Market settlement
 
-Prompt [027](../../prompts/dev-plan/027-market-settlement.md) adds stored settlement around
+Prompt [027](../dev-plan/027-market-settlement.md) adds stored settlement around
 the existing regulation market rules. It does not calculate hit rates, activate
 workers, fetch provider data or introduce optional exact scores.
 

@@ -1,6 +1,6 @@
 # MySQL runtime and migrations
 
-Prompt [003](../../prompts/dev-plan/003-mysql-prisma.md) establishes private database access.
+Prompt [003](../dev-plan/003-mysql-prisma.md) establishes private database access.
 The user's 7 October 2026 MySQL instruction supersedes the original PostgreSQL
 choice. The application baseline is MySQL 8.4 LTS with InnoDB and Prisma ORM 7.
 Hosting, credentials, grants, production connection capacity, TLS evidence and

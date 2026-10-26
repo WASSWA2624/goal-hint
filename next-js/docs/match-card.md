@@ -1,6 +1,6 @@
 # Shared match-card presentation
 
-Prompt [018](../../prompts/dev-plan/018-match-card.md) supplies reusable presentation for
+Prompt [018](../dev-plan/018-match-card.md) supplies reusable presentation for
 the later feed and detail pages. Components receive visitor-facing props; they
 do not fetch providers, start polling, access Redux or persist data. Examples
 exist only in tests and isolated acceptance apps.

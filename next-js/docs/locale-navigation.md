@@ -1,6 +1,6 @@
 # English routes and the public shell
 
-Prompt [016](../../prompts/dev-plan/016-locale-navigation.md) adds public navigation to the
+Prompt [016](../dev-plan/016-locale-navigation.md) adds public navigation to the
 [shared styling foundation](brand-styling.md). The shell reads no database or
 provider and requires no visitor credentials, tokens or cookies.
 

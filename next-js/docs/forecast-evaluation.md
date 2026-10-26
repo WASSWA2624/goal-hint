@@ -1,6 +1,6 @@
 # Chronological forecast evaluation
 
-Prompt [014](../../prompts/dev-plan/014-forecast-evaluation.md) provides an internal,
+Prompt [014](../dev-plan/014-forecast-evaluation.md) provides an internal,
 reproducible evaluation contract for AI, API-Football, combined forecasts and
 reconstructable league-frequency/team-strength baselines. It scores the shared
 regulation-time markets and produces an immutable report. It does not collect

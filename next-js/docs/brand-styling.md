@@ -1,6 +1,6 @@
 # Shared brand styling
 
-Prompt [015](../../prompts/dev-plan/015-brand-styling.md) provides the light-theme styling
+Prompt [015](../dev-plan/015-brand-styling.md) provides the light-theme styling
 foundation. It uses the existing [brand kit](../assets/brand/README.md), Manrope
 source font and named first-party assets. Public routes continue to show the
 honest development state until their later implementation prompts.

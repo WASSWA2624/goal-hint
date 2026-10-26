@@ -1,6 +1,6 @@
 # Validated provider fallback
 
-Prompt [013](../../prompts/dev-plan/013-provider-fallback.md) resolves one eligible refresh
+Prompt [013](../dev-plan/013-provider-fallback.md) resolves one eligible refresh
 from the [primary AI predictor](ai-predictor.md) and the existing
 [API-Football adapter](api-football-adapter.md). It produces a complete candidate
 for later publication. It does not save revisions, lock forecasts, select an old

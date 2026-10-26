@@ -7,8 +7,10 @@ Flutter shell will make that shared web experience installable on mobile and des
 ```text
 goal-hint/
 ├── next-js/          # Web client, server, workers, database, tests, and runbooks
+│   └── dev-plan/     # Numbered Next.js implementation plans
 ├── flutter/          # Destination for the Flutter shell and platform projects
-├── prompts/          # Feature prompts and numbered plans under dev-plan/
+│   └── dev-plan/     # Numbered Flutter shell implementation plans
+├── prompts/          # Shared feature requests and specifications
 └── app-write-up.md   # Product specification and shared application architecture
 ```
 
@@ -16,7 +18,8 @@ goal-hint/
 - [Next.js setup and commands](next-js/README.md)
 - [Flutter status and requirements](flutter/README.md)
 - [Flutter implementation prompt](prompts/flutter-app-shell.md)
-- [Numbered development plans](prompts/dev-plan/000-index.md)
+- [Next.js development plans](next-js/dev-plan/000-index.md)
+- [Flutter development plans](flutter/dev-plan/000-index.md)
 
 ## Run the web app
 

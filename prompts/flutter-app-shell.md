@@ -1,6 +1,6 @@
 # Flutter app shell
 
-Create a minimal Flutter shell in the repository-root `flutter/` directory for the existing Next.js web app in `next-js/`, preserving the separate project directories and the web development workflow. No Flutter application source exists yet; this prompt describes the planned implementation. Keep shared specifications and prompts at the repository root.
+Create a minimal Flutter shell in the repository-root `flutter/` directory for the existing Next.js web app in `next-js/`, preserving the separate project directories and the web development workflow. No Flutter application source exists yet; this prompt describes the planned implementation. Follow [the Flutter development plan](../flutter/dev-plan/000-index.md). Keep each app's numbered development files in its own `dev-plan/` folder, with shared specifications and prompts at the repository root.
 
 - Support installable Android, iOS, Windows, macOS, and Linux builds through suitable embedded web views and minimal reusable platform adapters.
 - Keep all screens, navigation, business logic, and application features in `next-js/`. Flutter should only host the web app and provide necessary platform integration, avoiding duplicate implementations.

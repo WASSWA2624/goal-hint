@@ -4,7 +4,7 @@
 Unresolved provider evidence blocks new publication; existing history/locks are
 preserved. See [schedule lifecycle](schedule-lifecycle.md) for ingestion and policy.
 
-Prompt [022](../../prompts/dev-plan/022-revision-publication.md) implements the private
+Prompt [022](../dev-plan/022-revision-publication.md) implements the private
 acceptance service for every AI/provider composition. It reuses immutable
 [history](prediction-history.md), committed [selection](daily-selection.md),
 stored evidence/model contracts and the [queue](durable-jobs.md). No worker,

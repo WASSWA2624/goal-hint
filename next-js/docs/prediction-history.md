@@ -1,6 +1,6 @@
 # Immutable prediction history
 
-Prompt [019](../../prompts/dev-plan/019-prediction-history.md) adds private persistence and
+Prompt [019](../dev-plan/019-prediction-history.md) adds private persistence and
 read repositories. It extends the canonical catalog, evidence snapshots and
 model registry. It creates no public endpoint, schedule, provider request or
 seeded forecast. Live evidence/model qualification remains with 011/012/014.

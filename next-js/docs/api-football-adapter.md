@@ -232,7 +232,7 @@ re-read in the 052 session, so the counted odds trial in the
 [provider trial runbook](football-provider-trial.md#odds-qualification-prompt-052)
 must confirm the real envelope before any odds schedule runs.
 
-Prompt [008](../../prompts/dev-plan/008-football-provider-trial.md) must qualify the actual
+Prompt [008](../dev-plan/008-football-provider-trial.md) must qualify the actual
 account, subscription/reset behavior, endpoint and field coverage, live-status
 behavior, AET/PEN regulation-score semantics and permitted data/image use through
 bounded accounted observations. Published contracts and synthetic tests do not

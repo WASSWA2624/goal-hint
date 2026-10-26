@@ -1,6 +1,6 @@
 # Canonical football catalog
 
-Prompt [009](../../prompts/dev-plan/009-canonical-football-catalog.md) adds reusable private catalog persistence. It stores canonical competition/team identities, seasons and fixtures from the existing [007 adapter](../src/server/football/api-football-adapter.ts). The [008 report](reports/provider-trial-008.md) still marks live provider qualification incomplete. Local schema and synthetic acceptance checks do not approve competitions, provider field semantics, source retention, publication or media rights.
+Prompt [009](../dev-plan/009-canonical-football-catalog.md) adds reusable private catalog persistence. It stores canonical competition/team identities, seasons and fixtures from the existing [007 adapter](../src/server/football/api-football-adapter.ts). The [008 report](reports/provider-trial-008.md) still marks live provider qualification incomplete. Local schema and synthetic acceptance checks do not approve competitions, provider field semantics, source retention, publication or media rights.
 
 ## Worker integration
 

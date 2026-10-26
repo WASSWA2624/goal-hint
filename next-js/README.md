@@ -2,7 +2,8 @@
 
 This directory is the Next.js application root. Run the npm and Python commands
 below from `next-js/`; from the repository root, enter it with `cd next-js`.
-The shared specification and all implementation prompts live one level above.
+The shared specification and cross-app prompts live one level above; this app's
+numbered implementation plan is in `dev-plan/`.
 
 ![Goal Hint](public/brand/goal-hint-logo-primary.svg)
 
@@ -19,7 +20,7 @@ are described in [analytics](docs/analytics.md) (development sign-in: `admin`/`a
 production requires its own hashed credentials).
 
 - [App specification](../app-write-up.md): scope, user experience, prediction rules, architecture and launch requirements.
-- [Development prompts](../prompts/dev-plan/000-index.md): run numbered feature prompts in order to implement the application.
+- [Development prompts](dev-plan/000-index.md): run numbered feature prompts in order to implement the application.
 - [Brand guide](assets/brand/README.md): logo variants, palette, file inventory, usage and regeneration.
 - [Brand preview](assets/brand/goal-hint-brand-preview.html): open locally to inspect the complete identity.
 - [Brand sheet](assets/brand/goal-hint-brand-sheet.png): shareable visual overview.

@@ -2,7 +2,7 @@
 
 # Monetization: phone accounts and manual mobile-money subscriptions
 
-**Repository layout:** The existing web application, supporting documentation, development tracker, assets, and tooling live in `next-js/`. File paths below are relative to the repository root; run web commands from `next-js/`. Shared `app-write-up.md` and `prompts/` remain at the root, including numbered implementation prompts in `prompts/dev-plan/`. The planned `flutter/` shell is outside this implementation plan.
+**Repository layout:** The existing web application, supporting documentation, development tracker, assets, and tooling live in `next-js/`. File paths below are relative to the repository root; run web commands from `next-js/`. Shared `app-write-up.md` and `prompts/` remain at the root; numbered web implementation plans live in `next-js/dev-plan/`. The planned `flutter/` shell is outside this implementation plan.
 
 **Status:** Plan only, not implemented. **Date:** 2026-10-19 (plans and period start set by the owner the same day). **File:** `prompts/monetization.md`.
 
@@ -371,7 +371,7 @@ Per-IP limits are high on purpose: MTN and Airtel put many users behind shared (
 | Client fetches | `next-js/src/state/refresh-base.ts:19`, `next-js/src/domain/feed-pagination-error.ts` | `credentials: "same-origin"`; 403 becomes `subscription-required`, which triggers `router.refresh()` |
 | Live merge and pagination | `next-js/src/domain/fixture-reconciliation.ts`, `live-refresh.ts`, `feed-pagination.ts:35-60`, `match-card.ts` `sameCardFixture`, `next-js/src/app/_components/feed-surface.tsx:158`, `next-js/src/components/match/live-match-detail.tsx:65`, `next-js/src/state/detail-api.ts` | A different `access.tier` raises `FeedPaginationError("changed")` and `router.refresh()`; provider keys include the tier; `sameCardFixture` compares the variant |
 | API headers | `next-js/src/server/matches/public-http.ts` | `privateMatchHeaders` (`private, no-store`, `vary: Cookie`) for feed, detail, insights; `/api/performance` keeps `publicMatchHeaders` |
-| Pending prompts 053–056 | `prompts/dev-plan/053-…` to `056-…` | Edited in Phase 0 (section 7) |
+| Pending prompts 053–056 | `next-js/dev-plan/053-…` to `056-…` | Edited in Phase 0 (section 7) |
 
 ### 5.6 Owner dashboard (`/admin`)
 
@@ -579,7 +579,7 @@ One collapsed `Disclosure` (`next-js/src/components/ui/disclosure.tsx`), "Safety
   - §13 line 438: data minimization with phone accounts;
   - §14 line 491: manual paid access;
   - §15 lines 499, 513: acceptance covers phone sign-in, manual payment, expiry, and no leaks to anonymous viewers or crawlers.
-- `prompts/dev-plan/000-index.md`:
+- `next-js/dev-plan/000-index.md`:
   - rewrite the line 41 invariant: phone accounts, sessions, payment reports, access codes and a private owner dashboard; still no betting;
   - amend the 028–031 Gate line (line 110): public reads still work anonymously and resolve viewer access from cookies;
   - add "every prediction-bearing read goes through the gated reads";
@@ -639,7 +639,7 @@ One collapsed `Disclosure` (`next-js/src/components/ui/disclosure.tsx`), "Safety
 
 ## 8. Implementation phases
 
-Phase 0 has no code: do the section 7 Phase 0 items, then create `prompts/dev-plan/057…067` and the tracker rows below. Each prompt follows the `prompts/dev-plan/` format (Feature / Depends on / Source / Prompt / Acceptance checks / Handoff), names its npm commands and updates `next-js/docs/development-progress.md`. Every prompt that adds an `/api/admin` route or `/admin` page extends `next-js/tests/admin-routes.test.mjs`.
+Phase 0 has no code: do the section 7 Phase 0 items, then create `next-js/dev-plan/057…067` and the tracker rows below. Each prompt follows the `next-js/dev-plan/` format (Feature / Depends on / Source / Prompt / Acceptance checks / Handoff), names its npm commands and updates `next-js/docs/development-progress.md`. Every prompt that adds an `/api/admin` route or `/admin` page extends `next-js/tests/admin-routes.test.mjs`.
 
 Manual checks are recorded in `next-js/docs/development-progress.md`:
 - Layout: at 375 px in the Browser pane.
@@ -817,17 +817,17 @@ Manual checks are recorded in `next-js/docs/development-progress.md`:
 **dev-tracker rows to add**
 
 ```
-| ☐ | [057-owner-admin-foundation.md](dev-plan/057-owner-admin-foundation.md) |
-| ☐ | [058-subscription-data-model.md](dev-plan/058-subscription-data-model.md) |
-| ☐ | [059-phone-sign-in.md](dev-plan/059-phone-sign-in.md) |
-| ☐ | [060-access-codes-periods.md](dev-plan/060-access-codes-periods.md) |
-| ☐ | [061-prediction-gating-server.md](dev-plan/061-prediction-gating-server.md) |
-| ☐ | [062-gated-ui-entry-points.md](dev-plan/062-gated-ui-entry-points.md) |
-| ☐ | [063-get-access-payments.md](dev-plan/063-get-access-payments.md) |
-| ☐ | [064-admin-payments-codes.md](dev-plan/064-admin-payments-codes.md) |
-| ☐ | [065-admin-subscribers-audit.md](dev-plan/065-admin-subscribers-audit.md) |
-| ☐ | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md) |
-| ☐ | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md) |
+| ☐ | [057-owner-admin-foundation.md](../next-js/dev-plan/057-owner-admin-foundation.md) |
+| ☐ | [058-subscription-data-model.md](../next-js/dev-plan/058-subscription-data-model.md) |
+| ☐ | [059-phone-sign-in.md](../next-js/dev-plan/059-phone-sign-in.md) |
+| ☐ | [060-access-codes-periods.md](../next-js/dev-plan/060-access-codes-periods.md) |
+| ☐ | [061-prediction-gating-server.md](../next-js/dev-plan/061-prediction-gating-server.md) |
+| ☐ | [062-gated-ui-entry-points.md](../next-js/dev-plan/062-gated-ui-entry-points.md) |
+| ☐ | [063-get-access-payments.md](../next-js/dev-plan/063-get-access-payments.md) |
+| ☐ | [064-admin-payments-codes.md](../next-js/dev-plan/064-admin-payments-codes.md) |
+| ☐ | [065-admin-subscribers-audit.md](../next-js/dev-plan/065-admin-subscribers-audit.md) |
+| ☐ | [066-paywall-legal-copy.md](../next-js/dev-plan/066-paywall-legal-copy.md) |
+| ☐ | [067-paywall-launch-readiness.md](../next-js/dev-plan/067-paywall-launch-readiness.md) |
 ```
 
 ## 9. Testing and verification
