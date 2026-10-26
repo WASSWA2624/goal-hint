@@ -236,21 +236,22 @@ test("the phone pick panel shows the market icon, market over pick, and the odds
   const pick = (await styledBlock("Pick")).tile.split("${table}")[0];
   assert.match(pick, /grid-template-areas: "glyph market numbers" "glyph pick numbers";/u);
   assert.match(pick, /background: \$\{\(\{ \$family \}\) => light\.market\[\$family\]\.soft\};/u);
-  // A locked pick adds the subscribe line across the panel.
-  assert.match(pick, /&\[data-pick-state="subscriber"\] \{\s*grid-template-areas: "glyph market numbers" "glyph pick numbers" "hint hint hint";/u);
+  // Locked picks use the same compact panel without a second subscription row.
+  assert.doesNotMatch(pick, /"hint hint hint"/u);
   assert.match((await styledBlock("CardGlyph")).tile, /grid-area: glyph;/u);
   assert.match((await styledBlock("MarketName")).tile, /grid-area: market;/u);
   assert.match((await styledBlock("PickShort")).tile, /grid-area: pick;/u);
   assert.match((await styledBlock("GatedPick")).tile, /grid-area: pick;/u);
   assert.match((await styledBlock("PickNumbers")).tile, /grid-area: numbers;/u);
-  assert.match((await styledBlock("SubscribeHint")).tile, /grid-area: hint;/u);
+  assert.doesNotMatch(await cardSource, /SubscribeHint/u);
   // The market and pick shorten with an ellipsis, so the numbers box always stays whole.
   for (const name of ["MarketName", "PickShort"]) assert.match((await styledBlock(name)).tile, /\$\{ellipsis\}/u);
   // The numbers box replaces the desktop probability cell on phones.
   assert.match((await styledBlock("Probability")).tile, /\$\{tile\} \{ display: none; \}/u);
   const messages = createMessages();
-  assert.deepEqual(["match.likely", "match.chance", "details.odds", "match.subscribeToSee"].map((key) => messages.text(key)),
-    ["likely", "chance", "Odds", "Subscribe to see the prediction"]);
+  assert.deepEqual(["match.likely", "match.chance", "details.odds", "paywall.locked", "paywall.unlockPrediction"].map((key) => messages.text(key)),
+    ["likely", "chance", "Odds", "Locked", "Unlock prediction"]);
+  assert.equal(messages.text("paywall.unlockPredictionPrice", { price: "1,000" }), "Unlock prediction for UGX 1,000");
 });
 
 test("phone tiles keep design 09's light palette and strong frame in both themes", async () => {

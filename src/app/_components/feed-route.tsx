@@ -12,6 +12,7 @@ import { feedQueryHref } from "@/domain/feed-query";
 import { withoutSubscriberFeedOracle } from "@/domain/paywall";
 import { resolveViewerAccess } from "@/server/members/viewer-access";
 import { contentAccess } from "@/server/members/gated-reads";
+import { readSubscriptionOffer } from "@/server/members/public-offer";
 import { parseMatchFeedQuery } from "@/server/matches/feed-service";
 import { loadMatchFeedPage } from "@/server/matches/feed-page";
 import { readPublicMatchFeed } from "@/server/matches/public-feed";
@@ -25,7 +26,8 @@ type Props = { params: Promise<{ locale: string; date?: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 /** Metadata and initial HTML share the same stored read and request-owned clock. */
-export function createFeedRoute({ dated = false, read = readPublicMatchFeed, instant = getShellInstant, policy = getDiscoveryPolicy, resolveAccess = resolveViewerAccess } = {}) {
+export function createFeedRoute({ dated = false, read = readPublicMatchFeed, instant = getShellInstant, policy = getDiscoveryPolicy,
+  resolveAccess = resolveViewerAccess, readOffer = readSubscriptionOffer } = {}) {
   const load = cache(async (parameters: string, locale: string, at: UtcInstant) => {
     const query = parseMatchFeedQuery(new URLSearchParams(parameters), getReportingDate(at), { locale, asOf: at,
       ...((await contentAccess(resolveAccess)).tier === "free" ? { providerOdds: true } : {}) });
@@ -53,12 +55,14 @@ export function createFeedRoute({ dated = false, read = readPublicMatchFeed, ins
     },
     async Page(props: Props) {
       const { query, today, result, access } = await resolve(props), discovery = feedDiscovery(query, today);
+      const offer = access.tier === "free" ? await readOffer() : null;
       const messages = createMessages(query.locale);
       const structured = !discovery.eligible ? null : breadcrumbStructuredData([{ name: publicPolicy.name, path: homeHref(query.locale) },
         { name: dated ? messages.text("metadata.breadcrumbArchive", { date: messages.reportingDate(discovery.range.startDate) }) : messages.text("navigation.matches") }]);
       return <>
         {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(structured) }} />}
-        <MatchFeedPage query={query} today={today} result={result} showAccount subscriberOnly={access.tier === "free"} />
+        <MatchFeedPage query={query} today={today} result={result} showAccount subscriberOnly={access.tier === "free"}
+          startingPriceUgx={offer?.priceUgx ?? null} />
       </>;
     },
   };

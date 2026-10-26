@@ -9,6 +9,7 @@ import { PublicShell } from "./public-shell";
 /** Server reads stay authoritative; the persistent surface owns UI transitions. */
 export function MatchFeedPage(props: {
   query: FeedQuery; today: ReportingDate; result: FeedPageResult; controls?: ReactNode; pagination?: ReactNode; showAccount?: boolean; subscriberOnly?: boolean;
+  startingPriceUgx?: number | null | undefined;
 }) {
   const { query, today } = props;
   const current = query.status === "finished" ? "results" : query.status === "live" ? "live" : "today";

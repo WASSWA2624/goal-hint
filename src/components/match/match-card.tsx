@@ -35,6 +35,7 @@ export type MatchCardProps = {
   /** Also gates unpublished fixtures, whose forecast has no wire variant to carry this state. */
   gated?: boolean;
   signedIn?: boolean;
+  startingPriceUgx?: number | null | undefined;
   analysisSlug: string;
   /** Show the most likely available pick among these eligible families. */
   markets?: readonly MarketFamily[];
@@ -61,6 +62,10 @@ const tileRadius = phoneCardFrame.radius;
 /** Owner decision (2026-10-25): phone tiles always use design 09's light palette, so white cards stand out on a dark
  * page too; the desktop table follows the theme. Tile rules take their colours from here, never from the theme. */
 const light = lightTheme.color;
+const lockGlow = keyframes`
+  0%, 100% { filter: drop-shadow(0 0 1px color-mix(in srgb, ${light.brand} 35%, transparent)); }
+  50% { filter: drop-shadow(0 0 6px color-mix(in srgb, ${light.brand} 80%, transparent)); }
+`;
 /** A locked panel's dashed edge, and the rule between the odds and the chance: the control border or the market's colour
  * softened towards the card surface. */
 const dashedBorder = `color-mix(in srgb, ${light.controlBorder} 55%, ${light.surface})`;
@@ -424,7 +429,7 @@ const LiveDot = styled.span`
 `;
 
 /** Tile: the pick panel under the teams, tinted in the market's colour: the market icon, the market over the pick, then
- * the odds and chance in a box. A locked pick gets a neutral dashed panel with its public chance and a subscribe line;
+ * the odds and chance in a box. A locked pick gets a neutral dashed panel with its public chance and unlock price;
  * no prediction shows "No prediction · Too early" beside a clock. The market and pick shorten first, so the numbers stay whole. */
 const Pick = styled.div<{ $family: MarketFamily }>`
   ${tile} {
@@ -442,7 +447,6 @@ const Pick = styled.div<{ $family: MarketFamily }>`
     line-height: 1.25;
     white-space: nowrap;
     &[data-pick-state="subscriber"] {
-      grid-template-areas: "glyph market numbers" "glyph pick numbers" "hint hint hint";
       background: ${light.surfaceMuted};
       border: ${({ theme }) => theme.border.width} dashed ${dashedBorder};
     }
@@ -454,14 +458,22 @@ const Pick = styled.div<{ $family: MarketFamily }>`
     ${narrowTile} {
       grid-template-columns: auto minmax(0, 1fr);
       grid-template-areas: "glyph market" "glyph pick" "numbers numbers";
-      &[data-pick-state="subscriber"] { grid-template-areas: "glyph market" "glyph pick" "numbers numbers" "hint hint"; }
     }
   }
   ${table} { display: grid; grid-column: 7 / span 4; grid-row: 2; grid-template-columns: subgrid; align-items: center; }
 `;
 const CardGlyph = styled(MarketGlyph)`
   display: none;
-  ${tile} { display: block; grid-area: glyph; }
+  ${tile} {
+    display: block; grid-area: glyph;
+    &[data-market-glyph="locked"] {
+      animation: ${lockGlow} 2s ease-in-out infinite;
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+        filter: drop-shadow(0 0 2px color-mix(in srgb, ${light.brand} 50%, transparent));
+      }
+    }
+  }
 `;
 /** A shared value cell keeps every selected-pick fact in the same column on both layouts. */
 const PickCell = styled.span`
@@ -511,6 +523,7 @@ const GatedPick = styled.span`
   font-size: ${({ theme }) => theme.typography.scale.secondary};
   line-height: 1rem;
   > svg { flex: none; }
+  > [data-mobile-only] { display: none; }
   ${tile} {
     grid-area: pick;
     color: ${light.text};
@@ -518,6 +531,8 @@ const GatedPick = styled.span`
     font-weight: ${({ theme }) => theme.typography.weight.heavy};
     line-height: 1.25rem;
     > svg { display: none; }
+    > [data-mobile-only] { display: block; white-space: normal; }
+    > [data-desktop-only] { display: none; }
   }
 `;
 const Prediction = styled.span<{ $available: boolean }>`
@@ -628,23 +643,6 @@ const PickNumbers = styled.span<{ $family: MarketFamily; $locked: boolean }>`
       line-height: 0.8125rem;
       text-transform: uppercase;
     }
-  }
-`;
-/** Tile only: the whole locked card already opens subscribing, so this line names where the tap goes. */
-const SubscribeHint = styled.span`
-  display: none;
-  ${tile} {
-    grid-area: hint;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-block-start: 6px;
-    padding-block-start: 6px;
-    border-block-start: ${({ theme }) => theme.border.width} solid ${light.border};
-    color: ${light.link};
-    font-size: ${({ theme }) => theme.typography.scale.body};
-    font-weight: ${({ theme }) => theme.typography.weight.heavy};
-    > svg { flex: none; font-size: 0.875rem; }
   }
 `;
 /** Tile: the verdict sits beside the meta line as a solid tag (an outlined one while the match is upcoming); every
@@ -843,7 +841,7 @@ function PredictionCell({ prediction, price, reason, locale, children }: {
 }
 
 function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = false, analysisSlug, markets, selectedFamily, locale: requestedLocale,
-  headingLevel = 2, eagerLogos = false, position, titleNote }: MatchCardProps) {
+  headingLevel = 2, eagerLogos = false, position, titleNote, startingPriceUgx }: MatchCardProps) {
   const locale = resolveLocale(requestedLocale);
   const messages = createMessages(locale);
   const titleId = `gh-match-${useId()}`;
@@ -908,10 +906,15 @@ function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = fals
     <Pick $family={shownFamily} data-pick-state={pickState} data-result={result}>
       <CardGlyph kind={gated ? "locked" : prediction ? shownFamily : "none"} />
       <MarketName $family={shownFamily} aria-hidden={gated ? undefined : true}>
-        <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
+        <span data-pick-value="" data-mobile-only="">{gated ? messages.text("paywall.locked") : family}</span>
         <span data-pick-value="" data-desktop-only="">{gated ? messages.text("paywall.lockedMarket") : family}</span>
       </MarketName>
-      {gated ? <><GatedPick><SubscriberIcon /><SubscriberNotice locale={locale} kind="card" /></GatedPick>
+      {gated ? <><GatedPick><SubscriberIcon />
+        <span data-subscriber-notice data-mobile-only="">{startingPriceUgx
+          ? messages.text("paywall.unlockPredictionPrice", { price: messages.number(startingPriceUgx) })
+          : messages.text("paywall.unlockPrediction")}</span>
+        <span data-desktop-only=""><SubscriberNotice locale={locale} kind="card" /></span>
+      </GatedPick>
         <Odds aria-hidden="true">—</Odds>
         <Probability aria-label={messages.text("details.probability")}><Percent data-public-probability>{publicChanceLabel}</Percent></Probability>
         {/* On phones this box is the only copy of the public chance, so it stays readable; the desktop hides it. */}
@@ -919,7 +922,6 @@ function MatchCardView({ fixture, gated: requiresAccess = false, signedIn = fals
           <span><VisuallyHidden>{messages.text("details.probability")}: </VisuallyHidden><span data-number="">{publicChanceLabel}</span>
             <span data-caption="" aria-hidden="true">{messages.text("match.chance")}</span></span>
         </PickNumbers>}
-        <SubscribeHint aria-hidden="true">{messages.text("match.subscribeToSee")}<ChevronIcon /></SubscribeHint>
       </> : <PredictionCell prediction={prediction} price={price} reason={reason} locale={locale}>
         <PickShort $family={shownFamily} $available={prediction !== null} aria-hidden="true" data-no-pick={missing ?? undefined}>
           {selection ? <span data-pick-value=""><span data-pick-selection="">{predictionLabel(messages, selection)}</span></span> : <>
