@@ -325,6 +325,8 @@ export const en = {
   "account.renewalExtends": "Paying now extends it",
   "account.unlockTitle": "Unlock every prediction and odds",
   "account.unlockPrice": "from UGX {price}",
+  "account.unlockFullAccess": "Unlock full access",
+  "account.unlockFullAccessPrice": "Unlock full access for UGX {price}",
   "account.renewsFromCredit": "Renews from credit",
   "account.creditBalance": "Credit: UGX {amount}",
   "account.subscribe": "Subscribe",

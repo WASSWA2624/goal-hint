@@ -42,11 +42,12 @@ const DesktopStatus = styled.span`
   display: none;
   ${media.desktop} { display: contents; }
 `;
-const MobileStatus = styled(Link)`
+const MobileStatus = styled(Link)<{ $singleLine: boolean }>`
+  --status-icon-size: ${({ $singleLine }) => $singleLine ? "1.25rem" : "2rem"};
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr);
-  align-items: stretch;
-  gap: 10px;
+  grid-template-columns: var(--status-icon-size) minmax(0, 1fr);
+  align-items: ${({ $singleLine }) => $singleLine ? "center" : "stretch"};
+  gap: ${({ $singleLine }) => $singleLine ? "8px" : "10px"};
   inline-size: 100%;
   min-inline-size: 0;
   color: inherit;
@@ -56,6 +57,7 @@ const MobileStatus = styled(Link)`
   &:active::after { background: ${({ theme }) => `color-mix(in srgb, ${theme.header.text} 8%, transparent)`}; }
   &:focus-visible { outline: none; }
   &:focus-visible::after { outline: 2px solid ${({ theme }) => theme.header.accent}; outline-offset: -2px; }
+  ${media.tablet} { --status-icon-size: 2rem; align-items: stretch; gap: 10px; }
   ${media.desktop} { display: none; }
 `;
 type BannerState = "locked" | "pending" | "active" | "expired";
@@ -63,23 +65,31 @@ const StatusIcon = styled.span<{ $state: BannerState }>`
   display: grid;
   place-items: center;
   align-self: stretch;
-  min-block-size: 2rem;
+  min-block-size: var(--status-icon-size);
   color: ${({ theme, $state }) => $state === "active" ? theme.header.tone.emerald
     : $state === "pending" || $state === "expired" ? theme.header.tone.amber : theme.header.accent};
-  > svg { inline-size: 2rem; block-size: 2rem; }
+  > svg { inline-size: var(--status-icon-size); block-size: var(--status-icon-size); }
 `;
-const MobileCopy = styled.div`
+const MobileCopy = styled.div<{ $singleLine: boolean }>`
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 2px;
   min-inline-size: 0;
-  > strong { color: ${({ theme }) => theme.header.mutedText}; font-size: 0.75rem; }
+  > strong { display: ${({ $singleLine }) => $singleLine ? "none" : "block"}; color: ${({ theme }) => theme.header.mutedText}; font-size: 0.75rem; }
+  ${media.tablet} { > strong { display: block; } }
 `;
 const MobileDetail = styled.span`
   color: ${({ theme }) => theme.header.text};
   font-size: 0.875rem;
   font-weight: ${({ theme }) => theme.typography.weight.bold};
+`;
+const PhoneOffer = styled.span`
+  ${media.tablet} { display: none; }
+`;
+const TabletOffer = styled.span`
+  display: none;
+  ${media.tablet} { display: inline; }
 `;
 const MobileMeta = styled.span`
   display: flex;
@@ -159,13 +169,14 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
     ? `${memberNextPath("subscribe", returnTo)}#report` : subscription.activeUntil ? accountPath : `${memberNextPath("subscribe", returnTo)}#plans`;
   const mobileAction = messages.text(!phone ? "account.login" : subscription.paymentPending ? "account.viewPayment"
     : subscription.activeUntil ? "account.accessSettings" : "account.subscribe");
-  const bar = (row: ReactNode, mobile: { state: BannerState; icon: ReactNode; title: string; detail: ReactNode; note?: ReactNode }) =>
+  const bar = (row: ReactNode, mobile: { state: BannerState; icon: ReactNode; title: string; detail: ReactNode; phoneDetail?: ReactNode; note?: ReactNode }) =>
     <Bar className={className} $desktopOnly={desktopOnly} aria-label={messages.text("account.accessSettings")}
       data-subscription-status-bar data-subscription-state={mobile.state}>
     <Row $wide={wide} $compact={compact}>
-      <MobileStatus href={mobileHref} prefetch={false} data-mobile-subscription-status>
+      <MobileStatus href={mobileHref} prefetch={false} $singleLine={mobile.phoneDetail !== undefined} data-mobile-subscription-status>
         <StatusIcon $state={mobile.state}>{mobile.icon}</StatusIcon>
-        <MobileCopy role="status" aria-atomic="true"><strong>{mobile.title}</strong><MobileDetail>{mobile.detail}</MobileDetail>
+        <MobileCopy $singleLine={mobile.phoneDetail !== undefined} role="status" aria-atomic="true"><strong>{mobile.title}</strong>
+          <MobileDetail>{mobile.phoneDetail === undefined ? mobile.detail : <><PhoneOffer>{mobile.phoneDetail}</PhoneOffer><TabletOffer>{mobile.detail}</TabletOffer></>}</MobileDetail>
           {mobile.note && <MobileMeta>{mobile.note}</MobileMeta>}
         </MobileCopy>
         <VisuallyHidden>{mobileAction}</VisuallyHidden>
@@ -178,16 +189,19 @@ export function SubscriptionStatusBar({ locale = "en", className, desktopOnly = 
     // Without access the bar offers the cheapest plan, except on the subscribe page itself.
     if (!subscription.canSubscribe || subscribing) return null;
     const { offer } = subscription;
-    const unlock = offer ? messages.text("paywall.unlockPredictionPrice", { price: messages.number(offer.priceUgx) })
+    const price = offer ? messages.number(offer.priceUgx) : null;
+    const unlock = price !== null ? messages.text("paywall.unlockPredictionPrice", { price })
       : messages.text("paywall.unlockPrediction");
     return subscription.paymentPending ? bar(<>
       <Status><ClockIcon /><span>{messages.text("account.pending")}</span></Status>{action(messages.text("account.viewPayment"))}
     </>, { state: "pending", icon: <ClockIcon />, title: messages.text("account.paymentPending"), detail: messages.text("account.pending") }) : bar(<>
       <Status data-subscription-offer><LockIcon /><strong>{messages.text("account.unlockTitle")}</strong>
-        {offer && <Price>{messages.text("account.unlockPrice", { price: messages.number(offer.priceUgx) })}</Price>}</Status>
+        {price !== null && <Price>{messages.text("account.unlockPrice", { price })}</Price>}</Status>
       {action(messages.text("account.subscribe"))}
     </>, { state: subscription.expired ? "expired" : "locked", icon: <LockIcon />,
-      title: messages.text(subscription.expired ? "account.subscriptionExpired" : "paywall.locked"), detail: unlock });
+      title: messages.text(subscription.expired ? "account.subscriptionExpired" : "paywall.locked"), detail: unlock,
+      ...(!subscription.expired && { phoneDetail: price !== null ? messages.text("account.unlockFullAccessPrice", { price })
+        : messages.text("account.unlockFullAccess") }) });
   }
   const until = new Date(subscription.activeUntil), left = subscriptionTimeLeft(until, now);
   return bar(<>
