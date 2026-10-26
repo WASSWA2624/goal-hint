@@ -308,8 +308,9 @@ test("every private exclusion point covers /admin; member pages stay crawlable b
   const rules = await nextConfig.headers();
   assert.deepEqual(rules[0], { source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] }, "The global rule stays first.");
   const sources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*", "/en/account", "/en/subscribe", "/api/account/:path*"];
-  assert.deepEqual(rules.slice(1).map((rule) => rule.source), sources);
-  for (const rule of rules.slice(1)) {
+  // Public asset caching (tests/seo-performance.test.mjs) sits between; the private rules stay last, so they win.
+  assert.deepEqual(rules.slice(-sources.length).map((rule) => rule.source), sources);
+  for (const rule of rules.slice(-sources.length)) {
     assert.deepEqual(Object.fromEntries(rule.headers.map(({ key, value }) => [key, value])),
       Object.fromEntries(Object.entries(privateHeaders).filter(([key]) => key !== "X-Content-Type-Options")), rule.source);
   }

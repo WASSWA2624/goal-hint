@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Button, PhoneInput } from "@/components/ui/controls";
+import { Button } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { MemberForm } from "@/components/members/member-controls";
 import { normalizePhone } from "@/domain/phone";
 

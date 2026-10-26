@@ -4,10 +4,12 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type
 import Link from "next/link";
 import { trackEvent } from "@/components/analytics/tracker";
 import { useRouter } from "next/navigation";
-import { Button, PhoneInput, TextInput } from "@/components/ui/controls";
+import { Button, TextInput } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { ChatIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClipboardIcon, CopyIcon, DialpadIcon, GiftIcon, HelpIcon, ImageIcon, LockIcon, PhoneIcon, ShieldIcon } from "@/components/ui/icons";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
-import { formatPhone, localUgandaPhone, networkForPrefix, telHref, validMobilePhone, waHref, type MobileNetwork } from "@/domain/phone";
+import { formatPhone, localUgandaPhone, networkForPrefix, telHref, waHref, type MobileNetwork } from "@/domain/phone";
+import { validMobilePhone } from "@/domain/phone-mobile";
 import { canOpenMoneyMenu, normalizeTransactionId, parseTransactionId, type PaymentStatus, type PaymentView } from "@/domain/payment";
 import { paymentEvidence, sameTransactionId, type PaymentEvidence } from "@/domain/payment-sms";
 import type { SubscriptionSettings } from "@/domain/subscription-settings";
