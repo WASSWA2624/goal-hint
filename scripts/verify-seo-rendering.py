@@ -129,9 +129,9 @@ def verify(origin, cases, *, staging):
     match(r"<title>Goal Hint \| Daily Football Predictions</title>", feed)
     match(r'href="/en/matches\?page=2"', visible_html(feed, comments=False))
     for query in ["page=2", "q=Discovery+Home+1", "when=next-7-days", "page=10000"]:
-        # The old homepage feed bookmarks retain their exact query in one redirect.
+        # The old homepage feed bookmarks retain their exact query in one permanent redirect.
         legacy = anonymous("/en?" + query)
-        assert legacy.status == 307, query
+        assert legacy.status == 308, query
         assert urljoin(origin, legacy.headers.get("location")) == origin + "/en/matches?" + query
         checks += 1
         path = "/en/matches?" + query

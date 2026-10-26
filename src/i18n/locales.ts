@@ -24,3 +24,9 @@ export function getLocaleRedirect(pathname: string): string | null {
   if (!requested || isSupportedLocale(requested) || !isLanguageTag(requested)) return null;
   return `/${resolveLocale(requested)}${pathname.slice(match[0].length)}`;
 }
+
+/** `/EN` or `/En/matches`: the published locale in another case, not another language. */
+export function isLocaleCaseVariant(pathname: string): boolean {
+  const segment = /^\/([^/]+)/u.exec(pathname)?.[1];
+  return segment !== undefined && !isSupportedLocale(segment) && isSupportedLocale(segment.toLowerCase());
+}
