@@ -15,7 +15,7 @@ import { createDiscoveryProxy } from '../src/server/seo/proxy.ts';
 registerHooks({ resolve(specifier, context, next) {
   return next(specifier === 'next/navigation' ? 'next/dist/client/components/navigation.react-server.js' : specifier, context);
 } });
-const { redirectLegacyFeedQuery } = await import('../src/server/seo/home-query.ts');
+const { homeBrowseLinks, redirectLegacyFeedQuery } = await import('../src/server/seo/home-query.ts');
 
 const today = parseReportingDate('2026-10-09');
 const approved = { deployment: 'production', index: true }, staging = { deployment: 'staging', index: false };
@@ -65,11 +65,19 @@ test('the home title carries the brand the WebSite structured data names, with a
 });
 
 test('an unavailable home links to nearby dated archives, help and results; available slips render nothing extra', () => {
-  const route = source('app/_components/best-slips-route.tsx');
-  assert.match(route, /feedHref\(\{ date: addReportingDays\(result\.day, offset\), status: feedDefaults\.today\.status \}, locale\)/u);
-  for (const link of ['day(0)', 'day(1)', 'day(-1)', 'informationHref("help", locale)', 'performanceHref(locale)']) assert.ok(route.includes(`[${link}, m.text(`), link);
-  assert.match(route, /\{result\.slips\.length === 0 && <CriteriaPanel as="nav" aria-labelledby="browse-predictions">/u);
+  const day = parseReportingDate('2026-10-26');
+  for (const state of ['odds-unavailable', 'model-unavailable', 'ready']) {
+    assert.deepEqual(homeBrowseLinks({ day, state, slips: [] }, 'en'), [['/en/predictions/2026-10-26', 'feed.date.today'],
+      ['/en/predictions/2026-10-27', 'feed.date.tomorrow'], ['/en/predictions/2026-10-25', 'feed.date.yesterday'],
+      ['/en/help', 'navigation.help'], ['/en/performance', 'performance.title']], state);
+  }
+  // Month and year boundaries follow the reporting calendar.
+  assert.deepEqual(homeBrowseLinks({ day: parseReportingDate('2026-12-31'), slips: [] }, 'en').slice(0, 3).map(([href]) => href),
+    ['/en/predictions/2026-12-31', '/en/predictions/2027-01-01', '/en/predictions/2026-12-30']);
+  assert.deepEqual(homeBrowseLinks({ day, state: 'ready', slips: [{}] }, 'en'), []);
+  for (const [, key] of homeBrowseLinks({ day, slips: [] }, 'en')) assert.doesNotMatch(messages.text(key), /\bpicks?\b/iu, key);
   assert.equal(messages.text('bestSlips.browseTitle'), 'Browse predictions');
+  assert.match(source('app/_components/best-slips-route.tsx'), /const browse = homeBrowseLinks\(result, locale\);[\s\S]*\{browse\.length > 0 && </u);
 });
 
 test('home query variants keep the canonical but are noindex; only feed keys permanently redirect to the feed', () => {
