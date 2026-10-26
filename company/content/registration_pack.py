@@ -90,7 +90,7 @@ DOCUMENTS = [
                 "After registration: incorporation number and date, TIN, official office and director records, and any certified copies requested by the bank or provider.",
                 "For launch: actual payment volumes, settlement account, support contacts, hosting and data locations, retention periods and approval of customer policies."
             ),
-            p("Keep scans of IDs, completed personal-information sheets and provider credentials in company/private or another secure location. The supplied WhatsApp archive remains unchanged. The repository tracks preparation text and the builder; generated Word files and private records stay local."),
+            p("Keep scans of IDs, completed personal-information sheets and provider credentials in company/private or another secure location. The supplied WhatsApp archive remains unchanged. The repository tracks the blank Word templates, preparation text and builder. Completed private records and QA output stay local."),
             p("Before publishing the customer policies, align account-erasure and unused-credit handling with the refund policy. The current application forfeits remaining credit on erasure; the proposed policy preserves applicable refund rights."),
         ),
         page(

@@ -32,9 +32,9 @@ including unused-credit treatment when an account is erased.
 
 The original WhatsApp ZIP stays unchanged and is excluded from Git. Keep completed
 identity sheets, IDs and credentials in `private/` or another secure location.
-Generated DOCX files, downloaded reference PDFs and QA images are also excluded
-from Git, following the repository rule about generated output. The reusable
-preparation content and builder are versioned so the blank pack can be rebuilt.
+The twelve requested blank Word documents are versioned with the reusable
+preparation content and builder, as requested. Downloaded reference PDFs, QA
+images and other generated files remain excluded from Git.
 Do not regenerate over completed Word files; save completed copies in `private/`.
 
 ## Rebuild and verify

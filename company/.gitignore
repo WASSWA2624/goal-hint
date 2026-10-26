@@ -3,8 +3,20 @@
 /private/
 /.work/
 
-# Requested Word files are generated locally from the reviewed source content.
+# Track only the requested blank Word deliverables; other generated files stay local.
 *.docx
+!/00-guidance/11-official-sources-and-filing-map.docx
+!/01-registration/00-start-here.docx
+!/01-registration/01-registration-information.docx
+!/01-registration/02-memorandum-and-articles.docx
+!/01-registration/03-nominee-appointments-and-consents.docx
+!/01-registration/04-member-and-beneficial-ownership-register.docx
+!/02-banking-and-payments/05-company-profile.docx
+!/02-banking-and-payments/06-company-resolutions.docx
+!/02-banking-and-payments/07-bank-and-api-application-letters.docx
+!/02-banking-and-payments/08-payment-operations-and-disclosures.docx
+!/03-customer-policies/09-service-terms-and-refunds.docx
+!/03-customer-policies/10-privacy-notice.docx
 *.pdf
 *.png
 __pycache__/
