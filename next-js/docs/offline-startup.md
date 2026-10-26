@@ -38,12 +38,6 @@ reads, expired content is unavailable, and the 24-hour envelope lifetime is
 unchanged. This accommodates small device clock differences without making
 credentials or authorization available offline.
 
-The server rejects source timestamps later than its own clock. Device-side reads
-allow up to five minutes of server/device clock difference, so a phone a second
-behind the server can accept a fresh snapshot. This does not add time to
-`expiresAt` or the 24-hour source lifetime; expired or substantially future
-snapshots remain unavailable. Authentication never uses this offline tolerance.
-
 No forecasts, selections, probabilities, prices, revision/run/cycle metadata,
 access/entitlement flags, account identities, credentials, search text or remote
 image URLs enter this schema. Even completed predictions that are public online
@@ -82,7 +76,7 @@ changes. Changed or missing resources still require verified network downloads.
 
 | Limit | Bound |
 | --- | --- |
-| One bundle | 10 MiB of entry/assets/snapshot content, reserving the snapshot allowance in the manifest. |
+| One bundle | 10 MiB of entry/assets/snapshot content, reserving snapshot and integrity-metadata allowances in the manifest. |
 | Individual entry/asset | 4 MiB. |
 | Required assets | At most 256, with bounded download concurrency. |
 | Retained bundles | Active plus at most one staging/previous bundle: 20 MiB content budget, plus small metadata/browser overhead. |
@@ -95,18 +89,47 @@ Older manifest times, snapshot times and overlapping fixture versions cannot
 replace newer accepted content. Cleanup deletes only recognized worker-owned
 bundle names, leaving cookies and unrelated origin storage intact.
 
-`OfflineBootstrap` requests `PREPARE` at visible startup and relevant online or
-visibility events, at most once per 60 seconds per mounted bootstrap. Concurrent
-preparations share one worker promise. Bounded same-origin manifest/projection
-reads establish actual reachability; an online event alone is insufficient.
-There is no additional timer poller or terminated-app background service.
-Worker `STATUS` and `/offline-cache/status` report validated availability;
-`/offline-cache/snapshot` serves only the validated anonymous projection.
+`OfflineBootstrap` uses one visible-document coordinator. Successful checks use
+a five-minute cadence; recent online/foreground hints coalesce for 60 seconds.
+Failures retry after 5, 15, 30 and 60 seconds, then at five-minute intervals while
+the document remains visible. Manual checks observe a two-second minimum gap
+and bounded server `Retry-After` values. Hints never overlap a running attempt or
+reset its failure backoff. There is no provider poller or terminated-app service.
+
+The public manifest and anonymous snapshot are the bounded reachability probes.
+An online flag alone proves nothing; a false offline flag does not prevent a
+successful real read. Timeouts/refusal, server errors, captive or wrong responses,
+unexpected authentication walls, and storage/integrity failures remain distinct
+finite results. An authentication wall on this anonymous endpoint is not a
+session-status probe and does not change account state.
+
+| Worker message | Meaning |
+| --- | --- |
+| `PREPARE` | `refreshed: true` means a complete verified server read succeeded; `activated` says whether a new bundle committed. |
+| Retained result | `ok: true, retained: true, refreshed: false, updateError` means the previous cache is usable but the refresh failed. Public version/capture/expiry/count metadata accompanies it. |
+| `STATUS` | Validates stored availability without a network check. `/offline-cache/status` exposes the same public metadata; `/offline-cache/snapshot` exposes only the approved projection. |
+| Same-port `CANCEL` | Releases only that caller's preparation lease. Another visible caller can continue the shared attempt; the last cancellation aborts downloads and streams, with cleanup anchored by the worker event. |
+
+Hidden, closed and disposed owners stop their timers and release their leases;
+late replies cannot update disposed UI. Legacy 004 workers remain compatible:
+their version-only preparation replies are followed by `STATUS` to recover the
+actual snapshot lifetime. Unknown lifetime or failed status verification cannot
+be presented as a fresh saved view.
+
+Same-worker callers share one preparation promise. Writers also take the
+nonqueued exclusive Web Lock `goal-hint-offline-prepare-v1` across worker
+contexts. A busy or unsupported lock preserves a valid previous cache and
+reports the limitation instead of starting a competing writer. Worker-code
+updates use normal activation after existing clients close; there is no
+`skipWaiting()` controller swap beneath an active form. A compatible new
+entry/assets/data bundle can still be accepted without reloading that document.
+See [the Web Locks coordination model](https://www.w3.org/TR/web-locks/).
 
 Preparation does not reload the active page or replace its form, navigation,
-focus or scroll. A later cold start uses the accepted complete version. The saved
-view offers **Try online again** as an explicit reload. Further native
-reconnection/lifecycle qualification belongs in
+focus or scroll. Its in-memory UI state contains public cache/update metadata,
+not account state or persisted drafts. The saved view's **Check for updates**
+action requests a read; **Try online again** explicitly reloads. A later cold
+start uses the accepted complete version. Native qualification belongs in
 [Flutter 005](../../flutter/dev-plan/005-reconnection-and-cache-updates.md).
 
 ## Missing storage and development
@@ -142,3 +165,13 @@ and transport. API availability is not installed cold-start evidence: Apple
 execution and Linux embedding remain unqualified. See the
 [platform matrix](../../flutter/docs/platform-support.md) and
 [Flutter offline guide](../../flutter/docs/offline-startup.md).
+
+The recorded 005 checks passed full-process offline cold A/B in Chrome
+156.0.8078.48 and separate-process cold A/B in Windows WebView2 155. Windows also
+passed actual OS minimize/restore, DOM visibility, active-draft preservation
+through valid B recovery, and no write replay. The browser's valid-B transition
+does not claim draft preservation; its failure/cancel phases do. The derived B
+fixture adds a harmless required asset to one existing build, separate from
+004's genuine Next.js rebuild check. Android testing is deferred and Apple/Linux
+remain unqualified; [recorded progress](development-progress.md#005--reachability-and-safe-update-handoff)
+keeps those scopes explicit.

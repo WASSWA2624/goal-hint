@@ -1,68 +1,58 @@
 "use client";
 
 import { useEffect } from "react";
+import { startOfflineRefresh } from "@/domain/offline-refresh";
+import { createOfflineTransport } from "./offline-transport";
+import { publishOfflineUpdate } from "./offline-update-store";
 
-type CacheReply = { ok: boolean; version?: string };
-const versionPattern = /^[a-f0-9]{64}$/u;
-
-function requestPreparation(worker: ServiceWorker): Promise<CacheReply> {
-  return new Promise((resolve, reject) => {
-    const channel = new MessageChannel();
-    const timer = setTimeout(() => { channel.port1.close(); reject(new Error("Offline preparation timed out.")); }, 65_000);
-    channel.port1.onmessage = ({ data }: MessageEvent<CacheReply>) => {
-      clearTimeout(timer);
-      channel.port1.close();
-      resolve(data);
-    };
-    worker.postMessage({ type: "PREPARE" }, [channel.port2]);
-  });
-}
-
-/** Only an explicitly approved anonymous bundle is saved; normal page responses never enter it. */
+/** One shared controller; product data/authentication keep their existing refresh rules. */
 export function OfflineBootstrap() {
   useEffect(() => {
+    const root = document.documentElement;
     if (process.env.NODE_ENV !== "production" || !window.isSecureContext || !("serviceWorker" in navigator)) {
-      document.documentElement.dataset.offlineCache = "unavailable";
+      root.dataset.offlineCache = "unavailable";
       return;
     }
-    let disposed = false, pending = false, attemptedAt = 0;
-    const prepare = async () => {
-      if (disposed || pending || document.visibilityState !== "visible" || Date.now() - attemptedAt < 60_000) return;
-      pending = true;
-      attemptedAt = Date.now();
-      const root = document.documentElement;
-      if (!root.dataset.offlineVersion) root.dataset.offlineCache = "preparing";
-      try {
-        const registration = await navigator.serviceWorker.register("/offline-worker.js", { scope: "/", updateViaCache: "none" });
-        const ready = registration.active ? registration : await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Offline worker unavailable.")), 15_000)),
-        ]);
-        const worker = ready.active;
-        if (!worker) throw new Error("Offline worker unavailable.");
-        const reply = await requestPreparation(worker);
-        if (disposed) return;
-        if (reply && typeof reply.version === "string" && versionPattern.test(reply.version)) {
-          root.dataset.offlineVersion = reply.version;
-          root.dataset.offlineCache = "ready";
-          window.dispatchEvent(new Event("goal-hint-offline-ready"));
-        } else {
-          delete root.dataset.offlineVersion;
-          root.dataset.offlineCache = "unavailable";
-        }
-      } catch {
-        if (!disposed && !root.dataset.offlineVersion) root.dataset.offlineCache = "unavailable";
-      } finally { pending = false; }
-    };
-    const resume = () => { void prepare(); };
-    resume();
-    window.addEventListener("online", resume);
-    document.addEventListener("visibilitychange", resume);
-    return () => {
-      disposed = true;
-      window.removeEventListener("online", resume);
-      document.removeEventListener("visibilitychange", resume);
-    };
+    let pageActive = true, readyKey = "";
+    return startOfflineRefresh({ ...createOfflineTransport(), publish: (state) => {
+      publishOfflineUpdate(state);
+      root.dataset.offlineCache = state.cache ? "ready" : state.phase === "checking" ? "preparing" : "unavailable";
+      root.dataset.offlineConnection = state.connection;
+      root.dataset.offlineUpdate = state.phase;
+      root.dataset.offlineAttempts = String(state.attempts);
+      if (state.cache) root.dataset.offlineVersion = state.cache.version;
+      else delete root.dataset.offlineVersion;
+      if (state.problem) root.dataset.offlineProblem = state.problem;
+      else delete root.dataset.offlineProblem;
+      if (state.retryAt !== null) root.dataset.offlineRetryAt = String(state.retryAt);
+      else delete root.dataset.offlineRetryAt;
+      const key = state.cache ? `${state.cache.version}:${state.cache.capturedAt}:${state.cache.expiresAt}` : "";
+      if (key && key !== readyKey) window.dispatchEvent(new Event("goal-hint-offline-ready"));
+      readyKey = key;
+    } }, {
+      now: Date.now, visible: () => pageActive && document.visibilityState === "visible", onlineHint: () => navigator.onLine,
+      schedule: (callback, delay) => window.setTimeout(callback, delay), cancel: (timer) => window.clearTimeout(timer as number),
+      listen: (callback) => {
+        const hint = () => callback();
+        const manual = () => callback("manual");
+        const leave = () => { pageActive = false; callback(); };
+        const restore = () => { pageActive = true; callback(); };
+        document.addEventListener("visibilitychange", hint);
+        window.addEventListener("online", hint);
+        window.addEventListener("offline", hint);
+        window.addEventListener("goal-hint-offline-check", manual);
+        window.addEventListener("pagehide", leave);
+        window.addEventListener("pageshow", restore);
+        return () => {
+          document.removeEventListener("visibilitychange", hint);
+          window.removeEventListener("online", hint);
+          window.removeEventListener("offline", hint);
+          window.removeEventListener("goal-hint-offline-check", manual);
+          window.removeEventListener("pagehide", leave);
+          window.removeEventListener("pageshow", restore);
+        };
+      },
+    });
   }, []);
   return null;
 }

@@ -9,6 +9,7 @@ import { Header, HeaderContent } from "@/components/navigation/shell-styles";
 import { MatchCard } from "@/components/match/match-card";
 import { MatchCardList } from "@/components/match/match-card-list";
 import { offlineFixture, offlineRules, offlineSnapshotSchema, type OfflineSnapshot } from "@/domain/offline";
+import { OfflineUpdateNotice } from "./offline-update-notice";
 
 const Notice = styled(Surface)`border-radius: 0;`;
 const Heading = styled(HeaderContent)`justify-content: space-between; gap: 12px;`;
@@ -60,6 +61,7 @@ export function OfflineView() {
           <p>Saved <time data-offline-saved-at dateTime={new Date(snapshot.capturedAt).toISOString()}>{new Date(snapshot.capturedAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" })} EAT</time>.</p>
         </> : <p>{supported ? "No usable saved matches are available. Connect to the internet and try again." : "This route was not saved. Open saved matches or reconnect to use it."}</p>}
         <p>Predictions, sign-in, account changes and payments need an internet connection. Nothing is queued or submitted from this view.</p>
+        <OfflineUpdateNotice />
         <Inline><Button variant="secondary" onClick={() => location.reload()}>Try online again</Button>
           {!supported && <Link href="/en/matches">Open saved matches</Link>}</Inline>
       </Stack></Notice>

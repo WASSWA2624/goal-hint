@@ -24,6 +24,7 @@ production requires its own hashed credentials).
 - [Brand guide](assets/brand/README.md): logo variants, palette, file inventory, usage and regeneration.
 - [Brand preview](assets/brand/goal-hint-brand-preview.html): open locally to inspect the complete identity.
 - [Brand sheet](assets/brand/goal-hint-brand-sheet.png): shareable visual overview.
+- [Offline startup and updates](docs/offline-startup.md): the bounded anonymous saved view, secure-origin setup, retry/update behavior and recorded platform limits.
 
 Production-ready artwork is in `public/brand/`; editable sources, tokens and the original logo reference are in `assets/brand/`. Use “Goal Hint” consistently, with deep navy, teal and the shared subtle 2px component radius.
 

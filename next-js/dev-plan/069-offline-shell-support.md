@@ -6,7 +6,7 @@
 
 **Source:** [App specification](../../app-write-up.md), [Flutter shell requirements](../../prompts/flutter-app-shell.md), and the coordinated [Flutter offline-startup plan](../../flutter/dev-plan/004-persistent-offline-startup.md).
 
-**Status:** Partial. The anonymous entry, bounded projection, pinned bundle and staged worker cache are implemented. Production-like browser cold startup, privacy boundaries and storage recovery have passed. Installed-target and remaining lifecycle/update acceptance are coordinated with Flutter 004–005; Apple/Linux qualification remains open. See [the contract](../docs/offline-startup.md) and [recorded progress](../docs/development-progress.md#069--anonymous-offline-startup-26-october-2026).
+**Status:** Partial. The anonymous entry/cache and shared safe-update coordinator are implemented. Browser and Windows cold A/B startup, measured retries, failed-update retention and available-target lifecycle checks have passed. Android testing is deferred, and Apple/Linux qualification remains open. See [the contract](../docs/offline-startup.md) and [recorded progress](../docs/development-progress.md#069--anonymous-offline-startup-26-october-2026).
 
 **Coordination:** Deliver and verify the shared web cache contract before Flutter plan 004 consumes it. Use the platform audit and integration baseline from [Flutter 001](../../flutter/dev-plan/001-foundation-and-platform-support.md) and [003](../../flutter/dev-plan/003-web-app-integration.md) where available. Completion of Flutter 004 is not a dependency of this web task. Installed-app persistence, reconnect, and release verification remain with Flutter [004](../../flutter/dev-plan/004-persistent-offline-startup.md), [005](../../flutter/dev-plan/005-reconnection-and-cache-updates.md), and [007](../../flutter/dev-plan/007-platform-builds-and-release.md).
 
@@ -64,6 +64,19 @@ remote media, identity, credentials and private/no-store responses are excluded.
 No offline writes are queued. Flutter uses its existing persistent browser
 profile; there is no second native content implementation.
 
+The 005 handoff adds one visible-document retry coordinator, public-only
+preparation/status replies, legacy 004 lifetime verification, per-port
+cancellation and nonqueued Web Locks for writer isolation. Worker code waits
+for existing clients to close before activation; no input or navigation is
+reloaded to apply cache updates. The current browser matrix has measured
+5/15/30/60/300-second retries, retained A through failed derived-B updates, and
+passed healthy-B activation plus full-process offline cold A/B startup. Windows
+also preserved its active draft through valid B recovery and a separate-process
+cold B launch. Browser draft preservation is qualified for the failure/cancel
+path, not its final valid-B transition. This derived fixture adds a harmless
+required asset to one existing build and does not replace 004's genuine Next.js
+rebuild proof.
+
 Overall status remains Partial. Installed-target evidence belongs in Flutter
-004; Apple/Linux and remaining native reachability/lifecycle/update checks stay
-explicit in 005/007. Browser success does not qualify an unavailable WebView.
+004–005; Android testing is deferred, and Apple/Linux execution remains
+unqualified. Browser success does not qualify an unavailable WebView.

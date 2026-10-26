@@ -17,6 +17,6 @@ abstract class WebViewAdapter extends ChangeNotifier {
   /// Reconcile browser state without reloading or discarding an unfinished form.
   Future<void> resume();
 
-  /// Commit browser-managed storage before normal background/close where needed.
+  /// Hide/pause the browser and commit its store where supported by the host.
   Future<void> suspend() async {}
 }

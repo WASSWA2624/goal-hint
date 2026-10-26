@@ -2,12 +2,10 @@ import { z } from "zod";
 import { getReportingDate, parseReportingDate, utcInstantFromEpochMilliseconds } from "./calendar.ts";
 import { fixtureSnapshotSchema, type FixtureSnapshot } from "./fixture-snapshot.ts";
 import { publicPolicy } from "./public-policy.ts";
+import { offlineRules } from "./offline-rules.ts";
+export { offlineRules } from "./offline-rules.ts";
 
 /** Anonymous, bounded content only. Browser profiles and session cookies are separate. */
-export const offlineRules = Object.freeze({ schemaVersion: 1, maximumRecords: 30,
-  retentionMs: 24 * 60 * 60 * 1000, maximumSnapshotBytes: 128 * 1024,
-  /** Device clocks can lag the server; this never extends the server's snapshot lifetime. */
-  clockSkewMs: 5 * 60 * 1000 });
 
 const fixture = fixtureSnapshotSchema.shape;
 const team = z.strictObject({ id: fixture.homeTeam.shape.id, name: fixture.homeTeam.shape.name,

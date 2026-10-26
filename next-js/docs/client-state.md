@@ -191,6 +191,14 @@ that schema and reuses existing match-card presentation. It is not restored live
 state or evidence of current server authorization. Feed reconciliation, history
 metadata and preference storage retain their existing boundaries.
 
+The offline update coordinator keeps only public cache version, lifetime/count,
+connection and retry metadata in memory. It does not serialize the Redux tree or
+persist drafts. A retained cache with a failed update remains distinct from a
+verified successful refresh; unknown legacy cache lifetime is checked through
+worker status. Owned timer/port cancellation prevents late replies from changing
+disposed UI, and accepting a bundle does not replace the current React tree or
+navigation. See the [update contract](offline-startup.md#coherent-bundles-and-updates).
+
 ## Anonymous preferences and verification
 
 Only `{ version: 1, density: "comfortable" | "compact" }` uses local storage,

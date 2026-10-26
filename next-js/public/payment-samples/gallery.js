@@ -94,7 +94,8 @@ export function mountGallery(root) {
     switch (button.dataset.action) {
       case 'favorite': {
         const id = button.dataset.id;
-        favorites.has(id) ? favorites.delete(id) : favorites.add(id);
+        if (favorites.has(id)) favorites.delete(id);
+        else favorites.add(id);
         try { localStorage.setItem(favoriteKey, JSON.stringify([...favorites])); } catch { /* Keep in-memory favorites functional. */ }
         if (root.querySelector('.workbench')) {
           const concept = concepts.find((item) => item.id === id);

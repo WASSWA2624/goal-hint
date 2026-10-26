@@ -27,10 +27,6 @@ envelope bound remain intact. A real Android read exposed a roughly one-second
 device lag; final Android cold-start qualification remains open and must not be
 inferred from browser or Windows results.
 
-Device reads allow a bounded five-minute difference from the server clock;
-server validation and the original expiry remain strict. This accommodates
-ordinary phone clock drift without changing device time or authorization.
-
 ## Origins and preparation
 
 The installed engine must expose service workers in a secure context and retain
@@ -48,13 +44,32 @@ to a production-like loopback server; remove that test mapping afterwards while
 preserving pairing. LAN and loopback origins have separate stores. Never copy
 cookies or cache files between origins to manufacture a passing test.
 
-Visible startup, online and visibility events request bounded preparation at
-most once per 60 seconds. Actual same-origin manifest/snapshot reads establish
-reachability. Every resource is staged and verified before activation; failure
-keeps the previous valid cache. At most two 10 MiB content bundles plus small
-metadata/browser overhead are retained. Cleanup affects only recognized owned
-cache names. No cookies/unrelated storage are cleared, active forms reloaded or
-terminated-app work started. **Try online again** is an explicit saved-view action.
+Visible startup, foreground and connection hints share one web refresh
+controller. Actual validated same-origin manifest/snapshot reads establish
+reachability; `navigator.onLine` is only a hint and cannot prevent a successful
+probe. Failures retry after 5, 15, 30 and 60 seconds, then five minutes; a healthy
+copy is checked after five minutes. Repeated hints preserve backoff and do not
+create concurrent refresh loops. Successful recent checks suppress hints for
+60 seconds; explicit checks obey the two-second minimum and server Retry-After.
+Hidden documents, page exit and disposal cancel owned work. The saved view's
+**Check for updates** action requests a check without reloading its document.
+
+Every required resource is staged and verified before activation; failure keeps
+the previous valid cache. A complete newer cache becomes available for future
+reads without replacing the active document or its draft, history, focus and
+scroll. New service workers follow the browser's normal waiting lifecycle,
+without forced activation over existing clients. At most two 10 MiB content
+bundles plus small metadata/browser overhead are retained. Cleanup affects only
+recognized owned cache names. Cookies/unrelated storage are retained and no
+work continues after the app is terminated.
+
+Windows forwards Flutter hidden/resumed lifecycle through the selected plugin's
+existing WebView2 pause/resume APIs so the shared document receives real
+visibility events. Calls are ordered, hidden/paused coalesce, and hidden startup
+is remembered until the controller exists. Suspension is best effort; the host
+does not add a native poller or content cache. [Microsoft's WebView2 lifecycle
+reference](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2_3?view=webview2-1.0.4022.49)
+describes visibility, suspension and automatic resume behavior.
 
 ## Failure and acceptance boundary
 

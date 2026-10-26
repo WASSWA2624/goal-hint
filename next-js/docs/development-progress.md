@@ -5011,10 +5011,11 @@ The post-build manifest pins the static entry, matching reachable JS/CSS/fonts
 and two first-party brand SVGs by bytes and SHA-256. The web service worker stages
 and validates a complete bundle before updating its active pointer, retaining a
 valid old bundle on failure. It caps content at 10 MiB per bundle and two bundles,
-with scoped cleanup and no native content cache. Bounded real server reads on
-startup/online/visible hints prepare updates without a timer poller, writes,
-queues or automatic reload. The active document, input and navigation remain in
-place. [Exact contract, routes, lifecycle and development limits](offline-startup.md).
+with scoped cleanup and no native content cache. The 005 coordinator below owns
+bounded server reads, retry timing and visible-document lifecycle cleanup;
+preparation adds no writes, queue or automatic reload. The active document,
+input and navigation remain in place.
+[Exact contract, routes, lifecycle and development limits](offline-startup.md).
 
 Production-like browser acceptance used installed Chrome **156.0.8078.48**, the actual Next offline entry/components,
 manifest builder and worker in a separate built fixture on loopback port 3190.
@@ -5100,3 +5101,64 @@ interrupted-update qualification continues in
 LAN HTTP online development does not provide this secure-context cache, and
 `next dev` skips preparation. Nothing was deployed; paid access and external
 operating approvals are unchanged.
+
+### 005 — Reachability and safe-update handoff
+
+The web now owns one visible-document coordinator in `domain/offline-refresh.ts`
+with a bounded worker transport and public update notice. It retries after
+5/15/30/60 seconds, then every 300 seconds while visible. Healthy checks use a
+five-minute cadence; fresh hints coalesce for 60 seconds. Manual checks retain
+the minimum gap and bounded `Retry-After`. A network flag cannot establish
+reachability or reset failure backoff.
+
+`PREPARE` distinguishes a successful refresh from a retained good cache with an
+update failure. `STATUS` validates only public version/lifetime/count metadata;
+legacy 004 version-only replies receive a lifetime check before readiness is
+claimed. Hide/pagehide/disposal cancels the owner's port lease; only the last
+lease aborts shared requests/streams. Late replies cannot update disposed state.
+Nonqueued Web Locks serialize writers, and worker-code activation waits for
+existing clients to close. These operations never reload an active document,
+persist account state/drafts, cache private responses or queue/replay writes.
+
+The 005 browser checks use Chrome **156.0.8078.48** and a loopback-only synthetic fault
+proxy. Generation B derives from the same built entry by adding a harmless
+required asset and advancing the anonymous projection. It verifies staging and
+retention, not a second compiled UI; 004's genuine Next.js rebuild proof above
+remains separate. Ignored evidence is under `output/playwright/offline005-*`.
+
+| Check | Actual result |
+| --- | --- |
+| Source checks | 48 focused cache/coordinator/transport checks and 75 Python helper checks passed; full typecheck, lint and production build passed. The build pins 22 assets. |
+| Full Node run | 2,087 cases ran with one existing skip; one database-CLI case reached its 60-second timeout under parallel load. That file then passed separately: 6/6. A clean full-suite rerun is not inferred. |
+| Real production HTTP boundary | Anonymous projection returned 30 bounded public records with a 24-hour envelope; existing match API remained private/no-store. |
+| Actual retry timing and hint flood | Passed: measured manifest retry intervals of 5.458/15.368/30.479/60.401/300.314 seconds. Hint flooding did not create extra requests or reset backoff. |
+| Unusable or unavailable responses | Captive response, authentication wall, header timeout and disconnect were classified without accepting an update; A and the current input/selection/focus/query/hash/scroll remained intact. |
+| Network flags and recovery | A false offline hint did not block verified reads. Actual browser-context offline → online recovered automatically. |
+| Privacy and writes | Synthetic private GET returned 401 with private/no-store; browser counters stayed at zero writes and no mutation replay occurred. Cache-policy regression checks passed. This is an HTTP sentinel, not a new real-account resolver test. |
+| Interrupted derived-B update | Missing, truncated and 503 required assets retained exactly A. A held request owned the exclusive Web Lock; pagehide canceled it and stopped retries. Browser lifecycle signaling here is synthetic; actual OS minimize evidence belongs in Flutter. |
+| Full-process cold A | Passed after closing/reopening Chrome with networking disabled before the first navigation; saved A (`0a28…`), dataVersion 1 rendered. |
+| Healthy derived-B activation and cold B | Passed: B (`2f4000d9322d…`) became reachable/accepted; complete Chrome close/reopen with networking disabled before the first `/en/matches` navigation rendered its one public record/dataVersion 2. `offline005-cold-b.log`, `offline005-cold-b.png`, `offline005-summary.json`. Browser counters stayed at zero writes. |
+
+Available Windows WebView2 **155** testing exposed a missing native visibility
+forwarding hook. The minimal pause/resume fix preserves the profile/document,
+remembers late controller creation, and has passed actual OS minimize/restore,
+DOM hidden/visible events through a 13-second minimize, and draft preservation.
+Native failed 503/captive/401/missing/timeout/truncated updates retained A;
+the disposal audit observed cancellation in 209 ms, before the normal eight-second
+timeout. Automatic recovery accepted valid B despite a false offline hint while
+preserving the actual draft. A private response remained 401/no-store, and the
+single failed synthetic POST counter stayed at one: no replay. A full separate
+process then rendered exactly B with proxy port 3192 absent. All 32 Flutter unit
+checks passed. Final native evidence and limits belong in the
+[Flutter tracker](../../flutter/dev-tracker.md).
+
+Browser draft preservation is qualified for failed-update/cancellation phases;
+it is not claimed for the final valid-B transition because that setup checkpoint
+was missed. The native valid-B run provides the actual draft-preservation proof.
+The browser's final cold-B check did not repeat private-cache inspection. Its
+owned browser and fault proxy were closed. The shared fixture backend was stopped
+after native qualification; the normal development server was preserved.
+
+**069 remains Partial:** Android testing is deferred by the owner, and
+Apple/Linux execution remains unqualified. Neither browser results nor an
+available native target qualify every platform.

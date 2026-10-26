@@ -1,6 +1,6 @@
 # Flutter shell platform support
 
-Evidence checked **26 October 2026 (Africa/Kampala)** for [foundation plan 001](../dev-plan/001-foundation-and-platform-support.md). The candidate tables below preserve that foundation decision record. A generated runner, a documented engine feature, and a tested WebView are different levels of evidence. Plan 003 implements browser adapters; plan 004 adds the [shared web-owned offline cache](offline-startup.md). See [the integration guide](web-app-integration.md) and [execution tracker](../dev-tracker.md) for actual installed checks. Persistent browser storage alone does not establish offline support.
+Evidence checked **26 October 2026 (Africa/Kampala)** for [foundation plan 001](../dev-plan/001-foundation-and-platform-support.md). The candidate tables below preserve that foundation decision record. A generated runner, a documented engine feature, and a tested WebView are different levels of evidence. Plan 003 implements browser adapters; plan 004 adds the [shared web-owned offline cache](offline-startup.md); plan 005 qualifies shared reachability/safe updates on Windows. See [the integration guide](web-app-integration.md) and [execution tracker](../dev-tracker.md) for actual installed checks. Persistent browser storage alone does not establish offline support.
 
 ## Toolchain baseline and evidence labels
 
@@ -123,3 +123,23 @@ Plan 001 added no candidate dependency. Plan 003 pins the official system plugin
 For each chosen engine, record its exact version, OS/architecture, selected plugin/lockfile and origin. Then demonstrate navigation and web sign-in/logout; cookie/profile persistence across full process termination; service-worker registration or the documented minimal adapter alternative; permitted local asset delivery; and eventual online → terminate → offline cold start → reachable-server update. Include first-use offline, eviction/corruption, failed update, expired/revoked access and untrusted external navigation. Separate local file origins, development LAN origins and the hosted HTTPS origin instead of assuming shared cookies/storage.
 
 Persistent browser storage alone does not implement offline startup. Do not cache private/no-store pages, subscriber responses, credentials or payment evidence, relax the web authorization rules, or queue account/financial writes to make a prototype pass. The shared web contract now stages an approved anonymous bundle, retains the previous valid version on failure and preserves active documents. Plan 004's installed evidence and plan 005's remaining platform update checks stay explicit; the original foundation scaffold did not qualify them.
+
+## Plan 005 native reachability qualification
+
+Windows 11 x64/WebView2 reported Chrome/Edge 155 through the actual test document
+on 26 October 2026. Its retained profile passed staged-update failures, genuine
+automatic retry and later valid B recovery with a false `navigator.onLine` hint.
+Actual OS minimize/restore exposed that the selected texture host did not
+forward document visibility. The adapter now uses the plugin's existing
+pause/resume APIs, with ordered/coalesced Flutter hidden/resumed handling and
+remembered hidden startup. The repeated real window test observed both native
+and document hidden/visible events and preserved its draft/history/focus/scroll.
+No native refresh loop, content store or JavaScript bridge was added.
+
+These checks stop the owned application-origin proxy while Wi-Fi remains
+available; they do not claim OS radio switching. Generation B is a coherent
+derived fixture, not an independent deployment build. Android reconnection was
+not run after the owner's stop; Apple native execution and Linux embedding
+remain open. See [the tracker](../dev-tracker.md) for exact cold-start and source
+results. WebView2 suspension is best effort; visible views resume according to
+[Microsoft's API contract](https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2_3?view=webview2-1.0.4022.49).

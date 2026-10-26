@@ -90,17 +90,22 @@ Run counts and ordinary successful polls have no live-region announcements.
 
 [Anonymous offline startup](offline-startup.md) adds a separate service-worker
 bundle, not persistence for RTK Query or the live feed. It stores no forecasts,
-private/no-store responses, account state or queued writes. Preparation runs on
-visible startup and online/visibility hints, at most once per 60 seconds, and
-requires successful bounded same-origin manifest/projection reads. There is no
-additional timer poller or provider request loop.
+private/no-store responses, account state or queued writes. One visible-document
+coordinator verifies bounded same-origin manifest/projection reads. Failures use
+5/15/30/60-second retry delays, then a five-minute cadence; healthy checks also
+use five minutes. Online/foreground hints coalesce and cannot bypass failure
+backoff. Hidden/disposed owners cancel their timers and owned worker lease.
+This is separate from the live feed and creates no provider request loop.
 
 Complete candidates are validated before activation; failed downloads or storage
 retain a valid previous bundle. Preparation does not replace the current React
 tree or reload forms, navigation, focus or scroll. Later offline startup renders
 the dedicated dated Saved matches view, limited to a 24-hour anonymous snapshot;
 normal online refresh keeps the ordering, authorization and reconciliation rules
-above. The saved view's explicit Try online again action controls a reload.
+above. Public status metadata distinguishes an available old cache from a failed
+refresh; legacy 004 replies receive an actual expiry check. The saved view's
+Check for updates action requests a read, while Try online again explicitly
+controls a reload. Worker code waits for old clients to close before activation.
 
 ## Verification
 

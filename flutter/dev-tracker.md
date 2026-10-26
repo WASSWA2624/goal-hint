@@ -6,7 +6,8 @@ network policy, shared loading/retry/history handling, and browser adapters for
 Android, iOS, macOS, and Windows. Goal Hint names, shared launcher artwork, and
 white launch/loading surfaces are implemented; appearance qualification remains
 partial. Linux embedding remains unqualified. The shared web cache is implemented;
-platform qualification, reconnection and release acceptance remain tracked below. Use
+platform qualification and release acceptance remain tracked below. Reconnection
+and safe updates now have shared-web and Windows acceptance evidence. Use
 [the plan index](dev-plan/000-index.md) for dependencies and the handoff records
 below for actual native execution evidence.
 
@@ -16,7 +17,7 @@ below for actual native execution evidence.
 | [002](dev-plan/002-environment-urls.md) | Development and production URLs | Completed — centrally configured installed loading verified on Windows and physical Android |
 | [003](dev-plan/003-web-app-integration.md) | Embedded web app integration | Partial — available Windows/Android lifecycle and cold reopen passed; manual, Apple and Linux qualification remains |
 | [004](dev-plan/004-persistent-offline-startup.md) | Persistent offline startup | Partial — shared cache and Windows cold/recovery checks passed; owner stopped further Android checks, Apple/Linux remain unqualified |
-| [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Not started |
+| [005](dev-plan/005-reconnection-and-cache-updates.md) | Reachability and safe updates | Partial — shared retry/update safety and Windows/browser acceptance passed; Android/Apple/Linux reconnection remain unqualified |
 | [006](dev-plan/006-app-identity-and-theme.md) | Installed identity and appearance | Partial — shared identity and white launch/loading implemented; appearance/runtime qualification remains |
 | [007](dev-plan/007-platform-builds-and-release.md) | Platform builds and release acceptance | Not started |
 
@@ -390,3 +391,62 @@ files between origins. See [native setup](docs/offline-startup.md) and continue
 remaining lifecycle/reconnection/release checks in
 [005](dev-plan/005-reconnection-and-cache-updates.md) and
 [007](dev-plan/007-platform-builds-and-release.md).
+
+## 005 Reachability and safe updates — 26 October 2026
+
+### Implementation
+
+The [shared web contract](../next-js/docs/offline-startup.md) now owns one
+reachability/retry controller. Validated same-origin reads determine success;
+connection hints alone neither establish success nor prevent probing. Backoff
+is 5/15/30/60 seconds then five minutes, with Retry-After, a two-second start
+minimum, recent-success hint suppression and cancellation when hidden/disposed.
+Complete candidates activate atomically; failures retain the exact prior bundle.
+The active document is not reloaded and waiting workers are not forcibly
+activated. Authentication and private/no-store rules remain unchanged, without
+queued/replayed writes. See [005](dev-plan/005-reconnection-and-cache-updates.md).
+
+Actual Windows OS minimize/restore exposed missing document visibility in the
+texture WebView host. `lib/web/windows_web_view.dart` now uses the selected
+plugin's existing pause/resume APIs. `web_app_shell.dart` coalesces hidden/paused,
+orders native calls, remembers hidden startup and skips work after disposal;
+the Windows adapter also remembers visibility before its controller attaches.
+This is native lifecycle glue, not a second refresh loop/cache/JavaScript bridge.
+Two meaningful widget tests cover pending suspension/resume ordering, duplicate
+background states, hidden initialization and disposal.
+
+### Native evidence and boundaries
+
+`integration_test/reconnection_test.dart` and reusable support helpers retain
+the real WebView2 development profile at an isolated secure loopback origin.
+The actual built shared web UI/worker sits behind an owned fault proxy; its
+snapshot and private route are synthetic. B is a coherent derived acceptance
+generation with a new required asset, not a second independent release build.
+No real account/payment writes, radio changes or private database reads occur.
+
+| Check | Actual result |
+| --- | --- |
+| Engine | Windows 11 x64; actual document UA reported Chrome/Edge 155 |
+| Shared browser | Chrome 156.0.8078.48 passed 5/15/30/60/300-second backoff, false connectivity hint with successful reads, offline/online recovery, failed/missing/truncated candidate responses, lock contention and page-exit cancellation; separate browser processes cold-started exact A then B. Browser draft preservation is not claimed; native draft proof is below. See [web 069](../next-js/dev-plan/069-offline-shell-support.md) |
+| Seed A | Passed; valid controlling worker and exact version/capture/expiry/data identity retained. 74.8s build/11s test; `windows-seed.log` |
+| Failed updates and hints | Passed 503, captive response, 401, missing required B asset, eight-second timeout and truncated body; exact A and draft survived. Genuine automatic retry respected the five-second delay; CDP/synthetic repeated connection hints preserved retry timing and manifest count. 84.1s build/43s test; `windows-failures.log` |
+| Disposal | Held new-asset request aborted after 209 ms and no later manifest request appeared. An independent proxy-record audit confirms this preceded the normal eight-second deadline. Stricter source assertions added afterwards were not rerun; worker/browser cancellation tests cover lease semantics. `cancellation-audit.json` |
+| Cold A and real lifecycle | New process with proxy stopped rendered exact A. The first coordinated run exposed missing browser hidden events; after native lifecycle fix, actual OS minimize/restore produced Flutter hidden/resumed and document hidden/visible. A later 100s wait was shorter than valid five-minute retry cooldown; the acceptance bound was corrected without changing production backoff |
+| Current-source recovery B | Passed automatic complete B activation after proxy restoration while actual test-WebView `navigator.onLine` stayed false. Unsent DOM draft, nonce, path/history, focus, selection and scroll stayed unchanged. Private GET returned 401/no-store, failed synthetic POST count remained 1. 137.6s build/2m04s test; `windows-recover-final.log` |
+| Current B cold restart | Passed new process with proxy stopped: exact saved B rendered and failed POST was not replayed. 173.1s build/8s test; `windows-final-cold.log` |
+| Flutter source checks | All 32 unit/widget tests passed, including the two new lifecycle checks; `dart analyze lib test integration_test` reported no issues; formatting checked 24 files with zero changes. `flutter-source-checks.log` |
+| Normal Windows cleanup | Passed normal `lib/main.dart` Debug rebuild at development loopback port3000 (115.3s), replacing the integration-test executable; no further runtime/device check. `windows-normal-restore.log` |
+
+The connection hint override uses only the owned test WebView's CDP protocol;
+actual server outage/invalid HTTP establishes unreachable or unusable access.
+This does not claim OS Wi-Fi/mobile-data switching. The draft is scripted DOM
+input, not a native-keyboard acceptance result. Controls, logs, stats, profiles,
+fixture bundles and binaries remain ignored. Reproduction and operator
+checkpoints are in [the native guide](integration_test/README.md#reachability-and-safe-updates).
+
+**005 remains Partial.** Windows and shared-browser evidence qualify available
+hosts, not every native target. Android execution remains stopped at the
+owner's request; no further device check or setting change was made. Final
+Android offline/reconnection qualification, Apple native execution, Linux
+embedding and release acceptance remain open. Keep normal online development
+on its existing origin and use a secure production-like build for cache checks.

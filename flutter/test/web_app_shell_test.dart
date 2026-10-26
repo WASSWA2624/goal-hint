@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:goal_hint/app.dart';
@@ -100,6 +102,49 @@ void main() {
   });
 
   testWidgets(
+    'hidden and paused coalesce and resume follows pending suspension',
+    (tester) async {
+      final browser = _DelayedLifecycleBrowser();
+      await tester.pumpWidget(
+        GoalHintApp(configuration: configuration, webViewAdapter: browser),
+      );
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(browser.suspends, 1);
+      expect(browser.resumes, 0);
+      browser.suspension.complete();
+      await tester.pump();
+      expect(browser.resumes, 1);
+      expect(browser.reloads, 0);
+    },
+  );
+
+  testWidgets(
+    'hidden startup reaches the initialized browser and disposed work is skipped',
+    (tester) async {
+      final browser = _DelayedLifecycleBrowser(delayInitialization: true);
+      await tester.pumpWidget(
+        GoalHintApp(configuration: configuration, webViewAdapter: browser),
+      );
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      expect(browser.suspends, 0);
+      browser.initialization.complete();
+      await tester.pump();
+      expect(browser.suspends, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpWidget(const SizedBox.shrink());
+      browser.suspension.complete();
+      await tester.pump();
+      expect(browser.resumes, 0);
+      expect(browser.disposed, isTrue);
+    },
+  );
+
+  testWidgets(
     'resume preserves form and browser state, disposal releases adapter',
     (tester) async {
       final browser = FakeWebViewAdapter();
@@ -117,4 +162,23 @@ void main() {
       expect(browser.disposed, isTrue);
     },
   );
+}
+
+class _DelayedLifecycleBrowser extends FakeWebViewAdapter {
+  _DelayedLifecycleBrowser({this.delayInitialization = false});
+
+  final bool delayInitialization;
+  final initialization = Completer<void>();
+  final suspension = Completer<void>();
+
+  @override
+  Future<void> initialize() async {
+    if (delayInitialization) await initialization.future;
+  }
+
+  @override
+  Future<void> suspend() async {
+    suspends++;
+    await suspension.future;
+  }
 }

@@ -24,11 +24,18 @@ class WebAppShell extends StatefulWidget {
 class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
   late final WebViewAdapter _browser;
   bool _initializing = true;
+  bool _hidden = false;
+  bool _browserHidden = false;
+  Future<void> _lifecycle = Future<void>.value();
   String? _startupError;
 
   @override
   void initState() {
     super.initState();
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _hidden =
+        lifecycle == AppLifecycleState.hidden ||
+        lifecycle == AppLifecycleState.paused;
     WidgetsBinding.instance.addObserver(this);
     _browser =
         widget.adapter ??
@@ -66,6 +73,7 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
       if (mounted) {
         setState(() => _initializing = false);
         await _browser.load(widget.configuration.origin);
+        _syncVisibility();
       }
     } on Exception {
       if (mounted) {
@@ -92,20 +100,35 @@ class _WebAppShellState extends State<WebAppShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_initializing) {
-      unawaited(_browser.resume());
-    } else if (state == AppLifecycleState.paused) {
-      unawaited(_suspend());
+    if (state == AppLifecycleState.resumed) {
+      _hidden = false;
+    } else if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _hidden = true;
+    } else {
+      return;
     }
+    _syncVisibility();
   }
 
-  Future<void> _suspend() async {
-    try {
-      await _browser.suspend();
-    } on Exception {
-      // Background persistence must not replace the current web document.
-      // Session validity and reauthentication remain owned by the server.
-    }
+  void _syncVisibility() {
+    if (_initializing || _browserHidden == _hidden) return;
+    final hidden = _hidden;
+    _browserHidden = hidden;
+    // Order native lifecycle commands so a quick restore follows suspension;
+    // hidden → paused must suspend only once. Engine suspension is best effort.
+    _lifecycle = _lifecycle.then((_) async {
+      if (!mounted) return;
+      try {
+        if (hidden) {
+          await _browser.suspend();
+        } else {
+          await _browser.resume();
+        }
+      } on Exception {
+        // Native lifecycle races must preserve the current web document.
+      }
+    });
   }
 
   @override

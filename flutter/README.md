@@ -14,8 +14,10 @@ Follow [the local development plan](dev-plan/000-index.md) and
 implemented. Step 003 adds native WebView integration; consult the tracker for
 the targets and account behaviors actually verified.
 Step 004 adds a bounded anonymous offline view through the shared web cache;
-see [offline setup and limits](docs/offline-startup.md). Safe reconnection
-acceptance is 005, native appearance is 006, and release packaging is 007. Goal Hint display names,
+see [offline setup and limits](docs/offline-startup.md). Step 005 adds bounded
+shared retries and safe cache updates, with Windows/browser acceptance recorded
+in the tracker. Other native targets remain unqualified. Native appearance is
+006, and release packaging is 007. Goal Hint display names,
 shared-primary-mark launcher artwork, and white launch/loading surfaces are
 implemented; see [native identity](docs/app-identity.md). Appearance qualification
 remains partial in 006: Android's white OS/Flutter loading transition is visually

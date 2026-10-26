@@ -79,7 +79,7 @@
 | ◐ Partial | [066-paywall-legal-copy.md](dev-plan/066-paywall-legal-copy.md)                 | Legal/privacy/refund facts remain pending (OP-26/27/39); draft notices; local test flows open                              |
 | ◐ Partial | [067-paywall-launch-readiness.md](dev-plan/067-paywall-launch-readiness.md)     | Real samples, phone/host/legal evidence and activation approval pending                              |
 | — Unassessed | [068-payment-approval-verification.md](dev-plan/068-payment-approval-verification.md) | No completion status was recorded; review implementation and acceptance evidence before assigning one. |
-| ◐ Partial | [069-offline-shell-support.md](dev-plan/069-offline-shell-support.md) | Anonymous cache implemented; production-like browser cold/privacy/recovery checks passed. Installed-target and remaining safe-update qualification tracked with Flutter 004–005. |
+| ◐ Partial | [069-offline-shell-support.md](dev-plan/069-offline-shell-support.md) | Anonymous cache and safe-update coordinator implemented; browser/Windows cold A/B, measured retries, retention and available lifecycle checks passed. Android testing is deferred; Apple/Linux remain unqualified. |
 
 ## Partial rows
 
@@ -92,7 +92,7 @@
 - **063 Get access:** local implementation and acceptance pass; drafted SMS fixtures are synthetic. Real messages/screenshots and physical Android/in-app/slow-network verification remain.
 - **066 Policy copy:** all local checks pass; notices remain drafts pending legal, privacy and refund facts; local test mode is open.
 - **067 Launch readiness:** verifiers and checklist are implemented; all required local regression checks and both local production verifiers pass. Real-message, owner/host/phone and activation evidence remains pending.
-- **069 Shared offline support:** dedicated static Saved matches entry, hash-pinned assets, bounded anonymous projection and staged CacheStorage activation are implemented. Browser close/reopen offline, uncached-route, synthetic identity/private-response exclusion and corruption/eviction/quota recovery checks passed. See [the contract](docs/offline-startup.md) and [development progress](docs/development-progress.md#069--anonymous-offline-startup-26-october-2026). Installed WebView evidence belongs in Flutter 004; Apple/Linux and remaining 005 lifecycle/update qualification remain open. Overall status is Partial.
+- **069 Shared offline support:** the anonymous saved view has one bounded reachability/retry coordinator, owned cancellation, public status metadata and serialized staged updates. Browser cold/privacy/recovery, measured 5/15/30/60/300-second retries, failed derived-B retention and healthy-B/full-process cold A/B passed. Windows additionally preserved its draft through actual OS visibility changes and valid B recovery, then passed separate-process cold B. See [the contract](docs/offline-startup.md) and [development progress](docs/development-progress.md#069--anonymous-offline-startup-26-october-2026). Android testing is deferred; Apple/Linux remain unqualified, keeping the overall status Partial.
 
 ## Unassessed rows
 

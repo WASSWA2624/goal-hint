@@ -5,6 +5,7 @@
 const CACHE_PREFIX = "goal-hint-offline-";
 const META_CACHE = `${CACHE_PREFIX}meta-v1`;
 const BUNDLE_PREFIX = `${CACHE_PREFIX}bundle-v1-`;
+const PREPARATION_LOCK = `${CACHE_PREFIX}prepare-v1`;
 const ACTIVE_KEY = "/offline-cache/active";
 const RECORD_KEY = "/offline-cache/record";
 const SNAPSHOT_KEY = "/offline-cache/snapshot";
@@ -27,7 +28,7 @@ const brandAssets = new Set(["/brand/goal-hint-logo-inverse.svg", "/brand/goal-h
 let preparation;
 
 class CacheFailure extends Error {
-  constructor(code) { super(code); this.code = code; }
+  constructor(code, retryAfterSeconds) { super(code); this.code = code; this.retryAfterSeconds = retryAfterSeconds; }
 }
 const fail = (code = "invalid-bundle") => { throw new CacheFailure(code); };
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -39,38 +40,55 @@ const absolute = (path) => new URL(path, self.location.origin).href;
 const jsonResponse = (body, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { "content-type": "application/json", "cache-control": "no-store", "x-content-type-options": "nosniff" },
 });
-const errorCode = (error) => error instanceof CacheFailure ? error.code : "storage-or-network-unavailable";
+const errorCode = (error) => error instanceof CacheFailure ? error.code : "storage-unavailable";
+const retryDetails = (error) => error instanceof CacheFailure && integer(error.retryAfterSeconds, 1, 300)
+  ? { retryAfterSeconds: error.retryAfterSeconds } : {};
+const bundleDetails = ({ manifest, snapshot }) => ({ version: manifest.version,
+  capturedAt: snapshot.capturedAt, expiresAt: snapshot.expiresAt, records: snapshot.records.length });
 
 async function digest(bytes) {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 const encode = (value) => new TextEncoder().encode(JSON.stringify(value));
 
-async function readBounded(response, maximum, timeout = FETCH_TIMEOUT_MS) {
+async function readBounded(response, maximum, timeout = FETCH_TIMEOUT_MS, signal) {
   if (!response.body) return new Uint8Array();
   const reader = response.body.getReader(), parts = [];
   let length = 0, timedOut = false;
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  signal?.addEventListener("abort", cancel, { once: true });
   const timer = setTimeout(() => { timedOut = true; void reader.cancel().catch(() => {}); }, timeout);
   try {
     for (;;) {
+      if (signal?.aborted) fail("canceled");
       const { done, value } = await reader.read();
+      if (signal?.aborted) fail("canceled");
       if (timedOut) fail("network-timeout");
       if (done) break;
       length += value.byteLength;
       if (length > maximum) { await reader.cancel(); fail("size-limit"); }
       parts.push(value);
     }
-  } finally { clearTimeout(timer); reader.releaseLock(); }
+  } finally { clearTimeout(timer); signal?.removeEventListener("abort", cancel); if (signal?.aborted) cancel(); reader.releaseLock(); }
   const bytes = new Uint8Array(length);
   let offset = 0;
   for (const part of parts) { bytes.set(part, offset); offset += part.byteLength; }
   return bytes;
 }
 
-async function boundedFetch(input, options = {}, timeout = FETCH_TIMEOUT_MS) {
+async function boundedFetch(input, options = {}, timeout = FETCH_TIMEOUT_MS, signal) {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
-  try { return await fetch(input, { ...options, signal: controller.signal }); }
-  finally { clearTimeout(timer); }
+  const cancel = () => controller.abort();
+  signal?.addEventListener("abort", cancel, { once: true });
+  try {
+    if (signal?.aborted) fail("canceled");
+    return await fetch(input, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (signal?.aborted) fail("canceled");
+    if (controller.signal.aborted) fail("network-timeout");
+    if (error instanceof CacheFailure) throw error;
+    fail("network-unreachable");
+  } finally { clearTimeout(timer); signal?.removeEventListener("abort", cancel); }
 }
 
 function preparationTime(deadline) {
@@ -79,13 +97,34 @@ function preparationTime(deadline) {
   return Math.min(FETCH_TIMEOUT_MS, remaining);
 }
 
+function readJson(bytes, code) {
+  try { return JSON.parse(new TextDecoder().decode(bytes)); }
+  catch { fail(code); }
+}
+
+async function readNetwork(response, maximum, timeout, signal) {
+  try { return await readBounded(response, maximum, timeout, signal); }
+  catch (error) { if (error instanceof CacheFailure) throw error; fail("network-unreachable"); }
+}
+
+function retryAfter(response) {
+  const header = response.headers.get("retry-after");
+  if (!header) return undefined;
+  const seconds = /^\d+$/.test(header) ? Number(header) : Math.ceil((Date.parse(header) - Date.now()) / 1000);
+  return Number.isFinite(seconds) ? Math.max(1, Math.min(300, seconds)) : undefined;
+}
+
 function publicResponse(response, path, marker) {
+  if (response.status === 401 || response.status === 403) fail("authentication-required");
+  if (response.status === 429) throw new CacheFailure("rate-limited", retryAfter(response));
+  if (response.status >= 500) throw new CacheFailure("server-unavailable", retryAfter(response));
+  if (response.status !== 200 || response.redirected || response.type === "opaqueredirect") fail("unexpected-response");
   const policy = response.headers.get("cache-control") ?? "";
   const vary = response.headers.get("vary") ?? "";
-  if (response.status !== 200 || response.redirected || /(?:^|,)\s*(?:private|no-store)\b/i.test(policy)
+  if (/(?:^|,)\s*(?:private|no-store)\b/i.test(policy)
     || !/(?:^|,)\s*public\b/i.test(policy) || /(?:^|,)\s*(?:cookie|\*)\s*(?:,|$)/i.test(vary)
-    || response.headers.has("set-cookie") || marker && response.headers.get(marker) !== "1") fail("response-policy");
-  if (response.url && response.url !== absolute(path)) fail("response-policy");
+    || response.headers.has("set-cookie")) fail("response-policy");
+  if (marker && response.headers.get(marker) !== "1" || response.url && response.url !== absolute(path)) fail("unexpected-response");
 }
 
 function assetPath(path) {
@@ -143,8 +182,8 @@ function validateSnapshot(value, now = Date.now()) {
   return value;
 }
 
-async function checkedBytes(response, entry, timeout) {
-  const bytes = await readBounded(response, entry.bytes, timeout);
+async function checkedBytes(response, entry, timeout, signal) {
+  const bytes = await readBounded(response, entry.bytes, timeout, signal);
   if (bytes.byteLength !== entry.bytes || await digest(bytes) !== entry.sha256) fail("integrity-failure");
   return bytes;
 }
@@ -159,7 +198,7 @@ function storedResponse(bytes, response) {
 async function activePointer() {
   const response = await (await caches.open(META_CACHE)).match(absolute(ACTIVE_KEY));
   if (!response) fail("cache-unavailable");
-  const pointer = JSON.parse(new TextDecoder().decode(await readBounded(response, 1024)));
+  const pointer = readJson(await readBounded(response, 1024), "corrupt-cache");
   if (!exact(pointer, ["cacheName", "previousCacheName"]) || !validCacheName(pointer.cacheName)
     || pointer.previousCacheName !== null && !validCacheName(pointer.previousCacheName)) fail("corrupt-cache");
   return pointer;
@@ -171,7 +210,7 @@ async function readBundle(cacheName, complete = true) {
   if (!(await caches.keys()).includes(cacheName)) fail("cache-unavailable");
   const cache = await caches.open(cacheName), response = await cache.match(absolute(RECORD_KEY));
   if (!response) fail("cache-unavailable");
-  const record = JSON.parse(new TextDecoder().decode(await readBounded(response, MAX_RECORD_BYTES)));
+  const record = readJson(await readBounded(response, MAX_RECORD_BYTES), "corrupt-cache");
   if (!exact(record, ["manifest", "snapshot"]) || !exact(record.snapshot, ["sha256", "bytes"])
     || !hashPattern.test(record.snapshot.sha256) || !integer(record.snapshot.bytes, 1, MAX_SNAPSHOT_BYTES)) fail("corrupt-cache");
   const manifest = await validateManifest(record.manifest);
@@ -179,7 +218,7 @@ async function readBundle(cacheName, complete = true) {
   const saved = await cache.match(absolute(SNAPSHOT_KEY));
   if (!saved) fail("corrupt-cache");
   let snapshot;
-  try { snapshot = validateSnapshot(JSON.parse(new TextDecoder().decode(await checkedBytes(saved, record.snapshot)))); }
+  try { snapshot = validateSnapshot(readJson(await checkedBytes(saved, record.snapshot), "invalid-snapshot")); }
   catch (error) {
     // Closed apps do not run timers. Enforce retention and remove expired data
     // at the next attempted read; do not keep serving it as merely stale.
@@ -200,22 +239,62 @@ async function removeOtherBundles(keep) {
   await Promise.all((await caches.keys()).filter((name) => validCacheName(name) && !keep.includes(name)).map((name) => caches.delete(name)));
 }
 
-async function downloadEntry(cache, entry, document, deadline, previous) {
+async function downloadEntry(cache, entry, document, deadline, previous, signal) {
   const prior = document ? previous?.manifest.entry : previous?.manifest.assets.find(({ url }) => url === entry.url);
   let response;
   if (prior?.url === entry.url && prior.sha256 === entry.sha256 && prior.bytes === entry.bytes) {
     try { response = await previous.cache.match(absolute(entry.url)); }
     catch { /* A transient cache read can recover through the same verified network asset. */ }
   }
-  response ??= await boundedFetch(absolute(entry.url), { credentials: "omit", cache: "no-store", redirect: "error" }, preparationTime(deadline));
+  const fromNetwork = !response;
+  response ??= await boundedFetch(absolute(entry.url), { credentials: "omit", cache: "no-store", redirect: "manual" }, preparationTime(deadline), signal);
   publicResponse(response, entry.url, document ? "x-goalhint-offline-entry" : undefined);
   const type = response.headers.get("content-type") ?? "";
-  if (document ? !type.toLowerCase().includes("text/html") : /\.css$/i.test(entry.url) && !type.toLowerCase().includes("text/css")) fail("response-policy");
-  await cache.put(absolute(entry.url), storedResponse(await checkedBytes(response, entry, preparationTime(deadline)), response));
+  if (document ? !type.toLowerCase().includes("text/html") : /\.css$/i.test(entry.url) && !type.toLowerCase().includes("text/css")) fail("unexpected-response");
+  let bytes;
+  try { bytes = await checkedBytes(response, entry, preparationTime(deadline), signal); }
+  catch (error) { if (fromNetwork && !(error instanceof CacheFailure)) fail("network-unreachable"); throw error; }
+  if (signal.aborted) fail("canceled");
+  await cache.put(absolute(entry.url), storedResponse(bytes, response));
 }
 
-async function prepareBundle() {
+function cancelLease(job, lease) {
+  if (lease.canceled) return;
+  lease.canceled = true;
+  job.leases.delete(lease);
+  if (job.leases.size === 0) job.controller.abort();
+  lease.port.onmessage = null;
+  try {
+    lease.port.postMessage({ ok: false, refreshed: false, error: "canceled" });
+    lease.port.close?.();
+  } catch { /* A closed owner must not prevent shared-job cancellation/cleanup. */ }
+}
+
+async function preparationCheckpoint(job, deadline) {
+  if (job.controller.signal.aborted) fail("canceled");
+  if (typeof self.clients.get === "function") {
+    await Promise.all([...job.leases].map(async (lease) => {
+      if (!lease.clientId) return;
+      try {
+        const client = await self.clients.get(lease.clientId);
+        if (!client || client.visibilityState === "hidden") cancelLease(job, lease);
+      } catch { /* A failed client lookup is not proof that its visible owner closed. */ }
+    }));
+  }
+  if (job.controller.signal.aborted) fail("canceled");
+  return preparationTime(deadline);
+}
+
+async function failureReply(error, protectedName) {
+  try {
+    const retained = protectedName ? await readBundle(protectedName) : await readActive();
+    return { ok: true, refreshed: false, retained: true, ...bundleDetails(retained), updateError: errorCode(error), ...retryDetails(error) };
+  } catch { return { ok: false, refreshed: false, error: errorCode(error), ...retryDetails(error) }; }
+}
+
+async function prepareBundle(job) {
   const deadline = Date.now() + PREPARATION_TIMEOUT_MS;
+  const signal = job.controller.signal;
   let previous, protectedName;
   try {
     protectedName = (await activePointer()).cacheName;
@@ -223,13 +302,16 @@ async function prepareBundle() {
   } catch { /* Preserve the pointer's bundle even if a transient read failed. */ }
   let candidateName;
   try {
-    const manifestResponse = await boundedFetch(absolute("/offline-manifest.json"), { credentials: "omit", cache: "no-store", redirect: "error" }, preparationTime(deadline));
+    await preparationCheckpoint(job, deadline);
+    const manifestResponse = await boundedFetch(absolute("/offline-manifest.json"), { credentials: "omit", cache: "no-store", redirect: "manual" }, preparationTime(deadline), signal);
     publicResponse(manifestResponse, "/offline-manifest.json", "x-goalhint-offline-manifest");
-    const manifest = await validateManifest(JSON.parse(new TextDecoder().decode(await readBounded(manifestResponse, MAX_MANIFEST_BYTES, preparationTime(deadline)))));
-    const response = await boundedFetch(absolute("/api/offline/snapshot"), { credentials: "omit", cache: "no-store", redirect: "error" }, preparationTime(deadline));
+    if (!(manifestResponse.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) fail("unexpected-response");
+    const manifest = await validateManifest(readJson(await readNetwork(manifestResponse, MAX_MANIFEST_BYTES, preparationTime(deadline), signal), "invalid-bundle"));
+    await preparationCheckpoint(job, deadline);
+    const response = await boundedFetch(absolute("/api/offline/snapshot"), { credentials: "omit", cache: "no-store", redirect: "manual" }, preparationTime(deadline), signal);
     publicResponse(response, "/api/offline/snapshot", "x-goalhint-offline-snapshot");
-    if (!(response.headers.get("content-type") ?? "").includes("application/json")) fail("response-policy");
-    const bytes = await readBounded(response, MAX_SNAPSHOT_BYTES, preparationTime(deadline)), snapshot = validateSnapshot(JSON.parse(new TextDecoder().decode(bytes)));
+    if (!(response.headers.get("content-type") ?? "").toLowerCase().includes("application/json")) fail("unexpected-response");
+    const bytes = await readNetwork(response, MAX_SNAPSHOT_BYTES, preparationTime(deadline), signal), snapshot = validateSnapshot(readJson(bytes, "invalid-snapshot"));
     if (previous && (manifest.createdAt < previous.manifest.createdAt || snapshot.capturedAt < previous.snapshot.capturedAt)) fail("older-version");
     if (previous) {
       const prior = new Map(previous.snapshot.records.map((entry) => [entry.fixtureId, entry.dataVersion]));
@@ -240,42 +322,46 @@ async function prepareBundle() {
     }
     const snapshotEntry = { sha256: await digest(bytes), bytes: bytes.byteLength };
     candidateName = BUNDLE_PREFIX + await digest(encode({ version: manifest.version, snapshot: snapshotEntry.sha256 }));
-    if (previous?.cacheName === candidateName) return { ok: true, version: manifest.version };
+    await preparationCheckpoint(job, deadline);
+    if (previous?.cacheName === candidateName) return { ok: true, refreshed: true, activated: false, ...bundleDetails(previous) };
     // Stage at most one candidate beside the active bundle: at most 20 MiB total.
     await removeOtherBundles(protectedName ? [protectedName] : []);
     const candidate = await caches.open(candidateName);
     await candidate.put(absolute(SNAPSHOT_KEY), storedResponse(bytes, response));
-    await downloadEntry(candidate, manifest.entry, true, deadline, previous);
+    await downloadEntry(candidate, manifest.entry, true, deadline, previous, signal);
     // Bounded concurrency prevents a large build from opening hundreds of fetches.
     for (let index = 0; index < manifest.assets.length; index += 4) {
-      preparationTime(deadline);
-      const results = await Promise.allSettled(manifest.assets.slice(index, index + 4).map((entry) => downloadEntry(candidate, entry, false, deadline, previous)));
+      await preparationCheckpoint(job, deadline);
+      const results = await Promise.allSettled(manifest.assets.slice(index, index + 4).map((entry) => downloadEntry(candidate, entry, false, deadline, previous, signal)));
       const rejected = results.find((result) => result.status === "rejected");
       if (rejected) throw rejected.reason;
     }
+    await preparationCheckpoint(job, deadline);
     await candidate.put(absolute(RECORD_KEY), jsonResponse({ manifest, snapshot: snapshotEntry }));
-    await readBundle(candidateName);
-    preparationTime(deadline);
+    const accepted = await readBundle(candidateName);
+    await preparationCheckpoint(job, deadline);
     await (await caches.open(META_CACHE)).put(absolute(ACTIVE_KEY), jsonResponse({ cacheName: candidateName, previousCacheName: previous?.cacheName ?? null }));
     // Cleanup failure cannot roll back or delete an already committed version.
     await removeOtherBundles([candidateName, ...(previous ? [previous.cacheName] : [])]).catch(() => {});
-    return { ok: true, version: manifest.version };
+    return { ok: true, refreshed: true, activated: true, ...bundleDetails(accepted) };
   } catch (error) {
     if (candidateName && candidateName !== protectedName) await caches.delete(candidateName).catch(() => {});
-    if (protectedName) {
-      try {
-        const retained = await readBundle(protectedName);
-        return { ok: true, version: retained.manifest.version, retained: true, updateError: errorCode(error) };
-      } catch { /* A cache that expired during refresh is no longer usable. */ }
-    }
-    return { ok: false, error: errorCode(error) };
+    return failureReply(error, protectedName);
   }
+}
+
+async function coordinatePreparation(job) {
+  if (job.controller.signal.aborted) return { ok: false, refreshed: false, error: "canceled" };
+  if (typeof self.navigator?.locks?.request !== "function") return failureReply(new CacheFailure("coordination-unavailable"));
+  try {
+    return await self.navigator.locks.request(PREPARATION_LOCK, { mode: "exclusive", ifAvailable: true },
+      (lock) => lock ? prepareBundle(job) : failureReply(new CacheFailure("preparation-busy")));
+  } catch { return failureReply(new CacheFailure("coordination-unavailable")); }
 }
 
 async function status() {
   try {
-    const { manifest, snapshot } = await readActive();
-    return { ok: true, version: manifest.version, capturedAt: snapshot.capturedAt, expiresAt: snapshot.expiresAt, records: snapshot.records.length };
+    return { ok: true, ...bundleDetails(await readActive()) };
   } catch (error) { return { ok: false, error: errorCode(error) }; }
 }
 
@@ -316,13 +402,36 @@ async function savedAsset(request) {
   return fetch(request);
 }
 
-self.addEventListener("install", (event) => { event.waitUntil(self.skipWaiting()); });
+// Worker-code upgrades wait for existing clients to close. Do not swap the
+// controller beneath an active form or overlap this writer with a legacy one.
 self.addEventListener("activate", (event) => { event.waitUntil(self.clients.claim()); });
 self.addEventListener("message", (event) => {
   if (!event.source?.url || new URL(event.source.url).origin !== self.location.origin || event.ports.length !== 1
     || !exact(event.data, ["type"]) || !["PREPARE", "STATUS"].includes(event.data.type)) return;
-  const result = event.data.type === "STATUS" ? status() : preparation ??= prepareBundle().finally(() => { preparation = undefined; });
-  event.waitUntil(result.then((reply) => { event.ports[0].postMessage(reply); }));
+  const port = event.ports[0];
+  if (event.data.type === "STATUS") {
+    event.waitUntil(status().then((reply) => { port.postMessage(reply); port.close?.(); }));
+    return;
+  }
+  let job = preparation;
+  if (!job || job.controller.signal.aborted) {
+    job = { controller: new AbortController(), leases: new Set(), promise: null };
+    preparation = job;
+    job.promise = Promise.resolve().then(() => coordinatePreparation(job)).finally(() => {
+      if (preparation === job) preparation = undefined;
+    });
+  }
+  const lease = { clientId: event.source.id, port, canceled: false };
+  job.leases.add(lease);
+  port.onmessage = ({ data }) => {
+    if (exact(data, ["type"]) && data.type === "CANCEL") cancelLease(job, lease);
+  };
+  port.start?.();
+  // Cancellation acknowledges only this port's lease. The lifetime promise
+  // still anchors shared work, or its bounded abort/cleanup when no lease stays.
+  event.waitUntil(job.promise.then((reply) => {
+    if (!lease.canceled) { port.postMessage(reply); port.close?.(); }
+  }).finally(() => { port.onmessage = null; job.leases.delete(lease); }));
 });
 self.addEventListener("fetch", (event) => {
   const request = event.request, url = new URL(request.url);

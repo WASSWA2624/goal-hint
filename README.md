@@ -48,8 +48,10 @@ embedded browser yet. Goal Hint names, shared launcher artwork, and white launch
 surfaces are implemented, with appearance qualification still partial in 006.
 The shared web code now saves a bounded anonymous offline view with compatible
 assets; [offline setup and limits](flutter/docs/offline-startup.md) distinguish
-production-like secure origins from normal development/HMR. Platform
-qualification, safe reconnection and release acceptance remain in 004–005 and 007.
+production-like secure origins from normal development/HMR. Shared web
+code checks reachability and refreshes verified cache bundles with bounded retries,
+preserving the last working version and active input after a failed update.
+Platform qualification and release acceptance remain in 004–005 and 007.
 See the [Flutter tracker](flutter/dev-tracker.md) for actual execution status and
 verification evidence, and the [implementation prompt](prompts/flutter-app-shell.md)
 for the full requirements. Normal product changes continue to belong in `next-js/`.

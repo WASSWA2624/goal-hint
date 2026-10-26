@@ -144,3 +144,61 @@ With the owned fixture online, `OFFLINE_CHECK_PHASE=diagnostic` reports only
 worker registration state and the public preparation version/error reply. It
 does not print cached content, cookies or credentials. This distinguishes an
 engine/origin registration failure from a rejected cache contract on a device.
+
+## Reachability and safe updates
+
+`reconnection_test.dart` is Windows-only acceptance using the real built worker,
+offline UI and persistent WebView2 profile. Android execution remains excluded
+at the owner's request. Build/start the fixture backend above on port 3189, then
+start the owned fault proxy from `next-js/`:
+
+```sh
+python scripts/serve-offline-proxy.py --backend http://127.0.0.1:3189 --port 3192 --fixture-dir <fixture-directory> --control .tmp/offline005-windows-control.json --stats .tmp/offline005-windows-stats.json
+```
+
+The helper initializes its ignored JSON control/stats files. Generation A uses
+the real fixture's bundle. B is a coherent derived acceptance generation with a
+new required asset and public data version, not a second release build. Fault
+controls and counters are file-only, without a network administration endpoint.
+They contain no cookies, private content or request bodies. Keep this proxy
+isolated from the normal development server and unrelated browser proxy.
+
+From `flutter/`, substitute absolute paths for the two ignored files:
+
+```sh
+flutter test integration_test/reconnection_test.dart -d windows --no-pub --no-uninstall --dart-define=APP_ENV=development --dart-define=DEV_APP_ORIGIN=http://127.0.0.1:3192 --dart-define=RECONNECT_CHECK_PHASE=seed --dart-define=OFFLINE_CONTROL_FILE=<absolute-control-file> --dart-define=OFFLINE_STATS_FILE=<absolute-stats-file>
+```
+
+Run `seed`, then `failures` as separate app processes at the same origin/profile.
+The latter exercises genuine automatic retry, repeated hints, 503/captive/401,
+missing/held/truncated required assets and an eight-second timeout. Exact A cache
+identity must remain usable. It records a synthetic unsent DOM draft and checks
+document identity, history, focus, selection and scroll. This is controller-driven
+DOM input, not a native-keyboard acceptance claim. A single synthetic failed POST
+has no real account/database behind it and must never be queued or replayed.
+Browser disposal must abort the held request before its natural timeout and
+prevent later refreshes. The final strict elapsed-time assertions were added
+after the observed run; the independently retained proxy record measured 209 ms.
+Worker/browser tests separately exercise cancellation semantics.
+
+Stop only proxy 3192, leaving the backend and browser profile intact. Run
+`RECONNECT_CHECK_PHASE=recover`. It must first cold-start exact A without its
+server. At the `minimize-restore` checkpoint, minimize the owned app window using
+the actual OS UI, hold at least 12 seconds, then restore it within the five-minute
+operator bound. Synthetic Flutter lifecycle events do not satisfy this phase:
+both actual native hidden/resumed and browser hidden/visible events are required.
+Leave the proxy stopped until the next `restore-server` checkpoint. Then restart
+the same proxy command; the harness already selected healthy B. It allows six
+minutes for genuine automatic backoff recovery, retains the unsent draft, and
+requires complete B while `navigator.onLine` remains false. This hint is changed
+only in the owned test WebView through CDP `Network.overrideNetworkState`; real
+server outage/HTTP faults establish reachability independently. No host network,
+radio, certificate or security setting is changed.
+
+After `recovery-complete` and process termination, stop proxy 3192 and run
+`RECONNECT_CHECK_PHASE=final-cold`. A new process must render saved B with the
+server absent and without replaying the failed synthetic POST. Remove only owned
+fixture processes after all acceptance clients finish. Restore the normal
+`lib/main.dart` Windows Debug binary/development origin; logs, proxy controls,
+profiles and binaries stay ignored. See [the tracker](../dev-tracker.md) for
+actual execution, setup failures, source checks and unqualified targets.

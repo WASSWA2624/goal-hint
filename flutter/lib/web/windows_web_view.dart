@@ -35,6 +35,7 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   bool _canGoBack = false;
   String? _error;
   bool _disposed = false;
+  bool _hidden = false;
 
   /// Native-controller access for integration checks, never exposed to the page.
   PlatformInAppWebViewController? get controller => _controller;
@@ -212,6 +213,9 @@ class WindowsWebViewAdapter extends WebViewAdapter {
       await _controller?.loadUrl(
         urlRequest: URLRequest(url: WebUri(uri.toString())),
       );
+      // The native widget can attach after a hidden startup. Navigation may
+      // resume the engine, so apply the remembered visibility after loading.
+      if (_hidden && !_disposed) await _controller?.pause();
     } catch (_) {
       _fail('Unable to load Goal Hint. Check your connection and retry.');
     }
@@ -247,7 +251,19 @@ class WindowsWebViewAdapter extends WebViewAdapter {
   }
 
   @override
-  Future<void> resume() => _updateHistory();
+  Future<void> suspend() async {
+    if (_disposed) return;
+    _hidden = true;
+    await _controller?.pause();
+  }
+
+  @override
+  Future<void> resume() async {
+    if (_disposed) return;
+    _hidden = false;
+    await _controller?.resume();
+    await _updateHistory();
+  }
 
   void _remember(WebUri? address) {
     if (!_disposed &&

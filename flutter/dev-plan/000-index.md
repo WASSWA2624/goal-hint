@@ -1,6 +1,6 @@
 # Flutter shell development plan
 
-**Foundation generated.** A minimal startup scaffold and native platform projects exist. URL configuration, embedded web integration, offline support, installed branding, and release acceptance remain planned in steps 002–007. Use [the Flutter tracker](../dev-tracker.md) for actual execution status, acceptance results, and verification evidence; generated projects alone do not prove platform support.
+**Shared web host implemented; platform qualification remains partial.** Central development/production URLs, embedded web integration, persistent anonymous offline startup, reachability checks and safe cache updates are implemented. Installed branding and white launch/loading surfaces also exist. Windows has native execution evidence; Android's final offline/reconnection checks, Apple execution, Linux embedding and release acceptance remain open. Use [the Flutter tracker](../dev-tracker.md) for actual results and limitations; generated projects alone do not prove platform support.
 
 Read [the app specification](../../app-write-up.md), [the shell requirements](../../prompts/flutter-app-shell.md), applicable repository instructions, and the current handoff before implementing a step. The Next.js app owns the screens, navigation, authentication, and business logic. Flutter supplies the smallest necessary hosting and platform integration layer.
 

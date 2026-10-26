@@ -1,6 +1,6 @@
 # 005 - Reachability and safe cache updates
 
-**State: Not started.** Prerequisite: [004](004-persistent-offline-startup.md). Follow [the specification](../../app-write-up.md) and [the shell requirements](../../prompts/flutter-app-shell.md).
+**State: Partial — shared reachability/update safety and Windows/browser acceptance passed; other native targets remain unqualified.** Prerequisite: [004](004-persistent-offline-startup.md). Follow [the specification](../../app-write-up.md) and [the shell requirements](../../prompts/flutter-app-shell.md).
 
 ## Outcome
 
@@ -30,3 +30,33 @@ remaining reachability, retry/backoff, foreground and interrupted-update cases
 on each available native target rather than adding another cache or refresh
 loop. [The tracker](../dev-tracker.md) records Windows/browser evidence and the
 unverified final Android cold restart, Apple execution and Linux embedding.
+
+## Implementation and available-host evidence — 26 October 2026
+
+The shared web controller owns validated reachability, bounded retries,
+Retry-After, hint deduplication and lifecycle cancellation. Preparation stages
+and verifies a complete candidate before changing the active cache pointer;
+failures preserve the previous bundle. It never reloads an active document,
+queues writes, or forces a waiting service worker over existing clients.
+
+Native Windows acceptance retained the real WebView2 profile and used the
+built shared application/worker through an owned fault proxy. It verified
+automatic retry, repeated connection hints, 503/captive/401 responses, missing
+and interrupted required assets, timeout, prior-version cold startup, and a
+later coherent generation becoming available. An unsent synthetic DOM draft,
+history, focus, selection and scroll survived. A synthetic failed POST was not
+replayed; real account/payment data was untouched. Generation B is a coherent
+derived acceptance bundle with a new required asset, not a second release build.
+
+Actual OS minimize/restore exposed a Windows visibility gap. The minimal fix
+forwards hidden/resumed through the selected plugin's existing pause/resume APIs;
+the shared shell orders calls, coalesces hidden/paused and remembers hidden
+startup. The repeat verified actual Flutter and browser hidden/visible events,
+then automatic recovery while the browser's connectivity hint remained false.
+This is an application-origin outage/protocol-hint check, not an OS radio test.
+
+See [the tracker](../dev-tracker.md) and
+[reproduction guide](../integration_test/README.md#reachability-and-safe-updates)
+for recorded results. Further Android checks remain stopped at the owner's
+request; iOS/macOS need their native host and Linux still lacks a qualified
+embedded engine. These gaps keep 005 Partial.
