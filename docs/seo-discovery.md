@@ -15,6 +15,12 @@ stored analysis and section content in collapsed mobile accordions and strengthe
 production HTML/sitemap verification, with fresh availability evidence and
 Search Console recovery steps.
 
+The [26 October audit](reports/seo-audit-2026-10-26.md) restores crawlable links
+from every feed card to its match page, answers 5xx instead of `200 + noindex`
+when an indexable page's stored read fails, bounds the date-archive calendar,
+links match pages to their day archive and related results, and removes the
+phone library from public pages. The site was still suspended by the host.
+
 ## Canonical pages and metadata
 
 `publicPolicy.origin` fixes the metadata base and canonical origin to
@@ -24,7 +30,11 @@ redirects `www.goalhint.com` to the canonical HTTPS origin, preserving path and
 query. Actual DNS, certificates and hosting rules still belong to deployment.
 
 Known campaign/click attribution parameters (UTM and Google, Meta and Microsoft
-click IDs) redirect permanently to the same clean page URL. Shared/search links
+click IDs, plus share/click identifiers such as `igshid`, `ttclid`, `twclid`,
+`li_fat_id`, `mc_cid`, `yclid`, `_gl` and `srsltid`, which are stripped without
+an attribution fragment) redirect permanently to the same clean page URL.
+Case-only variants of the published locale (`/EN/...`) move permanently (308);
+unpublished languages keep their temporary 307 fallback. Shared/search links
 therefore reach the feed or match instead of failing strict query validation.
 Filters, pagination, revision history and repeated functional parameters are
 preserved; unknown application parameters still receive the existing validation.
@@ -32,12 +42,19 @@ This normalization stores no attribution and adds no analytics. The API remains
 outside the page proxy and retains its strict input contract.
 
 Shared `pageMetadata` supplies complete page-specific Open Graph and Twitter
-fields because Next metadata objects merge shallowly. The homepage at `/en` now
-shows Best Slips; `/en/matches` is the default match feed, titled
+fields because Next metadata objects merge shallowly; `og:locale` is `en_US` and
+the Twitter image carries the same alt text. The homepage at `/en` shows Best
+Slips, titled `Best Slips — Daily football prediction slips | Goal Hint`; while no
+slips are available it also server-renders plain links to yesterday's, today's
+and tomorrow's dated archives, Help and Results & performance. `/en/matches` is
+the default match feed, titled
 `Goal Hint | Daily Football Predictions`. Archive titles include the EAT day and
 pagination number; match titles include the teams, known kickoff's EAT date and
-Goal Hint suffix. Dates distinguish repeat fixtures between the same clubs without
-inventing a kickoff when none is stored. Existing
+Goal Hint suffix, and say "prediction" only when the page is indexable (a
+published forecast). Descriptions add the competition and describe the anonymous
+view: predictions are for subscribers. Dates distinguish repeat fixtures between the same clubs without
+inventing a kickoff when none is stored. The 404 page has its own title and
+social tags, with no canonical. Existing
 named first-party favicon, touch icon and 1200 × 630 social PNG assets are reused.
 
 `createFeedRoute` shares its stored read and request-owned reporting clock between
@@ -48,7 +65,17 @@ Its ordinary numbered links use the same canonical URLs. API pagination still
 pins the date range to prevent mixed cohorts across midnight; a full document
 navigation to the rolling collection resolves its dates at request time.
 Single-day aliases pin to the corresponding dated collection. Legacy homepage
-filter URLs redirect to `/en/matches` with their query parameters preserved.
+feed URLs (any feed query key) redirect permanently (308) to `/en/matches` with
+their query parameters preserved; other home query variants render the home page
+with its `/en` canonical and noindex.
+
+Every feed and archive card links its canonical match page for every viewer;
+locked panels on the match page offer sign-up. Only an unfinished fixture with a
+published forecast in an eligible family renders locked; a fixture without one
+shows the no-prediction reason subscribers see. Match pages link their EAT-day
+archive from the banner date (the BreadcrumbList's middle level), and Team Form,
+Head to Head and last-result rows are links to those matches that still open the
+in-page panel on a plain click.
 Match metadata shares the fixture read with its page; only page rendering reads
 optional section insights, in parallel with that fixture read. An insights retry
 or slow insights query cannot hold up the canonical/title metadata.
@@ -58,7 +85,25 @@ explicit multiday collections receive `noindex, follow`. Their normalized canoni
 the actual query rather than claiming to be an equivalent unfiltered page.
 Empty, failed or out-of-range dated archives are not made indexable. The default
 match-feed page `/en/matches` stays indexable once its stored read succeeds, even
-on a quiet or uncovered day; failed reads still receive noindex. The Best Slips
+on a quiet or uncovered day. When the stored read of an indexable feed, archive or
+canonical match page fails under the production release policy, a document
+request answers HTTP 500 before streaming (`PublicReadUnavailableError`, with the
+`matches/` and `predictions/` error boundaries offering a retry), so crawlers keep
+the indexed URL and retry instead of dropping it on a `noindex`. Client
+navigations (`Sec-Fetch-Dest: empty`), filtered/search pages, revision variants,
+rate-limited reads and non-indexing environments keep the in-page retry state with
+noindex.
+
+A single day without stored fixtures more than 31 days from today is not a page:
+document requests answer 404 (strip and calendar taps keep the in-feed empty
+state). Days with stored fixtures stay pages at any age. Strip links to days more
+than 31 days ahead are `rel="nofollow"`, and the strip stops at the calendar's ends,
+so the generated calendar cannot be walked endlessly.
+
+`/en/performance` stays noindex and outside the sitemap until the owner decides
+OP-17 (public performance claims): it shows win/loss counts, losing streaks and
+illustrative returns. `/en/slips` stays noindex because anonymous visitors see
+only the builder. The Best Slips
 homepage `/en` has independent metadata and remains indexable under the production
 release policy even when no slips are available.
 Match pages are indexable only when the displayed revision publishes at least

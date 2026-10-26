@@ -32,11 +32,12 @@ def verify(origin, directory):
         match(r"prediction: [^<]+, estimated probability|prediction unavailable", article)
         outcome = match(r'data-outcome="(correct|incorrect|pending|void|unavailable)"', article).group(1)
         fixture_status = match(r'data-status="([^"]+)"', tag).group(1)
-        result = "upcoming" if fixture_status == "scheduled" else outcome
-        label = {"upcoming": "Upcoming", "correct": "Win", "incorrect": "Loss", "pending": "Pending",
-            "void": "Void", "unavailable": "—"}[result]
+        result = "upcoming" if fixture_status == "scheduled" else "live" if fixture_status == "live" else outcome
         assert article.count(f'data-result-badge="{result}"') == 1, "One truthful fixture/prediction result"
-        match(rf'data-result-badge="{result}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span></span>', article)
+        if result != "live":
+            label = {"upcoming": "Upcoming", "correct": "Win", "incorrect": "Loss", "pending": "Pending",
+                "void": "Void", "unavailable": "—"}[result]
+            match(rf'data-result-badge="{result}"[^>]*>[\s\S]*?<span data-pick-value[^>]*>{label}</span></span>', article)
         if fixture_status != "scheduled":
             no_match(r'data-result-badge="upcoming"', article)
         no_match(r"\s(?:\$[\w-]+|tone|variant|loaded)=", article)
@@ -69,7 +70,7 @@ def verify(origin, directory):
         ("card-void", "void"), ("card-unavailable", "unavailable"), ("card-missing-family", "unavailable")]:
         match(f'data-outcome="{status}"', by_id[card])
     for card, status, label in [("card-correct", "correct", "Win"), ("card-incorrect", "incorrect", "Loss"),
-        ("card-pending", "pending", "Pending"), ("card-delayed", "upcoming", "Upcoming"),
+        ("card-delayed", "upcoming", "Upcoming"),
         ("card-limited", "upcoming", "Upcoming")]:
         article = by_id[card]
         assert article.count(f'data-result-badge="{status}"') == 1
@@ -109,7 +110,9 @@ def verify(origin, directory):
     no_match(r"data-selected-odds=|Odds: 1\.85|Odds: 2\.10", by_id["card-any"])
     no_match(r"Final score:|Live score:|data-live-minute=", by_id["card-delayed"])
     no_match(r">0</span><span>–</span><span>0<", by_id["card-delayed"])
-    match(r'data-live-minute="67"[\s\S]*?<span aria-hidden="true">67′</span>', by_id["card-pending"])
+    # Live: the result tag shows the minute instead of Pending.
+    match(r'data-result-badge="live"[^>]*data-live-minute="67"[^>]*>[\s\S]*?<span data-pick-value[^>]*>67′</span></span>', by_id["card-pending"])
+    no_match(r'data-result-badge="pending"', by_id["card-pending"])
     no_match(r">(?:vs|VS)<", by_id["card-pending"])
     checks = {
         "card-correct": ["Final score: Example Home FC 2, Example Away FC 1", "Match result prediction: Home win, estimated probability 54%", ">FT<", "AI prediction"],

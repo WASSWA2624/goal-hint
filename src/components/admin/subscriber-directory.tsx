@@ -3,7 +3,7 @@
 import type { FormEvent, ReactNode } from "react";
 import styled, { css } from "styled-components";
 import Link from "@/components/navigation/navigation-link";
-import { PhoneInput } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronRightIcon, SearchIcon, ShieldIcon, UserIcon } from "@/components/ui/icons";
 import type { OwnerAccount } from "@/domain/owner-members";
 import { formatPhone } from "@/domain/phone";

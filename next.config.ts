@@ -12,8 +12,10 @@ const nextConfig: NextConfig = {
   ...(process.env.BUILD_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // Readable `file__Component` class names only in development; production emits bare `sc-` ids.
   compiler: { styledComponents: { displayName: process.env.NODE_ENV !== "production", ssr: true } },
-  // Every response: no MIME sniffing. The private owner dashboards (/analytics, /admin), the member account and Get access
-  // pages, and their APIs: never cached, framed or indexed (the same list as `privateHeaders` in src/server/http/private-http.ts).
+  // Every response: no MIME sniffing. Flags and brand files: browser-cached, since Next serves /public with max-age=0 (brand
+  // files keep their names when they change, so only a day). The private owner dashboards (/analytics, /admin), the member
+  // account and Get access pages, and their APIs: never cached, framed or indexed (the same list as `privateHeaders` in
+  // src/server/http/private-http.ts).
   async headers() {
     const privateHeaders = [
       { key: "Cache-Control", value: "no-store" },
@@ -24,8 +26,11 @@ const nextConfig: NextConfig = {
     ];
     const privateSources = ["/analytics", "/api/analytics/:path*", "/admin", "/admin/:path*", "/api/admin/:path*",
       "/en/account", "/en/subscribe", "/api/account/:path*"];
-    // The global rule stays first: when a key repeats, the last matching rule wins.
+    const publicCache = [["/flags/:file*", "public, max-age=2592000, stale-while-revalidate=86400"],
+      ["/brand/:file*", "public, max-age=86400, stale-while-revalidate=604800"]] as const;
+    // The global rule stays first and the private rules last: when a key repeats, the last matching rule wins.
     return [{ source: "/:path*", headers: [{ key: "X-Content-Type-Options", value: "nosniff" }] },
+      ...publicCache.map(([source, value]) => ({ source, headers: [{ key: "Cache-Control", value }] })),
       ...privateSources.map((source) => ({ source, headers: privateHeaders }))];
   },
   async redirects() {

@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import styled from "styled-components";
-import { PhoneInput, TextInput, TextLink } from "@/components/ui/controls";
+import { TextInput, TextLink } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronLeftIcon } from "@/components/ui/icons";
 import { passwordChangeWindowMs } from "@/domain/member-verification";
 import { formatPhone } from "@/domain/phone";

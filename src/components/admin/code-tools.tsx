@@ -5,7 +5,7 @@ import Link from "@/components/navigation/navigation-link";
 import styled, { css } from "styled-components";
 import { Notice } from "@/components/analytics/dashboard/dashboard-styles";
 import { formatPhone } from "@/domain/phone";
-import { PhoneInput } from "@/components/ui/controls";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { ChevronDownIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 import { useDesktopLayout } from "@/components/ui/use-desktop-layout";
 import { media } from "@/styles/theme";

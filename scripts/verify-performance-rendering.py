@@ -40,7 +40,7 @@ def main():
                 assert "Calibration by probability band" not in html
                 assert "Won" in html and "Lost" in html and "2.35" in html
                 assert html.count('data-published-slip=') == 2
-                assert "Individual-pick returns and streaks" in html and "2 settled picks lack usable permitted pre-publication quotes" in html
+                assert "Individual-prediction returns and streaks" in html and "2 settled predictions lack usable permitted pre-publication quotes" in html
                 assert "Returns are unavailable without usable original quotes" in html
             elif state == "reviewed":
                 assert "Reviewed sample metrics" in html and "Calibration by probability band" in html and "Confidence interval" in html

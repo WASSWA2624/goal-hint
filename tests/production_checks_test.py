@@ -40,6 +40,29 @@ class ProductionChecks(unittest.TestCase):
         for source in ('<article data-market="match-result">', '{"probabilities":{}}', r'{\"reasons\":["private"]}'):
             with self.assertRaises(AssertionError):
                 paywall["gated_html"](source)
+        # A feed page leaves card markup to FeedCards but still rejects flight data and detail markup.
+        paywall["gated_html"]('<article data-market="match-result"><p data-prediction="none" data-outcome="unavailable"></p></article>', cards=True)
+        for source in ('{"probabilities":{}}', '<section data-verdict="home-win">'):
+            with self.assertRaises(AssertionError):
+                paywall["gated_html"](source, cards=True)
+
+    def test_feed_cards_lock_published_forecasts_and_allow_forecastless_cards(self):
+        none = '<article data-fixture-id="none" data-market="match-result"><p data-prediction="none" data-outcome="unavailable"></p></article>'
+        locked = '<article data-fixture-id="published" data-status="scheduled"><p data-pick-state="subscriber"></p></article>'
+        paywall["FeedCards"](f"<main>{locked}{none}</main>", {"published"})
+        # Only a published family locks a card; a forecast without one shows no prediction, like a missing forecast.
+        records = [{"fixtureId": "published", "forecast": {"gated": True, "families": ["match-result"]}},
+            {"fixtureId": "none", "forecast": None}, {"fixtureId": "empty", "forecast": {"gated": True, "families": []}}]
+        self.assertEqual(paywall["forecast_ids"]({"records": records}), {"published"})
+        for source in ('<article data-fixture-id="published" data-market="match-result"></article>',
+                '<article data-fixture-id="published"><p data-prediction="none"></p></article>',
+                '<article data-fixture-id="none" data-market="match-result"><p data-prediction="home-win"></p></article>',
+                '<article data-fixture-id="none"><p data-outcome="pending"></p></article>',
+                '<article data-fixture-id="none"><span data-pick-selection="">Home</span></article>',
+                '<article data-fixture-id="none"><span data-probability-meter=""></span></article>',
+                f'{none}<p data-prediction="home-win"></p>'):
+            with self.assertRaises(AssertionError):
+                paywall["FeedCards"](source, {"published"})
 
     def test_private_headers_reject_shared_cache_or_intermediary(self):
         for values, accepted in [({"Cache-Control": "private, no-store"}, True),
@@ -61,9 +84,16 @@ class ProductionChecks(unittest.TestCase):
     def test_complete_check_rejects_news_analysis_and_missing_forecast(self):
         record = {"fixtureId": "10000000-0000-4000-8000-000000000001", "slug": "synthetic-match",
                   "status": "scheduled", "prices": [], "forecast": {"gated": True, "families": ["match-result"]}}
+        none = {**record, "fixtureId": "10000000-0000-4000-8000-000000000002", "forecast": None}
         access = {"tier": "free", "signedIn": False}
-        state = {"kind": "report", "forecast": True}
+        state = {"kind": "report", "forecast": True, "card": ""}
         seen = []
+
+        def cards():
+            # The locked card carries no pick markup; the forecastless one shows the subscriber's no-prediction state.
+            return (f'<main><article data-fixture-id="{record["fixtureId"]}"{state["card"]}></article>'
+                    f'<article data-fixture-id="{none["fixtureId"]}" data-market="match-result">'
+                    '<p data-prediction="none" data-outcome="unavailable"></p></article></main>')
 
         def read(origin, path):
             seen.append(path)
@@ -77,7 +107,9 @@ class ProductionChecks(unittest.TestCase):
                 value = {"access": access, "fixture": record, "history": {"gated": True}, "snapshot": {"gated": True},
                          "route": {"path": f'/en/matches/{record["fixtureId"]}/{record["slug"]}'}}
             elif path.startswith("/api/matches"):
-                value = {"access": access, "records": [{**record, "forecast": record["forecast"] if state["forecast"] else None}]}
+                value = {"access": access, "records": [{**record, "forecast": record["forecast"] if state["forecast"] else None}, none]}
+            elif path.startswith("/en/matches?") or path == "/en/matches":
+                return Response(200, headers, cards())
             else:
                 return Response(200, headers, "<main>Subscriber access</main>")
             return Response(200, headers, json.dumps(value))
@@ -88,7 +120,10 @@ class ProductionChecks(unittest.TestCase):
             state["kind"] = "analysis"
             with self.assertRaises(AssertionError):
                 paywall["verify"]("http://127.0.0.1")
-            state.update(kind="report", forecast=False)
+            state.update(kind="report", card=' data-market="match-result"')
+            with self.assertRaises(AssertionError):
+                paywall["verify"]("http://127.0.0.1")
+            state.update(card="", forecast=False)
             with self.assertRaises(AssertionError):
                 paywall["verify"]("http://127.0.0.1")
 

@@ -61,6 +61,11 @@ def main():
                     f"/api/matches/{fixture_id}{query}", f"/api/matches/{fixture_id}?revision={scenario['revision']}",
                     f"/api/matches/{fixture_id}/insights?section=news"]
                 for url in paths:
+                    # Without a current forecast every viewer gets the same no-prediction card and verdict; only real forecasts lock.
+                    # Pages always show the current verdict (a cycle or revision query only selects history); the API returns the selection.
+                    shown = scenario["prior"] if url.startswith("/api/") and ("cycle=" in url or "revision=" in url) else detail
+                    forecastless = shown["snapshot"] is None and shown["fixture"]["forecast"] is None
+                    leak = r'data-(?:prediction|outcome|featured-pick|verdict|market)="' + (r'(?!none"|unavailable"|match-result")' if forecastless else "")
                     variants = [headers, {**headers, "RSC": "1"}] if not url.startswith("/api/") else [headers]
                     for request_headers in variants:
                         # Next's flight protocol canonicalizes an RSC request with no router tree to this empty cache key.
@@ -71,16 +76,26 @@ def main():
                         text = response.text  # Keep every flight script; never strip raw RSC data.
                         if not full and not free_fixture:
                             assert not re.search(SENTINELS, text), (viewer, url, "premium sentinel leaked")
-                            assert not re.search(r'data-(?:prediction|outcome|featured-pick|verdict|market)="', text), (viewer, url, "prediction attribute leaked")
+                            assert not re.search(leak, text), (viewer, url, "prediction attribute leaked")
                         if not url.startswith("/api/") and "RSC" not in request_headers:
+                            if url.startswith("/en/matches?q="):
+                                # Every viewer's card links the canonical match page, never the account or subscribe page.
+                                assert re.search(rf'href="/en/matches/{fixture_id}/[a-z0-9-]+"', text), (viewer, url, "card link")
+                                assert f'return=%2Fen%2Fmatches%2F{fixture_id}' not in text, (viewer, url, "card links the account page")
                             if url.startswith("/en/matches?q=") and not full:
                                 assert 'data-subscriber-banner' in text and ('/en/account?view=register' in text if viewer in {'anonymous', 'off', 'evicted'} else '/en/subscribe?return=' in text)
                                 assert 'Subscribers only' in text
                                 assert not re.search(r'<option[^>]*value="probability-desc"[^>]*disabled', text) and not re.search(r'<option[^>]*disabled[^>]*value="probability-desc"', text)
+                                # The card element's state, not the stylesheet's selectors.
+                                states = set(re.findall(r'<div\b[^>]*\bdata-pick-state="([a-z]+)"', text))
+                                assert ("none" in states) == forecastless and ("subscriber" in states) == (not forecastless and not free_fixture), (viewer, url, "card lock")
                             if not full and not free_fixture and not url.startswith("/en/matches?q="):
-                                assert 'Subscribe to unlock predictions, markets and odds.' in text
-                                assert 'data-public-probability' in text
-                                assert 'From UGX 1,000 for 1 day.' in text
+                                if forecastless:
+                                    assert 'data-featured-pick="none"' in text and 'data-public-probability' not in text
+                                else:
+                                    assert 'Subscribe to unlock predictions, markets and odds.' in text
+                                    assert 'data-public-probability' in text
+                                    assert 'From UGX 1,000 for 1 day.' in text
                                 assert 'return=%2Fen%2Fmatches%2F' in text
                             if url.startswith("/en/matches?q="):
                                 assert 'data-account-actions' in text and 'view=register' in text

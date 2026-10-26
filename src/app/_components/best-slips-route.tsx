@@ -1,12 +1,14 @@
 import "server-only";
 
-import { redirect } from "next/navigation";
 import { BestSlips } from "@/components/slips/best-slips";
-import { homeHref, matchesHref } from "@/domain/navigation";
+import { CriteriaPanel } from "@/components/slips/slip-styles";
+import { TextLink } from "@/components/ui/controls";
+import { Inline, Stack } from "@/components/ui/layout";
 import { createMessages } from "@/i18n/messages";
 import { resolveViewerAccessFresh } from "@/server/members/viewer-access";
 import { gateBestSlips, readBestSlips } from "@/server/slips/best-slips";
-import { pageMetadata } from "@/server/seo/metadata";
+import { bestSlipsMetadata } from "@/server/seo/metadata";
+import { homeBrowseLinks, redirectLegacyFeedQuery } from "@/server/seo/home-query";
 import { getDiscoveryPolicy } from "@/server/seo/policy";
 import { homeStructuredData, serializeStructuredData } from "@/domain/discovery";
 import { PublicShell } from "./public-shell";
@@ -14,22 +16,24 @@ import { PublicShell } from "./public-shell";
 type Props = Readonly<{ params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }>;
 export function createBestSlipsRoute({ read = readBestSlips, access = resolveViewerAccessFresh, policy = getDiscoveryPolicy } = {}) {
   return {
-    async generateMetadata({ params }: Props) {
-      const { locale } = await params, m = createMessages(locale);
-      return pageMetadata({ title: m.text("bestSlips.metadataTitle"), description: m.text("bestSlips.description"), path: homeHref(locale), index: policy().index });
+    async generateMetadata({ params, searchParams }: Props) {
+      const [{ locale }, query] = await Promise.all([params, searchParams]);
+      return bestSlipsMetadata(locale, query, policy);
     },
     async Page({ params, searchParams }: Props) {
-      const { locale } = await params, query = await searchParams;
-      // Preserve bookmarks to the old homepage feed, including native search/filter forms.
-      if (Object.keys(query).length) {
-        const parameters = new URLSearchParams();
-        for (const [key, value] of Object.entries(query)) for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) parameters.append(key, item);
-        redirect(`${matchesHref(locale)}?${parameters}`);
-      }
+      const { locale } = await params, m = createMessages(locale);
+      redirectLegacyFeedQuery(locale, await searchParams);
       const viewer = await access(), result = gateBestSlips(await read(viewer, locale), await access());
+      const browse = homeBrowseLinks(result, locale);
       return <PublicShell locale={locale} current="best-slips" app compact>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeStructuredData(homeStructuredData()) }} />
-        <BestSlips result={result} locale={locale} signedIn={viewer.signedIn} />
+        <Stack $gap="sm">
+          <BestSlips result={result} locale={locale} signedIn={viewer.signedIn} />
+          {browse.length > 0 && <CriteriaPanel as="nav" aria-labelledby="browse-predictions"><Stack $gap="sm">
+            <h2 id="browse-predictions">{m.text("bestSlips.browseTitle")}</h2>
+            <Inline>{browse.map(([href, label]) => <TextLink key={href} href={href} prefetch={false}>{m.text(label)}</TextLink>)}</Inline>
+          </Stack></CriteriaPanel>}
+        </Stack>
       </PublicShell>;
     },
   };

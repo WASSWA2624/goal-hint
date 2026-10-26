@@ -74,7 +74,7 @@ const FeedResults = memo(function FeedResults({ data: initial, query, today, ena
         {similarFrom !== null && first + index === Math.max(first, similarFrom) && <MatchListDivider title={messages.text("feed.search.similar")}
           note={data.search?.exact === 0 ? messages.text("feed.search.noExact", { query: query.search }) : null} />}
         <li>
-          <MatchCard fixture={fixture} gated={data.access.tier === "free"} signedIn={data.access.signedIn} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
+          <MatchCard fixture={fixture} gated={data.access.tier === "free"} analysisSlug={canonicalMatchSlug(fixture.homeTeam.name, fixture.awayTeam.name)}
             markets={query.markets} locale={query.locale} position={first + index}
             titleNote={similarFrom !== null && first + index >= similarFrom ? messages.text("feed.search.similarItem") : undefined} />
         </li>
