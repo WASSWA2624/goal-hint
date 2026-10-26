@@ -1,5 +1,5 @@
 """Verify isolated SEO production/staging responses from genuine SQL captures."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 import os
 import re
@@ -113,6 +113,14 @@ def verify(origin, cases, *, staging):
     match(r"<title>Best Slips.*?</title>", home)
     match(r'<h1\b[^>]*>Best Slips</h1>', visible_html(home, comments=False))
     match(r'href="/en/matches"', home)
+    browse = re.search(r'<nav\b[^>]*aria-labelledby="browse-predictions"[^>]*>([\s\S]*?)</nav>', home)
+    if browse:  # only while Best Slips are unavailable: today's, tomorrow's and yesterday's archives, help and results
+        links = re.findall(r'<a\b[^>]*href="([^"]+)"', browse.group(1))
+        assert all(link.startswith("/en/predictions/") for link in links[:3]) and links[3:] == ["/en/help", "/en/performance"], links
+        days = [date.fromisoformat(link.rsplit("/", 1)[1]) for link in links[:3]]
+        assert [day - days[0] for day in days] == [timedelta(0), timedelta(days=1), timedelta(days=-1)], links
+    else:
+        no_match(r'id="browse-predictions"', home)
     structured = json.loads(match(r'<script type="application/ld\+json">([^<]+)</script>', home).group(1))
     graph = {node["@type"]: node for node in structured["@graph"]}
     assert graph["WebSite"]["url"] == fixed + "/en" and graph["Organization"]["url"] == fixed + "/en"
@@ -129,9 +137,9 @@ def verify(origin, cases, *, staging):
     match(r"<title>Goal Hint \| Daily Football Predictions</title>", feed)
     match(r'href="/en/matches\?page=2"', visible_html(feed, comments=False))
     for query in ["page=2", "q=Discovery+Home+1", "when=next-7-days", "page=10000"]:
-        # The old homepage feed bookmarks retain their exact query in one redirect.
+        # The old homepage feed bookmarks retain their exact query in one permanent redirect.
         legacy = anonymous("/en?" + query)
-        assert legacy.status == 307, query
+        assert legacy.status == 308, query
         assert urljoin(origin, legacy.headers.get("location")) == origin + "/en/matches?" + query
         checks += 1
         path = "/en/matches?" + query
